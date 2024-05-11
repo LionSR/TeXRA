@@ -58,6 +58,12 @@ def main():
         default=True,
         help="Whether to perform a reflection round after the initial processing.",
     )
+    parser.add_argument(
+        "--prompt_path",
+        type=str,
+        default="prompts",
+        help="Path to the prompts directory.",
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -87,6 +93,7 @@ def main():
         user_prefix_input_vars,
         reflect=args.reflect,
         model=args.model,
+        prompt_path=args.prompt_path,
     )
 
 

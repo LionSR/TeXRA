@@ -41,8 +41,14 @@ def main():
         "--task",
         type=str,
         default="correct",
-        help="Mode of operation, either 'correct', 'correct_qi'.",
-        choices=["correct", "correct_qi"],
+        help="Mode of operation, either 'correct_st', 'correct_qi'.",
+        choices=["correct_st", "correct_qi"],
+    )
+    parser.add_argument(
+        "--prompt_path",
+        type=str,
+        default="prompts",
+        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -55,12 +61,11 @@ def main():
         "input_content": read_file(args.input_file),
     }
 
+    user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
     if args.task == "correct_qi":
-        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
-        user_prefix_input_vars["commands_qi_content"] = read_file("commands_qi.tex")
-    elif args.task == "correct":
-        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
-        user_prefix_input_vars["commands_content"] = read_file("commands.tex")
+        user_prefix_input_vars["commands_content"] = read_file("commands_qi.tex")
+    elif args.task == "correct_st":
+        user_prefix_input_vars["commands_content"] = read_file("command.tex")
 
     task_settings = all_tasks_settings[args.task]
 
@@ -70,6 +75,7 @@ def main():
         args.input_file,
         user_prefix_input_vars,
         model=args.model,
+        prompt_path=args.prompt_path,
     )
 
 
