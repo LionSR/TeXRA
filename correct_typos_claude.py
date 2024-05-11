@@ -2,8 +2,8 @@ import os
 import argparse
 from termcolor import colored
 
-from ai_coauthor import read_file
-import ai_coauthor
+from coauthor import read_file
+import coauthor
 
 
 # Define the settings for each mode
@@ -64,7 +64,7 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    ai_coauthor.process_file_with_claude(
+    coauthor.process_file_with_claude(
         args.task,
         task_settings,
         args.input_file,

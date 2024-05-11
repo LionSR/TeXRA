@@ -1,4 +1,4 @@
-# ai_coauthor/__init__.py
+# coauthor/__init__.py
 from .process import process_file_with_claude
 from .utils import (
     read_file,
