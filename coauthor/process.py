@@ -7,7 +7,6 @@ from .utils import (
     read_file,
     write_file,
     find_last_non_empty_line,
-    extract_text_from_tags,
     check_for_massive_repetition,
 )
 from .claude_utils import compute_anthropic_price, model_mapping
