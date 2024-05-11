@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai_coauthor"
+version = "0.1.0"
+authors = [
+  { name="Sirui Lu", email="14889516+LionSR@users.noreply.github.com" },
+]
+description = "A package containing utility functions for interacting with LLM models like Anthropic's Claude AI."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/LionSR/ai_coauthor"
+"Bug Tracker" = "https://github.com/LionSR/ai_coauthor/issues"
+
+[tool.setuptools]
+packages = ["ai_coauthor"]
