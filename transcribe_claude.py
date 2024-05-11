@@ -1,8 +1,8 @@
 import argparse
 from termcolor import colored
 
-from ai_coauthor import read_file, extract_text_from_tags
-import ai_coauthor
+from coauthor import read_file, extract_text_from_tags
+import coauthor
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -80,7 +80,7 @@ def main():
     # Get the settings for the selected mode
     task_settings = all_tasks_settings[args.task]
 
-    ai_coauthor.process_file_with_claude(
+    coauthor.process_file_with_claude(
         args.task,
         task_settings,
         args.input_file,

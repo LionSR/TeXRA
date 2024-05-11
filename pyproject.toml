@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai_coauthor"
+name = "coauthor"
 version = "0.1.0"
 authors = [
   { name="Sirui Lu", email="sirui.lu.phys@gmail.com" },
@@ -18,8 +18,8 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/LionSR/ai_coauthor"
-"Bug Tracker" = "https://github.com/LionSR/ai_coauthor/issues"
+"Homepage" = "https://github.com/LionSR/coauthor"
+"Bug Tracker" = "https://github.com/LionSR/coauthor/issues"
 
 [tool.setuptools]
-packages = ["ai_coauthor"]
+packages = ["coauthor"]

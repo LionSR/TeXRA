@@ -1,1 +1,1 @@
-# ai_coauthor
+# coauthor
