@@ -1,2 +1,0 @@
-\documentclass{lecture}
-\input{commands_qi}

@@ -13,8 +13,8 @@ from .utils import (
 from .claude_utils import compute_anthropic_price, model_mapping
 
 
-def load_system_prompt(task):
-    system_prompt_file = f"prompts/system_prompt_{task}.txt"
+def load_system_prompt(task, prompt_path):
+    system_prompt_file = os.path.join(prompt_path, f"system_prompt_{task}.txt")
     return read_file(system_prompt_file)
 
 
@@ -26,6 +26,7 @@ def process_file_with_claude(
     reflect=False,
     model="sonnet",
     api_key=None,
+    prompt_path=None,
 ):
     model_name = model_mapping[model]
 
@@ -36,9 +37,12 @@ def process_file_with_claude(
     file_name, _ = os.path.splitext(input_file)
     output_file = f"{file_name}_{task}_{model}.{output_type}"
 
-    user_prefix_input_file_path = f"prompts/user_prefix_{task}.txt"
+    if prompt_path is None:
+        prompt_path = os.getenv("PROMPT_PATH", "prompts")
+
+    user_prefix_input_file_path = os.path.join(prompt_path, f"user_prefix_{task}.txt")
     user_prefix_input_template = read_file(user_prefix_input_file_path)
-    user_request_file_path = f"prompts/user_request_{task}.txt"
+    user_request_file_path = os.path.join(prompt_path, f"user_request_{task}.txt")
     user_request = read_file(user_request_file_path)
 
     user_prefix_input = user_prefix_input_template.format(**user_prefix_input_vars)
@@ -50,7 +54,7 @@ def process_file_with_claude(
     )
     print("User prompt request:", colored(user_request, "magenta"), "\n")
 
-    system_prompt = load_system_prompt(task)
+    system_prompt = load_system_prompt(task, prompt_path)
     messages = [{"role": "user", "content": user_prefix_input + user_request}]
 
     document_tag = task_settings["document_tag"]
@@ -204,7 +208,9 @@ def process_file_with_claude(
 
     if end_turn and reflect:
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
-        user_request_reflect = read_file(f"prompts/user_reflect_{task}.txt")
+        user_request_reflect = read_file(
+            os.path.join(prompt_path, f"user_reflect_{task}.txt")
+        )
         print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
         user_message = f"{user_request_reflect}\n"
         output_file = output_file.replace(
