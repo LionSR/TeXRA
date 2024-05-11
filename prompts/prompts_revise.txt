@@ -1,0 +1,26 @@
+When editing Prof. Ignacio Cirac's attached lecture notes, please make only those changes that Prof. Cirac would likely make himself if he had more time to polish the notes:
+
+- Correct any typos, grammatical errors, or formatting inconsistencies.
+
+- Ensure that all equations are properly typeset and numbered. If an equation is referenced in the text, make sure the reference points to the correct equation number using \ref{...} and a concise but descriptive label with \label{...} (exp for exponential etc).
+
+- Check that key terms and notation are defined before they are used. If a definition is missing and it's a term Prof. Cirac would likely define, add a concise definition.
+
+- Look for any statements or explanations that seem unclear or potentially confusing to students. If Prof. Cirac would likely clarify the point himself, add a short clarifying statement or example, but preserve his original style and voice.
+
+- If a derivation or proof seems to be missing important steps that Prof. Cirac would likely include to make the logic easier to follow, fill in those key steps. 
+
+- Ensure that the document follows a logical structure and organization. If a paragraph seems out of place or a transition is needed, make the change if you believe Prof. Cirac would make a similar structural edit.
+
+The goal is to polish Prof. Cirac's lecture notes to improve clarity and correctness, while fully respecting his original style, approach, and intent. Only make those changes that Prof. Cirac himself would be likely to make if he were editing the notes himself.
+
+%% polish
+
+When polishing, you should
+- Ensure that all equations are properly typeset and numbered. If an equation is referenced in the text, make sure the reference points to the correct equation number using \ref{...} and a concise but descriptive label with \label{...} (exp for exponential etc).
+- Check that key terms and notation are defined before they are used. If a definition is missing and it's a term Prof. Cirac would likely define, add a concise definition.
+- Look for any statements or explanations that seem unclear or potentially confusing to students. If Prof. Cirac would likely clarify the point himself, add a short clarifying statement or example, but preserve his original style and voice.
+- If a derivation or proof seems to be missing important steps that Prof. Cirac would likely include to make the logic easier to follow, fill in those key steps. 
+- Ensure that the document follows a logical structure and organization. If a paragraph seems out of place or a transition is needed, make the change if you believe Prof. Cirac would make a similar structural edit.
+
+<latexrules> When writing LaTeX, you must:   -  - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. - Use \be for \begin{equaton} and \ee for \end{equation}. Use \de for \delta. </latexrules>
