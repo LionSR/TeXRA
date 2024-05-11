@@ -1,0 +1,14 @@
+I am going to give you a transcribed txt from a lecture of a graduate quantum information course. You are about to rewrite it line by line into formal graduate textbook language using LaTeX, so read extremely carefully.
+
+Here is the transcription {input_file} with additional LaTeX document class and commands:
+<document_class>
+{document_cls_content}
+</document_class>
+
+<commands>
+{commands_qi_content}
+</commands>
+
+<latex_document>
+{input_content}
+</latex_document>

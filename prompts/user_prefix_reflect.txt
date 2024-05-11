@@ -1,0 +1,26 @@
+I will provide you with two pieces of information:
+1. A transcribed text from a lecture of a graduate quantum information course, enclosed in <transcription> tags
+2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex> tags
+
+The latex rewrite was generated using the following guideline.
+<guidelines>
+1. The rewrite should meticulously reflect all information from the lecture, strictly maintaining the original order and all the derivational details with no simplification by including all the equations. Ensure that every concept and content piece mentioned in the transcription is included and elaborated upon.
+2. Organize the document into well-structured sections and subsections using \section{} and \subsection{}.
+3. Make extensive use of \paragraph{} to explain key concepts.
+3. Utilize math commands from commands_qi.tex and the document class lecture.cls to typeset mathematical equations and expressions.
+4. Use \be and \ee for displayed equations, and \begin{align} and \end{align} for multi-line equations. The text should be technical, with all key equations prominently displayed.
+5. Employ \begin{example}...\end{example} to present examples, ensuring they are thoroughly explained and connected to the main content.
+6. Ignore administrative information about the course such as exam date in the rewrite.
+</guidelines>
+
+Please read the content within these tags line by line and extrmely carefully as they are crucial for completing the task.
+
+Here is the transcription {input_file}:
+<transcription>
+{corrected_transcription_content}
+</transcription>
+
+Here is the converted LaTeX document {converted_tex_file}:
+<latex>
+{converted_tex_content}
+</latex>

@@ -1,0 +1,4 @@
+Correct any typos, grammatical errors, or formatting inconsistencies. in both text and equations. Make sure all the math are correct. Improve the quality of the latex formulas.
+
+
+In some places only bare equations are presented (see the attached example). Can you add some explainations to make it more readable yet being concise? 
