@@ -14,7 +14,7 @@ all_tasks_settings = {
         "output_type": "tex",
         "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
     },
-    "correct": {
+    "correct_st": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
