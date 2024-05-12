@@ -63,13 +63,13 @@ def main():
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
     user_prefix_input_vars = {
-        "input_file": os.path.basename(args.input_file),
-        "input_content": read_file(args.input_file),
+        "INPUT_FILE": os.path.basename(args.input_file),
+        "INPUT_CONTENT": read_file(args.input_file),
     }
-    user_prefix_input_vars["preamble_content"] = read_file("preamble.tex")
+    user_prefix_input_vars["PREAMBLE_CONTENT"] = read_file("preamble.tex")
 
     if args.task == "correct_prl":
-        user_prefix_input_vars["supp_content"] = read_file("supp.tex")
+        user_prefix_input_vars["SUPP_CONTENT"] = read_file("supp.tex")
     elif args.task == "correct_prl_supp":
         user_prefix_input_vars["main_content"] = read_file(args.auxiliary_file)
 

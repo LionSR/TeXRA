@@ -22,15 +22,15 @@ def find_last_non_empty_line(response):
     return lines[last_non_empty_line_index]
 
 
-def extract_text_from_tags(input_content, document_tag):
+def extract_text_from_tags(INPUT_CONTENT, document_tag):
     import re
 
     match = re.search(
-        r"<{}>(.*?)</{}>".format(document_tag, document_tag), input_content, re.DOTALL
+        r"<{}>(.*?)</{}>".format(document_tag, document_tag), INPUT_CONTENT, re.DOTALL
     )
     if match:
-        input_content = match.group(1)
-    return input_content
+        INPUT_CONTENT = match.group(1)
+    return INPUT_CONTENT
 
 
 def check_for_massive_repetition(last_response, new_response):
