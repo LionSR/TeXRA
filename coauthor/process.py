@@ -34,7 +34,9 @@ def process_file_with_claude(
     output_type = task_settings["output_type"]
 
     file_name, _ = os.path.splitext(input_file)
-    output_file = f"{file_name}_{task}_{model}.{output_type}"
+
+    first_task_chunk = task.split('_')[0]
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
 
     if prompt_path is None:
         prompt_path = os.getenv("PROMPT_PATH", "prompts")
@@ -120,9 +122,6 @@ def process_file_with_claude(
                 print(colored(f"### {lines[0]}", "yellow"))
 
             state["new_last_line"] = find_last_non_empty_line(new_response)
-            if "accumulated_output" not in state:
-                accumulated_output = ""
-
             if state["continuation_count"] > 0:
                 accumulated_output += " " + new_response
             else:

@@ -1,2 +1,12 @@
 
 In some places only bare equations are presented (see the attached example). Can you add some explainations to make it more readable yet being concise? 
+
+- Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
+
+- Create cross-references to equations and sections using LaTeX commands like \label{} and \ref{} to improve the coherence and navigability of the document. Use descriptive yet concise labels (exp for exponential, ref for reference). Equations should be cited as Eqn. \ref{eqn:FT} etc.
+
+Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Explain concepts such as as variational methods, variational inference, diffusion models, optimal transport, and stochastic thermodynamics at a graduate physics level. Use equations and LaTeX formulas as much as possible. Use a clear, educational tone suitable for physics graduate students with extensive formulas. 
+
+- Identify key equations and figures that are referenced later in the document (look for phrases like "mentioned below", "as shown below", etc.). Label these equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
+
+- Create cross-references to sections using LaTeX commands like \label{sec:...} and \ref{sec:...} to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
