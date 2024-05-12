@@ -5,5 +5,4 @@ As you review the document, make the following corrections and improvements:
 - Use consistent mathematical symbols and notations throughout the document.
 - Improve the quality and formatting of the LaTeX formulas where needed.
 - Apply consistent indentation, spacing, and line breaks. For example, '\item [(a)]Show that...' should be corrected to '\item [(a)] Show that...'.
-- When an equation or figure is used in a later derivation, reference it using the \ref{eqn:...} command with the appropriate label you created. Identify key equations and figures that are referenced later in the document (look for phrases like "mentioned below", "as shown below", etc.). Label these equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
 
