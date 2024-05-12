@@ -8,12 +8,6 @@ import coauthor
 
 # Define the settings for each mode
 all_tasks_settings = {
-    "correct": {
-        "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
-        "output_type": "tex",
-        "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{inp",
-    },
     "correct_qi": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
@@ -46,9 +40,9 @@ def main():
     parser.add_argument(
         "--task",
         type=str,
-        default="correct",
-        help="Mode of operation, either 'correct', 'correct_st', 'correct_qi'.",
-        choices=["correct", "correct_st", "correct_qi"],
+        default="correct_qi",
+        help="Mode of operation, either 'correct_qi', 'correct_st'.",
+        choices=["correct_qi", "correct_st"],
     )
     parser.add_argument(
         "--prompt_path",
