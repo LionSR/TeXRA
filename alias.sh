@@ -1,11 +1,20 @@
-MODEL=opus
 SCRIPT_DIR="/Users/siruilu/Local/AI-Projects/coauthor"
 export PROMPT_PATH="$SCRIPT_DIR/prompts"
 
-alias correct='python "$SCRIPT_DIR/correct_lectures.py" --task=correct --model=$MODEL --prompt_path=$PROMPT_PATH'
+function correct_article() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    python "$SCRIPT_DIR/correct_lectures.py" --task=correct --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
+}
 
-alias correct_qi='python "$SCRIPT_DIR/correct_lectures.py" --task=correct_qi --model=$MODEL --prompt_path=$PROMPT_PATH'
+function correct_qi() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_qi --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
+}
 
-alias correct_st='python "$SCRIPT_DIR/correct_lectures.py" --task=correct_st --model=$MODEL --prompt_path=$PROMPT_PATH'
-
-
+function correct_st() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_st --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
+}
