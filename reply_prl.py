@@ -87,6 +87,12 @@ def main():
         default="preamble.tex",
         help="Path to the preamble file.",
     )
+    parser.add_argument(
+        "--example_reply_letter",
+        type=str,
+        default="rebuttal_example/reply_letter.txt",
+        help="Path to the example reply letter file.",
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -103,6 +109,7 @@ def main():
         "EDITOR_DECISION_LETTER": read_file(args.editor_letter),
         "REFEREE_REPORT_A": read_file(args.report_a),
         "REFEREE_REPORT_B": read_file(args.report_b),
+        "EXAMPLE_REPLY_LETTER": read_file(args.example_reply_letter),
     }
 
     task_settings = all_tasks_settings[args.task]
