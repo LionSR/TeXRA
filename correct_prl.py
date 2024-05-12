@@ -9,12 +9,17 @@ import coauthor
 
 # Define the settings for the "correct" mode tailored for research papers
 all_tasks_settings = {
-    "correct_main": {
+    "correct_prl": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        # "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{in",
-        # "first_prefill": "\\documentclass[pra,nobalancelastpage,twocolumn,nofootinbib,superscriptaddress]{revtex4-2}\n\\usepackage{xcolor,amsthm",
+        "first_prefill": "\\documentclass[aps,prl,twocolumn,superscriptaddress,nolongbibliography,nobalancelastpage,10pt]{revtex4-2}\n\\input{preamble}\n\\graphicspath",
+    },
+    "correct_prl_supp": {
+        "document_tag": "latex_document",
+        "output_type": "tex",
+        "end_tag": "</latex_document>",
+        "first_prefill": "Now we output the corrected supp.tex as follows.\n<latex_document>",
     },
 }
 
@@ -41,9 +46,9 @@ def main():
     parser.add_argument(
         "--task",
         type=str,
-        default="correct",
-        help="Mode of operation, either 'correct'.",
-        choices=["correct"],
+        default="correct_prl",
+        help="Mode of operation, either 'correct_prl', 'correct_prl_supp'.",
+        choices=["correct_prl", "correct_prl_supp"],
     )
     parser.add_argument(
         "--prompt_path",
@@ -61,6 +66,12 @@ def main():
         "input_file": os.path.basename(args.input_file),
         "input_content": read_file(args.input_file),
     }
+    user_prefix_input_vars["preamble_content"] = read_file("preamble.tex")
+
+    if args.task == "correct_prl":
+        user_prefix_input_vars["supp_content"] = read_file("supp.tex")
+    elif args.task == "correct_prl_supp":
+        user_prefix_input_vars["main_content"] = read_file(args.auxiliary_file)
 
     task_settings = all_tasks_settings[args.task]
 

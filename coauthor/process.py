@@ -61,7 +61,10 @@ def process_file_with_claude(
     document_tag = task_settings["document_tag"]
     end_tag = task_settings.get("end_tag", None)
 
-    assistant_prefill_first = task_settings["first_prefill"]
+    if output_type == "tex":
+        assistant_prefill_first = read_file(input_file).strip()[:50]
+    else:
+        assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
 
     print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
