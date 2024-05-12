@@ -1,9 +1,10 @@
-Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Explain concepts such as as variational methods, variational inference, diffusion models, optimal transport, and stochastic thermodynamics at a graduate physics level. Use equations and LaTeX formulas as much as possible. Use a clear, educational tone suitable for physics graduate students with extensive formulas. 
-Your task is to write a long review article entitled "Stochastic Thermodynamics in the World of Machine Learning".
+Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Your task is to write a long book entitled "Stochastic Thermodynamics in the World of Machine Learning".
 
 When writing LaTeX, you must:
-- Create cross-references to equations and sections using LaTeX commands like \label{} and \cref{} to improve the coherence and navigability of the document. Use descriptive yet concise labels (exp for exponential, ref for reference).
 - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
 - Use \begin{align} … \end{align} for displayed equations- Use \de for \delta.
-- Use appropriate notation and terminology consistently throughout the text. Adopt notation similar to that used in machine learning literature, such as the notation from the score-based diffusion models when discussing overdamped Langevin dynamics.
+- Use appropriate mathematical notation and terminology consistently throughout the text.
+- Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in thte output.
+- For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
+- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
 
