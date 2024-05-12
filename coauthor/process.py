@@ -59,7 +59,7 @@ def process_file_with_claude(
     messages = [{"role": "user", "content": user_prefix_input + user_request}]
 
     document_tag = task_settings["document_tag"]
-    end_tag = task_settings["end_tag"]
+    end_tag = task_settings.get("end_tag", None)
 
     assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
@@ -87,7 +87,7 @@ def process_file_with_claude(
                 max_tokens=4096,
                 messages=messages,
                 temperature=0,
-                stop_sequences=[end_tag],
+                stop_sequences=[end_tag] if end_tag else None,
                 system=system_prompt,
             )
 
@@ -103,7 +103,7 @@ def process_file_with_claude(
                 print(f"### DEBUG output_tokens: {response_object.usage.output_tokens}")
                 print(f"### DEBUG error: {response_object.error}")
                 break
-            
+
             if response_object.usage.output_tokens == 3:
                 print("Some errors might have appeared")
                 print(f"### DEBUG response_object: {response_object}")
@@ -170,7 +170,7 @@ def process_file_with_claude(
 
             # Define boolean variables for each stopping reason
             end_turn = response_object.stop_reason in ["end_turn", "stop_sequence"]
-            encounter_document_tag = f"<{document_tag}>" in new_response
+            encounter_document_tag = f"</{document_tag}>" in new_response
             continuation_limit = state["continuation_count"] > 10
             input_token_limit = response_object.usage.input_tokens > 100000
             massive_repetition = massive_repetition_detected
@@ -198,6 +198,13 @@ def process_file_with_claude(
             )
 
             if should_stop:
+                print("Printing the flags\n")
+                print(f"end_turn: {end_turn}\n")
+                print(f"encounter_document_tag: {encounter_document_tag}\n")
+                print(f"continuation_limit: {continuation_limit}\n")
+                print(f"input_token_limit: {input_token_limit}\n")
+                print(f"massive_repetition: {massive_repetition}\n")
+                print(f"output_token_limit: {output_token_limit}\n")
                 print(
                     "### The last {} characters of the previous response are:".format(k)
                 )

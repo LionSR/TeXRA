@@ -24,3 +24,6 @@ When polishing, you should
 - Ensure that the document follows a logical structure and organization. If a paragraph seems out of place or a transition is needed, make the change if you believe Prof. Cirac would make a similar structural edit.
 
 <latexrules> When writing LaTeX, you must:   -  - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. - Use \be for \begin{equaton} and \ee for \end{equation}. Use \de for \delta. </latexrules>
+
+
+- When an equation or figure is used in a later derivation, reference it using the \ref{eqn:...} command with the appropriate label you created. Identify key equations and figures that are referenced later in the document (look for phrases like "mentioned below", "as shown below", etc.). Label these equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.

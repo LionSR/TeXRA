@@ -1,0 +1,17 @@
+I am going to give you a latex document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+
+Here are the preamble of the latex document
+<preamble>
+{preamble_content}
+</preamble>
+
+Here is the main paper main.tex:
+<latex_document>
+{main_content}
+</latex_document>
+
+Here is the appendix of the paper
+<latex_document>
+{input_content}
+</latex_document>
+
