@@ -1,9 +1,13 @@
 You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the key inputs you will need:
 
+Here is our cover letter:
+<cover_letter>
+{COVER_LETTER}
+</cover_letter>
 
-The full text of the submitted paper {INPUT_FILE}::
+The full text of the submitted paper {INPUT_FILE}:
 <paper>
-{INPUT_CONTENT}
+{MAIN_CONTENT}
 </paper>
 
 Here is the appendix of the paper
@@ -13,18 +17,19 @@ Here is the appendix of the paper
 
 The full text of the editor decision letter:
 <editor_decision_letter>
-{{EDITOR_DECISION_LETTER}}
+{EDITOR_DECISION_LETTER}
 </editor_decision_letter>
 
-The full text of the referee reports:
+The full text of the two referee reports:
 <referee_report_a>
-{{REFEREE_REPORT_A}}
+{REFEREE_REPORT_A}
 </referee_report_a>
+
 <referee_report_b>
-{{REFEREE_REPORT_B}}
+{REFEREE_REPORT_B}
 </referee_report_b>
 
 Your overall instruction:
 <instruction>
-{{INSTRUCTION}}
+{INSTRUCTION}
 </instruction>
