@@ -24,7 +24,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\\course{",
+        "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
     },
 }
 
@@ -66,7 +66,6 @@ def main():
         "input_file": os.path.basename(args.input_file),
         "input_content": read_file(args.input_file),
     }
-
 
     if args.task == "correct_qi":
         user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")

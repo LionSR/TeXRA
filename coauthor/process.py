@@ -6,10 +6,10 @@ from termcolor import colored
 from .utils import (
     read_file,
     write_file,
-    find_last_non_empty_line,
     check_for_massive_repetition,
 )
 from .claude_utils import compute_anthropic_price, model_mapping
+from .openai_utils import best_connection_method
 
 
 def load_system_prompt(task, prompt_path):
@@ -35,7 +35,7 @@ def process_file_with_claude(
 
     file_name, _ = os.path.splitext(input_file)
 
-    first_task_chunk = task.split('_')[0]
+    first_task_chunk = task.split("_")[0]
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
 
     if prompt_path is None:
@@ -73,11 +73,10 @@ def process_file_with_claude(
         "total_output_tokens": 0,
         "total_response_time": 0,
         "last_response": "",
-        "new_last_line": "",
         "first_input_tokens": 0,
     }
 
-    def process_response_cycle(state, accumulated_output):
+    def process_response_cycle(state, accumulated_output, k=60):
         end_turn = False
 
         while True:
@@ -104,8 +103,14 @@ def process_file_with_claude(
                 print(f"### DEBUG output_tokens: {response_object.usage.output_tokens}")
                 print(f"### DEBUG error: {response_object.error}")
                 break
-
-            new_response = response_object.content[0].text.strip()
+            
+            if response_object.usage.output_tokens == 3:
+                print("Some errors might have appeared")
+                print(f"### DEBUG response_object: {response_object}")
+                print(f"### DEBUG response_object.content: {response_object.content}")
+                break
+            else:
+                new_response = response_object.content[0].text.strip()
 
             if state["continuation_count"] == 0:
                 state["first_input_tokens"] = response_object.usage.input_tokens
@@ -113,17 +118,35 @@ def process_file_with_claude(
             state["total_input_tokens"] += response_object.usage.input_tokens
             state["total_output_tokens"] += response_object.usage.output_tokens
 
-            lines = new_response.split("\n")
+            # Print the last k characters of the previous response and the first k characters of the new response
+            if state["continuation_count"] > 0:
+                print(
+                    "### The last {} characters of the previous response are:".format(k)
+                )
+                print(colored(f"### {state['last_response'][-k:]}", "yellow"))
+                print("### The first {} characters of the new response are:".format(k))
+                print(colored(f"### {new_response[:k]}", "yellow"))
 
             if state["continuation_count"] > 0:
-                print("### The last line of the previous response is:")
-                print(colored(f"### {state['new_last_line']}", "yellow"))
-                print("### First line of the new response is:")
-                print(colored(f"### {lines[0]}", "yellow"))
+                # accumulated_output += " " + new_response
 
-            state["new_last_line"] = find_last_non_empty_line(new_response)
-            if state["continuation_count"] > 0:
-                accumulated_output += " " + new_response
+                # Use the last k characters of the previous response and the first k characters of the new response
+                str1 = state["last_response"][-k:]
+                str2 = new_response[:k]
+
+                # Call the best_connection_method function from openai_utils.py
+                choice = best_connection_method(str1, str2)
+
+                if choice == "A":
+                    accumulated_output += new_response
+                elif choice == "B":
+                    accumulated_output += " " + new_response
+                elif choice == "C":
+                    accumulated_output += "\n" + new_response
+                else:
+                    print(f"Invalid choice: {choice}. Defaulting to adding a space.")
+                    accumulated_output += " " + new_response
+
             else:
                 accumulated_output += new_response
 
@@ -133,7 +156,7 @@ def process_file_with_claude(
             write_file(output_file, accumulated_output + "\n")
 
             print(
-                f"### Last line of the response: {colored(state['new_last_line'], 'yellow')}"
+                f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
             )
 
             messages[-1] = {"role": "assistant", "content": new_response}
@@ -142,6 +165,8 @@ def process_file_with_claude(
             massive_repetition_detected = check_for_massive_repetition(
                 state["last_response"], new_response
             )
+
+            state["last_response"] = new_response
 
             # Define boolean variables for each stopping reason
             end_turn = response_object.stop_reason in ["end_turn", "stop_sequence"]
@@ -173,11 +198,11 @@ def process_file_with_claude(
             )
 
             if should_stop:
-                print("### The last line of the previous response is:")
-                print(colored(f"### {state['new_last_line']}", "yellow"))
+                print(
+                    "### The last {} characters of the previous response are:".format(k)
+                )
+                print(colored(f"### {state['last_response'][-k:]}", "yellow"))
                 break
-
-            state["last_response"] = new_response
 
             state["continuation_count"] += 1
             user_message = (
@@ -192,8 +217,8 @@ def process_file_with_claude(
 
             messages.append({"role": "user", "content": user_message})
 
-            # Prefill the last 50 tokens from the response content
-            prefill_tokens = new_response[-50:]
+            # Prefill the last k tokens from the response content
+            prefill_tokens = new_response[-k:]
             print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
             messages.append({"role": "assistant", "content": prefill_tokens})
 
@@ -218,7 +243,6 @@ def process_file_with_claude(
         messages.append({"role": "assistant", "content": assistant_prefill_first})
         accumulated_output = assistant_prefill_first
         state["last_response"] = ""
-        state["new_last_line"] = ""
         state["continuation_count"] = 0
 
         end_turn, state, accumulated_output = process_response_cycle(
