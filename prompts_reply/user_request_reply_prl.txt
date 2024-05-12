@@ -1,0 +1,59 @@
+Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside <scratchpad> tags. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
+
+After your planning, draft a reply letter that includes the following:
+
+1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside <cover_letter> tags.
+
+2. A point-by-point response to the referee comments. To do this:
+- Split each referee report in the <referee_report_a> or <referee_report_b> tags into individual segment. Copy each exact comments as verbatim segment within <referee_comment> tags.
+- Write your rebuttal to each comment inside <author_response> tags immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Start with thanking the referee in a concrete manner. Follow the principles from the book "They Say, I Say" in crafting your rebuttals.
+
+3. At the end of each reply to the referers, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
+
+4. A revised version of the paper that addresses the referee comments. Include the full text of the revised paper inside <revised_paper> tags.
+
+Write the full reply letter in the following format:
+
+<reply_letter>
+<cover_letter>
+Your 1-page cover letter to the editor here.
+</cover_letter>
+
+Responses to Referee A:
+<point_by_point_reply_a>
+<referee_comment>
+First comment from the referee A here.
+</referee_comment>
+<author_response>
+Your rebuttal to the first comment here.
+</author_response>
+
+<referee_comment>
+Second comment from the referee A here. 
+</referee_comment>
+<author_response>
+Your rebuttal to the second comment here.
+</author_response>
+
+(Continue this pattern for each comment from the referee.)
+
+</point_by_point_reply_a>
+
+Responses to Referee B:
+<point_by_point_reply_b>
+...
+</point_by_point_reply_b>
+
+<list_of_major_changes>
+List of major changes you made to the paper.
+</list_of_major_changes>
+
+</reply_letter>
+
+
+
+<revised_paper>
+Full text of your revised paper here.
+</revised_paper>
+
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary.

@@ -81,6 +81,12 @@ def main():
         type=str,
         help="Path to the referee report B file.",
     )
+    parser.add_argument(
+        "--preamble",
+        type=str,
+        default="preamble.tex",
+        help="Path to the preamble file.",
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -89,7 +95,7 @@ def main():
 
     user_prefix_input_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
-        "PREAMBLE_CONTENT": read_file("preamble.tex"),
+        "PREAMBLE_CONTENT": read_file(args.preamble),
         "MAIN_CONTENT": read_file(args.input_file),
         "SUPP_CONTENT": read_file(args.supp_file),
         "INSTRUCTION": read_file(args.instruction),
