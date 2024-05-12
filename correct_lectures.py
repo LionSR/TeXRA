@@ -57,8 +57,8 @@ def main():
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
     user_prefix_input_vars = {
-        "input_file": os.path.basename(args.input_file),
-        "input_content": read_file(args.input_file),
+        "INPUT_FILE": os.path.basename(args.input_file),
+        "INPUT_CONTENT": read_file(args.input_file),
     }
 
     if args.task == "correct_qi":

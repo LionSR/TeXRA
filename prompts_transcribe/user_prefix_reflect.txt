@@ -15,7 +15,7 @@ The latex rewrite was generated using the following guideline.
 
 Please read the content within these tags line by line and extrmely carefully as they are crucial for completing the task.
 
-Here is the transcription {input_file}:
+Here is the transcription {INPUT_FILE}:
 <transcription>
 {corrected_transcription_content}
 </transcription>

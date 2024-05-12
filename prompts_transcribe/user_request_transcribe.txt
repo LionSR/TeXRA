@@ -1,5 +1,5 @@
 Improve the given noisy transcription while sticking to the original sentences as much as possible by following these instructions:
-<instructions>
+<instruction>
 1. Be faithful to the original content.
 2. Group sentences conveying the same idea or topic into well-structured, coherent paragraphs. This is crucial for clarity and readability.
 3. Transform spoken equations into LaTeX format:
@@ -10,7 +10,7 @@ Improve the given noisy transcription while sticking to the original sentences a
 6. Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
 7. Ensure grammatical correctness.
 8. Fix recognition errors and mistranscriptions.
-</instructions>
+</instruction>
 
 Here are some input output examples for segements:
 <examples>

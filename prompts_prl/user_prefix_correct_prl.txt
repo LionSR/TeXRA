@@ -2,16 +2,16 @@ I am going to give you a latex document of a research paper. You are about to co
 
 Here are the preamble of the latex document
 <preamble>
-{preamble_content}
+{PREAMBLE_CONTENT}
 </preamble>
 
-Here is the main paper {input_file}:
+Here is the main paper {INPUT_FILE}:
 <latex_document>
-{input_content}
+{INPUT_CONTENT}
 </latex_document>
 
 Here is the appendix of the paper
 <latex_document>
-{supp_content}
+{SUPP_CONTENT}
 </latex_document>
 
