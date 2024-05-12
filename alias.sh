@@ -39,10 +39,9 @@ function correct_st() {
 
 
 function reply_prl() {
-    local MODEL=${MODEL:-sonnet}
+    local MODEL=${MODEL:-opus}
     local INPUT_FILE=$1
-    local SUPP_FILE=${2:-""}
-    local REFEREE_REPORTS=${3:-""}
+    local SUPP_FILE=${2:-"supp.tex"}
     local REBUTTAL_PATH="rebuttal"
     local INSTRUCTION="$REBUTTAL_PATH/instruction.txt"
     local COVER_LETTER="$REBUTTAL_PATH/cover_letter.txt"
@@ -50,4 +49,5 @@ function reply_prl() {
     local REPORT_A="$REBUTTAL_PATH/report_a.txt"
     local REPORT_B="$REBUTTAL_PATH/report_b.txt"
     export PROMPT_PATH="$SCRIPT_DIR/prompts_reply"
-    python "$SCRIPT_DIR/reply_prl.py" --task=reply_prl --model=$MODEL --prompt_path=$PROMPT_PATH --input_file="$INPUT_FILE" --supp_file="$SUPP_FILE" --referee_reports="$REFEREE_REPORTS" --instruction="$INSTRUCTION" --cover_letter="$COVER_LETTER" --editor_letter="$EDITOR_LETTER" --report_a="$REPORT_A" --report_b="$REPORT_B"
+    python "$SCRIPT_DIR/reply_prl.py" --task=reply_prl --model=$MODEL --prompt_path=$PROMPT_PATH  --supp_file="$SUPP_FILE" --referee_reports="$REFEREE_REPORTS" --instruction="$INSTRUCTION" --cover_letter="$COVER_LETTER" --editor_letter="$EDITOR_LETTER" --report_a="$REPORT_A" --report_b="$REPORT_B" "$INPUT_FILE"
+}
