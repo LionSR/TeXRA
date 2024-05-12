@@ -8,6 +8,12 @@ import coauthor
 
 # Define the settings for each mode
 all_tasks_settings = {
+    "correct": {
+        "document_tag": "latex_document",
+        "end_tag": "\\end{document}",
+        "output_type": "tex",
+        "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{inp",
+    },
     "correct_qi": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
@@ -18,7 +24,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{commands}\n\\course{",
+        "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\\course{",
     },
 }
 
@@ -41,8 +47,8 @@ def main():
         "--task",
         type=str,
         default="correct",
-        help="Mode of operation, either 'correct_st', 'correct_qi'.",
-        choices=["correct_st", "correct_qi"],
+        help="Mode of operation, either 'correct', 'correct_st', 'correct_qi'.",
+        choices=["correct", "correct_st", "correct_qi"],
     )
     parser.add_argument(
         "--prompt_path",
@@ -61,10 +67,12 @@ def main():
         "input_content": read_file(args.input_file),
     }
 
-    user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
+
     if args.task == "correct_qi":
+        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
         user_prefix_input_vars["commands_content"] = read_file("commands_qi.tex")
     elif args.task == "correct_st":
+        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
         user_prefix_input_vars["commands_content"] = read_file("command.tex")
 
     task_settings = all_tasks_settings[args.task]
