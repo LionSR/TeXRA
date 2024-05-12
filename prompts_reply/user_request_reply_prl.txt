@@ -6,7 +6,8 @@ After your planning, draft a reply letter that includes the following:
 
 2. A point-by-point response to the referee comments. To do this:
 - Split each referee report in the <referee_report_a> or <referee_report_b> tags into individual segment. Copy each exact comments as verbatim segment within <referee_comment> tags.
-- Write your rebuttal to each comment inside <author_response> tags immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Start with thanking the referee in a concrete manner. Follow the principles from the book "They Say, I Say" in crafting your rebuttals.
+- All the referee's comments(recommendtions, criticisms, questions) need to be covered covered and addressed in the <point_by_point_reply_a> or <point_by_point_reply_b> tags. For recommendtions by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what are changed in the paper.
+- Write your rebuttal to each comment inside <author_response> tags immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Be specific about what are changed in the paper.
 
 3. At the end of each reply to the referers, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
 
@@ -49,8 +50,6 @@ List of major changes you made to the paper.
 </list_of_major_changes>
 
 </reply_letter>
-
-
 
 <revised_paper>
 Full text of your revised paper here.
