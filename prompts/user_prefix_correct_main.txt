@@ -1,7 +1,7 @@
 I am going to give you a latex document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the latex document {input_file}:
+Here is the latex document {INPUT_FILE}:
 
 <latex_document>
-{input_content}
+{INPUT_CONTENT}
 </latex_document>

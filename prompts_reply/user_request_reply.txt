@@ -1,0 +1,44 @@
+Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside <scratchpad> tags. Consider which points from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
+
+After your planning, draft a reply letter that includes the following:
+
+1. A 1-page cover letter to the editor. Summarize the key points you will make in your reply. Write this inside <cover_letter> tags.
+
+2. A point-by-point response to the referee comments. To do this:
+- Break the referee comments down into the key points of criticism. Quote each point inside <referee_point> tags. 
+- Write your rebuttal to each point inside <author_response> tags immediately after each <referee_point>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals.
+
+3. A revised version of the paper that addresses the referee comments. Include the full text of the revised paper inside <revised_paper> tags.
+
+Write the full reply letter in the following format:
+
+<reply_letter>
+<cover_letter>
+Your 1-page cover letter to the editor here.
+</cover_letter>
+
+<point_by_point_reply>
+<referee_point>
+First key point from the referee here.
+</referee_point>
+<author_response>
+Your rebuttal to the first point here.
+</author_response>
+
+<referee_point>
+Second key point from the referee here. 
+</referee_point>
+<author_response>
+Your rebuttal to the second point here.
+</author_response>
+
+(Continue this pattern for each key point from the referee.)
+
+</point_by_point_reply>
+</reply_letter>
+
+<revised_paper>
+Full text of your revised paper here.
+</revised_paper>
+
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. With thoughtful arguments and well-justified changes, you can successfully navigate the peer review process.
