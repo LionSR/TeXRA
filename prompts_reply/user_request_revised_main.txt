@@ -1,4 +1,4 @@
-Please read the submission cover letter, the paper, referee reports, and  the drafted reply letter carefully. Refer to the example for the tone and the structure. Afterwards, propose a new version of the paper which address all the proposed changes mentioned in the drafted reply letter. 
+Please read the submission cover letter, the paper, referee reports, and  the drafted reply letter carefully. Refer to the example for the tone and the structure. Afterwards, propose a new version of the main text of the paper which address all the proposed changes mentioned in the drafted reply letter. 
 - Note that the abstract, introduction, and the conclusion also needs to be updated accordingly. 
 - Make sure figure and their captions match the description in the text.
 
