@@ -6,8 +6,9 @@ from .utils import (
     find_last_non_empty_line,
     extract_text_from_tags,
     check_for_massive_repetition,
+    compute_api_price,
+    model_mapping,
 )
-from .claude_utils import compute_anthropic_price, model_mapping
 
 __all__ = [
     "process_file_with_claude",
@@ -16,6 +17,6 @@ __all__ = [
     "find_last_non_empty_line",
     "extract_text_from_tags",
     "check_for_massive_repetition",
-    "compute_anthropic_price",
+    "compute_api_price",
     "model_mapping",
 ]
