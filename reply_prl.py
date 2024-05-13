@@ -6,13 +6,18 @@ from termcolor import colored
 from coauthor import read_file
 import coauthor
 
-# Define the settings for the "reply" mode tailored for responding to reviewer comments
 all_tasks_settings = {
-    "reply_prl": {
+    "reply_letter": {
         "document_tag": "latex_document",
         "end_tag": "</reply_letter>",
         "output_type": "txt",
-        "first_prefill": "<reply_letter>",
+        "first_prefill": "<reply_letter>\n<cover_letter>",
+    },
+    "revised_paper": {
+        "document_tag": "latex_document",
+        "end_tag": "</revised_paper>",
+        "output_type": "text",
+        "first_prefill": "Now output the revised paper in the <revised_paper>\n<main_content>\n\\documentclass[aps",
     },
 }
 
@@ -51,9 +56,15 @@ def main():
     parser.add_argument(
         "--task",
         type=str,
-        default="reply_prl",
-        help="Mode of operation, currently only 'reply_prl'.",
-        choices=["reply_prl"],
+        default="reply_letter",
+        help="Mode of operation, currently only 'reply_prl' and 'revised_paper'.",
+        choices=["reply_letter", "revised_paper"],
+    )
+    parser.add_argument(
+        "--reflect",
+        type=bool,
+        default=True,
+        help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
         "--prompt_path",
@@ -93,6 +104,12 @@ def main():
         default="rebuttal_example/reply_letter.txt",
         help="Path to the example reply letter file.",
     )
+    parser.add_argument(
+        "--draft_reply_letter",
+        type=str,
+        help="Path to the draft reply letter file.",
+        default=None,
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -114,26 +131,19 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
+    if args.task == "revised_paper":
+        user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(args.draft_reply_letter)
+
     # First call to process the reply letter
     coauthor.process_file_with_claude(
         args.task,
         task_settings,
         args.input_file,
         user_prefix_input_vars,
+        reflect=args.reflect,
         model=args.model,
         prompt_path=args.prompt_path,
     )
-
-    # Second call to process the revised paper
-    # coauthor.process_file_with_claude(
-    #     args.task,
-    #     task_settings,
-    #     args.input_file,
-    #     user_prefix_input_vars,
-    #     model=args.model,
-    #     prompt_path=args.prompt_path,
-    #     # section="revised_paper"
-    # )
 
 
 if __name__ == "__main__":
