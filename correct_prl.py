@@ -15,7 +15,7 @@ all_tasks_settings = {
         "output_type": "tex",
         "first_prefill": "\\documentclass[aps,prl,twocolumn,superscriptaddress,nolongbibliography,nobalancelastpage,10pt]{revtex4-2}\n\\input{preamble}\n\\graphicspath",
     },
-    "correct_prl_supp": {
+    "correct_supp_prl": {
         "document_tag": "latex_document",
         "output_type": "tex",
         "end_tag": "</latex_document>",
@@ -47,8 +47,8 @@ def main():
         "--task",
         type=str,
         default="correct_prl",
-        help="Mode of operation, either 'correct_prl', 'correct_prl_supp'.",
-        choices=["correct_prl", "correct_prl_supp"],
+        help="Mode of operation, either 'correct_prl', 'correct_supp_prl'.",
+        choices=["correct_prl", "correct_supp_prl"],
     )
     parser.add_argument(
         "--prompt_path",
@@ -70,7 +70,7 @@ def main():
 
     if args.task == "correct_prl":
         user_prefix_input_vars["SUPP_CONTENT"] = read_file("supp.tex")
-    elif args.task == "correct_prl_supp":
+    elif args.task == "correct_supp_prl":
         user_prefix_input_vars["main_content"] = read_file(args.auxiliary_file)
 
     task_settings = all_tasks_settings[args.task]
