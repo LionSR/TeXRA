@@ -29,12 +29,20 @@ The full text of the two referee reports:
 {REFEREE_REPORT_B}
 </referee_report_b>
 
-Your overall instruction:
-<instruction>
-{INSTRUCTION}
-</instruction>
-
 Here is an example of a reply letter:
 <example_reply_letter>
 {EXAMPLE_REPLY_LETTER}
 </example_reply_letter>
+
+Follow your overall instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
+But use your own words in the tag <cover_letter>.
+
+Here is a draft of the reply letter:
+<draft_reply_letter>
+{DRAFT_REPLY_LETTER}
+</draft_reply_letter>
+
+
