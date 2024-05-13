@@ -1,6 +1,7 @@
 import os
 import time
 from anthropic import Anthropic
+from openai import OpenAI
 from termcolor import colored
 
 from .utils import (
@@ -8,8 +9,20 @@ from .utils import (
     write_file,
     check_for_massive_repetition,
 )
-from .claude_utils import compute_anthropic_price, model_mapping
+from .utils import compute_api_price, model_mapping
 from .openai_utils import best_connection_method
+
+
+def is_openai_model(model):
+    return "gpt" in model
+
+
+def is_anthropic_model(model):
+    if model in ["opus", "sonnet", "haiku"]:
+        return True
+    if model in ["claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
+        return True
+    return False
 
 
 def load_system_prompt(task, prompt_path):
@@ -29,9 +42,13 @@ def process_file_with_claude(
     k=100,
 ):
     model_name = model_mapping[model]
+    if is_openai_model(model):
+        OPENAI_API_KEY = api_key or os.getenv("OPENAI_API_KEY")
+        client = OpenAI(api_key=OPENAI_API_KEY)
+    elif is_anthropic_model(model):
+        ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
+        client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
     output_type = task_settings["output_type"]
 
     file_name, _ = os.path.splitext(input_file)
@@ -58,7 +75,14 @@ def process_file_with_claude(
     print("User prompt request:", colored(user_request, "magenta"), "\n")
 
     system_prompt = load_system_prompt(task, prompt_path)
-    messages = [{"role": "user", "content": user_prefix_input + user_request}]
+    # add the system prompt to the message if it is a gpt model
+    if is_openai_model(model):
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prefix_input + user_request},
+        ]
+    elif is_anthropic_model(model):
+        messages = [{"role": "user", "content": user_prefix_input + user_request}]
 
     document_tag = task_settings["document_tag"]
     end_tag = task_settings.get("end_tag", None)
@@ -69,9 +93,17 @@ def process_file_with_claude(
         first_k_tex_document = read_file(input_file).strip()[:k]
         assistant_prefill_first += first_k_tex_document
         accumulated_output = first_k_tex_document
+        if is_openai_model(model):
+            accumulated_output = ""
+            messages.append({"role": "assistant", "content": "```latex"})
+            # messages.append({"role": "user", "content": "continue"})
 
-    print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-    messages.append({"role": "assistant", "content": assistant_prefill_first})
+    # if is_openai_model(model):
+    #     messages.append({"role": "assistant", "content": assistant_prefill_first})
+    #     messages.append({"role": "user", "content": "continue"})
+    if is_anthropic_model(model):
+        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+        messages.append({"role": "assistant", "content": assistant_prefill_first})
 
     state = {
         "continuation_count": 0,
@@ -88,43 +120,65 @@ def process_file_with_claude(
         while True:
             start_time = time.time()
 
-            response_object = client.messages.create(
-                model=model_name,
-                max_tokens=4096,
-                messages=messages,
-                temperature=0,
-                stop_sequences=[end_tag] if end_tag else None,
-                system=system_prompt,
-            )
+            if is_openai_model(model):
+                response_object = client.chat.completions.create(
+                    model=model_name,
+                    max_tokens=4096,
+                    messages=messages,
+                    temperature=0,
+                    stop=end_tag,
+                )
+                response_time = time.time() - start_time
+                state["total_response_time"] += response_time
+                print(f"### Response time: {colored(response_time, 'green')} seconds")
+                print(
+                    f"### Reason for stopping: {response_object.choices[0].finish_reason}"
+                )
+                print(f"### Usage: {colored(response_object.usage, 'cyan')}")
+                new_response = response_object.choices[0].message.content.strip()
+                input_tokens = response_object.usage.prompt_tokens
+                output_tokens = response_object.usage.completion_tokens
+                stop_reason = response_object.choices[0].finish_reason
+            elif is_anthropic_model(model):
+                response_object = client.messages.create(
+                    model=model_name,
+                    max_tokens=4096,
+                    messages=messages,
+                    temperature=0,
+                    stop_sequences=[end_tag] if end_tag else None,
+                    system=system_prompt,
+                )
+                response_time = time.time() - start_time
+                state["total_response_time"] += response_time
+                print(f"### Response time: {colored(response_time, 'green')} seconds")
+                print(f"### Reason for stopping: {response_object.stop_reason}")
+                print(f"### Usage: {colored(response_object.usage, 'cyan')}")
+                new_response = response_object.completion.strip()
+                input_tokens = response_object.usage["input_tokens"]
+                output_tokens = response_object.usage["output_tokens"]
+                stop_reason = response_object.stop_reason
+                if output_tokens == 3:
+                    print("Some errors might have appeared. No output generated")
+                    print(f"### DEBUG response_object: {response_object}")
+                    print(
+                        f"### DEBUG response_object.content: {response_object.content}"
+                    )
+                    break
+                else:
+                    new_response = response_object.content[0].text.strip()
 
-            end_time = time.time()
-            response_time = end_time - start_time
-            state["total_response_time"] += response_time
-            print(f"### Response time: {colored(response_time, 'green')} seconds")
-            print(f"### Reason for stopping: {response_object.stop_reason}")
-            print(f"### Usage: {colored(response_object.usage, 'cyan')}")
-
-            if response_object.type == "error":
-                print("Error from the Anthropic API:")
-                print(f"### DEBUG output_tokens: {response_object.usage.output_tokens}")
-                print(f"### DEBUG error: {response_object.error}")
-                break
-
-            if response_object.usage.output_tokens == 3:
-                print("Some errors might have appeared. No output generated")
-                print(f"### DEBUG response_object: {response_object}")
-                print(f"### DEBUG response_object.content: {response_object.content}")
-                break
-            else:
-                new_response = response_object.content[0].text.strip()
+                if response_object.type == "error":
+                    print("Error from the API:")
+                    print(f"### DEBUG output_tokens: {output_tokens}")
+                    print(f"### DEBUG error: {response_object.error}")
+                    break
 
             if state["continuation_count"] == 0:
-                state["first_input_tokens"] = response_object.usage.input_tokens
+                state["first_input_tokens"] = input_tokens
 
-            state["total_input_tokens"] += response_object.usage.input_tokens
-            state["total_output_tokens"] += response_object.usage.output_tokens
+            state["total_input_tokens"] += input_tokens
+            state["total_output_tokens"] += output_tokens
 
-            # Print the last k characters of the previous response and the first k characters of the new response
             if state["continuation_count"] > 0:
                 print(
                     "### The last {} characters of the previous response are:".format(k)
@@ -134,13 +188,8 @@ def process_file_with_claude(
                 print(colored(f"### {new_response[:k]}", "yellow"))
 
             if state["continuation_count"] > 0:
-                # accumulated_output += " " + new_response
-
-                # Use the last k characters of the previous response and the first k characters of the new response
                 str1 = state["last_response"][-k:]
                 str2 = new_response[:k]
-
-                # Call the best_connection_method function from openai_utils.py
                 choice = best_connection_method(str1, str2)
 
                 if choice == "A":
@@ -152,12 +201,8 @@ def process_file_with_claude(
                 else:
                     print(f"Invalid choice: {choice}. Defaulting to adding a space.")
                     accumulated_output += " " + new_response
-
             else:
                 accumulated_output += new_response
-
-            # if response_object.stop_reason == "stop_sequence"
-            #     accumulated_output += "\n\n" + end_tag
 
             write_file(output_file, accumulated_output + "\n")
 
@@ -167,26 +212,22 @@ def process_file_with_claude(
 
             messages[-1] = {"role": "assistant", "content": new_response}
 
-            # Check for massive repetition using difflib
             massive_repetition_detected = check_for_massive_repetition(
                 state["last_response"], new_response
             )
 
             state["last_response"] = new_response
 
-            # Define boolean variables for each stopping reason
-            end_turn = response_object.stop_reason in ["end_turn", "stop_sequence"]
+            end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
             encounter_document_tag = f"</{document_tag}>" in new_response
             continuation_limit = state["continuation_count"] > 10
-            input_token_limit = response_object.usage.input_tokens > 100000
+            input_token_limit = input_tokens > 100000
             massive_repetition = massive_repetition_detected
 
-            # Check if the total output tokens exceed 1.3 times the first input tokens
             output_token_limit = (
                 state["total_output_tokens"] > 1.3 * state["first_input_tokens"]
             )
 
-            # Print warning messages for certain stopping reasons
             if output_token_limit:
                 print(
                     "WARNING: Total output tokens exceed 1.3 times the number of the first input tokens. Halting the process."
@@ -204,13 +245,13 @@ def process_file_with_claude(
             )
 
             if should_stop:
-                print("Printing the flags\n")
-                print(f"end_turn: {end_turn}\n")
-                print(f"encounter_document_tag: {encounter_document_tag}\n")
-                print(f"continuation_limit: {continuation_limit}\n")
-                print(f"input_token_limit: {input_token_limit}\n")
-                print(f"massive_repetition: {massive_repetition}\n")
-                print(f"output_token_limit: {output_token_limit}\n")
+                print("Printing the flags")
+                print(f"end_turn: {end_turn}")
+                print(f"encounter_document_tag: {encounter_document_tag}")
+                print(f"continuation_limit: {continuation_limit}")
+                print(f"input_token_limit: {input_token_limit}")
+                print(f"massive_repetition: {massive_repetition}")
+                print(f"output_token_limit: {output_token_limit}")
                 print(
                     "### The last {} characters of the previous response are:".format(k)
                 )
@@ -230,7 +271,6 @@ def process_file_with_claude(
 
             messages.append({"role": "user", "content": user_message})
 
-            # Prefill the last k tokens from the response content
             prefill_tokens = new_response[-k:]
             print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
             messages.append({"role": "assistant", "content": prefill_tokens})
@@ -277,7 +317,7 @@ def process_file_with_claude(
         f"Total input tokens  : {colored(total_input_tokens, 'cyan')}\n"
         f"Total output tokens : {colored(total_output_tokens, 'cyan')}\n"
         f"Total response time : {colored(total_response_time, 'green')} seconds\n"
-        f"Total cost          : ${compute_anthropic_price(total_input_tokens, total_output_tokens, model):.2f}"
+        f"Total cost          : ${compute_api_price(total_input_tokens, total_output_tokens, model):.2f}"
     )
 
     return state, accumulated_output

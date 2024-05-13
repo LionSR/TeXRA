@@ -59,7 +59,7 @@ def main():
         type=str,
         default="sonnet",
         help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku"],
+        choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
     )
     parser.add_argument(
         "--task",
@@ -153,7 +153,9 @@ def main():
     if args.task == "revised_supp":
         user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
         user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
-        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = read_file(args.draft_main_content)
+        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = read_file(
+            args.draft_main_content
+        )
 
     # First call to process the reply letter
     coauthor.process_file_with_claude(
