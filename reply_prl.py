@@ -3,7 +3,7 @@ import os
 import argparse
 from termcolor import colored
 
-from coauthor import read_file
+from coauthor import read_file, extract_text_from_tags
 import coauthor
 
 all_tasks_settings = {
@@ -13,11 +13,17 @@ all_tasks_settings = {
         "output_type": "txt",
         "first_prefill": "<reply_letter>\n<cover_letter>",
     },
-    "revised_paper": {
+    "revised_main": {
         "document_tag": "latex_document",
         "end_tag": "</revised_paper>",
         "output_type": "text",
-        "first_prefill": "Now output the revised paper in the <revised_paper>\n<main_content>\n\\documentclass[aps",
+        "first_prefill": "Now output the revised main paper. <revised_main>\n\\documentclass[aps",
+    },
+    "revised_supp": {
+        "document_tag": "latex_document",
+        "end_tag": "</revised_supp>",
+        "output_type": "text",
+        "first_prefill": "Now output the revised supplementary material.\n <revised_supp>",
     },
 }
 
@@ -32,9 +38,16 @@ def main():
         help="Path to the TeX file containing the reviewer comments.",
     )
     parser.add_argument(
+        "--main_content",
+        type=str,
+        help="Path to the main content TeX file to be included in the response.",
+        default=None,
+    )
+    parser.add_argument(
         "--supp_file",
         type=str,
         help="Path to the supplementary TeX file to be included in the response.",
+        default=None,
     )
     parser.add_argument(
         "--referee_reports",
@@ -58,7 +71,7 @@ def main():
         type=str,
         default="reply_letter",
         help="Mode of operation, currently only 'reply_prl' and 'revised_paper'.",
-        choices=["reply_letter", "revised_paper"],
+        choices=["reply_letter", "revised_main", "revised_supp"],
     )
     parser.add_argument(
         "--reflect",
@@ -110,6 +123,12 @@ def main():
         help="Path to the draft reply letter file.",
         default=None,
     )
+    parser.add_argument(
+        "--draft_main_content",
+        type=str,
+        help="Path to the draft main content file.",
+        default=None,
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -131,8 +150,15 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    if args.task == "revised_paper":
+    if "revised" in args.task:
         user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(args.draft_reply_letter)
+
+    if args.task == "revised_supp": 
+        user_prefix_input_vars["SUPP_CONTENT"] = read_file(args.input_file),
+        user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
+        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = extract_text_from_tags(
+            read_file(args.draft_main_content), "main_content"
+        )
 
     # First call to process the reply letter
     coauthor.process_file_with_claude(
