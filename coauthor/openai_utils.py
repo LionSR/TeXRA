@@ -1,6 +1,11 @@
 import os
 from openai import OpenAI
 
+model_mapping = {
+    "gpt-4o": "gpt-4o-2024-0513",
+    "gpt-4-turbo": "gpt-4-turbo-2024-04-09",
+}
+
 
 def best_connection_method(str1, str2, openai_api_key=None):
     # Define the strings A, B, C
@@ -20,7 +25,8 @@ def best_connection_method(str1, str2, openai_api_key=None):
 
     # Query the model
     completion = client.chat.completions.create(
-        model="gpt-4-turbo",
+        # model="gpt-4-turbo",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
