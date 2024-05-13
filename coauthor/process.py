@@ -253,12 +253,14 @@ def process_file_with_claude(
             f"_{model}.{output_type}", f"_reflect_{model}.{output_type}"
         )
         messages.append({"role": "user", "content": user_message})
-        messages.append({"role": "assistant", "content": assistant_prefill_first})
-        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+
         if output_type == "tex":
             accumulated_output = first_k_tex_document
         else:
             accumulated_output = assistant_prefill_first
+        messages.append({"role": "assistant", "content": assistant_prefill_first})
+        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+
         state["last_response"] = ""
         state["continuation_count"] = 0
 

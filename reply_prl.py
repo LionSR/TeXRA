@@ -153,9 +153,7 @@ def main():
     if args.task == "revised_supp":
         user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
         user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
-        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = extract_text_from_tags(
-            read_file(args.draft_main_content), "main_content"
-        )
+        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = read_file(args.draft_main_content)
 
     # First call to process the reply letter
     coauthor.process_file_with_claude(
