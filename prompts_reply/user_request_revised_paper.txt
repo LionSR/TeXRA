@@ -1,0 +1,7 @@
+Please read the submission cover letter, the paper, referee reports, and  the drafted reply letter carefully. Refer to the example for the tone and the structure. Afterwards, propose a new version of the paper which address all the proposed changes mentioned in the drafted reply letter. Note that the abstract, introduction, and the conclusion also needs to be updated accordingly.
+
+<revised_paper>
+Full text of your revised paper here.
+</revised_paper>
+
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Remeber that the main text of Physical Review Letters has the 4.5 page or 3500 words length limit. The overall length in the main text of the new version should stay constant.
