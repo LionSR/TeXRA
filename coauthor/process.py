@@ -26,6 +26,7 @@ def process_file_with_claude(
     model="sonnet",
     api_key=None,
     prompt_path=None,
+    k=100,
 ):
     model_name = model_mapping[model]
 
@@ -62,11 +63,12 @@ def process_file_with_claude(
     document_tag = task_settings["document_tag"]
     end_tag = task_settings.get("end_tag", None)
 
-    if output_type == "tex":
-        assistant_prefill_first = read_file(input_file).strip()[:50]
-    else:
-        assistant_prefill_first = task_settings["first_prefill"]
+    assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
+    if output_type == "tex":
+        first_k_tex_document = read_file(input_file).strip()[:k]
+        assistant_prefill_first += first_k_tex_document
+        accumulated_output = first_k_tex_document
 
     print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
     messages.append({"role": "assistant", "content": assistant_prefill_first})
@@ -80,7 +82,7 @@ def process_file_with_claude(
         "first_input_tokens": 0,
     }
 
-    def process_response_cycle(state, accumulated_output, k=60):
+    def process_response_cycle(state, accumulated_output, messages, k=k):
         end_turn = False
 
         while True:
@@ -109,7 +111,7 @@ def process_file_with_claude(
                 break
 
             if response_object.usage.output_tokens == 3:
-                print("Some errors might have appeared")
+                print("Some errors might have appeared. No output generated")
                 print(f"### DEBUG response_object: {response_object}")
                 print(f"### DEBUG response_object.content: {response_object.content}")
                 break
@@ -154,8 +156,8 @@ def process_file_with_claude(
             else:
                 accumulated_output += new_response
 
-            if response_object.stop_reason == "stop_sequence":
-                accumulated_output += "\n\n" + end_tag
+            # if response_object.stop_reason == "stop_sequence"
+            #     accumulated_output += "\n\n" + end_tag
 
             write_file(output_file, accumulated_output + "\n")
 
@@ -236,7 +238,7 @@ def process_file_with_claude(
         return end_turn, state, accumulated_output
 
     end_turn, state, accumulated_output = process_response_cycle(
-        state, accumulated_output
+        state, accumulated_output, messages
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
@@ -252,12 +254,16 @@ def process_file_with_claude(
         )
         messages.append({"role": "user", "content": user_message})
         messages.append({"role": "assistant", "content": assistant_prefill_first})
-        accumulated_output = assistant_prefill_first
+        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+        if output_type == "tex":
+            accumulated_output = first_k_tex_document
+        else:
+            accumulated_output = assistant_prefill_first
         state["last_response"] = ""
         state["continuation_count"] = 0
 
         end_turn, state, accumulated_output = process_response_cycle(
-            state, accumulated_output
+            state, accumulated_output, messages
         )
         print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
