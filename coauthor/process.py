@@ -37,6 +37,7 @@ def process_file_with_claude(
 
     first_task_chunk = task.split("_")[0]
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    print(f"Output file: {colored(output_file, 'cyan')}")
 
     if prompt_path is None:
         prompt_path = os.getenv("PROMPT_PATH", "prompts")
