@@ -15,14 +15,14 @@ all_tasks_settings = {
     },
     "revised_main": {
         "document_tag": "latex_document",
-        "end_tag": "</revised_paper>",
-        "output_type": "text",
-        "first_prefill": "Now output the revised main paper. <revised_main>\n\\documentclass[aps",
+        "end_tag": "</revised_main>",
+        "output_type": "tex",
+        "first_prefill": "Now output the revised main paper.\n <revised_main>",
     },
     "revised_supp": {
         "document_tag": "latex_document",
         "end_tag": "</revised_supp>",
-        "output_type": "text",
+        "output_type": "tex",
         "first_prefill": "Now output the revised supplementary material.\n <revised_supp>",
     },
 }
@@ -33,9 +33,9 @@ def main():
         description="Process TeX files for creating responses to reviewer comments and revising the paper."
     )
     parser.add_argument(
-        "input_file",
+        "--input_file",
         type=str,
-        help="Path to the TeX file containing the reviewer comments.",
+        help="Path to the TeX file to be considered the input.",
     )
     parser.add_argument(
         "--main_content",
@@ -48,11 +48,6 @@ def main():
         type=str,
         help="Path to the supplementary TeX file to be included in the response.",
         default=None,
-    )
-    parser.add_argument(
-        "--referee_reports",
-        type=str,
-        help="Path to the file containing the referee reports.",
     )
     parser.add_argument(
         "--instruction",
@@ -121,13 +116,13 @@ def main():
         "--draft_reply_letter",
         type=str,
         help="Path to the draft reply letter file.",
-        default=None,
+        # default=None,
     )
     parser.add_argument(
         "--draft_main_content",
         type=str,
         help="Path to the draft main content file.",
-        default=None,
+        # default=None,
     )
 
     args = parser.parse_args()
@@ -151,10 +146,12 @@ def main():
     task_settings = all_tasks_settings[args.task]
 
     if "revised" in args.task:
-        user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(args.draft_reply_letter)
+        user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(
+            args.draft_reply_letter
+        )
 
-    if args.task == "revised_supp": 
-        user_prefix_input_vars["SUPP_CONTENT"] = read_file(args.input_file),
+    if args.task == "revised_supp":
+        user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
         user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
         user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = extract_text_from_tags(
             read_file(args.draft_main_content), "main_content"
