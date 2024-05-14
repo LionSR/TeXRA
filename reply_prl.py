@@ -11,6 +11,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "</reply_letter>",
         "output_type": "txt",
+        # "first_prefill": "<scratchpad>",
         "first_prefill": "<reply_letter>\n<cover_letter>",
     },
     "revised_main": {
