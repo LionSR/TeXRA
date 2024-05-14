@@ -13,6 +13,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
+        "first_prefill": "Now output the revised document under <latex_document>.",
         # "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{in",
         # "first_prefill": "\\documentclass[pra,nobalancelastpage,twocolumn,nofootinbib,superscriptaddress]{revtex4-2}\n\\usepackage{xcolor,amsthm",
     },
@@ -42,8 +43,8 @@ def main():
         "--task",
         type=str,
         default="correct",
-        help="Mode of operation, either 'correct'.",
-        choices=["correct"],
+        help="Mode of operation, either 'correct_main'.",
+        choices=["correct_main"],
     )
     parser.add_argument(
         "--prompt_path",
