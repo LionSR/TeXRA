@@ -153,9 +153,8 @@ def process_file_with_claude(
                 print(f"### Response time: {colored(response_time, 'green')} seconds")
                 print(f"### Reason for stopping: {response_object.stop_reason}")
                 print(f"### Usage: {colored(response_object.usage, 'cyan')}")
-                new_response = response_object.completion.strip()
-                input_tokens = response_object.usage["input_tokens"]
-                output_tokens = response_object.usage["output_tokens"]
+                input_tokens = response_object.usage.input_tokens
+                output_tokens = response_object.usage.output_tokens
                 stop_reason = response_object.stop_reason
                 if output_tokens == 3:
                     print("Some errors might have appeared. No output generated")
