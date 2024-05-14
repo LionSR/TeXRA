@@ -14,17 +14,17 @@ all_tasks_settings = {
         # "first_prefill": "<scratchpad>",
         "first_prefill": "<reply_letter>\n<cover_letter>",
     },
-    "revised_main": {
+    "revise_main": {
         "document_tag": "latex_document",
         "end_tag": "</revised_main>",
         "output_type": "tex",
         "first_prefill": "Now output the revised main paper.\n <revised_main>",
     },
-    "revised_supp": {
+    "revise_supp": {
         "document_tag": "latex_document",
-        "end_tag": "</revised_supp>",
+        "end_tag": "</revise_supp>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised supplementary material.\n <revised_supp>",
+        "first_prefill": "Now output the revised supplementary material.\n <revise_supp>",
     },
     "polish_reply": {
         "document_tag": "latex_document",
@@ -72,8 +72,8 @@ def main():
         "--task",
         type=str,
         default="reply_letter",
-        help="Mode of operation, currently only 'reply_prl' and 'revised_paper'.",
-        choices=["reply_letter", "revised_main", "revised_supp", "polish_reply"],
+        help="Mode of operation, currently only 'reply_prl' and 'revise_paper'.",
+        choices=["reply_letter", "revise_main", "revise_supp", "polish_reply"],
     )
     parser.add_argument(
         "--reflect",
@@ -152,7 +152,7 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    if "revised" or "polish" in args.task:
+    if "revise" or "polish" in args.task:
         user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(
             args.draft_reply_letter
         )
@@ -160,7 +160,7 @@ def main():
     if "polish" in args.task:
         user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
 
-    if args.task == "revised_supp":
+    if args.task == "revise_supp":
         user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
         user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
         user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = read_file(
