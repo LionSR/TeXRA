@@ -46,16 +46,16 @@ function reply_letter_prl() {
     python "${SCRIPT_DIR}/reply_prl.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=reply_letter --input_file="${INPUT_FILE}" --supp_file="${SUPP_FILE}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
 }
 
-function revised_main_prl() {
+function revise_main_prl() {
     local INPUT_FILE=$1
     local SUPP_FILE=${2:-"supp.tex"}
     local DRAFT_REPLY_LETTER=$3
     local PROMPT_PATH=${SCRIPT_DIR}/prompts_reply
     local MODEL=${MODEL:-opus}
-    python "${SCRIPT_DIR}/reply_prl.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=revised_main --input_file="${INPUT_FILE}" --supp_file="${SUPP_FILE}" --draft_reply_letter="${DRAFT_REPLY_LETTER}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
+    python "${SCRIPT_DIR}/reply_prl.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=revise_main --input_file="${INPUT_FILE}" --supp_file="${SUPP_FILE}" --draft_reply_letter="${DRAFT_REPLY_LETTER}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
 }
 
-function revised_supp_prl() {
+function revise_supp_prl() {
     local INPUT_FILE=$1
     local MAIN_CONTENT=$2
     local DRAFT_REPLY_LETTER=$3
@@ -63,7 +63,7 @@ function revised_supp_prl() {
     local SUPP_FILE=${5:-"supp.tex"}
     local PROMPT_PATH=${SCRIPT_DIR}/prompts_reply
     local MODEL=${MODEL:-opus}
-    python "${SCRIPT_DIR}/reply_prl.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=revised_supp --input_file="${INPUT_FILE}" --main_content="${MAIN_CONTENT}" --supp_file="${SUPP_FILE}" --draft_reply_letter="${DRAFT_REPLY_LETTER}" --draft_main_content="${DRAFT_MAIN_CONTENT}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
+    python "${SCRIPT_DIR}/reply_prl.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=revise_supp --input_file="${INPUT_FILE}" --main_content="${MAIN_CONTENT}" --supp_file="${SUPP_FILE}" --draft_reply_letter="${DRAFT_REPLY_LETTER}" --draft_main_content="${DRAFT_MAIN_CONTENT}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
 }
 
 
