@@ -1,8 +1,8 @@
 Please read the submission cover letter, the paper, referee reports,  the drafted reply letter, and the draft of the revised main text of the paper carefully. Refer to the example for the tone and the structure. Afterwards, propose a new version of the appendix of the paper which address all the proposed changes mentioned in the drafted reply letter, and match well with the revised main text of the paper.
 - Make sure figure and their captions match the description in the text.
 
-<revised_supp>
+<revise_supp>
 Full appendix of your revised paper here.
-</revised_supp>
+</revise_supp>
 
 Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary.
