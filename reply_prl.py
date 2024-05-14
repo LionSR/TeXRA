@@ -26,6 +26,12 @@ all_tasks_settings = {
         "output_type": "tex",
         "first_prefill": "Now output the revised supplementary material.\n <revised_supp>",
     },
+    "polish_reply": {
+        "document_tag": "latex_document",
+        "end_tag": "</reply_letter>",
+        "output_type": "txt",
+        "first_prefill": "Now output the polished reply letter.\n <reply_letter>",
+    },
 }
 
 
@@ -67,7 +73,7 @@ def main():
         type=str,
         default="reply_letter",
         help="Mode of operation, currently only 'reply_prl' and 'revised_paper'.",
-        choices=["reply_letter", "revised_main", "revised_supp"],
+        choices=["reply_letter", "revised_main", "revised_supp", "polish_reply"],
     )
     parser.add_argument(
         "--reflect",
@@ -146,10 +152,13 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    if "revised" in args.task:
+    if "revised" or "polish" in args.task:
         user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(
             args.draft_reply_letter
         )
+
+    if "polish" in args.task:
+        user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
 
     if args.task == "revised_supp":
         user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)

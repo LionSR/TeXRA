@@ -97,13 +97,10 @@ def process_file_with_claude(
             accumulated_output = ""
             messages.append({"role": "assistant", "content": "```latex"})
             # messages.append({"role": "user", "content": "continue"})
-
-    # if is_openai_model(model):
-    #     messages.append({"role": "assistant", "content": assistant_prefill_first})
-    #     messages.append({"role": "user", "content": "continue"})
-    if is_anthropic_model(model):
+    elif is_anthropic_model(model):
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
         messages.append({"role": "assistant", "content": assistant_prefill_first})
+    
 
     state = {
         "continuation_count": 0,
