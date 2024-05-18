@@ -11,12 +11,18 @@ import coauthor
 all_tasks_settings = {
     "correct_main": {
         "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
+        "end_tag": "<latex_document>",
         "output_type": "tex",
         "first_prefill": "Now output the revised document under <latex_document>.",
         # "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{in",
         # "first_prefill": "\\documentclass[pra,nobalancelastpage,twocolumn,nofootinbib,superscriptaddress]{revtex4-2}\n\\usepackage{xcolor,amsthm",
     },
+    "correct_article": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "Now output the revised document under <latex_document>.",
+    }
 }
 
 
@@ -43,8 +49,8 @@ def main():
         "--task",
         type=str,
         default="correct",
-        help="Mode of operation, either 'correct_main'.",
-        choices=["correct_main"],
+        help="Mode of operation, either 'correct_main' or 'correct_article'.",
+        choices=["correct_main", "correct_article"],
     )
     parser.add_argument(
         "--prompt_path",
@@ -62,6 +68,9 @@ def main():
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
     }
+    if args.task == "correct_article":
+        user_prefix_input_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
+        user_prefix_input_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
 
     task_settings = all_tasks_settings[args.task]
 
