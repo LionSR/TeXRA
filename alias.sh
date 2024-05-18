@@ -1,6 +1,15 @@
 export SCRIPT_DIR="/Users/siruilu/Local/AI-Projects/coauthor"
 
+
 function correct_article() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    local AUXILIARY_FILE=$2
+    export PROMPT_PATH="$SCRIPT_DIR/prompts"
+    python "$SCRIPT_DIR/correct_article.py" --task=correct_article --model=$MODEL --prompt_path=$PROMPT_PATH --auxiliary_file="$AUXILIARY_FILE" "$INPUT_FILE"
+}
+
+function correct_main() {
     local MODEL=${MODEL:-opus}
     local INPUT_FILE=$1
     export PROMPT_PATH="$SCRIPT_DIR/prompts"
