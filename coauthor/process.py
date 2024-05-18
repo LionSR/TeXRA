@@ -39,7 +39,7 @@ def process_file_with_claude(
     model="sonnet",
     api_key=None,
     prompt_path=None,
-    k=100,
+    k=200,
 ):
     model_name = model_mapping[model]
     if is_openai_model(model):
