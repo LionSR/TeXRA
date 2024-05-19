@@ -10,7 +10,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "</lecture_note>",
         "output_type": "tex",
-        "first_prefill": "<lecture_note>\n",
+        "first_prefill": "Here is the output lecture note <lecture_note>.\n\\documentclass{lecture}\n\\input{command}\n\\course",
     },
 }
 
@@ -57,7 +57,7 @@ def main():
     parser.add_argument(
         "--reflect",
         type=bool,
-        default=False,
+        default=True,
         help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
@@ -92,6 +92,7 @@ def main():
         model=args.model,
         prompt_path=args.prompt_path,
         reflect=args.reflect,
+        use_prefill_from_input=False,
     )
 
 
