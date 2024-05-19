@@ -12,13 +12,15 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
+        "first_prefill": "Now output the revised document under <latex_document>.",
+        # "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
     },
     "correct_st": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
+        "first_prefill": "Now output the revised document under <latex_document>.",
+        # "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
     },
 }
 
@@ -53,6 +55,7 @@ def main():
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
+    # print(args)
 
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
@@ -62,11 +65,11 @@ def main():
     }
 
     if args.task == "correct_qi":
-        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
-        user_prefix_input_vars["commands_content"] = read_file("commands_qi.tex")
+        user_prefix_input_vars["DOCUMENT_CLS_CONTENT"] = read_file("lecture.cls")
+        user_prefix_input_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
     elif args.task == "correct_st":
-        user_prefix_input_vars["document_cls_content"] = read_file("lecture.cls")
-        user_prefix_input_vars["commands_content"] = read_file("command.tex")
+        user_prefix_input_vars["DOCUMENT_CLS_CONTENT"] = read_file("lecture.cls")
+        user_prefix_input_vars["COMMANDS_CONTENT"] = read_file("command.tex")
 
     task_settings = all_tasks_settings[args.task]
 
