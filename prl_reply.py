@@ -1,4 +1,4 @@
-# reply_prl.py
+# prl_reply.py
 import os
 import argparse
 from termcolor import colored
@@ -72,7 +72,7 @@ def main():
         "--task",
         type=str,
         default="reply_letter",
-        help="Mode of operation, currently only 'reply_prl' and 'revise_paper'.",
+        help="Mode of operation, currently only 'prl_reply' and 'revise_paper'.",
         choices=["reply_letter", "revise_main", "revise_supp", "polish_reply"],
     )
     parser.add_argument(
