@@ -45,7 +45,10 @@ def process_text(text, document):
             document.add_page_break()
             pass
         elif line.startswith("<point_by_point_reply_"):
-            document.add_paragraph("-----------------------------------------------------------------------", style="Response Heading")
+            document.add_paragraph(
+                "-----------------------------------------------------------------------",
+                style="Response Heading",
+            )
             document.add_paragraph(
                 f"Responses to Referee {line[-2].upper()}", style="Response Heading"
             )
@@ -62,7 +65,10 @@ def process_text(text, document):
         elif line.startswith("</author_response>"):
             pass
         elif line.startswith("<list_of_major_changes>"):
-            document.add_paragraph("-----------------------------------------------------------------------", style="Response Heading")
+            document.add_paragraph(
+                "-----------------------------------------------------------------------",
+                style="Response Heading",
+            )
             document.add_paragraph("List of Major Changes", style="Response Heading")
         elif line.startswith("</list_of_major_changes>"):
             pass
@@ -79,7 +85,9 @@ def process_text(text, document):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_file", help="The input file containing the structured text")
+    parser.add_argument(
+        "input_file", help="The input file containing the structured text"
+    )
     args = parser.parse_args()
 
     # Read the structured text from the file
@@ -97,4 +105,3 @@ if __name__ == "__main__":
 
     # Save the document
     document.save(args.input_file.replace(".txt", ".docx"))
-

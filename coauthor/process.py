@@ -97,11 +97,10 @@ def process_file_with_claude(
             accumulated_output = ""
             messages.append({"role": "assistant", "content": "```latex"})
             # messages.append({"role": "user", "content": "continue"})
-    
+
     if is_anthropic_model(model):
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
         messages.append({"role": "assistant", "content": assistant_prefill_first})
-    
 
     state = {
         "continuation_count": 0,
@@ -223,7 +222,7 @@ def process_file_with_claude(
 
             output_token_limit = (
                 state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
-            ) # should be 1.3 for translation
+            )  # should be 1.3 for translation
 
             if output_token_limit:
                 print(
