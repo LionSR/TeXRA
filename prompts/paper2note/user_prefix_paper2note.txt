@@ -20,6 +20,7 @@ The corresponding sample lecture notes with the the following document class and
 <command>
 {COMMANDS_CONTENT}
 </command>
+
 and the lecture note:
 <sample_note> 
 {SAMPLE_NOTE}
