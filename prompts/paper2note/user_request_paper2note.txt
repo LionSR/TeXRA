@@ -1,17 +1,14 @@
-Please carefully read the provided research paper {INPUT_FILE} and adapt it into lecture notes. 
+Please carefully read the provided research paper {INPUT_FILE} and adapt it into a concise lecture note with derivations. 
 
 In your adaptation, focus on the following:
-
-- Include the dynamic and static formulations and the connections to optimal transport, as relevant to the paper's content.
-- Note any notational changes from the paper.
-- Use the LaTeX commands and notations frequently used in the provided sample chapters. 
+<requirements>
+- Use the LaTeX commands and mathematical notations frequently used in the provided sample chapters (under the tag <sample_chapters>). 
 - Begin the lecture notes directly with the main content. Dive straight into the mathematical concepts and flesh out the details, as demonstrated in the sample chapters.
 - Derive every equation and result rather than only stating the results. Include multi-step derivations using the align environment.
-- Omit citations to the literature and focus only on the content of the paper being adapted. 
+- Omit all the figures in the output lecture note.
+- Omit citations to the literature and focus only on the mathematical formulation of the paper being adapted to the lecture note.
 - Do not mention the experiments or empirical results from the paper.
-- Use mathematical notations that are consistent in the provided sampler chapter under the <sample_chapters> tag.
-
-Aim for approximately 10,000 words in the lecture notes.
+</requirements>
 
 Please output the full LaTeX source for the lecture notes, enclosed in <lecture_note> tags:
 
