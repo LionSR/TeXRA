@@ -1,0 +1,16 @@
+Your output lecture notes adapted from the research paper are too generic and not specific enough, with some parts of the paper missing from the notes
+
+After thoroughly reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the following requirements:
+<requirements>
+- Increase the level of detail from moderate (6/10) to high (9/10), with specific references to the key equations, derivations, and concepts from the research paper.
+- Ensure that all major mathematical formulations and derivations from the paper are covered in-depth, with clear explanations and step-by-step derivations.
+- The style, notation, and structure of the lecture notes should closely match the provided sample chapters and the sample lecture notes.
+- Dive deeper into the connections between the paper's content and the overarching themes of stochastic thermodynamics and machine learning, as relevant.
+- Provide more intuitive explanations and interpretations of the key mathematical results, to aid understanding for a broader audience.
+</requirements>
+
+Please output the revised lecture notes (under the <lecture_note> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+
+<lecture_note>
+% Your revised LaTeX source here
+</lecture_note>

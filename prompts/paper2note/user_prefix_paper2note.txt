@@ -1,0 +1,32 @@
+Your goal is to adapt a research paper into lecture notes, focusing on the derivations of the mathematical formulation.
+
+You are provided with previous sample chapters:
+<sample_chapters>
+{SAMPLE_CHAPTERS}
+</sample_chapters>
+
+You are also provided a sample pair of a research paper and its corresponding lecture notes:
+
+Sample paper: 
+<sample_paper>
+{SAMPLE_PAPER}
+</sample_paper>
+
+The corresponding sample lecture notes with the the following document class and the self-defined commands and imported packages:
+<document_class>
+{DOCUMENT_CLS_CONTENT}
+</document_class>
+
+<command>
+{COMMANDS_CONTENT}
+</command>
+and the lecture note:
+<sample_note> 
+{SAMPLE_NOTE}
+</sample_note>
+
+Now, adapt the given research paper {INPUT_FILE} into lecture notes:
+
+<latex_document>
+{INPUT_CONTENT}
+</latex_document>
