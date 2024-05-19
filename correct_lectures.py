@@ -49,7 +49,7 @@ def main():
     parser.add_argument(
         "--prompt_path",
         type=str,
-        default="prompts",
+        default="prompts/general",
         help="Path to the prompts directory.",
     )
 

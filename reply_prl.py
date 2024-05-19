@@ -3,7 +3,7 @@ import os
 import argparse
 from termcolor import colored
 
-from coauthor import read_file, extract_text_from_tags
+from coauthor import read_file
 import coauthor
 
 all_tasks_settings = {
