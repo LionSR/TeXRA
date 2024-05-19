@@ -22,7 +22,7 @@ all_tasks_settings = {
         "end_tag": "</latex_document>",
         "output_type": "tex",
         "first_prefill": "Now output the revised document under <latex_document>.",
-    }
+    },
 }
 
 
@@ -55,7 +55,7 @@ def main():
     parser.add_argument(
         "--prompt_path",
         type=str,
-        default="prompts",
+        default="prompts/general",
         help="Path to the prompts directory.",
     )
 
