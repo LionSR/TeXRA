@@ -40,6 +40,7 @@ def process_file_with_claude(
     api_key=None,
     prompt_path=None,
     k=200,
+    use_prefill_from_input=True,
 ):
     model_name = model_mapping[model]
     if is_openai_model(model):
@@ -89,7 +90,7 @@ def process_file_with_claude(
 
     assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
-    if output_type == "tex":
+    if output_type == "tex" and use_prefill_from_input:
         first_k_tex_document = read_file(input_file).strip()[:k]
         assistant_prefill_first += first_k_tex_document
         accumulated_output = first_k_tex_document
@@ -290,7 +291,7 @@ def process_file_with_claude(
         )
         messages.append({"role": "user", "content": user_message})
 
-        if output_type == "tex":
+        if output_type == "tex" and use_prefill_from_input:
             accumulated_output = first_k_tex_document
         else:
             accumulated_output = assistant_prefill_first
