@@ -25,8 +25,8 @@ def best_connection_method(str1, str2, openai_api_key=None):
 
     # Query the model
     completion = client.chat.completions.create(
-        # model="gpt-4-turbo",
-        model="gpt-4o",
+        model="gpt-4-turbo",
+        # model="gpt-4o",
         messages=[
             {
                 "role": "system",
