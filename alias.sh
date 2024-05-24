@@ -67,9 +67,9 @@ function correct_st() {
 
 function txt2tex() {
     local INPUT_FILE=$1
-    local SAMPLE_TEX=$2
-    local DOCUMENT_CLS=$3
-    local COMMANDS_FILE=$4
+    local DOCUMENT_CLS=$2
+    local COMMANDS_FILE=$3
+    local SAMPLE_TEX=$4
     local PROMPT_PATH="$PROMPT_DIR/txt2tex"
     local MODEL=${MODEL:-opus}
     python "${SCRIPT_DIR}/txt2tex.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --task=txt2tex --input_file="${INPUT_FILE}" --sample_tex="${SAMPLE_TEX}" --document_cls="${DOCUMENT_CLS}" --commands_file="${COMMANDS_FILE}"
