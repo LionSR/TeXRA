@@ -1,0 +1,66 @@
+You are provided with the following:
+
+<txt_content>
+{INPUT_CONTENT}
+</txt_content>
+
+This is the content of a text file generated from a PDF of a book on stochastic differential equations. You need to convert this content into a LaTeX file that will be included in a main LaTeX file.
+
+The main LaTeX file has the following structure:
+
+<main_tex>
+\documentclass[fontsize=9pt,twoside,colorlinks]{fulllecture}
+\input{command}
+
+\begin{document}
+
+\title{Title}
+\author{Author}
+\date{\today}
+
+\maketitle
+
+\frontmatter
+\tableofcontents
+
+\mainmatter
+\input{chap1.tex}
+
+\input{chap2.tex}
+
+\input{chap3.tex}
+
+\input{chap4.tex}
+
+\input{chap5.tex}
+
+\input{chap6.tex}
+
+\input{chap7.tex}
+
+\input{app.tex}
+
+\backmatter
+
+\input{references.bbl}
+
+\end{document}
+</main_tex>
+
+You are also provided with a sample LaTeX file in the desired style:
+
+<sample_tex>
+{SAMPLE_TEX}
+</sample_tex>
+
+Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
+
+The document class and custom commands for the LaTeX file are as follows:
+
+<document_class>
+{DOCUMENT_CLS_CONTENT}
+</document_class>
+
+<command>
+{COMMANDS_CONTENT}
+</command>
