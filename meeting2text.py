@@ -1,7 +1,7 @@
 import argparse
 from termcolor import colored
 
-from coauthor import read_file, extract_text_from_tags
+from coauthor import read_file
 import coauthor
 
 # Define the settings for each mode
@@ -18,7 +18,40 @@ all_tasks_settings = {
 def main():
     parser = argparse.ArgumentParser(description="AI-assisted transcription.")
     parser.add_argument(
-        "input_file", type=str, help="Path to the INPUT file to be transcribed."
+        "--input_file", type=str, help="Path to the INPUT file to be transcribed."
+    )
+    parser.add_argument(
+        "--context_file",
+        type=str,
+        required=True,
+        help="Path to the file containing the context for the discussion transcript.",
+    )
+    parser.add_argument(
+        "--example_transcript",
+        type=str,
+        # default="prompts/meeting2text/example_transcript.txt",
+        default=None,
+        help="Path to the example transcript file.",
+    )
+    parser.add_argument(
+        "--example_edited_transcript",
+        type=str,
+        # default="prompts/meeting2text/example_edited_transcript.txt",
+        default=None,
+        help="Path to the example edited transcript file.",
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="txt2tex",
+        help="Task to perform, currently only 'txt2tex'.",
+        choices=["transcribe"],
+    )
+    parser.add_argument(
+        "--reflect",
+        type=bool,
+        default=False,
+        help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
         "--model",
@@ -33,24 +66,6 @@ def main():
         default="prompts/meeting2text",
         help="Path to the prompts directory.",
     )
-    parser.add_argument(
-        "--context_file",
-        type=str,
-        required=True,
-        help="Path to the file containing the context for the discussion transcript.",
-    )
-    parser.add_argument(
-        "--example_transcript",
-        type=str,
-        default="prompts/meeting2text/example_transcript.txt",
-        help="Path to the example transcript file.",
-    )
-    parser.add_argument(
-        "--example_edited_transcript",
-        type=str,
-        default="prompts/meeting2text/example_edited_transcript.txt",
-        help="Path to the example edited transcript file.",
-    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
@@ -61,20 +76,25 @@ def main():
         "INPUT_FILE": args.input_file,
         "TRANSCRIPT": read_file(args.input_file),
         "CONTEXT": read_file(args.context_file),
-        "EXAMPLE_TRANSCRIPT": read_file(args.example_transcript),
-        "EXAMPLE_EDITED_TRANSCRIPT": read_file(args.example_edited_transcript),
+        "EXAMPLE_TRANSCRIPT": read_file(args.example_transcript)
+        if args.example_transcript
+        else "",
+        "EXAMPLE_EDITED_TRANSCRIPT": read_file(args.example_edited_transcript)
+        if args.example_edited_transcript
+        else "",
     }
 
     # Get the settings for the selected mode
-    task_settings = all_tasks_settings["transcribe"]
+    task_settings = all_tasks_settings[args.task]
 
     coauthor.process_file_with_claude(
-        "transcribe",
+        args.task,
         task_settings,
         args.input_file,
         user_prefix_input_vars,
         model=args.model,
         prompt_path=args.prompt_path,
+        reflect=args.reflect,
     )
 
 

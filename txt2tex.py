@@ -11,7 +11,7 @@ all_tasks_settings = {
         "document_tag": "txt_content",
         "end_tag": "</latex_content>",
         "output_type": "tex",
-        "first_prefill": "<latex_content>\chapter",
+        "first_prefill": "<latex_content> \\chapter",
     },
 }
 

@@ -30,7 +30,7 @@ def main():
         description="Process TeX files with AI-assisted revision."
     )
     parser.add_argument(
-        "input_file", type=str, help="Path to the TeX file to be processed."
+        "--input_file", type=str, help="Path to the TeX file to be processed."
     )
     parser.add_argument(
         "--model",
