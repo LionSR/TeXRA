@@ -140,7 +140,7 @@ def process_file_with_claude(
                 output_tokens = response_object.usage.completion_tokens
                 stop_reason = response_object.choices[0].finish_reason
                 if stop_reason == "stop":
-                    new_response = new_response + end_tag
+                    new_response = new_response + "\n" + end_tag
             elif is_anthropic_model(model):
                 response_object = client.messages.create(
                     model=model_name,
@@ -175,7 +175,7 @@ def process_file_with_claude(
                     break
 
                 if stop_reason == "stop_sequence":
-                    new_response = new_response + end_tag
+                    new_response = new_response + "\n" + end_tag
 
             if state["continuation_count"] == 0:
                 state["first_input_tokens"] = input_tokens
