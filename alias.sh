@@ -23,12 +23,12 @@ function correct_main() {
 function meeting2text() {
     local INPUT_FILE=$1
     local CONTEXT_FILE=$2
-    # local EXAMPLE_TRANSCRIPT=${3:-"$PROMPT_PATH/example_transcript.txt"}
-    # local EXAMPLE_EDITED_TRANSCRIPT=${4:-"$PROMPT_PATH/example_edited_transcript.txt"}
+    local EXAMPLE_TRANSCRIPT=${3:-""}
+    local EXAMPLE_EDITED_TRANSCRIPT=${4:-""}
     local PROMPT_PATH="$PROMPT_DIR/meeting2text"
     local MODEL=${MODEL:-opus}
     # local MODEL=${MODEL:-sonnet}
-    python "${SCRIPT_DIR}/meeting2text.py" --task=transcribe --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context_file="${CONTEXT_FILE}"
+    python "${SCRIPT_DIR}/meeting2text.py" --task=transcribe --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context_file="${CONTEXT_FILE}" --example_transcript="${EXAMPLE_TRANSCRIPT}" --example_edited_transcript="${EXAMPLE_EDITED_TRANSCRIPT}"
 }
 
 # paper2note
