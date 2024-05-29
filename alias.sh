@@ -8,14 +8,14 @@ function correct_article() {
     local INPUT_FILE=$1
     local AUXILIARY_FILE=$2
     export PROMPT_PATH="$PROMPT_DIR/general"
-    python "$SCRIPT_DIR/correct_article.py" --task=correct_article --model=$MODEL --prompt_path=$PROMPT_PATH --auxiliary_file="$AUXILIARY_FILE" "$INPUT_FILE"
+    python "$SCRIPT_DIR/correct_article.py" --task=correct_article --model=$MODEL --prompt_path=$PROMPT_PATH --auxiliary_file="$AUXILIARY_FILE" --input_file="${INPUT_FILE}"
 }
 
 function correct_main() {
     local MODEL=${MODEL:-opus}
     local INPUT_FILE=$1
     export PROMPT_PATH="$PROMPT_DIR/general"
-    python "$SCRIPT_DIR/correct_article.py" --task=correct_main --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
+    python "$SCRIPT_DIR/correct_article.py" --task=correct_main --model=$MODEL --prompt_path=$PROMPT_PATH --input_file="${INPUT_FILE}"
 }
 
 # meeting2text
@@ -23,12 +23,12 @@ function correct_main() {
 function meeting2text() {
     local INPUT_FILE=$1
     local CONTEXT_FILE=$2
-    local PROMPT_PATH=${3:-"$PROMPT_DIR/meeting2text"}
-    local EXAMPLE_TRANSCRIPT=${4:-"$PROMPT_PATH/example_transcript.txt"}
-    local EXAMPLE_EDITED_TRANSCRIPT=${5:-"$PROMPT_PATH/example_edited_transcript.txt"}
-    local MODEL=${MODEL:-opus}
-    local CONTEXT=$(cat "$CONTEXT_FILE")
-    python "${SCRIPT_DIR}/meeting2text.py" --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context="${CONTEXT}" --example_transcript="${EXAMPLE_TRANSCRIPT}" --example_edited_transcript="${EXAMPLE_EDITED_TRANSCRIPT}"
+    # local EXAMPLE_TRANSCRIPT=${3:-"$PROMPT_PATH/example_transcript.txt"}
+    # local EXAMPLE_EDITED_TRANSCRIPT=${4:-"$PROMPT_PATH/example_edited_transcript.txt"}
+    local PROMPT_PATH="$PROMPT_DIR/meeting2text"
+    # local MODEL=${MODEL:-opus}
+    local MODEL=${MODEL:-sonnet}
+    python "${SCRIPT_DIR}/meeting2text.py" --task=transcribe --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context_file="${CONTEXT_FILE}"
 }
 
 # paper2note
@@ -39,41 +39,9 @@ function paper2note() {
     local SAMPLE_PAPER=$3
     local SAMPLE_NOTE=$4
     local PROMPT_PATH="$PROMPT_DIR/paper2note"
-    local MODEL=${MODEL:-opus}
+    # local MODEL=${MODEL:-opus}
+    # local MODEL=${MODEL:-sonnet}
     python "${SCRIPT_DIR}/paper2note.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --task=paper2note --input_file="${INPUT_FILE}" --sample_chapters="${SAMPLE_CHAPTERS}" --sample_paper="${SAMPLE_PAPER}" --sample_note="${SAMPLE_NOTE}"
-}
-
-# prl_edit
-
-function correct_supp_prl() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    local AUXILIARY_FILE=$2
-    export PROMPT_PATH="$SCRIPT_DIR/prl_edit"
-    python "$SCRIPT_DIR/edit_prl.py" --task=correct_supp_prl --model=$MODEL --prompt_path=$PROMPT_PATH --auxiliary_file="$AUXILIARY_FILE" "$INPUT_FILE" 
-}
-
-function correct_prl() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    export PROMPT_PATH="$PROMPT_DIR/prl_edit"
-    python "$SCRIPT_DIR/edit_prl.py" --task=correct_prl --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
-}
-
-# correct_lecture
-
-function correct_qi() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    export PROMPT_PATH="$PROMPT_DIR/lecture_qi"
-    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_qi --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
-}
-
-function correct_st() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    export PROMPT_PATH="$PROMPT_DIR/lecture_st"
-    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_st --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
 }
 
 # txt2tex
@@ -87,6 +55,41 @@ function txt2tex() {
     local MODEL=${MODEL:-opus}
     python "${SCRIPT_DIR}/txt2tex.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --task=txt2tex --input_file="${INPUT_FILE}" --sample_tex="${SAMPLE_TEX}" --document_cls="${DOCUMENT_CLS}" --commands_file="${COMMANDS_FILE}"
 }
+
+
+# prl_edit
+
+function correct_supp_prl() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    local AUXILIARY_FILE=$2
+    export PROMPT_PATH="$SCRIPT_DIR/prl_edit"
+    python "$SCRIPT_DIR/edit_prl.py" --task=correct_supp_prl --model=$MODEL --prompt_path=$PROMPT_PATH --auxiliary_file="$AUXILIARY_FILE" --input_file="${INPUT_FILE}"
+}
+
+function correct_prl() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    export PROMPT_PATH="$PROMPT_DIR/prl_edit"
+    python "$SCRIPT_DIR/edit_prl.py" --task=correct_prl --model=$MODEL --prompt_path=$PROMPT_PATH --input_file="${INPUT_FILE}"
+}
+
+# correct_lecture
+
+function correct_qi() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    export PROMPT_PATH="$PROMPT_DIR/lecture_qi"
+    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_qi --model=$MODEL --prompt_path=$PROMPT_PATH --input_file="${INPUT_FILE}"
+}
+
+function correct_st() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    export PROMPT_PATH="$PROMPT_DIR/lecture_st"
+    python "$SCRIPT_DIR/correct_lectures.py" --task=correct_st --model=$MODEL --prompt_path=$PROMPT_PATH --input_file="${INPUT_FILE}"
+}
+
 
 # prl_reply
 
