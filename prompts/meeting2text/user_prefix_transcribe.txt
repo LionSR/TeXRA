@@ -1,4 +1,4 @@
-You will be editing an academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. 
+You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully because my work depends on the results
 
 Here is a pair of examples showing an original transcript and how it should be edited:
 
