@@ -101,7 +101,9 @@ def process_file_with_claude(
 
     if is_anthropic_model(model):
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-        messages.append({"role": "assistant", "content": assistant_prefill_first.strip()})
+        messages.append(
+            {"role": "assistant", "content": assistant_prefill_first.strip()}
+        )
 
     state = {
         "continuation_count": 0,
@@ -137,6 +139,8 @@ def process_file_with_claude(
                 input_tokens = response_object.usage.prompt_tokens
                 output_tokens = response_object.usage.completion_tokens
                 stop_reason = response_object.choices[0].finish_reason
+                if stop_reason == "stop":
+                    new_response = new_response + end_tag
             elif is_anthropic_model(model):
                 response_object = client.messages.create(
                     model=model_name,
@@ -169,6 +173,9 @@ def process_file_with_claude(
                     print(f"### DEBUG output_tokens: {output_tokens}")
                     print(f"### DEBUG error: {response_object.error}")
                     break
+
+                if stop_reason == "stop_sequence":
+                    new_response = new_response + end_tag
 
             if state["continuation_count"] == 0:
                 state["first_input_tokens"] = input_tokens
