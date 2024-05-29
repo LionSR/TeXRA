@@ -116,4 +116,14 @@ function polish_prl_reply() {
     python "${SCRIPT_DIR}/prl_reply.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --example_reply_letter="${PROMPT_PATH}/example_reply_letter.txt" --task=polish_reply --input_file="${INPUT_FILE}" --main_content="${MAIN_CONTENT}" --supp_file="${SUPP_FILE}" --draft_reply_letter="${DRAFT_REPLY_LETTER}" --cover_letter=rebuttal/cover_letter.txt --instruction=rebuttal/instruction.txt --editor_letter=rebuttal/editor_letter.txt --report_a=rebuttal/report_a.txt --report_b=rebuttal/report_b.txt
 }
 
+# adapt
 
+function adapt() {
+    local INPUT_FILE=$1
+    local SAMPLE_TEX=$2
+    local DOCUMENT_CLS=${3:-"lecture.cls"}
+    local COMMANDS_FILE=${4:-"command.tex"}
+    local PROMPT_PATH="$PROMPT_DIR/adapt"
+    local MODEL=${MODEL:-opus}
+    python "${SCRIPT_DIR}/adapt.py" --model=${MODEL} --prompt_path=${PROMPT_PATH} --task=adapt --input_file="${INPUT_FILE}" --sample_tex="${SAMPLE_TEX}" --document_cls="${DOCUMENT_CLS}" --commands_file="${COMMANDS_FILE}"
+}
