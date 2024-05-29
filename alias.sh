@@ -18,6 +18,19 @@ function correct_main() {
     python "$SCRIPT_DIR/correct_article.py" --task=correct_main --model=$MODEL --prompt_path=$PROMPT_PATH "$INPUT_FILE"
 }
 
+# meeting2text
+
+function meeting2text() {
+    local INPUT_FILE=$1
+    local CONTEXT_FILE=$2
+    local PROMPT_PATH=${3:-"$PROMPT_DIR/meeting2text"}
+    local EXAMPLE_TRANSCRIPT=${4:-"$PROMPT_PATH/example_transcript.txt"}
+    local EXAMPLE_EDITED_TRANSCRIPT=${5:-"$PROMPT_PATH/example_edited_transcript.txt"}
+    local MODEL=${MODEL:-opus}
+    local CONTEXT=$(cat "$CONTEXT_FILE")
+    python "${SCRIPT_DIR}/meeting2text.py" --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context="${CONTEXT}" --example_transcript="${EXAMPLE_TRANSCRIPT}" --example_edited_transcript="${EXAMPLE_EDITED_TRANSCRIPT}"
+}
+
 # paper2note
 
 function paper2note() {
