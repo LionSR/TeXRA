@@ -1,0 +1,13 @@
+As you edit the transcript, please keep the following key points in mind:
+- Correct grammatical mistakes 
+- Remove gibberish and unclear phrases
+- Clarify out-of-context statements while sticking to the original sentences as much as possible
+- Refine the sentences for clarity and coherence
+- Maintain a formal academic tone throughout 
+- Do not include any timestamps in the edited version
+
+Refer back to the example edited transcript to see how these guidelines should be applied in practice.
+
+Before you begin editing, carefully read through the full transcript to ensure you understand the overall context and flow of the discussion. Then, go through and meticulously edit the transcript line by line.
+
+After you are done editing, please provide your final edited version of the transcript inside <edited_transcript> tags. Do not include the original transcript or the example transcripts in your response.
