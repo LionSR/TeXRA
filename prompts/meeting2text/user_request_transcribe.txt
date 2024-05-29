@@ -1,13 +1,12 @@
-As you edit the transcript, please keep the following points in mind:
+Improve the given noisy transcription while sticking to the original sentences as much as possible by following these instructions:
 <instruction>
-- Be faithful to the original content. Never omit anything.
+- Be faithful to the original content.
 - Group sentences conveying the same idea or topic into well-structured, coherent paragraphs. This is crucial for clarity and readability.
 - Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
 - Correct punctuation as needed.
 - Correct grammatical mistakes.
 - Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
 - Fix recognition errors and mistranscriptions.
-- Maintain a formal academic tone throughout 
 - Transform spoken equations into LaTeX format:
    - For inline equations, use single dollar signs, e.g. $\sigma_x$ and $\ket{\psi}$
    - For displayed equations, use double dollar signs, e.g. $$...$$
