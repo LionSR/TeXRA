@@ -3,20 +3,20 @@ You will be editing an academic discussion transcript that has been transcribed 
 Here is a pair of examples showing an original transcript and how it should be edited:
 
 <example_transcript>
-{{EXAMPLE_TRANSCRIPT}}
+{EXAMPLE_TRANSCRIPT}
 </example_transcript>
 
 <example_edited_transcript>
-{{EXAMPLE_EDITED_TRANSCRIPT}}
+{EXAMPLE_EDITED_TRANSCRIPT}
 </example_edited_transcript>
 
 Here is the transcript you need to edit:
 
 <transcript>
-{{TRANSCRIPT}}
+{TRANSCRIPT}
 </transcript>
 
-For context, this transcript covers the following:
+For context, this transcript covers the following topic and the following participants.
 <context>
-{{CONTEXT}}
+{CONTEXT}
 </context>

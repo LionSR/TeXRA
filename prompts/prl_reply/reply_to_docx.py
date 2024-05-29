@@ -86,7 +86,7 @@ def process_text(text, document):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "input_file", help="The input file containing the structured text"
+        "--input_file", help="The input file containing the structured text"
     )
     args = parser.parse_args()
 
