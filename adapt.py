@@ -1,4 +1,3 @@
-# txt2tex.py
 import os
 import argparse
 from termcolor import colored
@@ -6,19 +5,22 @@ from termcolor import colored
 from coauthor import read_file
 import coauthor
 
+
+# Define the settings for each mode
 all_tasks_settings = {
-    "txt2tex": {
-        "document_tag": "txt_content",
-        "end_tag": "</latex_content>",
+    "adapt": {
+        "document_tag": "latex_document",
+        "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "<latex_content>\chapter",
+        "first_prefill": "<scratchpad>",
+        # "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
     },
 }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert a text file generated from a PDF into LaTeX format."
+        description="Process TeX files with AI-assisted revision."
     )
     parser.add_argument(
         "--input_file",
@@ -33,11 +35,13 @@ def main():
     parser.add_argument(
         "--document_cls",
         type=str,
+        default="lecture.cls",
         help="Path to the document class file.",
     )
     parser.add_argument(
         "--commands_file",
         type=str,
+        default="command.tex",
         help="Path to the file containing custom LaTeX commands.",
     )
     parser.add_argument(
@@ -45,14 +49,14 @@ def main():
         type=str,
         default="sonnet",
         help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
+        choices=["sonnet", "opus", "haiku"],
     )
     parser.add_argument(
         "--task",
         type=str,
-        default="txt2tex",
-        help="Task to perform, currently only 'txt2tex'.",
-        choices=["txt2tex"],
+        default="adapt",
+        help="Mode of operation, either 'adapt'.",
+        choices=["adapt"],
     )
     parser.add_argument(
         "--reflect",
@@ -63,23 +67,22 @@ def main():
     parser.add_argument(
         "--prompt_path",
         type=str,
-        default="prompts/txt2tex",
+        default="prompts/adapt",
         help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
+    # print(args)
 
-    print(colored(f"Converting {args.input_file} to LaTeX...\n", "green"))
+    print(colored(f"Revising {args.input_file}...\n", "green"))
 
     user_prefix_input_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
-        "EXISTING_LECTURE_NOTES": read_file(args.sample_tex) if args.sample_tex else "",
-        "DOCUMENT_CLS_CONTENT": (
-            read_file(args.document_cls) if args.document_cls else ""
-        ),
-        "COMMANDS_CONTENT": read_file(args.commands_file) if args.commands_file else "",
+        "EXISTING_LECTURE_NOTES": read_file(args.sample_tex),
+        "DOCUMENT_CLS_CONTENT": read_file(args.document_cls),
+        "COMMANDS_CONTENT": read_file(args.commands_file),
     }
 
     task_settings = all_tasks_settings[args.task]
