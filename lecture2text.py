@@ -36,7 +36,7 @@ all_tasks_settings = {
 def main():
     parser = argparse.ArgumentParser(description="AI-assisted transcription.")
     parser.add_argument(
-        "input_file", type=str, help="Path to the INPUT file to be processed."
+        "--input_file", type=str, help="Path to the INPUT file to be processed."
     )
     parser.add_argument(
         "--model",
