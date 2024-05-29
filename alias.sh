@@ -26,8 +26,8 @@ function meeting2text() {
     # local EXAMPLE_TRANSCRIPT=${3:-"$PROMPT_PATH/example_transcript.txt"}
     # local EXAMPLE_EDITED_TRANSCRIPT=${4:-"$PROMPT_PATH/example_edited_transcript.txt"}
     local PROMPT_PATH="$PROMPT_DIR/meeting2text"
-    # local MODEL=${MODEL:-opus}
-    local MODEL=${MODEL:-sonnet}
+    local MODEL=${MODEL:-opus}
+    # local MODEL=${MODEL:-sonnet}
     python "${SCRIPT_DIR}/meeting2text.py" --task=transcribe --input_file="${INPUT_FILE}" --model="${MODEL}" --prompt_path="${PROMPT_PATH}" --context_file="${CONTEXT_FILE}"
 }
 

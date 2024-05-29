@@ -1,11 +1,18 @@
-As you edit the transcript, please keep the following key points in mind:
-- Correct grammatical mistakes 
-- Remove gibberish and unclear phrases
-- Clarify out-of-context statements while sticking to the original sentences as much as possible
-- Refine the sentences for clarity and coherence
+As you edit the transcript, please keep the following points in mind:
+<instruction>
+- Be faithful to the original content. Never omit anything.
+- Group sentences conveying the same idea or topic into well-structured, coherent paragraphs. This is crucial for clarity and readability.
+- Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
+- Correct punctuation as needed.
+- Correct grammatical mistakes.
+- Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
+- Fix recognition errors and mistranscriptions.
 - Maintain a formal academic tone throughout 
-- Do not include any timestamps in the edited version
-- Identify the speakers in your transcript and include their names in the edited version.
+- Transform spoken equations into LaTeX format:
+   - For inline equations, use single dollar signs, e.g. $\sigma_x$ and $\ket{\psi}$
+   - For displayed equations, use double dollar signs, e.g. $$...$$
+- Some partial identifications have been made to the speaker names. Identify the rest of the speakers in your transcript based on the context and include their names in the edited version.
+</instruction>
 
 Refer back to the example edited transcript to see how these guidelines should be applied in practice.
 
