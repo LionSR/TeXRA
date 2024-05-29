@@ -9,7 +9,7 @@ This content is related to your working book on stochastic differential equation
 You are also provided with a sample LaTeX file in the desired style:
 
 <sample_tex>
-{SAMPLE_TEX}
+{EXISTING_LECTURE_NOTES}
 </sample_tex>
 
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.

@@ -13,3 +13,7 @@ When writing LaTeX, you must:
 - Use \begin{exercise} ... \end{exercise} for exercises.
 - Use \dd for the differential symbol.
 - Use \usepackage{enumitem} when enumerating.
+- Use \cref{...} for referencing equations and sections.
+- 
+- Use Ito instead of Ito.
+- When adding citations use commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use Non-breaking space (`~') before \cite such as "~\cite{...}" when appropriate.
