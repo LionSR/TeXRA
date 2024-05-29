@@ -101,7 +101,7 @@ def process_file_with_claude(
 
     if is_anthropic_model(model):
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-        messages.append({"role": "assistant", "content": assistant_prefill_first})
+        messages.append({"role": "assistant", "content": assistant_prefill_first.strip()})
 
     state = {
         "continuation_count": 0,
