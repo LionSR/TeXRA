@@ -1,0 +1,15 @@
+Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
+
+After thoroughly reviewing the exisiting lecture notes (under the <existing_lecture_notes> tag), the new lecture notes (under the <new_lecture_notes> tag), and your generated lecture notes (under the <adapted_lecture_notes> tag), please revise the lecture notes to satisfy the previous requirements under the <requirements> tag and the following instructions:
+<instruction>
+- Increase the level of detail from moderate (5/10) to high (9/10)
+- Ensure that all major mathematical formulations and derivations from the new lecture note are covered in-depth, with clear explanations and step-by-step derivations.
+- The style, notation, and structure of the output lecture notes should closely match the provided exisiting lecture notes.
+- Make sure all the math commands exists inside the commands file <command> tag or from the packages imported there.
+</instruction>
+
+Please output the revised lecture notes (under the <adapted_lecture_notes> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+
+<adapted_lecture_notes>
+% Your revised LaTeX source here
+</adapted_lecture_notes>
