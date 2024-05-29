@@ -17,20 +17,9 @@ The main LaTeX file has the following structure:
 
 \mainmatter
 \input{chap1.tex}
-
-\input{chap2.tex}
-
-\input{chap3.tex}
-
+...
 \input{chap4.tex}
-
-\input{chap5.tex}
-
-\input{chap6.tex}
-
-\input{chap7.tex}
-
-\input{app.tex}
+...
 
 \backmatter
 
