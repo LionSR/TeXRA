@@ -1,0 +1,12 @@
+You missed some parts of discussion. Your output needs to be improved to ensure it adheres more closely to the original transcription while enhancing clarity and structure. After reviewing the edited document, make sure that the transcription:
+<requirements>
+- Accurately reflects the original content without adding or omitting any details. Ensure that the transcription maintains the original chronological order of information.
+- Enhances the readability by organizing the content into coherent paragraphs that group related ideas or topics.
+- Converts all spoken equations into LaTeX format correctly, ensuring that inline and displayed equations are formatted appropriately.
+- Adjusts sentence lengths to improve readability, breaking down overly long sentences into shorter, more manageable ones.
+- Corrects all punctuation, grammatical errors, and recognition mistakes to produce a polished and professional document.
+- Removes all filler words and phrases that do not contribute to the meaning or flow of the text.
+- Read carefully and make sure the speaker identifications are connect given the context.
+</requirements>
+
+Please revise the document to meet these requirements, ensuring it is a faithful, clear, and grammatically correct representation of the original transcription.
