@@ -9,7 +9,7 @@ all_tasks_settings = {
     "transcribe": {
         "document_tag": "edited_transcript",
         "end_tag": "</edited_transcript>",
-        "output_type": "txt",
+        "output_type": "md",
         "first_prefill": "Here is the faithfully and correctly edited transcript:\n<edited_transcript>",
     },
 }
@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--reflect",
         type=bool,
-        default=False,
+        default=True,
         help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
