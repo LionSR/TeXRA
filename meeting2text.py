@@ -1,8 +1,8 @@
-import argparse
 from termcolor import colored
-
+import os
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -14,12 +14,12 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/meeting2text")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="AI-assisted transcription.")
-    parser.add_argument(
-        "--input_file", type=str, help="Path to the INPUT file to be transcribed."
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--context_file",
         type=str,
@@ -46,25 +46,6 @@ def main():
         default="txt2tex",
         help="Task to perform, currently only 'txt2tex'.",
         choices=["transcribe"],
-    )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=False,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku"],
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/meeting2text",
-        help="Path to the prompts directory.",
     )
     parser.add_argument(
         "--append_mode",
@@ -99,7 +80,7 @@ def main():
         args.input_file,
         user_prefix_vars,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
         reflect=args.reflect,
         append_mode=args.append_mode,
     )
