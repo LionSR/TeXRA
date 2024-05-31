@@ -30,7 +30,7 @@ def load_system_prompt(task, prompt_path):
     return read_file(system_prompt_file)
 
 
-def process_file_with_claude(
+def process_file_with_llm(
     task,
     task_settings,
     input_file,

@@ -74,7 +74,7 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    coauthor.process_file_with_claude(
+    coauthor.process_file_with_llm(
         args.task,
         task_settings,
         args.input_file,
