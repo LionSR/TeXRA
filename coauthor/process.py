@@ -8,12 +8,13 @@ from .file_utils import (
     append_file,
     check_for_massive_repetition,
 )
-from .file_utils import (
-    print_summary,
+from .model_utils import (
     get_model_client,
     is_openai_model,
     is_anthropic_model,
     extract_response_statistics,
+    create_response,
+    print_message_summary,
 )
 from .openai_utils import best_connection_method
 
@@ -35,19 +36,25 @@ def load_user_request(task, prompt_path):
     return read_file(user_request_file_path).strip()
 
 
+def load_user_reflect(task, prompt_path):
+    user_reflect_file_path = os.path.join(prompt_path, f"user_reflect_{task}.txt")
+    return read_file(user_reflect_file_path).strip()
+
+
 def process_file_with_llm(
     task,
     task_settings,
     input_file,
     user_prefix_vars,
     reflect=False,
+    use_prefill_from_input=True,
     model="sonnet",
     api_key=None,
     prompt_path=None,
     k=200,
-    use_prefill_from_input=True,
     max_tokens=4096,
     append_mode=False,
+    temperature=0,
 ):
     client, model_name = get_model_client(model, api_key)
 
@@ -111,42 +118,32 @@ def process_file_with_llm(
         "first_input_tokens": 0,
     }
 
+    encounter_document_tag = f"</{document_tag}>" in accumulated_output
+    if encounter_document_tag:
+        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+        
     def process_response_cycle(
         state, accumulated_output, messages, k=k, best_connector=" "
     ):
         end_turn = False
 
-        while True:
+        while not end_turn:
             start_time = time.time()
-
-            if is_openai_model(model):
-                response_object = client.chat.completions.create(
-                    model=model_name,
-                    max_tokens=max_tokens,
-                    messages=messages,
-                    temperature=0,
-                    stop=end_tag,
-                )
-            elif is_anthropic_model(model):
-                response_object = client.messages.create(
-                    model=model_name,
-                    max_tokens=max_tokens,
-                    messages=messages,
-                    temperature=0,
-                    stop_sequences=[end_tag] if end_tag else None,
-                    system=system_prompt,
-                )
-
+            response_object = create_response(
+                client=client,
+                model=model,
+                model_name=model_name,
+                max_tokens=max_tokens,
+                messages=messages,
+                temperature=temperature,
+                end_tag=end_tag,
+                system_prompt=system_prompt if is_anthropic_model(model) else None,
+            )
             response_time = time.time() - start_time
             state["total_response_time"] += response_time
             print(f"### Response time: {colored(response_time, 'green')} seconds")
 
-            (
-                new_response,
-                input_tokens,
-                output_tokens,
-                stop_reason,
-            ) = extract_response_statistics(response_object, model, end_tag)
+            (new_response, input_tokens, output_tokens, stop_reason) = extract_response_statistics(response_object, model, end_tag)
 
             print(f"### Reason for stopping: {stop_reason}")
             print(f"### Usage: {colored(response_object.usage, 'cyan')}")
@@ -170,14 +167,10 @@ def process_file_with_llm(
 
             accumulated_output += best_connector + new_response
 
-            if (
-                state["continuation_count"] == 0
-                and not append_mode
-                and not os.path.exists(output_file)
-            ):
+            if not os.path.exists(output_file) or not append_mode:
                 write_file(output_file, accumulated_output)
-
-            append_file(output_file, best_connector + new_response)
+            else:
+                append_file(output_file, best_connector + new_response)
 
             print(
                 f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
@@ -199,7 +192,7 @@ def process_file_with_llm(
 
             output_token_limit = (
                 state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
-            )  # should be 1.3 for translation
+            )  # should be 1.3 for translation/transcribe tasks
 
             if output_token_limit:
                 print(
@@ -209,8 +202,7 @@ def process_file_with_llm(
                 print("Stopping after 10 continuations or 100,000 input tokens")
 
             should_stop = (
-                end_turn
-                or encounter_document_tag
+                encounter_document_tag
                 or continuation_limit
                 or input_token_limit
                 or massive_repetition
@@ -248,20 +240,18 @@ def process_file_with_llm(
             print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
             messages.append({"role": "assistant", "content": prefill_tokens})
 
-        return end_turn, state, accumulated_output
+        return state, accumulated_output, end_turn
 
-    end_turn, state, accumulated_output = process_response_cycle(
+    state, accumulated_output, end_turn = process_response_cycle(
         state, accumulated_output, messages
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    print_summary(state, model)
+    print_message_summary(state, model)
 
     if end_turn and reflect:
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
-        user_request_reflect = read_file(
-            os.path.join(prompt_path, f"user_reflect_{task}.txt")
-        )
+        user_request_reflect = load_user_reflect(task, prompt_path)
         print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
         user_message = f"{user_request_reflect}\n"
         output_file = output_file.replace(
@@ -273,17 +263,18 @@ def process_file_with_llm(
             accumulated_output = first_k_tex_document
         else:
             accumulated_output = assistant_prefill_first
+
         messages.append({"role": "assistant", "content": assistant_prefill_first})
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
 
         state["last_response"] = accumulated_output
         state["continuation_count"] = 0
 
-        end_turn, state, accumulated_output = process_response_cycle(
+        state, accumulated_output, end_turn = process_response_cycle(
             state, accumulated_output, messages
         )
         print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-        print_summary(state, model)
+        print_message_summary(state, model)
 
-    return state, accumulated_output
+    return state, accumulated_output, end_turn
