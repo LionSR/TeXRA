@@ -153,9 +153,7 @@ def main():
     task_settings = all_tasks_settings[args.task]
 
     if "revise" or "polish" in args.task:
-        user_prefix_vars["DRAFT_REPLY_LETTER"] = read_file(
-            args.draft_reply_letter
-        )
+        user_prefix_vars["DRAFT_REPLY_LETTER"] = read_file(args.draft_reply_letter)
 
     if "polish" in args.task:
         user_prefix_vars["MAIN_CONTENT"] = read_file(args.main_content)
@@ -163,9 +161,7 @@ def main():
     if args.task == "revise_supp":
         user_prefix_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
         user_prefix_vars["MAIN_CONTENT"] = read_file(args.main_content)
-        user_prefix_vars["DRAFT_MAIN_CONTENT"] = read_file(
-            args.draft_main_content
-        )
+        user_prefix_vars["DRAFT_MAIN_CONTENT"] = read_file(args.draft_main_content)
 
     # First call to process the reply letter
     coauthor.process_file_with_llm(
