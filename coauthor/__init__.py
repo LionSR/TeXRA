@@ -3,7 +3,7 @@ from .process import process_file_with_llm
 from .model_utils import (
     create_response,
     extract_response_statistics,
-    print_summary,
+    print_message_summary,
     is_openai_model,
     is_anthropic_model,
     compute_api_price,
@@ -21,7 +21,7 @@ __all__ = [
     "process_file_with_llm",
     "create_response",
     "extract_response_statistics",
-    "print_summary",
+    "print_message_summary",
     "is_openai_model",
     "is_anthropic_model",
     "read_file",

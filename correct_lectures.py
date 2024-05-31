@@ -13,14 +13,12 @@ all_tasks_settings = {
         "end_tag": "\\end{document}",
         "output_type": "tex",
         "first_prefill": "Now output the revised document. <latex_document>",
-        # "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
     },
     "correct_st": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
         "first_prefill": "Here is the revised document. <latex_document>",
-        # "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
     },
 }
 
