@@ -17,7 +17,7 @@ from .file_utils import (
     check_for_massive_repetition,
 )
 
-from .argparse_utils import get_common_argparser
+from .argparse_utils import get_common_argparser, get_prompt_path
 
 __all__ = [
     "process_file_with_llm",
@@ -33,4 +33,5 @@ __all__ = [
     "check_for_massive_repetition",
     "compute_api_price",
     "get_common_argparser",
+    "get_prompt_path",
 ]

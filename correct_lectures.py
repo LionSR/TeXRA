@@ -1,9 +1,8 @@
 import os
 from termcolor import colored
 
-from coauthor import read_file
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, get_common_argparser, get_prompt_path
 
 
 # Define the settings for each mode
@@ -36,7 +35,6 @@ def main():
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
-    # print(args)
 
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
@@ -48,15 +46,11 @@ def main():
     if args.task == "correct_qi":
         user_prefix_vars["DOCUMENT_CLS_CONTENT"] = read_file("lecture.cls")
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
-        prompt_path = os.path.join(
-            os.path.dirname(coauthor.__file__), "prompts/correct_qi"
-        )
+        prompt_path = get_prompt_path(coauthor, "lecture_qi")
     elif args.task == "correct_st":
         user_prefix_vars["DOCUMENT_CLS_CONTENT"] = read_file("lecture.cls")
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
-        prompt_path = os.path.join(
-            os.path.dirname(coauthor.__file__), "prompts/correct_st"
-        )
+        prompt_path = get_prompt_path(coauthor, "lecture_st")
 
     task_settings = all_tasks_settings[args.task]
 
