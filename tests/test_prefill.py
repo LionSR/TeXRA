@@ -22,7 +22,18 @@ def main(input_file, append_mode=False):
             "content": [
                 {
                     "type": "text",
-                    "text": "You will be writing a 20 chapters novel about the Real Madrid. First, brainstorm some ideas for the plot, characters, themes, and setting of the novel. Consider how you can tell an engaging fictional story while still being respectful of and true to the key facts of CR7's life. \n\nWrite the first draft of the full novel inside <novel> tags. Aim for a length of approximately 20,000 words. Be sure to:\n- Develop memorable characters with distinct personalities, motivations, and arcs\n- Use vivid descriptions to bring the scenes to life in the reader's imagination\n- Include engaging dialogue that sounds natural and reveals character\n- Create a compelling plot with rising action, high stakes, and a satisfying resolution\n- Explore meaningful themes about life, loss, ambition, family, and CR7's legacy\n- Stay true to the key facts of CR7 Bryant's life and career, even as you craft a fictional story\n\nBe creative, but approach the subject matter with sensitivity and respect. The goal is to write an original novel that celebrates CR7's life and achievements.",
+                    "text": (
+                        "You will be writing a 20 chapters novel about the Real Madrid. First, brainstorm some ideas for the plot, characters, themes, and setting of the novel. "
+                        "Consider how you can tell an engaging fictional story while still being respectful of and true to the key facts of CR7's life. \n\n"
+                        "Write the first draft of the full novel inside <novel> tags. Aim for a length of approximately 20,000 words. Be sure to:\n"
+                        "- Develop memorable characters with distinct personalities, motivations, and arcs\n"
+                        "- Use vivid descriptions to bring the scenes to life in the reader's imagination\n"
+                        "- Include engaging dialogue that sounds natural and reveals character\n"
+                        "- Create a compelling plot with rising action, high stakes, and a satisfying resolution\n"
+                        "- Explore meaningful themes about life, loss, ambition, family, and CR7's legacy\n"
+                        "- Stay true to the key facts of CR7 Bryant's life and career, even as you craft a fictional story\n\n"
+                        "Be creative, but approach the subject matter with sensitivity and respect. The goal is to write an original novel that celebrates CR7's life and achievements."
+                    ),
                 },
             ],
         },
