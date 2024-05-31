@@ -1,5 +1,4 @@
 from termcolor import colored
-import difflib
 
 model_mapping = {
     "sonnet": "claude-3-sonnet-20240229",
@@ -67,63 +66,6 @@ def compute_api_price(input_tokens, output_tokens, model):
     return input_price + output_price
 
 
-def read_file(file_path):
-    with open(file_path, "r") as file:
-        return file.read()
-
-
-def write_file(file_path, content):
-    with open(file_path, "w") as file:
-        file.write(content)
-
-
-def append_file(file_path, content):
-    with open(file_path, "a+") as file:
-        file.write(content)
-
-
-def find_last_non_empty_line(response):
-    lines = response.split("\n")
-    last_non_empty_line_index = -1
-    for i in range(len(lines) - 1, -1, -1):
-        if lines[i].strip():
-            last_non_empty_line_index = i
-            break
-    return lines[last_non_empty_line_index]
-
-
-def extract_text_from_tags(INPUT_CONTENT, document_tag):
-    import re
-
-    match = re.search(
-        r"<{}>(.*?)</{}>".format(document_tag, document_tag), INPUT_CONTENT, re.DOTALL
-    )
-    if match:
-        INPUT_CONTENT = match.group(1)
-    return INPUT_CONTENT
-
-
-def check_for_massive_repetition(last_response, new_response):
-    sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
-    repetition_ratio = sequence_matcher.ratio()
-    longest_match = sequence_matcher.find_longest_match(
-        0, len(last_response), 0, len(new_response)
-    )
-    longest_matching_substring = last_response[
-        longest_match.a : longest_match.a + longest_match.size
-    ]
-    massive_repetition_detected = len(longest_matching_substring) > 1000
-    if massive_repetition_detected:
-        print(colored(f"### repetition_ratio is {repetition_ratio}", "red"))
-        print(
-            colored(
-                f"### Longest matching substring: {longest_matching_substring}", "red"
-            )
-        )
-        print("WARNING: Massive repetition detected. Stopping the process.")
-    return massive_repetition_detected
-
-
 def print_summary(state, model):
     total_input_tokens = state["total_input_tokens"]
     total_output_tokens = state["total_output_tokens"]
@@ -134,3 +76,66 @@ def print_summary(state, model):
         f"Total response time : {colored(total_response_time, 'green')} seconds\n"
         f"Total cost          : ${compute_api_price(total_input_tokens, total_output_tokens, model):.2f}"
     )
+
+
+def extract_response_statistics(response_object, model, end_tag=None):
+    if is_openai_model(model):
+        input_tokens = response_object.usage.prompt_tokens
+        output_tokens = response_object.usage.completion_tokens
+        stop_reason = response_object.choices[0].finish_reason
+        new_response = response_object.choices[0].message.content.strip()
+    elif is_anthropic_model(model):
+        input_tokens = response_object.usage.input_tokens
+        output_tokens = response_object.usage.output_tokens
+        stop_reason = response_object.stop_reason
+        if output_tokens == 3:
+            print("Some errors might have appeared. No output generated")
+            print(f"### DEBUG response_object: {response_object}")
+            print(f"### DEBUG response_object.content: {response_object.content}")
+            raise ValueError("No output generated")
+        if response_object.type == "error":
+            print("Error from the API:")
+            print(f"### DEBUG output_tokens: {output_tokens}")
+            print(f"### DEBUG error: {response_object.error}")
+            raise ValueError("Error from the API")
+        new_response = response_object.content[0].text.strip()
+    else:
+        raise ValueError(f"Unsupported model: {model}")
+
+    if "stop" in stop_reason:
+        new_response += "\n" + end_tag
+
+    return new_response, input_tokens, output_tokens, stop_reason
+
+
+def create_response(
+    client,
+    model,
+    model_name,
+    max_tokens,
+    messages,
+    temperature,
+    end_tag,
+    system_prompt=None,
+):
+    if is_openai_model(model):
+        response_object = client.chat.completions.create(
+            model=model_name,
+            max_tokens=max_tokens,
+            messages=messages,
+            temperature=temperature,
+            stop=end_tag,
+        )
+    elif is_anthropic_model(model):
+        response_object = client.messages.create(
+            model=model_name,
+            max_tokens=max_tokens,
+            messages=messages,
+            temperature=temperature,
+            stop_sequences=[end_tag] if end_tag else None,
+            system=system_prompt,
+        )
+    else:
+        raise ValueError(f"Unsupported model: {model}")
+
+    return response_object
