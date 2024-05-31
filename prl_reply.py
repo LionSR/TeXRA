@@ -168,7 +168,7 @@ def main():
         )
 
     # First call to process the reply letter
-    coauthor.process_file_with_claude(
+    coauthor.process_file_with_llm(
         args.task,
         task_settings,
         args.input_file,
