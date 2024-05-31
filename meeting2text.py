@@ -1,8 +1,7 @@
-from termcolor import colored
 import os
-from coauthor import read_file
+from termcolor import colored
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, get_common_argparser, get_prompt_path
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -14,7 +13,7 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/meeting2text")
+prompt_path = get_prompt_path(coauthor, "meeting2text")
 
 
 def main():
@@ -60,7 +59,7 @@ def main():
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
     user_prefix_vars = {
-        "INPUT_FILE": args.input_file,
+        "INPUT_FILE": os.path.basename(args.input_file),
         "TRANSCRIPT": read_file(args.input_file),
         "CONTEXT": read_file(args.context_file),
         "EXAMPLE_TRANSCRIPT": read_file(args.example_transcript)
