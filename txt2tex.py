@@ -72,7 +72,7 @@ def main():
 
     print(colored(f"Converting {args.input_file} to LaTeX...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
         "EXISTING_LECTURE_NOTES": read_file(args.sample_tex) if args.sample_tex else "",
@@ -88,7 +88,7 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         model=args.model,
         prompt_path=args.prompt_path,
         reflect=args.reflect,
