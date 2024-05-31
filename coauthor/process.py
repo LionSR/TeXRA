@@ -2,13 +2,19 @@ import os
 import time
 from termcolor import colored
 
-from .utils import (
+from .file_utils import (
     read_file,
     write_file,
     append_file,
     check_for_massive_repetition,
 )
-from .utils import print_summary, get_model_client, is_openai_model, is_anthropic_model
+from .file_utils import (
+    print_summary,
+    get_model_client,
+    is_openai_model,
+    is_anthropic_model,
+    extract_response_statistics,
+)
 from .openai_utils import best_connection_method
 
 
@@ -18,7 +24,9 @@ def load_system_prompt(task, prompt_path):
 
 
 def load_user_prefix_template(task, prompt_path):
-    user_prefix_template_file_path = os.path.join(prompt_path, f"user_prefix_{task}.txt")
+    user_prefix_template_file_path = os.path.join(
+        prompt_path, f"user_prefix_{task}.txt"
+    )
     return read_file(user_prefix_template_file_path).strip()
 
 
@@ -119,19 +127,6 @@ def process_file_with_llm(
                     temperature=0,
                     stop=end_tag,
                 )
-                response_time = time.time() - start_time
-                state["total_response_time"] += response_time
-                print(f"### Response time: {colored(response_time, 'green')} seconds")
-                print(
-                    f"### Reason for stopping: {response_object.choices[0].finish_reason}"
-                )
-                print(f"### Usage: {colored(response_object.usage, 'cyan')}")
-                new_response = response_object.choices[0].message.content.strip()
-                input_tokens = response_object.usage.prompt_tokens
-                output_tokens = response_object.usage.completion_tokens
-                stop_reason = response_object.choices[0].finish_reason
-                if stop_reason == "stop":
-                    new_response = new_response + "\n" + end_tag
             elif is_anthropic_model(model):
                 response_object = client.messages.create(
                     model=model_name,
@@ -141,36 +136,23 @@ def process_file_with_llm(
                     stop_sequences=[end_tag] if end_tag else None,
                     system=system_prompt,
                 )
-                response_time = time.time() - start_time
-                state["total_response_time"] += response_time
-                print(f"### Response time: {colored(response_time, 'green')} seconds")
-                print(f"### Reason for stopping: {response_object.stop_reason}")
-                print(f"### Usage: {colored(response_object.usage, 'cyan')}")
-                input_tokens = response_object.usage.input_tokens
-                output_tokens = response_object.usage.output_tokens
-                stop_reason = response_object.stop_reason
-                if output_tokens == 3:
-                    print("Some errors might have appeared. No output generated")
-                    print(f"### DEBUG response_object: {response_object}")
-                    print(
-                        f"### DEBUG response_object.content: {response_object.content}"
-                    )
-                    break
-                else:
-                    new_response = response_object.content[0].text.strip()
 
-                if response_object.type == "error":
-                    print("Error from the API:")
-                    print(f"### DEBUG output_tokens: {output_tokens}")
-                    print(f"### DEBUG error: {response_object.error}")
-                    break
+            response_time = time.time() - start_time
+            state["total_response_time"] += response_time
+            print(f"### Response time: {colored(response_time, 'green')} seconds")
 
-                if stop_reason == "stop_sequence":
-                    new_response = new_response + "\n" + end_tag
+            (
+                new_response,
+                input_tokens,
+                output_tokens,
+                stop_reason,
+            ) = extract_response_statistics(response_object, model, end_tag)
+
+            print(f"### Reason for stopping: {stop_reason}")
+            print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
             state["total_input_tokens"] += input_tokens
             state["total_output_tokens"] += output_tokens
-
             if state["continuation_count"] == 0:
                 state["first_input_tokens"] = input_tokens
 
@@ -182,13 +164,17 @@ def process_file_with_llm(
                 print("### The first {} characters of the new response are:".format(k))
                 print(colored(f"### {new_response[:k]}", "yellow"))
 
-            str1 = state["last_response"][-k:]
-            str2 = new_response[:k]
-            best_connector, _ = best_connection_method(str1, str2)
+            best_connector, _ = best_connection_method(
+                state["last_response"][-k:], new_response[:k]
+            )
 
             accumulated_output += best_connector + new_response
 
-            if state["continuation_count"] == 0 and not append_mode:
+            if (
+                state["continuation_count"] == 0
+                and not append_mode
+                and not os.path.exists(output_file)
+            ):
                 write_file(output_file, accumulated_output)
 
             append_file(output_file, best_connector + new_response)

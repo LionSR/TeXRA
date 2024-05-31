@@ -8,6 +8,13 @@ model_mapping = {
 
 
 def best_connection_method(str1, str2, openai_api_key=None):
+    """
+    Example usage
+    str1 = "Hello"
+    # str2 = "world"
+    # print(best_connection_method(str1, str2))
+    """
+
     # Define the strings A, B, C
     A = str1 + str2
     B = str1 + " " + str2
@@ -54,9 +61,3 @@ def best_connection_method(str1, str2, openai_api_key=None):
     else:
         print(f"Invalid choice: {choice}. Defaulting to adding a space.")
         return " ", "B"
-
-
-# Example usage
-# str1 = "Hello"
-# str2 = "world"
-# print(best_connection_method(str1, str2))
