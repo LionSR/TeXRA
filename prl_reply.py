@@ -2,9 +2,8 @@
 import os
 from termcolor import colored
 
-from coauthor import read_file
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, get_common_argparser, get_prompt_path
 
 all_tasks_settings = {
     "reply_letter": {
@@ -34,7 +33,7 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/prl_reply")
+prompt_path = get_prompt_path(coauthor, "prl_reply")
 
 
 def main():

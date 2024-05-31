@@ -2,9 +2,8 @@
 import os
 from termcolor import colored
 
-from coauthor import read_file
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, get_common_argparser, get_prompt_path
 
 
 # Define the settings for the "correct" mode tailored for research papers
@@ -25,7 +24,7 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/prl_edit")
+prompt_path = get_prompt_path(coauthor, "prl_edit")
 
 
 def main():
