@@ -10,6 +10,42 @@ model_mapping = {
 }
 
 
+def is_openai_model(model):
+    return "gpt" in model
+
+
+def is_anthropic_model(model):
+    if model in ["opus", "sonnet", "haiku"]:
+        return True
+    if model in ["claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
+        return True
+    return False
+
+
+def get_model_client(model, api_key=None):
+    from openai import OpenAI
+    from anthropic import Anthropic
+    import os
+
+    model_name = model_mapping[model]
+    if "gpt" in model:
+        OPENAI_API_KEY = api_key or os.getenv("OPENAI_API_KEY")
+        client = OpenAI(api_key=OPENAI_API_KEY)
+    elif model in [
+        "opus",
+        "sonnet",
+        "haiku",
+        "claude-3-haiku",
+        "claude-3-sonnet",
+        "claude-3-opus",
+    ]:
+        ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
+        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    else:
+        raise ValueError("Unsupported model type")
+    return client, model_name
+
+
 def compute_api_price(input_tokens, output_tokens, model):
     if model == "sonnet":
         input_price = input_tokens * 3 / 1e6
@@ -38,6 +74,11 @@ def read_file(file_path):
 
 def write_file(file_path, content):
     with open(file_path, "w") as file:
+        file.write(content)
+
+
+def append_file(file_path, content):
+    with open(file_path, "a+") as file:
         file.write(content)
 
 
@@ -81,3 +122,15 @@ def check_for_massive_repetition(last_response, new_response):
         )
         print("WARNING: Massive repetition detected. Stopping the process.")
     return massive_repetition_detected
+
+
+def print_summary(state, model):
+    total_input_tokens = state["total_input_tokens"]
+    total_output_tokens = state["total_output_tokens"]
+    total_response_time = state["total_response_time"]
+    print(
+        f"Total input tokens  : {colored(total_input_tokens, 'cyan')}\n"
+        f"Total output tokens : {colored(total_output_tokens, 'cyan')}\n"
+        f"Total response time : {colored(total_response_time, 'green')} seconds\n"
+        f"Total cost          : ${compute_api_price(total_input_tokens, total_output_tokens, model):.2f}"
+    )
