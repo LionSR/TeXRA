@@ -14,7 +14,13 @@ def best_connection_method(str1, str2, openai_api_key=None):
     C = str1 + "\n" + str2
 
     # Set up the prompt for the GPT model
-    prompt = f"Given three strings from a LaTeX document:\nA: {A}\nB: {B}\nC: {C}\nWhich is more grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason."
+    prompt = (
+        f"Given three strings from a LaTeX document:\n"
+        f"A: {A}\n"
+        f"B: {B}\n"
+        f"C: {C}\n"
+        f"Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason."
+    )
 
     # Read API key from environment if not provided
     if openai_api_key is None:
@@ -27,6 +33,7 @@ def best_connection_method(str1, str2, openai_api_key=None):
     completion = client.chat.completions.create(
         model="gpt-4-turbo",
         # model="gpt-4o",
+        temperature=0,
         messages=[
             {
                 "role": "system",
@@ -39,8 +46,14 @@ def best_connection_method(str1, str2, openai_api_key=None):
     # Extract the choice from the response
     choice = completion.choices[0].message.content.strip()
 
+    case_dict = {"A": "", "B": " ", "C": "\n"}
+
     # Return the choice directly
-    return choice
+    if choice in case_dict:
+        return case_dict[choice], choice
+    else:
+        print(f"Invalid choice: {choice}. Defaulting to adding a space.")
+        return " ", "B"
 
 
 # Example usage

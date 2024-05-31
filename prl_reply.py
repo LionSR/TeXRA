@@ -137,7 +137,7 @@ def main():
 
     print(colored(f"Preparing response for {args.input_file}...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "PREAMBLE_CONTENT": read_file(args.preamble),
         "MAIN_CONTENT": read_file(args.input_file),
@@ -153,17 +153,17 @@ def main():
     task_settings = all_tasks_settings[args.task]
 
     if "revise" or "polish" in args.task:
-        user_prefix_input_vars["DRAFT_REPLY_LETTER"] = read_file(
+        user_prefix_vars["DRAFT_REPLY_LETTER"] = read_file(
             args.draft_reply_letter
         )
 
     if "polish" in args.task:
-        user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
+        user_prefix_vars["MAIN_CONTENT"] = read_file(args.main_content)
 
     if args.task == "revise_supp":
-        user_prefix_input_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
-        user_prefix_input_vars["MAIN_CONTENT"] = read_file(args.main_content)
-        user_prefix_input_vars["DRAFT_MAIN_CONTENT"] = read_file(
+        user_prefix_vars["SUPP_CONTENT"] = (read_file(args.input_file),)
+        user_prefix_vars["MAIN_CONTENT"] = read_file(args.main_content)
+        user_prefix_vars["DRAFT_MAIN_CONTENT"] = read_file(
             args.draft_main_content
         )
 
@@ -172,7 +172,7 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         reflect=args.reflect,
         model=args.model,
         prompt_path=args.prompt_path,

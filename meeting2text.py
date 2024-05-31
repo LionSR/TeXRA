@@ -50,7 +50,7 @@ def main():
     parser.add_argument(
         "--reflect",
         type=bool,
-        default=True,
+        default=False,
         help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
@@ -66,13 +66,19 @@ def main():
         default="prompts/meeting2text",
         help="Path to the prompts directory.",
     )
+    parser.add_argument(
+        "--append_mode",
+        type=bool,
+        default=True,
+        help="Whether to append the output to the input file instead of overwriting it.",
+    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
 
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": args.input_file,
         "TRANSCRIPT": read_file(args.input_file),
         "CONTEXT": read_file(args.context_file),
@@ -91,10 +97,11 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         model=args.model,
         prompt_path=args.prompt_path,
         reflect=args.reflect,
+        append_mode=args.append_mode,
     )
 
 
