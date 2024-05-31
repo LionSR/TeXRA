@@ -29,6 +29,5 @@ The edited transcript should use markdown format, be easy to follow, with clear 
 
 ...
 </example>
-</output>
 
 Do not include the original transcript or the example transcripts in your response. 
