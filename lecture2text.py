@@ -1,8 +1,7 @@
 import os
 from termcolor import colored
-from coauthor import read_file, extract_text_from_tags
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, extract_text_from_tags, get_common_argparser, get_prompt_path
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -32,7 +31,7 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/lecture2text")
+prompt_path = get_prompt_path(coauthor, "lecture2text")
 
 
 def main():
@@ -58,7 +57,7 @@ def main():
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
     user_prefix_vars = {
-        "INPUT_FILE": args.input_file,
+        "INPUT_FILE": os.path.basename(args.input_file),
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
         "COMMANDS_QI_CONTENT": read_file("commands_qi.tex"),
     }
