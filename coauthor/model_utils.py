@@ -18,6 +18,12 @@ def is_anthropic_model(model):
         return True
     if model in ["claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
         return True
+    if model in [
+        "claude-3-sonnet-20240229",
+        "claude-3-opus-20240229",
+        "claude-3-haiku-20240307",
+    ]:
+        return True
     return False
 
 
@@ -27,17 +33,10 @@ def get_model_client(model, api_key=None):
     import os
 
     model_name = model_mapping[model]
-    if "gpt" in model:
+    if is_openai_model(model):
         OPENAI_API_KEY = api_key or os.getenv("OPENAI_API_KEY")
         client = OpenAI(api_key=OPENAI_API_KEY)
-    elif model in [
-        "opus",
-        "sonnet",
-        "haiku",
-        "claude-3-haiku",
-        "claude-3-sonnet",
-        "claude-3-opus",
-    ]:
+    elif is_anthropic_model(model):
         ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
         client = Anthropic(api_key=ANTHROPIC_API_KEY)
     else:
@@ -66,7 +65,7 @@ def compute_api_price(input_tokens, output_tokens, model):
     return input_price + output_price
 
 
-def print_summary(state, model):
+def print_message_summary(state, model):
     total_input_tokens = state["total_input_tokens"]
     total_output_tokens = state["total_output_tokens"]
     total_response_time = state["total_response_time"]
