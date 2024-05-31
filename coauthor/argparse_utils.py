@@ -1,5 +1,6 @@
 # coauthor/argparse_utils.py
 import argparse
+import os
 
 
 def get_common_argparser():
@@ -23,3 +24,9 @@ def get_common_argparser():
         help="Whether to perform a reflection round after the initial processing.",
     )
     return parser
+
+
+def get_prompt_path(library, prompt_name):
+    return os.path.join(
+        os.path.dirname(os.path.dirname(library.__file__)), "prompts", prompt_name
+    )

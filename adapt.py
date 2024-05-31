@@ -1,9 +1,8 @@
 import os
 from termcolor import colored
 
-from coauthor import read_file
 import coauthor
-from coauthor.argparse_utils import get_common_argparser
+from coauthor import read_file, get_common_argparser, get_prompt_path
 
 
 # Define the settings for each mode
@@ -16,7 +15,7 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/adapt")
+prompt_path = get_prompt_path(coauthor, "adapt")
 
 
 def main():
@@ -48,7 +47,6 @@ def main():
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
-    # print(args)
 
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
