@@ -1,9 +1,9 @@
 import os
-import argparse
 from termcolor import colored
 
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 all_tasks_settings = {
     "paper2note": {
@@ -14,16 +14,12 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/paper2note")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Process a research paper to generate lecture notes."
-    )
-    parser.add_argument(
-        "--input_file",
-        type=str,
-        help="Path to the research paper TeX file.",
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--sample_chapters",
         type=str,
@@ -41,13 +37,6 @@ def main():
         help="Path to the sample lecture note TeX file corresponding to the sample paper.",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="paper2note",
@@ -59,12 +48,6 @@ def main():
         type=bool,
         default=True,
         help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/paper2note",
-        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -90,7 +73,7 @@ def main():
         args.input_file,
         user_prefix_vars,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
         reflect=args.reflect,
         use_prefill_from_input=False,
     )

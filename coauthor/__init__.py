@@ -17,6 +17,8 @@ from .file_utils import (
     check_for_massive_repetition,
 )
 
+from .argparse_utils import get_common_argparser
+
 __all__ = [
     "process_file_with_llm",
     "create_response",
@@ -30,4 +32,5 @@ __all__ = [
     "extract_text_from_tags",
     "check_for_massive_repetition",
     "compute_api_price",
+    "get_common_argparser",
 ]
