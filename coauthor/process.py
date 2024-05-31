@@ -41,6 +41,7 @@ def process_file_with_llm(
     prompt_path=None,
     k=200,
     use_prefill_from_input=True,
+    max_tokens=4096,
 ):
     model_name = model_mapping[model]
     if is_openai_model(model):
@@ -123,7 +124,7 @@ def process_file_with_llm(
             if is_openai_model(model):
                 response_object = client.chat.completions.create(
                     model=model_name,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                     messages=messages,
                     temperature=0,
                     stop=end_tag,
@@ -144,7 +145,7 @@ def process_file_with_llm(
             elif is_anthropic_model(model):
                 response_object = client.messages.create(
                     model=model_name,
-                    max_tokens=4096,
+                    max_tokens=max_tokens,
                     messages=messages,
                     temperature=0,
                     stop_sequences=[end_tag] if end_tag else None,
