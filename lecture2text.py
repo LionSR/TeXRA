@@ -1,8 +1,8 @@
-import argparse
+import os
 from termcolor import colored
-
 from coauthor import read_file, extract_text_from_tags
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -32,19 +32,12 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/lecture2text")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="AI-assisted transcription.")
-    parser.add_argument(
-        "--input_file", type=str, help="Path to the INPUT file to be processed."
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku"],
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--task",
         type=str,
@@ -57,12 +50,6 @@ def main():
         type=bool,
         default=True,
         help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/transcribe",
-        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -93,7 +80,7 @@ def main():
         user_prefix_vars,
         reflect=args.reflect,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
     )
 
 

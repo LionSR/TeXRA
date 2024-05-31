@@ -85,7 +85,7 @@ def process_file_with_llm(
     assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
     if output_type == "tex" and use_prefill_from_input:
-        first_k_tex_document = read_file(input_file).strip()[:k]
+        first_k_tex_document = read_file(input_file)[:k].strip()
         assistant_prefill_first += first_k_tex_document
         accumulated_output = first_k_tex_document
         if is_openai_model(model):
@@ -105,9 +105,7 @@ def process_file_with_llm(
             print(
                 f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
             )
-            messages.append(
-                {"role": "assistant", "content": assistant_prefill_first.strip()}
-            )
+            messages.append({"role": "assistant", "content": assistant_prefill_first})
 
     state = {
         "continuation_count": 0,
@@ -121,7 +119,7 @@ def process_file_with_llm(
     encounter_document_tag = f"</{document_tag}>" in accumulated_output
     if encounter_document_tag:
         raise ValueError(f"</{document_tag}> encountered in the prefill.")
-        
+
     def process_response_cycle(
         state, accumulated_output, messages, k=k, best_connector=" "
     ):
@@ -143,7 +141,12 @@ def process_file_with_llm(
             state["total_response_time"] += response_time
             print(f"### Response time: {colored(response_time, 'green')} seconds")
 
-            (new_response, input_tokens, output_tokens, stop_reason) = extract_response_statistics(response_object, model, end_tag)
+            (
+                new_response,
+                input_tokens,
+                output_tokens,
+                stop_reason,
+            ) = extract_response_statistics(response_object, model, end_tag)
 
             print(f"### Reason for stopping: {stop_reason}")
             print(f"### Usage: {colored(response_object.usage, 'cyan')}")
