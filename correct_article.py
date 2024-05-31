@@ -64,13 +64,13 @@ def main():
 
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
     }
     if args.task == "correct_article":
-        user_prefix_input_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
-        user_prefix_input_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
+        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
+        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
 
     task_settings = all_tasks_settings[args.task]
 
@@ -78,7 +78,7 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         model=args.model,
         prompt_path=args.prompt_path,
     )

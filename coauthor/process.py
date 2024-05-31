@@ -1,40 +1,37 @@
 import os
 import time
-from anthropic import Anthropic
-from openai import OpenAI
 from termcolor import colored
 
 from .utils import (
     read_file,
     write_file,
+    append_file,
     check_for_massive_repetition,
 )
-from .utils import compute_api_price, model_mapping
+from .utils import print_summary, get_model_client, is_openai_model, is_anthropic_model
 from .openai_utils import best_connection_method
-
-
-def is_openai_model(model):
-    return "gpt" in model
-
-
-def is_anthropic_model(model):
-    if model in ["opus", "sonnet", "haiku"]:
-        return True
-    if model in ["claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
-        return True
-    return False
 
 
 def load_system_prompt(task, prompt_path):
     system_prompt_file = os.path.join(prompt_path, f"system_prompt_{task}.txt")
-    return read_file(system_prompt_file)
+    return read_file(system_prompt_file).strip()
+
+
+def load_user_prefix_template(task, prompt_path):
+    user_prefix_template_file_path = os.path.join(prompt_path, f"user_prefix_{task}.txt")
+    return read_file(user_prefix_template_file_path).strip()
+
+
+def load_user_request(task, prompt_path):
+    user_request_file_path = os.path.join(prompt_path, f"user_request_{task}.txt")
+    return read_file(user_request_file_path).strip()
 
 
 def process_file_with_llm(
     task,
     task_settings,
     input_file,
-    user_prefix_input_vars,
+    user_prefix_vars,
     reflect=False,
     model="sonnet",
     api_key=None,
@@ -42,49 +39,30 @@ def process_file_with_llm(
     k=200,
     use_prefill_from_input=True,
     max_tokens=4096,
+    append_mode=False,
 ):
-    model_name = model_mapping[model]
-    if is_openai_model(model):
-        OPENAI_API_KEY = api_key or os.getenv("OPENAI_API_KEY")
-        client = OpenAI(api_key=OPENAI_API_KEY)
-    elif is_anthropic_model(model):
-        ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
-        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    client, model_name = get_model_client(model, api_key)
 
-    output_type = task_settings["output_type"]
-
-    file_name, _ = os.path.splitext(input_file)
-
-    first_task_chunk = task.split("_")[0]
-    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
-    print(f"Output file: {colored(output_file, 'cyan')}")
-
-    if prompt_path is None:
-        prompt_path = os.getenv("PROMPT_PATH", "prompts")
-
-    user_prefix_input_file_path = os.path.join(prompt_path, f"user_prefix_{task}.txt")
-    user_prefix_input_template = read_file(user_prefix_input_file_path)
-    user_request_file_path = os.path.join(prompt_path, f"user_request_{task}.txt")
-    user_request = read_file(user_request_file_path)
-
-    user_prefix_input = user_prefix_input_template.format(**user_prefix_input_vars)
-
+    system_prompt = load_system_prompt(task, prompt_path)
+    user_prefix_template = load_user_prefix_template(task, prompt_path)
+    user_request = load_user_request(task, prompt_path)
+    user_prefix = user_prefix_template.format(**user_prefix_vars)
     print(
         "User prompt prefix template:",
-        colored(user_prefix_input_template, "magenta"),
+        colored(user_prefix_template, "magenta"),
         "\n",
     )
     print("User prompt request:", colored(user_request, "magenta"), "\n")
 
-    system_prompt = load_system_prompt(task, prompt_path)
-    # add the system prompt to the message if it is a gpt model
+    output_type = task_settings["output_type"]
+    file_name, _ = os.path.splitext(input_file)
+    first_task_chunk = task.split("_")[0]
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    print(f"Output file: {colored(output_file, 'cyan')}")
+
+    messages = [{"role": "user", "content": user_prefix + user_request}]
     if is_openai_model(model):
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prefix_input + user_request},
-        ]
-    elif is_anthropic_model(model):
-        messages = [{"role": "user", "content": user_prefix_input + user_request}]
+        messages.insert(0, {"role": "system", "content": system_prompt})
 
     document_tag = task_settings["document_tag"]
     end_tag = task_settings.get("end_tag", None)
@@ -101,21 +79,33 @@ def process_file_with_llm(
             # messages.append({"role": "user", "content": "continue"})
 
     if is_anthropic_model(model):
-        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-        messages.append(
-            {"role": "assistant", "content": assistant_prefill_first.strip()}
-        )
+        if append_mode and os.path.exists(output_file):
+            file_content = read_file(output_file).strip()
+            accumulated_output = file_content
+            messages.append({"role": "assistant", "content": file_content})
+            print(
+                f"Using existing file content as prefill: {colored(output_file, 'green')}"
+            )
+        else:
+            print(
+                f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
+            )
+            messages.append(
+                {"role": "assistant", "content": assistant_prefill_first.strip()}
+            )
 
     state = {
         "continuation_count": 0,
         "total_input_tokens": 0,
         "total_output_tokens": 0,
         "total_response_time": 0,
-        "last_response": "",
+        "last_response": accumulated_output,
         "first_input_tokens": 0,
     }
 
-    def process_response_cycle(state, accumulated_output, messages, k=k):
+    def process_response_cycle(
+        state, accumulated_output, messages, k=k, best_connector=" "
+    ):
         end_turn = False
 
         while True:
@@ -178,11 +168,11 @@ def process_file_with_llm(
                 if stop_reason == "stop_sequence":
                     new_response = new_response + "\n" + end_tag
 
-            if state["continuation_count"] == 0:
-                state["first_input_tokens"] = input_tokens
-
             state["total_input_tokens"] += input_tokens
             state["total_output_tokens"] += output_tokens
+
+            if state["continuation_count"] == 0:
+                state["first_input_tokens"] = input_tokens
 
             if state["continuation_count"] > 0:
                 print(
@@ -192,24 +182,16 @@ def process_file_with_llm(
                 print("### The first {} characters of the new response are:".format(k))
                 print(colored(f"### {new_response[:k]}", "yellow"))
 
-            if state["continuation_count"] > 0:
-                str1 = state["last_response"][-k:]
-                str2 = new_response[:k]
-                choice = best_connection_method(str1, str2)
+            str1 = state["last_response"][-k:]
+            str2 = new_response[:k]
+            best_connector, _ = best_connection_method(str1, str2)
 
-                if choice == "A":
-                    accumulated_output += new_response
-                elif choice == "B":
-                    accumulated_output += " " + new_response
-                elif choice == "C":
-                    accumulated_output += "\n" + new_response
-                else:
-                    print(f"Invalid choice: {choice}. Defaulting to adding a space.")
-                    accumulated_output += " " + new_response
-            else:
-                accumulated_output += new_response
+            accumulated_output += best_connector + new_response
 
-            write_file(output_file, accumulated_output + "\n")
+            if state["continuation_count"] == 0 and not append_mode:
+                write_file(output_file, accumulated_output)
+
+            append_file(output_file, best_connector + new_response)
 
             print(
                 f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
@@ -287,6 +269,8 @@ def process_file_with_llm(
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
+    print_summary(state, model)
+
     if end_turn and reflect:
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
         user_request_reflect = read_file(
@@ -306,7 +290,7 @@ def process_file_with_llm(
         messages.append({"role": "assistant", "content": assistant_prefill_first})
         print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
 
-        state["last_response"] = ""
+        state["last_response"] = accumulated_output
         state["continuation_count"] = 0
 
         end_turn, state, accumulated_output = process_response_cycle(
@@ -314,15 +298,6 @@ def process_file_with_llm(
         )
         print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    total_input_tokens = state["total_input_tokens"]
-    total_output_tokens = state["total_output_tokens"]
-    total_response_time = state["total_response_time"]
-
-    print(
-        f"Total input tokens  : {colored(total_input_tokens, 'cyan')}\n"
-        f"Total output tokens : {colored(total_output_tokens, 'cyan')}\n"
-        f"Total response time : {colored(total_response_time, 'green')} seconds\n"
-        f"Total cost          : ${compute_api_price(total_input_tokens, total_output_tokens, model):.2f}"
-    )
+        print_summary(state, model)
 
     return state, accumulated_output

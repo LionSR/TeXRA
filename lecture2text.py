@@ -70,18 +70,18 @@ def main():
 
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": args.input_file,
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
         "COMMANDS_QI_CONTENT": read_file("commands_qi.tex"),
     }
 
     if args.task in ["2tex", "reflect"]:
-        user_prefix_input_vars["INPUT_CONTENT"] = extract_text_from_tags(
+        user_prefix_vars["INPUT_CONTENT"] = extract_text_from_tags(
             read_file(args.input_file), "improved_document"
         )
     elif args.task in ["transcribe", "punctuate"]:
-        user_prefix_input_vars["INPUT_CONTENT"] = read_file(args.input_file)
+        user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
 
     # Get the settings for the selected mode
     task_settings = all_tasks_settings[args.task]
@@ -90,7 +90,7 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         reflect=args.reflect,
         model=args.model,
         prompt_path=args.prompt_path,
