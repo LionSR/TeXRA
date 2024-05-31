@@ -72,7 +72,7 @@ def main():
 
     print(colored(f"Preparing lecture notes for {args.input_file}...\n", "green"))
 
-    user_prefix_input_vars = {
+    user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
         "SAMPLE_CHAPTERS": "\n".join([read_file(ch) for ch in args.sample_chapters]),
@@ -88,7 +88,7 @@ def main():
         args.task,
         task_settings,
         args.input_file,
-        user_prefix_input_vars,
+        user_prefix_vars,
         model=args.model,
         prompt_path=args.prompt_path,
         reflect=args.reflect,
