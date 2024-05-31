@@ -41,6 +41,7 @@ def best_connection_method(str1, str2, openai_api_key=None):
         model="gpt-4-turbo",
         # model="gpt-4o",
         temperature=0,
+        n=3,  # Generate 3 choices
         messages=[
             {
                 "role": "system",
@@ -50,14 +51,17 @@ def best_connection_method(str1, str2, openai_api_key=None):
         ],
     )
 
-    # Extract the choice from the response
-    choice = completion.choices[0].message.content.strip()
+    # Extract the choices from the response
+    choices = [choice.message.content.strip() for choice in completion.choices]
+
+    # Determine the majority vote
+    majority_choice = max(set(choices), key=choices.count)
 
     case_dict = {"A": "", "B": " ", "C": "\n"}
 
-    # Return the choice directly
-    if choice in case_dict:
-        return case_dict[choice], choice
+    # Return the majority choice directly
+    if majority_choice in case_dict:
+        return case_dict[majority_choice], majority_choice
     else:
-        print(f"Invalid choice: {choice}. Defaulting to adding a space.")
+        print(f"Invalid choice: {majority_choice}. Defaulting to adding a space.")
         return " ", "B"

@@ -14,8 +14,6 @@ all_tasks_settings = {
         "end_tag": "<latex_document>",
         "output_type": "tex",
         "first_prefill": "Now output the revised document under <latex_document>.",
-        # "first_prefill": "\\documentclass{article}\n\\usepackage[utf8]{in",
-        # "first_prefill": "\\documentclass[pra,nobalancelastpage,twocolumn,nofootinbib,superscriptaddress]{revtex4-2}\n\\usepackage{xcolor,amsthm",
     },
     "correct_article": {
         "document_tag": "latex_document",
