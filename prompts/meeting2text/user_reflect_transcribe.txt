@@ -7,6 +7,7 @@ You missed some parts of discussion. Your output needs to be improved to ensure 
 - Corrects all punctuation, grammatical errors, and recognition mistakes to produce a polished and professional document.
 - Removes all filler words and phrases that do not contribute to the meaning or flow of the text.
 - Read carefully and make sure the speaker identifications are connect given the context.
+- To make the transcription more readable, propose a section and subsection structure for this meeting based on the meeting content.
 </requirements>
 
 Please revise the document to meet these requirements, ensuring it is a faithful, clear, and grammatically correct representation of the original transcription.
