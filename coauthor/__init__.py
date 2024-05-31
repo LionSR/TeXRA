@@ -1,5 +1,5 @@
 # coauthor/__init__.py
-from .process import process_file_with_claude
+from .process import process_file_with_llm
 from .utils import (
     read_file,
     write_file,
@@ -11,7 +11,7 @@ from .utils import (
 )
 
 __all__ = [
-    "process_file_with_claude",
+    "process_file_with_llm",
     "read_file",
     "write_file",
     "find_last_non_empty_line",
