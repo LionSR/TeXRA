@@ -1,10 +1,10 @@
 # txt2tex.py
 import os
-import argparse
 from termcolor import colored
 
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 all_tasks_settings = {
     "txt2tex": {
@@ -15,11 +15,12 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/txt2tex")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert a text file generated from a PDF into LaTeX format."
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--input_file",
         type=str,
@@ -41,30 +42,11 @@ def main():
         help="Path to the file containing custom LaTeX commands.",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="txt2tex",
         help="Task to perform, currently only 'txt2tex'.",
         choices=["txt2tex"],
-    )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=True,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/txt2tex",
-        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -90,7 +72,7 @@ def main():
         args.input_file,
         user_prefix_vars,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
         reflect=args.reflect,
         use_prefill_from_input=False,
     )

@@ -1,10 +1,10 @@
 # prl_reply.py
 import os
-import argparse
 from termcolor import colored
 
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 all_tasks_settings = {
     "reply_letter": {
@@ -34,16 +34,12 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/prl_reply")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Process TeX files for creating responses to reviewer comments and revising the paper."
-    )
-    parser.add_argument(
-        "--input_file",
-        type=str,
-        help="Path to the TeX file to be considered the input.",
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--main_content",
         type=str,
@@ -62,30 +58,11 @@ def main():
         help="Path to the file containing the overall instruction.",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="reply_letter",
         help="Mode of operation, currently only 'prl_reply' and 'revise_paper'.",
         choices=["reply_letter", "revise_main", "revise_supp", "polish_reply"],
-    )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=True,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts_reply",
-        help="Path to the prompts directory.",
     )
     parser.add_argument(
         "--cover_letter",
@@ -171,7 +148,7 @@ def main():
         user_prefix_vars,
         reflect=args.reflect,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
     )
 
 

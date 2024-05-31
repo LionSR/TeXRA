@@ -1,10 +1,10 @@
 # correct_article.py
 import os
-import argparse
 from termcolor import colored
 
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 
 # Define the settings for the "correct" mode tailored for research papers
@@ -25,25 +25,16 @@ all_tasks_settings = {
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/prl_edit")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Process TeX files of research papers with AI-assisted revision."
-    )
-    parser.add_argument(
-        "--input_file", type=str, help="Path to the TeX file to be processed."
-    )
+    parser = get_common_argparser()
+
     parser.add_argument(
         "--auxiliary_file",
         type=str,
         help="Path to the auxiliary TeX file to be processed.",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku"],
     )
     parser.add_argument(
         "--task",
@@ -51,12 +42,6 @@ def main():
         default="correct_prl",
         help="Mode of operation, either 'correct_prl', 'correct_supp_prl'.",
         choices=["correct_prl", "correct_supp_prl"],
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/prl_edit",
-        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -83,7 +68,7 @@ def main():
         args.input_file,
         user_prefix_vars,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
     )
 
 
