@@ -1,9 +1,9 @@
 import os
-import argparse
 from termcolor import colored
 
 from coauthor import read_file
 import coauthor
+from coauthor.argparse_utils import get_common_argparser
 
 
 # Define the settings for each mode
@@ -13,20 +13,14 @@ all_tasks_settings = {
         "end_tag": "\\end{document}",
         "output_type": "tex",
         "first_prefill": "<scratchpad>",
-        # "first_prefill": "\\documentclass{lecture}\n\\input{command}\n\n\\course{",
     },
 }
 
+prompt_path = os.path.join(os.path.dirname(coauthor.__file__), "prompts/adapt")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Process TeX files with AI-assisted revision."
-    )
-    parser.add_argument(
-        "--input_file",
-        type=str,
-        help="Path to the text file generated from the PDF.",
-    )
+    parser = get_common_argparser
     parser.add_argument(
         "--sample_tex",
         type=str,
@@ -45,30 +39,11 @@ def main():
         help="Path to the file containing custom LaTeX commands.",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="sonnet",
-        help="Model name to use for processing.",
-        choices=["sonnet", "opus", "haiku"],
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="adapt",
         help="Mode of operation, either 'adapt'.",
         choices=["adapt"],
-    )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=True,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
-    parser.add_argument(
-        "--prompt_path",
-        type=str,
-        default="prompts/adapt",
-        help="Path to the prompts directory.",
     )
 
     args = parser.parse_args()
@@ -93,7 +68,7 @@ def main():
         args.input_file,
         user_prefix_vars,
         model=args.model,
-        prompt_path=args.prompt_path,
+        prompt_path=prompt_path,
         reflect=args.reflect,
         use_prefill_from_input=False,
     )
