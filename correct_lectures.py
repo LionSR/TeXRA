@@ -9,13 +9,13 @@ from coauthor import read_file, get_common_argparser, get_prompt_path
 all_tasks_settings = {
     "correct_qi": {
         "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
+        "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised document. <latex_document>",
+        "first_prefill": "Here is the revised document. <latex_document>",
     },
     "correct_st": {
         "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
+        "end_tag": "</latex_document>",
         "output_type": "tex",
         "first_prefill": "Here is the revised document. <latex_document>",
     },
