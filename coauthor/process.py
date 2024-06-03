@@ -99,11 +99,18 @@ def process_file_with_llm(
     if is_anthropic_model(model):
         if append_mode and os.path.exists(output_file):
             file_content = read_file(output_file).strip()
-            accumulated_output = file_content
-            messages.append({"role": "assistant", "content": file_content})
-            print(
-                f"Using existing file content as prefill: {colored(output_file, 'green')}"
-            )
+            if output_type == "tex" and "\\end{document}" in file_content:
+                print("end_tag detected in existing file content. Overwriting...")
+                print(
+                    f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
+                )
+                messages.append({"role": "assistant", "content": "```latex"})
+            else:
+                accumulated_output = file_content
+                messages.append({"role": "assistant", "content": file_content})
+                print(
+                    f"Using existing file content as prefill: {colored(output_file, 'green')}"
+                )
         else:
             print(
                 f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
