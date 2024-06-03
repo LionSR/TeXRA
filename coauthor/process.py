@@ -19,26 +19,13 @@ from .model_utils import (
 from .openai_utils import best_connection_method
 
 
-def load_system_prompt(task, prompt_path):
-    system_prompt_file = os.path.join(prompt_path, f"system_prompt_{task}.txt")
-    return read_file(system_prompt_file).strip()
-
-
-def load_user_prefix_template(task, prompt_path):
-    user_prefix_template_file_path = os.path.join(
-        prompt_path, f"user_prefix_{task}.txt"
-    )
-    return read_file(user_prefix_template_file_path).strip()
-
-
-def load_user_request(task, prompt_path):
-    user_request_file_path = os.path.join(prompt_path, f"user_request_{task}.txt")
-    return read_file(user_request_file_path).strip()
-
-
-def load_user_reflect(task, prompt_path):
-    user_reflect_file_path = os.path.join(prompt_path, f"user_reflect_{task}.txt")
-    return read_file(user_reflect_file_path).strip()
+def load_prompt(prompt_type, task, prompt_path, task_settings):
+    prompt_file = task_settings.get(f"{prompt_type}_file")
+    if prompt_file:
+        prompt_file_path = os.path.join(prompt_path, prompt_file)
+    else:
+        prompt_file_path = os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
+    return read_file(prompt_file_path).strip()
 
 
 def process_file_with_llm(
@@ -58,9 +45,10 @@ def process_file_with_llm(
 ):
     client, model_name = get_model_client(model, api_key)
 
-    system_prompt = load_system_prompt(task, prompt_path)
-    user_prefix_template = load_user_prefix_template(task, prompt_path)
-    user_request = load_user_request(task, prompt_path)
+    system_prompt = load_prompt("system_prompt", task, prompt_path, task_settings)
+    user_prefix_template = load_prompt("user_prefix", task, prompt_path, task_settings)
+    user_request = load_prompt("user_request", task, prompt_path, task_settings)
+
     user_prefix = user_prefix_template.format(**user_prefix_vars)
     print(
         "User prompt prefix template:",
@@ -264,7 +252,9 @@ def process_file_with_llm(
 
     if end_turn and reflect:
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
-        user_request_reflect = load_user_reflect(task, prompt_path)
+        user_request_reflect = load_prompt(
+            "user_reflect", task, prompt_path, task_settings
+        )
         print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
         user_message = f"{user_request_reflect}\n"
         output_file = output_file.replace(
