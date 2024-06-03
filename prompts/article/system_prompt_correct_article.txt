@@ -5,9 +5,15 @@ When writing LaTeX, you must:
 - Use appropriate notation and terminology consistently throughout the text.
 - Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in thte output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a concise label and adjust accordingly where the labelled items are referenced.
-- You should use \ldots to achieve an ellipsis.
+- You should use \ldots or \cdots rather than "..." to achieve an ellipsis following the best practice of chktex.
 - Non-breaking spaces should be used when referencing equations and figures e.g., use "Eq.~\eqref{eq:label}" and "see Fig.\ref{fig:label}"
 - Use either `` or '' as an alternative to `"`.
-- Inside math environments, you should avoid spaces after parenthesis, and you ought to remove spaces in front of punctuation. For example, use "(a+b)" instead of "( a + b )".
+- Inside math environments, you should avoid spaces after parenthesis, and you ought to remove spaces in front of punctuation. For example, use "$(a+b)$" instead of "$( a + b )$".
 - You should put punctuation outside inner math mode.
-
+- Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
+- Remove redundant multi-line breaks (e.g., when there are more than three consecutive 
+blank lines, reduce to two.).
+- Use space sparingly to separate math symbols to improve readability. For example, prefer "$u_k b_k^\dagger$" over "$u_kb_k^{\dagger}$"; prefer $e^{-h_k t}$ over $e^{-h_kt}$; 
+- Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
+- Remove spaces in front of punctuation.
+- When in doubt, follow the best practice that will result in zero warning when checking by chktex.

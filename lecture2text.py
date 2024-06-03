@@ -1,7 +1,12 @@
 import os
 from termcolor import colored
 import coauthor
-from coauthor import read_file, extract_text_from_tags, get_common_argparser, get_prompt_path
+from coauthor import (
+    read_file,
+    extract_text_from_tags,
+    get_common_argparser,
+    get_prompt_path,
+)
 
 # Define the settings for each mode
 all_tasks_settings = {
