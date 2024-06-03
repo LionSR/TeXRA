@@ -5,14 +5,17 @@ import coauthor
 from coauthor import read_file, get_common_argparser, get_prompt_path
 
 
+prompt_path = get_prompt_path(coauthor, "article")
+
 task_settings = {
     "document_tag": "latex_document",
     "end_tag": "</latex_document>",
     "output_type": "tex",
     "first_prefill": "Here is the revised latex document. <latex_document>",
+    "user_prefix_file": "user_prefix_correct.txt",
+    "user_request_file": "user_request_correct.txt",
+    "system_prompt_file": "system_prompt_correct.txt",
 }
-
-prompt_path = get_prompt_path(coauthor, "article")
 
 
 def main():
@@ -20,11 +23,13 @@ def main():
     parser.add_argument(
         "--auxiliary_file",
         type=str,
+        default=None,
         help="Path to the auxiliary TeX file to be processed.",
     )
     parser.add_argument(
         "--task",
         type=str,
+        default="correct",
         help="The task to be performed.",
     )
     parser.add_argument(
@@ -47,6 +52,7 @@ def main():
     if args.auxiliary_file:
         user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
         user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
+        task_settings["user_prefix_file"] = "user_prefix_correct_with_auxiliary.txt"
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         "correct",
