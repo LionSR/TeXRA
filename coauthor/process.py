@@ -84,14 +84,17 @@ def process_file_with_llm(
 
     assistant_prefill_first = task_settings["first_prefill"]
     accumulated_output = assistant_prefill_first
-    if output_type == "tex" and use_prefill_from_input:
-        first_k_tex_document = read_file(input_file)[:k].strip()
-        assistant_prefill_first += first_k_tex_document
-        accumulated_output = first_k_tex_document
-        if is_openai_model(model):
+    if output_type == "tex":
+        if use_prefill_from_input:
+            first_k_tex_document = read_file(input_file)[:k].strip()
+            assistant_prefill_first += first_k_tex_document
+            accumulated_output = first_k_tex_document
+            if is_openai_model(model):
+                accumulated_output = ""
+                messages.append({"role": "assistant", "content": "```latex"})
+                # messages.append({"role": "user", "content": "continue"})
+        else:
             accumulated_output = ""
-            messages.append({"role": "assistant", "content": "```latex"})
-            # messages.append({"role": "user", "content": "continue"})
 
     if is_anthropic_model(model):
         if append_mode and os.path.exists(output_file):
@@ -280,4 +283,4 @@ def process_file_with_llm(
 
         print_message_summary(state, model)
 
-    return state, accumulated_output, end_turn
+    return state, accumulated_output, end_turn, output_file

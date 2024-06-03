@@ -129,4 +129,3 @@ function adapt() {
     local MODEL=${MODEL:-opus}
     python "${SCRIPT_DIR}/adapt.py" --model=${MODEL} --task=adapt --input_file="${INPUT_FILE}" --sample_tex="${SAMPLE_TEX}" --document_cls="${DOCUMENT_CLS}" --commands_file="${COMMANDS_FILE}" --reflect=True
 }
-}
