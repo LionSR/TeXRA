@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coauthor"
-version = "0.1.0"
+version = "0.3.0"
 authors = [
   { name="Sirui Lu", email="14889516+LionSR@users.noreply.github.com" },
 ]
@@ -23,3 +23,6 @@ classifiers = [
 
 [tool.setuptools]
 packages = ["coauthor"]
+
+[project.entry-points.console_scripts]
+coauthor-cli = "coauthor.cli:cli"
