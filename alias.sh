@@ -1,21 +1,6 @@
 export SCRIPT_DIR="/Users/siruilu/Local/AI-Projects/coauthor"
 export PROMPT_DIR="$SCRIPT_DIR/prompts"
 
-# general
-
-function correct_article() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    local AUXILIARY_FILE=$2
-    python "$SCRIPT_DIR/correct_article.py" --task=correct_article --model=$MODEL --auxiliary_file="$AUXILIARY_FILE" --input_file="${INPUT_FILE}"
-}
-
-function correct_main() {
-    local MODEL=${MODEL:-opus}
-    local INPUT_FILE=$1
-    python "$SCRIPT_DIR/correct_article.py" --task=correct_main --model=$MODEL --input_file="${INPUT_FILE}"
-}
-
 # meeting2text
 
 function meeting2text() {
