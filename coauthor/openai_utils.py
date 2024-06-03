@@ -41,7 +41,7 @@ def best_connection_method(str1, str2, openai_api_key=None):
         model="gpt-4-turbo",
         # model="gpt-4o",
         temperature=0,
-        n=5,  # Generate 5 choices
+        n=10,  # Generate 10 choices
         messages=[
             {
                 "role": "system",
