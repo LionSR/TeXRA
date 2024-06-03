@@ -30,6 +30,17 @@ should just be:
 \begin{equation}
 	\mathcal{F}_{n} \approx \exp(-\frac{\Delta J N}{8h}\tanh^{-1}\frac{n\Delta J}{h})
 \end{equation}
-At the same time, prefer align environments for multi-line equations of several expressions.
+At the same time, prefer align environments for multi-line equations of several expressions. For example:
+\begin{equation}
+	\begin{split}
+		\mathcal{F}_{\pm k} &=\frac{1-\zeta_{\pm k}}{2}\\
+		\frac{E_{\pm k}}{N} &=-\zeta_{\pm k}\frac{E_{Gs}^{\pm k}}{N}
+	\end{split}
+\end{equation}
+should just be:
+\begin{align}
+	\mathcal{F}_{\pm k} &=\frac{1-\zeta_{\pm k}}{2}\\
+	\frac{E_{\pm k}}{N} &=-\zeta_{\pm k}\frac{E_{Gs}^{\pm k}}{N}
+\end{align}
 
 
