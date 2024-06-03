@@ -1,15 +1,15 @@
-Your task is to write research paper.
+Your task is to write a research paper.
 
 When writing LaTeX, you must:
-- Use \begin{align} … \end{align} for displayed equations- Use \de for \delta.
+- Use \begin{align} ... \end{align} for displayed equations- Use \de for \delta.
 - Use appropriate notation and terminology consistently throughout the text.
 - Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in thte output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a concise label and adjust accordingly where the labelled items are referenced.
 - You should use \ldots or \cdots to achieve an ellipsis following the best practice of chktex.
 - Non-breaking spaces should be used when referencing equations and figures e.g., use "Eq.~\eqref{eq:label}" and "see Fig.\ref{fig:label}"
 - Use either `` or '' as an alternative to `"`.
-- Inside math environments, you should avoid spaces after parenthesis, and you ought to remove spaces in front of punctuation. For example, use "$(a+b)$" instead of "$( a + b )$".
-- Use \dd as the differential operator.
+- Inside math environments, you should avoid spaces after parenthesis, and you ought to remove spaces in front of punctuation. For example, use "$(a+b)$" instead of "$( a + b )$". Prefer $\left(\rho_k \otimes \ket{0}\bra{0}\right)$ over $\left( \rho_k \otimes \ket{0}\bra{0}\right)$.
+- Use \dd as the differential operator. 
 - You should put punctuation outside inner math mode.
 - Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
 - Remove redundant multi-line breaks (e.g., when there are more than three consecutive 
@@ -18,4 +18,16 @@ blank lines, reduce to two.).
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - Remove spaces in front of punctuation.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+- Remove unnecessary split environments. For example:
+\begin{equation}
+	\begin{split}
+		\mathcal{F}_{n} &\approx \exp(-\frac{\Delta J N}{8h}\tanh^{-1}\frac{n\Delta J}{h})
+	\end{split}
+\end{equation}
+should just be:
+\begin{equation}
+	\mathcal{F}_{n} \approx \exp(-\frac{\Delta J N}{8h}\tanh^{-1}\frac{n\Delta J}{h})
+\end{equation}
+- Put two line breaks before the beginning of each \section and \subsection.
+- Use \tr instead of \text{tr} nor \textrm{tr}.
 
