@@ -2,7 +2,7 @@ Please carefully read the provided research paper {INPUT_FILE} and adapt it into
 
 In your adaptation, focus on the following:
 <requirements>
-- Use the LaTeX commands and mathematical notations frequently used in the provided sample chapters (under the tag <sample_chapters>). 
+- Use the LaTeX commands and mathematical notations frequently used in the provided sample chapters (under the tag <sample_chapters></sample_chapters>). 
 - Begin the lecture notes directly with the main content. Dive straight into the mathematical concepts and flesh out the details, as demonstrated in the sample chapters.
 - Derive every equation and result rather than only stating the results. Include multi-step derivations using the align environment.
 - Omit all the figures in the output lecture note.
@@ -10,7 +10,7 @@ In your adaptation, focus on the following:
 - Do not mention the experiments or empirical results from the paper.
 </requirements>
 
-Please output the full LaTeX source for the lecture notes, enclosed in <lecture_note> tags:
+Please output the full LaTeX source for the lecture notes, enclosed in the <lecture_note></lecture_note> tag:
 
 <lecture_note>
 % Your LaTeX source here

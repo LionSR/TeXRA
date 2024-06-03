@@ -1,6 +1,6 @@
 I will provide you with two pieces of information:
-1. A transcribed text from a lecture of a graduate quantum information course, enclosed in <transcription> tags
-2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex> tags
+1. A transcribed text from a lecture of a graduate quantum information course, enclosed in <transcription></transcription> tag
+2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex></latex> tag
 
 The latex rewrite was generated using the following guideline.
 <guidelines>

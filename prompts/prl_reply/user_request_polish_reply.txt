@@ -2,13 +2,13 @@ Please read the paper, referee reports, the example reply, and the drafted reply
 
 The draft letter has the following structure
 
-1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside <cover_letter> tags.
+1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <cover_letter></cover_letter> tag.
 
 2. A point-by-point response to the referee comments. To do this:
-- Split each referee report in the <referee_report_a> or <referee_report_b> tags into individual segment. Copy each exact comments as verbatim segment within <referee_comment> tags.
-- Similar to the provided example, all the referee's comments (summary, recommendtions, criticisms, questions) need to be covered covered and addressed in the <point_by_point_reply_a> or <point_by_point_reply_b> tags. For recommendtions by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what are changed in the paper, similar to the provided example.
+- Split each referee report in the <referee_report_a></referee_report_a> or <referee_report_b></referee_report_b> tag into individual segment. Copy each exact comments as verbatim segment within the <referee_comment></referee_comment> tag.
+- Similar to the provided example, all the referee's comments (summary, recommendtions, criticisms, questions) need to be covered covered and addressed in the <point_by_point_reply_a></point_by_point_reply_a> or <point_by_point_reply_b></point_by_point_reply_b> tag. For recommendtions by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what are changed in the paper, similar to the provided example.
 - Make sure everything the referee wrote in the original report have been responded in the point by point reply.
-- Write your rebuttal to each comment inside <author_response> tags immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use "Show, not tell" approach - be specific about what are changed in the paper, similar to the provided example.
+- Write your rebuttal to each comment inside <author_response></author_response> tag immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use "Show, not tell" approach - be specific about what are changed in the paper, similar to the provided example.
 
 3. At the end of each reply to the referers, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
 
@@ -61,6 +61,6 @@ Please review the drafted reply letter and the referee comments carefully. Then,
 3. Address all the referee comments thoroughly and convincingly
 4. Ensure the tone is professional and respectful
 
-Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start polishing the reply letter in the <reply_letter> tags. Your polished reply letter should be well-structured, concise, and free of errors in grammar, punctuation, and spelling.
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start polishing the reply letter in the the <reply_letter></reply_letter> tag. Your polished reply letter should be well-structured, concise, and free of errors in grammar, punctuation, and spelling.
 
 
