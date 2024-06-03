@@ -36,11 +36,19 @@ def clean():
         "*_gpt4t.tex",
         "*_gpt4o.tex",
     ]
+    patterns_build = [
+        "build/*_opus*",
+        "build/*_sonnet*",
+        "build/*_haiku*",
+        "build/*_gpt4t*",
+        "build/*_gpt4o*",
+    ]
     files_to_delete = []
     for pattern in patterns:
         # Search in the current directory and immediate subdirectories
         files_to_delete.extend(glob.glob(pattern))
-        files_to_delete.extend(glob.glob(f"./**/{pattern}", recursive=True))
+    for pattern in patterns_build:
+        files_to_delete.extend(glob.glob(pattern))
 
     for file in files_to_delete:
         os.remove(file)
@@ -48,8 +56,42 @@ def clean():
     print("Cleanup complete.")
 
 
+@click.command()
+def indent_tex():
+    tex_files = glob.glob(
+        "./*.tex", recursive=False
+    )  # Find all .tex files in the current directory
+    for tex_file in tex_files:
+        subprocess.run(
+            ["latexindent", tex_file, "-w", "-s", "-l"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    print("All .tex files have been indented.")
+
+
+@click.command()
+def rm_build():
+    # Delete all PDF files in the current directory
+    pdf_files = glob.glob("./*.pdf", recursive=False)  # Only in the current directory
+    for pdf_file in pdf_files:
+        os.remove(pdf_file)
+
+    # Delete all files in the build directory
+    build_files = glob.glob(
+        "./build/*", recursive=False
+    )  # Only in the build directory, not subdirectories
+    for build_file in build_files:
+        os.remove(build_file)
+
+    print("All specified files have been deleted.")
+
+
 cli.add_command(correct_tex)
 cli.add_command(clean)
+cli.add_command(indent_tex)
+cli.add_command(rm_build)
+
 
 if __name__ == "__main__":
     cli()
