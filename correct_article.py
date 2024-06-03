@@ -11,13 +11,13 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "<latex_document>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised document under <latex_document>.",
+        "first_prefill": "Now output the revised latex document. <latex_document>",
     },
     "correct_article": {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised document under <latex_document>.",
+        "first_prefill": "Now output the revised latex document. <latex_document>",
     },
 }
 
@@ -56,16 +56,22 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    prompt_path = os.path.join(args.prompt_path, "article")
-
-    coauthor.process_file_with_llm(
+    state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         args.task,
         task_settings,
         args.input_file,
         user_prefix_vars,
         model=args.model,
         prompt_path=prompt_path,
+        use_prefill_from_input=False
     )
+
+    # Call latexdiff to diff the generated/output file with the input to a file ends with _diff_opus.txt
+    input_file_name = os.path.basename(args.input_file)
+    diff_file_name = output_file.replace(f"{args.model}.tex", f"_diff_{args.model}.tex")
+    latexdiff_command = f"latexdiff {input_file_name} {output_file} > {diff_file_name}"
+    print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
+    os.system(latexdiff_command)
 
 
 if __name__ == "__main__":
