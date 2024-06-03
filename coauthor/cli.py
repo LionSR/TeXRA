@@ -30,7 +30,7 @@ def correct_tex(input_file, auxiliary_file=None):
 
 @click.command()
 def clean():
-    excluded_dirs = {'Figs', 'Figures', 'build'}
+    excluded_dirs = {"Figs", "Figures", "build"}
     patterns = [
         "*_opus.tex",
         "*_sonnet.tex",
@@ -41,7 +41,7 @@ def clean():
     patterns_build = [
         "*/build/*_opus*",
         "*/build/*_sonnet*",
-        "*/build/*_haiku*", 
+        "*/build/*_haiku*",
         "*/build/*_gpt4t*",
         "*/build/*_gpt4o*",
     ]
@@ -49,13 +49,17 @@ def clean():
 
     # Walk through all directories and files, excluding specific directories
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in excluded_dirs]  # Modify dirs in-place to exclude certain directories
+        dirs[:] = [
+            d for d in dirs if d not in excluded_dirs
+        ]  # Modify dirs in-place to exclude certain directories
         for pattern in patterns:
             for filename in fnmatch.filter(files, pattern):
                 files_to_delete.append(os.path.join(root, filename))
-        
+
         for pattern in patterns_build:
-            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
+            files_to_delete.extend(
+                glob.glob(os.path.join(root, pattern), recursive=True)
+            )
 
     # Perform the deletion
     for file in files_to_delete:
@@ -80,9 +84,14 @@ def rm_build():
 
     # Delete all PDF files and files in the build directory in subdirectories, excluding 'Figs' and 'Figures'
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in {'Figs', 'Figures'}]  # Exclude 'Figs' and 'Figures' directories
+        dirs[:] = [
+            d for d in dirs if d not in {"Figs", "Figures"}
+        ]  # Exclude 'Figs' and 'Figures' directories
         for file in files:
-            if file.endswith('.pdf') or os.path.basename(os.path.dirname(file)) == 'build':
+            if (
+                file.endswith(".pdf")
+                or os.path.basename(os.path.dirname(file)) == "build"
+            ):
                 os.remove(os.path.join(root, file))
 
     print("All specified files have been deleted.")
@@ -95,13 +104,21 @@ def indent_tex():
     )  # Find all .tex files in the current directory
     for tex_file in tex_files:
         subprocess.run(
-            ["latexindent", tex_file, "-w", "-s", "-l"],
+            [
+                "latexindent",
+                tex_file,
+                "-w",
+                "-s",
+                "-l=/Users/siruilu/Local/TEX/latexindent.yaml",
+            ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-    
+
     # Delete all .bak and indent.log files in the current directory
-    files_to_delete = glob.glob("./*.bak0", recursive=False) + glob.glob("./indent.log", recursive=False)
+    files_to_delete = glob.glob("./*.bak0", recursive=False) + glob.glob(
+        "./indent.log", recursive=False
+    )
     for file in files_to_delete:
         os.remove(file)
 

@@ -169,7 +169,8 @@ def process_file_with_llm(
             accumulated_output += best_connector + new_response
 
             if not os.path.exists(output_file) or not append_mode:
-                write_file(output_file, accumulated_output)
+                write_file(output_file, new_response)
+                # write_file(output_file, accumulated_output)
             else:
                 append_file(output_file, best_connector + new_response)
 
