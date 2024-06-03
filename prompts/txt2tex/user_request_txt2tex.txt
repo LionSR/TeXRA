@@ -41,7 +41,7 @@ In your conversion, focus on the following:
 - Prioritize accuracy and clarity in your transcription
 </requirements>
 
-Please output the full LaTeX source, enclosed in <latex_content> tags:
+Please output the full LaTeX source, enclosed in the <latex_content></latex_content> tag:
 
 <latex_content>
 % Your LaTeX source here

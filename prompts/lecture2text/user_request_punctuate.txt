@@ -56,5 +56,5 @@ Then, this quantum information theory is the theory that is behind it, is the ba
 </output>
 </example2>
 
-Output the improved version of the document inside <improved_document> tags.
+Output the improved version of the document inside the <improved_document></improved_document> tag.
 

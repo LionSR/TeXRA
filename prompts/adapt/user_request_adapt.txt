@@ -5,11 +5,12 @@ You need to include the derivations of the path probability for the langevin sys
 - You should use the same notations as the existing lecture notes.  For example, you used use \rho for the path probability as in the exisitng lecture notes. Use $x_n$ instead of $x_\ell$ for dividing the path. You should use use the notations for the SDE for the overdamped Langevin systems (ie., continue to use \mu and \sigma defined in the exisitng lecture notes  to replace $\mu_P F$ and $\sqrt{2D}$ in the new output) 
 - The output should standalone without any appendix.
 
-In <scratchpad> tags, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
+In <scratchpad></scratchpad> tag, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
 
 - Use the same document class (lecture.cls) and auxiliary command files (command.tex) as your existing notes
 - Maintain a consistent set of notations throughout 
 - Match the tone and style of writing in your existing notes
 - Provide the same level of detail in explanations and derivations as your existing notes, using multi-line align environments for detailed derivations where appropriate
 
-After showing your work, please output the fully adapted content inside <adapted_lecture_notes> tags, ready to be integrated with your existing lecture notes.
+After showing your work, please output the fully adapted content inside <adapted_lecture_notes></adapted_lecture_notes> tag, ready to be integrated with your existing lecture notes.
+
