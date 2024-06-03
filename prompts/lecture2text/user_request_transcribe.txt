@@ -104,4 +104,4 @@ So, in other words, you could have just taken the classical probabilities and th
 </example3>
 <examples>
 
-Output the improved version of the document inside <improved_document> tags.
+Output the improved version of the document inside the <improved_document></improved_document> tag.

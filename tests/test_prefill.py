@@ -25,7 +25,7 @@ def main(input_file, append_mode=False):
                     "text": (
                         "You will be writing a 20 chapters novel about the Real Madrid. First, brainstorm some ideas for the plot, characters, themes, and setting of the novel. "
                         "Consider how you can tell an engaging fictional story while still being respectful of and true to the key facts of CR7's life. \n\n"
-                        "Write the first draft of the full novel inside <novel> tags. Aim for a length of approximately 20,000 words. Be sure to:\n"
+                        "Write the first draft of the full novel inside <novel></novel> tag. Aim for a length of approximately 20,000 words. Be sure to:\n"
                         "- Develop memorable characters with distinct personalities, motivations, and arcs\n"
                         "- Use vivid descriptions to bring the scenes to life in the reader's imagination\n"
                         "- Include engaging dialogue that sounds natural and reveals character\n"

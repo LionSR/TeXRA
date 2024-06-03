@@ -1,5 +1,5 @@
 Your output is too simplest and omitting many important specifics.
-After thoroughly reviewing the LaTeX version and comparing it to the original transcription (enclosed in <transcription> tags), ensure that the LaTeX document:
+After thoroughly reviewing the LaTeX version and comparing it to the original transcription (enclosed in <transcription></transcription> tag), ensure that the LaTeX document:
 <requirements>
 - Faithfully represents the content, structure, and detail of the original lecture transcription with exactly the same order. Fine turn the section, subsection, and paragraph strucutre if necessnary.
 - Increases the level of detail from moderate (6/10) to high (9/10), particularly by adding back any missing equations or mathematical details from the transcription. 
