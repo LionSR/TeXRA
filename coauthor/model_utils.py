@@ -101,7 +101,7 @@ def extract_response_statistics(response_object, model, end_tag=None):
     else:
         raise ValueError(f"Unsupported model: {model}")
 
-    if "stop" in stop_reason:
+    if "stop" in stop_reason and "\\end{document}" not in new_response:
         new_response += "\n" + end_tag
 
     return new_response, input_tokens, output_tokens, stop_reason
