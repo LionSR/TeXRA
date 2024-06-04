@@ -58,3 +58,10 @@ def check_for_massive_repetition(last_response, new_response):
         )
         print("WARNING: Massive repetition detected. Stopping the process.")
     return massive_repetition_detected
+
+
+def run_latexdiff(input_file, output_file, model):
+    diff_file_name = output_file.replace(f"{model}.tex", f"diff_{model}.tex")
+    latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
+    print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
+    os.system(latexdiff_command)

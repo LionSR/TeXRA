@@ -15,6 +15,7 @@ from .file_utils import (
     find_last_non_empty_line,
     extract_text_from_tags,
     check_for_massive_repetition,
+    run_latexdiff,
 )
 
 from .argparse_utils import get_common_argparser, get_prompt_path
@@ -34,4 +35,5 @@ __all__ = [
     "compute_api_price",
     "get_common_argparser",
     "get_prompt_path",
+    "run_latexdiff",
 ]
