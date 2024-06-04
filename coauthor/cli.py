@@ -31,7 +31,7 @@ def correct_tex(input_file, auxiliary_file=None):
 
 @click.command()
 def clean():
-    excluded_dirs = {"Figs", "Figures", "build", "versions"}
+    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
     patterns = [
         "*_opus.tex",
         "*_sonnet.tex",
@@ -71,6 +71,8 @@ def clean():
 
 @click.command()
 def rm_build():
+    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
+
     # Delete all PDF files in the current directory
     pdf_files = glob.glob("./*.pdf", recursive=False)  # Only in the current directory
     for pdf_file in pdf_files:
@@ -83,11 +85,9 @@ def rm_build():
     for build_file in build_files:
         os.remove(build_file)
 
-    # Delete all PDF files and files in the build directory in subdirectories, excluding 'Figs' and 'Figures'
+    # Delete all PDF files and files in the build directory in subdirectories
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [
-            d for d in dirs if d not in {"Figs", "Figures"}
-        ]  # Exclude 'Figs' and 'Figures' directories
+        dirs[:] = [d for d in dirs if d not in excluded_dirs]
         for file in files:
             if (
                 file.endswith(".pdf")
@@ -103,9 +103,11 @@ def indent_tex():
     tex_files = glob.glob(
         "./*.tex", recursive=False
     )  # Find all .tex files in the current directory
-    
-    latexindent_config = os.environ.get("LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml")
-    
+
+    latexindent_config = os.environ.get(
+        "LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml"
+    )
+
     for tex_file in tex_files:
         subprocess.run(
             [
