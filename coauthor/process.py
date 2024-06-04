@@ -43,6 +43,8 @@ def process_file_with_llm(
     append_mode=False,
     temperature=0,
 ):
+    overwrite = False
+
     client, model_name = get_model_client(model, api_key)
 
     system_prompt = load_prompt("system_prompt", task, prompt_path, task_settings)
@@ -88,11 +90,12 @@ def process_file_with_llm(
         if append_mode and os.path.exists(output_file):
             file_content = read_file(output_file).strip()
             if output_type == "tex" and "\\end{document}" in file_content:
+                overwrite = True
                 print("end_tag detected in existing file content. Overwriting...")
                 print(
                     f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
                 )
-                messages.append({"role": "assistant", "content": "```latex"})
+                messages.append({"role": "assistant", "content": assistant_prefill_first})
             else:
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
@@ -168,9 +171,8 @@ def process_file_with_llm(
 
             accumulated_output += best_connector + new_response
 
-            if not os.path.exists(output_file) or not append_mode:
+            if not os.path.exists(output_file) or not append_mode or overwrite:
                 write_file(output_file, new_response)
-                # write_file(output_file, accumulated_output)
             else:
                 append_file(output_file, best_connector + new_response)
 
