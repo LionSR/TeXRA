@@ -77,8 +77,9 @@ def process_file_with_llm(
         if use_prefill_from_input:
             first_k_tex_document = read_file(input_file)[:k].strip()
             assistant_prefill_first += first_k_tex_document
-            accumulated_output = first_k_tex_document
-            if is_openai_model(model):
+            if is_anthropic_model(model):
+                accumulated_output = first_k_tex_document
+            elif is_openai_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex"})
         else:
@@ -122,133 +123,23 @@ def process_file_with_llm(
     if encounter_document_tag:
         raise ValueError(f"</{document_tag}> encountered in the prefill.")
 
-    def process_response_cycle(
-        state, accumulated_output, messages, k=k, best_connector=" "
-    ):
-        end_turn = False
-
-        while not end_turn:
-            start_time = time.time()
-            response_object = create_response(
-                client=client,
-                model=model,
-                model_name=model_name,
-                max_tokens=max_tokens,
-                messages=messages,
-                temperature=temperature,
-                end_tag=end_tag,
-                system_prompt=system_prompt if is_anthropic_model(model) else None,
-            )
-            response_time = time.time() - start_time
-            state["total_response_time"] += response_time
-            print(f"### Response time: {colored(response_time, 'green')} seconds")
-
-            (
-                new_response,
-                input_tokens,
-                output_tokens,
-                stop_reason,
-            ) = extract_response_statistics(response_object, model, end_tag)
-
-            print(f"### Reason for stopping: {stop_reason}")
-            print(f"### Usage: {colored(response_object.usage, 'cyan')}")
-
-            state["total_input_tokens"] += input_tokens
-            state["total_output_tokens"] += output_tokens
-            if state["continuation_count"] == 0:
-                state["first_input_tokens"] = input_tokens
-
-            if state["continuation_count"] > 0:
-                print(
-                    "### The last {} characters of the previous response are:".format(k)
-                )
-                print(colored(f"### {state['last_response'][-k:]}", "yellow"))
-                print("### The first {} characters of the new response are:".format(k))
-                print(colored(f"### {new_response[:k]}", "yellow"))
-
-            best_connector, _ = best_connection_method(
-                state["last_response"][-k:], new_response[:k]
-            )
-
-            accumulated_output += best_connector + new_response
-
-            if not os.path.exists(output_file) or not append_mode or overwrite:
-                write_file(output_file, new_response)
-            else:
-                append_file(output_file, best_connector + new_response)
-
-            print(
-                f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
-            )
-
-            messages[-1] = {"role": "assistant", "content": new_response}
-
-            massive_repetition_detected = check_for_massive_repetition(
-                state["last_response"], new_response
-            )
-
-            state["last_response"] = new_response
-
-            end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-            encounter_document_tag = f"</{document_tag}>" in new_response
-            continuation_limit = state["continuation_count"] > 10
-            input_token_limit = input_tokens > 100000
-            massive_repetition = massive_repetition_detected
-
-            output_token_limit = (
-                state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
-            )  # should be 1.3 for translation/transcribe tasks
-
-            if output_token_limit:
-                print(
-                    "WARNING: Total output tokens exceed 1.3 times the number of the first input tokens. Halting the process."
-                )
-            if continuation_limit:
-                print("Stopping after 10 continuations or 100,000 input tokens")
-
-            should_stop = (
-                encounter_document_tag
-                or continuation_limit
-                or input_token_limit
-                or massive_repetition
-                or output_token_limit
-            )
-
-            if should_stop:
-                print("Printing the flags")
-                print(f"end_turn: {end_turn}")
-                print(f"encounter_document_tag: {encounter_document_tag}")
-                print(f"continuation_limit: {continuation_limit}")
-                print(f"input_token_limit: {input_token_limit}")
-                print(f"massive_repetition: {massive_repetition}")
-                print(f"output_token_limit: {output_token_limit}")
-                print(
-                    "### The last {} characters of the previous response are:".format(k)
-                )
-                print(colored(f"### {state['last_response'][-k:]}", "yellow"))
-                break
-
-            state["continuation_count"] += 1
-            user_message = (
-                f"Your response got cut off, because you only have limited response space. "
-                f"Please continue writing from where you left off until the very end, "
-                f"marked by {end_tag}. Avoid repetition and begin your response with:"
-            )
-            print(
-                f"\nContinuation #{state['continuation_count']}.\nUser message:",
-                colored(user_message, "magenta"),
-            )
-
-            messages.append({"role": "user", "content": user_message})
-
-            prefill_tokens = new_response[-k:]
-            print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-            messages.append({"role": "assistant", "content": prefill_tokens})
-
-        return state, accumulated_output, end_turn
-
     state, accumulated_output, end_turn = process_response_cycle(
-        state, accumulated_output, messages
+        state,
+        accumulated_output,
+        messages,
+        output_file,
+        k=k,
+        best_connector=" ",
+        client=client,
+        model=model,
+        model_name=model_name,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        end_tag=end_tag,
+        system_prompt=system_prompt,
+        overwrite=overwrite,
+        append_mode=append_mode,
+        document_tag=document_tag,
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
@@ -285,3 +176,140 @@ def process_file_with_llm(
         print_message_summary(state, model)
 
     return state, accumulated_output, end_turn, output_file
+
+
+def process_response_cycle(
+    state,
+    accumulated_output,
+    messages,
+    output_file,
+    k=200,
+    best_connector=" ",
+    client=None,
+    model=None,
+    model_name=None,
+    max_tokens=None,
+    temperature=None,
+    end_tag=None,
+    system_prompt=None,
+    overwrite=False,
+    append_mode=False,
+    document_tag=None,
+):
+    end_turn = False
+
+    while not end_turn:
+        start_time = time.time()
+        response_object = create_response(
+            client=client,
+            model=model,
+            model_name=model_name,
+            max_tokens=max_tokens,
+            messages=messages,
+            temperature=temperature,
+            end_tag=end_tag,
+            system_prompt=system_prompt if is_anthropic_model(model) else None,
+        )
+        response_time = time.time() - start_time
+        state["total_response_time"] += response_time
+        print(f"### Response time: {colored(response_time, 'green')} seconds")
+
+        (
+            new_response,
+            input_tokens,
+            output_tokens,
+            stop_reason,
+        ) = extract_response_statistics(response_object, model, end_tag)
+
+        print(f"### Reason for stopping: {stop_reason}")
+        print(f"### Usage: {colored(response_object.usage, 'cyan')}")
+
+        state["total_input_tokens"] += input_tokens
+        state["total_output_tokens"] += output_tokens
+        if state["continuation_count"] == 0:
+            state["first_input_tokens"] = input_tokens
+
+        if state["continuation_count"] > 0:
+            print("### The last {} characters of the previous response are:".format(k))
+            print(colored(f"### {state['last_response'][-k:]}", "yellow"))
+            print("### The first {} characters of the new response are:".format(k))
+            print(colored(f"### {new_response[:k]}", "yellow"))
+
+        best_connector, _ = best_connection_method(
+            state["last_response"][-k:], new_response[:k]
+        )
+
+        accumulated_output += best_connector + new_response
+
+        if not os.path.exists(output_file) or not append_mode or overwrite:
+            write_file(output_file, new_response)
+        else:
+            append_file(output_file, best_connector + new_response)
+
+        print(
+            f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
+        )
+
+        messages[-1] = {"role": "assistant", "content": new_response}
+
+        massive_repetition_detected = check_for_massive_repetition(
+            state["last_response"], new_response
+        )
+
+        state["last_response"] = new_response
+
+        end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
+        encounter_document_tag = f"</{document_tag}>" in new_response
+        continuation_limit = state["continuation_count"] > 10
+        input_token_limit = input_tokens > 100000
+        massive_repetition = massive_repetition_detected
+
+        output_token_limit = (
+            state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
+        )  # should be 1.3 for translation/transcribe tasks
+
+        if output_token_limit:
+            print(
+                "WARNING: Total output tokens exceed 1.3 times the number of the first input tokens. Halting the process."
+            )
+        if continuation_limit:
+            print("Stopping after 10 continuations or 100,000 input tokens")
+
+        should_stop = (
+            encounter_document_tag
+            or continuation_limit
+            or input_token_limit
+            or massive_repetition
+            or output_token_limit
+        )
+
+        if should_stop:
+            print("Printing the flags")
+            print(f"end_turn: {end_turn}")
+            print(f"encounter_document_tag: {encounter_document_tag}")
+            print(f"continuation_limit: {continuation_limit}")
+            print(f"input_token_limit: {input_token_limit}")
+            print(f"massive_repetition: {massive_repetition}")
+            print(f"output_token_limit: {output_token_limit}")
+            print("### The last {} characters of the previous response are:".format(k))
+            print(colored(f"### {state['last_response'][-k:]}", "yellow"))
+            break
+
+        state["continuation_count"] += 1
+        user_message = (
+            f"Your response got cut off, because you only have limited response space. "
+            f"Please continue writing from where you left off until the very end, "
+            f"marked by {end_tag}. Avoid repetition and begin your response with:"
+        )
+        print(
+            f"\nContinuation #{state['continuation_count']}.\nUser message:",
+            colored(user_message, "magenta"),
+        )
+
+        messages.append({"role": "user", "content": user_message})
+
+        prefill_tokens = new_response[-k:]
+        print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
+        messages.append({"role": "assistant", "content": prefill_tokens})
+
+    return state, accumulated_output, end_turn
