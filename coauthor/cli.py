@@ -15,7 +15,8 @@ def cli():
 @click.argument("auxiliary_file", required=False)
 def correct_tex(input_file, auxiliary_file=None):
     model = os.getenv("MODEL", "opus")
-    script_dir = "/Users/siruilu/Local/AI-Projects/coauthor"
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print(f"script_dir: {script_dir}")
     command = [
         "python",
         f"{script_dir}/correct_article.py",
@@ -30,7 +31,7 @@ def correct_tex(input_file, auxiliary_file=None):
 
 @click.command()
 def clean():
-    excluded_dirs = {"Figs", "Figures", "build"}
+    excluded_dirs = {"Figs", "Figures", "build", "versions"}
     patterns = [
         "*_opus.tex",
         "*_sonnet.tex",
@@ -102,6 +103,9 @@ def indent_tex():
     tex_files = glob.glob(
         "./*.tex", recursive=False
     )  # Find all .tex files in the current directory
+    
+    latexindent_config = os.environ.get("LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml")
+    
     for tex_file in tex_files:
         subprocess.run(
             [
@@ -109,7 +113,7 @@ def indent_tex():
                 tex_file,
                 "-w",
                 "-s",
-                "-l=/Users/siruilu/Local/TEX/latexindent.yaml",
+                f"-l={latexindent_config}",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

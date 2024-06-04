@@ -1,7 +1,22 @@
 export SCRIPT_DIR="/Users/siruilu/Local/AI-Projects/coauthor"
 export PROMPT_DIR="$SCRIPT_DIR/prompts"
 
+
+function correct_with_auxiliary() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    local AUXILIARY_FILE=$2
+    python "$SCRIPT_DIR/correct_article.py" --task=correct --model=$MODEL --input_file="${INPUT_FILE}" --auxiliary_file="${AUXILIARY_FILE}"
+}
+
+function correct() {
+    local MODEL=${MODEL:-opus}
+    local INPUT_FILE=$1
+    python "$SCRIPT_DIR/correct_article.py" --task=correct --model=$MODEL --input_file="${INPUT_FILE}"
+}
+
 # meeting2text
+
 
 function meeting2text() {
     local INPUT_FILE=$1
@@ -114,3 +129,9 @@ function adapt() {
     local MODEL=${MODEL:-opus}
     python "${SCRIPT_DIR}/adapt.py" --model=${MODEL} --task=adapt --input_file="${INPUT_FILE}" --sample_tex="${SAMPLE_TEX}" --document_cls="${DOCUMENT_CLS}" --commands_file="${COMMANDS_FILE}" --reflect=True
 }
+
+# alias del_revs='rm *_revised.tex *_revision_summary.txt Ch*.pdf'
+# alias del_revs='rm *_revised.tex *_revision_summary.txt Ch*.pdf || true'
+# function format_tex { for file in *.tex; do latexindent -w "$file"; done }
+# function format_tex { for file in *.tex; do latexindent -w "$file"; rm -f *.bak0; done }
+# function format_tex { for file in *.tex; do latexindent -s -w "$file"; rm -f *.bak0; rm -f indent.log; done }
