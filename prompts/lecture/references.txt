@@ -1,0 +1,1 @@
+- Add sufficient references to relevant research and review papers or books mentioned using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use "~\cite{...}" when appropriate.
