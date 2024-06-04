@@ -34,17 +34,16 @@ def process_file_with_llm(
     input_file,
     user_prefix_vars,
     reflect=False,
-    use_prefill_from_input=True,
     model="sonnet",
     api_key=None,
     prompt_path=None,
+    use_prefill_from_input=True,
+    append_mode=False,
+    overwrite=False,
     k=200,
     max_tokens=4096,
-    append_mode=False,
     temperature=0,
 ):
-    overwrite = False
-
     client, model_name = get_model_client(model, api_key)
 
     system_prompt = load_prompt("system_prompt", task, prompt_path, task_settings)
@@ -82,16 +81,16 @@ def process_file_with_llm(
             if is_openai_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex"})
-                # messages.append({"role": "user", "content": "continue"})
         else:
             accumulated_output = ""
 
     if is_anthropic_model(model):
+        # when append_mode is off this does not print the prefill somehow
         if append_mode and os.path.exists(output_file):
             file_content = read_file(output_file).strip()
             if output_type == "tex" and "\\end{document}" in file_content:
-                overwrite = True
                 print("end_tag detected in existing file content. Overwriting...")
+                overwrite = True
                 print(
                     f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
                 )
