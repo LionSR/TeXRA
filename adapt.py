@@ -47,7 +47,6 @@ def main():
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))
-
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
     user_prefix_vars = {

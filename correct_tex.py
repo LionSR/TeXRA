@@ -2,7 +2,7 @@ import os
 from termcolor import colored
 
 import coauthor
-from coauthor import read_file, get_common_argparser, get_prompt_path
+from coauthor import read_file, get_common_argparser, get_prompt_path, run_latexdiff
 
 
 prompt_path = get_prompt_path(coauthor, "article")
@@ -65,11 +65,7 @@ def main():
         append_mode=args.append_mode,
     )
 
-    # Call latexdiff to diff the generated/output file with the input to a diff file
-    diff_file_name = output_file.replace(f"{args.model}.tex", f"diff_{args.model}.tex")
-    latexdiff_command = f"latexdiff {args.input_file} {output_file} > {diff_file_name}"
-    print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
-    os.system(latexdiff_command)
+    run_latexdiff(args.input_file, output_file, args.model)
 
 
 if __name__ == "__main__":

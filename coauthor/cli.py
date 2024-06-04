@@ -3,6 +3,14 @@ import subprocess
 import os
 import glob
 import fnmatch
+import shutil
+
+
+def get_common_env():
+    model = os.getenv("MODEL", "opus")
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/prompts")
+    return model, script_dir, prompt_dir
 
 
 @click.group()
@@ -14,18 +22,275 @@ def cli():
 @click.argument("input_file")
 @click.argument("auxiliary_file", required=False)
 def correct_tex(input_file, auxiliary_file=None):
-    model = os.getenv("MODEL", "opus")
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    print(f"script_dir: {script_dir}")
+    model, script_dir, _ = get_common_env()
     command = [
         "python",
-        f"{script_dir}/correct_article.py",
+        f"{script_dir}/correct_tex.py",
         "--task=correct",
         f"--model={model}",
         f"--input_file={input_file}",
     ]
     if auxiliary_file:
         command.extend(["--auxiliary_file", auxiliary_file])
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("sample_chapters")
+@click.argument("sample_paper", required=False, default=None)
+@click.argument("sample_note", required=False, default=None)
+def paper2note(input_file, sample_chapters, sample_paper=None, sample_note=None):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/paper2note.py",
+        f"--model={model}",
+        "--task=paper2note",
+        f"--input_file={input_file}",
+        f"--sample_chapters={sample_chapters}",
+        f"--sample_paper={sample_paper}",
+        f"--sample_note={sample_note}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("sample_tex")
+@click.argument("document_cls", required=False, default="lecture.cls")
+@click.argument("commands_file", required=False, default="command.tex")
+def adapt(
+    input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex"
+):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/adapt.py",
+        "--task=adapt",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--sample_tex={sample_tex}",
+        f"--document_cls={document_cls}",
+        f"--commands_file={commands_file}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("context_file")
+@click.argument("example_transcript", required=False, default=None)
+@click.argument("example_edited_transcript", required=False, default=None)
+def meeting2text(
+    input_file, context_file, example_transcript=None, example_edited_transcript=None
+):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/meeting2text.py",
+        "--task=transcribe",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--context_file={context_file}",
+        f"--example_transcript={example_transcript}",
+        f"--example_edited_transcript={example_edited_transcript}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("document_cls", required=False, default="lecture.cls")
+@click.argument("commands_file", required=False, default="command.tex")
+@click.argument("sample_tex", required=False, default=None)
+def txt2tex(
+    input_file, document_cls="lecture.cls", commands_file="command.tex", sample_tex=None
+):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/txt2tex.py",
+        "--task=txt2tex",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--sample_tex={sample_tex}",
+        f"--document_cls={document_cls}",
+        f"--commands_file={commands_file}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+def correct_qi(input_file):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/edit_lecture.py",
+        "--task=correct_qi",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+def correct_st(input_file):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/edit_lecture.py",
+        "--task=correct_st",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("auxiliary_file")
+def correct_supp_prl(input_file, auxiliary_file):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/edit_prl.py",
+        "--task=correct_supp_prl",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--auxiliary_file={auxiliary_file}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+def correct_prl(input_file):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/edit_prl.py",
+        "--task=correct_prl",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("supp_file", required=False, default="supp.tex")
+def reply_letter_prl(input_file, supp_file="supp.tex"):
+    model, script_dir, prompt_dir = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/prl_reply.py",
+        "--task=reply_letter",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--supp_file={supp_file}",
+        "--cover_letter=rebuttal/cover_letter.txt",
+        "--instruction=rebuttal/instruction.txt",
+        "--editor_letter=rebuttal/editor_letter.txt",
+        "--report_a=rebuttal/report_a.txt",
+        "--report_b=rebuttal/report_b.txt",
+        f"--example_reply_letter={prompt_dir}/prl_reply/example_reply_letter.txt",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("supp_file", required=False, default="supp.tex")
+@click.argument("draft_reply_letter")
+def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None):
+    model, script_dir, prompt_dir = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/prl_reply.py",
+        "--task=revise_main",
+        f"--model={model}",
+        f"--example_reply_letter={prompt_dir}/prl_reply/example_reply_letter.txt",
+        f"--input_file={input_file}",
+        f"--supp_file={supp_file}",
+        f"--draft_reply_letter={draft_reply_letter}",
+        "--cover_letter=rebuttal/cover_letter.txt",
+        "--instruction=rebuttal/instruction.txt",
+        "--editor_letter=rebuttal/editor_letter.txt",
+        "--report_a=rebuttal/report_a.txt",
+        "--report_b=rebuttal/report_b.txt",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("main_content")
+@click.argument("draft_reply_letter")
+@click.argument("draft_main_content")
+@click.argument("supp_file", required=False, default="supp.tex")
+def revise_supp_prl(
+    input_file,
+    main_content,
+    draft_reply_letter,
+    draft_main_content,
+    supp_file="supp.tex",
+):
+    model, script_dir, prompt_dir = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/prl_reply.py",
+        "--task=revise_supp",
+        f"--model={model}",
+        f"--example_reply_letter={prompt_dir}/prl_reply/example_reply_letter.txt",
+        f"--input_file={input_file}",
+        f"--main_content={main_content}",
+        f"--supp_file={supp_file}",
+        f"--draft_reply_letter={draft_reply_letter}",
+        f"--draft_main_content={draft_main_content}",
+        "--cover_letter=rebuttal/cover_letter.txt",
+        "--instruction=rebuttal/instruction.txt",
+        "--editor_letter=rebuttal/editor_letter.txt",
+        "--report_a=rebuttal/report_a.txt",
+        "--report_b=rebuttal/report_b.txt",
+        "--reflect=True",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("main_content")
+@click.argument("supp_file", required=False, default="supp.tex")
+def polish_prl_reply(input_file, main_content, supp_file="supp.tex"):
+    model, script_dir, prompt_dir = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/prl_reply.py",
+        "--task=polish_reply",
+        f"--model={model}",
+        f"--input_file={input_file}",
+        f"--main_content={main_content}",
+        f"--supp_file={supp_file}",
+        f"--draft_reply_letter={input_file}",
+        f"--example_reply_letter={prompt_dir}/prl_reply/example_reply_letter.txt",
+        "--cover_letter=rebuttal/cover_letter.txt",
+        "--instruction=rebuttal/instruction.txt",
+        "--editor_letter=rebuttal/editor_letter.txt",
+        "--report_a=rebuttal/report_a.txt",
+        "--report_b=rebuttal/report_b.txt",
+        "--reflect=True",
+    ]
     subprocess.run(command)
 
 
@@ -70,7 +335,7 @@ def clean():
 
 
 @click.command()
-def rm_build():
+def clean_build():
     excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
 
     # Delete all PDF files in the current directory
@@ -78,12 +343,15 @@ def rm_build():
     for pdf_file in pdf_files:
         os.remove(pdf_file)
 
-    # Delete all files in the build directory
+    # Delete all non-empty files in the build directory
     build_files = glob.glob(
         "./build/*", recursive=False
     )  # Only in the build directory, not subdirectories
     for build_file in build_files:
-        os.remove(build_file)
+        if os.path.isfile(build_file) and os.path.getsize(build_file) > 0:
+            os.remove(build_file)
+        elif os.path.isdir(build_file) and os.listdir(build_file):
+            shutil.rmtree(build_file)
 
     # Delete all PDF files and files in the build directory in subdirectories
     for root, dirs, files in os.walk(".", topdown=True):
@@ -131,9 +399,41 @@ def indent_tex():
     print("All .tex files have been indented and .bak files have been deleted.")
 
 
+# correct_tex.py
 cli.add_command(correct_tex)
+
+# edit_lecture.py
+cli.add_command(correct_qi)
+cli.add_command(correct_st)
+
+# meeting2text.py
+cli.add_command(meeting2text)
+
+# txt2tex.py
+cli.add_command(txt2tex)
+
+# paper2note.py
+cli.add_command(paper2note)
+
+# adapt.py
+cli.add_command(adapt)
+
+# prl_edit.py
+cli.add_command(correct_prl)
+cli.add_command(correct_supp_prl)
+
+# prl_reply.py
+cli.add_command(reply_letter_prl)
+cli.add_command(revise_main_prl)
+cli.add_command(revise_supp_prl)
+cli.add_command(polish_prl_reply)
+
+# clean up
 cli.add_command(clean)
-cli.add_command(rm_build)
+cli.add_command(clean_build)
+
+
+# latexindent
 cli.add_command(indent_tex)
 
 
