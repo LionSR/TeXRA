@@ -95,7 +95,9 @@ def process_file_with_llm(
                 print(
                     f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
                 )
-                messages.append({"role": "assistant", "content": assistant_prefill_first})
+                messages.append(
+                    {"role": "assistant", "content": assistant_prefill_first}
+                )
             else:
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
