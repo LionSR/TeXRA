@@ -336,8 +336,6 @@ def clean():
 
 @click.command()
 def clean_build():
-    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
-
     # Delete all PDF files in the current directory
     pdf_files = glob.glob("./*.pdf", recursive=False)  # Only in the current directory
     for pdf_file in pdf_files:
@@ -354,23 +352,37 @@ def clean_build():
             shutil.rmtree(build_file)
 
     # Delete all PDF files and files in the build directory in subdirectories
+    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
+    non_forbidden_subdirs = []
     for root, dirs, files in os.walk(".", topdown=True):
         dirs[:] = [d for d in dirs if d not in excluded_dirs]
-        for file in files:
-            if (
-                file.endswith(".pdf")
-                or os.path.basename(os.path.dirname(file)) == "build"
-            ):
-                os.remove(os.path.join(root, file))
+        non_forbidden_subdirs.extend([os.path.join(root, d) for d in dirs])
 
+    for subdir in non_forbidden_subdirs:
+        for file in os.listdir(subdir):
+            if file.endswith(".pdf"):
+                os.remove(os.path.join(subdir, file))
+
+        build_dir = os.path.join(subdir, "build")
+        if os.path.isdir(build_dir) and os.listdir(build_dir):
+            shutil.rmtree(build_dir)
+        
     print("All specified files have been deleted.")
 
 
 @click.command()
 def indent_tex():
-    tex_files = glob.glob(
-        "./*.tex", recursive=False
-    )  # Find all .tex files in the current directory
+    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
+    non_forbidden_subdirs = []
+    tex_files = []
+
+    # Find all .tex files in the current directory and subdirectories, excluding specific directories
+    for root, dirs, files in os.walk(".", topdown=True):
+        dirs[:] = [d for d in dirs if d not in excluded_dirs]
+        for file in files:
+            if file.endswith(".tex"):
+                tex_files.append(os.path.join(root, file))
+        non_forbidden_subdirs.extend([os.path.join(root, d) for d in dirs])
 
     latexindent_config = os.environ.get(
         "LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml"
@@ -388,13 +400,20 @@ def indent_tex():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-
     # Delete all .bak and indent.log files in the current directory
-    files_to_delete = glob.glob("./*.bak0", recursive=False) + glob.glob(
-        "./indent.log", recursive=False
+    files_to_delete = glob.glob("./*.bak0", recursive=True) + glob.glob(
+        "./indent.log", recursive=True
     )
     for file in files_to_delete:
         os.remove(file)
+    
+    # Delete all .bak and indent.log files in non-forbidden subdirectories
+    for subdir in non_forbidden_subdirs:
+        files_to_delete = glob.glob(os.path.join(subdir, "*.bak0"), recursive=True) + glob.glob(
+            os.path.join(subdir, "indent.log"), recursive=True
+        )
+        for file in files_to_delete:
+            os.remove(file)
 
     print("All .tex files have been indented and .bak files have been deleted.")
 
