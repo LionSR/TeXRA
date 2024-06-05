@@ -1,7 +1,7 @@
 {
   "name": "coauthor-for-vs-code",
   "displayName": "CoAuthor for VS Code",
-  "description": "CoAuthor for VS code is a companion",
+  "description": "CoAuthor for VS code is a companion extension for the CoAuthor CLI",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.89.0"
@@ -9,7 +9,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:coauthor-for-vs-code"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -17,7 +19,24 @@
         "command": "coauthor-for-vs-code.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "coauthor-for-vs-code",
+          "title": "CoAuthor",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "coauthor-for-vs-code": [
+        {
+          "id": "coauthor-for-vs-code",
+          "name": "CoAuthor for VS Code"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
