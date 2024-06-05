@@ -11,6 +11,16 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor clean");
     }),
+    vscode.commands.registerCommand('coauthor.cleanBuild', () => {
+      const terminal = vscode.window.createTerminal();
+      terminal.show();
+      terminal.sendText("coauthor clean-build");
+    }),
+    vscode.commands.registerCommand('coauthor.indentTex', () => {
+      const terminal = vscode.window.createTerminal();
+      terminal.show();
+      terminal.sendText("coauthor indent-tex");
+    }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
 }
@@ -33,6 +43,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'clean':
           vscode.commands.executeCommand('coauthor.clean');
           break;
+        case 'cleanBuild':
+          vscode.commands.executeCommand('coauthor.cleanBuild');
+          break;
+        case 'indentTex':
+          vscode.commands.executeCommand('coauthor.indentTex');
+          break;
       }
     });
   }
@@ -52,6 +68,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               command: 'clean'
             });
           });
+          document.getElementById('cleanBuildButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'cleanBuild'
+            });
+          });
+          document.getElementById('indentTexButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'indentTex'
+            });
+          });
         });
       </script>
     </head>
@@ -69,8 +95,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder='focus on the filling in the missing derivations; improve the coherence of the paragraphs. etc'></textarea>
       </p>
       <button id="executeButton">Execute</button>
-      <p id="output">Output will be displayed here.</p>
+      <p id="housekeepings">Housekeepings:</p>
+      <button id="indentTexButton">Indent TeX</button>
       <button id="cleanButton">Clean</button>
+      <button id="cleanBuildButton">Clean Build</button>
+      </p>
     </body>
     </html>`;
   }
