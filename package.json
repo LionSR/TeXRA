@@ -1,8 +1,8 @@
 {
-  "name": "coauthor-for-vs-code",
-  "displayName": "CoAuthor for VS Code",
-  "description": "CoAuthor for VS code is a companion extension for the CoAuthor CLI",
-  "version": "0.0.1",
+  "name": "coauthor",
+  "displayName": "CoAuthor",
+  "description": "Interact with a Python script to process LaTeX documents.",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -10,30 +10,30 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:coauthor-for-vs-code"
+    "onView:coauthor"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "coauthor-for-vs-code.helloWorld",
-        "title": "Hello World"
+        "command": "coauthor.executeTask",
+        "title": "Execute Task"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "coauthor-for-vs-code",
+          "id": "coauthor",
           "title": "CoAuthor",
           "icon": "media/activity-bar.svg"
         }
       ]
     },
     "views": {
-      "coauthor-for-vs-code": [
+      "coauthor": [
         {
-          "id": "coauthor-for-vs-code",
-          "name": "CoAuthor for VS Code"
+          "id": "coauthorView",
+          "name": "CoAuthor"
         }
       ]
     }
