@@ -5,19 +5,17 @@ import * as vscode from 'vscode';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  const terminal = vscode.window.createTerminal();
   context.subscriptions.push(
     vscode.commands.registerCommand('coauthor.clean', () => {
-      const terminal = vscode.window.createTerminal();
       terminal.show();
       terminal.sendText("coauthor clean");
     }),
     vscode.commands.registerCommand('coauthor.cleanBuild', () => {
-      const terminal = vscode.window.createTerminal();
       terminal.show();
       terminal.sendText("coauthor clean-build");
     }),
     vscode.commands.registerCommand('coauthor.indentTex', () => {
-      const terminal = vscode.window.createTerminal();
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
