@@ -12,5 +12,3 @@ pip install -e .
 ## Usage
 
 CoAuthor provides a CLI with several commands for different tasks.
-
-

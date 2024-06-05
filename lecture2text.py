@@ -49,12 +49,6 @@ def main():
         help="Mode of operation, either 'transcribe', 'punctuate', '2tex', or 'reflect'.",
         choices=["transcribe", "punctuate", "2tex", "reflect"],
     )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=True,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))

@@ -169,7 +169,22 @@ def process_file_with_llm(
         state["continuation_count"] = 0
 
         state, accumulated_output, end_turn = process_response_cycle(
-            state, accumulated_output, messages
+            state,
+            accumulated_output,
+            messages,
+            output_file,
+            k=k,
+            best_connector=" ",
+            client=client,
+            model=model,
+            model_name=model_name,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            end_tag=end_tag,
+            system_prompt=system_prompt,
+            overwrite=overwrite,
+            append_mode=append_mode,
+            document_tag=document_tag,
         )
         print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
