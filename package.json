@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -30,6 +30,10 @@
       {
         "command": "coauthor.indentTex",
         "title": "Indent TeX"
+      },
+      {
+        "command": "coauthor.selectFile",
+        "title": "Select Input File"
       }
     ],
     "viewsContainers": {
