@@ -6,12 +6,20 @@ import * as vscode from 'vscode';
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
+    vscode.commands.registerCommand('coauthor.clean', () => {
+      const terminal = vscode.window.createTerminal();
+      terminal.show();
+      terminal.sendText("coauthor clean");
+    }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
 }
 
+// This method is called when your extension is deactivated
+export function deactivate() { }
+
 class CoAuthorViewProvider implements vscode.WebviewViewProvider {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) { }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = {
@@ -19,6 +27,14 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this.getWebviewContent();
+
+    webviewView.webview.onDidReceiveMessage(message => {
+      switch (message.command) {
+        case 'clean':
+          vscode.commands.executeCommand('coauthor.clean');
+          break;
+      }
+    });
   }
 
   private getWebviewContent() {
@@ -28,20 +44,34 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>CoAuthor Panel</title>
+      <script>
+        const vscode = acquireVsCodeApi();
+        document.addEventListener('DOMContentLoaded', function() {
+          document.getElementById('cleanButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'clean'
+            });
+          });
+        });
+      </script>
     </head>
     <body>
-      <h1>CoAuthor LaTeX Editor</h1>
+      <h2>CoAuthor</h2>
+      <p id="taskSelect">
+      <label for="taskSelect">Tasks:</label>
       <select id="taskSelect">
         <option value="correct">Correct</option>
         <option value="polish">Polish</option>
       </select>
-      <input type="text" id="taskInput" placeholder="Enter your LaTeX code">
-      <button>Submit</button>
+      </p>
+      <p id="taskInputArea">
+      <label for="taskInputArea">Custom Instructions:</label>
+      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder='focus on the filling in the missing derivations; improve the coherence of the paragraphs. etc'></textarea>
+      </p>
+      <button id="executeButton">Execute</button>
       <p id="output">Output will be displayed here.</p>
+      <button id="cleanButton">Clean</button>
     </body>
     </html>`;
   }
 }
-
-// This method is called when your extension is deactivated
-export function deactivate() { }
