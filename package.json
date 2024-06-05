@@ -2,14 +2,16 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.89.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:coauthor"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -23,18 +25,19 @@
         {
           "id": "coauthor",
           "title": "CoAuthor",
-          "icon": "resources/logo.svg"
+          "icon": "resources/activity-bar.svg"
         }
       ]
-  },
-  "views": {
-    "coauthor": [
-      {
-        "type": "webview",
-        "id": "coauthor.chatView",
-        "name": "CoAuthor"
-      }
-    ]
+    },
+    "views": {
+      "coauthor": [
+        {
+          "type": "webview",
+          "id": "coauthor.chatView",
+          "name": "CoAuthor Panel"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

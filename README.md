@@ -1,6 +1,6 @@
 # coauthor README
 
-This is the README for your extension "coauthor". After writing up a brief description, we recommend including the following sections.
+After writing up a brief description, we recommend including the following sections.
 
 ## Features
 
