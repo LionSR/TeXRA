@@ -1,4 +1,4 @@
-# correct_tex.py
+# edit_tex.py
 import os
 from termcolor import colored
 
