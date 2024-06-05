@@ -19,11 +19,15 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, instructions: string, filePath: string) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean) => {
       terminal.show();
-      terminal.sendText(`coauthor ${task} ${filePath}`);
+      if (auxFilePath) {
+        terminal.sendText(`coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath} --instruction="${instructions}"`);
+      } else {
+        terminal.sendText(`coauthor ${task} ${filePath} --instruction="${instructions}"`);
+      }
     }),
-    vscode.commands.registerCommand('coauthor.selectFile', async () => {
+    vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
       const fileUri = await vscode.window.showOpenDialog({
         canSelectMany: false,
         openLabel: 'Select File',
@@ -66,14 +70,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'execute':
           const task_val = message.task;
-          const instructions_val = message.instructions;
           const filePath_val = message.filePath;
-          vscode.commands.executeCommand('coauthor.execute', task_val, instructions_val, filePath_val);
+          const auxFilePath_val = message.auxFilePath;
+          const instructions_val = message.instructions;
+          const reflect_val = message.reflect;
+          vscode.commands.executeCommand('coauthor.execute', task_val, filePath_val, auxFilePath_val, instructions_val, reflect_val);
           break;
-        case 'selectFile':
-          const filePath = await vscode.commands.executeCommand<string>('coauthor.selectFile');
+        case 'selectInputFile':
+          const filePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
           if (filePath) {
-            webviewView.webview.postMessage({ command: 'fileSelected', filePath });
+            webviewView.webview.postMessage({ command: 'inputFileSelected', filePath });
           }
           break;
         case 'requestFiles':
@@ -84,7 +90,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const auxFiles = await this.listAuxFiles();
           webviewView.webview.postMessage({ command: 'setAuxFiles', files: auxFiles });
           break;
-        case 'fileSelected':
+        case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
           break;
         case 'auxFileSelected':
@@ -99,7 +105,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath);
+      return await this.getFilesInDirectory(workspacePath, ['.bst', '.bib', '.pdf', ".cls", ".sty", "*.py", "*.json", "*.ipynb"]);
     }
     return [];
   }
@@ -108,26 +114,26 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', "*.py", "*.ipynb"], ['build', 'node_modules', 'figures', 'Figs', "__pycache__"]);
     }
     return [];
   }
 
-  private async getFilesInDirectory(dir: string): Promise<string[]> {
+  private async getFilesInDirectory(dir: string, excludeExtensions: string[] = []): Promise<string[]> {
     const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
     return dirEntries
-      .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith('.'))
+      .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && name.includes('.'))
       .map(([name]) => name);
   }
 
-  private async getFilesRecursively(dir: string, root: string): Promise<string[]> {
+  private async getFilesRecursively(dir: string, root: string, excludeExtensions: string[] = [], excludeDirectories: string[] = []): Promise<string[]> {
     const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
     const files = await Promise.all(dirEntries.map(async ([name, type]) => {
       const fullPath = `${dir}/${name}`;
       const relativePath = fullPath.replace(`${root}/`, '');
-      if (type === vscode.FileType.Directory && !name.startsWith('.') && name !== 'build' && name !== 'node_modules') {
-        return await this.getFilesRecursively(fullPath, root);
-      } else if (type === vscode.FileType.File && !name.startsWith('.') && !name.endsWith('.bst') && !name.endsWith('.bib') && !name.endsWith('.cls')) {
+      if (type === vscode.FileType.Directory && !name.startsWith('.') && !excludeDirectories.includes(name)) {
+        return await this.getFilesRecursively(fullPath, root, excludeExtensions, excludeDirectories);
+      } else if (type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && name.includes('.')) {
         return [relativePath];
       } else {
         return [];
@@ -167,14 +173,17 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           });
           document.getElementById('executeButton').addEventListener('click', function() {
             const task = document.getElementById('taskSelect').value;
-            const instructions = document.getElementById('taskInput').value;
-            const filePath = document.getElementById('fileSelect').value;
+            const filePath = document.getElementById('inputFileSelect').value;
             const auxFilePath = document.getElementById('auxFileSelect').value;
+            const instructions = document.getElementById('taskInput').value;
+            const reflect = document.getElementById('reflectSelect').value === 'true';
             vscode.postMessage({
               command: 'execute',
               task: task,
+              filePath: filePath,
+              auxFilePath: auxFilePath,
               instructions: instructions,
-              filePath: filePath
+              reflect: reflect
             });
           });
         });
@@ -183,21 +192,25 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const message = event.data;
           switch (message.command) {
             case 'setFiles':
-              const fileSelect = document.getElementById('fileSelect');
-              fileSelect.innerHTML = '';
+              const inputFileSelect = document.getElementById('inputFileSelect');
+              inputFileSelect.innerHTML = '';
               message.files.forEach(file => {
                 const option = document.createElement('option');
                 option.value = file;
                 option.textContent = file;
-                fileSelect.appendChild(option);
+                inputFileSelect.appendChild(option);
               });
               break;
-            case 'fileSelected':
-              document.getElementById('fileSelect').value = message.filePath;
+            case 'inputFileSelected':
+              document.getElementById('inputFileSelect').value = message.filePath;
               break;
             case 'setAuxFiles':
               const auxFileSelect = document.getElementById('auxFileSelect');
               auxFileSelect.innerHTML = '';
+              const emptyOption = document.createElement('option');
+              emptyOption.value = '';
+              emptyOption.textContent = 'None';
+              auxFileSelect.appendChild(emptyOption);
               message.files.forEach(file => {
                 const option = document.createElement('option');
                 option.value = file;
@@ -215,10 +228,20 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     <body>
       <h2>CoAuthor</h2>
       <p>
+      <label for="modelSelect">Models:</label>
+      <select id="modelSelect">
+        <option value="opus">Opus</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+        <option value="gpt4o">GPT-4 Omni</option>
+        <option value="gpt4t">GPT-4 Turbo</option>
+      </select>
+      </p>
+      <p>
       <label for="taskSelect">Tasks:</label>
       <select id="taskSelect">
         <option value="correct-tex">Correct TeX</option>
-        <option value="polish">Polish</option>
+        <option value="polish-tex">Polish TeX</option>
         <option value="correct-qi">Correct QI</option>
         <option value="correct-st">Correct ST</option>
         <option value="meeting2text">Meeting to Text</option>
@@ -227,16 +250,23 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </select>
       </p>
       <p>
-      <label for="fileSelect">Select Input File:</label><br>
-      <select id="fileSelect"></select>
+      <label for="inputFileSelect">Select Input File:</label><br>
+      <select id="inputFileSelect"></select>
       </p>
       <p>
       <label for="auxFileSelect">Select Auxiliary File:</label><br>
       <select id="auxFileSelect"></select>
       </p>
       <p>
-      <label for="taskInputArea">Custom Instructions:</label>
-      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder='focus on the filling in the missing derivations; improve the coherence of the paragraphs. etc, etc.'></textarea>
+      <label for="taskInputArea">Specific Instructions:</label>
+      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder=''></textarea>
+      </p>
+      <p>
+      <label for="reflectSelect">Reflect:</label>
+      <select id="reflectSelect">
+        <option value="true">True</option>
+        <option value="false">False</option>
+      </select>
       </p>
       <button id="executeButton">Execute</button>
       <p>
