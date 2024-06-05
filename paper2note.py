@@ -42,12 +42,6 @@ def main():
         help="Task to perform, currently only 'paper2note'.",
         choices=["paper2note"],
     )
-    parser.add_argument(
-        "--reflect",
-        type=bool,
-        default=True,
-        help="Whether to perform a reflection round after the initial processing.",
-    )
 
     args = parser.parse_args()
     print(colored(f"args: {args}", "blue"))

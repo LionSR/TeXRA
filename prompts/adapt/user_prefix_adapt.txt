@@ -11,7 +11,7 @@ Here are your existing lecture notes with consistent notation and style with add
 </commands>
 
 <existing_lecture_notes>
-{{EXISTING_LECTURE_NOTES}}
+{EXISTING_LECTURE_NOTES}
 </existing_lecture_notes>
 
 And here are the new lecture notes {INPUT_FILE} you want to understand, paraphrase, and adapt:
