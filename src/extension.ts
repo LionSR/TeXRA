@@ -19,6 +19,10 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
+    vscode.commands.registerCommand('coauthor.execute', (task: string, instructions: string, filePath: string) => {
+      terminal.show();
+      terminal.sendText(`coauthor ${task} ${filePath}`);
+    }),
     vscode.commands.registerCommand('coauthor.selectFile', async () => {
       const fileUri = await vscode.window.showOpenDialog({
         canSelectMany: false,
@@ -60,6 +64,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'indentTex':
           vscode.commands.executeCommand('coauthor.indentTex');
           break;
+        case 'execute':
+          const task_val = message.task;
+          const instructions_val = message.instructions;
+          const filePath_val = message.filePath;
+          vscode.commands.executeCommand('coauthor.execute', task_val, instructions_val, filePath_val);
+          break;
         case 'selectFile':
           const filePath = await vscode.commands.executeCommand<string>('coauthor.selectFile');
           if (filePath) {
@@ -70,28 +80,60 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const files = await this.listFiles();
           webviewView.webview.postMessage({ command: 'setFiles', files });
           break;
+        case 'requestAuxFiles':
+          const auxFiles = await this.listAuxFiles();
+          webviewView.webview.postMessage({ command: 'setAuxFiles', files: auxFiles });
+          break;
         case 'fileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
           break;
-        case 'execute':
-          vscode.window.showInformationMessage(`Executing task: ${message.task} on file: ${message.filePath} with instructions: ${message.instructions}`);
-          // Add your logic to handle the execution of the task here
+        case 'auxFileSelected':
+          vscode.window.showInformationMessage(`Selected auxiliary file: ${message.filePath}`);
           break;
       }
     });
+  }
+  
+  
+  private async listAuxFiles(): Promise<string[]> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+      return await this.getFilesInDirectory(workspacePath);
+    }
+    return [];
   }
 
   private async listFiles(): Promise<string[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(workspacePath));
-      return files
-        .filter(file => file[1] === vscode.FileType.File)
-        .map(file => file[0])
-        .filter(fileName => !fileName.startsWith('.') && !fileName.endsWith('.bst') && !fileName.endsWith('.bib') && !fileName.endsWith('.cls'));
+      return await this.getFilesRecursively(workspacePath, workspacePath);
     }
     return [];
+  }
+
+  private async getFilesInDirectory(dir: string): Promise<string[]> {
+    const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+    return dirEntries
+      .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith('.'))
+      .map(([name]) => name);
+  }
+
+  private async getFilesRecursively(dir: string, root: string): Promise<string[]> {
+    const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+    const files = await Promise.all(dirEntries.map(async ([name, type]) => {
+      const fullPath = `${dir}/${name}`;
+      const relativePath = fullPath.replace(`${root}/`, '');
+      if (type === vscode.FileType.Directory && !name.startsWith('.') && name !== 'build' && name !== 'node_modules') {
+        return await this.getFilesRecursively(fullPath, root);
+      } else if (type === vscode.FileType.File && !name.startsWith('.') && !name.endsWith('.bst') && !name.endsWith('.bib') && !name.endsWith('.cls')) {
+        return [relativePath];
+      } else {
+        return [];
+      }
+    }));
+    return files.flat();
   }
 
   private getWebviewContent() {
@@ -105,6 +147,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         const vscode = acquireVsCodeApi();
         window.onload = function() {
           vscode.postMessage({ command: 'requestFiles' });
+          vscode.postMessage({ command: 'requestAuxFiles' });
         };
         document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('cleanButton').addEventListener('click', function() {
@@ -122,15 +165,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               command: 'indentTex'
             });
           });
-          document.getElementById('selectFileButton').addEventListener('click', function() {
-            vscode.postMessage({
-              command: 'selectFile'
-            });
-          });
           document.getElementById('executeButton').addEventListener('click', function() {
             const task = document.getElementById('taskSelect').value;
             const instructions = document.getElementById('taskInput').value;
             const filePath = document.getElementById('fileSelect').value;
+            const auxFilePath = document.getElementById('auxFileSelect').value;
             vscode.postMessage({
               command: 'execute',
               task: task,
@@ -156,29 +195,52 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'fileSelected':
               document.getElementById('fileSelect').value = message.filePath;
               break;
+            case 'setAuxFiles':
+              const auxFileSelect = document.getElementById('auxFileSelect');
+              auxFileSelect.innerHTML = '';
+              message.files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                auxFileSelect.appendChild(option);
+              });
+              break;
+            case 'auxFileSelected':
+              document.getElementById('auxFileSelect').value = message.filePath;
+              break;
           }
         });
       </script>
     </head>
     <body>
       <h2>CoAuthor</h2>
-      <p id="taskSelect">
+      <p>
       <label for="taskSelect">Tasks:</label>
       <select id="taskSelect">
-        <option value="correct">Correct</option>
+        <option value="correct-tex">Correct TeX</option>
         <option value="polish">Polish</option>
+        <option value="correct-qi">Correct QI</option>
+        <option value="correct-st">Correct ST</option>
+        <option value="meeting2text">Meeting to Text</option>
+        <option value="paper2note">Paper to Note</option>
+        <option value="txt2tex">Paper to Note</option>
       </select>
       </p>
-      <p id="fileSelectArea">
-      <label for="fileSelect">Select Input File:</label>
+      <p>
+      <label for="fileSelect">Select Input File:</label><br>
       <select id="fileSelect"></select>
       </p>
-      <p id="taskInputArea">
+      <p>
+      <label for="auxFileSelect">Select Auxiliary File:</label><br>
+      <select id="auxFileSelect"></select>
+      </p>
+      <p>
       <label for="taskInputArea">Custom Instructions:</label>
-      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder='focus on the filling in the missing derivations; improve the coherence of the paragraphs. etc'></textarea>
+      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder='focus on the filling in the missing derivations; improve the coherence of the paragraphs. etc, etc.'></textarea>
       </p>
       <button id="executeButton">Execute</button>
-      <p id="housekeepings">Housekeepings:</p>
+      <p>
+      <label>Housekeepings:</label>
       <button id="indentTexButton">Indent TeX</button>
       <button id="cleanButton">Clean</button>
       <button id="cleanBuildButton">Clean Build</button>

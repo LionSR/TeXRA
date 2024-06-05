@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor",
-  "version": "0.0.4",
+  "version": "0.0.7",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -15,10 +15,6 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "coauthor.helloWorld",
-        "title": "Hello World"
-      },
       {
         "command": "coauthor.clean",
         "title": "Clean"
@@ -34,6 +30,14 @@
       {
         "command": "coauthor.selectFile",
         "title": "Select Input File"
+      },
+      {
+        "command": "coauthor.selectAuxFile",
+        "title": "Select Auxiliary File"
+      },
+      {
+        "command": "coauthor.execute",
+        "title": "Execute Task"
       }
     ],
     "viewsContainers": {
