@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -28,7 +28,7 @@
         "title": "Indent TeX"
       },
       {
-        "command": "coauthor.selectFile",
+        "command": "coauthor.selectInputFile",
         "title": "Select Input File"
       },
       {
