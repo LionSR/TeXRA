@@ -20,18 +20,45 @@ def cli():
 
 @click.command()
 @click.argument("input_file")
-@click.argument("auxiliary_file", required=False)
+@click.argument("auxiliary_file", required=False, default=None)
 def correct_tex(input_file, auxiliary_file=None):
     model, script_dir, _ = get_common_env()
     command = [
         "python",
-        f"{script_dir}/correct_tex.py",
+        f"{script_dir}/edit_tex.py",
         "--task=correct",
         f"--model={model}",
         f"--input_file={input_file}",
     ]
     if auxiliary_file:
         command.extend(["--auxiliary_file", auxiliary_file])
+    subprocess.run(command)
+
+
+@click.command()
+@click.argument("input_file")
+@click.option(
+    "--auxiliary_file", required=False, default=None, help="Path to the auxiliary file"
+)
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+@click.option("--reflect", required=False, default=False, help="Reflect on the changes")
+def polish_tex(input_file, auxiliary_file=None, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env()
+    command = [
+        "python",
+        f"{script_dir}/edit_tex.py",
+        "--task=polish",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    if auxiliary_file:
+        command.extend(["--auxiliary_file", auxiliary_file])
+    if instruction:
+        command.extend(["--instruction", instruction])
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -62,7 +89,11 @@ def paper2note(input_file, sample_chapters, sample_paper=None, sample_note=None)
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
 def adapt(
-    input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex"
+    input_file,
+    sample_tex,
+    document_cls="lecture.cls",
+    commands_file="command.tex",
+    reflect=False,
 ):
     model, script_dir, _ = get_common_env()
     command = [
@@ -366,7 +397,7 @@ def clean_build():
         build_dir = os.path.join(subdir, "build")
         if os.path.isdir(build_dir) and os.listdir(build_dir):
             shutil.rmtree(build_dir)
-        
+
     print("All specified files have been deleted.")
 
 
@@ -406,20 +437,21 @@ def indent_tex():
     )
     for file in files_to_delete:
         os.remove(file)
-    
+
     # Delete all .bak and indent.log files in non-forbidden subdirectories
     for subdir in non_forbidden_subdirs:
-        files_to_delete = glob.glob(os.path.join(subdir, "*.bak0"), recursive=True) + glob.glob(
-            os.path.join(subdir, "indent.log"), recursive=True
-        )
+        files_to_delete = glob.glob(
+            os.path.join(subdir, "*.bak0"), recursive=True
+        ) + glob.glob(os.path.join(subdir, "indent.log"), recursive=True)
         for file in files_to_delete:
             os.remove(file)
 
     print("All .tex files have been indented and .bak files have been deleted.")
 
 
-# correct_tex.py
+# edit_tex.py
 cli.add_command(correct_tex)
+cli.add_command(polish_tex)
 
 # edit_lecture.py
 cli.add_command(correct_qi)

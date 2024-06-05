@@ -1,7 +1,7 @@
 Your task is to write a research paper.
 
 When writing LaTeX, you must:
-- Use \begin{align} ... \end{align} for displayed equations- Use \de for \delta.
+- Use \begin{align} ... \end{align} for displayed equations
 - Use appropriate notation and terminology consistently throughout the text.
 - Keep the comments that starts with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in thte output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a concise label and adjust accordingly where the labelled items are referenced.
