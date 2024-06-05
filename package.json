@@ -18,6 +18,10 @@
       {
         "command": "coauthor.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "coauthor.clean",
+        "title": "Clean"
       }
     ],
     "viewsContainers": {
@@ -25,7 +29,7 @@
         {
           "id": "coauthor",
           "title": "CoAuthor",
-          "icon": "resources/activity-bar.svg"
+          "icon": "resources/unicorn.svg"
         }
       ]
     },
