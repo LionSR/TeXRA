@@ -291,7 +291,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <option value="correct-st">Correct ST</option>
         <option value="meeting2text">Meeting to Text</option>
         <option value="paper2note">Paper to Note</option>
-        <option value="txt2tex">Paper to Note</option>
+        <option value="txt2tex">Txt to TeX</option>
       </select>
       </p>
       <p>
