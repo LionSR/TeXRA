@@ -20,11 +20,13 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.sendText("coauthor indent-tex");
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean) => {
-      terminal.show();
+      // terminal.show();
+      const terminal_new = vscode.window.createTerminal();
+      terminal_new.show();
       if (auxFilePath) {
-        terminal.sendText(`coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath} --instruction="${instructions}"`);
+        terminal_new.sendText(`coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath} --instruction="${instructions}" --reflect=${reflect}`);
       } else {
-        terminal.sendText(`coauthor ${task} ${filePath} --instruction="${instructions}"`);
+        terminal_new.sendText(`coauthor ${task} ${filePath} --instruction="${instructions}" --reflect=${reflect}`);
       }
     }),
     vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
