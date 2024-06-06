@@ -162,6 +162,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         window.onload = function() {
           vscode.postMessage({ command: 'requestFiles' });
           vscode.postMessage({ command: 'requestAuxFiles' });
+          // Restore previous state
+          restoreState();
         };        
         // Add event listeners for buttons
         document.addEventListener('DOMContentLoaded', function() {
@@ -217,6 +219,18 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.setState(state);
         }
 
+        function restoreState() {
+          const previousState = vscode.getState();
+          if (previousState) {
+            document.getElementById('modelSelect').value = previousState.modelSelect || '';
+            document.getElementById('taskSelect').value = previousState.taskSelect || '';
+            document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
+            document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
+            document.getElementById('taskInput').value = previousState.taskInput || '';
+            document.getElementById('reflectSelect').value = previousState.reflectSelect || '';
+          }
+        }
+
         window.addEventListener('message', event => {
           const message = event.data;
           switch (message.command) {
@@ -229,11 +243,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 option.textContent = file;
                 inputFileSelect.appendChild(option);
               });
-              // Restore previous state for input file select
-              const previousState = vscode.getState();
-              if (previousState && previousState.inputFileSelect) {
-                document.getElementById('inputFileSelect').value = previousState.inputFileSelect;
-              }
               break;
             case 'inputFileSelected':
               document.getElementById('inputFileSelect').value = message.filePath;
@@ -251,22 +260,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 option.textContent = file;
                 auxFileSelect.appendChild(option);
               });
-              // Restore previous state for aux file select
-              if (previousState && previousState.auxFileSelect) {
-                document.getElementById('auxFileSelect').value = previousState.auxFileSelect;
-              }
               break;
             case 'auxFileSelected':
               document.getElementById('auxFileSelect').value = message.filePath;
               break;
           }
-          // Restore previous state for other elements
-          if (previousState) {
-            document.getElementById('modelSelect').value = previousState.modelSelect || '';
-            document.getElementById('taskSelect').value = previousState.taskSelect || '';
-            document.getElementById('taskInput').value = previousState.taskInput || '';
-            document.getElementById('reflectSelect').value = previousState.reflectSelect || '';
-          }
+          // Restore previous state
+          restoreState();
         });
       </script>
     </head>
