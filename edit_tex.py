@@ -50,12 +50,6 @@ def main():
         default=True,
         help="Whether to append the output to the input file instead of overwriting it.",
     )
-    parser.add_argument(
-        "--instruction",
-        type=str,
-        default=None,
-        help="The specific instruction or the hints to be followed.",
-    )
 
     args = parser.parse_args()
 
