@@ -18,6 +18,12 @@ def get_common_argparser():
         choices=["sonnet", "opus", "haiku", "gpt4o", "gpt4turbo"],
     )
     parser.add_argument(
+        "--instruction",
+        type=str,
+        default=None,
+        help="The specific instruction or the hints to be followed.",
+    )
+    parser.add_argument(
         "--reflect",
         type=bool,
         default=False,
