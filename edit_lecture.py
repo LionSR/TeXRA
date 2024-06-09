@@ -42,6 +42,7 @@ def main():
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
+        # "DOCUMENT_CLS_CONTENT": read_file("exercise.cls"),
     }
     if "correct" in args.task:
         task_settings = all_task_settings["correct"]
