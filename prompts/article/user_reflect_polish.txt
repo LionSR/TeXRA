@@ -9,8 +9,7 @@ Let's take a moment to reflect on the changes made:
 6. Are there any ways to improve the global and paragraph coherence and cohesion of the paper, and to improve the flow of the paper?
 </reflection>
 
-Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below:
-
+Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
 <scratchpad>
 1. [Additional refinement 1]
 2. [Additional refinement 2]
