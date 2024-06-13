@@ -20,7 +20,7 @@ def cli():
 
 @click.command()
 @click.argument("input_file")
-@click.argument("auxiliary_file", required=False, default=None)
+@click.option("--auxiliary_file", required=False, default=None)
 def correct_tex(input_file, auxiliary_file=None):
     model, script_dir, _ = get_common_env()
     command = [
@@ -186,8 +186,8 @@ def correct_st(input_file):
 
 @click.command()
 @click.argument("input_file")
-@click.argument("auxiliary_file")
-def correct_supp_prl(input_file, auxiliary_file):
+@click.option("--auxiliary_file", required=False, default=None)
+def correct_supp_prl(input_file, auxiliary_file=None):
     model, script_dir, _ = get_common_env()
     command = [
         "python",
