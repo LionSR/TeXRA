@@ -24,9 +24,23 @@ export function activate(context: vscode.ExtensionContext) {
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
       if (auxFilePath) {
-        terminal_new.sendText(`coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath} --instruction="${instructions}" --reflect=${reflect}`);
+        let command = `coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath}`;
+        if (instructions) {
+          command += ` --instruction="${instructions}"`;
+        }
+        if (reflect) {
+          command += ` --reflect=${reflect}`;
+        }
+        terminal_new.sendText(command);
       } else {
-        terminal_new.sendText(`coauthor ${task} ${filePath} --instruction="${instructions}" --reflect=${reflect}`);
+        let command = `coauthor ${task} ${filePath}`;
+        if (instructions) {
+          command += ` --instruction="${instructions}"`;
+        }
+        if (reflect) {
+          command += ` --reflect=${reflect}`;
+        }
+        terminal_new.sendText(command);
       }
     }),
     vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
@@ -113,7 +127,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.bst', '.bib', '.pdf', ".cls", ".sty", "*.py", "*.json", "*.ipynb"]);
+      return await this.getFilesInDirectory(workspacePath, ['.bst', '.bib', '.pdf', ".cls", ".sty", "*.py", "*.json", "*.ipynb", "*.png"]);
     }
     return [];
   }
@@ -122,7 +136,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', "*.py", "*.ipynb"], ['build', 'node_modules', 'figures', 'Figs', "__pycache__"]);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', "*.py", "*.ipynb", "*.png"], ['build', 'node_modules', 'figures', 'Figs', "__pycache__", "Figures", "figs"]);
     }
     return [];
   }
