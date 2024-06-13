@@ -1,4 +1,4 @@
-In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper.
+In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a detailed action plans so that a graduate student can also perform the improvements.
 <scratchpad>
 1. [Specific improvement idea 1 that directly addresses the instruction]
 2. [Specific improvement idea 2 that directly addresses the instruction]

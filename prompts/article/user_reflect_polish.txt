@@ -4,7 +4,9 @@ Let's take a moment to reflect on the changes made:
 1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
 2. Are the enhancements clear, concise, and effective in improving the quality of the research paper? If not, how could they be further refined?
 3. Do the changes maintain the overall structure and coherence of the original paper? If not, what adjustments could be made to ensure a smooth flow?
-4. Are there any super important information from the original version that are now missing in the new version?
+4. Are there any super important information or details from the original version that are now missing in the new version?
+5. Are there any notations or quantities used before being defined?
+6. Are there any ways to improve the global and paragraph coherence and cohesion of the paper, and to improve the flow of the paper?
 </reflection>
 
 Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below:
@@ -15,4 +17,4 @@ Please carefully consider these points and brainstorm additional targeted refine
 3. [Additional refinement 3]
 </scratchpad>
 
-Now, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B.
+Now, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
