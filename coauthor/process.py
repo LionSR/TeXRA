@@ -110,6 +110,10 @@ def process_file_with_llm(
             )
             messages.append({"role": "assistant", "content": assistant_prefill_first})
 
+    encounter_document_tag = f"</{document_tag}>" in accumulated_output
+    if encounter_document_tag:
+        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+
     state = {
         "continuation_count": 0,
         "total_input_tokens": 0,
@@ -119,27 +123,31 @@ def process_file_with_llm(
         "first_input_tokens": 0,
     }
 
-    encounter_document_tag = f"</{document_tag}>" in accumulated_output
-    if encounter_document_tag:
-        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+    model_settings = {
+        "client": client,
+        "model": model,
+        "model_name": model_name,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "end_tag": end_tag,
+        "system_prompt": system_prompt,
+    }
+
+    output_settings = {
+        "k": k,
+        "best_connector": " ",
+        "overwrite": overwrite,
+        "append_mode": append_mode,
+        "document_tag": document_tag,
+    }
 
     state, accumulated_output, end_turn = process_response_cycle(
         state,
         accumulated_output,
         messages,
         output_file,
-        k=k,
-        best_connector=" ",
-        client=client,
-        model=model,
-        model_name=model_name,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        end_tag=end_tag,
-        system_prompt=system_prompt,
-        overwrite=overwrite,
-        append_mode=append_mode,
-        document_tag=document_tag,
+        model_settings=model_settings,
+        output_settings=output_settings,
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
@@ -173,18 +181,8 @@ def process_file_with_llm(
             accumulated_output,
             messages,
             output_file,
-            k=k,
-            best_connector=" ",
-            client=client,
-            model=model,
-            model_name=model_name,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            end_tag=end_tag,
-            system_prompt=system_prompt,
-            overwrite=overwrite,
-            append_mode=append_mode,
-            document_tag=document_tag,
+            model_settings=model_settings,
+            output_settings=output_settings,
         )
         print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
@@ -198,32 +196,19 @@ def process_response_cycle(
     accumulated_output,
     messages,
     output_file,
-    k=200,
-    best_connector=" ",
-    client=None,
-    model=None,
-    model_name=None,
-    max_tokens=None,
-    temperature=None,
-    end_tag=None,
-    system_prompt=None,
-    overwrite=False,
-    append_mode=False,
-    document_tag=None,
+    model_settings=None,
+    output_settings=None,
 ):
     end_turn = False
+
+    k = output_settings["k"]
 
     while not end_turn:
         start_time = time.time()
         response_object = create_response(
-            client=client,
-            model=model,
-            model_name=model_name,
-            max_tokens=max_tokens,
+            client=model_settings["client"],
             messages=messages,
-            temperature=temperature,
-            end_tag=end_tag,
-            system_prompt=system_prompt if is_anthropic_model(model) else None,
+            model_settings=model_settings,
         )
         response_time = time.time() - start_time
         state["total_response_time"] += response_time
@@ -234,7 +219,9 @@ def process_response_cycle(
             input_tokens,
             output_tokens,
             stop_reason,
-        ) = extract_response_statistics(response_object, model, end_tag)
+        ) = extract_response_statistics(
+            response_object, model_settings["model"], model_settings["end_tag"]
+        )
 
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
@@ -251,12 +238,17 @@ def process_response_cycle(
             print(colored(f"### {new_response[:k]}", "yellow"))
 
         best_connector, _ = best_connection_method(
-            state["last_response"][-k:], new_response[:k]
+            state["last_response"][-k:],
+            new_response[:k],
         )
 
         accumulated_output += best_connector + new_response
 
-        if not os.path.exists(output_file) or not append_mode or overwrite:
+        if (
+            not os.path.exists(output_file)
+            or not output_settings["append_mode"]
+            or output_settings["overwrite"]
+        ):
             write_file(output_file, new_response)
         else:
             append_file(output_file, best_connector + new_response)
@@ -274,7 +266,7 @@ def process_response_cycle(
         state["last_response"] = new_response
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-        encounter_document_tag = f"</{document_tag}>" in new_response
+        encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
         continuation_limit = state["continuation_count"] > 10
         input_token_limit = input_tokens > 100000
         massive_repetition = massive_repetition_detected
@@ -314,7 +306,7 @@ def process_response_cycle(
         user_message = (
             f"Your response got cut off, because you only have limited response space. "
             f"Please continue writing from where you left off until the very end, "
-            f"marked by {end_tag}. Avoid repetition and begin your response with:"
+            f"marked by {model_settings['end_tag']}. Avoid repetition and begin your response with:"
         )
         print(
             f"\nContinuation #{state['continuation_count']}.\nUser message:",
