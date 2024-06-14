@@ -109,14 +109,16 @@ def extract_response_statistics(response_object, model, end_tag=None):
 
 def create_response(
     client,
-    model,
-    model_name,
-    max_tokens,
     messages,
-    temperature,
-    end_tag,
-    system_prompt=None,
+    model_settings,
 ):
+    model = model_settings["model"]
+    model_name = model_settings["model_name"]
+    max_tokens = model_settings["max_tokens"]
+    temperature = model_settings["temperature"]
+    end_tag = model_settings["end_tag"]
+    system_prompt = model_settings["system_prompt"]
+
     if is_openai_model(model):
         response_object = client.chat.completions.create(
             model=model_name,
