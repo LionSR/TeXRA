@@ -17,3 +17,6 @@ Your task is to write a long review article entitled "Stochastic Thermodynamics 
 - Create cross-references to equations and sections using LaTeX commands like \label{} and \cref{} to improve the coherence and navigability of the document. Use descriptive yet concise labels (exp for exponential, ref for reference).
 
 - Identify key equations and figures that are referenced later in the document (look for phrases like "mentioned below", "as shown below", etc.). 
+
+
+- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.

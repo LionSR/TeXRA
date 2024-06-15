@@ -1,0 +1,13 @@
+I am going to give you a latex document of a research paper. 
+
+Here is the latex document of a research paper:
+<latex_document>
+{INPUT_CONTENT}
+</latex_document>
+
+Please carefully read through the entire research paper above and ensure you fully understand all the details.
+Your task is to enhance this paper focusing solely on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
+For example, in the instruction, if I ask you to revise section A, you do not need to revise section B.
