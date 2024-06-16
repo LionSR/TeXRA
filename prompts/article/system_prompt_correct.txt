@@ -42,6 +42,6 @@ should just be:
 	\mathcal{F}_{\pm k} &=\frac{1-\zeta_{\pm k}}{2}\\
 	\frac{E_{\pm k}}{N} &=-\zeta_{\pm k}\frac{E_{Gs}^{\pm k}}{N}
 \end{align}
-- Get rid of unnecessary hypertarget
+- Get rid of unnecessary hypertarget.
 
 
