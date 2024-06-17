@@ -6,11 +6,24 @@ import fnmatch
 import shutil
 
 
-def get_common_env():
-    model = os.getenv("MODEL", "opus")
+def get_common_env(model):
+    if model is None:
+        model = os.getenv("MODEL", "opus")
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/prompts")
     return model, script_dir, prompt_dir
+
+
+# Define a decorator for shared arguments
+def shared_arguments(func):
+    func = click.argument("input_file")(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(
+        func
+    )
+    func = click.option(
+        "--reflect", required=False, default=False, help="Reflect on the changes"
+    )(func)
+    return func
 
 
 @click.group()
@@ -19,10 +32,10 @@ def cli():
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.option("--auxiliary_file", required=False, default=None)
-def correct_tex(input_file, auxiliary_file=None):
-    model, script_dir, _ = get_common_env()
+def correct_tex(model, input_file, auxiliary_file=None):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_tex.py",
@@ -36,16 +49,15 @@ def correct_tex(input_file, auxiliary_file=None):
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.option(
     "--auxiliary_file", required=False, default=None, help="Path to the auxiliary file"
 )
 @click.option(
     "--instruction", required=False, default=None, help="Instruction for processing"
 )
-@click.option("--reflect", required=False, default=False, help="Reflect on the changes")
-def polish_tex(input_file, auxiliary_file=None, instruction=None, reflect=False):
-    model, script_dir, _ = get_common_env()
+def polish_tex(model, input_file, auxiliary_file=None, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_tex.py",
@@ -63,12 +75,12 @@ def polish_tex(input_file, auxiliary_file=None, instruction=None, reflect=False)
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("sample_chapters")
 @click.argument("sample_paper", required=False, default=None)
 @click.argument("sample_note", required=False, default=None)
-def paper2note(input_file, sample_chapters, sample_paper=None, sample_note=None):
-    model, script_dir, _ = get_common_env()
+def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_note=None):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/paper2note.py",
@@ -84,18 +96,19 @@ def paper2note(input_file, sample_chapters, sample_paper=None, sample_note=None)
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("sample_tex")
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
 def adapt(
+    model,
     input_file,
     sample_tex,
     document_cls="lecture.cls",
     commands_file="command.tex",
     reflect=False,
 ):
-    model, script_dir, _ = get_common_env()
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/adapt.py",
@@ -111,14 +124,14 @@ def adapt(
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("context_file")
 @click.argument("example_transcript", required=False, default=None)
 @click.argument("example_edited_transcript", required=False, default=None)
 def meeting2text(
-    input_file, context_file, example_transcript=None, example_edited_transcript=None
+    model, input_file, context_file, example_transcript=None, example_edited_transcript=None
 ):
-    model, script_dir, _ = get_common_env()
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/meeting2text.py",
@@ -134,14 +147,14 @@ def meeting2text(
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
 @click.argument("sample_tex", required=False, default=None)
 def txt2tex(
-    input_file, document_cls="lecture.cls", commands_file="command.tex", sample_tex=None
+    model, input_file, document_cls="lecture.cls", commands_file="command.tex", sample_tex=None
 ):
-    model, script_dir, _ = get_common_env()
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/txt2tex.py",
@@ -157,9 +170,9 @@ def txt2tex(
 
 
 @click.command()
-@click.argument("input_file")
-def correct_qi(input_file):
-    model, script_dir, _ = get_common_env()
+@shared_arguments
+def correct_qi(model, input_file):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_lecture.py",
@@ -171,9 +184,9 @@ def correct_qi(input_file):
 
 
 @click.command()
-@click.argument("input_file")
-def correct_st(input_file):
-    model, script_dir, _ = get_common_env()
+@shared_arguments
+def correct_st(model, input_file):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_lecture.py",
@@ -185,10 +198,32 @@ def correct_st(input_file):
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+@click.option("--reflect", required=False, default=False, help="Reflect on the changes")
+def polish_st(model, input_file, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/edit_lecture.py",
+        "--task=polish_st",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    if instruction:
+        command.extend(["--instruction", instruction])
+    if reflect:
+        command.append("--reflect=True")
+    subprocess.run(command)
+
+
+@click.command()
+@shared_arguments
 @click.option("--auxiliary_file", required=False, default=None)
-def correct_supp_prl(input_file, auxiliary_file=None):
-    model, script_dir, _ = get_common_env()
+def correct_supp_prl(model, input_file, auxiliary_file=None):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_prl.py",
@@ -202,9 +237,9 @@ def correct_supp_prl(input_file, auxiliary_file=None):
 
 
 @click.command()
-@click.argument("input_file")
-def correct_prl(input_file):
-    model, script_dir, _ = get_common_env()
+@shared_arguments
+def correct_prl(model, input_file):
+    model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/edit_prl.py",
@@ -217,7 +252,7 @@ def correct_prl(input_file):
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 def reply_letter_prl(input_file, supp_file="supp.tex"):
     model, script_dir, prompt_dir = get_common_env()
@@ -240,7 +275,7 @@ def reply_letter_prl(input_file, supp_file="supp.tex"):
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
 def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None):
@@ -265,7 +300,7 @@ def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None):
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("main_content")
 @click.argument("draft_reply_letter")
 @click.argument("draft_main_content")
@@ -300,7 +335,7 @@ def revise_supp_prl(
 
 
 @click.command()
-@click.argument("input_file")
+@shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
 def polish_prl_reply(input_file, main_content, supp_file="supp.tex"):
@@ -456,6 +491,7 @@ cli.add_command(polish_tex)
 # edit_lecture.py
 cli.add_command(correct_qi)
 cli.add_command(correct_st)
+cli.add_command(polish_st)
 
 # meeting2text.py
 cli.add_command(meeting2text)
