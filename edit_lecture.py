@@ -14,6 +14,15 @@ all_task_settings = {
         "output_type": "tex",
         "first_prefill": "Here is the revised latex document. <latex_document>",
     },
+    "polish": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "<scratchpad>",
+        # "user_prefix_file": "user_prefix_polish.txt",
+        # "user_request_file": "user_request_polish.txt",
+        "user_reflect_file": "user_reflect_polish.txt",
+    },
 }
 
 
@@ -24,8 +33,8 @@ def main():
         "--task",
         type=str,
         default="correct_qi",
-        help="Mode of operation, either 'correct_qi', 'correct_st'.",
-        choices=["correct_qi", "correct_st"],
+        help="Mode of operation, either 'correct_qi', 'correct_st', 'polish_qi', 'polish_st'.",
+        choices=["correct_qi", "correct_st", "polish_qi", "polish_st"],
     )
     parser.add_argument(
         "--append_mode",
@@ -43,15 +52,16 @@ def main():
         "INPUT_CONTENT": read_file(args.input_file),
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
         # "DOCUMENT_CLS_CONTENT": read_file("exercise.cls"),
+        "INSTRUCTION": args.instruction if args.instruction else None,
     }
+    if "qi" in args.task:
+        user_prefix_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
+    elif "st" in args.task:
+        user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
     if "correct" in args.task:
         task_settings = all_task_settings["correct"]
-        if "qi" in args.task:
-            user_prefix_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
-        elif "st" in args.task:
-            user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
-
-    task_settings["system_prompt_file"] = f"system_prompt_{args.task}.txt"
+    elif "polish" in args.task:
+        task_settings = all_task_settings["polish"]
     task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
     task_settings["user_request_file"] = f"user_request_{args.task}.txt"
 
@@ -64,6 +74,7 @@ def main():
         prompt_path=prompt_path,
         use_prefill_from_input=False,
         append_mode=args.append_mode,
+        reflect=args.reflect,
     )
 
     run_latexdiff(args.input_file, output_file, args.model)
