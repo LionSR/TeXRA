@@ -160,7 +160,7 @@ def process_file_with_llm(
         )
         print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
         user_message = f"{user_request_reflect}\n"
-        output_file = output_file.replace(
+        output_file_reflect = output_file.replace(
             f"_{model}.{output_type}", f"_reflect_{model}.{output_type}"
         )
         messages.append({"role": "user", "content": user_message})
@@ -180,13 +180,14 @@ def process_file_with_llm(
             state,
             accumulated_output,
             messages,
-            output_file,
+            output_file_reflect,
             model_settings=model_settings,
             output_settings=output_settings,
         )
-        print(f"\n\nProcessed {input_file} and saved as {output_file}")
+        print(f"\n\nProcessed {input_file} and saved as {output_file_reflect}")
 
         print_message_summary(state, model)
+        return state, accumulated_output, end_turn, [output_file, output_file_reflect]
 
     return state, accumulated_output, end_turn, output_file
 
