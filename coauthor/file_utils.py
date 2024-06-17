@@ -63,6 +63,28 @@ def run_latexdiff(input_file, output_file, model):
     import os
     from termcolor import colored
 
+    log_file_name = input_file.replace(".tex", f"_log_{model}.txt")
+
+    # Check if "</scratchpad>" is in the output_file
+    with open(output_file, "r") as file:
+        output_content = file.read()
+    if "</scratchpad>" in output_content:
+        # Log all lines before "</scratchpad>" to a log file
+        with open(log_file_name, "a+") as log_file:  # Ensure the log file is opened in append mode
+            log_file.write("\n<scratchpad>\n")
+            lines = output_content.split("\n")
+            for line in lines:
+                if "</scratchpad>" in line:
+                    log_file.write(line + "\n")
+                    break
+                log_file.write(line + "\n")
+
+        # Delete all lines up to "</scratchpad>"
+        # output_content = output_content.split("</scratchpad>", 1)[1].lstrip()
+        output_content = output_content.split("<latex_document>", 1)[1].lstrip()
+        with open(output_file, "w") as file:
+            file.write(output_content)
+
     diff_file_name = output_file.replace(f"{model}.tex", f"diff_{model}.tex")
     latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
@@ -94,7 +116,7 @@ def run_latexdiff(input_file, output_file, model):
         for line in lines:
             if "%DIF ADD" in line:
                 add_block = True
-            elif "\\documentclass[" in line or "\\input" in line:
+            elif "\\documentclass" in line or "\\input" in line:
                 add_block = False
                 diff_file.write(line)
             elif not add_block:

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from termcolor import colored
 
 import coauthor
@@ -64,6 +65,12 @@ def main():
         task_settings = all_task_settings["polish"]
     task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
     task_settings["user_request_file"] = f"user_request_{args.task}.txt"
+
+    log_file_name = args.input_file.replace(".tex", f"_log_{args.model}.txt")
+    with open(log_file_name, "a+") as log_file:
+        # start logging: log the time and the instructions
+        log_file.write(f"\nStart logging: {datetime.now()}\n")
+        log_file.write(f"<request>\n{args.instruction}\n</request>\n")
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         args.task,
