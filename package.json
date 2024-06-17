@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -16,8 +16,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "coauthor.clean",
-        "title": "Clean"
+        "command": "coauthor.cleanOutput",
+        "title": "Clean Output"
       },
       {
         "command": "coauthor.cleanBuild",
