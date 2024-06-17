@@ -94,7 +94,7 @@ def run_latexdiff(input_file, output_file, model):
         for line in lines:
             if "%DIF ADD" in line:
                 add_block = True
-            elif "\\documentclass[" in line:
+            elif "\\documentclass[" in line or "\\input" in line:
                 add_block = False
                 diff_file.write(line)
             elif not add_block:
