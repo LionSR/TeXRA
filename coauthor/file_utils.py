@@ -1,4 +1,3 @@
-import os
 from termcolor import colored
 import difflib
 
@@ -61,7 +60,42 @@ def check_for_massive_repetition(last_response, new_response):
 
 
 def run_latexdiff(input_file, output_file, model):
+    import os
+    from termcolor import colored
+
     diff_file_name = output_file.replace(f"{model}.tex", f"diff_{model}.tex")
     latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
     os.system(latexdiff_command)
+
+    # Additional operations after latexdiff has finished
+    print(colored(f"latexdiff completed. Output saved to {diff_file_name}", "blue"))
+
+    # Read the diff file and add line breaks after %DIF PREAMBLE lines
+    with open(diff_file_name, "r") as diff_file:
+        lines = diff_file.readlines()
+
+    with open(diff_file_name, "w") as diff_file:
+        for line in lines:
+            if "\\RequirePackage[normalem]{ulem}" in line:
+                diff_file.write("\n")  # Add a line break before
+            diff_file.write(line)
+            if "\\RequirePackage{color}" in line:
+                diff_file.write("\n")  # Add a line break after
+
+    print(colored(f"Line breaks added to {diff_file_name}", "blue"))
+
+    # Delete lines between "%DIF ADD" and "\documentclass["
+    with open(diff_file_name, "r") as diff_file:
+        lines = diff_file.readlines()
+
+    with open(diff_file_name, "w") as diff_file:
+        add_block = False
+        for line in lines:
+            if "%DIF ADD" in line:
+                add_block = True
+            elif "\\documentclass[" in line:
+                add_block = False
+                diff_file.write(line)
+            elif not add_block:
+                diff_file.write(line)
