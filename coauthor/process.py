@@ -51,6 +51,9 @@ def process_file_with_llm(
     user_request = load_prompt("user_request", task, prompt_path, task_settings)
 
     user_prefix = user_prefix_template.format(**user_prefix_vars)
+
+    print("System prompt:", colored(system_prompt, "magenta"), "\n")
+
     print(
         "User prompt prefix template:",
         colored(user_prefix_template, "magenta"),
