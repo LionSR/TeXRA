@@ -7,9 +7,9 @@ import * as vscode from 'vscode';
 export function activate(context: vscode.ExtensionContext) {
   const terminal = vscode.window.createTerminal();
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.clean', () => {
+    vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       terminal.show();
-      terminal.sendText("coauthor clean");
+      terminal.sendText("coauthor clean-output");
     }),
     vscode.commands.registerCommand('coauthor.cleanBuild', () => {
       terminal.show();
@@ -20,28 +20,26 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.sendText("coauthor indent-tex");
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean) => {
-      // terminal.show();
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
+      
+      let command = `coauthor ${task} ${filePath}`;
       if (auxFilePath) {
-        let command = `coauthor ${task} ${filePath} --auxiliary_file=${auxFilePath}`;
-        if (instructions) {
-          command += ` --instruction="${instructions}"`;
-        }
-        if (reflect) {
-          command += ` --reflect=${reflect}`;
-        }
-        terminal_new.sendText(command);
-      } else {
-        let command = `coauthor ${task} ${filePath}`;
-        if (instructions) {
-          command += ` --instruction="${instructions}"`;
-        }
-        if (reflect) {
-          command += ` --reflect=${reflect}`;
-        }
-        terminal_new.sendText(command);
+        command += ` --auxiliary_file=${auxFilePath}`;
       }
+      if (instructions) {
+        const escapedInstructions = instructions
+          .replace(/\\/g, '\\\\')  // Escape backslashes
+          .replace(/"/g, '\\"')  // Escape double quotes
+          .replace(/{/g, '\\{')  // Escape curly braces
+          .replace(/}/g, '\\}');  // Escape curly braces
+        command += ` --instruction="${escapedInstructions}"`;
+      }
+      if (reflect) {
+        command += ` --reflect=${reflect}`;
+      }
+      
+      terminal_new.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
       const fileUri = await vscode.window.showOpenDialog({
@@ -81,8 +79,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async message => {
       switch (message.command) {
-        case 'clean':
-          vscode.commands.executeCommand('coauthor.clean');
+        case 'cleanOutput':
+          vscode.commands.executeCommand('coauthor.cleanOutput');
           break;
         case 'cleanBuild':
           vscode.commands.executeCommand('coauthor.cleanBuild');
@@ -181,9 +179,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         };        
         // Add event listeners for buttons
         document.addEventListener('DOMContentLoaded', function() {
-          document.getElementById('cleanButton').addEventListener('click', function() {
+          document.getElementById('cleanOutputButton').addEventListener('click', function() {
             vscode.postMessage({
-              command: 'clean'
+              command: 'cleanOutput'
             });
           });
           document.getElementById('cleanBuildButton').addEventListener('click', function() {
@@ -303,6 +301,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <option value="polish-tex">Polish TeX</option>
         <option value="correct-qi">Correct QI</option>
         <option value="correct-st">Correct ST</option>
+        <option value="polish-st">Polish ST</option>
         <option value="meeting2text">Meeting to Text</option>
         <option value="paper2note">Paper to Note</option>
         <option value="txt2tex">Txt to TeX</option>
@@ -331,7 +330,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
       <label>Housekeepings:</label>
       <button id="indentTexButton">Indent TeX</button>
-      <button id="cleanButton">Clean</button>
+      <button id="cleanOutputButton">Clean Output</button>
       <button id="cleanBuildButton">Clean Build</button>
       </p>
     </body>
