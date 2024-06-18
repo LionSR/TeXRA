@@ -83,8 +83,8 @@ def process_file_with_llm(
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-    # Handle image input
-    if figure_input and is_anthropic_model(model):
+        # Handle image input
+    if figure_input:
         print(f"Figure input: {colored(figure_input, 'cyan')}")
         _, file_extension = os.path.splitext(figure_input)
         if file_extension.lower() == ".pdf":
@@ -99,23 +99,42 @@ def process_file_with_llm(
                 ".gif": "image/gif",
                 ".webp": "image/webp",
             }.get(file_extension, "image/jpeg")
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"{user_prefix}"},
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": img_data,
+
+        if is_anthropic_model(model):
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"{user_prefix}"},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": img_data,
+                            },
                         },
-                    },
-                    {"type": "text", "text": f"{user_request}"},
-                ],
-            }
-        ]
+                        {"type": "text", "text": f"{user_request}"},
+                    ],
+                }
+            ]
+        elif is_openai_model(model):
+            base64_image = img_data
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"{user_prefix}"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{media_type};base64,{base64_image}"
+                            },
+                        },
+                        {"type": "text", "text": f"{user_request}"},
+                    ],
+                }
+            ]
 
     document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)
