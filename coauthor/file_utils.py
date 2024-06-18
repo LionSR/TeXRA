@@ -59,7 +59,7 @@ def check_for_massive_repetition(last_response, new_response):
     return massive_repetition_detected
 
 
-def run_latexdiff(input_file, output_file, model):
+def run_latexdiff(model, task, input_file, output_file):
     import os
     from termcolor import colored
 
