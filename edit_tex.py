@@ -18,8 +18,8 @@ all_task_settings = {
         "user_request_file": "user_request_correct.txt",
     },
     "polish": {
-        "document_tag": "updated_latex_document",
-        "end_tag": "</updated_latex_document>",
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
         "output_type": "tex",
         "first_prefill": "<scratchpad>",
         "system_prompt_file": "system_prompt_polish.txt",
@@ -67,9 +67,12 @@ def main():
     if args.auxiliary_file:
         user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
         user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
-        task_settings[
-            "user_prefix_file"
-        ] = f"user_prefix_{args.task}_with_auxiliary.txt"
+        # task_settings[
+        #     "user_prefix_file"
+        # ] = f"user_prefix_{args.task}_with_auxiliary.txt"
+        task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(
+            ".txt", "_with_auxiliary.txt"
+        )
         print(colored(f"Using auxiliary file: {args.auxiliary_file}", "green"))
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
