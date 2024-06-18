@@ -35,17 +35,35 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
-### 1.0.0
+## [0.1.9]
 
-Initial release of ...
+- Added a CleanSingle Button to clean up the generated file for the selected input.
 
-### 1.0.1
+## [0.1.8]
 
-Fixed issue #.
+- Fixed the file filter to exclude certain files and directories
 
-### 1.1.0
+## [0.1.7]
 
-Added features X, Y, and Z.
+- Fixed the passing of the reflection parameter to the backend
+
+## [0.1.6]
+
+- Fixed the bug that the model parameter is not passed to the backend correctly
+
+## [0.1.5]
+
+- Added hacks to process the scratchpad in the generated tex files
+
+## [0.1.4]
+
+- Created the Clean-Output Button
+- Simplifies the execute logic
+
+## [0.1.0]
+
+- Added basic functionalities
+- Initial release
 
 ---
 
@@ -63,9 +81,3 @@ You can author your README using Visual Studio Code. Here are some useful editor
 * Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
 * Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
 
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**

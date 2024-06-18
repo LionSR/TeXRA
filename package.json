@@ -1,8 +1,8 @@
 {
   "name": "coauthor",
   "displayName": "CoAuthor",
-  "description": "CoAuthor",
-  "version": "0.1.6",
+  "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
+  "version": "0.1.9",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -26,6 +26,10 @@
       {
         "command": "coauthor.indentTex",
         "title": "Indent TeX"
+      },
+      {
+        "command": "coauthor.cleanSingle",
+        "title": "Clean Single"
       },
       {
         "command": "coauthor.selectInputFile",

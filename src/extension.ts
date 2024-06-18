@@ -19,12 +19,11 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean, model: string) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: string, model: string) => {
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
       
-      // let command = `coauthor ${task} ${filePath}`;
-      let command = `coauthor ${task} ${filePath} --model=${model}`;
+      let command = `coauthor ${task} ${filePath}`;
       if (auxFilePath) {
         command += ` --auxiliary_file=${auxFilePath}`;
       }
@@ -36,13 +35,13 @@ export function activate(context: vscode.ExtensionContext) {
           .replace(/}/g, '\\}');  // Escape curly braces
         command += ` --instruction="${escapedInstructions}"`;
       }
-      if (reflect) {
-        command += ` --reflect=${reflect}`;
-      }
       if (model) {
         command += ` --model=${model}`;
       }
-      
+      if (reflect !== 'default') { // Only add --reflect if it's not the default option
+        command += ` --reflect=${reflect}`;
+      }
+
       terminal_new.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
@@ -57,6 +56,11 @@ export function activate(context: vscode.ExtensionContext) {
         return fileUri[0].fsPath;
       }
       return null;
+    }),
+    vscode.commands.registerCommand('coauthor.cleanSingle', (filePath: string) => {
+      const terminal_new = vscode.window.createTerminal();
+      terminal_new.show();
+      terminal_new.sendText(`coauthor clean-single ${filePath}`);
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
@@ -130,6 +134,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             });
           }
           break;
+        case 'cleanSingle':
+          vscode.commands.executeCommand('coauthor.cleanSingle', message.filePath);
+          break;
       }
     });
   }
@@ -139,7 +146,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.bst', '.bib', '.pdf', ".cls", ".sty", "*.py", "*.json", "*.ipynb", "*.png"]);
+      return await this.getFilesInDirectory(workspacePath, ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template']);
     }
     return [];
   }
@@ -148,26 +155,26 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', "*.py", "*.ipynb", "*.png"], ['build', 'node_modules', 'figures', 'Figs', "__pycache__", "Figures", "figs"]);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs'], ['_log_', 'Makefile', 'template']);
     }
     return [];
   }
 
-  private async getFilesInDirectory(dir: string, excludeExtensions: string[] = []): Promise<string[]> {
+  private async getFilesInDirectory(dir: string, excludeExtensions: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
     const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
     return dirEntries
-      .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && name.includes('.'))
+      .filter(([name, type]) => type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && !excludeKeywords.some(keyword => name.includes(keyword)))
       .map(([name]) => name);
   }
 
-  private async getFilesRecursively(dir: string, root: string, excludeExtensions: string[] = [], excludeDirectories: string[] = []): Promise<string[]> {
+  private async getFilesRecursively(dir: string, root: string, excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
     const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
     const files = await Promise.all(dirEntries.map(async ([name, type]) => {
       const fullPath = `${dir}/${name}`;
       const relativePath = fullPath.replace(`${root}/`, '');
       if (type === vscode.FileType.Directory && !name.startsWith('.') && !excludeDirectories.includes(name)) {
-        return await this.getFilesRecursively(fullPath, root, excludeExtensions, excludeDirectories);
-      } else if (type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && name.includes('.')) {
+        return await this.getFilesRecursively(fullPath, root, excludeExtensions, excludeDirectories, excludeKeywords);
+      } else if (type === vscode.FileType.File && !name.startsWith('.') && !excludeExtensions.some(ext => name.endsWith(ext)) && !excludeKeywords.some(keyword => name.includes(keyword))) {
         return [relativePath];
       } else {
         return [];
@@ -219,7 +226,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const filePath = document.getElementById('inputFileSelect').value;
             const auxFilePath = document.getElementById('auxFileSelect').value;
             const instructions = document.getElementById('taskInput').value;
-            const reflect = document.getElementById('reflectSelect').value === 'true';
+            const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
             vscode.postMessage({
               command: 'execute',
@@ -229,6 +236,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               instructions: instructions,
               reflect: reflect,
               model: model
+            });
+          });
+          document.getElementById('cleanSingleButton').addEventListener('click', function() {
+            const filePath = document.getElementById('inputFileSelect').value;
+            vscode.postMessage({
+              command: 'cleanSingle',
+              filePath: filePath
             });
           });
 
@@ -261,7 +275,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
             document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
-            document.getElementById('reflectSelect').value = previousState.reflectSelect || '';
+            document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
           }
         }
 
@@ -347,16 +361,21 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
       <label for="reflectSelect">Reflect:</label>
       <select id="reflectSelect">
-        <option value="true">True</option>
-        <option value="false">False</option>
+        <option value="default">Default</option>
+        <option value="True">True</option>
+        <option value="False">False</option>
       </select>
       </p>
       <button id="executeButton">Execute</button>
       <p>
-      <label>Housekeepings:</label>
+      <label>Housekeepings for all files:</label>
       <button id="indentTexButton">Indent TeX</button>
       <button id="cleanOutputButton">Clean Output</button>
       <button id="cleanBuildButton">Clean Build</button>
+      </p>
+      <p>
+      <label>Housekeepings for selected file:</label>
+      <button id="cleanSingleButton">Clean Single</button>
       </p>
     </body>
     </html>`;
