@@ -242,6 +242,26 @@ def polish_st(model, input_file, instruction=None, reflect=False):
         command.append("--reflect=True")
     subprocess.run(command)
 
+@click.command()
+@shared_arguments
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+def polish_qi(model, input_file, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/edit_lecture.py",
+        "--task=polish_qi",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    if instruction:
+        command.extend(["--instruction", instruction])
+    if reflect:
+        command.append("--reflect=True")
+    subprocess.run(command)
+
 
 @click.command()
 @shared_arguments
@@ -513,6 +533,34 @@ def indent_tex():
     print("All .tex files have been indented and .bak files have been deleted.")
 
 
+@click.command()
+@click.argument("input_file")
+def clean_single(input_file):
+    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
+    base_name = os.path.splitext(input_file)[0]
+    suffixes = ["_opus", "_sonnet", "_haiku", "_gpt4t", "_gpt4o"]
+    patterns = [f"{base_name}*{suffix}*" for suffix in suffixes]
+    patterns_build = [f"*/build/{base_name}*{suffix}*" for suffix in suffixes]
+    files_to_delete = []
+
+    # Walk through all directories and files, excluding specific directories
+    for root, dirs, files in os.walk(".", topdown=True):
+        dirs[:] = [d for d in dirs if d not in excluded_dirs]  # Modify dirs in-place to exclude certain directories
+        for pattern in patterns:
+            for filename in fnmatch.filter(files, pattern):
+                files_to_delete.append(os.path.join(root, filename))
+
+        for pattern in patterns_build:
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
+
+    # Perform the deletion
+    for file in files_to_delete:
+        os.remove(file)
+        print(f"Deleted: {file}\n")
+
+    print(f"Cleanup complete for {input_file}.")
+
+
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
@@ -521,6 +569,7 @@ cli.add_command(polish_tex)
 cli.add_command(correct_qi)
 cli.add_command(correct_st)
 cli.add_command(polish_st)
+cli.add_command(polish_qi)
 
 # meeting2text.py
 cli.add_command(meeting2text)
@@ -547,7 +596,7 @@ cli.add_command(polish_prl_reply)
 # clean up
 cli.add_command(clean)
 cli.add_command(clean_build)
-
+cli.add_command(clean_single)
 
 # latexindent
 cli.add_command(indent_tex)
