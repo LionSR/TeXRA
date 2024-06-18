@@ -129,7 +129,11 @@ def adapt(
 @click.argument("example_transcript", required=False, default=None)
 @click.argument("example_edited_transcript", required=False, default=None)
 def meeting2text(
-    model, input_file, context_file, example_transcript=None, example_edited_transcript=None
+    model,
+    input_file,
+    context_file,
+    example_transcript=None,
+    example_edited_transcript=None,
 ):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -152,7 +156,11 @@ def meeting2text(
 @click.argument("commands_file", required=False, default="command.tex")
 @click.argument("sample_tex", required=False, default=None)
 def txt2tex(
-    model, input_file, document_cls="lecture.cls", commands_file="command.tex", sample_tex=None
+    model,
+    input_file,
+    document_cls="lecture.cls",
+    commands_file="command.tex",
+    sample_tex=None,
 ):
     model, script_dir, _ = get_common_env(model)
     command = [
