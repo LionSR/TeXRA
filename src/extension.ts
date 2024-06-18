@@ -365,18 +365,19 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <option value="True">True</option>
         <option value="False">False</option>
       </select>
-      </p>
       <button id="executeButton">Execute</button>
+      </p>
       <p>
-      <label>Housekeepings for all files:</label>
+      <label>Housekeepings for selected file:</label><br>
+      <button id="cleanSingleButton">Clean Single</button>
+      </p>
+      <p>
+      <label>Housekeepings for all files:</label><br>
       <button id="indentTexButton">Indent TeX</button>
       <button id="cleanOutputButton">Clean Output</button>
       <button id="cleanBuildButton">Clean Build</button>
       </p>
-      <p>
-      <label>Housekeepings for selected file:</label>
-      <button id="cleanSingleButton">Clean Single</button>
-      </p>
+
     </body>
     </html>`;
   }
