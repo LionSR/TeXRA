@@ -66,6 +66,14 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.1]
+
+* Supported the pdf figure inputs.
+
+## [0.2.0]
+
+* Supported png and jpeg figure inputs.
+
 ## [0.1.9]
 
 * Added a CleanSingle Button to clean up the generated file for the selected input.
