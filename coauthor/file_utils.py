@@ -82,8 +82,8 @@ def run_latexdiff(input_file, output_file, model):
                 log_file.write(line + "\n")
 
         # Delete all lines up to "</scratchpad>"
-        # output_content = output_content.split("</scratchpad>", 1)[1].lstrip()
-        output_content = output_content.split("<latex_document>", 1)[1].lstrip()
+        output_content = output_content.split("</scratchpad>", 1)[1].lstrip()
+        # output_content = output_content.split("<latex_document>", 1)[1].lstrip()
         with open(output_file, "w") as file:
             file.write(output_content)
 

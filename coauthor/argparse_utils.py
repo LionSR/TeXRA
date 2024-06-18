@@ -29,6 +29,11 @@ def get_common_argparser():
         default=False,
         help="Whether to perform a reflection round after the initial processing.",
     )
+    parser.add_argument(
+        "--figure_input",
+        type=str,
+        help="Path to the figure input file.",
+    )
     return parser
 
 
