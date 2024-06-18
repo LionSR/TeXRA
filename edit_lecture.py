@@ -66,13 +66,15 @@ def main():
     task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
     task_settings["user_request_file"] = f"user_request_{args.task}.txt"
 
+    first_task_chunk = args.task.split("_")[0]
     log_file_name = args.input_file.replace(
-        ".tex", f"_{args.task}_log_{args.model}.txt"
+        ".tex", f"_{first_task_chunk}_log_{args.model}.txt"
     )
     with open(log_file_name, "a+") as log_file:
-        # start logging: log the time and the instructions
         log_file.write(f"\nStart logging: {datetime.now()}\n")
-        log_file.write(f"<request>\n{args.instruction}\n</request>\n")
+        log_file.write(f"\nTask: {args.task}\n")
+        log_file.write(f"\nModel: {args.model}\n")
+        log_file.write(f"\nInstruction: {args.instruction}\n")
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         args.task,
@@ -87,7 +89,6 @@ def main():
         figure_input=args.figure_input if args.figure_input else None,
     )
 
-    first_task_chunk = args.task.split("_")[0]
     if isinstance(output_file, list):
         output_file, output_file_reflect = output_file
         print(

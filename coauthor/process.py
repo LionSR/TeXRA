@@ -234,6 +234,8 @@ def process_response_cycle(
 
     k = output_settings["k"]
 
+    file_exists = os.path.exists(output_file)
+
     while not end_turn:
         start_time = time.time()
         response_object = create_response(
@@ -275,13 +277,17 @@ def process_response_cycle(
 
         accumulated_output += best_connector + new_response
 
-        if (
-            not os.path.exists(output_file)
-            or not output_settings["append_mode"]
-            or output_settings["overwrite"]
-        ):
+        if not file_exists:
+            # or not output_settings["append_mode"]
+            print("Creating the file")
             write_file(output_file, new_response)
+            file_exists = True
+        elif output_settings["overwrite"]:
+            print("Overwriting file")
+            write_file(output_file, new_response)
+            output_settings["overwrite"] = False
         else:
+            print("Appending to file")
             append_file(output_file, best_connector + new_response)
 
         print(
