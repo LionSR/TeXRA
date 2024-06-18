@@ -18,6 +18,8 @@ from .file_utils import (
     run_latexdiff,
 )
 
+from .img_utils import get_base64_encoded_image
+
 from .argparse_utils import get_common_argparser, get_prompt_path
 
 __all__ = [
@@ -36,4 +38,5 @@ __all__ = [
     "get_common_argparser",
     "get_prompt_path",
     "run_latexdiff",
+    "get_base64_encoded_image",
 ]

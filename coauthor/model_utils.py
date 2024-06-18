@@ -1,4 +1,6 @@
 from termcolor import colored
+import os
+from .file_utils import read_file
 
 model_mapping = {
     "sonnet": "claude-3-sonnet-20240229",
@@ -105,6 +107,63 @@ def extract_response_statistics(response_object, model, end_tag=None):
         new_response += "\n" + end_tag
 
     return new_response, input_tokens, output_tokens, stop_reason
+
+
+def handle_prefill(
+    model,
+    output_type,
+    use_prefill_from_input,
+    assistant_prefill_first,
+    input_file,
+    k,
+    append_mode,
+    output_file,
+    messages,
+    document_tag,
+    overwrite,
+):
+    accumulated_output = assistant_prefill_first
+    if output_type == "tex":
+        if use_prefill_from_input:
+            first_k_tex_document = read_file(input_file)[:k].strip()
+            assistant_prefill_first += first_k_tex_document
+            if is_anthropic_model(model):
+                accumulated_output = first_k_tex_document
+            elif is_openai_model(model):
+                accumulated_output = ""
+                messages.append({"role": "assistant", "content": "```latex"})
+        elif "<scratchpad>" not in assistant_prefill_first:
+            accumulated_output = ""
+
+    if is_anthropic_model(model):
+        if append_mode and os.path.exists(output_file):
+            file_content = read_file(output_file).strip()
+            if output_type == "tex" and "\\end{document}" in file_content:
+                print("end_tag detected in existing file content. Overwriting...")
+                overwrite = True
+                print(
+                    f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
+                )
+                messages.append(
+                    {"role": "assistant", "content": assistant_prefill_first}
+                )
+            else:
+                accumulated_output = file_content
+                messages.append({"role": "assistant", "content": file_content})
+                print(
+                    f"Using existing file content as prefill: {colored(output_file, 'green')}"
+                )
+        else:
+            print(
+                f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
+            )
+            messages.append({"role": "assistant", "content": assistant_prefill_first})
+
+    encounter_document_tag = f"</{document_tag}>" in accumulated_output
+    if encounter_document_tag:
+        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+
+    return accumulated_output, messages, overwrite
 
 
 def create_response(
