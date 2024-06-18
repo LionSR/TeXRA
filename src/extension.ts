@@ -19,11 +19,11 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: string, model: string) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
 
-      let command = `coauthor ${task} ${filePath}`;
+      let command = `coauthor ${task} ${inputFilePath}`;
       if (auxFilePath) {
         command += ` --auxiliary_file=${auxFilePath}`;
       }
@@ -38,8 +38,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (model) {
         command += ` --model=${model}`;
       }
-      if (reflect !== 'default') { // Only add --reflect if it's not the default option
+      if (reflect !== 'default') {
         command += ` --reflect=${reflect}`;
+      }
+      if (figureFilePath) {
+        command += ` --figure_input="${figureFilePath}"`;
       }
 
       terminal_new.sendText(command);
@@ -114,29 +117,30 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'execute':
           const task_val = message.task;
-          const filePath_val = message.filePath;
+          const inputFilePath_val = message.inputFilePath;
           const auxFilePath_val = message.auxFilePath;
           const instructions_val = message.instructions;
           const reflect_val = message.reflect;
           const model_val = message.model;
-          vscode.commands.executeCommand('coauthor.execute', task_val, filePath_val, auxFilePath_val, instructions_val, reflect_val, model_val);
+          const figureFilePath_val = message.figureFilePath;
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFilePath_val);
           break;
         case 'selectInputFile':
-          const filePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
-          if (filePath) {
-            webviewView.webview.postMessage({ command: 'inputFileSelected', filePath });
-          }
-          break;
-        case 'selectFigureFile':
-          const figureFilePath = await vscode.commands.executeCommand<string>('coauthor.selectFigureFile');
-          if (figureFilePath) {
-            webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFilePath });
+          const inputFilePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
+          if (inputFilePath) {
+            webviewView.webview.postMessage({ command: 'inputFileSelected', filePath: inputFilePath });
           }
           break;
         case 'selectAuxFile':
           const auxFilePath = await vscode.commands.executeCommand<string>('coauthor.selectAuxFile');
           if (auxFilePath) {
             webviewView.webview.postMessage({ command: 'auxFileSelected', filePath: auxFilePath });
+          }
+          break;
+        case 'selectFigureFile':
+          const figureFilePath = await vscode.commands.executeCommand<string>('coauthor.selectFigureFile');
+          if (figureFilePath) {
+            webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFilePath });
           }
           break;
         case 'requestInputFiles':
@@ -180,7 +184,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs'], ['_log_', 'Makefile', 'template']);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs'], ['_log_', 'Makefile', 'template', '_log']);
     }
     return [];
   }
@@ -189,11 +193,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template']);
+      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log']);
     }
     return [];
   }
-
 
   private async listFigureFiles(): Promise<string[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -252,7 +255,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           // Restore previous state
           restoreState();
         };        
-        // Add event listeners for buttons
         document.addEventListener('DOMContentLoaded', function() {
           document.getElementById('modelSelect').addEventListener('change', function() {
             vscode.postMessage({
@@ -277,26 +279,28 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           });
           document.getElementById('executeButton').addEventListener('click', function() {
             const task = document.getElementById('taskSelect').value;
-            const filePath = document.getElementById('inputFileSelect').value;
+            const inputFilePath = document.getElementById('inputFileSelect').value;
             const auxFilePath = document.getElementById('auxFileSelect').value;
+            const figureFilePath = document.getElementById('figureFileSelect').value;
             const instructions = document.getElementById('taskInput').value;
             const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
             vscode.postMessage({
               command: 'execute',
               task: task,
-              filePath: filePath,
+              inputFilePath: inputFilePath,
               auxFilePath: auxFilePath,
               instructions: instructions,
               reflect: reflect,
-              model: model
+              model: model,
+              figureFilePath: figureFilePath
             });
           });
           document.getElementById('cleanSingleButton').addEventListener('click', function() {
-            const filePath = document.getElementById('inputFileSelect').value;
+            const inputFilePath = document.getElementById('inputFileSelect').value;
             vscode.postMessage({
               command: 'cleanSingle',
-              filePath: filePath
+              filePath: inputFilePath
             });
           });
 
@@ -329,8 +333,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('modelSelect').value = previousState.modelSelect || '';
             document.getElementById('taskSelect').value = previousState.taskSelect || '';
             document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
-            document.getElementById('auxFileSelect').value = previousState.auxFileSelect || 'None';
-            document.getElementById('figureFileSelect').value = previousState.figureFileSelect || 'None';
+            document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
+            document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
           }
@@ -353,7 +357,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               const auxFileSelect = document.getElementById('auxFileSelect');
               auxFileSelect.innerHTML = '';
               const emptyOption = document.createElement('option');
-              emptyOption.value = 'None';
+              emptyOption.value = '';
               emptyOption.textContent = 'None';
               auxFileSelect.appendChild(emptyOption);
               message.files.forEach(file => {
@@ -367,7 +371,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               const figureFileSelect = document.getElementById('figureFileSelect');
               figureFileSelect.innerHTML = '';
               const emptyFigureOption = document.createElement('option');
-              emptyFigureOption.value = 'None';
+              emptyFigureOption.value = '';
               emptyFigureOption.textContent = 'None';
               figureFileSelect.appendChild(emptyFigureOption);
               message.files.forEach(file => {
