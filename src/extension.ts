@@ -19,11 +19,12 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, filePath: string, auxFilePath: string, instructions: string, reflect: boolean, model: string) => {
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
       
-      let command = `coauthor ${task} ${filePath}`;
+      // let command = `coauthor ${task} ${filePath}`;
+      let command = `coauthor ${task} ${filePath} --model=${model}`;
       if (auxFilePath) {
         command += ` --auxiliary_file=${auxFilePath}`;
       }
@@ -37,6 +38,9 @@ export function activate(context: vscode.ExtensionContext) {
       }
       if (reflect) {
         command += ` --reflect=${reflect}`;
+      }
+      if (model) {
+        command += ` --model=${model}`;
       }
       
       terminal_new.sendText(command);
@@ -94,7 +98,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const auxFilePath_val = message.auxFilePath;
           const instructions_val = message.instructions;
           const reflect_val = message.reflect;
-          vscode.commands.executeCommand('coauthor.execute', task_val, filePath_val, auxFilePath_val, instructions_val, reflect_val);
+          const model_val = message.model;
+          vscode.commands.executeCommand('coauthor.execute', task_val, filePath_val, auxFilePath_val, instructions_val, reflect_val, model_val);
           break;
         case 'selectInputFile':
           const filePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
@@ -115,6 +120,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'auxFileSelected':
           vscode.window.showInformationMessage(`Selected auxiliary file: ${message.filePath}`);
+          break;
+        case 'modelSelect':
+          vscode.window.showInformationMessage(`Selected model: ${message.model}`);
+          if (message.model) {
+            webviewView.webview.postMessage({
+              command: 'modelSelected',
+              model: message.model
+            });
+          }
           break;
       }
     });
@@ -179,6 +193,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         };        
         // Add event listeners for buttons
         document.addEventListener('DOMContentLoaded', function() {
+          document.getElementById('modelSelect').addEventListener('change', function() {
+            vscode.postMessage({
+              command: 'modelSelect',
+              model: this.value
+            });
+          });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
             vscode.postMessage({
               command: 'cleanOutput'
@@ -200,13 +220,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const auxFilePath = document.getElementById('auxFileSelect').value;
             const instructions = document.getElementById('taskInput').value;
             const reflect = document.getElementById('reflectSelect').value === 'true';
+            const model = document.getElementById('modelSelect').value;
             vscode.postMessage({
               command: 'execute',
               task: task,
               filePath: filePath,
               auxFilePath: auxFilePath,
               instructions: instructions,
-              reflect: reflect
+              reflect: reflect,
+              model: model
             });
           });
 
@@ -276,6 +298,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'auxFileSelected':
               document.getElementById('auxFileSelect').value = message.filePath;
               break;
+            case 'modelSelected':
+              document.getElementById('modelSelect').value = message.model;
+              break;
           }
           // Restore previous state
           restoreState();
@@ -285,7 +310,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     <body>
       <h2>CoAuthor</h2>
       <p>
-      <label for="modelSelect">Models:</label>
+      <label for="modelSelect">Model:</label>
       <select id="modelSelect">
         <option value="opus">Opus</option>
         <option value="sonnet">Sonnet</option>
@@ -295,7 +320,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </select>
       </p>
       <p>
-      <label for="taskSelect">Tasks:</label>
+      <label for="taskSelect">Task:</label>
       <select id="taskSelect">
         <option value="correct-tex">Correct TeX</option>
         <option value="polish-tex">Polish TeX</option>
