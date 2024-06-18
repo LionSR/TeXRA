@@ -1,5 +1,7 @@
 import base64
-from IPython.display import Image
+from PIL import Image
+import io
+import fitz
 
 
 def get_base64_encoded_image(image_path):
@@ -8,3 +10,58 @@ def get_base64_encoded_image(image_path):
         base_64_encoded_data = base64.b64encode(binary_data)
         base64_string = base_64_encoded_data.decode("utf-8")
         return base64_string
+
+
+def single_page_pdf_to_png(pdf_path, page_num=0, quality=75, max_size=(1024, 1024)):
+    """
+    Convert a single page of a PDF to a PNG image.
+
+    Args:
+        pdf_path (str): Path to the PDF file.
+        page_num (int): Page number to convert (0-indexed).
+        quality (int): Quality of the output PNG image.
+        max_size (tuple): Maximum size of the output image.
+
+    Returns:
+        str: Base64 encoded PNG image.
+    
+    Example usage:
+        pdf_path = "../images/reading_charts_graphs/twilio_q4_2023.pdf"
+        encoded_png = single_page_pdf_to_png(pdf_path, page_num=0)
+        print(encoded_png)
+    """
+    # Open the PDF file
+    doc = fitz.open(pdf_path)
+
+    # Load the specified page
+    page = doc.load_page(page_num)
+
+    # Render the page as a PNG image
+    pix = page.get_pixmap(matrix=fitz.Matrix(300 / 72, 300 / 72))
+
+    # Save the PNG image to a BytesIO object
+    image_data = io.BytesIO()
+    pix.save(image_data, format="PNG")
+
+    # Open the image with PIL
+    image = Image.open(image_data)
+
+    # Resize the image if it exceeds the maximum size
+    if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
+        image.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+    # Save the resized image to a BytesIO object
+    resized_image_data = io.BytesIO()
+    image.save(resized_image_data, format="PNG", optimize=True, quality=quality)
+    resized_image_data.seek(0)
+
+    # Encode the image to base64
+    base64_encoded = base64.b64encode(resized_image_data.getvalue()).decode("utf-8")
+
+    # Close the PDF document
+    doc.close()
+
+    return base64_encoded
+
+
+
