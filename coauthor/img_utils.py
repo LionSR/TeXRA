@@ -12,7 +12,7 @@ def get_base64_encoded_image(image_path):
         return base64_string
 
 
-def single_page_pdf_to_png(pdf_path, page_num=0, quality=75, max_size=(1024, 1024)):
+def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 1024)):
     """
     Convert a single page of a PDF to a PNG image.
 
@@ -24,7 +24,7 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=75, max_size=(1024, 102
 
     Returns:
         str: Base64 encoded PNG image.
-    
+
     Example usage:
         pdf_path = "../images/reading_charts_graphs/twilio_q4_2023.pdf"
         encoded_png = single_page_pdf_to_png(pdf_path, page_num=0)
@@ -40,8 +40,7 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=75, max_size=(1024, 102
     pix = page.get_pixmap(matrix=fitz.Matrix(300 / 72, 300 / 72))
 
     # Save the PNG image to a BytesIO object
-    image_data = io.BytesIO()
-    pix.save(image_data, format="PNG")
+    image_data = io.BytesIO(pix.tobytes())
 
     # Open the image with PIL
     image = Image.open(image_data)
@@ -62,6 +61,3 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=75, max_size=(1024, 102
     doc.close()
 
     return base64_encoded
-
-
-
