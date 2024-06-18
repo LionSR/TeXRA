@@ -38,6 +38,7 @@ Users appreciate release notes as you update your extension.
 ## [0.1.9]
 
 - Added a CleanSingle Button to clean up the generated file for the selected input.
+- UI changes
 
 ## [0.1.8]
 
