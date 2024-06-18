@@ -56,7 +56,20 @@ def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
 @click.option(
     "--instruction", required=False, default=None, help="Instruction for processing"
 )
-def polish_tex(model, input_file, auxiliary_file=None, instruction=None, reflect=False):
+@click.option(
+    "--figure_input",
+    required=False,
+    default=None,
+    help="Path to the figure input file.",
+)
+def polish_tex(
+    model,
+    input_file,
+    auxiliary_file=None,
+    figure_input=None,
+    instruction=None,
+    reflect=False,
+):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -69,8 +82,10 @@ def polish_tex(model, input_file, auxiliary_file=None, instruction=None, reflect
         command.extend(["--auxiliary_file", auxiliary_file])
     if instruction:
         command.extend(["--instruction", instruction])
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
+    if figure_input:
+        command.extend(["--figure_input", figure_input])
     subprocess.run(command)
 
 
@@ -98,7 +113,7 @@ def paper2note(
         f"--sample_paper={sample_paper}",
         f"--sample_note={sample_note}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -127,7 +142,7 @@ def adapt(
         f"--document_cls={document_cls}",
         f"--commands_file={commands_file}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -156,7 +171,7 @@ def meeting2text(
         f"--example_transcript={example_transcript}",
         f"--example_edited_transcript={example_edited_transcript}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -185,7 +200,7 @@ def txt2tex(
         f"--document_cls={document_cls}",
         f"--commands_file={commands_file}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -201,7 +216,7 @@ def correct_qi(model, input_file, reflect=False):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -217,7 +232,7 @@ def correct_st(model, input_file, reflect=False):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -227,7 +242,13 @@ def correct_st(model, input_file, reflect=False):
 @click.option(
     "--instruction", required=False, default=None, help="Instruction for processing"
 )
-def polish_st(model, input_file, instruction=None, reflect=False):
+@click.option(
+    "--figure_input",
+    required=False,
+    default=None,
+    help="Path to the figure input file.",
+)
+def polish_st(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -238,16 +259,25 @@ def polish_st(model, input_file, instruction=None, reflect=False):
     ]
     if instruction:
         command.extend(["--instruction", instruction])
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
+    if figure_input:
+        command.extend(["--figure_input", figure_input])
     subprocess.run(command)
+
 
 @click.command()
 @shared_arguments
 @click.option(
     "--instruction", required=False, default=None, help="Instruction for processing"
 )
-def polish_qi(model, input_file, instruction=None, reflect=False):
+@click.option(
+    "--figure_input",
+    required=False,
+    default=None,
+    help="Path to the figure input file.",
+)
+def polish_qi(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -258,8 +288,10 @@ def polish_qi(model, input_file, instruction=None, reflect=False):
     ]
     if instruction:
         command.extend(["--instruction", instruction])
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
+    if figure_input:
+        command.extend(["--figure_input", figure_input])
     subprocess.run(command)
 
 
@@ -377,7 +409,7 @@ def revise_supp_prl(
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -404,7 +436,7 @@ def polish_prl_reply(input_file, main_content, supp_file="supp.tex", reflect=Tru
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
     ]
-    if reflect:
+    if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
 
@@ -545,13 +577,17 @@ def clean_single(input_file):
 
     # Walk through all directories and files, excluding specific directories
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in excluded_dirs]  # Modify dirs in-place to exclude certain directories
+        dirs[:] = [
+            d for d in dirs if d not in excluded_dirs
+        ]  # Modify dirs in-place to exclude certain directories
         for pattern in patterns:
             for filename in fnmatch.filter(files, pattern):
                 files_to_delete.append(os.path.join(root, filename))
 
         for pattern in patterns_build:
-            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
+            files_to_delete.extend(
+                glob.glob(os.path.join(root, pattern), recursive=True)
+            )
 
     # Perform the deletion
     for file in files_to_delete:
