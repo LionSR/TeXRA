@@ -12,8 +12,9 @@ from .model_utils import (
     get_model_client,
     is_openai_model,
     is_anthropic_model,
-    extract_response_statistics,
+    handle_prefill,
     create_response,
+    extract_response_statistics,
     print_message_summary,
 )
 from .openai_utils import best_connection_method
@@ -61,7 +62,7 @@ def process_file_with_llm(
     )
     print("User prompt request:", colored(user_request, "magenta"), "\n")
 
-    output_type = task_settings["output_type"]
+    output_type = task_settings.get("output_type", "txt")
     file_name, _ = os.path.splitext(input_file)
     first_task_chunk = task.split("_")[0]
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
@@ -71,51 +72,23 @@ def process_file_with_llm(
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-    document_tag = task_settings["document_tag"]
+    document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)
 
-    assistant_prefill_first = task_settings["first_prefill"]
-    accumulated_output = assistant_prefill_first
-    if output_type == "tex":
-        if use_prefill_from_input:
-            first_k_tex_document = read_file(input_file)[:k].strip()
-            assistant_prefill_first += first_k_tex_document
-            if is_anthropic_model(model):
-                accumulated_output = first_k_tex_document
-            elif is_openai_model(model):
-                accumulated_output = ""
-                messages.append({"role": "assistant", "content": "```latex"})
-        elif "<scratchpad>" not in assistant_prefill_first:
-            accumulated_output = ""
-
-    if is_anthropic_model(model):
-        # when append_mode is off this does not print the prefill somehow
-        if append_mode and os.path.exists(output_file):
-            file_content = read_file(output_file).strip()
-            if output_type == "tex" and "\\end{document}" in file_content:
-                print("end_tag detected in existing file content. Overwriting...")
-                overwrite = True
-                print(
-                    f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
-                )
-                messages.append(
-                    {"role": "assistant", "content": assistant_prefill_first}
-                )
-            else:
-                accumulated_output = file_content
-                messages.append({"role": "assistant", "content": file_content})
-                print(
-                    f"Using existing file content as prefill: {colored(output_file, 'green')}"
-                )
-        else:
-            print(
-                f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
-            )
-            messages.append({"role": "assistant", "content": assistant_prefill_first})
-
-    encounter_document_tag = f"</{document_tag}>" in accumulated_output
-    if encounter_document_tag:
-        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+    assistant_prefill_first = task_settings.get("first_prefill", None)
+    accumulated_output, messages, overwrite = handle_prefill(
+        model,
+        output_type,
+        use_prefill_from_input,
+        assistant_prefill_first,
+        input_file,
+        k,
+        append_mode,
+        output_file,
+        messages,
+        document_tag,
+        overwrite,
+    )
 
     state = {
         "continuation_count": 0,
@@ -157,6 +130,9 @@ def process_file_with_llm(
     print_message_summary(state, model)
 
     if end_turn and reflect:
+        assistant_reflect_prefill_first = task_settings.get(
+            "first_prefill_reflect", assistant_prefill_first
+        )
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
         user_request_reflect = load_prompt(
             "user_reflect", task, prompt_path, task_settings
@@ -169,12 +145,18 @@ def process_file_with_llm(
         messages.append({"role": "user", "content": user_message})
 
         if output_type == "tex" and use_prefill_from_input:
+            # may need to change this
+            first_k_tex_document = read_file(input_file)[:k].strip()
             accumulated_output = first_k_tex_document
         else:
-            accumulated_output = assistant_prefill_first
+            accumulated_output = assistant_reflect_prefill_first
 
-        messages.append({"role": "assistant", "content": assistant_prefill_first})
-        print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+        messages.append(
+            {"role": "assistant", "content": assistant_reflect_prefill_first}
+        )
+        print(
+            f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}"
+        )
 
         state["last_response"] = accumulated_output
         state["continuation_count"] = 0
@@ -273,7 +255,6 @@ def process_response_cycle(
         encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
         continuation_limit = state["continuation_count"] > 10
         input_token_limit = input_tokens > 100000
-        massive_repetition = massive_repetition_detected
 
         output_token_limit = (
             state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
@@ -281,7 +262,7 @@ def process_response_cycle(
 
         if output_token_limit:
             print(
-                "WARNING: Total output tokens exceed 1.3 times the number of the first input tokens. Halting the process."
+                "WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process."
             )
         if continuation_limit:
             print("Stopping after 10 continuations or 100,000 input tokens")
@@ -290,7 +271,7 @@ def process_response_cycle(
             encounter_document_tag
             or continuation_limit
             or input_token_limit
-            or massive_repetition
+            or massive_repetition_detected
             or output_token_limit
         )
 
@@ -300,7 +281,7 @@ def process_response_cycle(
             print(f"encounter_document_tag: {encounter_document_tag}")
             print(f"continuation_limit: {continuation_limit}")
             print(f"input_token_limit: {input_token_limit}")
-            print(f"massive_repetition: {massive_repetition}")
+            print(f"massive_repetition_detected: {massive_repetition_detected}")
             print(f"output_token_limit: {output_token_limit}")
             print("### The last {} characters of the previous response are:".format(k))
             print(colored(f"### {state['last_response'][-k:]}", "yellow"))

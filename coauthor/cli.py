@@ -21,7 +21,7 @@ def shared_arguments(func):
         func
     )
     func = click.option(
-        "--reflect", required=False, default=False, help="Reflect on the changes"
+        "--reflect", required=False, default=None, help="Reflect on the changes"
     )(func)
     return func
 
@@ -34,7 +34,7 @@ def cli():
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_file", required=False, default=None)
-def correct_tex(model, input_file, auxiliary_file=None):
+def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -79,7 +79,14 @@ def polish_tex(model, input_file, auxiliary_file=None, instruction=None, reflect
 @click.argument("sample_chapters")
 @click.argument("sample_paper", required=False, default=None)
 @click.argument("sample_note", required=False, default=None)
-def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_note=None):
+def paper2note(
+    model,
+    input_file,
+    sample_chapters,
+    sample_paper=None,
+    sample_note=None,
+    reflect=False,
+):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -90,8 +97,9 @@ def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_not
         f"--sample_chapters={sample_chapters}",
         f"--sample_paper={sample_paper}",
         f"--sample_note={sample_note}",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -106,7 +114,7 @@ def adapt(
     sample_tex,
     document_cls="lecture.cls",
     commands_file="command.tex",
-    reflect=False,
+    reflect=True,
 ):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -118,8 +126,9 @@ def adapt(
         f"--sample_tex={sample_tex}",
         f"--document_cls={document_cls}",
         f"--commands_file={commands_file}",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -134,6 +143,7 @@ def meeting2text(
     context_file,
     example_transcript=None,
     example_edited_transcript=None,
+    reflect=True,
 ):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -145,8 +155,9 @@ def meeting2text(
         f"--context_file={context_file}",
         f"--example_transcript={example_transcript}",
         f"--example_edited_transcript={example_edited_transcript}",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -161,6 +172,7 @@ def txt2tex(
     document_cls="lecture.cls",
     commands_file="command.tex",
     sample_tex=None,
+    reflect=True,
 ):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -172,14 +184,15 @@ def txt2tex(
         f"--sample_tex={sample_tex}",
         f"--document_cls={document_cls}",
         f"--commands_file={commands_file}",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
 @click.command()
 @shared_arguments
-def correct_qi(model, input_file):
+def correct_qi(model, input_file, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -188,12 +201,14 @@ def correct_qi(model, input_file):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
 @click.command()
 @shared_arguments
-def correct_st(model, input_file):
+def correct_st(model, input_file, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -202,6 +217,8 @@ def correct_st(model, input_file):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -210,7 +227,6 @@ def correct_st(model, input_file):
 @click.option(
     "--instruction", required=False, default=None, help="Instruction for processing"
 )
-@click.option("--reflect", required=False, default=False, help="Reflect on the changes")
 def polish_st(model, input_file, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -230,7 +246,7 @@ def polish_st(model, input_file, instruction=None, reflect=False):
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_file", required=False, default=None)
-def correct_supp_prl(model, input_file, auxiliary_file=None):
+def correct_supp_prl(model, input_file, auxiliary_file=None, reflect=True):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -239,14 +255,14 @@ def correct_supp_prl(model, input_file, auxiliary_file=None):
         f"--model={model}",
         f"--input_file={input_file}",
         f"--auxiliary_file={auxiliary_file}",
-        "--reflect=True",
+        f"--reflect={reflect}",
     ]
     subprocess.run(command)
 
 
 @click.command()
 @shared_arguments
-def correct_prl(model, input_file):
+def correct_prl(model, input_file, reflect=True):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -254,7 +270,7 @@ def correct_prl(model, input_file):
         "--task=correct_prl",
         f"--model={model}",
         f"--input_file={input_file}",
-        "--reflect=True",
+        f"--reflect={reflect}",
     ]
     subprocess.run(command)
 
@@ -262,7 +278,7 @@ def correct_prl(model, input_file):
 @click.command()
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
-def reply_letter_prl(input_file, supp_file="supp.tex"):
+def reply_letter_prl(input_file, supp_file="supp.tex", reflect=True):
     model, script_dir, prompt_dir = get_common_env()
     command = [
         "python",
@@ -277,7 +293,7 @@ def reply_letter_prl(input_file, supp_file="supp.tex"):
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
         f"--example_reply_letter={prompt_dir}/prl_reply/example_reply_letter.txt",
-        "--reflect=True",
+        f"--reflect={reflect}",
     ]
     subprocess.run(command)
 
@@ -286,7 +302,9 @@ def reply_letter_prl(input_file, supp_file="supp.tex"):
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None):
+def revise_main_prl(
+    input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True
+):
     model, script_dir, prompt_dir = get_common_env()
     command = [
         "python",
@@ -302,7 +320,7 @@ def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None):
         "--editor_letter=rebuttal/editor_letter.txt",
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
-        "--reflect=True",
+        f"--reflect={reflect}",
     ]
     subprocess.run(command)
 
@@ -319,6 +337,7 @@ def revise_supp_prl(
     draft_reply_letter,
     draft_main_content,
     supp_file="supp.tex",
+    reflect=True,
 ):
     model, script_dir, prompt_dir = get_common_env()
     command = [
@@ -337,8 +356,9 @@ def revise_supp_prl(
         "--editor_letter=rebuttal/editor_letter.txt",
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
@@ -346,7 +366,7 @@ def revise_supp_prl(
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(input_file, main_content, supp_file="supp.tex"):
+def polish_prl_reply(input_file, main_content, supp_file="supp.tex", reflect=True):
     model, script_dir, prompt_dir = get_common_env()
     command = [
         "python",
@@ -363,8 +383,9 @@ def polish_prl_reply(input_file, main_content, supp_file="supp.tex"):
         "--editor_letter=rebuttal/editor_letter.txt",
         "--report_a=rebuttal/report_a.txt",
         "--report_b=rebuttal/report_b.txt",
-        "--reflect=True",
     ]
+    if reflect:
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
