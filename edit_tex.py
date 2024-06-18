@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from termcolor import colored
 
 import coauthor
@@ -74,6 +75,14 @@ def main():
             ".txt", "_with_auxiliary.txt"
         )
         print(colored(f"Using auxiliary file: {args.auxiliary_file}", "green"))
+
+    log_file_name = args.input_file.replace(
+        ".tex", f"_{args.task}_log_{args.model}.txt"
+    )
+    with open(log_file_name, "a+") as log_file:
+        # start logging: log the time and the instructions
+        log_file.write(f"\nStart logging: {datetime.now()}\n")
+        log_file.write(f"<request>\n{args.instruction}\n</request>\n")
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         args.task,
