@@ -17,6 +17,7 @@ from .model_utils import (
     extract_response_statistics,
     print_message_summary,
 )
+from .img_utils import get_base64_encoded_image
 from .openai_utils import best_connection_method
 
 
@@ -44,6 +45,7 @@ def process_file_with_llm(
     k=200,
     max_tokens=4096,
     temperature=0,
+    figure_input=None,
 ):
     client, model_name = get_model_client(model, api_key)
 
@@ -68,9 +70,47 @@ def process_file_with_llm(
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
 
-    messages = [{"role": "user", "content": user_prefix + user_request}]
+    # messages = [{"role": "user", "content": user_prefix + user_request}]
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": user_prefix},
+                {"type": "text", "text": user_request},
+            ],
+        }
+    ]
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
+
+    # Handle image input
+    if figure_input and is_anthropic_model(model):
+        print(f"Figure input: {colored(figure_input, 'cyan')}")
+        img_data = get_base64_encoded_image(figure_input)
+        media_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }.get(os.path.splitext(figure_input)[1], "image/jpeg")
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"{user_prefix}"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": img_data,
+                        },
+                    },
+                    {"type": "text", "text": f"{user_request}"},
+                ],
+            }
+        ]
 
     document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)

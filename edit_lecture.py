@@ -82,6 +82,7 @@ def main():
         use_prefill_from_input=False,
         append_mode=args.append_mode,
         reflect=args.reflect,
+        figure_input=args.figure_input if args.figure_input else None,
     )
 
     if isinstance(output_file, list):
