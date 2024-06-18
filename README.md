@@ -35,10 +35,16 @@ Follow these steps to install the necessary components for the extension:
    ```bash
    npm run compile && vsce package
    ```
-6. **Install the Companion Python Package: 
+6. **Install the Companion Python Package**: 
    ```bash
    cd coauthor
    pip install -e .
+   ```
+
+7. **Put your OpenAI/ANTHROPIC API Key environment variable**:
+   ```bash
+   export OPENAI_API_KEY="your_openai_api_key"
+   export ANTHROPIC_API_KEY="your_anthropic_api_key"
    ```
 
 ## Extension Settings
