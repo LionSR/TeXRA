@@ -592,7 +592,7 @@ def clean_single(input_file):
     # Perform the deletion
     for file in files_to_delete:
         os.remove(file)
-        print(f"Deleted: {file}\n")
+        print(f"Deleted: {file}")
 
     print(f"Cleanup complete for {input_file}.")
 
