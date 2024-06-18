@@ -66,7 +66,9 @@ def main():
     task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
     task_settings["user_request_file"] = f"user_request_{args.task}.txt"
 
-    log_file_name = args.input_file.replace(".tex", f"_log_{args.model}.txt")
+    log_file_name = args.input_file.replace(
+        ".tex", f"_{args.task}_log_{args.model}.txt"
+    )
     with open(log_file_name, "a+") as log_file:
         # start logging: log the time and the instructions
         log_file.write(f"\nStart logging: {datetime.now()}\n")
