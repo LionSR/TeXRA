@@ -7,6 +7,11 @@ import * as vscode from 'vscode';
 export function activate(context: vscode.ExtensionContext) {
   const terminal = vscode.window.createTerminal();
   context.subscriptions.push(
+    vscode.commands.registerCommand('coauthor.packSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
+      const terminal_new = vscode.window.createTerminal();
+      terminal_new.show();
+      terminal_new.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
+    }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       terminal.show();
       terminal.sendText("coauthor clean-output");
@@ -176,6 +181,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'cleanSingle':
           vscode.commands.executeCommand('coauthor.cleanSingle', message.filePath);
           break;
+        case 'packSingle':
+          vscode.commands.executeCommand('coauthor.packSingle', message.inputFilePath, message.task, message.reflect, message.model);
+          break;
       }
     });
   }
@@ -294,6 +302,19 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               reflect: reflect,
               model: model,
               figureFilePath: figureFilePath
+            });
+          });
+          document.getElementById('packSingleButton').addEventListener('click', function() {
+            const inputFilePath = document.getElementById('inputFileSelect').value;
+            const task = document.getElementById('taskSelect').value;
+            const reflect = document.getElementById('reflectSelect').value;
+            const model = document.getElementById('modelSelect').value;
+            vscode.postMessage({
+              command: 'packSingle',
+              inputFilePath: inputFilePath,
+              task: task,
+              reflect: reflect,
+              model: model
             });
           });
           document.getElementById('cleanSingleButton').addEventListener('click', function() {
@@ -448,11 +469,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <button id="executeButton">Execute</button>
       </p>
       <p>
-      <label>Housekeepings for selected file:</label><br>
+      <label>Housekeepings for the selected file:</label><br>
+      <button id="packSingleButton">Pack Single</button>
       <button id="cleanSingleButton">Clean Single</button>
       </p>
       <p>
-      <label>Housekeepings for all files:</label><br>
+      <label>Housekeepings for all the files:</label><br>
       <button id="indentTexButton">Indent TeX</button>
       <button id="cleanOutputButton">Clean Output</button>
       <button id="cleanBuildButton">Clean Build</button>
