@@ -87,6 +87,7 @@ def main():
         figure_input=args.figure_input if args.figure_input else None,
     )
 
+    first_task_chunk = args.task.split("_")[0]
     if isinstance(output_file, list):
         output_file, output_file_reflect = output_file
         print(
@@ -95,11 +96,13 @@ def main():
                 "yellow",
             )
         )
-        run_latexdiff(args.input_file, output_file, args.model)
-        run_latexdiff(args.input_file, output_file_reflect, args.model)
+        run_latexdiff(args.model, first_task_chunk, args.input_file, output_file)
+        run_latexdiff(
+            args.model, first_task_chunk, args.input_file, output_file_reflect
+        )
     else:
         print(colored(f"Output file: {output_file}", "yellow"))
-        run_latexdiff(args.input_file, output_file, args.model)
+        run_latexdiff(args.model, first_task_chunk, args.input_file, output_file)
 
 
 if __name__ == "__main__":
