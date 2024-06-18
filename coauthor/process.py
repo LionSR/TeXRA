@@ -17,7 +17,7 @@ from .model_utils import (
     extract_response_statistics,
     print_message_summary,
 )
-from .img_utils import get_base64_encoded_image
+from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .openai_utils import best_connection_method
 
 
@@ -86,14 +86,19 @@ def process_file_with_llm(
     # Handle image input
     if figure_input and is_anthropic_model(model):
         print(f"Figure input: {colored(figure_input, 'cyan')}")
-        img_data = get_base64_encoded_image(figure_input)
-        media_type = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-        }.get(os.path.splitext(figure_input)[1], "image/jpeg")
+        _, file_extension = os.path.splitext(figure_input)
+        if file_extension.lower() == ".pdf":
+            img_data = single_page_pdf_to_png(figure_input)
+            media_type = "image/png"
+        else:
+            img_data = get_base64_encoded_image(figure_input)
+            media_type = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }.get(file_extension, "image/jpeg")
         messages = [
             {
                 "role": "user",

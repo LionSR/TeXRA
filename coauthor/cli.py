@@ -442,7 +442,7 @@ def polish_prl_reply(input_file, main_content, supp_file="supp.tex", reflect=Tru
 
 
 @click.command()
-def clean():
+def clean_output():
     excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
     patterns = [
         "*_opus.tex",
@@ -630,7 +630,7 @@ cli.add_command(revise_supp_prl)
 cli.add_command(polish_prl_reply)
 
 # clean up
-cli.add_command(clean)
+cli.add_command(clean_output)
 cli.add_command(clean_build)
 cli.add_command(clean_single)
 
