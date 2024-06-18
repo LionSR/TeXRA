@@ -85,7 +85,7 @@ def process_file_with_llm(
             elif is_openai_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex"})
-        else:
+        elif "<scratchpad>" not in assistant_prefill_first:
             accumulated_output = ""
 
     if is_anthropic_model(model):
