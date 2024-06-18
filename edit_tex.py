@@ -85,9 +85,22 @@ def main():
         use_prefill_from_input=False,
         append_mode=args.append_mode,
         reflect=args.reflect,
+        figure_input=args.figure_input if args.figure_input else None,
     )
 
-    run_latexdiff(args.input_file, output_file, args.model)
+    if isinstance(output_file, list):
+        output_file, output_file_reflect = output_file
+        print(
+            colored(
+                f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}",
+                "yellow",
+            )
+        )
+        run_latexdiff(args.input_file, output_file, args.model)
+        run_latexdiff(args.input_file, output_file_reflect, args.model)
+    else:
+        print(colored(f"Output file: {output_file}", "yellow"))
+        run_latexdiff(args.input_file, output_file, args.model)
 
 
 if __name__ == "__main__":
