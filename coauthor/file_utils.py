@@ -70,7 +70,9 @@ def run_latexdiff(input_file, output_file, model):
         output_content = file.read()
     if "</scratchpad>" in output_content:
         # Log all lines before "</scratchpad>" to a log file
-        with open(log_file_name, "a+") as log_file:  # Ensure the log file is opened in append mode
+        with open(
+            log_file_name, "a+"
+        ) as log_file:  # Ensure the log file is opened in append mode
             log_file.write("\n<scratchpad>\n")
             lines = output_content.split("\n")
             for line in lines:
