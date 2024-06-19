@@ -611,91 +611,71 @@ def clean_single(input_file):
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
 def pack_single(input_file, model, reflect, task):
-    # Get the current date and time (up to the hour)
     now = datetime.now().strftime("%Y%m%d%H%M")
-
-    # Get the base name and directory of the input file
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-
-    # Create a new folder named after the current date and time inside the input file's directory
     output_folder_prefix = os.path.join(input_dir, "Versions")
     output_folder = os.path.join(output_folder_prefix, f"{now}_{base_name}")
-    os.makedirs(output_folder_prefix, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
 
-    # Get the first task chunk
-    if "_" in task:
-        first_task_chunk = task.split("_")[0]
-    else:
-        first_task_chunk = task.split("-")[0]
+    first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
-    # List to keep track of moved files
-    moved_files = []
-
-    # Move the compiled PDF files (if they exist)
-    build_dir = os.path.join(input_dir, "build")
-    pdf_files = [
+    file_patterns = [
         f"{base_name}.pdf",
         f"{base_name}_{first_task_chunk}_{model}.pdf",
         f"{base_name}_{first_task_chunk}_{model}_diff.pdf",
+        f"{base_name}_{first_task_chunk}_{model}.tex",
+        f"{base_name}_{first_task_chunk}_{model}_diff.tex",
+        f"{base_name}_{first_task_chunk}_{model}_log.txt",
     ]
-    if reflect and reflect != "False":
-        pdf_files.extend(
-            [
-                f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
-                f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
-            ]
-        )
-    for pdf_file in pdf_files:
-        pdf_path = os.path.join(build_dir, pdf_file)
-        if os.path.exists(pdf_path):
-            shutil.move(pdf_path, output_folder)
-            moved_files.append(pdf_path)
-        else:
-            pdf_path = os.path.join(input_dir, pdf_file)
-            if os.path.exists(pdf_path):
-                shutil.move(pdf_path, output_folder)
-                moved_files.append(pdf_path)
-
-    # Move the generated TEX file(s)
-    tex_file = f"{base_name}_{first_task_chunk}_{model}.tex"
-    tex_path = os.path.join(input_dir, tex_file)
-    if os.path.exists(tex_path):
-        shutil.move(tex_path, output_folder)
-        moved_files.append(tex_path)
 
     if reflect and reflect != "False":
-        tex_file_reflect = f"{base_name}_{first_task_chunk}_reflect_{model}.tex"
-        tex_path_reflect = os.path.join(input_dir, tex_file_reflect)
-        if os.path.exists(tex_path_reflect):
-            shutil.move(tex_path_reflect, output_folder)
-            moved_files.append(tex_path_reflect)
+        file_patterns.extend([
+            f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
+            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
+            f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
+            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
+        ])
 
-    # Move the diff file(s)
-    diff_file = f"{base_name}_{first_task_chunk}_{model}_diff.tex"
-    diff_path = os.path.join(input_dir, diff_file)
-    if os.path.exists(diff_path):
-        shutil.move(diff_path, output_folder)
-        moved_files.append(diff_path)
+    moved_files = []
+    for pattern in file_patterns:
+        for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+            file_path = os.path.join(search_dir, pattern)
+            if os.path.exists(file_path):
+                shutil.move(file_path, output_folder)
+                moved_files.append(file_path)
+                break
 
-    if reflect and reflect != "False":
-        diff_file_reflect = f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex"
-        diff_path_reflect = os.path.join(input_dir, diff_file_reflect)
-        if os.path.exists(diff_path_reflect):
-            shutil.move(diff_path_reflect, output_folder)
-            moved_files.append(diff_path_reflect)
-
-    # Move the log file
-    log_file = f"{base_name}_{first_task_chunk}_{model}_log.txt"
-    log_path = os.path.join(input_dir, log_file)
-    if os.path.exists(log_path):
-        shutil.move(log_path, output_folder)
-        moved_files.append(log_path)
-
-    # Print the names of all moved files
     for file in moved_files:
         print(f"Moved: {file}")
+
+    # Remove temporary files
+    temp_file_extensions = [
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
+    ]
+
+    temp_file_patterns = [
+        # "{base_name}{ext}",
+        "{base_name}_{first_task_chunk}_{model}_diff{ext}",
+        "{base_name}_{first_task_chunk}_{model}{ext}",
+        "{base_name}_{first_task_chunk}_reflect_{model}{ext}",
+        "{base_name}_{first_task_chunk}_reflect_{model}_diff{ext}",
+    ]
+
+    for pattern in temp_file_patterns:
+        for ext in temp_file_extensions:
+            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+                file_path = os.path.join(search_dir, pattern.format(base_name=base_name, first_task_chunk=first_task_chunk, model=model, ext=ext))
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"Removed: {file_path}")
 
     print(f"Files packed into {output_folder}")
 
