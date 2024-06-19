@@ -5,6 +5,7 @@ import glob
 import fnmatch
 import shutil
 from datetime import datetime
+from coauthor.file_utils import run_latexdiff
 
 
 def get_common_env(model):
@@ -618,7 +619,9 @@ def pack_single(input_file, model, reflect, task):
     input_dir = os.path.dirname(input_file)
 
     # Create a new folder named after the current date and time inside the input file's directory
-    output_folder = os.path.join(input_dir, f"{now}_{base_name}")
+    output_folder_prefix = os.path.join(input_dir, "Versions")
+    output_folder = os.path.join(output_folder_prefix, f"{now}_{base_name}")
+    os.makedirs(output_folder_prefix, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
 
     # Get the first task chunk
@@ -633,6 +636,7 @@ def pack_single(input_file, model, reflect, task):
     # Move the compiled PDF files (if they exist)
     build_dir = os.path.join(input_dir, "build")
     pdf_files = [
+        f"{base_name}.pdf",
         f"{base_name}_{first_task_chunk}_{model}.pdf",
         f"{base_name}_{first_task_chunk}_{model}_diff.pdf",
     ]
@@ -696,6 +700,17 @@ def pack_single(input_file, model, reflect, task):
     print(f"Files packed into {output_folder}")
 
 
+@click.command()
+@click.argument("input_file")
+@click.argument("revision_file")
+def latex_diff(input_file, revision_file):
+    """Run latexdiff on the given input and revision files."""
+    run_latexdiff(input_file, revision_file)
+
+
+if __name__ == "__main__":
+    cli()
+
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
@@ -738,7 +753,7 @@ cli.add_command(indent_tex)
 
 # pack single
 cli.add_command(pack_single)
-
+cli.add_command(latex_diff)
 
 if __name__ == "__main__":
     cli()
