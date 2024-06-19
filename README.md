@@ -66,6 +66,14 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.6]
+
+* small UI bump
+
+## [0.2.5]
+
+* added the automatic call to update the select revision file for latexdiff only for those that match the input.
+
 ## [0.2.4]
 
 * handled the case when the housekeeping terminal is not available.
