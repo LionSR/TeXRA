@@ -247,7 +247,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex']);
+      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff']);
     }
     return [];
   }
@@ -314,6 +314,14 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>CoAuthor Panel</title>
+      <style>
+      select#inputFileSelect,
+      select#auxFileSelect,
+      select#figureFileSelect,
+      select#revisionFileSelect {
+        width: 100%;
+        }
+      </style>
       <script>
         const vscode = acquireVsCodeApi();
         window.onload = function() {
