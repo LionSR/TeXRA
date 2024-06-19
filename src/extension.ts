@@ -5,33 +5,44 @@ import * as vscode from 'vscode';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  const terminal = vscode.window.createTerminal('housekeeping');
+  let terminal: vscode.Terminal | undefined;
+
+  function ensureTerminal() {
+    if (!terminal || terminal.exitStatus !== undefined) {
+      terminal = vscode.window.createTerminal('housekeeping');
+    }
+    return terminal;
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand('coauthor.packSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
-      const terminal_new = vscode.window.createTerminal();
-      terminal_new.show();
-      terminal_new.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
+      const terminal = ensureTerminal();
+      terminal.show();
+      terminal.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
+      const terminal = ensureTerminal();
       terminal.show();
       terminal.sendText("coauthor clean-output");
     }),
     vscode.commands.registerCommand('coauthor.cleanBuild', () => {
+      const terminal = ensureTerminal();
       terminal.show();
       terminal.sendText("coauthor clean-build");
     }),
     vscode.commands.registerCommand('coauthor.indentTex', () => {
+      const terminal = ensureTerminal();
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
     vscode.commands.registerCommand('coauthor.cleanSingle', (filePath: string) => {
+      const terminal = ensureTerminal();
       terminal.show();
       terminal.sendText(`coauthor clean-single ${filePath}`);
     }),
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFilePath: string, revisionFilePath: string) => {
-      const terminal_new = vscode.window.createTerminal();
-      terminal_new.show();
-      terminal_new.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
+      const terminal = ensureTerminal();
+      terminal.show();
+      terminal.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
       const terminal_new = vscode.window.createTerminal();
