@@ -70,7 +70,8 @@ Users appreciate release notes as you update your extension.
 
 Quality of life improvements: 
 * gave a name to the housekeeping terminal.
-* tweaking the continuation mode for claude and GPTs.
+* ignored more files and directories when searching for files.
+* tweaking the continuation mode for claude and GPTs on the backend side.
 
 
 ## [0.2.1]
