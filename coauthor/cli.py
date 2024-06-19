@@ -124,12 +124,16 @@ def paper2note(
 @click.argument("sample_tex")
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
 def adapt(
     model,
     input_file,
     sample_tex,
     document_cls="lecture.cls",
     commands_file="command.tex",
+    instruction=None,
     reflect=True,
 ):
     model, script_dir, _ = get_common_env(model)
@@ -143,6 +147,8 @@ def adapt(
         f"--document_cls={document_cls}",
         f"--commands_file={commands_file}",
     ]
+    if instruction:
+        command.extend(["--instruction", instruction])
     if reflect and reflect != "False":
         command.append("--reflect=True")
     subprocess.run(command)
