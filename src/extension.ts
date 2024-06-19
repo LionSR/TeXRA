@@ -28,6 +28,11 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText(`coauthor clean-single ${filePath}`);
     }),
+    vscode.commands.registerCommand('coauthor.latexDiff', (inputFilePath: string, revisionFilePath: string) => {
+      const terminal_new = vscode.window.createTerminal();
+      terminal_new.show();
+      terminal_new.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
+    }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
       const terminal_new = vscode.window.createTerminal();
       terminal_new.show();
@@ -81,6 +86,19 @@ export function activate(context: vscode.ExtensionContext) {
       });
       if (fileUri && fileUri[0]) {
         vscode.window.showInformationMessage(`Selected figure file: ${fileUri[0].fsPath}`);
+        return fileUri[0].fsPath;
+      }
+      return null;
+    }),
+    vscode.commands.registerCommand('coauthor.selectRevisionFile', async () => {
+      const fileUri = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Select Revision File',
+        canSelectFiles: true,
+        canSelectFolders: false
+      });
+      if (fileUri && fileUri[0]) {
+        vscode.window.showInformationMessage(`Selected revision file: ${fileUri[0].fsPath}`);
         return fileUri[0].fsPath;
       }
       return null;
@@ -147,6 +165,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFilePath });
           }
           break;
+        case 'selectRevisionFile':
+          const revisionFilePath = await vscode.commands.executeCommand<string>('coauthor.selectRevisionFile');
+          if (revisionFilePath) {
+            webviewView.webview.postMessage({ command: 'revisionFileSelected', filePath: revisionFilePath });
+          }
+          break;
         case 'requestInputFiles':
           const files = await this.listInputFiles();
           webviewView.webview.postMessage({ command: 'setInputFiles', files: files });
@@ -159,6 +183,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFiles = await this.listFigureFiles();
           webviewView.webview.postMessage({ command: 'setFigureFiles', files: figureFiles });
           break;
+        case 'requestRevisionFiles':
+          const revisionFiles = await this.listRevisionFiles();
+          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: revisionFiles });
+          break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
           break;
@@ -167,6 +195,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'figureFileSelected':
           vscode.window.showInformationMessage(`Selected figure file: ${message.filePath}`);
+          break;
+        case 'revisionFileSelected':
+          vscode.window.showInformationMessage(`Selected revision file: ${message.filePath}`);
           break;
         case 'modelSelect':
           vscode.window.showInformationMessage(`Selected model: ${message.model}`);
@@ -183,6 +214,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'packSingle':
           vscode.commands.executeCommand('coauthor.packSingle', message.inputFilePath, message.task, message.reflect, message.model);
           break;
+        case 'latexDiff':
+          vscode.commands.executeCommand('coauthor.latexDiff', message.inputFilePath, message.revisionFilePath);
+          break;
       }
     });
   }
@@ -191,7 +225,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs'], ['_log_', 'Makefile', 'template', '_log', '_diff']);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff']);
     }
     return [];
   }
@@ -209,7 +243,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.png', '.pdf', '.jpeg'], ['.txt', '.tex', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.vslx', '.ts', '.js'], ['build', 'node_modules', '__pycache__'], ['_log', 'Makefile', 'template', '_diff']);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.png', '.pdf', '.jpeg'], ['.txt', '.tex', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.vslx', '.ts', '.js'], ['build', 'node_modules', '__pycache__', "Versions"], ['_log', 'Makefile', 'template', '_diff']);
+    }
+    return [];
+  }
+
+  private async listRevisionFiles(): Promise<string[]> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff']);
     }
     return [];
   }
@@ -259,6 +302,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ command: 'requestInputFiles' });
           vscode.postMessage({ command: 'requestAuxFiles' });
           vscode.postMessage({ command: 'requestFigureFiles' });
+          vscode.postMessage({ command: 'requestRevisionFiles' });
           // Restore previous state
           restoreState();
         };        
@@ -323,6 +367,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               filePath: inputFilePath
             });
           });
+          document.getElementById('latexDiffButton').addEventListener('click', function() {
+            const inputFilePath = document.getElementById('inputFileSelect').value;
+            const revisionFilePath = document.getElementById('revisionFileSelect').value;
+            vscode.postMessage({
+              command: 'latexDiff',
+              inputFilePath: inputFilePath,
+              revisionFilePath: revisionFilePath
+            });
+          });
 
           // Save state on input changes
           document.getElementById('modelSelect').addEventListener('change', saveState);
@@ -330,6 +383,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('inputFileSelect').addEventListener('change', saveState);
           document.getElementById('auxFileSelect').addEventListener('change', saveState);
           document.getElementById('figureFileSelect').addEventListener('change', saveState);
+          document.getElementById('revisionFileSelect').addEventListener('change', saveState);
           document.getElementById('taskInput').addEventListener('input', saveState);
           document.getElementById('reflectSelect').addEventListener('change', saveState);
         });
@@ -341,6 +395,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             inputFileSelect: document.getElementById('inputFileSelect').value,
             auxFileSelect: document.getElementById('auxFileSelect').value,
             figureFileSelect: document.getElementById('figureFileSelect').value,
+            revisionFileSelect: document.getElementById('revisionFileSelect').value,
             taskInput: document.getElementById('taskInput').value,
             reflectSelect: document.getElementById('reflectSelect').value
           };
@@ -355,6 +410,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
             document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
             document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
+            document.getElementById('revisionFileSelect').value = previousState.revisionFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
           }
@@ -401,6 +457,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 figureFileSelect.appendChild(option);
               });
               break;
+            case 'setRevisionFiles':
+              const revisionFileSelect = document.getElementById('revisionFileSelect');
+              revisionFileSelect.innerHTML = '';
+              message.files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                revisionFileSelect.appendChild(option);
+              });
+              break;
             case 'inputFileSelected':
               document.getElementById('inputFileSelect').value = message.filePath;
               break;
@@ -409,6 +475,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'figureFileSelected':
               document.getElementById('figureFileSelect').value = message.filePath;
+              break;
+            case 'revisionFileSelected':
+              document.getElementById('revisionFileSelect').value = message.filePath;
               break;
             case 'modelSelected':
               document.getElementById('modelSelect').value = message.model;
@@ -477,6 +546,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <button id="indentTexButton">Indent TeX</button>
       <button id="cleanOutputButton">Clean Output</button>
       <button id="cleanBuildButton">Clean Build</button>
+      </p>
+      <p>
+      <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label><br>
+      <select id="revisionFileSelect"></select>
+      <button id="latexDiffButton">LaTeX Diff</button>
       </p>
 
     </body>
