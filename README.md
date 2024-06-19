@@ -66,6 +66,14 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.4]
+
+* handled the case when the housekeeping terminal is not available.
+
+## [0.2.3]
+
+* added the latexdiff button
+
 ## [0.2.2]
 
 Quality of life improvements: 
