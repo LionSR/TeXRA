@@ -195,11 +195,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setFigureFiles', files: figureFiles });
           break;
         case 'requestRevisionFiles':
-          const revisionFiles = await this.listRevisionFiles();
-          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: revisionFiles });
+          const allRevisionFiles = await this.listRevisionFiles(message.inputFilePath);
+          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: allRevisionFiles });
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
+          const filteredRevisionFiles = await this.listRevisionFiles(message.filePath);
+          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: filteredRevisionFiles });
           break;
         case 'auxFileSelected':
           vscode.window.showInformationMessage(`Selected auxiliary file: ${message.filePath}`);
@@ -245,7 +247,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff']);
+      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex']);
     }
     return [];
   }
@@ -259,11 +261,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     return [];
   }
 
-  private async listRevisionFiles(): Promise<string[]> {
+  private async listRevisionFiles(inputFileName?: string): Promise<string[]> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff']);
+      const files = await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex']);
+      if (inputFileName) {
+        const inputFileBaseName = inputFileName.split('.').slice(0, -1).join('.');
+        return files.filter(file => file.startsWith(inputFileBaseName) && file !== inputFileName);
+      }
+      return files;
     }
     return [];
   }
@@ -322,6 +329,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({
               command: 'modelSelect',
               model: this.value
+            });
+          });
+          document.getElementById('inputFileSelect').addEventListener('change', function() {
+            const inputFilePath = this.value;
+            vscode.postMessage({
+              command: 'inputFileSelected',
+              filePath: inputFilePath
             });
           });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
@@ -471,6 +485,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'setRevisionFiles':
               const revisionFileSelect = document.getElementById('revisionFileSelect');
               revisionFileSelect.innerHTML = '';
+              const noneOption = document.createElement('option');
+              noneOption.value = '';
+              noneOption.textContent = 'None';
+              revisionFileSelect.appendChild(noneOption);
               message.files.forEach(file => {
                 const option = document.createElement('option');
                 option.value = file;
@@ -480,6 +498,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'inputFileSelected':
               document.getElementById('inputFileSelect').value = message.filePath;
+              vscode.postMessage({
+                command: 'requestRevisionFiles',
+                inputFilePath: message.filePath
+              });
               break;
             case 'auxFileSelected':
               document.getElementById('auxFileSelect').value = message.filePath;
@@ -560,7 +582,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </p>
       <p>
       <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label><br>
-      <select id="revisionFileSelect"></select>
+      <select id="revisionFileSelect"></select><br>
       <button id="latexDiffButton">LaTeX Diff</button>
       </p>
 
