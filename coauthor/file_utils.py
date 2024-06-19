@@ -63,7 +63,8 @@ def run_latexdiff(model, task, input_file, output_file):
     import os
     from termcolor import colored
 
-    log_file_name = input_file.replace(".tex", f"_log_{model}.txt")
+    first_task_chunk = task.split("_")[0]
+    log_file_name = input_file.replace(".tex", f"_{first_task_chunk}_log_{model}.txt")
 
     # Check if "</scratchpad>" is in the output_file
     with open(output_file, "r") as file:
