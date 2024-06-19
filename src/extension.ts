@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  const terminal = vscode.window.createTerminal();
+  const terminal = vscode.window.createTerminal('housekeeping');
   context.subscriptions.push(
     vscode.commands.registerCommand('coauthor.packSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
       const terminal_new = vscode.window.createTerminal();
@@ -23,6 +23,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.indentTex', () => {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
+    }),
+    vscode.commands.registerCommand('coauthor.cleanSingle', (filePath: string) => {
+      terminal.show();
+      terminal.sendText(`coauthor clean-single ${filePath}`);
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
       const terminal_new = vscode.window.createTerminal();
@@ -80,11 +84,6 @@ export function activate(context: vscode.ExtensionContext) {
         return fileUri[0].fsPath;
       }
       return null;
-    }),
-    vscode.commands.registerCommand('coauthor.cleanSingle', (filePath: string) => {
-      const terminal_new = vscode.window.createTerminal();
-      terminal_new.show();
-      terminal_new.sendText(`coauthor clean-single ${filePath}`);
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
