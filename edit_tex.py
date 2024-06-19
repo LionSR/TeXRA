@@ -107,13 +107,11 @@ def main():
                 "yellow",
             )
         )
-        run_latexdiff(args.model, first_task_chunk, args.input_file, output_file)
-        run_latexdiff(
-            args.model, first_task_chunk, args.input_file, output_file_reflect
-        )
+        run_latexdiff(args.input_file, output_file)
+        run_latexdiff(args.input_file, output_file_reflect)
     else:
         print(colored(f"Output file: {output_file}", "yellow"))
-        run_latexdiff(args.model, first_task_chunk, args.input_file, output_file)
+        run_latexdiff(args.input_file, output_file)
 
 
 if __name__ == "__main__":
