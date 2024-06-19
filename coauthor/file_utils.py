@@ -59,12 +59,11 @@ def check_for_massive_repetition(last_response, new_response):
     return massive_repetition_detected
 
 
-def run_latexdiff(model, task, input_file, output_file):
+def run_latexdiff(input_file, output_file):
     import os
     from termcolor import colored
 
-    first_task_chunk = task.split("_")[0]
-    log_file_name = input_file.replace(".tex", f"_{first_task_chunk}_log_{model}.txt")
+    log_file_name = output_file.replace(".tex", "_log.txt")
 
     # Check if "</scratchpad>" is in the output_file
     with open(output_file, "r") as file:
@@ -90,7 +89,7 @@ def run_latexdiff(model, task, input_file, output_file):
         with open(output_file, "w") as file:
             file.write(output_content)
 
-    diff_file_name = output_file.replace(f"{model}.tex", f"diff_{model}.tex")
+    diff_file_name = output_file.replace(".tex", "_diff.tex")
     latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
     os.system(latexdiff_command)
