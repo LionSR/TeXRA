@@ -66,6 +66,13 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.2]
+
+Quality of life improvements: 
+* gave a name to the housekeeping terminal.
+* tweaking the continuation mode for claude and GPTs.
+
+
 ## [0.2.1]
 
 * Supported the pdf figure inputs.
