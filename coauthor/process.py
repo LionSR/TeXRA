@@ -313,7 +313,13 @@ def process_response_cycle(
             f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
         )
 
-        messages[-1] = {"role": "assistant", "content": new_response}
+        # the previous continue logic (see below)
+        # messages[-1] = {"role": "assistant", "content": new_response}
+
+        # maybe
+        # messages.append({"role": "assistant", "content": new_response})
+        if messages[-1]["role"] == "assistant":
+            messages[-1]["content"] = accumulated_output
 
         massive_repetition_detected = check_for_massive_repetition(
             state["last_response"], new_response
@@ -358,20 +364,22 @@ def process_response_cycle(
             break
 
         state["continuation_count"] += 1
-        user_message = (
-            f"Your response got cut off, because you only have limited response space. "
-            f"Please continue writing from where you left off until the very end, "
-            f"marked by {model_settings['end_tag']}. Avoid repetition and begin your response with:"
-        )
-        print(
-            f"\nContinuation #{state['continuation_count']}.\nUser message:",
-            colored(user_message, "magenta"),
-        )
+        print(f"\nContinuation #{state['continuation_count']}")
 
-        messages.append({"role": "user", "content": user_message})
+        # does this apply to openai models or only anthropic models?
+        if is_openai_model(model_settings["model"]):
+            prefill_tokens = new_response[-k:]
+            user_message = (
+                f"Your response got cut off, because you only have limited response space. "
+                f"Please continue writing from where you left off until the very end, "
+                f"marked by {model_settings['end_tag']}. Avoid repetition and begin your response with:"
+            )
+            print("User message:", colored(user_message, "magenta"))
+            print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
+            messages.append({"role": "user", "content": user_message + prefill_tokens})
 
-        prefill_tokens = new_response[-k:]
-        print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-        messages.append({"role": "assistant", "content": prefill_tokens})
+            # previous version: which somehow worked for gpts?
+            # messages.append({"role": "user", "content": user_message})
+            # messages.append({"role": "assistant", "content": prefill_tokens})
 
     return state, accumulated_output, end_turn
