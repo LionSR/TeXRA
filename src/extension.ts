@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
     
-      terminal.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
+      terminal.sendText(`coauthor latexdiff ${inputFilePath} ${revisionFilePath}`);
     
       // Log the expected path for debugging
       console.log(`Expected diff file path: ${fullPath.fsPath}`);
@@ -77,7 +77,8 @@ export function activate(context: vscode.ExtensionContext) {
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
     
-      terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+      // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+      terminal.sendText(`coauthor latexdiff-vc ${inputFilePath} ${commitHash}`);
     
       // Log the expected path for debugging
       console.log(`Expected diff file path: ${fullPath.fsPath}`);
