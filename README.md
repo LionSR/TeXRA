@@ -66,6 +66,18 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.0]
+
+* A functional latexdiff/latexdiff-vs UI that automatically open the generated diff file
+
+## [0.2.9]
+
+* Added the latexdiff-vc button
+
+## [0.2.8]
+
+UI improvements and refresh button fix.
+
 ## [0.2.8]
 
 UI improvements: 
