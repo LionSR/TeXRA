@@ -5,7 +5,7 @@ import glob
 import fnmatch
 import shutil
 from datetime import datetime
-from coauthor.file_utils import run_latexdiff
+from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
 
 
 def get_common_env(model):
@@ -630,12 +630,15 @@ def pack_single(input_file, model, reflect, task):
     ]
 
     if reflect and reflect != "False":
-        file_patterns.extend([
-            f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
-            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
-            f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
-            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
-        ])
+        file_patterns.extend(
+            [
+                f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
+                f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_log.txt",
+            ]
+        )
 
     moved_files = []
     for pattern in file_patterns:
@@ -672,7 +675,15 @@ def pack_single(input_file, model, reflect, task):
     for pattern in temp_file_patterns:
         for ext in temp_file_extensions:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-                file_path = os.path.join(search_dir, pattern.format(base_name=base_name, first_task_chunk=first_task_chunk, model=model, ext=ext))
+                file_path = os.path.join(
+                    search_dir,
+                    pattern.format(
+                        base_name=base_name,
+                        first_task_chunk=first_task_chunk,
+                        model=model,
+                        ext=ext,
+                    ),
+                )
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     print(f"Removed: {file_path}")
@@ -683,9 +694,17 @@ def pack_single(input_file, model, reflect, task):
 @click.command()
 @click.argument("input_file")
 @click.argument("revision_file")
-def latex_diff(input_file, revision_file):
+def latexdiff(input_file, revision_file):
     """Run latexdiff on the given input and revision files."""
     run_latexdiff(input_file, revision_file)
+
+
+@click.command()
+@click.argument("input_file")
+@click.argument("commit_hash")
+def latexdiff_vc(input_file, commit_hash):
+    """Run latexdiff-vc on the given input file and commit hash."""
+    run_latexdiff_vc(input_file, commit_hash)
 
 
 if __name__ == "__main__":
@@ -733,7 +752,8 @@ cli.add_command(indent_tex)
 
 # pack single
 cli.add_command(pack_single)
-cli.add_command(latex_diff)
+cli.add_command(latexdiff)
+cli.add_command(latexdiff_vc)
 
 if __name__ == "__main__":
     cli()
