@@ -66,6 +66,12 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.8]
+
+UI improvements: 
+* moved to using h3 for section headers and h4 for subsections.
+* right-aligned the button for latexdiff and latexdiff-vc
+
 ## [0.2.7]
 
 * added the latexdiff-vs button to diff with a version in the commit history 
