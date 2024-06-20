@@ -3,8 +3,9 @@ import os
 from .file_utils import read_file
 
 model_mapping = {
-    "sonnet": "claude-3-sonnet-20240229",
+    "sonnet35": "claude-3-5-sonnet-20240620",
     "opus": "claude-3-opus-20240229",
+    "sonnet": "claude-3-sonnet-20240229",
     "haiku": "claude-3-haiku-20240307",
     "gpt4o": "gpt-4o-2024-05-13",
     "gpt4t": "gpt-4-turbo-2024-04-09",
@@ -16,12 +17,13 @@ def is_openai_model(model):
 
 
 def is_anthropic_model(model):
-    if model in ["opus", "sonnet", "haiku"]:
+    if model in ["sonnet35", "opus", "sonnet", "haiku"]:
         return True
-    if model in ["claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
+    if model in ["claude-3-5-sonnet", "claude-3-haiku", "claude-3-sonnet", "claude-3-opus"]:
         return True
     if model in [
         "claude-3-sonnet-20240229",
+        "claude-3-5-sonnet-20240620",
         "claude-3-opus-20240229",
         "claude-3-haiku-20240307",
     ]:
@@ -47,7 +49,7 @@ def get_model_client(model, api_key=None):
 
 
 def compute_api_price(input_tokens, output_tokens, model):
-    if model == "sonnet":
+    if "sonnet" in model:
         input_price = input_tokens * 3 / 1e6
         output_price = output_tokens * 15 / 1e6
     elif model == "opus":
