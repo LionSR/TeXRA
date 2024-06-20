@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (workspaceFolders) {
         const workspacePath = workspaceFolders[0].uri.fsPath;
         return new Promise<string[]>((resolve, reject) => {
-          exec('git log -n 10 --pretty=format:"%h %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
+          exec('git log -n 10 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
             if (error) {
               vscode.window.showErrorMessage(`Error fetching commits: ${stderr}`);
               reject(stderr);
@@ -447,7 +447,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           });
           document.getElementById('latexDiffVCButton').addEventListener('click', function() {
             const inputFilePath = document.getElementById('inputFileSelect').value;
-            const commitHash = document.getElementById('commitSelect').value.split(' ')[0];
+            const commitHash = document.getElementById('commitSelect').value;
             vscode.postMessage({
               command: 'latexDiffVC',
               inputFilePath: inputFilePath,
@@ -494,14 +494,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
-
-            // If inputFileSelect is not empty, request revision files
-            // if (previousState.inputFileSelect) {
-            //   vscode.postMessage({
-            //     command: 'requestRevisionFiles',
-            //     inputFilePath: previousState.inputFileSelect
-            //   });
-            // }
           }
         }
 
@@ -584,7 +576,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               commitSelect.innerHTML = '';
               message.commits.forEach(commit => {
                 const option = document.createElement('option');
-                option.value = commit;
+                const [commitHash, ...commitMessage] = commit.split(': ');
+                option.value = commitHash;
                 option.textContent = commit;
                 commitSelect.appendChild(option);
               });
