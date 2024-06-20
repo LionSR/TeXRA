@@ -62,8 +62,19 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           await vscode.workspace.fs.stat(fullPath);
           vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
+          await vscode.commands.executeCommand('latex-workshop.build');
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000); // Adjust the delay based on expected build time
         } catch (error) {
-          vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+          if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+            vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+          } else if (error instanceof Error) {
+            vscode.window.showErrorMessage('An error occurred: ' + error.message);
+          } else {
+            vscode.window.showErrorMessage('An unknown error occurred.');
+          }
         }
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
@@ -86,8 +97,19 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           await vscode.workspace.fs.stat(fullPath);
           vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
+          await vscode.commands.executeCommand('latex-workshop.build');
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000); // Adjust the delay based on expected build time
         } catch (error) {
-          vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+          if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+            vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+          } else if (error instanceof Error) {
+            vscode.window.showErrorMessage('An error occurred: ' + error.message);
+          } else {
+            vscode.window.showErrorMessage('An unknown error occurred.');
+          }
         }
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
@@ -112,7 +134,8 @@ export function activate(context: vscode.ExtensionContext) {
       return [];
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
-      const terminal_new = vscode.window.createTerminal();
+      const terminalName = `${task}-${model}`;
+      const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
 
       let command = `coauthor ${task} ${inputFilePath}`;
@@ -677,6 +700,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </select>
         <label for="modelSelect">Model:</label>
         <select id="modelSelect">
+          <option value="sonnet+">Sonnet 3.5</option>
           <option value="opus">Opus</option>
           <option value="sonnet">Sonnet</option>
           <option value="haiku">Haiku</option>
