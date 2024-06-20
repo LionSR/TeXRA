@@ -1,6 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { exec } from 'child_process';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -43,6 +44,30 @@ export function activate(context: vscode.ExtensionContext) {
       const terminal = ensureTerminal();
       terminal.show();
       terminal.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
+    }),
+    vscode.commands.registerCommand('coauthor.latexDiffVC', (inputFilePath: string, commitHash: string) => {
+      const terminal = ensureTerminal();
+      terminal.show();
+      // terminal.sendText(`coauthor latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+      terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+    }),
+    vscode.commands.registerCommand('coauthor.getRecentCommits', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders) {
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+        return new Promise<string[]>((resolve, reject) => {
+          exec('git log -n 10 --pretty=format:"%h %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
+            if (error) {
+              vscode.window.showErrorMessage(`Error fetching commits: ${stderr}`);
+              reject(stderr);
+            } else {
+              const commits = stdout.split('\n').map(line => line.trim());
+              resolve(commits);
+            }
+          });
+        });
+      }
+      return [];
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
       const terminal_new = vscode.window.createTerminal();
@@ -230,6 +255,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'latexDiff':
           vscode.commands.executeCommand('coauthor.latexDiff', message.inputFilePath, message.revisionFilePath);
           break;
+        case 'latexDiffVC':
+          vscode.commands.executeCommand('coauthor.latexDiffVC', message.inputFilePath, message.commitHash);
+          break;
+        case 'requestRecentCommits':
+          const commits = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
+          webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits });
+          break;
       }
     });
   }
@@ -318,7 +350,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       select#inputFileSelect,
       select#auxFileSelect,
       select#figureFileSelect,
-      select#revisionFileSelect {
+      select#revisionFileSelect,
+      select#commitSelect {
         width: 100%;
         }
       </style>
@@ -329,6 +362,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ command: 'requestAuxFiles' });
           vscode.postMessage({ command: 'requestFigureFiles' });
           vscode.postMessage({ command: 'requestRevisionFiles' });
+          vscode.postMessage({ command: 'requestRecentCommits' });
           // Restore previous state
           restoreState();
         };        
@@ -409,6 +443,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               revisionFilePath: revisionFilePath
             });
           });
+          document.getElementById('latexDiffVCButton').addEventListener('click', function() {
+            const inputFilePath = document.getElementById('inputFileSelect').value;
+            const commitHash = document.getElementById('commitSelect').value.split(' ')[0];
+            vscode.postMessage({
+              command: 'latexDiffVC',
+              inputFilePath: inputFilePath,
+              commitHash: commitHash
+            });
+          });
 
           // Save state on input changes
           document.getElementById('modelSelect').addEventListener('change', saveState);
@@ -419,6 +462,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('revisionFileSelect').addEventListener('change', saveState);
           document.getElementById('taskInput').addEventListener('input', saveState);
           document.getElementById('reflectSelect').addEventListener('change', saveState);
+          document.getElementById('commitSelect').addEventListener('change', saveState);
         });
 
         function saveState() {
@@ -430,7 +474,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             figureFileSelect: document.getElementById('figureFileSelect').value,
             revisionFileSelect: document.getElementById('revisionFileSelect').value,
             taskInput: document.getElementById('taskInput').value,
-            reflectSelect: document.getElementById('reflectSelect').value
+            reflectSelect: document.getElementById('reflectSelect').value,
+            commitSelect: document.getElementById('commitSelect').value,
           };
           vscode.setState(state);
         }
@@ -446,6 +491,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('revisionFileSelect').value = previousState.revisionFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
+            document.getElementById('commitSelect').value = previousState.commitSelect || '';
           }
         }
 
@@ -523,6 +569,16 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'modelSelected':
               document.getElementById('modelSelect').value = message.model;
               break;
+            case 'setRecentCommits':
+              const commitSelect = document.getElementById('commitSelect');
+              commitSelect.innerHTML = '';
+              message.commits.forEach(commit => {
+                const option = document.createElement('option');
+                option.value = commit;
+                option.textContent = commit;
+                commitSelect.appendChild(option);
+              });
+              break;
           }
           // Restore previous state
           restoreState();
@@ -589,11 +645,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <button id="cleanBuildButton">Clean Build</button>
       </p>
       <p>
-      <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label><br>
+      <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
+      <button id="latexDiffButton">LaTeX Diff</button><br>
       <select id="revisionFileSelect"></select><br>
-      <button id="latexDiffButton">LaTeX Diff</button>
       </p>
-
+      <p>
+      <label for="commitSelect">Select Commit:</label><br>
+      <select id="commitSelect"></select>
+      <button id="latexDiffVCButton">LaTeX Diff VC</button>
+      </p>
     </body>
     </html>`;
   }
