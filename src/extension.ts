@@ -43,20 +43,61 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFilePath: string, revisionFilePath: string) => {
       const terminal = ensureTerminal();
       terminal.show();
+      const revisionFileName = revisionFilePath.split('/').pop();
+      const baseName = revisionFileName?.split('.').slice(0, -1).join('.');
+      const diffFileName = `${baseName}_diff.tex`;
+      const inputSubdirectory = inputFilePath.substring(0, inputFilePath.lastIndexOf('/'));
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
+      const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
+    
       terminal.sendText(`coauthor latex-diff ${inputFilePath} ${revisionFilePath}`);
+    
+      // Log the expected path for debugging
+      console.log(`Expected diff file path: ${fullPath.fsPath}`);
+    
+      // Wait for the command to execute and the file to be generated
+      setTimeout(async () => {
+        try {
+          await vscode.workspace.fs.stat(fullPath);
+          vscode.window.showTextDocument(fullPath);
+        } catch (error) {
+          vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+        }
+      }, 2000); // Adjust delay as needed based on expected command execution time
     }),
-    vscode.commands.registerCommand('coauthor.latexDiffVC', (inputFilePath: string, commitHash: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFilePath: string, commitHash: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      // terminal.sendText(`coauthor latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+      const inputFileName = inputFilePath.split('/').pop();
+      const baseName = inputFileName?.split('.').slice(0, -1).join('.');
+      const diffFileName = `${baseName}-diff${commitHash}.tex`;
+      const inputSubdirectory = inputFilePath.substring(0, inputFilePath.lastIndexOf('/'));
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
+      const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
+    
       terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
+    
+      // Log the expected path for debugging
+      console.log(`Expected diff file path: ${fullPath.fsPath}`);
+    
+      // Wait for the command to execute and the file to be generated
+      setTimeout(async () => {
+        try {
+          await vscode.workspace.fs.stat(fullPath);
+          vscode.window.showTextDocument(fullPath);
+        } catch (error) {
+          vscode.window.showErrorMessage('Diff file could not be found. Expected path: ' + fullPath.fsPath);
+        }
+      }, 2000); // Adjust delay as needed based on expected command execution time
     }),
     vscode.commands.registerCommand('coauthor.getRecentCommits', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (workspaceFolders) {
         const workspacePath = workspaceFolders[0].uri.fsPath;
         return new Promise<string[]>((resolve, reject) => {
-          exec('git log -n 10 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
+          exec('git log -n 12 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
             if (error) {
               vscode.window.showErrorMessage(`Error fetching commits: ${stderr}`);
               reject(stderr);
