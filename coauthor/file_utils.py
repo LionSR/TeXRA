@@ -101,7 +101,7 @@ def run_latexdiff(input_file, output_file):
     with open(diff_file_name, "r") as diff_file:
         lines = diff_file.readlines()
 
-    with open(output_file, "w") as diff_file:
+    with open(diff_file_name, "w") as diff_file:
         for line in lines:
             if "\\usepackage{tikz}" in line:
                 diff_file.write("\n")
@@ -133,7 +133,7 @@ def run_latexdiff_vc(input_file, commit_hash):
     import os
     from termcolor import colored
 
-    output_file = input_file.replace(".tex", f"-diff{commit_hash}.tex")
+    diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command
     latexdiff_vc_command = (
@@ -143,13 +143,13 @@ def run_latexdiff_vc(input_file, commit_hash):
     os.system(latexdiff_vc_command)
 
     # Additional operations after latexdiff-vc has finished
-    print(colored(f"latexdiff-vc completed. Output saved to {output_file}", "blue"))
+    print(colored(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue"))
 
     # Delete lines between "%DIF ADD" and "\documentclass["
-    with open(output_file, "r") as diff_file:
+    with open(diff_file_name, "r") as diff_file:
         lines = diff_file.readlines()
 
-    with open(output_file, "w") as diff_file:
+    with open(diff_file_name, "w") as diff_file:
         for line in lines:
             if "\\usepackage{tikz}" in line:
                 diff_file.write("\n")
@@ -159,4 +159,4 @@ def run_latexdiff_vc(input_file, commit_hash):
             if "\\RequirePackage{color}" in line:
                 diff_file.write("\n")
 
-    print(colored(f"Line breaks added to {output_file}", "blue"))
+    print(colored(f"Line breaks added to {diff_file_name}", "blue"))
