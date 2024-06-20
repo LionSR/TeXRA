@@ -62,6 +62,8 @@ export function activate(context: vscode.ExtensionContext) {
               reject(stderr);
             } else {
               const commits = stdout.split('\n').map(line => line.trim());
+              // Add "HEAD" as the first option
+              commits.unshift("HEAD");
               resolve(commits);
             }
           });
@@ -270,7 +272,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff']);
+      return await this.getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'preamble.tex']);
     }
     return [];
   }
@@ -491,7 +493,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('revisionFileSelect').value = previousState.revisionFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
-            document.getElementById('commitSelect').value = previousState.commitSelect || '';
+            document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
+
+            // If inputFileSelect is not empty, request revision files
+            // if (previousState.inputFileSelect) {
+            //   vscode.postMessage({
+            //     command: 'requestRevisionFiles',
+            //     inputFilePath: previousState.inputFileSelect
+            //   });
+            // }
           }
         }
 
@@ -586,73 +596,78 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </script>
     </head>
     <body>
-      <h2>CoAuthor</h2>
+      <h4>CoAuthor</h4>
       <p>
-      <label for="taskSelect">Task:</label>
-      <select id="taskSelect">
-        <option value="correct-tex">Correct TeX</option>
-        <option value="polish-tex">Polish TeX</option>
-        <option value="correct-qi">Correct QI</option>
-        <option value="correct-st">Correct ST</option>
-        <option value="polish-st">Polish ST</option>
-        <option value="meeting2text">Meeting to Text</option>
-        <option value="paper2note">Paper to Note</option>
-        <option value="txt2tex">Txt to TeX</option>
-      </select>
+        <label for="taskSelect">Task:</label>
+        <select id="taskSelect">
+          <option value="correct-tex">Correct TeX</option>
+          <option value="polish-tex">Polish TeX</option>
+          <option value="correct-qi">Correct QI</option>
+          <option value="correct-st">Correct ST</option>
+          <option value="polish-st">Polish ST</option>
+          <option value="meeting2text">Meeting to Text</option>
+          <option value="paper2note">Paper to Note</option>
+          <option value="txt2tex">Txt to TeX</option>
+        </select>
       </p>
       <p>
-      <label for="inputFileSelect">Select Input File:</label><br>
-      <select id="inputFileSelect"></select>
+        <label for="inputFileSelect">Select Input File:</label><br>
+        <select id="inputFileSelect"></select>
       </p>
       <p>
-      <label for="auxFileSelect">Select Auxiliary File:</label><br>
-      <select id="auxFileSelect"></select>
+        <label for="auxFileSelect">Select Auxiliary File:</label><br>
+        <select id="auxFileSelect"></select>
       </p>
       <p>
-      <label for="figureFileSelect">Select Figure File:</label><br>
-      <select id="figureFileSelect"></select>
+        <label for="figureFileSelect">Select Figure File:</label><br>
+        <select id="figureFileSelect"></select>
       </p>
       <p>
-      <label for="taskInputArea">Specific Instructions:</label>
-      <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder=''></textarea>
+        <label for="taskInputArea">Specific Instructions:</label>
+        <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder=''></textarea>
       </p>
       <p>
-      <label for="reflectSelect">Reflect:</label>
-      <select id="reflectSelect">
-        <option value="default">Default</option>
-        <option value="True">True</option>
-        <option value="False">False</option>
-      </select>
-      <label for="modelSelect">Model:</label>
-      <select id="modelSelect">
-        <option value="opus">Opus</option>
-        <option value="sonnet">Sonnet</option>
-        <option value="haiku">Haiku</option>
-        <option value="gpt4o">GPT-4 Omni</option>
-        <option value="gpt4t">GPT-4 Turbo</option>
-      </select>
-      <button id="executeButton">Execute</button>
+        <label for="reflectSelect">Reflect:</label>
+        <select id="reflectSelect">
+          <option value="default">Default</option>
+          <option value="True">True</option>
+          <option value="False">False</option>
+        </select>
+        <label for="modelSelect">Model:</label>
+        <select id="modelSelect">
+          <option value="opus">Opus</option>
+          <option value="sonnet">Sonnet</option>
+          <option value="haiku">Haiku</option>
+          <option value="gpt4o">GPT-4 Omni</option>
+          <option value="gpt4t">GPT-4 Turbo</option>
+        </select><br>
+        <button id="executeButton">Execute</button>
+      </p>
+      <h5>Housekeeping</h5>
+      <p>
+        <label>For the Selected File:</label><br>
+        <button id="packSingleButton">Pack Single</button>
+        <button id="cleanSingleButton">Clean Single</button>
       </p>
       <p>
-      <label>Housekeepings for the selected file:</label><br>
-      <button id="packSingleButton">Pack Single</button>
-      <button id="cleanSingleButton">Clean Single</button>
+        <label>For All the Files:</label><br>
+        <button id="indentTexButton">Indent TeX</button>
+        <button id="cleanOutputButton">Clean Output</button>
+        <button id="cleanBuildButton">Clean Build</button>
+      </p>
+      <h5>LaTeXDiff</h5>
+      <p>
+        <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
+        <button id="latexDiffButton" style="float: right;">latexdiff</button>
+        <select id="revisionFileSelect"></select>
+
       </p>
       <p>
-      <label>Housekeepings for all the files:</label><br>
-      <button id="indentTexButton">Indent TeX</button>
-      <button id="cleanOutputButton">Clean Output</button>
-      <button id="cleanBuildButton">Clean Build</button>
-      </p>
-      <p>
-      <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
-      <button id="latexDiffButton">LaTeX Diff</button><br>
-      <select id="revisionFileSelect"></select><br>
-      </p>
-      <p>
-      <label for="commitSelect">Select Commit:</label><br>
-      <select id="commitSelect"></select>
-      <button id="latexDiffVCButton">LaTeX Diff VC</button>
+        <label for="commitSelect">Select Commit:</label>
+        <button id="latexDiffVCButton" style="float: right;">latexdiff-vc</button>
+        <select id="commitSelect">
+          <option value="HEAD">HEAD</option>
+        </select>
       </p>
     </body>
     </html>`;
