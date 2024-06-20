@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -38,6 +38,14 @@
       {
         "command": "coauthor.latexDiff",
         "title": "LaTeX Diff"
+      },
+      {
+        "command": "coauthor.latexDiffVC",
+        "title": "LaTeX Diff VC"
+      },
+      {
+        "command": "coauthor.getRecentCommits",
+        "title": "Get Recent Commits"
       },
       {
         "command": "coauthor.selectInputFile",
