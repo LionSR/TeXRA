@@ -66,6 +66,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.1]
+
+* Safe housekeeping terminal.
+
 ## [0.3.0]
 
 * A functional latexdiff/latexdiff-vs UI that automatically open the generated diff file
