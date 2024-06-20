@@ -36,7 +36,7 @@ def process_file_with_llm(
     input_file,
     user_prefix_vars,
     reflect=False,
-    model="sonnet",
+    model="sonnet35",
     api_key=None,
     prompt_path=None,
     use_prefill_from_input=True,

@@ -455,13 +455,21 @@ def clean_output():
     patterns = [
         "*_opus.tex",
         "*_sonnet.tex",
+        "*_sonnet35.tex",
         "*_haiku.tex",
         "*_gpt4t.tex",
         "*_gpt4o.tex",
+        "*_opus_diff.tex",
+        "*_sonnet_*.tex",
+        "*_sonnet35_*.tex",
+        "*_haiku_*.tex",
+        "*_gpt4t_*.tex",
+        "*_gpt4o_*.tex",
     ]
     patterns_build = [
         "*/build/*_opus*",
         "*/build/*_sonnet*",
+        "*/build/*_sonnet35*",
         "*/build/*_haiku*",
         "*/build/*_gpt4t*",
         "*/build/*_gpt4o*",
@@ -484,6 +492,7 @@ def clean_output():
 
     # Perform the deletion
     for file in files_to_delete:
+        print(f"Deleted: {file}")
         os.remove(file)
 
     print("Cleanup complete.")
@@ -578,7 +587,7 @@ def indent_tex():
 def clean_single(input_file):
     excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
     base_name = os.path.splitext(input_file)[0]
-    suffixes = ["_opus", "_sonnet", "_haiku", "_gpt4t", "_gpt4o"]
+    suffixes = ["_sonnet35", "_opus", "_sonnet", "_haiku", "_gpt4t", "_gpt4o"]
     patterns = [f"{base_name}*{suffix}*" for suffix in suffixes]
     patterns_build = [f"*/build/{base_name}*{suffix}*" for suffix in suffixes]
     files_to_delete = []
