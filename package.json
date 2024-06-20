@@ -2,7 +2,8 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.2.8",
+  "version": "0.2.9",
+  "publisher": "Sirui Lu",
   "engines": {
     "vscode": "^1.89.0"
   },
@@ -46,6 +47,10 @@
       {
         "command": "coauthor.getRecentCommits",
         "title": "Get Recent Commits"
+      },
+      {
+        "command": "coauthor.refreshCommits",
+        "title": "Refresh Commits"
       },
       {
         "command": "coauthor.selectInputFile",
@@ -113,5 +118,10 @@
   },
   "license": "MIT",
   "author": "Sirui LU",
-  "icon": "resources/unicorn.png"
+  "icon": "resources/unicorn.png",
+  "keywords": ["latex", "academic", "writing", "coauthor", "vscode"],
+  "bugs": {
+    "url": "https://github.com/LionSR/coauthor-for-vs-code/issues"
+  },
+  "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme"
 }
