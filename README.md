@@ -66,6 +66,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.2.7]
+
+* added the latexdiff-vs button to diff with a version in the commit history 
+
 ## [0.2.6]
 
 * small UI bump
