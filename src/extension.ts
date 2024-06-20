@@ -264,6 +264,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const commits = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
           webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits });
           break;
+        case 'refreshCommits':
+          const commits_refresh = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
+          webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits_refresh });
+          break;
       }
     });
   }
@@ -454,6 +458,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               commitHash: commitHash
             });
           });
+          document.getElementById('refreshCommitsButton').addEventListener('click', function() {
+            vscode.postMessage({
+                command: 'refreshCommits'
+            });
+          });
 
           // Save state on input changes
           document.getElementById('modelSelect').addEventListener('change', saveState);
@@ -589,7 +598,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </script>
     </head>
     <body>
-      <h4>CoAuthor</h4>
+      <h4>CoAuthor ❤️</h4>
       <p>
         <label for="taskSelect">Task:</label>
         <select id="taskSelect">
@@ -657,6 +666,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </p>
       <p>
         <label for="commitSelect">Select Commit:</label>
+        <button id="refreshCommitsButton" style="float: right; margin-right: 80px;">Refresh</button>
         <button id="latexDiffVCButton" style="float: right;">latexdiff-vc</button>
         <select id="commitSelect">
           <option value="HEAD">HEAD</option>
