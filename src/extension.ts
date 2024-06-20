@@ -134,7 +134,7 @@ export function activate(context: vscode.ExtensionContext) {
       return [];
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
-      const terminalName = `${task}-${model}`;
+      const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
 
