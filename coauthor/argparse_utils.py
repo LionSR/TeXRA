@@ -13,9 +13,9 @@ def get_common_argparser():
     parser.add_argument(
         "--model",
         type=str,
-        default="sonnet35",
+        default="sonnet+",
         help="Model name to use for processing.",
-        choices=["sonnet35", "opus", "sonnet", "haiku", "gpt4o", "gpt4turbo"],
+        choices=["sonnet+", "opus", "sonnet", "haiku", "gpt4o", "gpt4turbo"],
     )
     parser.add_argument(
         "--instruction",

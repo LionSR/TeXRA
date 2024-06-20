@@ -105,7 +105,9 @@ def run_latexdiff(input_file, output_file):
         for line in lines:
             if "\\usepackage{tikz}" in line:
                 diff_file.write("\n")
-            if "\\RequirePackage[normalem]{ulem}" in line:
+            elif "\\providecommand{\\DIFaddbegin}" in line:
+                diff_file.write("\n")
+            elif "\\RequirePackage[normalem]{ulem}" in line:
                 diff_file.write("\n")
             diff_file.write(line)
             if "\\RequirePackage{color}" in line:
@@ -153,7 +155,9 @@ def run_latexdiff_vc(input_file, commit_hash):
         for line in lines:
             if "\\usepackage{tikz}" in line:
                 diff_file.write("\n")
-            if "\\RequirePackage[normalem]{ulem}" in line:
+            elif "\\providecommand{\\DIFaddbegin}" in line:
+                diff_file.write("\n")
+            elif "\\RequirePackage[normalem]{ulem}" in line:
                 diff_file.write("\n")
             diff_file.write(line)
             if "\\RequirePackage{color}" in line:
