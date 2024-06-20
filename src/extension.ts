@@ -9,7 +9,11 @@ export function activate(context: vscode.ExtensionContext) {
   let terminal: vscode.Terminal | undefined;
 
   function ensureTerminal() {
-    if (!terminal || terminal.exitStatus !== undefined) {
+    // Check if the terminal already exists
+    const existingTerminal = vscode.window.terminals.find(t => t.name === 'housekeeping');
+    if (existingTerminal) {
+      terminal = existingTerminal;
+    } else if (!terminal || terminal.exitStatus !== undefined) {
       terminal = vscode.window.createTerminal('housekeeping');
     }
     return terminal;
@@ -53,9 +57,6 @@ export function activate(context: vscode.ExtensionContext) {
     
       terminal.sendText(`coauthor latexdiff ${inputFilePath} ${revisionFilePath}`);
     
-      // Log the expected path for debugging
-      console.log(`Expected diff file path: ${fullPath.fsPath}`);
-    
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
         try {
@@ -79,10 +80,7 @@ export function activate(context: vscode.ExtensionContext) {
     
       // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
       terminal.sendText(`coauthor latexdiff-vc ${inputFilePath} ${commitHash}`);
-    
-      // Log the expected path for debugging
-      console.log(`Expected diff file path: ${fullPath.fsPath}`);
-    
+        
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
         try {
