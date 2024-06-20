@@ -598,7 +598,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </script>
     </head>
     <body>
-      <h4>CoAuthor ❤️</h4>
+      <h4>Your Favourite CoAuthor ❤️</h4>
       <p>
         <label for="taskSelect">Task:</label>
         <select id="taskSelect">
@@ -666,8 +666,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </p>
       <p>
         <label for="commitSelect">Select Commit:</label>
-        <button id="refreshCommitsButton" style="float: right; margin-right: 80px;">Refresh</button>
         <button id="latexDiffVCButton" style="float: right;">latexdiff-vc</button>
+        <button id="refreshCommitsButton" style="float: right; margin-right: 10px;">Refresh</button>
         <select id="commitSelect">
           <option value="HEAD">HEAD</option>
         </select>
