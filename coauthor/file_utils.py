@@ -101,13 +101,15 @@ def run_latexdiff(input_file, output_file):
     with open(diff_file_name, "r") as diff_file:
         lines = diff_file.readlines()
 
-    with open(diff_file_name, "w") as diff_file:
+    with open(output_file, "w") as diff_file:
         for line in lines:
+            if "\\usepackage{tikz}" in line:
+                diff_file.write("\n")
             if "\\RequirePackage[normalem]{ulem}" in line:
-                diff_file.write("\n")  # Add a line break before
+                diff_file.write("\n")
             diff_file.write(line)
             if "\\RequirePackage{color}" in line:
-                diff_file.write("\n")  # Add a line break after
+                diff_file.write("\n")
 
     print(colored(f"Line breaks added to {diff_file_name}", "blue"))
 
@@ -125,3 +127,36 @@ def run_latexdiff(input_file, output_file):
                 diff_file.write(line)
             elif not add_block:
                 diff_file.write(line)
+
+
+def run_latexdiff_vc(input_file, commit_hash):
+    import os
+    from termcolor import colored
+
+    output_file = input_file.replace(".tex", f"-diff{commit_hash}.tex")
+
+    # Run latexdiff-vc command
+    latexdiff_vc_command = (
+        f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
+    )
+    print(colored(f"Running latexdiff-vc command: {latexdiff_vc_command}", "green"))
+    os.system(latexdiff_vc_command)
+
+    # Additional operations after latexdiff-vc has finished
+    print(colored(f"latexdiff-vc completed. Output saved to {output_file}", "blue"))
+
+    # Delete lines between "%DIF ADD" and "\documentclass["
+    with open(output_file, "r") as diff_file:
+        lines = diff_file.readlines()
+
+    with open(output_file, "w") as diff_file:
+        for line in lines:
+            if "\\usepackage{tikz}" in line:
+                diff_file.write("\n")
+            if "\\RequirePackage[normalem]{ulem}" in line:
+                diff_file.write("\n")
+            diff_file.write(line)
+            if "\\RequirePackage{color}" in line:
+                diff_file.write("\n")
+
+    print(colored(f"Line breaks added to {output_file}", "blue"))

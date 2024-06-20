@@ -77,9 +77,7 @@ def main():
         print(colored(f"Using auxiliary file: {args.auxiliary_file}", "green"))
 
     first_task_chunk = args.task.split("_")[0]
-    log_file_name = args.input_file.replace(
-        ".tex", f"_{first_task_chunk}_log.txt"
-    )
+    log_file_name = args.input_file.replace(".tex", f"_{first_task_chunk}_log.txt")
     with open(log_file_name, "a+") as log_file:
         log_file.write(f"\nStart logging: {datetime.now()}\n")
         log_file.write(f"\nTask: {args.task}\n")
