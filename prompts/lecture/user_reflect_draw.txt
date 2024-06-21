@@ -1,19 +1,47 @@
-Let's take a moment to reflect on the changes made:
-
-<reflection>
-1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
-2. Are there any annotation texts overlappings with the objects of the figures? If so, please move them to more appropriate positions. Are there any lines or objects that are not visible? If so, increase the size or width or boldness of them.
-3. Are the figures correct mathematically, clear, concise, and effective in conveying the key concepts and ideas? If not, how could they be further refined?
-4. Do the figures maintain consistency with the overall style and aesthetics of the chapter? If not, what adjustments could be made to ensure a cohesive look and feel?
-5. Compared to the reference figure(s) provided, does the generated/modified figure(s) effectively convey the same information in a more concise and visually appealing manner? If not, what improvements can be made?
-6. Have the figures been properly and coherently referenced throughout the main text in relevant places? Are there any missing or unnecessary references?
-</reflection>
-
-Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change.
+Let's reflect on the changes made to the figures. Based on this reflection, propose targeted refinements. Use the following format for thinking:
 <scratchpad>
-1. [Additional refinement 1]
-2. [Additional refinement 2]
-3. [Additional refinement 3]
+<figure_analysis>
+your analysis of the exisitng figure and how it compares with the provided image input
+</figure_analysis>
+<reflection>
+1. Instruction Alignment: How well do the modifications address the specific instruction? Identify any areas where alignment could be improved.
+
+2. Visual Clarity:
+   - Are there any overlapping texts or objects?
+   - Are all elements clearly visible?
+   - Suggest specific adjustments for size, width, or boldness if needed.
+
+3. Mathematical and Conceptual Accuracy: Evaluate the figures for mathematical correctness and effectiveness in conveying key concepts.
+
+4. Stylistic Consistency: Assess how well the figures maintain consistency with the overall document style. Suggest adjustments if needed.
+
+5. Comparative Effectiveness: Compare the modified figures to any reference figures provided. Are they more concise and visually appealing while conveying the same information?
+
+6. Textual Integration: Evaluate the coherence of figure references throughout the main text. Identify any missing or unnecessary references.
+
+7. TikZ Code Quality: Assess the clarity, efficiency, and commenting of the TikZ code for each figure.
+
+8. Caption Quality: Evaluate the originality and informativeness of figure captions.
+</reflection>
+<idea>
+1. [Refinement 1]
+   - Rationale:
+   - Implementation details:
+
+2. [Refinement 2]
+   - Rationale:
+   - Implementation details:
+
+3. [Refinement 3]
+   - Rationale:
+   - Implementation details:
+</idea>
 </scratchpad>
 
-Now, please output a further enhanced and **complete version of the LaTeX document**, incorporating the reflections and additional refinements discussed above. You must output a complete version of the latex document, not just the created or the revised figure or the changes, in order to maintain the coherence with the main text. Remember to stay laser-focused on the specific instruction provided and create figures that are correct, aesthetically pleasing, informative, and concise, in the style of a professional graduate physics textbook.
+Now, implement these refinements by outputting a further enhanced and complete version of the LaTeX document. Ensure that your changes:
+1. Address all points raised in the reflection.
+2. Maintain focus on the original instruction.
+3. Result in figures that are correct, aesthetically pleasing, informative, and concise.
+4. Adhere to the style of a professional graduate physics textbook.
+
+Please provide the complete LaTeX document with your refinements.

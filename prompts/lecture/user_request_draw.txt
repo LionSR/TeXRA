@@ -1,8 +1,32 @@
-In the scratchpad below, brainstorm concrete ways to create or significantly improve the figures in the chapter that are directly relevant to the instruction above. Be as specific as possible, detailing which figures to create or modify and in what ways. Use the scratchpad as an opportunity to formulate a detailed action plan. If an image input is provided, first give a detailed visual description of the image in the scratchpad before listing the ideas.
+Analyze the existing figures in the document and propose improvements.  Based on the analysis and the specific instruction provided, brainstorm concrete ways to create or significantly improve the figures in the chapter. Be as specific as possible in your proposals. 
+
+Use the following format for thinking:
 <scratchpad>
-1. [Specific figure creation/improvement idea 1 that directly addresses the instruction]
-2. [Specific figure creation/improvement idea 2 that directly addresses the instruction] 
-3. [Specific figure creation/improvement idea 3 that directly addresses the instruction]
+<figure_analysis>
+your analysis of the exisitng figure or the provided image input
+</figure_analysis>
+<idea>
+1. [Specific figure creation/improvement idea 1]
+   - Rationale:
+   - Implementation details:
+
+2. [Specific figure creation/improvement idea 2]
+   - Rationale:
+   - Implementation details:
+
+3. [Specific figure creation/improvement idea 3]
+   - Rationale:
+   - Implementation details:
+</idea>
 </scratchpad>
 
-Now, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references.
+Now, implement these improvements by outputting an updated version of the LaTeX document. Ensure that:
+1. New or modified figures directly address the given instruction.
+2. Figures are well-integrated into the main text with appropriate references.
+3. TikZ code for each figure is clear, efficient, and well-commented.
+4. Captions are informative and original, reflecting the content of each figure.
+
+Please provide the complete LaTeX document with your refinements in the following format:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>

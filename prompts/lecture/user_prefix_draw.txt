@@ -1,6 +1,7 @@
-I am going to give you a LaTeX document of a draft textbook chapter. You are about to create or revise the figures in this chapter, so please read the document carefully.
+I will provide you with a LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
 Here is the LaTeX document {INPUT_FILE} with additional LaTeX document class and commands:
+
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>
@@ -13,9 +14,29 @@ Here is the LaTeX document {INPUT_FILE} with additional LaTeX document class and
 {INPUT_CONTENT}
 </latex_document>
 
-Please carefully read through the entire draft chapter above and ensure you fully understand all the details.
+Please thoroughly analyze the entire draft chapter above, focusing on:
+1. The overall context and subject matter of the chapter
+2. Existing figures and their relevance to the text
+3. Areas where new figures could enhance understanding
+4. Mathematical concepts that could benefit from visual representation
 
-Your task is to create or enhance the figures in this draft chapter, focusing solely on the following specific instruction:
+Your task is to create or enhance the figures in this draft chapter, focusing on the following specific instruction:
+
 <instruction>
 {INSTRUCTION}
 </instruction>
+
+When approaching this task, consider the following:
+1. How can new or modified figures best illustrate the concepts discussed in the text?
+2. What improvements can be made to existing figures to increase clarity and information density?
+3. Are there complex ideas or relationships that could be better explained through visual representation?
+4. How can you ensure consistency between the figures and the mathematical notation used in the text?
+
+Please use your expertise in physics, machine learning, LaTeX, and TikZ to create figures that are:
+- Mathematically accurate
+- Visually appealing
+- Informative and concise
+- Well-integrated with the text
+- Consistent with graduate-level physics textbook standards
+
+Prepare to analyze, brainstorm, and implement improvements to the figures in this chapter, keeping the specific instruction as your primary focus.
