@@ -66,6 +66,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.2]
+
+* Fixed the clean-single function.
+
 ## [0.3.1]
 
 * Safe housekeeping terminal.
