@@ -673,9 +673,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <select id="taskSelect">
           <option value="correct-tex">Correct TeX</option>
           <option value="polish-tex">Polish TeX</option>
-          <option value="correct-qi">Correct QI</option>
+          <option value="draw-tex">Draw TeX</option>
           <option value="correct-st">Correct ST</option>
           <option value="polish-st">Polish ST</option>
+          <option value="draw-st">Draw ST</option>
+          <option value="correct-qi">Correct QI</option>
+          <option value="polish-qi">Polish QI</option>
           <option value="meeting2text">Meeting to Text</option>
           <option value="paper2note">Paper to Note</option>
           <option value="txt2tex">Txt to TeX</option>
