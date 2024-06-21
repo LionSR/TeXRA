@@ -78,10 +78,10 @@ def main():
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:
-        log_file.write(f"\nStart logging: {datetime.now()}\n")
+        log_file.write(f"Start logging: {datetime.now()}\n")
         log_file.write(f"\nTask: {args.task}\n")
         log_file.write(f"\nModel: {args.model}\n")
-        log_file.write(f"\nInstruction: {args.instruction}\n")
+        log_file.write(f"\nInstruction:\n<request>\n{args.instruction}\n</request>\n\n")
 
     state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
         args.task,
