@@ -1,0 +1,18 @@
+Let's take a moment to reflect on the changes made:
+
+<reflection>
+1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
+2. Are the figures clear, concise, and effective in conveying the key concepts and ideas? If not, how could they be further refined?
+3. Do the figures maintain consistency with the overall style and aesthetics of the textbook? If not, what adjustments could be made to ensure a cohesive look and feel?
+4. Have the figures been properly referenced throughout the main text in relevant places? Are there any missing or unnecessary references?
+5. Compared to the reference figure(s) provided, does the generated/modified figure(s) effectively convey the same information in a more concise and visually appealing manner? If not, what improvements can be made?
+</reflection>
+
+Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change.
+<scratchpad>
+1. [Additional refinement 1]
+2. [Additional refinement 2]
+3. [Additional refinement 3]
+</scratchpad>
+
+Now, please output a further enhanced and complete version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided and create figures that are correct, aesthetically pleasing, informative, and concise, in the style of a professional graduate physics textbook.

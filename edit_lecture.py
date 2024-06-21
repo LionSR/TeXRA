@@ -20,9 +20,17 @@ all_task_settings = {
         "end_tag": "</latex_document>",
         "output_type": "tex",
         "first_prefill": "<scratchpad>",
-        # "user_prefix_file": "user_prefix_polish.txt",
-        # "user_request_file": "user_request_polish.txt",
+        "user_prefix_file": "user_prefix_polish.txt",
         "user_reflect_file": "user_reflect_polish.txt",
+    },
+    "draw": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "<scratchpad>",
+        "user_prefix_file": "user_prefix_draw.txt",
+        "user_request_file": "user_request_draw.txt",
+        "user_reflect_file": "user_reflect_draw.txt",
     },
 }
 
@@ -34,8 +42,15 @@ def main():
         "--task",
         type=str,
         default="correct_qi",
-        help="Mode of operation, either 'correct_qi', 'correct_st', 'polish_qi', 'polish_st'.",
-        choices=["correct_qi", "correct_st", "polish_qi", "polish_st"],
+        help="Mode of operation, either 'correct_qi', 'correct_st', 'polish_qi', 'polish_st', 'draw_st'.",
+        choices=[
+            "correct_qi",
+            "correct_st",
+            "polish_qi",
+            "polish_st",
+            "draw_st",
+            "draw_qi",
+        ],
     )
     parser.add_argument(
         "--append_mode",
@@ -59,12 +74,18 @@ def main():
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
     elif "st" in args.task:
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
+
     if "correct" in args.task:
         task_settings = all_task_settings["correct"]
     elif "polish" in args.task:
         task_settings = all_task_settings["polish"]
-    task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
-    task_settings["user_request_file"] = f"user_request_{args.task}.txt"
+    elif "draw" in args.task:
+        task_settings = all_task_settings["draw"]
+
+    if not task_settings.get("user_prefix_file"):
+        task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
+    if not task_settings.get("user_request_file"):
+        task_settings["user_request_file"] = f"user_request_{args.task}.txt"
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:
