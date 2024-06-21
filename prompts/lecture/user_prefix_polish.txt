@@ -1,6 +1,6 @@
-I am going to give you a latex document of a draft textbook chapter. You are about to revise this chapter so please read the document carefully.
+You will be given a LaTeX document of a draft textbook chapter to revise. Read the document carefully before proceeding.
 
-Here is the latex document {INPUT_FILE} with additional LaTeX document class and commands:
+LaTeX document {INPUT_FILE} with additional document class and commands:
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>
@@ -13,10 +13,9 @@ Here is the latex document {INPUT_FILE} with additional LaTeX document class and
 {INPUT_CONTENT}
 </latex_document>
 
-Please carefully read through the entire draft chapter above and ensure you fully understand all the details.
-
-Your task is to enhance this draft chapter focusing solely on the following specific instruction:
+Your task is to enhance this draft chapter based on the following specific instruction:
 <instruction>
 {INSTRUCTION}
 </instruction>
-For example, in the instruction, if I ask you to revise section A, you do not need to revise section B.
+
+Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.

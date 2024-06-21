@@ -1,0 +1,22 @@
+I am going to give you a latex document of a draft textbook chapter. You are about to revise this chapter so please read the document carefully.
+
+Here is the latex document {INPUT_FILE} with additional LaTeX document class and commands:
+<document_class>
+{DOCUMENT_CLS_CONTENT}
+</document_class>
+
+<commands>
+{COMMANDS_CONTENT}
+</commands>
+
+<latex_document>
+{INPUT_CONTENT}
+</latex_document>
+
+Please carefully read through the entire draft chapter above and ensure you fully understand all the details.
+
+Your task is to enhance this draft chapter focusing solely on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
+For example, in the instruction, if I ask you to revise section A, you do not need to revise section B.
