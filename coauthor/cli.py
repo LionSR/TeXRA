@@ -93,6 +93,35 @@ def polish_tex(
 
 @click.command()
 @shared_arguments
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+@click.option(
+    "--figure_input",
+    required=False,
+    default=None,
+    help="Path to the figure input file.",
+)
+def draw_tex(model, input_file, figure_input, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/edit_tex.py",
+        "--task=draw",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    if instruction:
+        command.extend(["--instruction", instruction])
+    if reflect and reflect != "False":
+        command.append("--reflect=True")
+    if figure_input:
+        command.extend(["--figure_input", figure_input])
+    subprocess.run(command)
+
+
+@click.command()
+@shared_arguments
 @click.argument("sample_chapters")
 @click.argument("sample_paper", required=False, default=None)
 @click.argument("sample_note", required=False, default=None)
@@ -291,6 +320,35 @@ def polish_qi(model, input_file, figure_input, instruction=None, reflect=False):
         "python",
         f"{script_dir}/edit_lecture.py",
         "--task=polish_qi",
+        f"--model={model}",
+        f"--input_file={input_file}",
+    ]
+    if instruction:
+        command.extend(["--instruction", instruction])
+    if reflect and reflect != "False":
+        command.append("--reflect=True")
+    if figure_input:
+        command.extend(["--figure_input", figure_input])
+    subprocess.run(command)
+
+
+@click.command()
+@shared_arguments
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+@click.option(
+    "--figure_input",
+    required=False,
+    default=None,
+    help="Path to the figure input file.",
+)
+def draw_st(model, input_file, figure_input, instruction=None, reflect=False):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/edit_lecture.py",
+        "--task=draw_st",
         f"--model={model}",
         f"--input_file={input_file}",
     ]
@@ -602,16 +660,25 @@ def clean_single(input_file, model, reflect, task):
     ]
 
     if reflect and reflect != "False":
-        file_patterns.extend([
-            f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
-            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
-            f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
-            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
-            f"{base_name}_{first_task_chunk}_reflect_{model}_log.txt",
-        ])
+        file_patterns.extend(
+            [
+                f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
+                f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
+                f"{base_name}_{first_task_chunk}_reflect_{model}_log.txt",
+            ]
+        )
 
     temp_file_extensions = [
-        ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz"
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
     ]
 
     temp_file_patterns = [
@@ -762,12 +829,14 @@ if __name__ == "__main__":
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
+cli.add_command(draw_tex)
 
 # edit_lecture.py
-cli.add_command(correct_qi)
 cli.add_command(correct_st)
+cli.add_command(correct_qi)
 cli.add_command(polish_st)
 cli.add_command(polish_qi)
+cli.add_command(draw_st)
 
 # meeting2text.py
 cli.add_command(meeting2text)

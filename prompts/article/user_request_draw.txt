@@ -1,0 +1,8 @@
+In the scratchpad below, brainstorm concrete ways to create or significantly improve the figures in the paper that are directly relevant to the instruction above. Be as specific as possible, detailing which figures to create or modify and in what ways. Use the scratchpad as an opportunity to formulate a detailed action plan.
+<scratchpad>
+1. [Specific figure creation/improvement idea 1 that directly addresses the instruction]
+2. [Specific figure creation/improvement idea 2 that directly addresses the instruction]
+3. [Specific figure creation/improvement idea 3 that directly addresses the instruction]
+</scratchpad>
+
+Now, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references.
