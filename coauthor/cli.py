@@ -29,7 +29,13 @@ def shared_arguments(func):
 
 
 def shared_arguments_long(func):
-    func = shared_arguments(func)
+    func = click.argument("input_file")(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(
+        func
+    )
+    func = click.option(
+        "--reflect", required=False, default=None, help="Reflect on the changes"
+    )(func)
     func = click.option(
         "--instruction", required=False, default=None, help="Instruction for processing"
     )(func)
@@ -69,7 +75,6 @@ def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
 @click.option(
     "--auxiliary_file", required=False, default=None, help="Path to the auxiliary file"
 )
-@shared_arguments_long
 def polish_tex(
     model,
     input_file,
