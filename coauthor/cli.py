@@ -584,27 +584,59 @@ def indent_tex():
 
 @click.command()
 @click.argument("input_file")
-def clean_single(input_file):
-    excluded_dirs = {"Figs", "Figures", "build", "versions", "figs", "figures", "Notes"}
-    base_name = os.path.splitext(input_file)[0]
-    suffixes = ["_sonnet+", "_opus", "_sonnet", "_haiku", "_gpt4t", "_gpt4o"]
-    patterns = [f"{base_name}*{suffix}*" for suffix in suffixes]
-    patterns_build = [f"*/build/{base_name}*{suffix}*" for suffix in suffixes]
+@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
+@click.option("--task", required=True, help="Task to perform")
+def clean_single(input_file, model, reflect, task):
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    input_dir = os.path.dirname(input_file)
+
+    first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
+
+    file_patterns = [
+        f"{base_name}_{first_task_chunk}_{model}.pdf",
+        f"{base_name}_{first_task_chunk}_{model}_diff.pdf",
+        f"{base_name}_{first_task_chunk}_{model}.tex",
+        f"{base_name}_{first_task_chunk}_{model}_diff.tex",
+        f"{base_name}_{first_task_chunk}_{model}_log.txt",
+    ]
+
+    if reflect and reflect != "False":
+        file_patterns.extend([
+            f"{base_name}_{first_task_chunk}_reflect_{model}.pdf",
+            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.pdf",
+            f"{base_name}_{first_task_chunk}_reflect_{model}.tex",
+            f"{base_name}_{first_task_chunk}_reflect_{model}_diff.tex",
+            f"{base_name}_{first_task_chunk}_reflect_{model}_log.txt",
+        ])
+
+    temp_file_extensions = [
+        ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz"
+    ]
+
+    temp_file_patterns = [
+        f"{base_name}_{first_task_chunk}_{model}_diff{{ext}}",
+        f"{base_name}_{first_task_chunk}_{model}{{ext}}",
+        f"{base_name}_{first_task_chunk}_reflect_{model}{{ext}}",
+        f"{base_name}_{first_task_chunk}_reflect_{model}_diff{{ext}}",
+    ]
+
     files_to_delete = []
 
-    # Walk through all directories and files, excluding specific directories
-    for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [
-            d for d in dirs if d not in excluded_dirs
-        ]  # Modify dirs in-place to exclude certain directories
-        for pattern in patterns:
-            for filename in fnmatch.filter(files, pattern):
-                files_to_delete.append(os.path.join(root, filename))
+    # Add main files to delete list
+    for pattern in file_patterns:
+        for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+            file_path = os.path.join(search_dir, pattern)
+            if os.path.exists(file_path):
+                files_to_delete.append(file_path)
 
-        for pattern in patterns_build:
-            files_to_delete.extend(
-                glob.glob(os.path.join(root, pattern), recursive=True)
-            )
+    # Add temporary files to delete list
+    for pattern in temp_file_patterns:
+        for ext in temp_file_extensions:
+            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+                file_path = os.path.join(search_dir, pattern.format(ext=ext))
+                if os.path.exists(file_path):
+                    files_to_delete.append(file_path)
 
     # Perform the deletion
     for file in files_to_delete:
@@ -625,7 +657,6 @@ def pack_single(input_file, model, reflect, task):
     input_dir = os.path.dirname(input_file)
     output_folder_prefix = os.path.join(input_dir, "Versions")
     output_folder = os.path.join(output_folder_prefix, f"{now}_{base_name}")
-    os.makedirs(output_folder, exist_ok=True)
 
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
@@ -650,16 +681,25 @@ def pack_single(input_file, model, reflect, task):
         )
 
     moved_files = []
+    copied_files = []
     for pattern in file_patterns:
         for search_dir in [os.path.join(input_dir, "build"), input_dir]:
             file_path = os.path.join(search_dir, pattern)
             if os.path.exists(file_path):
-                shutil.move(file_path, output_folder)
-                moved_files.append(file_path)
+                if pattern == f"{base_name}.pdf":
+                    copied_files.append(file_path)
+                else:
+                    moved_files.append(file_path)
                 break
 
-    for file in moved_files:
-        print(f"Moved: {file}")
+    if len(moved_files) > 1:
+        os.makedirs(output_folder, exist_ok=True)
+        for file_path in moved_files:
+            shutil.move(file_path, output_folder)
+            print(f"Moved: {file_path}")
+        for file_path in copied_files:
+            shutil.copy(file_path, output_folder)
+            print(f"Copied: {file_path}")
 
     # Remove temporary files
     temp_file_extensions = [
@@ -674,7 +714,6 @@ def pack_single(input_file, model, reflect, task):
     ]
 
     temp_file_patterns = [
-        # "{base_name}{ext}",
         "{base_name}_{first_task_chunk}_{model}_diff{ext}",
         "{base_name}_{first_task_chunk}_{model}{ext}",
         "{base_name}_{first_task_chunk}_reflect_{model}{ext}",
@@ -697,7 +736,8 @@ def pack_single(input_file, model, reflect, task):
                     os.remove(file_path)
                     print(f"Removed: {file_path}")
 
-    print(f"Files packed into {output_folder}")
+    if len(moved_files) > 1:
+        print(f"Files packed into {output_folder}")
 
 
 @click.command()
