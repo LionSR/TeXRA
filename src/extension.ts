@@ -39,10 +39,10 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.cleanSingle', (filePath: string) => {
+    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor clean-single ${filePath}`);
+      terminal.sendText(`coauthor clean-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFilePath: string, revisionFilePath: string) => {
       const terminal = ensureTerminal();
@@ -312,7 +312,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'cleanSingle':
-          vscode.commands.executeCommand('coauthor.cleanSingle', message.filePath);
+          vscode.commands.executeCommand('coauthor.cleanSingle', message.inputFilePath, message.task, message.reflect, message.model);
           break;
         case 'packSingle':
           vscode.commands.executeCommand('coauthor.packSingle', message.inputFilePath, message.task, message.reflect, message.model);
@@ -498,9 +498,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           });
           document.getElementById('cleanSingleButton').addEventListener('click', function() {
             const inputFilePath = document.getElementById('inputFileSelect').value;
+            const task = document.getElementById('taskSelect').value;
+            const reflect = document.getElementById('reflectSelect').value;
+            const model = document.getElementById('modelSelect').value;
             vscode.postMessage({
               command: 'cleanSingle',
-              filePath: inputFilePath
+              inputFilePath: inputFilePath,
+              task: task,
+              reflect: reflect,
+              model: model
             });
           });
           document.getElementById('latexDiffButton').addEventListener('click', function() {
