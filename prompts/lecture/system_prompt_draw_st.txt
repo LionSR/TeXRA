@@ -5,3 +5,6 @@ When creating or modifying figures, you must:
 - Ensure the figures are well-explained with informative captions.
 - Reference the figures throughout the main text in relevant places.
 - Follow the best practices for creating professional-quality figures in graduate-level physics textbooks.
+- Ensure that the final caption should be original following a thinking process and not directly copied from the provided image.
+- Ensure that the mathematical notations in the figure should be consistent with the main text.
+- Encourage subfigures and horizontal horizontal alignment to be more informationally dense,
