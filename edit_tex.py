@@ -28,6 +28,16 @@ all_task_settings = {
         "user_request_file": "user_request_polish.txt",
         "user_reflect_file": "user_reflect_polish.txt",
     },
+    "draw": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "<scratchpad>",
+        "system_prompt_file": "system_prompt_draw.txt",
+        "user_prefix_file": "user_prefix_draw.txt",
+        "user_request_file": "user_request_draw.txt",
+        "user_reflect_file": "user_reflect_draw.txt",
+    },
 }
 
 
@@ -44,6 +54,7 @@ def main():
         type=str,
         default="correct",
         help="The task to be performed.",
+        choices=["correct", "polish", "draw"],
     )
     parser.add_argument(
         "--append_mode",
