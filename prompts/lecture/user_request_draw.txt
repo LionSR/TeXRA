@@ -1,4 +1,4 @@
-In the scratchpad below, brainstorm concrete ways to create or significantly improve the figures in the chapter that are directly relevant to the instruction above. Be as specific as possible, detailing which figures to create or modify and in what ways. Use the scratchpad as an opportunity to formulate a detailed action plan.
+In the scratchpad below, brainstorm concrete ways to create or significantly improve the figures in the chapter that are directly relevant to the instruction above. Be as specific as possible, detailing which figures to create or modify and in what ways. Use the scratchpad as an opportunity to formulate a detailed action plan. If an image input is provided, first give a detailed visual description of the image in the scratchpad before listing the ideas.
 <scratchpad>
 1. [Specific figure creation/improvement idea 1 that directly addresses the instruction]
 2. [Specific figure creation/improvement idea 2 that directly addresses the instruction] 

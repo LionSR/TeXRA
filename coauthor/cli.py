@@ -28,6 +28,20 @@ def shared_arguments(func):
     return func
 
 
+def shared_arguments_long(func):
+    func = shared_arguments(func)
+    func = click.option(
+        "--instruction", required=False, default=None, help="Instruction for processing"
+    )(func)
+    func = click.option(
+        "--figure_input",
+        required=False,
+        default=None,
+        help="Path to the figure input file.",
+    )(func)
+    return func
+
+
 @click.group()
 def cli():
     pass
@@ -51,19 +65,11 @@ def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
 
 
 @click.command()
-@shared_arguments
+@shared_arguments_long
 @click.option(
     "--auxiliary_file", required=False, default=None, help="Path to the auxiliary file"
 )
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
-@click.option(
-    "--figure_input",
-    required=False,
-    default=None,
-    help="Path to the figure input file.",
-)
+@shared_arguments_long
 def polish_tex(
     model,
     input_file,
@@ -92,16 +98,7 @@ def polish_tex(
 
 
 @click.command()
-@shared_arguments
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
-@click.option(
-    "--figure_input",
-    required=False,
-    default=None,
-    help="Path to the figure input file.",
-)
+@shared_arguments_long
 def draw_tex(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -275,16 +272,7 @@ def correct_st(model, input_file, reflect=False):
 
 
 @click.command()
-@shared_arguments
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
-@click.option(
-    "--figure_input",
-    required=False,
-    default=None,
-    help="Path to the figure input file.",
-)
+@shared_arguments_long
 def polish_st(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -304,16 +292,7 @@ def polish_st(model, input_file, figure_input, instruction=None, reflect=False):
 
 
 @click.command()
-@shared_arguments
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
-@click.option(
-    "--figure_input",
-    required=False,
-    default=None,
-    help="Path to the figure input file.",
-)
+@shared_arguments_long
 def polish_qi(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -333,16 +312,7 @@ def polish_qi(model, input_file, figure_input, instruction=None, reflect=False):
 
 
 @click.command()
-@shared_arguments
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
-@click.option(
-    "--figure_input",
-    required=False,
-    default=None,
-    help="Path to the figure input file.",
-)
+@shared_arguments_long
 def draw_st(model, input_file, figure_input, instruction=None, reflect=False):
     model, script_dir, _ = get_common_env(model)
     command = [
