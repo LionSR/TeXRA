@@ -1,0 +1,13 @@
+I am going to give you a LaTeX document of a research paper. You are about to create or revise the figures in this paper, so please read the document carefully.
+
+Here is the LaTeX document {INPUT_FILE}:
+<latex_document>
+{INPUT_CONTENT}
+</latex_document>
+
+Please carefully read through the entire research paper above and ensure you fully understand all the details.
+
+Your task is to create or enhance the figures in this paper, focusing solely on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
