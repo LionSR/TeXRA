@@ -1,7 +1,7 @@
 Let's reflect on the changes made to the figures. Based on this reflection, propose targeted refinements. Use the following format for thinking:
 <scratchpad>
 <figure_analysis>
-your analysis of the exisitng figure and how it compares with the provided image input
+your detailed analysis of the exisitng figure and how it compares with the provided image input
 </figure_analysis>
 <reflection>
 1. Instruction Alignment: How well do the modifications address the specific instruction? Identify any areas where alignment could be improved.
