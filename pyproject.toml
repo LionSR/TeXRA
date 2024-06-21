@@ -24,7 +24,8 @@ dependencies = [
     "anthropic",
     "IPython",
     "click",
-    "PyMuPDF"
+    "PyMuPDF",
+    "termcolor"
 ]
 
 [project.urls]
