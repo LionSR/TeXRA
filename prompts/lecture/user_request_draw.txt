@@ -3,7 +3,7 @@ Analyze the existing figures in the document and propose improvements.  Based on
 Use the following format for thinking:
 <scratchpad>
 <figure_analysis>
-your detailed analysis of the exisitng figure or the provided image input ()
+your detailed analysis of the exisitng figure or the provided image input. When an image input is provided, give a super detailed description of the image that is enough for someone who has not seen the image to reproduce it.
 </figure_analysis>
 <idea>
 1. [Specific figure creation/improvement idea 1]
