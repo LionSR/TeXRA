@@ -1,6 +1,6 @@
 You will be given a LaTeX document of a draft textbook chapter to revise. Read the document carefully before proceeding.
 
-LaTeX document {INPUT_FILE} with additional document class and commands:
+LaTeX document {INPUT_FILE} with additional document class and commands  (where has defined the math commands you should use):
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>
