@@ -1,6 +1,6 @@
 I will provide you with a LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
-Here is the LaTeX document {INPUT_FILE} with additional LaTeX document class and commands:
+Here is the LaTeX document {INPUT_FILE} with additional LaTeX document class and commands (where has defined the math commands you should use):
 
 <document_class>
 {DOCUMENT_CLS_CONTENT}
