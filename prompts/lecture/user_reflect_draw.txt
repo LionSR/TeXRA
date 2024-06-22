@@ -39,9 +39,9 @@ your detailed analysis of the exisitng figure and how it compares with the provi
 </scratchpad>
 
 Now, implement these refinements by outputting a further enhanced and complete version of the LaTeX document. Ensure that your changes:
-1. Address all points raised in the reflection.
+1. Address all points raised in the reflection and idea.
 2. Maintain focus on the original instruction.
 3. Result in figures that are correct, aesthetically pleasing, informative, and concise.
 4. Adhere to the style of a professional graduate physics textbook.
 
-Please provide the complete LaTeX document with your refinements.
+Please provide the complete LaTeX document with your refinements in the </latex_document> ... <latex_document> tag.
