@@ -62,14 +62,8 @@ def main():
         "INPUT_FILE": os.path.basename(args.input_file),
         "TRANSCRIPT": read_file(args.input_file),
         "CONTEXT": read_file(args.context_file),
-        "EXAMPLE_TRANSCRIPT": (
-            read_file(args.example_transcript) if args.example_transcript else ""
-        ),
-        "EXAMPLE_EDITED_TRANSCRIPT": (
-            read_file(args.example_edited_transcript)
-            if args.example_edited_transcript
-            else ""
-        ),
+        "EXAMPLE_TRANSCRIPT": (read_file(args.example_transcript) if args.example_transcript else ""),
+        "EXAMPLE_EDITED_TRANSCRIPT": (read_file(args.example_edited_transcript) if args.example_edited_transcript else ""),
     }
 
     # Get the settings for the selected mode
