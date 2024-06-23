@@ -66,6 +66,11 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.5]
+
+* increase the number of git commit message to show up to 20.
+* handled softlinks folders
+
 ## [0.3.4]
 
 * Added draw-tex and draw-st tasks in the backend and the UI.

@@ -118,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (workspaceFolders) {
         const workspacePath = workspaceFolders[0].uri.fsPath;
         return new Promise<string[]>((resolve, reject) => {
-          exec('git log -n 12 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
+          exec('git log -n 20 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
             if (error) {
               vscode.window.showErrorMessage(`Error fetching commits: ${stderr}`);
               reject(stderr);
@@ -394,7 +394,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const files = await Promise.all(dirEntries.map(async ([name, type]) => {
       const fullPath = `${dir}/${name}`;
       const relativePath = fullPath.replace(`${root}/`, '');
-      if (type === vscode.FileType.Directory && !name.startsWith('.') && !excludeDirectories.includes(name)) {
+      
+      // Check if the entry is a symbolic link
+      const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+      const isSymbolicLink = (stat.type & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
+      
+      if ((type === vscode.FileType.Directory || isSymbolicLink) && !name.startsWith('.') && !excludeDirectories.includes(name)) {
+        // If it's a directory or a symbolic link, recursively process it
         return await this.getFilesRecursively(fullPath, root, includeExtensions, excludeExtensions, excludeDirectories, excludeKeywords);
       } else if (type === vscode.FileType.File && !name.startsWith('.') &&
         (includeExtensions.length === 0 || includeExtensions.some(ext => name.endsWith(ext))) &&
