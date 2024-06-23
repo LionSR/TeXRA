@@ -889,7 +889,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
         <label for="inputFileSelect">Select Input File:</label>
         <button id="selectMultipleFilesButton" style="float: right;">Select Multiple Files</button><br>
-        <select id="inputFileSelect"></select>
+        <select id="inputFileSelect">
+          <option value="">None</option>
+        </select>
         <div id="selectedFiles" style="display: none;"></div>
       </p>
       <p>
@@ -899,7 +901,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
         <label for="figureFileSelect">Select Figure File:</label>
         <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple Figures</button><br>
-        <select id="figureFileSelect"></select>
+        <select id="figureFileSelect">
+          <option value="">None</option>
+        </select>
         <div id="selectedFigures" style="display: none;"></div>
       </p>
       <p>
