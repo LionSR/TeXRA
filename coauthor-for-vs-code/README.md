@@ -70,6 +70,11 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.7]
+
+* Added the possibility to select multiple input files and or figures, and display selected files in the extension UI (Activity Bar tab).
+* Set the default open dialog for file selection to the same path of the select input file if it is set.
+
 ## [0.3.6]
 
 * Set figure file to "None" and reflect to "False" when a task starting with "Correct" is selected.
@@ -195,3 +200,4 @@ You can author your README using Visual Studio Code. Here are some useful editor
 * Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
 * Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
 * Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+
