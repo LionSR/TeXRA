@@ -44,4 +44,4 @@ Now, implement these refinements by outputting a further enhanced and complete v
 3. Result in figures that are correct, aesthetically pleasing, informative, and concise.
 4. Adhere to the style of a professional graduate physics textbook.
 
-Please provide the complete LaTeX document with your refinements in the </latex_document> ... <latex_document> tag.
+Please provide the complete LaTeX document with your refinements in the <latex_document> ... </latex_document> tag.
