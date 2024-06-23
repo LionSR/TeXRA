@@ -215,8 +215,9 @@ def process_reflection(
 
     user_message = f"{user_request_reflect}\n"
     output_file_reflect = output_file.replace(
-        f"_{model_settings['model']}.{output_settings['document_tag']}", f"_reflect_{model_settings['model']}.{output_settings['document_tag']}"
+        f"_{model_settings['model']}", f"_reflect_{model_settings['model']}"
     )
+    print(f"output_file_reflect: {colored(output_file_reflect, 'cyan')}")
     messages.append({"role": "user", "content": user_message})
 
     if output_settings["document_tag"] == "tex" and use_prefill_from_input:
