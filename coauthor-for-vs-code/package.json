@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "publisher": "Sirui Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -51,6 +51,10 @@
       {
         "command": "coauthor.refreshCommits",
         "title": "Refresh Commits"
+      },
+      {
+        "command": "coauthor.selectMultipleFiles",
+        "title": "Select Multiple Input Files"
       },
       {
         "command": "coauthor.selectInputFile",
