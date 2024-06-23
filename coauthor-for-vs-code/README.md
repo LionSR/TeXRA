@@ -70,6 +70,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.8]
+
+* now possible to pass the multiple selected input files and/or figures to the backend
+
 ## [0.3.7]
 
 * Added the possibility to select multiple input files and or figures, and display selected files in the extension UI (Activity Bar tab).
