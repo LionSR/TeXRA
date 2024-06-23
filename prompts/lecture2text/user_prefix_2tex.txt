@@ -1,14 +1,21 @@
 I am going to give you a transcribed txt from a lecture of a graduate quantum information course. You are about to rewrite it line by line into formal graduate textbook language using LaTeX, so read extremely carefully.
 
-Here is the transcription {INPUT_FILE} with additional LaTeX document class and commands:
-<document_class>
-{DOCUMENT_CLS_CONTENT}
-</document_class>
+Here is the transcription {INPUT_FILE} with additional LaTeX document class and commands (where has defined the math commands you should use):
 
-<commands>
-{commands_qi_content}
-</commands>
-
-<latex_document>
-{INPUT_CONTENT}
-</latex_document>
+<documents>
+    <document index="1">
+        <source>{DOCUMENT_CLS}</source>
+    <document_content>
+        {DOCUMENT_CLS_CONTENT}
+    </document_content>
+    <document index="2">
+        <source>{COMMANDS}</source>
+    <document_content>
+        {COMMANDS_CONTENT}
+    </document_content>
+    <document index="3">
+        <source>{INPUT_FILE}</source>
+    <document_content>
+        {INPUT_CONTENT}
+    </document_content>
+</documents>
