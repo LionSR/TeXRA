@@ -24,9 +24,7 @@ def shared_arguments(func):
 
 
 def shared_arguments_long(func):
-    func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
-    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
+    func = shared_arguments(func)
     func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
     func = click.option(
         "--figure_input",
@@ -41,7 +39,7 @@ def execute_task(script, task, model, input_file, **kwargs):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
-        f"{script_dir}/{script}.py",
+        f"{script_dir}/programs/{script}.py",
         f"--task={task}",
         f"--model={model}",
         f"--input_file={input_file}",
@@ -113,6 +111,7 @@ def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
 @shared_arguments_long
 def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
     execute_task("edit_lecture", "draw_st", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+
 
 @click.command()
 @shared_arguments_long
