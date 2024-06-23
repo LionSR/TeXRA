@@ -24,6 +24,11 @@ export function activate(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
+    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFilePath: string, commitHash: string) => {
+      const terminal = ensureTerminal();
+      terminal.show();
+      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFilePath} ${commitHash}`);
+    }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       const terminal = ensureTerminal();
       terminal.show();
@@ -331,6 +336,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const commits_refresh = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
           webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits_refresh });
           break;
+        case 'packLatexDiffVC':
+          vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFilePath, message.commitHash);
+          break;
       }
     });
   }
@@ -536,6 +544,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('refreshCommitsButton').addEventListener('click', function() {
             vscode.postMessage({
                 command: 'refreshCommits'
+            });
+          });
+          document.getElementById('packLatexDiffVCButton').addEventListener('click', function() {
+            const inputFilePath = document.getElementById('inputFileSelect').value;
+            const commitHash = document.getElementById('commitSelect').value;
+            vscode.postMessage({
+              command: 'packLatexDiffVC',
+              inputFilePath: inputFilePath,
+              commitHash: commitHash
             });
           });
 
@@ -746,6 +763,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
         <label for="commitSelect">Select Commit:</label>
         <button id="latexDiffVCButton" style="float: right;">latexdiff-vc</button>
+        <button id="packLatexDiffVCButton" style="float: right; margin-right: 10px;">Pack</button>
         <button id="refreshCommitsButton" style="float: right; margin-right: 10px;">Refresh</button>
         <select id="commitSelect">
           <option value="HEAD">HEAD</option>
