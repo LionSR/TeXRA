@@ -70,6 +70,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.6]
+
+* Set figure file to "None" and reflect to "False" when a task starting with "Correct" is selected.
+
 ## [0.3.5]
 
 * increase the number of git commit message to show up to 20.
