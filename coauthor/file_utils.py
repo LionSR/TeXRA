@@ -64,71 +64,70 @@ def run_latexdiff(input_file, output_file):
     from termcolor import colored
 
     log_file_name = output_file.replace(".tex", "_log.txt")
+    diff_file_name = output_file.replace(".tex", "_diff.tex")
 
-    # Check if "</scratchpad>" is in the output_file
+    # Handle scratchpad content
     with open(output_file, "r") as file:
         output_content = file.read()
-    if "</scratchpad>" in output_content:
-        # Log all lines before "</scratchpad>" to a log file
-        with open(
-            log_file_name, "a+"
-        ) as log_file:  # Ensure the log file is opened in append mode
-            log_file.write("\n<scratchpad>\n")
-            lines = output_content.split("\n")
-            for line in lines:
-                if "</scratchpad>" in line:
-                    log_file.write(line + "\n")
-                    break
-                log_file.write(line + "\n")
 
-        # Delete all lines up to "</scratchpad>" or "<latex_document>"
-        if "<latex_document>" in output_content:
-            output_content = output_content.split("<latex_document>", 1)[1].lstrip()
-        else:
-            output_content = output_content.split("</scratchpad>", 1)[1].lstrip()
+    if "</scratchpad>" in output_content:
+        with open(log_file_name, "a+") as log_file:
+            log_file.write(
+                "\n<scratchpad>\n"
+                + output_content.split("</scratchpad>")[0]
+                + "</scratchpad>\n"
+            )
+
+        output_content = output_content.split(
+            (
+                "<latex_document>"
+                if "<latex_document>" in output_content
+                else "</scratchpad>"
+            ),
+            1,
+        )[1].lstrip()
         with open(output_file, "w") as file:
             file.write(output_content)
 
-    diff_file_name = output_file.replace(".tex", "_diff.tex")
+    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
+    output_content = output_content.replace("\\end{document>", "\\end{document}")
+    
+    # Run latexdiff
     latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
     os.system(latexdiff_command)
-
-    # Additional operations after latexdiff has finished
     print(colored(f"latexdiff completed. Output saved to {diff_file_name}", "blue"))
 
-    # Read the diff file and add line breaks after %DIF PREAMBLE lines
-    with open(diff_file_name, "r") as diff_file:
-        lines = diff_file.readlines()
-
-    with open(diff_file_name, "w") as diff_file:
-        for line in lines:
-            if "\\usepackage{tikz}" in line:
-                diff_file.write("\n")
-            elif "\\providecommand{\\DIFaddbegin}" in line:
-                diff_file.write("\n")
-            elif "\\RequirePackage[normalem]{ulem}" in line:
-                diff_file.write("\n")
-            diff_file.write(line)
-            if "\\RequirePackage{color}" in line:
-                diff_file.write("\n")
-
-    print(colored(f"Line breaks added to {diff_file_name}", "blue"))
-
-    # Delete lines between "%DIF ADD" and "\documentclass["
+    # Process diff file
     with open(diff_file_name, "r") as diff_file:
         lines = diff_file.readlines()
 
     with open(diff_file_name, "w") as diff_file:
         add_block = False
         for line in lines:
+            if any(
+                pkg in line
+                for pkg in [
+                    "\\usepackage{tikz}",
+                    "\\usepackage{pgfplots}",
+                    "\\providecommand{\\DIFaddbegin}",
+                    "\\RequirePackage[normalem]{ulem}",
+                ]
+            ):
+                diff_file.write("\n")
+
             if "%DIF ADD" in line:
                 add_block = True
             elif "\\documentclass" in line or "\\input" in line:
                 add_block = False
+
+            if not add_block:
                 diff_file.write(line)
-            elif not add_block:
-                diff_file.write(line)
+
+            if "\\RequirePackage{color}" in line:
+                diff_file.write("\n")
+
+    print(colored(f"Line breaks added to {diff_file_name}", "blue"))
 
 
 def run_latexdiff_vc(input_file, commit_hash):
@@ -143,21 +142,20 @@ def run_latexdiff_vc(input_file, commit_hash):
     )
     print(colored(f"Running latexdiff-vc command: {latexdiff_vc_command}", "green"))
     os.system(latexdiff_vc_command)
-
-    # Additional operations after latexdiff-vc has finished
     print(colored(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue"))
 
-    # Delete lines between "%DIF ADD" and "\documentclass["
+    # Process diff file
     with open(diff_file_name, "r") as diff_file:
         lines = diff_file.readlines()
 
     with open(diff_file_name, "w") as diff_file:
+        packages_to_add_newline = [
+            "\\usepackage{tikz}",
+            "\\providecommand{\\DIFaddbegin}",
+            "\\RequirePackage[normalem]{ulem}",
+        ]
         for line in lines:
-            if "\\usepackage{tikz}" in line:
-                diff_file.write("\n")
-            elif "\\providecommand{\\DIFaddbegin}" in line:
-                diff_file.write("\n")
-            elif "\\RequirePackage[normalem]{ulem}" in line:
+            if any(pkg in line for pkg in packages_to_add_newline):
                 diff_file.write("\n")
             diff_file.write(line)
             if "\\RequirePackage{color}" in line:
