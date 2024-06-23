@@ -191,42 +191,59 @@ def process_file_with_llm(
 
     print_message_summary(state, model)
 
-    if end_turn and reflect:
-        assistant_reflect_prefill_first = task_settings.get("first_prefill_reflect", assistant_prefill_first)
-        print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
-        user_request_reflect = load_prompt("user_reflect", task, prompt_path, task_settings)
-        print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
-        user_message = f"{user_request_reflect}\n"
-        output_file_reflect = output_file.replace(f"_{model}.{output_type}", f"_reflect_{model}.{output_type}")
-        messages.append({"role": "user", "content": user_message})
+    return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings
 
-        if output_type == "tex" and use_prefill_from_input:
-            # may need to change this
-            first_k_tex_document = read_file(input_file)[:k].strip()
-            accumulated_output = first_k_tex_document
-        else:
-            accumulated_output = assistant_reflect_prefill_first
 
-        messages.append({"role": "assistant", "content": assistant_reflect_prefill_first})
-        print(f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}")
+def process_reflection(
+    task,
+    task_settings,
+    input_file,
+    output_file,
+    state,
+    accumulated_output,
+    messages,
+    model_settings,
+    output_settings,
+    prompt_path,
+    use_prefill_from_input,
+):
+    print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
 
-        state["last_response"] = accumulated_output
-        state["continuation_count"] = 0
+    assistant_reflect_prefill_first = task_settings.get("first_prefill_reflect", task_settings.get("first_prefill"))
+    user_request_reflect = load_prompt("user_reflect", task, prompt_path, task_settings)
+    print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
 
-        state, accumulated_output, end_turn = process_response_cycle(
-            state,
-            accumulated_output,
-            messages,
-            output_file_reflect,
-            model_settings=model_settings,
-            output_settings=output_settings,
-        )
-        print(f"\n\nProcessed {input_file} and saved as {output_file_reflect}")
+    user_message = f"{user_request_reflect}\n"
+    output_file_reflect = output_file.replace(
+        f"_{model_settings['model']}.{output_settings['document_tag']}", f"_reflect_{model_settings['model']}.{output_settings['document_tag']}"
+    )
+    messages.append({"role": "user", "content": user_message})
 
-        print_message_summary(state, model)
-        return state, accumulated_output, end_turn, [output_file, output_file_reflect]
+    if output_settings["document_tag"] == "tex" and use_prefill_from_input:
+        first_k_tex_document = read_file(input_file)[: output_settings["k"]].strip()
+        accumulated_output = first_k_tex_document
+    else:
+        accumulated_output = assistant_reflect_prefill_first
 
-    return state, accumulated_output, end_turn, output_file
+    messages.append({"role": "assistant", "content": assistant_reflect_prefill_first})
+    print(f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}")
+
+    state["last_response"] = accumulated_output
+    state["continuation_count"] = 0
+
+    state, accumulated_output, end_turn = process_response_cycle(
+        state,
+        accumulated_output,
+        messages,
+        output_file_reflect,
+        model_settings=model_settings,
+        output_settings=output_settings,
+    )
+    print(f"\n\nProcessed {input_file} and saved as {output_file_reflect}")
+
+    print_message_summary(state, model_settings["model"])
+
+    return state, accumulated_output, end_turn, output_file_reflect, messages
 
 
 def process_response_cycle(

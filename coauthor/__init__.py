@@ -1,5 +1,5 @@
 # coauthor/__init__.py
-from .process import process_file_with_llm
+from .process import process_file_with_llm, process_reflection
 from .model_utils import (
     create_response,
     extract_response_statistics,
