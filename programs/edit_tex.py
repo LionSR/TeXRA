@@ -92,7 +92,7 @@ def main():
         log_file.write(f"Model: {args.model}\n")
         log_file.write(f"Instruction:\n<request>\n{args.instruction}\n</request>\n\n")
 
-    state, accumulated_output, end_turn, output_file = coauthor.process_file_with_llm(
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = coauthor.process_file_with_llm(
         args.task,
         task_settings,
         args.input_file,
@@ -101,23 +101,31 @@ def main():
         prompt_path=prompt_path,
         use_prefill_from_input=False,
         append_mode=args.append_mode,
-        reflect=args.reflect,
         figure_input=args.figure_input if args.figure_input else None,
     )
 
-    if isinstance(output_file, list):
-        output_file, output_file_reflect = output_file
-        print(
-            colored(
-                f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}",
-                "yellow",
-            )
+    print(colored(f"Output file: {output_file}", "yellow"))
+    run_latexdiff(args.input_file, output_file)
+
+    if args.reflect and end_turn:
+        state, accumulated_output, end_turn, output_file_reflect, messages = coauthor.process_reflection(
+            args.task,
+            task_settings,
+            args.input_file,
+            output_file,
+            state,
+            accumulated_output,
+            messages,
+            model_settings,
+            output_settings,
+            prompt_path,
+            use_prefill_from_input=False,
         )
-        run_latexdiff(args.input_file, output_file)
+
+        print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
         run_latexdiff(args.input_file, output_file_reflect)
     else:
-        print(colored(f"Output file: {output_file}", "yellow"))
-        run_latexdiff(args.input_file, output_file)
+        output_file_reflect = None
 
 
 if __name__ == "__main__":
