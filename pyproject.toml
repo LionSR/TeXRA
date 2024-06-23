@@ -37,3 +37,22 @@ packages = ["coauthor"]
 
 [project.entry-points.console_scripts]
 coauthor = "coauthor.cli:cli"
+
+[tool.black]
+line-length = 151
+target-version = ['py39', 'py310', 'py311']
+include = '\.(pyi?|ipynb)$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

@@ -70,9 +70,7 @@ def main(input_file, append_mode=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Test prefilling more than 4096 tokens with Claude model and save output."
-    )
+    parser = argparse.ArgumentParser(description="Test prefilling more than 4096 tokens with Claude model and save output.")
     parser.add_argument(
         "input_file",
         type=str,
