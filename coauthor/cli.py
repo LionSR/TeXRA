@@ -1,4 +1,5 @@
 import click
+import shlex
 import subprocess
 import os
 import glob
@@ -18,19 +19,26 @@ def get_common_env(model):
 # Define a decorator for shared arguments
 def shared_arguments(func):
     func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
-    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(
+        func
+    )
+    func = click.option(
+        "--reflect", required=False, default=None, help="Reflect on the changes"
+    )(func)
     return func
 
 
 def shared_arguments_long(func):
     func = shared_arguments(func)
-    func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
+    func = click.option(
+        "--instruction", required=False, default=None, help="Instruction for processing"
+    )(func)
     func = click.option(
         "--figure_input",
         required=False,
         default=None,
-        help="Path to the figure input file.",
+        multiple=True,
+        help="Path to the figure input file(s).",
     )(func)
     return func
 
@@ -50,8 +58,14 @@ def execute_task(script, task, model, input_file, **kwargs):
             if isinstance(value, bool):
                 if value:
                     command.append(f"--{key}")
+            elif key in ["input_files", "figure_input"]:
+                if isinstance(value, str):
+                    value = [value]
+                command.append(f"--{key}")
+                command.extend([shlex.quote(file) for file in value])
             else:
-                command.extend([f"--{key}", str(value)])
+                command.append(f"--{key}")
+                command.append(shlex.quote(str(value)))
 
     subprocess.run(command)
 
@@ -65,22 +79,51 @@ def cli():
 @shared_arguments
 @click.option("--auxiliary_file", default=None)
 def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
-    execute_task("edit_tex", "correct", model, input_file, auxiliary_file=auxiliary_file, reflect=reflect)
+    execute_task(
+        "edit_tex",
+        "correct",
+        model,
+        input_file,
+        auxiliary_file=auxiliary_file,
+        reflect=reflect,
+    )
 
 
 @click.command()
 @shared_arguments_long
 @click.option("--auxiliary_file", default=None, help="Path to the auxiliary file")
-def polish_tex(model, input_file, auxiliary_file=None, figure_input=None, instruction=None, reflect=True):
+def polish_tex(
+    model,
+    input_file,
+    auxiliary_file=None,
+    figure_input=None,
+    instruction=None,
+    reflect=True,
+):
     execute_task(
-        "edit_tex", "polish", model, input_file, auxiliary_file=auxiliary_file, figure_input=figure_input, instruction=instruction, reflect=reflect
+        "edit_tex",
+        "polish",
+        model,
+        input_file,
+        auxiliary_file=auxiliary_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
     )
 
 
 @click.command()
 @shared_arguments_long
 def draw_tex(model, input_file, figure_input, instruction=None, reflect=True):
-    execute_task("edit_tex", "draw", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+    execute_task(
+        "edit_tex",
+        "draw",
+        model,
+        input_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
+    )
 
 
 @click.command()
@@ -98,25 +141,57 @@ def correct_st(model, input_file, reflect=False):
 @click.command()
 @shared_arguments_long
 def polish_st(model, input_file, figure_input, instruction=None, reflect=True):
-    execute_task("edit_lecture", "polish_st", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+    execute_task(
+        "edit_lecture",
+        "polish_st",
+        model,
+        input_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
+    )
 
 
 @click.command()
 @shared_arguments_long
 def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
-    execute_task("edit_lecture", "polish_qi", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+    execute_task(
+        "edit_lecture",
+        "polish_qi",
+        model,
+        input_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
+    )
 
 
 @click.command()
 @shared_arguments_long
 def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
-    execute_task("edit_lecture", "draw_st", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+    execute_task(
+        "edit_lecture",
+        "draw_st",
+        model,
+        input_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
+    )
 
 
 @click.command()
 @shared_arguments_long
 def draw_qi(model, input_file, figure_input, instruction=None, reflect=True):
-    execute_task("edit_lecture", "draw_qi", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+    execute_task(
+        "edit_lecture",
+        "draw_qi",
+        model,
+        input_file,
+        figure_input=figure_input,
+        instruction=instruction,
+        reflect=reflect,
+    )
 
 
 @click.command()
@@ -124,7 +199,14 @@ def draw_qi(model, input_file, figure_input, instruction=None, reflect=True):
 @click.argument("sample_chapters")
 @click.argument("sample_paper", required=False, default=None)
 @click.argument("sample_note", required=False, default=None)
-def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_note=None, reflect=False):
+def paper2note(
+    model,
+    input_file,
+    sample_chapters,
+    sample_paper=None,
+    sample_note=None,
+    reflect=False,
+):
     execute_task(
         "paper2note",
         "paper2note",
@@ -142,8 +224,18 @@ def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_not
 @click.argument("sample_tex")
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
-@click.option("--instruction", required=False, default=None, help="Instruction for processing")
-def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex", instruction=None, reflect=True):
+@click.option(
+    "--instruction", required=False, default=None, help="Instruction for processing"
+)
+def adapt(
+    model,
+    input_file,
+    sample_tex,
+    document_cls="lecture.cls",
+    commands_file="command.tex",
+    instruction=None,
+    reflect=True,
+):
     execute_task(
         "adapt",
         "adapt",
@@ -162,7 +254,14 @@ def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_fi
 @click.argument("context_file")
 @click.argument("example_transcript", required=False, default=None)
 @click.argument("example_edited_transcript", required=False, default=None)
-def meeting2text(model, input_file, context_file, example_transcript=None, example_edited_transcript=None, reflect=True):
+def meeting2text(
+    model,
+    input_file,
+    context_file,
+    example_transcript=None,
+    example_edited_transcript=None,
+    reflect=True,
+):
     execute_task(
         "meeting2text",
         "transcribe",
@@ -180,9 +279,23 @@ def meeting2text(model, input_file, context_file, example_transcript=None, examp
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
 @click.argument("sample_tex", required=False, default=None)
-def txt2tex(model, input_file, document_cls="lecture.cls", commands_file="command.tex", sample_tex=None, reflect=True):
+def txt2tex(
+    model,
+    input_file,
+    document_cls="lecture.cls",
+    commands_file="command.tex",
+    sample_tex=None,
+    reflect=True,
+):
     execute_task(
-        "txt2tex", "txt2tex", model, input_file, document_cls=document_cls, commands_file=commands_file, sample_tex=sample_tex, reflect=reflect
+        "txt2tex",
+        "txt2tex",
+        model,
+        input_file,
+        document_cls=document_cls,
+        commands_file=commands_file,
+        sample_tex=sample_tex,
+        reflect=reflect,
     )
 
 
@@ -196,7 +309,14 @@ def correct_prl(model, input_file, reflect=True):
 @shared_arguments
 @click.option("--auxiliary_file", default=None)
 def correct_supp_prl(model, input_file, auxiliary_file=None, reflect=True):
-    execute_task("edit_prl", "correct_supp_prl", model, input_file, auxiliary_file=auxiliary_file, reflect=reflect)
+    execute_task(
+        "edit_prl",
+        "correct_supp_prl",
+        model,
+        input_file,
+        auxiliary_file=auxiliary_file,
+        reflect=reflect,
+    )
 
 
 @click.command()
@@ -224,7 +344,9 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True):
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True):
+def revise_main_prl(
+    model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -249,7 +371,15 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 @click.argument("draft_reply_letter")
 @click.argument("draft_main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", reflect=True):
+def revise_supp_prl(
+    model,
+    input_file,
+    main_content,
+    draft_reply_letter,
+    draft_main_content,
+    supp_file="supp.tex",
+    reflect=True,
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -274,7 +404,9 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", reflect=True):
+def polish_prl_reply(
+    model, input_file, main_content, supp_file="supp.tex", reflect=True
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -296,7 +428,16 @@ def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", refl
 
 @click.command()
 def clean_output():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+    excluded_dirs = {
+        "Figs",
+        "Figures",
+        "build",
+        "Versions",
+        "versions",
+        "figs",
+        "figures",
+        "Notes",
+    }
     models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o"]
 
     patterns = [f"*_{model}*.tex" for model in models]
@@ -311,12 +452,17 @@ def clean_output():
             files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
 
         for pattern in patterns_build:
-            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
+            files_to_delete.extend(
+                glob.glob(os.path.join(root, pattern), recursive=True)
+            )
 
-    for file in files_to_delete:
+    for file in set(files_to_delete):
         try:
-            os.remove(file)
-            print(f"Deleted: {file}")
+            if os.path.exists(file):  # Check if file exists before attempting to delete
+                os.remove(file)
+                print(f"Deleted: {file}")
+            else:
+                print(f"File not found: {file}")
         except OSError as e:
             print(f"Error deleting {file}: {e}")
 
@@ -325,7 +471,16 @@ def clean_output():
 
 @click.command()
 def clean_build():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+    excluded_dirs = {
+        "Figs",
+        "Figures",
+        "build",
+        "Versions",
+        "versions",
+        "figs",
+        "figures",
+        "Notes",
+    }
 
     def remove_files(directory, pattern):
         for file in glob.glob(os.path.join(directory, pattern)):
@@ -361,8 +516,19 @@ def clean_build():
 
 @click.command()
 def indent_tex():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-    latexindent_config = os.environ.get("LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml")
+    excluded_dirs = {
+        "Figs",
+        "Figures",
+        "build",
+        "Versions",
+        "versions",
+        "figs",
+        "figures",
+        "Notes",
+    }
+    latexindent_config = os.environ.get(
+        "LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml"
+    )
 
     for root, dirs, files in os.walk(".", topdown=True):
         dirs[:] = [d for d in dirs if d not in excluded_dirs]
@@ -394,15 +560,30 @@ def clean_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_patterns(base, model, task, reflect):
-        patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
+        patterns = [
+            f"{base}_{task}_{model}{ext}"
+            for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
+        ]
         if reflect and reflect != "False":
-            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
+            patterns.extend(
+                [
+                    f"{base}_{task}_reflect_{model}{ext}"
+                    for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
+                ]
+            )
         return patterns
 
     file_patterns = get_patterns(base_name, model, first_task_chunk, reflect)
-    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
+    temp_patterns = [
+        f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]
+    ]
     if reflect and reflect != "False":
-        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
+        temp_patterns.extend(
+            [
+                f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}"
+                for suffix in ["", "_diff"]
+            ]
+        )
 
     temp_extensions = [
         ".aux",
@@ -439,9 +620,17 @@ def pack_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_file_patterns(base, task, model, reflect):
-        patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
+        patterns = [f"{base}.pdf"] + [
+            f"{base}_{task}_{model}{ext}"
+            for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
+        ]
         if reflect and reflect != "False":
-            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
+            patterns.extend(
+                [
+                    f"{base}_{task}_reflect_{model}{ext}"
+                    for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
+                ]
+            )
         return patterns
 
     file_patterns = get_file_patterns(base_name, first_task_chunk, model, reflect)
@@ -470,10 +659,26 @@ def pack_single(input_file, model, reflect, task):
         print(f"Files packed into {output_folder}")
 
     # Remove temporary files
-    temp_extensions = [".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz"]
-    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
+    temp_extensions = [
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
+    ]
+    temp_patterns = [
+        f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]
+    ]
     if reflect and reflect != "False":
-        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
+        temp_patterns.extend(
+            [
+                f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}"
+                for suffix in ["", "_diff"]
+            ]
+        )
 
     for pattern in temp_patterns:
         for ext in temp_extensions:
@@ -511,12 +716,19 @@ def pack_latexdiff_vc(input_file, commit_hash):
     output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
 
     # File patterns to keep
-    keep_patterns = [
-        f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]
-    ]
+    keep_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
 
     # Build file extensions to delete
-    delete_extensions = [".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz"]
+    delete_extensions = [
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
+    ]
 
     files_to_move = []
     files_to_delete = []
