@@ -82,9 +82,7 @@ def main():
         # task_settings[
         #     "user_prefix_file"
         # ] = f"user_prefix_{args.task}_with_auxiliary.txt"
-        task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(
-            ".txt", "_with_auxiliary.txt"
-        )
+        task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
         print(colored(f"Using auxiliary file: {args.auxiliary_file}", "green"))
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")

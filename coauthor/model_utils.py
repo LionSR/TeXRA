@@ -148,22 +148,14 @@ def handle_prefill(
             if output_type == "tex" and "\\end{document}" in file_content:
                 print("end_tag detected in existing file content. Overwriting...")
                 overwrite = True
-                print(
-                    f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
-                )
-                messages.append(
-                    {"role": "assistant", "content": assistant_prefill_first}
-                )
+                print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
+                messages.append({"role": "assistant", "content": assistant_prefill_first})
             else:
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
-                print(
-                    f"Using existing file content as prefill: {colored(output_file, 'green')}"
-                )
+                print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
         else:
-            print(
-                f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}"
-            )
+            print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
             messages.append({"role": "assistant", "content": assistant_prefill_first})
 
     encounter_document_tag = f"</{document_tag}>" in accumulated_output

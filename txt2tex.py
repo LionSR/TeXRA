@@ -57,9 +57,7 @@ def main():
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
         "EXISTING_LECTURE_NOTES": read_file(args.sample_tex) if args.sample_tex else "",
-        "DOCUMENT_CLS_CONTENT": (
-            read_file(args.document_cls) if args.document_cls else ""
-        ),
+        "DOCUMENT_CLS_CONTENT": (read_file(args.document_cls) if args.document_cls else ""),
         "COMMANDS_CONTENT": read_file(args.commands_file) if args.commands_file else "",
     }
 

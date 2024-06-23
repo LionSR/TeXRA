@@ -30,9 +30,7 @@ def find_last_non_empty_line(response):
 def extract_text_from_tags(INPUT_CONTENT, document_tag):
     import re
 
-    match = re.search(
-        r"<{}>(.*?)</{}>".format(document_tag, document_tag), INPUT_CONTENT, re.DOTALL
-    )
+    match = re.search(r"<{}>(.*?)</{}>".format(document_tag, document_tag), INPUT_CONTENT, re.DOTALL)
     if match:
         INPUT_CONTENT = match.group(1)
     return INPUT_CONTENT
@@ -41,20 +39,12 @@ def extract_text_from_tags(INPUT_CONTENT, document_tag):
 def check_for_massive_repetition(last_response, new_response):
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
-    longest_match = sequence_matcher.find_longest_match(
-        0, len(last_response), 0, len(new_response)
-    )
-    longest_matching_substring = last_response[
-        longest_match.a : longest_match.a + longest_match.size
-    ]
+    longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
+    longest_matching_substring = last_response[longest_match.a : longest_match.a + longest_match.size]
     massive_repetition_detected = len(longest_matching_substring) > 1000
     if massive_repetition_detected:
         print(colored(f"### repetition_ratio is {repetition_ratio}", "red"))
-        print(
-            colored(
-                f"### Longest matching substring: {longest_matching_substring}", "red"
-            )
-        )
+        print(colored(f"### Longest matching substring: {longest_matching_substring}", "red"))
         print("WARNING: Massive repetition detected. Stopping the process.")
     return massive_repetition_detected
 
@@ -75,18 +65,10 @@ def run_latexdiff(input_file, output_file):
 
     if "</scratchpad>" in output_content:
         with open(log_file_name, "a+") as log_file:
-            log_file.write(
-                "\n<scratchpad>\n"
-                + output_content.split("</scratchpad>")[0]
-                + "</scratchpad>\n"
-            )
+            log_file.write("\n<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
 
         output_content = output_content.split(
-            (
-                "<latex_document>"
-                if "<latex_document>" in output_content
-                else "</scratchpad>"
-            ),
+            ("<latex_document>" if "<latex_document>" in output_content else "</scratchpad>"),
             1,
         )[1].lstrip()
         with open(output_file, "w") as file:
@@ -137,9 +119,7 @@ def run_latexdiff_vc(input_file, commit_hash):
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command
-    latexdiff_vc_command = (
-        f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
-    )
+    latexdiff_vc_command = f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
     print(colored(f"Running latexdiff-vc command: {latexdiff_vc_command}", "green"))
     os.system(latexdiff_vc_command)
     print(colored(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue"))
