@@ -1,0 +1,128 @@
+{
+  "name": "coauthor",
+  "displayName": "CoAuthor",
+  "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
+  "version": "0.3.5",
+  "publisher": "Sirui Lu",
+  "engines": {
+    "vscode": "^1.89.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:coauthor"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "coauthor.cleanOutput",
+        "title": "Clean Output"
+      },
+      {
+        "command": "coauthor.cleanBuild",
+        "title": "Clean All"
+      },
+      {
+        "command": "coauthor.indentTex",
+        "title": "Indent TeX"
+      },
+      {
+        "command": "coauthor.packSingle",
+        "title": "Pack Single"
+      },
+      {
+        "command": "coauthor.cleanSingle",
+        "title": "Clean Single"
+      },
+      {
+        "command": "coauthor.latexDiff",
+        "title": "LaTeX Diff"
+      },
+      {
+        "command": "coauthor.latexDiffVC",
+        "title": "LaTeX Diff VC"
+      },
+      {
+        "command": "coauthor.getRecentCommits",
+        "title": "Get Recent Commits"
+      },
+      {
+        "command": "coauthor.refreshCommits",
+        "title": "Refresh Commits"
+      },
+      {
+        "command": "coauthor.selectInputFile",
+        "title": "Select Input File"
+      },
+      {
+        "command": "coauthor.selectAuxFile",
+        "title": "Select Auxiliary File"
+      },
+      {
+        "command": "coauthor.selectFigureFile",
+        "title": "Select Figure File"
+      },
+      {
+        "command": "coauthor.execute",
+        "title": "Execute Task"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "coauthor",
+          "title": "CoAuthor",
+          "icon": "resources/unicorn.svg"
+        }
+      ]
+    },
+    "views": {
+      "coauthor": [
+        {
+          "type": "webview",
+          "id": "coauthor.chatView",
+          "name": "CoAuthor Panel"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^18.19.34",
+    "@types/vscode": "^1.89.0",
+    "@typescript-eslint/eslint-plugin": "^7.11.0",
+    "@typescript-eslint/parser": "^7.11.0",
+    "@vscode/test-electron": "^2.4.0",
+    "eslint": "^8.57.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LionSR/coauthor-for-vs-code.git"
+  },
+  "license": "MIT",
+  "author": "Sirui LU",
+  "icon": "resources/unicorn.png",
+  "keywords": ["latex", "academic", "writing", "coauthor", "vscode"],
+  "bugs": {
+    "url": "https://github.com/LionSR/coauthor-for-vs-code/issues"
+  },
+  "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme"
+}
+
