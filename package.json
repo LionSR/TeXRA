@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "Sirui Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -125,3 +125,4 @@
   },
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme"
 }
+
