@@ -73,7 +73,7 @@ def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
 @click.command()
 @shared_arguments_long
 @click.option("--auxiliary_file", default=None, help="Path to the auxiliary file")
-def polish_tex(model, input_file, auxiliary_file=None, figure_input=None, instruction=None, reflect=False):
+def polish_tex(model, input_file, auxiliary_file=None, figure_input=None, instruction=None, reflect=True):
     execute_task(
         "edit_tex", "polish", model, input_file, auxiliary_file=auxiliary_file, figure_input=figure_input, instruction=instruction, reflect=reflect
     )
@@ -81,7 +81,7 @@ def polish_tex(model, input_file, auxiliary_file=None, figure_input=None, instru
 
 @click.command()
 @shared_arguments_long
-def draw_tex(model, input_file, figure_input, instruction=None, reflect=False):
+def draw_tex(model, input_file, figure_input, instruction=None, reflect=True):
     execute_task("edit_tex", "draw", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
 
 
@@ -99,20 +99,25 @@ def correct_st(model, input_file, reflect=False):
 
 @click.command()
 @shared_arguments_long
-def polish_st(model, input_file, figure_input, instruction=None, reflect=False):
+def polish_st(model, input_file, figure_input, instruction=None, reflect=True):
     execute_task("edit_lecture", "polish_st", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
 
 
 @click.command()
 @shared_arguments_long
-def polish_qi(model, input_file, figure_input, instruction=None, reflect=False):
+def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
     execute_task("edit_lecture", "polish_qi", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
 
 
 @click.command()
 @shared_arguments_long
-def draw_st(model, input_file, figure_input, instruction=None, reflect=False):
+def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
     execute_task("edit_lecture", "draw_st", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
+
+@click.command()
+@shared_arguments_long
+def draw_qi(model, input_file, figure_input, instruction=None, reflect=True):
+    execute_task("edit_lecture", "draw_qi", model, input_file, figure_input=figure_input, instruction=instruction, reflect=reflect)
 
 
 @click.command()
@@ -510,6 +515,7 @@ cli.add_command(correct_qi)
 cli.add_command(polish_st)
 cli.add_command(polish_qi)
 cli.add_command(draw_st)
+cli.add_command(draw_qi)
 
 # meeting2text.py
 cli.add_command(meeting2text)

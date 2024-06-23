@@ -75,7 +75,7 @@ def run_latexdiff(input_file, output_file):
             file.write(output_content)
 
     # Run latexdiff
-    latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
+    latexdiff_command = f"latexdiff -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
     os.system(latexdiff_command)
     print(colored(f"latexdiff completed. Output saved to {diff_file_name}", "blue"))
