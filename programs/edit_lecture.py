@@ -66,13 +66,16 @@ def main():
     user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
+        "DOCUMENT_CLS": "lecture.cls",
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
         # "DOCUMENT_CLS_CONTENT": read_file("exercise.cls"),
         "INSTRUCTION": args.instruction if args.instruction else None,
     }
     if "qi" in args.task:
+        user_prefix_vars["COMMANDS"] = "commands_qi.tex"
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("commands_qi.tex")
     elif "st" in args.task:
+        user_prefix_vars["COMMANDS"] = "command.tex"
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
 
     if "correct" in args.task:
