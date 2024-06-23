@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
+import * as path from 'path';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -19,6 +20,64 @@ export function activate(context: vscode.ExtensionContext) {
     return terminal;
   }
   context.subscriptions.push(
+    vscode.commands.registerCommand('coauthor.selectMultipleFiles', async (currentInputFile: string) => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+  
+      const defaultUri = currentInputFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
+        : vscode.Uri.file(workspacePath);
+      
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Files',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Text files': ['tex', 'txt']
+        }
+      });
+      if (fileUris && fileUris.length > 0) {
+        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        return relativePaths;
+      }
+      return null;
+    }),
+    vscode.commands.registerCommand('coauthor.selectMultipleFigures', async (currentFigureFile: string) => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+  
+      const defaultUri = currentFigureFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
+        : vscode.Uri.file(workspacePath);
+      
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Figures',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Image files': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'pdf']
+        }
+      });
+      if (fileUris && fileUris.length > 0) {
+        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        return relativePaths;
+      }
+      return null;
+    }),
     vscode.commands.registerCommand('coauthor.packSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
@@ -167,16 +226,32 @@ export function activate(context: vscode.ExtensionContext) {
 
       terminal_new.sendText(command);
     }),
-    vscode.commands.registerCommand('coauthor.selectInputFile', async () => {
+    vscode.commands.registerCommand('coauthor.selectInputFile', async (currentInputFile: string) => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      const defaultUri = currentInputFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
+        : vscode.Uri.file(workspacePath);
+
       const fileUri = await vscode.window.showOpenDialog({
         canSelectMany: false,
         openLabel: 'Select File',
         canSelectFiles: true,
-        canSelectFolders: false
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Text files': ['tex', 'txt']
+        }
       });
       if (fileUri && fileUri[0]) {
-        vscode.window.showInformationMessage(`Selected file: ${fileUri[0].fsPath}`);
-        return fileUri[0].fsPath;
+        const relativePath = path.relative(workspacePath, fileUri[0].fsPath);
+        vscode.window.showInformationMessage(`Selected file: ${relativePath}`);
+        return relativePath;
       }
       return null;
     }),
@@ -253,6 +328,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFilePath_val = message.figureFilePath;
           vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFilePath_val);
           break;
+        case 'selectMultipleFiles':
+          const selectedFiles = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
+          if (selectedFiles) {
+            webviewView.webview.postMessage({ command: 'setSelectedFiles', files: selectedFiles });
+          }
+          break;
         case 'selectInputFile':
           const inputFilePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
           if (inputFilePath) {
@@ -269,6 +350,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFilePath = await vscode.commands.executeCommand<string>('coauthor.selectFigureFile');
           if (figureFilePath) {
             webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFilePath });
+          }
+          break;
+        case 'selectMultipleFigures':
+          const selectedFigures = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFigures', message.currentFigureFile);
+          if (selectedFigures) {
+            webviewView.webview.postMessage({ command: 'setSelectedFigures', files: selectedFigures });
           }
           break;
         case 'selectRevisionFile':
@@ -437,6 +524,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       select#commitSelect {
         width: 100%;
         }
+      #selectedFiles {
+        margin-top: 10px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        max-height: 100px;
+        overflow-y: auto;
+      }
       </style>
       <script>
         const vscode = acquireVsCodeApi();
@@ -472,6 +566,20 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({
               command: 'inputFileSelected',
               filePath: inputFilePath
+            });
+          });
+          document.getElementById('selectMultipleFilesButton').addEventListener('click', function() {
+            const currentInputFile = document.getElementById('inputFileSelect').value;
+            vscode.postMessage({
+              command: 'selectMultipleFiles',
+              currentInputFile: currentInputFile
+            });
+          });
+          document.getElementById('selectMultipleFiguresButton').addEventListener('click', function() {
+            const currentFigureFile = document.getElementById('figureFileSelect').value;
+            vscode.postMessage({
+              command: 'selectMultipleFigures',
+              currentFigureFile: currentFigureFile
             });
           });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
@@ -612,6 +720,35 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         window.addEventListener('message', event => {
           const message = event.data;
           switch (message.command) {
+            case 'setSelectedFiles':
+              const selectedFilesDiv = document.getElementById('selectedFiles');
+              if (message.files && message.files.length > 1) {
+                selectedFilesDiv.innerHTML = '';
+                message.files.forEach(file => {
+                  const fileElement = document.createElement('div');
+                  fileElement.textContent = file;
+                  selectedFilesDiv.appendChild(fileElement);
+                });
+                selectedFilesDiv.style.display = 'block';
+              } else {
+                selectedFilesDiv.style.display = 'none';
+              }
+              break;
+            case 'setSelectedFigures':
+              const selectedFiguresDiv = document.getElementById('selectedFigures');
+              if (message.files && message.files.length > 0) {
+                selectedFiguresDiv.innerHTML = '';
+                message.files.forEach(file => {
+                  const fileElement = document.createElement('div');
+                  fileElement.textContent = file;
+                  selectedFiguresDiv.appendChild(fileElement);
+                });
+                selectedFiguresDiv.style.display = 'block';
+                document.getElementById('figureFileSelect').value = message.files.join(',');
+              } else {
+                selectedFiguresDiv.style.display = 'none';
+              }
+              break;
             case 'setInputFiles':
               const inputFileSelect = document.getElementById('inputFileSelect');
               inputFileSelect.innerHTML = '';
@@ -719,16 +856,20 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </select>
       </p>
       <p>
-        <label for="inputFileSelect">Select Input File:</label><br>
+        <label for="inputFileSelect">Select Input File:</label>
+        <button id="selectMultipleFilesButton" style="float: right;">Select Multiple Files</button><br>
         <select id="inputFileSelect"></select>
+        <div id="selectedFiles" style="display: none;"></div>
       </p>
       <p>
         <label for="auxFileSelect">Select Auxiliary File:</label><br>
         <select id="auxFileSelect"></select>
       </p>
       <p>
-        <label for="figureFileSelect">Select Figure File:</label><br>
+        <label for="figureFileSelect">Select Figure File:</label>
+        <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple Figures</button><br>
         <select id="figureFileSelect"></select>
+        <div id="selectedFigures" style="display: none;"></div>
       </p>
       <p>
         <label for="taskInputArea">Specific Instructions:</label>
@@ -769,7 +910,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
         <button id="latexDiffButton" style="float: right;">latexdiff</button>
         <select id="revisionFileSelect"></select>
-
       </p>
       <p>
         <label for="commitSelect">Select Commit:</label>
