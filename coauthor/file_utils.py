@@ -70,6 +70,9 @@ def run_latexdiff(input_file, output_file):
     with open(output_file, "r") as file:
         output_content = file.read()
 
+    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
+    output_content = output_content.replace("\\end{document>", "\\end{document}")
+
     if "</scratchpad>" in output_content:
         with open(log_file_name, "a+") as log_file:
             log_file.write(
@@ -89,9 +92,6 @@ def run_latexdiff(input_file, output_file):
         with open(output_file, "w") as file:
             file.write(output_content)
 
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
-    
     # Run latexdiff
     latexdiff_command = f"latexdiff {input_file} {output_file} > {diff_file_name}"
     print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
