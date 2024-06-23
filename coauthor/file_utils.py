@@ -86,15 +86,17 @@ def run_latexdiff(input_file, output_file):
 
     with open(diff_file_name, "w") as diff_file:
         add_block = False
+        packages_to_add_newline = [
+            "\\usepackage{tikz}",
+            "\\usepackage{pgfplots}",
+            "\\providecommand{\\DIFaddbegin}",
+            "\\RequirePackage[normalem]{ulem}",
+            "\\usetikzlibrary",
+        ]
         for line in lines:
             if any(
                 pkg in line
-                for pkg in [
-                    "\\usepackage{tikz}",
-                    "\\usepackage{pgfplots}",
-                    "\\providecommand{\\DIFaddbegin}",
-                    "\\RequirePackage[normalem]{ulem}",
-                ]
+                for pkg in packages_to_add_newline
             ):
                 diff_file.write("\n")
 
@@ -131,8 +133,10 @@ def run_latexdiff_vc(input_file, commit_hash):
     with open(diff_file_name, "w") as diff_file:
         packages_to_add_newline = [
             "\\usepackage{tikz}",
+            "\\usepackage{pgfplots}",
             "\\providecommand{\\DIFaddbegin}",
             "\\RequirePackage[normalem]{ulem}",
+            "\\usetikzlibrary",
         ]
         for line in lines:
             if any(pkg in line for pkg in packages_to_add_newline):
