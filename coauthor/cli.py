@@ -2,7 +2,6 @@ import click
 import subprocess
 import os
 import glob
-import fnmatch
 import shutil
 from datetime import datetime
 from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
@@ -19,26 +18,16 @@ def get_common_env(model):
 # Define a decorator for shared arguments
 def shared_arguments(func):
     func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(
-        func
-    )
-    func = click.option(
-        "--reflect", required=False, default=None, help="Reflect on the changes"
-    )(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
+    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
     return func
 
 
 def shared_arguments_long(func):
     func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(
-        func
-    )
-    func = click.option(
-        "--reflect", required=False, default=None, help="Reflect on the changes"
-    )(func)
-    func = click.option(
-        "--instruction", required=False, default=None, help="Instruction for processing"
-    )(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
+    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
+    func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
     func = click.option(
         "--figure_input",
         required=False,
@@ -72,9 +61,7 @@ def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
 
 @click.command()
 @shared_arguments_long
-@click.option(
-    "--auxiliary_file", required=False, default=None, help="Path to the auxiliary file"
-)
+@click.option("--auxiliary_file", required=False, default=None, help="Path to the auxiliary file")
 def polish_tex(
     model,
     input_file,
@@ -156,9 +143,7 @@ def paper2note(
 @click.argument("sample_tex")
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
+@click.option("--instruction", required=False, default=None, help="Instruction for processing")
 def adapt(
     model,
     input_file,
@@ -395,9 +380,7 @@ def reply_letter_prl(input_file, supp_file="supp.tex", reflect=True):
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(
-    input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True
-):
+def revise_main_prl(input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True):
     model, script_dir, prompt_dir = get_common_env()
     command = [
         "python",
@@ -484,94 +467,65 @@ def polish_prl_reply(input_file, main_content, supp_file="supp.tex", reflect=Tru
 
 @click.command()
 def clean_output():
-    excluded_dirs = {
-        "Figs",
-        "Figures",
-        "build",
-        "Versions",
-        "versions",
-        "figs",
-        "figures",
-        "Notes",
-    }
-    patterns = [
-        "*_opus.tex",
-        "*_sonnet.tex",
-        "*_sonnet+.tex",
-        "*_haiku.tex",
-        "*_gpt4t.tex",
-        "*_gpt4o.tex",
-        "*_opus_diff.tex",
-        "*_sonnet_*.tex",
-        "*_sonnet+_*.tex",
-        "*_haiku_*.tex",
-        "*_gpt4t_*.tex",
-        "*_gpt4o_*.tex",
-    ]
-    patterns_build = [
-        "*/build/*_opus*",
-        "*/build/*_sonnet*",
-        "*/build/*_sonnet+*",
-        "*/build/*_haiku*",
-        "*/build/*_gpt4t*",
-        "*/build/*_gpt4o*",
-    ]
+    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o"]
+
+    patterns = [f"*_{model}*.tex" for model in models]
+    patterns_build = [f"*/build/*_{model}*" for model in models]
+
     files_to_delete = []
 
-    # Walk through all directories and files, excluding specific directories
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [
-            d for d in dirs if d not in excluded_dirs
-        ]  # Modify dirs in-place to exclude certain directories
+        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
+
         for pattern in patterns:
-            for filename in fnmatch.filter(files, pattern):
-                files_to_delete.append(os.path.join(root, filename))
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
 
         for pattern in patterns_build:
-            files_to_delete.extend(
-                glob.glob(os.path.join(root, pattern), recursive=True)
-            )
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
 
-    # Perform the deletion
     for file in files_to_delete:
-        print(f"Deleted: {file}")
-        os.remove(file)
+        try:
+            os.remove(file)
+            print(f"Deleted: {file}")
+        except OSError as e:
+            print(f"Error deleting {file}: {e}")
 
     print("Cleanup complete.")
 
 
 @click.command()
 def clean_build():
-    # Delete all PDF files in the current directory
-    pdf_files = glob.glob("./*.pdf", recursive=False)  # Only in the current directory
-    for pdf_file in pdf_files:
-        os.remove(pdf_file)
-
-    # Delete all non-empty files in the build directory
-    build_files = glob.glob(
-        "./build/*", recursive=False
-    )  # Only in the build directory, not subdirectories
-    for build_file in build_files:
-        if os.path.isfile(build_file) and os.path.getsize(build_file) > 0:
-            os.remove(build_file)
-        elif os.path.isdir(build_file) and os.listdir(build_file):
-            shutil.rmtree(build_file)
-
-    # Delete all PDF files and files in the build directory in subdirectories
     excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-    non_forbidden_subdirs = []
-    for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in excluded_dirs]
-        non_forbidden_subdirs.extend([os.path.join(root, d) for d in dirs])
 
-    for subdir in non_forbidden_subdirs:
-        for file in os.listdir(subdir):
-            if file.endswith(".pdf"):
-                os.remove(os.path.join(subdir, file))
+    def remove_files(directory, pattern):
+        for file in glob.glob(os.path.join(directory, pattern)):
+            os.remove(file)
+            print(f"Deleted: {file}")
 
-        build_dir = os.path.join(subdir, "build")
-        if os.path.isdir(build_dir) and os.listdir(build_dir):
-            shutil.rmtree(build_dir)
+    def clean_build_dir(directory):
+        build_dir = os.path.join(directory, "build")
+        if os.path.isdir(build_dir):
+            for item in os.listdir(build_dir):
+                item_path = os.path.join(build_dir, item)
+                if os.path.isfile(item_path) and os.path.getsize(item_path) > 0:
+                    os.remove(item_path)
+                    print(f"Deleted: {item_path}")
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                    print(f"Deleted directory: {item_path}")
+
+    # Clean current directory
+    remove_files(".", "*.pdf")
+    clean_build_dir(".")
+
+    # Clean subdirectories
+    for root, dirs, _ in os.walk(".", topdown=True):
+        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
+        for dir in dirs:
+            subdir = os.path.join(root, dir)
+            remove_files(subdir, "*.pdf")
+            clean_build_dir(subdir)
 
     print("All specified files have been deleted.")
 
@@ -599,9 +553,7 @@ def indent_tex():
                 tex_files.append(os.path.join(root, file))
         non_forbidden_subdirs.extend([os.path.join(root, d) for d in dirs])
 
-    latexindent_config = os.environ.get(
-        "LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml"
-    )
+    latexindent_config = os.environ.get("LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml")
 
     for tex_file in tex_files:
         subprocess.run(
@@ -616,17 +568,13 @@ def indent_tex():
             stderr=subprocess.DEVNULL,
         )
     # Delete all .bak and indent.log files in the current directory
-    files_to_delete = glob.glob("./*.bak0", recursive=True) + glob.glob(
-        "./indent.log", recursive=True
-    )
+    files_to_delete = glob.glob("./*.bak0", recursive=True) + glob.glob("./indent.log", recursive=True)
     for file in files_to_delete:
         os.remove(file)
 
     # Delete all .bak and indent.log files in non-forbidden subdirectories
     for subdir in non_forbidden_subdirs:
-        files_to_delete = glob.glob(
-            os.path.join(subdir, "*.bak0"), recursive=True
-        ) + glob.glob(os.path.join(subdir, "indent.log"), recursive=True)
+        files_to_delete = glob.glob(os.path.join(subdir, "*.bak0"), recursive=True) + glob.glob(os.path.join(subdir, "indent.log"), recursive=True)
         for file in files_to_delete:
             os.remove(file)
 
@@ -644,30 +592,15 @@ def clean_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_patterns(base, model, task, reflect):
-        patterns = [
-            f"{base}_{task}_{model}{ext}"
-            for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-        ]
+        patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
         if reflect and reflect != "False":
-            patterns.extend(
-                [
-                    f"{base}_{task}_reflect_{model}{ext}"
-                    for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-                ]
-            )
+            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
         return patterns
 
     file_patterns = get_patterns(base_name, model, first_task_chunk, reflect)
-    temp_patterns = [
-        f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]
-    ]
+    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
     if reflect and reflect != "False":
-        temp_patterns.extend(
-            [
-                f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}"
-                for suffix in ["", "_diff"]
-            ]
-        )
+        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
 
     temp_extensions = [
         ".aux",

@@ -49,9 +49,7 @@ def process_text(text, document):
                 "-----------------------------------------------------------------------",
                 style="Response Heading",
             )
-            document.add_paragraph(
-                f"Responses to Referee {line[-2].upper()}", style="Response Heading"
-            )
+            document.add_paragraph(f"Responses to Referee {line[-2].upper()}", style="Response Heading")
         elif line.startswith("</point_by_point_reply_"):
             pass
         elif line.startswith("<referee_comment>"):
@@ -85,9 +83,7 @@ def process_text(text, document):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--input_file", help="The input file containing the structured text"
-    )
+    parser.add_argument("--input_file", help="The input file containing the structured text")
     args = parser.parse_args()
 
     # Read the structured text from the file
