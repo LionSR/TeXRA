@@ -1,18 +1,24 @@
 I will provide you with a LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
-Here is the LaTeX document {INPUT_FILE} with additional LaTeX document class and commands (where has defined the math commands you should use):
+Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
-<document_class>
-{DOCUMENT_CLS_CONTENT}
-</document_class>
-
-<commands>
-{COMMANDS_CONTENT}
-</commands>
-
-<latex_document>
-{INPUT_CONTENT}
-</latex_document>
+<documents>
+    <document index="1">
+        <source>{DOCUMENT_CLS}</source>
+    <document_content>
+        {DOCUMENT_CLS_CONTENT}
+    </document_content>
+    <document index="2">
+        <source>{COMMANDS}</source>
+    <document_content>
+        {COMMANDS_CONTENT}
+    </document_content>
+    <document index="3">
+        <source>{INPUT_FILE}</source>
+    <document_content>
+        {INPUT_CONTENT}
+    </document_content>
+</documents>
 
 Please thoroughly analyze the entire draft chapter above, focusing on:
 1. The overall context and subject matter of the chapter
@@ -40,3 +46,7 @@ Please use your expertise in physics, machine learning, LaTeX, and TikZ to creat
 - Consistent with graduate-level physics textbook standards
 
 Prepare to analyze, brainstorm, and implement improvements to the figures in this chapter, keeping the specific instruction as your primary focus.
+
+
+
+

@@ -1,14 +1,21 @@
 I am going to give you a long latex document of a chapter on stochastic thermodynamics and machine learning. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the latex document {INPUT_FILE} with additional LaTeX document class and commands:
-<document_class>
-{DOCUMENT_CLS_CONTENT}
-</document_class>
+Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
-<commands>
-{COMMANDS_CONTENT}
-</commands>
-
-<latex_document>
-{INPUT_CONTENT}
-</latex_document>
+<documents>
+    <document index="1">
+        <source>{DOCUMENT_CLS}</source>
+    <document_content>
+        {DOCUMENT_CLS_CONTENT}
+    </document_content>
+    <document index="2">
+        <source>{COMMANDS}</source>
+    <document_content>
+        {COMMANDS_CONTENT}
+    </document_content>
+    <document index="3">
+        <source>{INPUT_FILE}</source>
+    <document_content>
+        {INPUT_CONTENT}
+    </document_content>
+</documents>
