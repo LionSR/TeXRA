@@ -450,6 +450,17 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           restoreState();
         };        
         document.addEventListener('DOMContentLoaded', function() {
+          document.getElementById('taskSelect').addEventListener('change', function() {
+            const selectedTask = this.value;
+            if (selectedTask.startsWith('correct')) {
+              document.getElementById('figureFileSelect').value = '';
+              document.getElementById('reflectSelect').value = 'False';
+            } else {
+              // Refresh the figure file options
+              vscode.postMessage({ command: 'requestFigureFiles' });
+            }
+            saveState();
+          });
           document.getElementById('modelSelect').addEventListener('change', function() {
             vscode.postMessage({
               command: 'modelSelect',
