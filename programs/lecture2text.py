@@ -57,8 +57,10 @@ def main():
 
     user_prefix_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
+        "DOCUMENT_CLS": "lecture.cls",
         "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
-        "COMMANDS_QI_CONTENT": read_file("commands_qi.tex"),
+        "COMMANDS": "commands_qi.tex",
+        "COMMANDS_CONTENT": read_file("commands_qi.tex"),
     }
 
     if args.task in ["2tex", "reflect"]:
