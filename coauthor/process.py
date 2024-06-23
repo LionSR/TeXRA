@@ -127,9 +127,7 @@ def process_file_with_llm(
                         {"type": "text", "text": f"{user_prefix}"},
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{media_type};base64,{base64_image}"
-                            },
+                            "image_url": {"url": f"data:{media_type};base64,{base64_image}"},
                         },
                         {"type": "text", "text": f"{user_request}"},
                     ],
@@ -194,18 +192,12 @@ def process_file_with_llm(
     print_message_summary(state, model)
 
     if end_turn and reflect:
-        assistant_reflect_prefill_first = task_settings.get(
-            "first_prefill_reflect", assistant_prefill_first
-        )
+        assistant_reflect_prefill_first = task_settings.get("first_prefill_reflect", assistant_prefill_first)
         print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
-        user_request_reflect = load_prompt(
-            "user_reflect", task, prompt_path, task_settings
-        )
+        user_request_reflect = load_prompt("user_reflect", task, prompt_path, task_settings)
         print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
         user_message = f"{user_request_reflect}\n"
-        output_file_reflect = output_file.replace(
-            f"_{model}.{output_type}", f"_reflect_{model}.{output_type}"
-        )
+        output_file_reflect = output_file.replace(f"_{model}.{output_type}", f"_reflect_{model}.{output_type}")
         messages.append({"role": "user", "content": user_message})
 
         if output_type == "tex" and use_prefill_from_input:
@@ -215,12 +207,8 @@ def process_file_with_llm(
         else:
             accumulated_output = assistant_reflect_prefill_first
 
-        messages.append(
-            {"role": "assistant", "content": assistant_reflect_prefill_first}
-        )
-        print(
-            f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}"
-        )
+        messages.append({"role": "assistant", "content": assistant_reflect_prefill_first})
+        print(f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}")
 
         state["last_response"] = accumulated_output
         state["continuation_count"] = 0
@@ -271,9 +259,7 @@ def process_response_cycle(
             input_tokens,
             output_tokens,
             stop_reason,
-        ) = extract_response_statistics(
-            response_object, model_settings["model"], model_settings["end_tag"]
-        )
+        ) = extract_response_statistics(response_object, model_settings["model"], model_settings["end_tag"])
 
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
@@ -309,9 +295,7 @@ def process_response_cycle(
             print("Appending to file")
             append_file(output_file, best_connector + new_response)
 
-        print(
-            f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}"
-        )
+        print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
 
         # the previous continue logic (see below)
         # messages[-1] = {"role": "assistant", "content": new_response}
@@ -321,9 +305,7 @@ def process_response_cycle(
         if messages[-1]["role"] == "assistant":
             messages[-1]["content"] = accumulated_output
 
-        massive_repetition_detected = check_for_massive_repetition(
-            state["last_response"], new_response
-        )
+        massive_repetition_detected = check_for_massive_repetition(state["last_response"], new_response)
 
         state["last_response"] = new_response
 
@@ -332,24 +314,14 @@ def process_response_cycle(
         continuation_limit = state["continuation_count"] > 10
         input_token_limit = input_tokens > 100000
 
-        output_token_limit = (
-            state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
-        )  # should be 1.3 for translation/transcribe tasks
+        output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]  # should be 1.3 for translation/transcribe tasks
 
         if output_token_limit:
-            print(
-                "WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process."
-            )
+            print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
         if continuation_limit:
             print("Stopping after 10 continuations or 100,000 input tokens")
 
-        should_stop = (
-            encounter_document_tag
-            or continuation_limit
-            or input_token_limit
-            or massive_repetition_detected
-            or output_token_limit
-        )
+        should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
 
         if should_stop:
             print("Printing the flags")

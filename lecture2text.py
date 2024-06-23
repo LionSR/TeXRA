@@ -62,9 +62,7 @@ def main():
     }
 
     if args.task in ["2tex", "reflect"]:
-        user_prefix_vars["INPUT_CONTENT"] = extract_text_from_tags(
-            read_file(args.input_file), "improved_document"
-        )
+        user_prefix_vars["INPUT_CONTENT"] = extract_text_from_tags(read_file(args.input_file), "improved_document")
     elif args.task in ["transcribe", "punctuate"]:
         user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
 
