@@ -27,11 +27,11 @@ export function activate(context: vscode.ExtensionContext) {
         return null;
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
-  
+
       const defaultUri = currentInputFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
         : vscode.Uri.file(workspacePath);
-      
+
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         openLabel: 'Select Files',
@@ -56,11 +56,11 @@ export function activate(context: vscode.ExtensionContext) {
         return null;
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
-  
+
       const defaultUri = currentFigureFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
         : vscode.Uri.file(workspacePath);
-      
+
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         openLabel: 'Select Figures',
@@ -118,9 +118,9 @@ export function activate(context: vscode.ExtensionContext) {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
-    
+
       terminal.sendText(`coauthor latexdiff ${inputFilePath} ${revisionFilePath}`);
-    
+
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
         try {
@@ -152,10 +152,10 @@ export function activate(context: vscode.ExtensionContext) {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
-    
+
       // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
       terminal.sendText(`coauthor latexdiff-vc ${inputFilePath} ${commitHash}`);
-        
+
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
         try {
@@ -197,12 +197,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFilePath: string) => {
-      const terminalName = `${task}@${model}`;
-      const terminal_new = vscode.window.createTerminal(terminalName);
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[]) => {
+      const terminal_new = ensureTerminal();
       terminal_new.show();
 
       let command = `coauthor ${task} ${inputFilePath}`;
+
       if (auxFilePath) {
         command += ` --auxiliary_file=${auxFilePath}`;
       }
@@ -220,8 +220,14 @@ export function activate(context: vscode.ExtensionContext) {
       if (reflect !== 'default') {
         command += ` --reflect=${reflect}`;
       }
-      if (figureFilePath) {
-        command += ` --figure_input="${figureFilePath}"`;
+      if (figureFiles) {
+        const figureFileList = Array.isArray(figureFiles) ? figureFiles : [figureFiles];
+        if (figureFileList.length > 0) {
+          command += ` --figure_input="${figureFileList.join(',')}"`;
+        }
+      }
+      if (additionalInputFiles && additionalInputFiles.length > 0) {
+        command += ` --input_files="${additionalInputFiles.join(',')}"`;
       }
 
       terminal_new.sendText(command);
@@ -325,8 +331,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const instructions_val = message.instructions;
           const reflect_val = message.reflect;
           const model_val = message.model;
-          const figureFilePath_val = message.figureFilePath;
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFilePath_val);
+          const additionalInputFiles_val = message.additionalInputFiles;
+          const figureFiles_val = message.figureFiles;
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val);
           break;
         case 'selectMultipleFiles':
           const selectedFiles = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
@@ -364,19 +371,19 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'revisionFileSelected', filePath: revisionFilePath });
           }
           break;
-        case 'requestInputFiles':
+        case 'requestInputFile':
           const files = await this.listInputFiles();
-          webviewView.webview.postMessage({ command: 'setInputFiles', files: files });
+          webviewView.webview.postMessage({ command: 'setInputFile', files: files });
           break;
-        case 'requestAuxFiles':
+        case 'requestAuxFile':
           const auxFiles = await this.listAuxFiles();
-          webviewView.webview.postMessage({ command: 'setAuxFiles', files: auxFiles });
+          webviewView.webview.postMessage({ command: 'setAuxFile', files: auxFiles });
           break;
-        case 'requestFigureFiles':
+        case 'requestFigureFile':
           const figureFiles = await this.listFigureFiles();
-          webviewView.webview.postMessage({ command: 'setFigureFiles', files: figureFiles });
+          webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
           break;
-        case 'requestRevisionFiles':
+        case 'requestRevisionFile':
           const allRevisionFiles = await this.listRevisionFiles(message.inputFilePath);
           webviewView.webview.postMessage({ command: 'setRevisionFiles', files: allRevisionFiles });
           break;
@@ -489,11 +496,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const files = await Promise.all(dirEntries.map(async ([name, type]) => {
       const fullPath = `${dir}/${name}`;
       const relativePath = fullPath.replace(`${root}/`, '');
-      
+
       // Check if the entry is a symbolic link
       const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
       const isSymbolicLink = (stat.type & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
-      
+
       if ((type === vscode.FileType.Directory || isSymbolicLink) && !name.startsWith('.') && !excludeDirectories.includes(name)) {
         // If it's a directory or a symbolic link, recursively process it
         return await this.getFilesRecursively(fullPath, root, includeExtensions, excludeExtensions, excludeDirectories, excludeKeywords);
@@ -524,21 +531,35 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       select#commitSelect {
         width: 100%;
         }
-      #selectedFiles {
-        margin-top: 10px;
-        padding: 5px;
-        border: 1px solid #ccc;
-        max-height: 100px;
-        overflow-y: auto;
-      }
+        #selectedFiles,
+        #selectedFigures {
+          margin-top: 10px;
+          padding: 5px;
+          border: 1px solid #ccc;
+          max-height: 100px;
+          overflow-y: auto;
+          background-color: #f0f0f0;
+        }
+        #selectedFiles div,
+        #selectedFigures div {
+          margin-bottom: 2px;
+          padding: 2px;
+          background-color: #ffffff;
+        }
       </style>
       <script>
         const vscode = acquireVsCodeApi();
+
+        function getSelectedFiles(selectedFilesDiv) {
+          const fileElements = selectedFilesDiv.getElementsByTagName('div');
+          return Array.from(fileElements).map(el => el.textContent || '');
+        }
+
         window.onload = function() {
-          vscode.postMessage({ command: 'requestInputFiles' });
-          vscode.postMessage({ command: 'requestAuxFiles' });
-          vscode.postMessage({ command: 'requestFigureFiles' });
-          vscode.postMessage({ command: 'requestRevisionFiles' });
+          vscode.postMessage({ command: 'requestInputFile' });
+          vscode.postMessage({ command: 'requestAuxFile' });
+          vscode.postMessage({ command: 'requestFigureFile' });
+          vscode.postMessage({ command: 'requestRevisionFile' });
           vscode.postMessage({ command: 'requestRecentCommits' });
           // Restore previous state
           restoreState();
@@ -551,7 +572,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               document.getElementById('reflectSelect').value = 'False';
             } else {
               // Refresh the figure file options
-              vscode.postMessage({ command: 'requestFigureFiles' });
+              vscode.postMessage({ command: 'requestFigureFile' });
             }
             saveState();
           });
@@ -605,6 +626,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const instructions = document.getElementById('taskInput').value;
             const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
+
+            // Get additional input files
+            const selectedFilesDiv = document.getElementById('selectedFiles');
+            const additionalInputFiles = getSelectedFiles(selectedFilesDiv).filter(file => file !== inputFilePath);
+            
+            // Get figure files
+            const selectedFiguresDiv = document.getElementById('selectedFigures');
+            const figureFiles = getSelectedFiles(selectedFiguresDiv);
+
             vscode.postMessage({
               command: 'execute',
               task: task,
@@ -613,7 +643,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               instructions: instructions,
               reflect: reflect,
               model: model,
-              figureFilePath: figureFilePath
+              additionalInputFiles: additionalInputFiles,
+              figureFiles: figureFiles.length > 0 ? figureFiles : (figureFilePath ? [figureFilePath] : [])
             });
           });
           document.getElementById('packSingleButton').addEventListener('click', function() {
@@ -749,7 +780,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 selectedFiguresDiv.style.display = 'none';
               }
               break;
-            case 'setInputFiles':
+            case 'setInputFile':
               const inputFileSelect = document.getElementById('inputFileSelect');
               inputFileSelect.innerHTML = '';
               message.files.forEach(file => {
@@ -759,7 +790,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 inputFileSelect.appendChild(option);
               });
               break;
-            case 'setAuxFiles':
+            case 'setAuxFile':
               const auxFileSelect = document.getElementById('auxFileSelect');
               auxFileSelect.innerHTML = '';
               const emptyOption = document.createElement('option');
@@ -773,7 +804,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 auxFileSelect.appendChild(option);
               });
               break;
-            case 'setFigureFiles':
+            case 'setFigureFile':
               const figureFileSelect = document.getElementById('figureFileSelect');
               figureFileSelect.innerHTML = '';
               const emptyFigureOption = document.createElement('option');
@@ -804,7 +835,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'inputFileSelected':
               document.getElementById('inputFileSelect').value = message.filePath;
               vscode.postMessage({
-                command: 'requestRevisionFiles',
+                command: 'requestRevisionFile',
                 inputFilePath: message.filePath
               });
               break;
