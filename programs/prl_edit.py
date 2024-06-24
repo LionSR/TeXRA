@@ -56,7 +56,7 @@ def main():
     if args.task == "correct_prl":
         user_prefix_vars["SUPP_CONTENT"] = read_file("supp.tex")
     elif args.task == "correct_supp_prl":
-        user_prefix_vars["main_content"] = read_file(args.auxiliary_file)
+        user_prefix_vars["main_content"] = read_file(args.auxiliary_files)
 
     task_settings = all_tasks_settings[args.task]
 
