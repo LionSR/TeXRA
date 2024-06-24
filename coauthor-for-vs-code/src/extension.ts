@@ -52,6 +52,30 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return null;
     }),
+    vscode.commands.registerCommand('coauthor.selectMultipleAuxFiles', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+    
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Auxiliary Files',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        filters: {
+          'Text files': ['txt', 'tex', 'cls']
+        }
+      });
+      if (fileUris && fileUris.length > 0) {
+        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        return relativePaths;
+      }
+      return null;
+    }),
     vscode.commands.registerCommand('coauthor.selectMultipleFigures', async (currentFigureFile: string) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
@@ -217,14 +241,31 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFilePath: string, instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[]) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[]) => {
       const terminal_new = ensureTerminal();
       terminal_new.show();
 
       let command = `coauthor ${task} ${inputFilePath}`;
+      
+      if (additionalInputFiles && additionalInputFiles.length > 0) {
+        command += ` --input_files="${additionalInputFiles.join(',')}"`;
+      }
+      if (auxFiles) {
+        const auxFileList = Array.isArray(auxFiles) ? auxFiles : [auxFiles];
+        if (auxFileList.length === 1) {
+          command += ` --auxiliary_files="${auxFileList[0]}"`;
+        } else if (auxFileList.length > 1) {
+          command += ` --auxiliary_files="${auxFileList.join(',')}"`;
+        }
+      }
 
-      if (auxFilePath) {
-        command += ` --auxiliary_file=${auxFilePath}`;
+      if (figureFiles) {
+        const figureFileList = Array.isArray(figureFiles) ? figureFiles : [figureFiles];
+        if (figureFileList.length === 1) {
+          command += ` --figure_inputs="${figureFileList[0]}"`;
+        } else if (figureFileList.length > 1) {
+          command += ` --figure_inputs="${figureFileList.join(',')}"`;
+        }
       }
       if (instructions) {
         const escapedInstructions = instructions
@@ -239,15 +280,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
       if (reflect !== 'default') {
         command += ` --reflect=${reflect}`;
-      }
-      if (figureFiles) {
-        const figureFileList = Array.isArray(figureFiles) ? figureFiles : [figureFiles];
-        if (figureFileList.length > 0) {
-          command += ` --figure_input="${figureFileList.join(',')}"`;
-        }
-      }
-      if (additionalInputFiles && additionalInputFiles.length > 0) {
-        command += ` --input_files="${additionalInputFiles.join(',')}"`;
       }
 
       terminal_new.sendText(command);
@@ -347,20 +379,14 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'execute':
           const task_val = message.task;
           const inputFilePath_val = message.inputFilePath;
-          const auxFilePath_val = message.auxFilePath;
+          const auxFiles_val = message.auxFiles;
           const instructions_val = message.instructions;
           const reflect_val = message.reflect;
           const model_val = message.model;
           const additionalInputFiles_val = message.additionalInputFiles;
           const figureFiles_val = message.figureFiles;
 
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val);
-          break;
-        case 'selectMultipleFiles':
-          const multipleFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
-          if (multipleFilesSelect) {
-            webviewView.webview.postMessage({ command: 'setMultipleFiles', files: multipleFilesSelect });
-          }
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val);
           break;
         case 'selectInputFile':
           const inputFilePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
@@ -378,6 +404,18 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFilePath = await vscode.commands.executeCommand<string>('coauthor.selectFigureFile');
           if (figureFilePath) {
             webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFilePath });
+          }
+          break;
+        case 'selectMultipleFiles':
+          const multipleFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
+          if (multipleFilesSelect) {
+            webviewView.webview.postMessage({ command: 'setMultipleFiles', files: multipleFilesSelect });
+          }
+          break;
+        case 'selectMultipleAuxFiles':
+          const multipleAuxFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleAuxFiles');
+          if (multipleAuxFilesSelect) {
+            webviewView.webview.postMessage({ command: 'setMultipleAuxFiles', files: multipleAuxFilesSelect });
           }
           break;
         case 'selectMultipleFigures':
@@ -471,7 +509,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
       const workspacePath = workspaceFolders[0].uri.fsPath;
-      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.cls', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff']);
+      return await this.getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff']);
     }
     return [];
   }
@@ -630,11 +668,21 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFilesSelectDiv.style.display = 'none';
             saveState();
           });
-  
+          document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'selectMultipleAuxFiles'
+            });
+          });
           document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function() {
             const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
             multipleFiguresSelectDiv.innerHTML = '';
             multipleFiguresSelectDiv.style.display = 'none';
+            saveState();
+          });
+          document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function() {
+            const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
+            multipleAuxFilesSelectDiv.innerHTML = '';
+            multipleAuxFilesSelectDiv.style.display = 'none';
             saveState();
           });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
@@ -664,6 +712,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             // Get additional input files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
             const additionalInputFiles = getSelectedFiles(multipleFilesSelectDiv).filter(file => file !== inputFilePath);
+
+            // Get auxiliary files
+            const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
+            const auxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
+            if (auxFiles.length === 0 && auxFilePath) {
+              auxFiles = [auxFilePath];
+            }
             
             // Get figure files
             const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
@@ -674,12 +729,12 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               command: 'execute',
               task: task,
               inputFilePath: inputFilePath,
-              auxFilePath: auxFilePath,
+              additionalInputFiles: additionalInputFiles,
+              auxFiles: auxFiles,
+              figureFiles: figureFiles,
               instructions: instructions,
               reflect: reflect,
               model: model,
-              additionalInputFiles: additionalInputFiles,
-              figureFiles: figureFiles
             });
           });
           document.getElementById('packSingleButton').addEventListener('click', function() {
@@ -765,6 +820,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             reflectSelect: document.getElementById('reflectSelect').value,
             commitSelect: document.getElementById('commitSelect').value,
             multipleFilesSelect: getSelectedFiles(document.getElementById('multipleFilesSelect')),
+            multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
             multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
           };
           vscode.setState(state);
@@ -795,6 +851,20 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               multipleFilesSelectDiv.style.display = 'block';
             } else {
               multipleFilesSelectDiv.style.display = 'none';
+            }
+
+            // Restore selected multiple auxiliary files
+            const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
+            multipleAuxFilesSelectDiv.innerHTML = '';
+            if (previousState.multipleAuxFilesSelect && previousState.multipleAuxFilesSelect.length > 0) {
+              previousState.multipleAuxFilesSelect.forEach(file => {
+                const fileElement = document.createElement('div');
+                fileElement.textContent = file;
+                multipleAuxFilesSelectDiv.appendChild(fileElement);
+              });
+              multipleAuxFilesSelectDiv.style.display = 'block';
+            } else {
+              multipleAuxFilesSelectDiv.style.display = 'none';
             }
         
             // Restore selected multiple figures
@@ -828,6 +898,21 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 multipleFilesSelectDiv.style.display = 'block';
               } else {
                 multipleFilesSelectDiv.style.display = 'none';
+              }
+              saveState();
+              break;
+            case 'setMultipleAuxFiles':
+              const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
+              multipleAuxFilesSelectDiv.innerHTML = '';
+              if (message.files && message.files.length > 0) {
+                message.files.forEach(file => {
+                  const fileElement = document.createElement('div');
+                  fileElement.textContent = file;
+                  multipleAuxFilesSelectDiv.appendChild(fileElement);
+                });
+                multipleAuxFilesSelectDiv.style.display = 'block';
+              } else {
+                multipleAuxFilesSelectDiv.style.display = 'none';
               }
               saveState();
               break;
@@ -967,8 +1052,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <div id="multipleFilesSelect" style="display: none;"></div>
       </p>
       <p>
-        <label for="auxFileSelect">Select Auxiliary File:</label><br>
-        <select id="auxFileSelect"></select>
+        <label for="auxFileSelect">Select Auxiliary File:</label>
+        <button id="selectMultipleAuxFilesButton" style="float: right;">Select Multiple</button>
+        <button id="emptyMultipleAuxFilesButton" style="float: right; margin-right: 10px;">Empty</button><br>
+        <select id="auxFileSelect">
+          <option value="">None</option>
+        </select>
+        <div id="multipleAuxFilesSelect" style="display: none;"></div>
       </p>
       <p>
         <label for="figureFileSelect">Select Figure File:</label>
