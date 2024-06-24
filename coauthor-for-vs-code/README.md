@@ -82,6 +82,10 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.4.0]
+
+* added the handling of multiple figures in the backend and make it works also in the frontend.
+
 ## [0.3.12]
 
 * more fixes for selecting multiple input files and/or figures
