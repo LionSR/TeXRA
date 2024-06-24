@@ -20,6 +20,10 @@ def get_common_env(model):
     return model, script_dir, prompt_dir
 
 
+def comma_separated_list(value):
+    return [item.strip() for item in value.split(",")]
+
+
 # Define a decorator for shared arguments
 def shared_arguments(func):
     func = click.argument("input_file")(func)
@@ -32,7 +36,7 @@ def shared_arguments_long(func):
     func = shared_arguments(func)
     func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
     func = click.option(
-        "--figure_input",
+        "--figure_inputs",
         required=False,
         default=None,
         multiple=True,
@@ -56,7 +60,7 @@ def execute_task(script, task, model, input_file, **kwargs):
             if isinstance(value, bool):
                 if value:
                     command.append(f"--{key}")
-            elif key in ["input_files", "figure_input"]:
+            elif key in ["input_files", "figure_inputs", "auxiliary_files"]:
                 if isinstance(value, str):
                     value = [value]
                 command.append(f"--{key}")
@@ -75,26 +79,26 @@ def cli():
 
 @click.command()
 @shared_arguments
-@click.option("--auxiliary_file", default=None)
-def correct_tex(model, input_file, auxiliary_file=None, reflect=False):
+@click.option("--auxiliary_files", default=None)
+def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
     execute_task(
         "edit_tex",
         "correct",
         model,
         input_file,
-        auxiliary_file=auxiliary_file,
+        auxiliary_files=auxiliary_files,
         reflect=reflect,
     )
 
 
 @click.command()
 @shared_arguments_long
-@click.option("--auxiliary_file", default=None, help="Path to the auxiliary file")
+@click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
 def polish_tex(
     model,
     input_file,
-    auxiliary_file=None,
-    figure_input=None,
+    auxiliary_files=None,
+    figure_inputs=None,
     instruction=None,
     reflect=True,
 ):
@@ -103,8 +107,8 @@ def polish_tex(
         "polish",
         model,
         input_file,
-        auxiliary_file=auxiliary_file,
-        figure_input=figure_input,
+        auxiliary_files=auxiliary_files,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -118,7 +122,7 @@ def draw_tex(model, input_file, figure_input, instruction=None, reflect=True):
         "draw",
         model,
         input_file,
-        figure_input=figure_input,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -144,7 +148,7 @@ def polish_st(model, input_file, figure_input, instruction=None, reflect=True):
         "polish_st",
         model,
         input_file,
-        figure_input=figure_input,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -158,7 +162,7 @@ def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
         "polish_qi",
         model,
         input_file,
-        figure_input=figure_input,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -172,7 +176,7 @@ def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
         "draw_st",
         model,
         input_file,
-        figure_input=figure_input,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -186,7 +190,7 @@ def draw_qi(model, input_file, figure_input, instruction=None, reflect=True):
         "draw_qi",
         model,
         input_file,
-        figure_input=figure_input,
+        figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
@@ -303,14 +307,14 @@ def correct_prl(model, input_file, reflect=True):
 
 @click.command()
 @shared_arguments
-@click.option("--auxiliary_file", default=None)
-def correct_supp_prl(model, input_file, auxiliary_file=None, reflect=True):
+@click.option("--auxiliary_files", default=None)
+def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True):
     execute_task(
         "edit_prl",
         "correct_supp_prl",
         model,
         input_file,
-        auxiliary_file=auxiliary_file,
+        auxiliary_files=auxiliary_files,
         reflect=reflect,
     )
 
