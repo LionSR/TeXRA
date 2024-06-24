@@ -214,9 +214,7 @@ def process_reflection(
     print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
 
     user_message = f"{user_request_reflect}\n"
-    output_file_reflect = output_file.replace(
-        f"_{model_settings['model']}", f"_reflect_{model_settings['model']}"
-    )
+    output_file_reflect = output_file.replace(f"_{model_settings['model']}", f"_reflect_{model_settings['model']}")
     print(f"output_file_reflect: {colored(output_file_reflect, 'cyan')}")
     messages.append({"role": "user", "content": user_message})
 

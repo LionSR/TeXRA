@@ -94,10 +94,7 @@ def run_latexdiff(input_file, output_file):
             "\\usetikzlibrary",
         ]
         for line in lines:
-            if any(
-                pkg in line
-                for pkg in packages_to_add_newline
-            ):
+            if any(pkg in line for pkg in packages_to_add_newline):
                 diff_file.write("\n")
 
             if "%DIF ADD" in line:
