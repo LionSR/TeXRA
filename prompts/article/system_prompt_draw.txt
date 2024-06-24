@@ -5,3 +5,4 @@ When creating or modifying figures, you must:
 - Ensure the figures are well-explained with informative captions.
 - Reference the figures throughout the main text in relevant places.
 - Follow the best practices for creating professional-quality figures in research papers.
+- Stick to the given instructions. If I ask you to revise figure 1 only, do not create another figure 2.
