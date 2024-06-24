@@ -13,11 +13,11 @@ from .model_utils import (
     is_openai_model,
     is_anthropic_model,
     handle_prefill,
+    handle_images,
     create_response,
     extract_response_statistics,
     print_message_summary,
 )
-from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .openai_utils import best_connection_method
 
 
@@ -70,69 +70,17 @@ def process_file_with_llm(
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
 
-    # messages = [{"role": "user", "content": user_prefix + user_request}]
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": user_prefix},
-                {"type": "text", "text": user_request},
-            ],
-        }
-    ]
+    messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
+
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
 
-        # Handle image input
     if figure_inputs:
         print(f"Figure input: {colored(figure_inputs, 'cyan')}")
-        _, file_extension = os.path.splitext(figure_inputs)
-        if file_extension.lower() == ".pdf":
-            img_data = single_page_pdf_to_png(figure_inputs)
-            media_type = "image/png"
-        else:
-            img_data = get_base64_encoded_image(figure_inputs)
-            media_type = {
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".png": "image/png",
-                ".gif": "image/gif",
-                ".webp": "image/webp",
-            }.get(file_extension, "image/jpeg")
+        image_content = handle_images(figure_inputs, model)
+        messages[-1]["content"].extend(image_content)
 
-        if is_anthropic_model(model):
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"{user_prefix}"},
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": img_data,
-                            },
-                        },
-                        {"type": "text", "text": f"{user_request}"},
-                    ],
-                }
-            ]
-        elif is_openai_model(model):
-            base64_image = img_data
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"{user_prefix}"},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{media_type};base64,{base64_image}"},
-                        },
-                        {"type": "text", "text": f"{user_request}"},
-                    ],
-                }
-            ]
+    messages[-1]["content"].append({"type": "text", "text": user_request})
 
     document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)

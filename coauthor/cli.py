@@ -64,10 +64,10 @@ def execute_task(script, task, model, input_file, **kwargs):
                 if isinstance(value, str):
                     value = [value]
                 command.append(f"--{key}")
-                command.extend([shlex.quote(file) for file in value])
+                command.extend([shlex.quote(file).strip("'") for file in value])
             else:
                 command.append(f"--{key}")
-                command.append(shlex.quote(str(value)))
+                command.append(shlex.quote(str(value)).strip("'"))
 
     subprocess.run(command)
 
@@ -116,7 +116,7 @@ def polish_tex(
 
 @click.command()
 @shared_arguments_long
-def draw_tex(model, input_file, figure_input, instruction=None, reflect=True):
+def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_tex",
         "draw",
@@ -142,7 +142,7 @@ def correct_st(model, input_file, reflect=False):
 
 @click.command()
 @shared_arguments_long
-def polish_st(model, input_file, figure_input, instruction=None, reflect=True):
+def polish_st(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_lecture",
         "polish_st",
@@ -156,7 +156,7 @@ def polish_st(model, input_file, figure_input, instruction=None, reflect=True):
 
 @click.command()
 @shared_arguments_long
-def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
+def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_lecture",
         "polish_qi",
@@ -170,7 +170,7 @@ def polish_qi(model, input_file, figure_input, instruction=None, reflect=True):
 
 @click.command()
 @shared_arguments_long
-def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
+def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_lecture",
         "draw_st",
@@ -184,7 +184,7 @@ def draw_st(model, input_file, figure_input, instruction=None, reflect=True):
 
 @click.command()
 @shared_arguments_long
-def draw_qi(model, input_file, figure_input, instruction=None, reflect=True):
+def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_lecture",
         "draw_qi",
