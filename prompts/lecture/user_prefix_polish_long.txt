@@ -18,6 +18,7 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
     <document_content>
         {INPUT_CONTENT}
     </document_content>
+    {ADDITIONAL_INPUT_FILES}
 </documents>
 
 Please carefully read through the entire chapter and ensure you fully understand all the details.
@@ -26,4 +27,3 @@ Your task is to enhance this chapter focusing solely on the following specific i
 {INSTRUCTION}
 </instruction>
 Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
-

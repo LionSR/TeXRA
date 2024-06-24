@@ -5,3 +5,8 @@ As you review the document, make the following corrections and improvements:
 - Use consistent mathematical symbols and notations throughout the document.
 - Improve the quality and formatting of the LaTeX formulas where needed.
 - Apply consistent indentation, spacing, and line breaks. For example, '\item [(a)]Show that...' should be corrected to '\item [(a)] Show that...'.
+
+Use the following format for your output
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>

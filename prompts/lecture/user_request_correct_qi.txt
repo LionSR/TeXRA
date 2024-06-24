@@ -9,3 +9,8 @@ As you review the document, make the following corrections and improvements:
 - Identify key equations and figures that are referenced later in the document (look for phrases like "mentioned below", "as shown below", etc.). Label these equations and figures using \label{eq:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
 - When an equation or figure is used in a later derivation, reference it using the \ref{} command with the appropriate label you created.
 - Create cross-references to sections using LaTeX commands like \label{sec:...} and \cref{} to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
+
+Use the following format for your output:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>

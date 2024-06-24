@@ -14,4 +14,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
    - Implementation: [Concrete steps]
 </scratchpad>
 
-Now, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction.
+Now, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>
