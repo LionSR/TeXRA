@@ -71,10 +71,14 @@ def main():
     }
 
     if args.auxiliary_files:
-        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files)
-        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files)
+        if len(args.auxiliary_files) > 1:
+            raise ValueError("Only one auxiliary file is allowed. Please provide a single file.")
+        
+        auxiliary_file = args.auxiliary_files[0]
+        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(auxiliary_file)
+        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(auxiliary_file)
         task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
-        print(colored(f"Using auxiliary file: {args.auxiliary_files}", "green"))
+        print(colored(f"Using auxiliary file: {auxiliary_file}", "green"))
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:
