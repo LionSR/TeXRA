@@ -25,7 +25,8 @@ dependencies = [
     "IPython",
     "click",
     "PyMuPDF",
-    "termcolor"
+    "termcolor",
+    "python-dotenv",
 ]
 
 [project.urls]
