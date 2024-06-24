@@ -15,6 +15,21 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "CoAuthor",
+      "properties": {
+        "coauthor.includedDirectories": {
+          "type": "array",
+          "default": ["Discrete-Time", "FiguresEx"],
+          "description": "Directories to include in the figure path"
+        },
+        "coauthor.ignoredFilePatterns": {
+          "type": "array",
+          "default": ["*_log.txt"],
+          "description": "File patterns to ignore when selecting files"
+        }
+      }
+    },
     "commands": [
       {
         "command": "coauthor.cleanOutput",
