@@ -352,12 +352,13 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const model_val = message.model;
           const additionalInputFiles_val = message.additionalInputFiles;
           const figureFiles_val = message.figureFiles;
+
           vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFilePath_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val);
           break;
         case 'selectMultipleFiles':
-          const selectedMultipleFiles = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
-          if (selectedMultipleFiles) {
-            webviewView.webview.postMessage({ command: 'setSelectedMultipleFiles', files: selectedMultipleFiles });
+          const multipleFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFiles', message.currentInputFile);
+          if (multipleFilesSelect) {
+            webviewView.webview.postMessage({ command: 'setMultipleFiles', files: multipleFilesSelect });
           }
           break;
         case 'selectInputFile':
@@ -379,9 +380,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'selectMultipleFigures':
-          const selectedMultipleFigures = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFigures', message.currentFigureFile);
-          if (selectedMultipleFigures) {
-            webviewView.webview.postMessage({ command: 'setSelectedMultipleFigures', files: selectedMultipleFigures });
+          const multipleFiguresSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFigures', message.currentFigureFile);
+          if (multipleFiguresSelect) {
+            webviewView.webview.postMessage({ command: 'setMultipleFigures', files: multipleFiguresSelect });
           }
           break;
         case 'selectRevisionFile':
@@ -549,28 +550,28 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       select#revisionFileSelect,
       select#commitSelect {
         width: 100%;
-        }
-        #selectedMultipleFiles,
-        #selectedMultipleFigures {
-          margin-top: 10px;
-          padding: 5px;
-          border: 1px solid #ccc;
-          max-height: 100px;
-          overflow-y: auto;
-          background-color: #f0f0f0;
-        }
-        #selectedMultipleFiles div,
-        #selectedMultipleFigures div {
-          margin-bottom: 2px;
-          padding: 2px;
-          background-color: #ffffff;
-        }
+      }
+      #multipleFilesSelect,
+      #multipleFiguresSelect {
+        margin-top: 10px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        max-height: 100px;
+        overflow-y: auto;
+        background-color: #f0f0f0;
+      }
+      #multipleFilesSelect div,
+      #multipleFiguresSelect div {
+        margin-bottom: 2px;
+        padding: 2px;
+        background-color: #ffffff;
+      }
       </style>
       <script>
         const vscode = acquireVsCodeApi();
 
-        function getSelectedFiles(selectedMultipleFilesDiv) {
-          const fileElements = selectedMultipleFilesDiv.getElementsByTagName('div');
+        function getSelectedFiles(multipleFilesSelectDiv) {
+          const fileElements = multipleFilesSelectDiv.getElementsByTagName('div');
           return Array.from(fileElements).map(el => el.textContent || '');
         }
 
@@ -647,15 +648,14 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const model = document.getElementById('modelSelect').value;
 
             // Get additional input files
-            const selectedMultipleFilesDiv = document.getElementById('selectedMultipleFiles');
-            const additionalInputFiles = getSelectedFiles(selectedMultipleFilesDiv).filter(file => file !== inputFilePath);
+            const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
+            const additionalInputFiles = getSelectedFiles(multipleFilesSelectDiv).filter(file => file !== inputFilePath);
             
             // Get figure files
-            const selectedMultipleFiguresDiv = document.getElementById('selectedMultipleFigures');
-            const multipleFigures = getSelectedFiles(selectedMultipleFiguresDiv);
+            const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
+            const multipleFigures = getSelectedFiles(multipleFiguresSelectDiv);
             const figureFiles = multipleFigures.length > 0 ? multipleFigures : (figureFilePath ? [figureFilePath] : []);
           
-
             vscode.postMessage({
               command: 'execute',
               task: task,
@@ -750,6 +750,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             taskInput: document.getElementById('taskInput').value,
             reflectSelect: document.getElementById('reflectSelect').value,
             commitSelect: document.getElementById('commitSelect').value,
+            multipleFilesSelect: getSelectedFiles(document.getElementById('multipleFilesSelect')),
+            multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
           };
           vscode.setState(state);
         }
@@ -766,40 +768,69 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
+
+            // Restore selected multiple files
+            const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
+            multipleFilesSelectDiv.innerHTML = '';
+            if (previousState.multipleFilesSelect && previousState.multipleFilesSelect.length > 0) {
+              previousState.multipleFilesSelect.forEach(file => {
+                const fileElement = document.createElement('div');
+                fileElement.textContent = file;
+                multipleFilesSelectDiv.appendChild(fileElement);
+              });
+              multipleFilesSelectDiv.style.display = 'block';
+            } else {
+              multipleFilesSelectDiv.style.display = 'none';
+            }
+        
+            // Restore selected multiple figures
+            const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
+            multipleFiguresSelectDiv.innerHTML = '';
+            if (previousState.multipleFiguresSelect && previousState.multipleFiguresSelect.length > 0) {
+              previousState.multipleFiguresSelect.forEach(file => {
+                const fileElement = document.createElement('div');
+                fileElement.textContent = file;
+                multipleFiguresSelectDiv.appendChild(fileElement);
+              });
+              multipleFiguresSelectDiv.style.display = 'block';
+            } else {
+              multipleFiguresSelectDiv.style.display = 'none';
+            }
           }
         }
 
         window.addEventListener('message', event => {
           const message = event.data;
           switch (message.command) {
-            case 'setSelectedMultipleFiles':
-              const selectedMultipleFilesDiv = document.getElementById('selectedMultipleFiles');
-              if (message.files && message.files.length > 1) {
-                selectedMultipleFilesDiv.innerHTML = '';
-                message.files.forEach(file => {
-                  const fileElement = document.createElement('div');
-                  fileElement.textContent = file;
-                  selectedMultipleFilesDiv.appendChild(fileElement);
-                });
-                selectedMultipleFilesDiv.style.display = 'block';
-              } else {
-                selectedMultipleFilesDiv.style.display = 'none';
-              }
-              break;
-            case 'setSelectedMultipleFigures':
-              const selectedMultipleFiguresDiv = document.getElementById('selectedMultipleFigures');
+            case 'setMultipleFiles':
+              const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
+              multipleFilesSelectDiv.innerHTML = '';
               if (message.files && message.files.length > 0) {
-                selectedMultipleFiguresDiv.innerHTML = '';
                 message.files.forEach(file => {
                   const fileElement = document.createElement('div');
                   fileElement.textContent = file;
-                  selectedMultipleFiguresDiv.appendChild(fileElement);
+                  multipleFilesSelectDiv.appendChild(fileElement);
                 });
-                selectedMultipleFiguresDiv.style.display = 'block';
-                document.getElementById('figureFileSelect').value = ''; // Clear single figure selection
+                multipleFilesSelectDiv.style.display = 'block';
               } else {
-                selectedMultipleFiguresDiv.style.display = 'none';
+                multipleFilesSelectDiv.style.display = 'none';
               }
+              saveState();
+              break;
+            case 'setMultipleFigures':
+              const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
+              multipleFiguresSelectDiv.innerHTML = '';
+              if (message.files && message.files.length > 0) {
+                message.files.forEach(file => {
+                  const fileElement = document.createElement('div');
+                  fileElement.textContent = file;
+                  multipleFiguresSelectDiv.appendChild(fileElement);
+                });
+                multipleFiguresSelectDiv.style.display = 'block';
+              } else {
+                multipleFiguresSelectDiv.style.display = 'none';
+              }
+              saveState();
               break;
             case 'setInputFile':
               const inputFileSelect = document.getElementById('inputFileSelect');
@@ -912,7 +943,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <select id="inputFileSelect">
           <option value="">None</option>
         </select>
-        <div id="selectedMultipleFiles" style="display: none;"></div>
+        <div id="multipleFilesSelect" style="display: none;"></div>
       </p>
       <p>
         <label for="auxFileSelect">Select Auxiliary File:</label><br>
@@ -924,7 +955,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <select id="figureFileSelect">
           <option value="">None</option>
         </select>
-        <div id="selectedMultipleFigures" style="display: none;"></div>
+        <div id="multipleFiguresSelect" style="display: none;"></div>
       </p>
       <p>
         <label for="taskInputArea">Specific Instructions:</label>
