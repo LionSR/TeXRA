@@ -115,6 +115,32 @@ def polish_tex(
 
 @click.command()
 @shared_arguments_long
+@click.option("--input_files", default=None, help="Path to the multiple input files")
+@click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files")
+def polish_tex_long(
+    model,
+    input_file,
+    input_files=None,
+    auxiliary_files=None,
+    figure_inputs=None,
+    instruction=None,
+    reflect=True,
+):
+    execute_task(
+        "edit_tex",
+        "polish_long",
+        model,
+        input_file,
+        input_files=input_files,
+        auxiliary_files=auxiliary_files,
+        figure_inputs=figure_inputs,
+        instruction=instruction,
+        reflect=reflect,
+    )
+
+
+@click.command()
+@shared_arguments_long
 def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True):
     execute_task(
         "edit_tex",
@@ -161,6 +187,22 @@ def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
         "polish_qi",
         model,
         input_file,
+        figure_inputs=figure_inputs,
+        instruction=instruction,
+        reflect=reflect,
+    )
+
+
+@click.command()
+@shared_arguments_long
+@click.option("--input_files", default=None, help="Path to the multiple input files")
+def polish_st_long(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
+    execute_task(
+        "edit_lecture",
+        "polish_st_long",
+        model,
+        input_file,
+        input_files=input_files,
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
@@ -733,6 +775,10 @@ cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
 
+# cli.add_command(correct_tex_long)
+cli.add_command(polish_tex_long)
+# cli.add_command(draw_texLong)
+
 # edit_lecture.py
 cli.add_command(correct_st)
 cli.add_command(correct_qi)
@@ -740,6 +786,8 @@ cli.add_command(polish_st)
 cli.add_command(polish_qi)
 cli.add_command(draw_st)
 cli.add_command(draw_qi)
+
+cli.add_command(polish_st_long)
 
 # meeting2text.py
 cli.add_command(meeting2text)

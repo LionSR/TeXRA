@@ -6,3 +6,8 @@ As you review the document, make the following corrections and improvements:
 - Improve the quality and formatting of the LaTeX formulas where needed.
 - Apply consistent indentation, spacing, and line breaks. For example, '\item [(a)]Show that...' should be corrected to '\item [(a)] Show that...'.
 - Make sure the captions correclty reflect the figure (if provided as an image input or the tikz figure is present).
+
+Use the following format for your output:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>
