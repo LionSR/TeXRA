@@ -4,9 +4,7 @@ import os
 
 
 def get_common_argparser():
-    parser = argparse.ArgumentParser(
-        description="Process files with AI-assisted techniques."
-    )
+    parser = argparse.ArgumentParser(description="Process files with AI-assisted techniques.")
     parser.add_argument(
         "--input_file",
         type=str,
@@ -48,9 +46,7 @@ def get_common_argparser():
 
 
 def get_prompt_path(library, prompt_name):
-    return os.path.join(
-        os.path.dirname(os.path.dirname(library.__file__)), "prompts", prompt_name
-    )
+    return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "prompts", prompt_name)
 
 
 def parse_args(parser):
