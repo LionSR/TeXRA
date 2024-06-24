@@ -4,7 +4,8 @@ import os
 
 
 def comma_separated_list(value):
-    return [item.strip() for item in value.split(",")]
+    items = [item.strip() for item in value.split(",")]
+    return [item.strip("'\"") for item in items]  # Remove surrounding quotes
 
 
 def get_common_argparser():
@@ -42,15 +43,13 @@ def get_common_argparser():
     )
     parser.add_argument(
         "--figure_inputs",
-        type=str,
-        nargs="*",
+        type=comma_separated_list,
         default=[],
         help="Path to the figure input file(s). Multiple files can be specified.",
     )
     parser.add_argument(
         "--auxiliary_files",
-        type=str,
-        nargs="*",
+        type=comma_separated_list,
         default=[],
         help="Path to the auxiliary file(s). Multiple files can be specified.",
     )
