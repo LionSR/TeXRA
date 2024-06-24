@@ -1,43 +1,62 @@
-You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the key inputs you will need:
+You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
-Here is our cover letter:
-<cover_letter>
-{COVER_LETTER}
-</cover_letter>
+<documents>
+    <document index="1">
+        <source>Cover Letter</source>
+        <document_content>
+            {COVER_LETTER}
+        </document_content>
+    </document>
+    <document index="2">
+        <source>{INPUT_FILE}</source>
+        <document_content>
+            {MAIN_CONTENT}
+        </document_content>
+    </document>
+    <document index="3">
+        <source>Appendix</source>
+        <document_content>
+            {SUPP_CONTENT}
+        </document_content>
+    </document>
+    <document index="4">
+        <source>Editor Decision Letter</source>
+        <document_content>
+            {EDITOR_DECISION_LETTER}
+        </document_content>
+    </document>
+    <document index="5">
+        <source>Referee Report A</source>
+        <document_content>
+            {REFEREE_REPORT_A}
+        </document_content>
+    </document>
+    <document index="6">
+        <source>Referee Report B</source>
+        <document_content>
+            {REFEREE_REPORT_B}
+        </document_content>
+    </document>
+    <document index="7">
+        <source>Example Reply Letter</source>
+        <document_content>
+            {EXAMPLE_REPLY_LETTER}
+        </document_content>
+    </document>
+    <document index="8">
+        <source>Instructions</source>
+        <document_content>
+            {INSTRUCTION}
+        </document_content>
+    </document>
+</documents>
 
-The full text of the submitted paper {INPUT_FILE}:
-<paper>
-{MAIN_CONTENT}
-</paper>
-
-Here is the appendix of the paper
-<appendix>
-{SUPP_CONTENT}
-</appendix>
-
-The full text of the editor decision letter:
-<editor_decision_letter>
-{EDITOR_DECISION_LETTER}
-</editor_decision_letter>
-
-The full text of the two referee reports:
-<referee_report_a>
-{REFEREE_REPORT_A}
-</referee_report_a>
-
-<referee_report_b>
-{REFEREE_REPORT_B}
-</referee_report_b>
-
-Here is an example of a reply letter:
-<example_reply_letter>
-{EXAMPLE_REPLY_LETTER}
-</example_reply_letter>
-
-Here are some ideas about how to draft the reply letter. But use your own words.
-<instruction>
-{INSTRUCTION}
-</instruction>
-
-
-
+Explanation of documents:
+1. Cover Letter: The original cover letter submitted with the paper.
+2. Main Paper: The full text of the submitted paper, identified by {INPUT_FILE}.
+3. Appendix: Supplementary information for the paper.
+4. Editor Decision Letter: The full text of the editor's decision and comments.
+5. Referee Report A: The full text of the first referee's report.
+6. Referee Report B: The full text of the second referee's report.
+7. Example Reply Letter: A sample reply letter for reference.
+8. Instructions: Guidelines on how to draft the reply letter.
