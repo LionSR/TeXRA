@@ -3,6 +3,8 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as util from 'util';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -39,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectFolders: false,
         defaultUri: defaultUri,
         filters: {
-          'Text files': ['tex', 'txt']
+          'Text files': ['tex']
         }
       });
       if (fileUris && fileUris.length > 0) {
@@ -57,6 +59,10 @@ export function activate(context: vscode.ExtensionContext) {
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
 
+      // Get the configuration
+      const config = vscode.workspace.getConfiguration('coauthor');
+      const includeDirectories = config.get<string[]>('includedDirectories') || ['Discrete-Time', 'FiguresEx'];
+
       const defaultUri = currentFigureFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
         : vscode.Uri.file(workspacePath);
@@ -71,8 +77,21 @@ export function activate(context: vscode.ExtensionContext) {
           'Image files': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'pdf']
         }
       });
+
       if (fileUris && fileUris.length > 0) {
-        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        const relativePaths = fileUris.map(uri => {
+          const relativePath = path.relative(workspacePath, uri.fsPath);
+          const pathParts = relativePath.split(path.sep);
+
+          const startIndex = pathParts.findIndex(part => includeDirectories.includes(part));
+
+          if (startIndex !== -1) {
+            return pathParts.slice(startIndex).join(path.sep);
+          }
+
+          return relativePath;
+        });
+
         vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
