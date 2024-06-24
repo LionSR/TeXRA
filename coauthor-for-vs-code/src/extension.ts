@@ -1030,9 +1030,15 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           <option value="correct-tex">Correct TeX</option>
           <option value="polish-tex">Polish TeX</option>
           <option value="draw-tex">Draw TeX</option>
+          <option value="correct-tex-long">Correct TeX (Long)</option>
+          <option value="polish-tex-long">Polish TeX (Long)</option>
+          <option value="draw-tex-long">Draw TeX (Long)</option>
           <option value="correct-st">Correct ST</option>
           <option value="polish-st">Polish ST</option>
           <option value="draw-st">Draw ST</option>
+          <option value="correct-st-long">Correct ST (Long)</option>
+          <option value="polish-st-long">Polish ST (Long)</option>
+          <option value="draw-st-long">Draw ST (Long)</option>
           <option value="correct-qi">Correct QI</option>
           <option value="polish-qi">Polish QI</option>
           <option value="meeting2text">Meeting to Text</option>

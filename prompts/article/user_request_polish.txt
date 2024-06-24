@@ -5,4 +5,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 3. [Specific improvement idea 3 that directly addresses the instruction]
 </scratchpad>
 
-Now, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction.
+Now, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>
