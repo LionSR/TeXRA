@@ -23,6 +23,16 @@ all_task_settings = {
         "user_prefix_file": "user_prefix_polish.txt",
         "user_reflect_file": "user_reflect_polish.txt",
     },
+    "polish_long": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "<scratchpad>",
+        "system_prompt_file": "system_prompt_polish_st.txt",
+        "user_prefix_file": "user_prefix_polish_long.txt",
+        "user_request_file": "user_request_polish_st.txt",
+        "user_reflect_file": "user_reflect_polish.txt",
+    },
     "draw": {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
@@ -50,6 +60,9 @@ def main():
             "polish_st",
             "draw_st",
             "draw_qi",
+            "polish_st_long",
+            "draw_st_long",
+            "correct_st_long",
         ],
     )
     parser.add_argument(
@@ -78,7 +91,15 @@ def main():
         user_prefix_vars["COMMANDS"] = "command.tex"
         user_prefix_vars["COMMANDS_CONTENT"] = read_file("command.tex")
 
-    if "correct" in args.task:
+    if "long" in args.task:
+        print(colored(f"Using long task: {args.task}", "red"))
+        if "correct" in args.task:
+            task_settings = all_task_settings["correct_long"]
+        elif "polish" in args.task:
+            task_settings = all_task_settings["polish_long"]
+        elif "draw" in args.task:
+            task_settings = all_task_settings["draw_long"]
+    elif "correct" in args.task:
         task_settings = all_task_settings["correct"]
     elif "polish" in args.task:
         task_settings = all_task_settings["polish"]
@@ -86,9 +107,34 @@ def main():
         task_settings = all_task_settings["draw"]
 
     if not task_settings.get("user_prefix_file"):
-        task_settings["user_prefix_file"] = f"user_prefix_{args.task}.txt"
+        task_settings["user_prefix_file"] = f"user_prefix_f{args.task}.txt"
     if not task_settings.get("user_request_file"):
-        task_settings["user_request_file"] = f"user_request_{args.task}.txt"
+        task_settings["user_request_file"] = f"user_request_f{args.task}.txt"
+
+    if "long" in args.task:
+        task_settings = all_task_settings["polish_long"]
+        # task_settings["user_prefix_file"] = f"user_prefix_{args.task}_long.txt"
+
+        if args.input_files:
+            print(colored(f"Using long input files: {', '.join(args.input_files)}", "red"))
+            additional_input_files_xml = ""
+            for i, input_file in enumerate(args.input_files, start=4):
+                additional_input_files_xml += (
+                    f'<document index="{i}">\n'
+                    f"    <source>{os.path.basename(input_file)}</source>\n"
+                    f"    <document_content>\n"
+                    f"        {read_file(input_file)}\n"
+                    f"    </document_content>\n"
+                    f"</document>"
+                )
+            user_prefix_vars["ADDITIONAL_INPUT_FILES"] = additional_input_files_xml
+            print(colored(f"Using additional input files: {', '.join(args.input_files)}", "green"))
+        else:
+            user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
+
+    else:
+        if args.input_files:
+            raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:

@@ -5,4 +5,7 @@ In the scratchpad below, brainstorm concrete ways to create or significantly imp
 3. [Specific figure creation/improvement idea 3 that directly addresses the instruction]
 </scratchpad>
 
-Now, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references.
+Then, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>
