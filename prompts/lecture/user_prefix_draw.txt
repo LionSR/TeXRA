@@ -45,7 +45,7 @@ Please use your expertise in physics, machine learning, LaTeX, and TikZ to creat
 - Well-integrated with the text
 - Consistent with graduate-level physics textbook standards
 
-Prepare to analyze, brainstorm, and implement improvements to the figures in this chapter, keeping the specific instruction as your primary focus.
+Prepare to analyze, brainstorm, and implement improvements to the figures in this chapter, keeping the specific instruction as your sole focus. If I ask you to revise figure 1 only, do not create a figure 2.
 
 
 

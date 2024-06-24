@@ -15,4 +15,4 @@ Please carefully consider these points and brainstorm additional targeted refine
 3. [Additional refinement 3]
 </scratchpad>
 
-Now, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided and create figures that are correct, aesthetically pleasing, informative, and concise, in the style of a professional research paper.
+Now, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided and create figures that are correct, aesthetically pleasing, informative, and concise, in the style of a professional research paper. If I ask you to revise figure 1 only, do not create a figure 2.

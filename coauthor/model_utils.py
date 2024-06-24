@@ -1,6 +1,7 @@
 from termcolor import colored
 import os
 from .file_utils import read_file
+from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 
 model_mapping = {
     "sonnet+": "claude-3-5-sonnet-20240620",
@@ -163,6 +164,54 @@ def handle_prefill(
         raise ValueError(f"</{document_tag}> encountered in the prefill.")
 
     return accumulated_output, messages, overwrite
+
+
+def handle_images(figure_inputs, model):
+    image_contents = []
+
+    if not isinstance(figure_inputs, list):
+        figure_inputs = [figure_inputs]
+
+    for figure_input in figure_inputs:
+        _, file_extension = os.path.splitext(figure_input)
+        if file_extension.lower() == ".pdf":
+            img_data = single_page_pdf_to_png(figure_input)
+            media_type = "image/png"
+        else:
+            img_data = get_base64_encoded_image(figure_input)
+            media_type = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".webp": "image/webp",
+            }.get(file_extension.lower(), "image/jpeg")
+
+        image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
+
+    content = []
+    for image in image_contents:
+        content.extend(
+            [
+                {"type": "text", "text": f"Image: {image['file_name']}"},
+                {
+                    "type": "image_url" if is_openai_model(model) else "image",
+                    "image_url"
+                    if is_openai_model(model)
+                    else "source": {
+                        "url"
+                        if is_openai_model(model)
+                        else "type": f"data:{image['media_type']};base64,{image['data']}"
+                        if is_openai_model(model)
+                        else "base64",
+                        "media_type": image["media_type"],
+                        "data": image["data"],
+                    },
+                },
+            ]
+        )
+
+    return content
 
 
 def create_response(
