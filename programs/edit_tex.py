@@ -28,6 +28,16 @@ all_task_settings = {
         "user_request_file": "user_request_polish.txt",
         "user_reflect_file": "user_reflect_polish.txt",
     },
+    "polish_long": {
+        "document_tag": "latex_document",
+        "end_tag": "</latex_document>",
+        "output_type": "tex",
+        "first_prefill": "<scratchpad>",
+        "system_prompt_file": "system_prompt_polish.txt",
+        "user_prefix_file": "user_prefix_polish_long.txt",
+        "user_request_file": "user_request_polish.txt",
+        "user_reflect_file": "user_reflect_polish.txt",
+    },
     "draw": {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
@@ -44,11 +54,7 @@ all_task_settings = {
 def main():
     parser = get_common_argparser()
     parser.add_argument(
-        "--task",
-        type=str,
-        default="correct",
-        help="The task to be performed.",
-        choices=["correct", "polish", "draw"],
+        "--task", type=str, default="correct", help="The task to be performed.", choices=["correct", "polish", "draw", "polish_long", "draw_long"]
     )
     parser.add_argument(
         "--append_mode",
@@ -70,15 +76,56 @@ def main():
         "INSTRUCTION": args.instruction,
     }
 
-    if args.auxiliary_files:
-        if len(args.auxiliary_files) > 1:
-            raise ValueError("Only one auxiliary file is allowed. Please provide a single file.")
-        
-        auxiliary_file = args.auxiliary_files[0]
-        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(auxiliary_file)
-        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(auxiliary_file)
-        task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
-        print(colored(f"Using auxiliary file: {auxiliary_file}", "green"))
+    if "long" in args.task:
+        task_settings["user_prefix_file"] = "user_prefix_polish_long.txt"
+
+        if args.auxiliary_files:
+            print(colored(f"Using long auxiliary files: {', '.join(args.auxiliary_files)}", "red"))
+            auxiliary_files_xml = ""
+            for i, auxiliary_file in enumerate(args.auxiliary_files, start=2):
+                auxiliary_files_xml += (
+                    f'<document index="{i}">\n'
+                    f"    <source>{os.path.basename(auxiliary_file)}</source>\n"
+                    f"    <document_content>\n"
+                    f"        {read_file(auxiliary_file)}\n"
+                    f"    </document_content>\n"
+                    f"</document>"
+                )
+            user_prefix_vars["AUXILIARY_FILES"] = auxiliary_files_xml
+            print(colored(f"Using auxiliary files: {', '.join(args.auxiliary_files)}", "green"))
+        else:
+            user_prefix_vars["AUXILIARY_FILES"] = ""
+
+        if args.input_files:
+            print(colored(f"Using long input files: {', '.join(args.input_files)}", "red"))
+            additional_input_files_xml = ""
+            for i, input_file in enumerate(args.input_files, start=len(args.auxiliary_files) + 2):
+                additional_input_files_xml += (
+                    f'<document index="{i}">\n'
+                    f"    <source>{os.path.basename(input_file)}</source>\n"
+                    f"    <document_content>\n"
+                    f"        {read_file(input_file)}\n"
+                    f"    </document_content>\n"
+                    f"</document>"
+                )
+            user_prefix_vars["ADDITIONAL_INPUT_FILES"] = additional_input_files_xml
+            print(colored(f"Using additional input files: {', '.join(args.input_files)}", "green"))
+        else:
+            user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
+
+    else:
+        if args.input_files:
+            raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
+
+        if args.auxiliary_files:
+            if len(args.auxiliary_files) > 1:
+                raise ValueError("Only one auxiliary file is allowed. Please provide a single file.")
+
+            auxiliary_file = args.auxiliary_files[0]
+            user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(auxiliary_file)
+            user_prefix_vars["AUXILIARY_CONTENT"] = read_file(auxiliary_file)
+            task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
+            print(colored(f"Using auxiliary file: {auxiliary_file}", "green"))
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:

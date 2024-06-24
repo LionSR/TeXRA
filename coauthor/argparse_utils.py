@@ -17,8 +17,7 @@ def get_common_argparser():
     )
     parser.add_argument(
         "--input_files",
-        type=str,
-        nargs="*",
+        type=comma_separated_list,
         default=[],
         help="Path to additional input files. Multiple files can be specified.",
     )
