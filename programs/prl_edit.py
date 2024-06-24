@@ -31,7 +31,7 @@ def main():
     parser = get_common_argparser()
 
     parser.add_argument(
-        "--auxiliary_file",
+        "--auxiliary_files",
         type=str,
         help="Path to the auxiliary TeX file to be processed.",
     )
