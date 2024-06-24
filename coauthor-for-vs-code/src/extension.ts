@@ -591,6 +591,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         width: 100%;
       }
       #multipleFilesSelect,
+      #multipleAuxFilesSelect,
       #multipleFiguresSelect {
         margin-top: 10px;
         padding: 5px;
@@ -600,6 +601,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         background-color: #f0f0f0;
       }
       #multipleFilesSelect div,
+      #multipleAuxFilesSelect div,
       #multipleFiguresSelect div {
         margin-bottom: 2px;
         padding: 2px;
@@ -888,7 +890,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           switch (message.command) {
             case 'setMultipleFiles':
               const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
-              multipleFilesSelectDiv.innerHTML = '';
               if (message.files && message.files.length > 0) {
                 message.files.forEach(file => {
                   const fileElement = document.createElement('div');
@@ -903,7 +904,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'setMultipleAuxFiles':
               const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-              multipleAuxFilesSelectDiv.innerHTML = '';
               if (message.files && message.files.length > 0) {
                 message.files.forEach(file => {
                   const fileElement = document.createElement('div');
@@ -918,7 +918,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'setMultipleFigures':
               const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-              multipleFiguresSelectDiv.innerHTML = '';
               if (message.files && message.files.length > 0) {
                 message.files.forEach(file => {
                   const fileElement = document.createElement('div');
