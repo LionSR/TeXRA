@@ -1,22 +1,30 @@
-You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully because my work depends on the results
+You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully because my work depends on the results.
 
-Here is a pair of examples showing an original transcript and how it should be edited:
-
-<example_transcript>
+<documents>
+    <document index="1">
+        <source>example_transcript</source>
+        <document_content>
 {EXAMPLE_TRANSCRIPT}
-</example_transcript>
-
-<example_edited_transcript>
+        </document_content>
+    </document>
+    <document index="2">
+        <source>example_edited_transcript</source>
+        <document_content>
 {EXAMPLE_EDITED_TRANSCRIPT}
-</example_edited_transcript>
-
-Here is the transcript you need to edit:
-
-<transcript>
+        </document_content>
+    </document>
+    <document index="3">
+        <source>transcript_to_edit</source>
+        <document_content>
 {TRANSCRIPT}
-</transcript>
-
-For context, this transcript covers the following topic and the following participants.
-<context>
+        </document_content>
+    </document>
+    <document index="4">
+        <source>context</source>
+        <document_content>
 {CONTEXT}
-</context>
+        </document_content>
+    </document>
+</documents>
+
+For context, a pair of examples showing an original transcript and how it should be edited is given in document index 1 and 2. the transcript in document index 3 covers the topic and participants described in document index 4.
