@@ -560,11 +560,12 @@ def clean_single(input_file, model, reflect, task):
         return patterns
 
     file_patterns = get_patterns(base_name, model, first_task_chunk, reflect)
-    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
+    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff", "Notes", "_diffNotes"]]
     if reflect and reflect != "False":
-        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
+        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff", "Notes", "_diffNotes"]])
 
     temp_extensions = [
+        ".bib",
         ".aux",
         ".bbl",
         ".blg",
