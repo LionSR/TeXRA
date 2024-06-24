@@ -39,6 +39,10 @@ Follow these steps to install the necessary components for the extension:
    ```bash
    npm run compile && vsce package
    ```
+   or
+      ```bash
+   npm run build
+   ```
 6. **Install the Companion Python Package**: 
    ```bash
    cd coauthor
@@ -62,6 +66,14 @@ This extension contributes the following settings:
 * `myExtension.enable`: Enable/disable this extension.
 * `myExtension.thing`: Set to `blah` to do something.
 
+
+Users can customize the included directories by modifying their VS Code settings, either in the UI or in their settings.json file:
+```json
+{
+  "coauthor.includedDirectories": ["Discrete-Time", "FiguresEx", "AnotherDirectory"]
+}
+```
+
 ## Known Issues
 
 Calling out known issues can help limit users opening duplicate issues against your extension.
@@ -69,6 +81,12 @@ Calling out known issues can help limit users opening duplicate issues against y
 ## Release Notes
 
 Users appreciate release notes as you update your extension.
+
+
+
+## [0.3.9]
+
+* polish pass the multiple selected input files and/or figures to the backend: only show relative path if softlinks is encountered.
 
 ## [0.3.8]
 
@@ -204,4 +222,6 @@ You can author your README using Visual Studio Code. Here are some useful editor
 * Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
 * Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
 * Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+
+
 
