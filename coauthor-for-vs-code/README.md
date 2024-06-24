@@ -82,6 +82,14 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+## [0.3.12]
+
+* more fixes for selecting multiple input files and/or figures
+
+## [0.3.11]
+
+* fixes for selecting multiple input files and/or figures
+
 ## [0.3.10]
 
 * UI optimizations

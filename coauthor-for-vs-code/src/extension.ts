@@ -1,5 +1,6 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
+/* The module 'vscode' contains the VS Code extensibility API
+ * Import the module and reference it with the alias vscode in your code below
+ */
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
 import * as path from 'path';
@@ -623,6 +624,19 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               currentFigureFile: currentFigureFile
             });
           });
+          document.getElementById('emptyMultipleFilesButton').addEventListener('click', function() {
+            const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
+            multipleFilesSelectDiv.innerHTML = '';
+            multipleFilesSelectDiv.style.display = 'none';
+            saveState();
+          });
+  
+          document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function() {
+            const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
+            multipleFiguresSelectDiv.innerHTML = '';
+            multipleFiguresSelectDiv.style.display = 'none';
+            saveState();
+          });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
             vscode.postMessage({
               command: 'cleanOutput'
@@ -827,8 +841,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                   multipleFiguresSelectDiv.appendChild(fileElement);
                 });
                 multipleFiguresSelectDiv.style.display = 'block';
+                // document.getElementById('figureFileSelect').value = '';
               } else {
                 multipleFiguresSelectDiv.style.display = 'none';
+                // Restore the previously selected single figure file if no multiple figures are selected
+                document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
               }
               saveState();
               break;
@@ -896,6 +913,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               break;
             case 'figureFileSelected':
               document.getElementById('figureFileSelect').value = message.filePath;
+              // Clear multiple figures selection when a single figure file is selected
+              document.getElementById('multipleFiguresSelect').innerHTML = '';
+              document.getElementById('multipleFiguresSelect').style.display = 'none';
               break;
             case 'revisionFileSelected':
               document.getElementById('revisionFileSelect').value = message.filePath;
@@ -939,7 +959,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </p>
       <p>
         <label for="inputFileSelect">Select Input File:</label>
-        <button id="selectMultipleFilesButton" style="float: right;">Select Multiple Files</button><br>
+        <button id="selectMultipleFilesButton" style="float: right;">Select Multiple</button>
+        <button id="emptyMultipleFilesButton" style="float: right; margin-right: 10px;">Empty</button><br>
         <select id="inputFileSelect">
           <option value="">None</option>
         </select>
@@ -951,7 +972,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </p>
       <p>
         <label for="figureFileSelect">Select Figure File:</label>
-        <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple Figures</button><br>
+        <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple</button>
+        <button id="emptyMultipleFiguresButton" style="float: right; margin-right: 10px;">Empty</button><br>
         <select id="figureFileSelect">
           <option value="">None</option>
         </select>
