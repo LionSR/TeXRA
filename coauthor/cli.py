@@ -6,6 +6,10 @@ import glob
 import shutil
 from datetime import datetime
 from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
+from dotenv import load_dotenv
+
+# Add this at the beginning of the file, after the imports
+load_dotenv()
 
 
 def get_common_env(model):
@@ -19,20 +23,14 @@ def get_common_env(model):
 # Define a decorator for shared arguments
 def shared_arguments(func):
     func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(
-        func
-    )
-    func = click.option(
-        "--reflect", required=False, default=None, help="Reflect on the changes"
-    )(func)
+    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
+    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
     return func
 
 
 def shared_arguments_long(func):
     func = shared_arguments(func)
-    func = click.option(
-        "--instruction", required=False, default=None, help="Instruction for processing"
-    )(func)
+    func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
     func = click.option(
         "--figure_input",
         required=False,
@@ -224,9 +222,7 @@ def paper2note(
 @click.argument("sample_tex")
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
-@click.option(
-    "--instruction", required=False, default=None, help="Instruction for processing"
-)
+@click.option("--instruction", required=False, default=None, help="Instruction for processing")
 def adapt(
     model,
     input_file,
@@ -344,9 +340,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True):
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(
-    model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True
-):
+def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -404,9 +398,7 @@ def revise_supp_prl(
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(
-    model, input_file, main_content, supp_file="supp.tex", reflect=True
-):
+def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", reflect=True):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -452,9 +444,7 @@ def clean_output():
             files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
 
         for pattern in patterns_build:
-            files_to_delete.extend(
-                glob.glob(os.path.join(root, pattern), recursive=True)
-            )
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
 
     for file in set(files_to_delete):
         try:
@@ -526,17 +516,18 @@ def indent_tex():
         "figures",
         "Notes",
     }
-    latexindent_config = os.environ.get(
-        "LATEXINDENT_CONFIG", "/Users/siruilu/Local/TEX/latexindent.yaml"
-    )
+    latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
 
     for root, dirs, files in os.walk(".", topdown=True):
         dirs[:] = [d for d in dirs if d not in excluded_dirs]
         for file in files:
             if file.endswith(".tex"):
                 tex_file = os.path.join(root, file)
+                command = ["latexindent", tex_file, "-w", "-s"]
+                if latexindent_config:
+                    command.append(f"-l={latexindent_config}")
                 subprocess.run(
-                    ["latexindent", tex_file, "-w", "-s", f"-l={latexindent_config}"],
+                    command,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
@@ -560,30 +551,15 @@ def clean_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_patterns(base, model, task, reflect):
-        patterns = [
-            f"{base}_{task}_{model}{ext}"
-            for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-        ]
+        patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
         if reflect and reflect != "False":
-            patterns.extend(
-                [
-                    f"{base}_{task}_reflect_{model}{ext}"
-                    for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-                ]
-            )
+            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
         return patterns
 
     file_patterns = get_patterns(base_name, model, first_task_chunk, reflect)
-    temp_patterns = [
-        f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]
-    ]
+    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
     if reflect and reflect != "False":
-        temp_patterns.extend(
-            [
-                f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}"
-                for suffix in ["", "_diff"]
-            ]
-        )
+        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
 
     temp_extensions = [
         ".aux",
@@ -620,17 +596,9 @@ def pack_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_file_patterns(base, task, model, reflect):
-        patterns = [f"{base}.pdf"] + [
-            f"{base}_{task}_{model}{ext}"
-            for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-        ]
+        patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
         if reflect and reflect != "False":
-            patterns.extend(
-                [
-                    f"{base}_{task}_reflect_{model}{ext}"
-                    for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]
-                ]
-            )
+            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
         return patterns
 
     file_patterns = get_file_patterns(base_name, first_task_chunk, model, reflect)
@@ -669,16 +637,9 @@ def pack_single(input_file, model, reflect, task):
         ".out",
         ".synctex.gz",
     ]
-    temp_patterns = [
-        f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]
-    ]
+    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
     if reflect and reflect != "False":
-        temp_patterns.extend(
-            [
-                f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}"
-                for suffix in ["", "_diff"]
-            ]
-        )
+        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
 
     for pattern in temp_patterns:
         for ext in temp_extensions:
