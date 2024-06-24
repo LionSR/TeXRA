@@ -44,12 +44,6 @@ all_task_settings = {
 def main():
     parser = get_common_argparser()
     parser.add_argument(
-        "--auxiliary_files",
-        type=str,
-        default=None,
-        help="Path to the auxiliary TeX file to be processed.",
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="correct",
@@ -76,14 +70,11 @@ def main():
         "INSTRUCTION": args.instruction,
     }
 
-    if args.auxiliary_file:
-        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_file)
-        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_file)
-        # task_settings[
-        #     "user_prefix_file"
-        # ] = f"user_prefix_{args.task}_with_auxiliary.txt"
+    if args.auxiliary_files:
+        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files)
+        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files)
         task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
-        print(colored(f"Using auxiliary file: {args.auxiliary_file}", "green"))
+        print(colored(f"Using auxiliary file: {args.auxiliary_files}", "green"))
 
     log_file_name = args.input_file.replace(".tex", "_log.txt")
     with open(log_file_name, "a+") as log_file:
