@@ -39,7 +39,6 @@ def shared_arguments_long(func):
         "--figure_inputs",
         required=False,
         default=None,
-        multiple=True,
         help="Path to the figure input file(s).",
     )(func)
     return func
