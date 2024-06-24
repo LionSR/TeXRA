@@ -1,17 +1,28 @@
 I am going to give you a latex document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here are the preamble of the latex document
-<preamble>
-{PREAMBLE_CONTENT}
-</preamble>
+<documents>
+    <document index="1">
+        <source>Preamble</source>
+        <document_content>
+            {PREAMBLE_CONTENT}
+        </document_content>
+    </document>
+    <document index="2">
+        <source>Main Paper</source>
+        <document_content>
+            {MAIN_CONTENT}
+        </document_content>
+    </document>
+    <document index="3">
+        <source>Appendix</source>
+        <document_content>
+            {INPUT_CONTENT}
+        </document_content>
+    </document>
+</documents>
 
-Here is the main paper main.tex:
-<latex_document>
-{main_content}
-</latex_document>
-
-Here is the appendix of the paper
-<latex_document>
-{INPUT_CONTENT}
-</latex_document>
+Explanation of documents:
+1. Preamble: This contains the LaTeX preamble, which includes package imports, custom commands, and document setup.
+2. Main Paper: This is the primary content of the research paper. It contains the main body of the paper, including introduction, methods, results, and discussion.
+3. Appendix: This section includes supplementary information, additional data, or extended explanations that support the main paper.
 
