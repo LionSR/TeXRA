@@ -1,11 +1,16 @@
 I am going to give you a latex document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the command file {AUXILIARY_FILE} with many math commands defined (which you should use)
-<commands>
-{AUXILIARY_CONTENT}
-</commands>
+Here is the LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
-Here is the latex document {INPUT_FILE}:
-<latex_document>
-{INPUT_CONTENT}
-</latex_document>
+<documents>
+    <document index="1">
+        <source>{AUXILIARY_FILE}</source>
+    <document_content>
+        {AUXILIARY_CONTENT}
+    </document_content>
+    <document index="2">
+        <source>{INPUT_FILE}</source>
+    <document_content>
+        {INPUT_CONTENT}
+    </document_content>
+</documents>
