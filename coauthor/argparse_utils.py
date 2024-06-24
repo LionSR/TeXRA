@@ -3,6 +3,10 @@ import argparse
 import os
 
 
+def comma_separated_list(value):
+    return [item.strip() for item in value.split(",")]
+
+
 def get_common_argparser():
     parser = argparse.ArgumentParser(description="Process files with AI-assisted techniques.")
     parser.add_argument(
@@ -37,10 +41,18 @@ def get_common_argparser():
         help="Whether to perform a reflection round after the initial processing.",
     )
     parser.add_argument(
-        "--figure_input",
+        "--figure_inputs",
         type=str,
         nargs="*",
+        default=[],
         help="Path to the figure input file(s). Multiple files can be specified.",
+    )
+    parser.add_argument(
+        "--auxiliary_files",
+        type=str,
+        nargs="*",
+        default=[],
+        help="Path to the auxiliary file(s). Multiple files can be specified.",
     )
     return parser
 

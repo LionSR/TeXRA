@@ -44,7 +44,7 @@ all_task_settings = {
 def main():
     parser = get_common_argparser()
     parser.add_argument(
-        "--auxiliary_file",
+        "--auxiliary_files",
         type=str,
         default=None,
         help="Path to the auxiliary TeX file to be processed.",
@@ -101,7 +101,7 @@ def main():
         prompt_path=prompt_path,
         use_prefill_from_input=False,
         append_mode=args.append_mode,
-        figure_input=args.figure_input if args.figure_input else None,
+        figure_inputs=args.figure_inputs if args.figure_inputs else None,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))

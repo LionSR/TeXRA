@@ -45,7 +45,7 @@ def process_file_with_llm(
     k=200,
     max_tokens=4096,
     temperature=0,
-    figure_input=None,
+    figure_inputs=None,
 ):
     client, model_name = get_model_client(model, api_key)
 
@@ -84,14 +84,14 @@ def process_file_with_llm(
         messages.insert(0, {"role": "system", "content": system_prompt})
 
         # Handle image input
-    if figure_input:
-        print(f"Figure input: {colored(figure_input, 'cyan')}")
-        _, file_extension = os.path.splitext(figure_input)
+    if figure_inputs:
+        print(f"Figure input: {colored(figure_inputs, 'cyan')}")
+        _, file_extension = os.path.splitext(figure_inputs)
         if file_extension.lower() == ".pdf":
-            img_data = single_page_pdf_to_png(figure_input)
+            img_data = single_page_pdf_to_png(figure_inputs)
             media_type = "image/png"
         else:
-            img_data = get_base64_encoded_image(figure_input)
+            img_data = get_base64_encoded_image(figure_inputs)
             media_type = {
                 ".jpg": "image/jpeg",
                 ".jpeg": "image/jpeg",
