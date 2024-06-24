@@ -242,7 +242,8 @@ export function activate(context: vscode.ExtensionContext) {
       return [];
     }),
     vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[]) => {
-      const terminal_new = ensureTerminal();
+      const terminalName = `${task}@${model}`;
+      const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
 
       let command = `coauthor ${task} ${inputFilePath}`;
@@ -710,23 +711,21 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const instructions = document.getElementById('taskInput').value;
             const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
-
+          
             // Get additional input files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
             const additionalInputFiles = getSelectedFiles(multipleFilesSelectDiv).filter(file => file !== inputFilePath);
-
+          
             // Get auxiliary files
             const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-            const auxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
-            if (auxFiles.length === 0 && auxFilePath) {
-              auxFiles = [auxFilePath];
-            }
+            const multipleAuxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
+            const auxFiles = multipleAuxFiles.length > 0 ? multipleAuxFiles : (auxFilePath ? [auxFilePath] : []);
             
             // Get figure files
             const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
             const multipleFigures = getSelectedFiles(multipleFiguresSelectDiv);
             const figureFiles = multipleFigures.length > 0 ? multipleFigures : (figureFilePath ? [figureFilePath] : []);
-          
+                    
             vscode.postMessage({
               command: 'execute',
               task: task,
