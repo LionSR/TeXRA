@@ -795,6 +795,25 @@ def extract_tikzpictures(latex_file):
         print(file)
 
 
+@click.command()
+@click.argument("original_latex")
+@click.argument("edited_latex")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
+@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
+def merge(original_latex, edited_latex, model, reflect):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/programs/merge.py",
+        f"--original_latex={original_latex}",
+        f"--edited_latex={edited_latex}",
+        f"--model={model}",
+    ]
+    if reflect:
+        command.append(f"--reflect={reflect}")
+    subprocess.run(command)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -846,6 +865,9 @@ cli.add_command(pack_single)
 cli.add_command(pack_latexdiff_vc)
 cli.add_command(latexdiff)
 cli.add_command(latexdiff_vc)
+
+# merge
+cli.add_command(merge)
 
 # tools
 cli.add_command(tex_count)

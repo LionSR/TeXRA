@@ -1,0 +1,11 @@
+You are tasked with creating a full version of an edited LaTeX document by combining information from two sources: an original LaTeX document and an edited version of that document. This task is crucial for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
+
+Here is the original LaTeX document:
+<original_latex>
+{ORIGINAL_LATEX}
+</original_latex>
+
+Here is the edited version of the LaTeX document:  
+<edited_latex>
+{EDITED_LATEX}
+</edited_latex>
