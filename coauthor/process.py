@@ -16,7 +16,7 @@ from .model_utils import (
     handle_images,
     create_response,
     extract_response_statistics,
-    print_message_summary,
+    get_summary_string,
 )
 from .openai_utils import best_connection_method
 
@@ -137,8 +137,6 @@ def process_file_with_llm(
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    print_message_summary(state, model)
-
     return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings
 
 
@@ -187,8 +185,6 @@ def process_reflection(
         output_settings=output_settings,
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file_reflect}")
-
-    print_message_summary(state, model_settings["model"])
 
     return state, accumulated_output, end_turn, output_file_reflect, messages
 
