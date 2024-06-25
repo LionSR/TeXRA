@@ -82,6 +82,23 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 Users appreciate release notes as you update your extension.
 
+### 0.4.3
+- Added auto-extract figure option in VS Code extension
+- Implemented automatic figure path extraction from LaTeX files
+- Improved polish functionality with refined prompts and better figure handling
+- Enhanced reflection process for polishing task
+- Various minor improvements and bug fixes
+
+### 0.4.2
+- Streamlined TeX and ST processing by removing long versions of commands
+- Merged polish_tex and polish_tex_long functionality
+- Enhanced logging with summary statistics
+- Added figure extraction and word count utility scripts
+- Updated prompts for more detailed improvement plans
+- Refactored model utility functions for better reusability
+- Improved reflection process with more detailed action plans
+- Added summary logging for both initial processing and reflection steps
+
 ## [0.4.1]
 
 * small fixes to the execute button for the single auxiliary file case.
