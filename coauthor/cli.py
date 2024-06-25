@@ -6,6 +6,7 @@ import glob
 import shutil
 from datetime import datetime
 from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
+from coauthor.tools import extract_figure_paths
 from dotenv import load_dotenv
 
 # Add this at the beginning of the file, after the imports
@@ -94,6 +95,7 @@ def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
 @shared_arguments_long
 @click.option("--input_files", default=None, help="Path to the multiple input files")
 @click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
+@click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file")
 def polish_tex(
     model,
     input_file,
@@ -102,13 +104,26 @@ def polish_tex(
     figure_inputs=None,
     instruction=None,
     reflect=True,
+    auto_extract_figure=False,
 ):
+    if auto_extract_figure:
+        extracted_figure_paths = extract_figure_paths(input_file)
+        if extracted_figure_paths:
+            if figure_inputs is None or figure_inputs == []:
+                figure_inputs = extracted_figure_paths
+            else:
+                figure_inputs.extend(extracted_figure_paths)
+
+    if figure_inputs:
+        figure_inputs = ",".join(figure_inputs)
+
     task = "polish" if input_files is None else "polish_long"
     execute_task(
         "edit_tex",
         task,
         model,
         input_file,
+        input_files=input_files,
         auxiliary_files=auxiliary_files,
         figure_inputs=figure_inputs,
         instruction=instruction,
@@ -772,6 +787,15 @@ def pack_latexdiff_vc(input_file, commit_hash):
         print("No files found to pack.")
 
 
+@click.command()
+@click.argument("latex_file")
+def extract_figure_path(latex_file):
+    figure_paths = extract_figure_paths(latex_file)
+    print("Extracted figure file paths:")
+    for figure in figure_paths:
+        print(figure)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -829,6 +853,10 @@ cli.add_command(pack_single)
 cli.add_command(pack_latexdiff_vc)
 cli.add_command(latexdiff)
 cli.add_command(latexdiff_vc)
+
+# tools
+cli.add_command(extract_figure_path)
+
 
 if __name__ == "__main__":
     cli()

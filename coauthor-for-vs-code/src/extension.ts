@@ -241,7 +241,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[]) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -268,6 +268,11 @@ export function activate(context: vscode.ExtensionContext) {
           command += ` --figure_inputs="${figureFileList.join(',')}"`;
         }
       }
+
+      if (autoExtractFigure) {
+        command += ' --auto_extract_figure';
+      }
+
       if (instructions) {
         const escapedInstructions = instructions
           .replace(/\\/g, '\\\\')  // Escape backslashes
@@ -386,8 +391,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const model_val = message.model;
           const additionalInputFiles_val = message.additionalInputFiles;
           const figureFiles_val = message.figureFiles;
+          const autoExtractFigure_val = message.autoExtractFigure;
 
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val);
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, autoExtractFigure_val);
           break;
         case 'selectInputFile':
           const inputFilePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
@@ -671,6 +677,10 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFilesSelectDiv.style.display = 'none';
             saveState();
           });
+          document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
+            const isChecked = event.target.checked;
+            vscode.postMessage({ command: 'updateAutoExtractFigure', value: isChecked });
+          });
           document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function() {
             vscode.postMessage({
               command: 'selectMultipleAuxFiles'
@@ -711,6 +721,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const instructions = document.getElementById('taskInput').value;
             const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
+            const autoExtractFigure = document.getElementById('autoExtractFigure').checked;
           
             // Get additional input files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
@@ -736,6 +747,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               instructions: instructions,
               reflect: reflect,
               model: model,
+              autoExtractFigure: autoExtractFigure,
             });
           });
           document.getElementById('packSingleButton').addEventListener('click', function() {
@@ -807,6 +819,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('taskInput').addEventListener('input', saveState);
           document.getElementById('reflectSelect').addEventListener('change', saveState);
           document.getElementById('commitSelect').addEventListener('change', saveState);
+          document.getElementById('autoExtractFigure').addEventListener('change', saveState);
         });
 
         function saveState() {
@@ -820,6 +833,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             taskInput: document.getElementById('taskInput').value,
             reflectSelect: document.getElementById('reflectSelect').value,
             commitSelect: document.getElementById('commitSelect').value,
+            autoExtractFigure: document.getElementById('autoExtractFigure').checked,
             multipleFilesSelect: getSelectedFiles(document.getElementById('multipleFilesSelect')),
             multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
             multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
@@ -839,6 +853,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
+            document.getElementById('autoExtractFigure').checked = previousState.autoExtractFigure || false;
 
             // Restore selected multiple files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
@@ -1067,7 +1082,8 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <p>
         <label for="figureFileSelect">Select Figure File:</label>
         <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple</button>
-        <button id="emptyMultipleFiguresButton" style="float: right; margin-right: 10px;">Empty</button><br>
+        <button id="emptyMultipleFiguresButton" style="float: right; margin-right: 10px;">Empty</button>
+        <br>
         <select id="figureFileSelect">
           <option value="">None</option>
         </select>
@@ -1093,6 +1109,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           <option value="gpt4o">GPT-4 Omni</option>
           <option value="gpt4t">GPT-4 Turbo</option>
         </select><br>
+        <label for="autoExtractFigure">
+          Auto-extract Figs: <input type="checkbox" id="autoExtractFigure">
+        </label>
         <button id="executeButton" style="float: right;">Execute</button>
       </p>
       <p>
