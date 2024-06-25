@@ -241,7 +241,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, includeTexCount: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -269,10 +269,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
 
-      if (autoExtractFigure) {
-        command += ' --auto_extract_figure';
-      }
-
       if (instructions) {
         const escapedInstructions = instructions
           .replace(/\\/g, '\\\\')  // Escape backslashes
@@ -286,6 +282,13 @@ export function activate(context: vscode.ExtensionContext) {
       }
       if (reflect !== 'default') {
         command += ` --reflect=${reflect}`;
+      }
+
+      if (autoExtractFigure) {
+        command += ' --auto_extract_figure';
+      }
+      if (includeTexCount) {
+        command += ' --include_tex_count';
       }
 
       terminal_new.sendText(command);
@@ -392,8 +395,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const additionalInputFiles_val = message.additionalInputFiles;
           const figureFiles_val = message.figureFiles;
           const autoExtractFigure_val = message.autoExtractFigure;
+          const includeTexCount_val = message.includeTexCount;
 
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, autoExtractFigure_val);
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFilePath_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, autoExtractFigure_val, includeTexCount_val);
           break;
         case 'selectInputFile':
           const inputFilePath = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
@@ -722,6 +726,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const reflect = document.getElementById('reflectSelect').value;
             const model = document.getElementById('modelSelect').value;
             const autoExtractFigure = document.getElementById('autoExtractFigure').checked;
+            const includeTexCount = document.getElementById('includeTexCount').checked;
           
             // Get additional input files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
@@ -748,6 +753,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               reflect: reflect,
               model: model,
               autoExtractFigure: autoExtractFigure,
+              includeTexCount: includeTexCount,
             });
           });
           document.getElementById('packSingleButton').addEventListener('click', function() {
@@ -820,6 +826,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('reflectSelect').addEventListener('change', saveState);
           document.getElementById('commitSelect').addEventListener('change', saveState);
           document.getElementById('autoExtractFigure').addEventListener('change', saveState);
+          document.getElementById('includeTexCount').addEventListener('change', saveState);
         });
 
         function saveState() {
@@ -834,6 +841,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             reflectSelect: document.getElementById('reflectSelect').value,
             commitSelect: document.getElementById('commitSelect').value,
             autoExtractFigure: document.getElementById('autoExtractFigure').checked,
+            includeTexCount: document.getElementById('includeTexCount').checked,
             multipleFilesSelect: getSelectedFiles(document.getElementById('multipleFilesSelect')),
             multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
             multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
@@ -854,6 +862,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
             document.getElementById('autoExtractFigure').checked = previousState.autoExtractFigure || false;
+            document.getElementById('includeTexCount').checked = previousState.includeTexCount || false;
 
             // Restore selected multiple files
             const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
@@ -1111,6 +1120,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </select><br>
         <label for="autoExtractFigure">
           Auto-extract Figs: <input type="checkbox" id="autoExtractFigure">
+        </label>
+        <label for="includeTexCount">
+          Include Tex Count: <input type="checkbox" id="includeTexCount">
         </label>
         <button id="executeButton" style="float: right;">Execute</button>
       </p>
