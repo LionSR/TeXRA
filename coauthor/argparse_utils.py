@@ -1,4 +1,3 @@
-# coauthor/argparse_utils.py
 import argparse
 import os
 

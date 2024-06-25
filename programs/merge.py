@@ -1,5 +1,3 @@
-# merge.py
-import os
 from termcolor import colored
 
 import coauthor
