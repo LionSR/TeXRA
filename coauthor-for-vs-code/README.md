@@ -80,7 +80,12 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.4.4
+- Added tex count functionality for LaTeX documents
+- Improved figure handling with auto-extraction
+- Enhanced CoAuthor extension UI to include tex count option
+- Updated CLI to support new tex count feature
+- Various minor improvements and bug fixes
 
 ### 0.4.3
 - Added auto-extract figure option in VS Code extension
