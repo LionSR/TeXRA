@@ -18,6 +18,7 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
     <document_content>
         {INPUT_CONTENT}
     </document_content>
+    {ADDITIONAL_INPUT_FILES}
 </documents>
 
 Please carefully read through the entire chapter and ensure you fully understand all the details.

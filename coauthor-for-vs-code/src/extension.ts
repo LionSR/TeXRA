@@ -1086,7 +1086,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </select>
         <label for="modelSelect">Model:</label>
         <select id="modelSelect">
-          <option value="sonnet+">Sonnet 3.5</option>
+          <option value="sonnet+">Sonnet+</option>
           <option value="opus">Opus</option>
           <option value="sonnet">Sonnet</option>
           <option value="haiku">Haiku</option>
