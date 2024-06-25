@@ -535,7 +535,6 @@ def clean_build():
                     print(f"Deleted directory: {item_path}")
 
     # Clean current directory
-    remove_files(".", "*.pdf")
     clean_build_dir(".")
 
     # Clean subdirectories
@@ -543,7 +542,6 @@ def clean_build():
         dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
         for dir in dirs:
             subdir = os.path.join(root, dir)
-            remove_files(subdir, "*.pdf")
             clean_build_dir(subdir)
 
     print("All specified files have been deleted.")
@@ -598,7 +596,12 @@ def clean_single(input_file, model, reflect, task):
     def get_patterns(base, model, task, reflect):
         patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
         if reflect and reflect != "False":
-            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
+            patterns.extend(
+                [
+                    f"{base}_{task}_reflect_{model}{ext}"
+                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_log.txt"]
+                ]
+            )
         return patterns
 
     file_patterns = get_patterns(base_name, model, first_task_chunk, reflect)
@@ -644,7 +647,12 @@ def pack_single(input_file, model, reflect, task):
     def get_file_patterns(base, task, model, reflect):
         patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
         if reflect and reflect != "False":
-            patterns.extend([f"{base}_{task}_reflect_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]])
+            patterns.extend(
+                [
+                    f"{base}_{task}_reflect_{model}{ext}"
+                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_log.txt"]
+                ]
+            )
         return patterns
 
     file_patterns = get_file_patterns(base_name, first_task_chunk, model, reflect)
@@ -673,19 +681,10 @@ def pack_single(input_file, model, reflect, task):
         print(f"Files packed into {output_folder}")
 
     # Remove temporary files
-    temp_extensions = [
-        ".aux",
-        ".bbl",
-        ".blg",
-        ".fdb_latexmk",
-        ".fls",
-        ".log",
-        ".out",
-        ".synctex.gz",
-    ]
-    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff"]]
+    temp_extensions = [".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
+    temp_patterns = [f"{base_name}_{first_task_chunk}_{model}{suffix}" for suffix in ["", "_diff", "Notes", "_diffNotes"]]
     if reflect and reflect != "False":
-        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff"]])
+        temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff", "Notes", "_diffNotes"]])
 
     for pattern in temp_patterns:
         for ext in temp_extensions:

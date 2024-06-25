@@ -249,7 +249,10 @@ def process_response_cycle(
         if not file_exists:
             # or not output_settings["append_mode"]
             print("Creating the file")
-            write_file(output_file, new_response)
+            if "<scractchpad>" in state["last_response"]:
+                write_file(output_file, state["last_response"] + best_connector + new_response)
+            else:
+                write_file(output_file, new_response)
             file_exists = True
         elif output_settings["overwrite"]:
             print("Overwriting file")

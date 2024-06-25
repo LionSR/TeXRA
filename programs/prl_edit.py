@@ -14,7 +14,6 @@ all_tasks_settings = {
         # "end_tag": "\\end{document}",
         "output_type": "tex",
         "first_prefill": "Now we output the corrected supp.tex as follows.\n<latex_document>",
-        # "first_prefill": "\\documentclass[aps,prl,twocolumn,superscriptaddress,nolongbibliography,nobalancelastpage,10pt]{revtex4-2}\n\\input{preamble}\n\\graphicspath",
     },
     "correct_supp_prl": {
         "document_tag": "latex_document",
