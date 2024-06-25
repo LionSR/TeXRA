@@ -4,6 +4,7 @@ from termcolor import colored
 
 import coauthor
 from coauthor import read_file, get_common_argparser, get_prompt_path, run_latexdiff
+from coauthor.process import get_summary_string
 
 prompt_path = get_prompt_path(coauthor, "lecture")
 
@@ -88,7 +89,7 @@ def main():
 
     with open(args.input_file.replace(".tex", "_log.txt"), "a+") as log_file:
         log_file.write(
-            f"Start logging: {datetime.now()}\nTask: {args.task}\nModel: {args.model}\nInstruction:\n<request>\n{args.instruction}\n</request>\n\n"
+            f"Start logging: {datetime.now()}\nTask: {args.task}\nModel: {args.model}\nInstruction:\n<request>\n{args.instruction}\n</request>\n"
         )
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = coauthor.process_file_with_llm(
@@ -105,6 +106,12 @@ def main():
 
     print(colored(f"Output file: {output_file}", "yellow"))
     run_latexdiff(args.input_file, output_file)
+
+    # Log the summary
+    summary = get_summary_string(state, args.model)
+    print(f"Summary: {summary}")
+    with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
+        log_file.write(f"Summary:\n{summary}\n")
 
     if args.reflect and end_turn:
         state, accumulated_output, end_turn, output_file_reflect, messages = coauthor.process_reflection(
@@ -124,6 +131,13 @@ def main():
         run_latexdiff(args.input_file, output_file_reflect)
 
         run_latexdiff(output_file, output_file_reflect, args.model)
+
+        # Get and log the reflection summary
+        reflection_summary = get_summary_string(state, args.model)
+        print(f"\nReflection summary: {reflection_summary}")
+
+        with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
+            log_file.write(f"\nReflection summary:\n{reflection_summary}\n")
 
 
 if __name__ == "__main__":
