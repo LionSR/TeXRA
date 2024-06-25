@@ -134,10 +134,10 @@ def main():
 
         # Get and log the reflection summary
         reflection_summary = get_summary_string(state, args.model)
-        print(f"\nReflection summary: {reflection_summary}")
+        print(f"Reflection summary: {reflection_summary}")
 
         with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
-            log_file.write(f"\nReflection summary:\n{reflection_summary}\n")
+            log_file.write(f"Reflection summary:\n{reflection_summary}\n")
 
 
 if __name__ == "__main__":
