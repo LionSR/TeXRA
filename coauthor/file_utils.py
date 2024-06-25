@@ -49,12 +49,16 @@ def check_for_massive_repetition(last_response, new_response):
     return massive_repetition_detected
 
 
-def run_latexdiff(input_file, output_file):
+def run_latexdiff(input_file, output_file, model=None):
     import os
     from termcolor import colored
 
     log_file_name = output_file.replace(".tex", "_log.txt")
     diff_file_name = output_file.replace(".tex", "_diff.tex")
+
+    if model is not None:
+        if model in input_file and model in output_file:
+            diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
     # Handle scratchpad content
     with open(output_file, "r") as file:
@@ -92,21 +96,21 @@ def run_latexdiff(input_file, output_file):
             "\\providecommand{\\DIFaddbegin}",
             "\\RequirePackage[normalem]{ulem}",
             "\\usetikzlibrary",
+            "\\RequirePackage{color}",
         ]
+        document_started = False
         for line in lines:
             if any(pkg in line for pkg in packages_to_add_newline):
                 diff_file.write("\n")
 
-            if "%DIF ADD" in line:
-                add_block = True
-            elif "\\documentclass" in line or "\\input" in line:
+            if "\\documentclass" in line or "\\input" in line:
                 add_block = False
+                document_started = True
+            elif ("%DIF ADD" in line or "Here is" in line) and not document_started:
+                add_block = True
 
             if not add_block:
                 diff_file.write(line)
-
-            if "\\RequirePackage{color}" in line:
-                diff_file.write("\n")
 
     print(colored(f"Line breaks added to {diff_file_name}", "blue"))
 
