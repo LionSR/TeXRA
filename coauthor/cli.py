@@ -92,32 +92,9 @@ def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
 
 @click.command()
 @shared_arguments_long
+@click.option("--input_files", default=None, help="Path to the multiple input files")
 @click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
 def polish_tex(
-    model,
-    input_file,
-    auxiliary_files=None,
-    figure_inputs=None,
-    instruction=None,
-    reflect=True,
-):
-    execute_task(
-        "edit_tex",
-        "polish",
-        model,
-        input_file,
-        auxiliary_files=auxiliary_files,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-    )
-
-
-@click.command()
-@shared_arguments_long
-@click.option("--input_files", default=None, help="Path to the multiple input files")
-@click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files")
-def polish_tex_long(
     model,
     input_file,
     input_files=None,
@@ -126,17 +103,43 @@ def polish_tex_long(
     instruction=None,
     reflect=True,
 ):
+    task = "polish" if input_files is None else "polish_long"
     execute_task(
         "edit_tex",
-        "polish_long",
+        task,
         model,
         input_file,
-        input_files=input_files,
         auxiliary_files=auxiliary_files,
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
     )
+
+
+# @click.command()
+# @shared_arguments_long
+# @click.option("--input_files", default=None, help="Path to the multiple input files")
+# @click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files")
+# def polish_tex_long(
+#     model,
+#     input_file,
+#     input_files=None,
+#     auxiliary_files=None,
+#     figure_inputs=None,
+#     instruction=None,
+#     reflect=True,
+# ):
+#     execute_task(
+#         "edit_tex",
+#         "polish_long",
+#         model,
+#         input_file,
+#         input_files=input_files,
+#         auxiliary_files=auxiliary_files,
+#         figure_inputs=figure_inputs,
+#         instruction=instruction,
+#         reflect=reflect,
+#     )
 
 
 @click.command()
@@ -167,12 +170,15 @@ def correct_st(model, input_file, reflect=False):
 
 @click.command()
 @shared_arguments_long
-def polish_st(model, input_file, figure_inputs, instruction=None, reflect=True):
+@click.option("--input_files", default=None, help="Path to the multiple input files")
+def polish_st(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
+    task = "polish_st_long" if input_files else "polish_st"
     execute_task(
         "edit_lecture",
-        "polish_st",
+        task,
         model,
         input_file,
+        input_files=input_files,
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
@@ -193,20 +199,20 @@ def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
     )
 
 
-@click.command()
-@shared_arguments_long
-@click.option("--input_files", default=None, help="Path to the multiple input files")
-def polish_st_long(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
-    execute_task(
-        "edit_lecture",
-        "polish_st_long",
-        model,
-        input_file,
-        input_files=input_files,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-    )
+# @click.command()
+# @shared_arguments_long
+# @click.option("--input_files", default=None, help="Path to the multiple input files")
+# def polish_st_long(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
+#     execute_task(
+#         "edit_lecture",
+#         "polish_st_long",
+#         model,
+#         input_file,
+#         input_files=input_files,
+#         figure_inputs=figure_inputs,
+#         instruction=instruction,
+#         reflect=reflect,
+#     )
 
 
 @click.command()
@@ -641,7 +647,7 @@ def pack_single(input_file, model, reflect, task):
     now = datetime.now().strftime("%Y%m%d%H%M")
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-    output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}")
+    output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{model}")
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_file_patterns(base, task, model, reflect):
@@ -775,7 +781,7 @@ cli.add_command(polish_tex)
 cli.add_command(draw_tex)
 
 # cli.add_command(correct_tex_long)
-cli.add_command(polish_tex_long)
+# cli.add_command(polish_tex_long)
 # cli.add_command(draw_texLong)
 
 # edit_lecture.py
@@ -786,7 +792,7 @@ cli.add_command(polish_qi)
 cli.add_command(draw_st)
 cli.add_command(draw_qi)
 
-cli.add_command(polish_st_long)
+# cli.add_command(polish_st_long)
 
 # meeting2text.py
 cli.add_command(meeting2text)
