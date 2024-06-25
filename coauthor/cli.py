@@ -6,7 +6,7 @@ import glob
 import shutil
 from datetime import datetime
 from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
-from coauthor.tools import extract_figure_paths
+from coauthor.tools import get_tex_count, extract_figure_paths, extract_and_compile_tikzpictures
 from dotenv import load_dotenv
 
 # Add this at the beginning of the file, after the imports
@@ -30,6 +30,8 @@ def shared_arguments(func):
     func = click.argument("input_file")(func)
     func = click.option("--model", required=False, default="opus", help="Model to use")(func)
     func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
+    func = click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file")(func)
+    func = click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message")(func)
     return func
 
 
@@ -54,6 +56,20 @@ def execute_task(script, task, model, input_file, **kwargs):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
+
+    if kwargs.get("auto_extract_figure"):
+        extracted_figure_paths = extract_figure_paths(input_file)
+        if extracted_figure_paths:
+            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
+                kwargs["figure_inputs"] = extracted_figure_paths
+            else:
+                kwargs["figure_inputs"].extend(extracted_figure_paths)
+
+    if kwargs.get("include_tex_count"):
+        tex_count_stats = get_tex_count(input_file)
+        if tex_count_stats:
+            instruction = kwargs.get("instruction", "")
+            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
 
     for key, value in kwargs.items():
         if value is not None:
@@ -80,7 +96,8 @@ def cli():
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
-def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
+@click.option("--instruction", required=False, default=None, help="Instruction for processing")
+def correct_tex(model, input_file, auxiliary_files=None, reflect=False, auto_extract_figure=False, include_tex_count=False, instruction=None):
     execute_task(
         "edit_tex",
         "correct",
@@ -88,6 +105,9 @@ def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
         input_file,
         auxiliary_files=auxiliary_files,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
+        instruction=instruction,
     )
 
 
@@ -95,7 +115,6 @@ def correct_tex(model, input_file, auxiliary_files=None, reflect=False):
 @shared_arguments_long
 @click.option("--input_files", default=None, help="Path to the multiple input files")
 @click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
-@click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file")
 def polish_tex(
     model,
     input_file,
@@ -105,19 +124,9 @@ def polish_tex(
     instruction=None,
     reflect=True,
     auto_extract_figure=False,
+    include_tex_count=False,
 ):
-    if auto_extract_figure:
-        extracted_figure_paths = extract_figure_paths(input_file)
-        if extracted_figure_paths:
-            if figure_inputs is None or figure_inputs == []:
-                figure_inputs = extracted_figure_paths
-            else:
-                figure_inputs.extend(extracted_figure_paths)
-
-    if figure_inputs:
-        figure_inputs = ",".join(figure_inputs)
-
-    task = "polish" if input_files is None else "polish_long"
+    task = "polish" if (input_files is None or input_files == []) else "polish_long"
     execute_task(
         "edit_tex",
         task,
@@ -128,38 +137,14 @@ def polish_tex(
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
-
-
-# @click.command()
-# @shared_arguments_long
-# @click.option("--input_files", default=None, help="Path to the multiple input files")
-# @click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files")
-# def polish_tex_long(
-#     model,
-#     input_file,
-#     input_files=None,
-#     auxiliary_files=None,
-#     figure_inputs=None,
-#     instruction=None,
-#     reflect=True,
-# ):
-#     execute_task(
-#         "edit_tex",
-#         "polish_long",
-#         model,
-#         input_file,
-#         input_files=input_files,
-#         auxiliary_files=auxiliary_files,
-#         figure_inputs=figure_inputs,
-#         instruction=instruction,
-#         reflect=reflect,
-#     )
 
 
 @click.command()
 @shared_arguments_long
-def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True):
+def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
     execute_task(
         "edit_tex",
         "draw",
@@ -168,6 +153,8 @@ def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True):
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -186,8 +173,10 @@ def correct_st(model, input_file, reflect=False):
 @click.command()
 @shared_arguments_long
 @click.option("--input_files", default=None, help="Path to the multiple input files")
-def polish_st(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
-    task = "polish_st_long" if input_files else "polish_st"
+def polish_st(
+    model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False
+):
+    task = "polish_st_long" if (input_files is None or input_files == []) else "polish_st"
     execute_task(
         "edit_lecture",
         task,
@@ -197,12 +186,14 @@ def polish_st(model, input_file, input_files=None, figure_inputs=None, instructi
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments_long
-def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
+def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
     execute_task(
         "edit_lecture",
         "polish_qi",
@@ -211,28 +202,14 @@ def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
-
-
-# @click.command()
-# @shared_arguments_long
-# @click.option("--input_files", default=None, help="Path to the multiple input files")
-# def polish_st_long(model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True):
-#     execute_task(
-#         "edit_lecture",
-#         "polish_st_long",
-#         model,
-#         input_file,
-#         input_files=input_files,
-#         figure_inputs=figure_inputs,
-#         instruction=instruction,
-#         reflect=reflect,
-#     )
 
 
 @click.command()
 @shared_arguments_long
-def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True):
+def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
     execute_task(
         "edit_lecture",
         "draw_st",
@@ -241,12 +218,14 @@ def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True):
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments_long
-def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
+def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
     execute_task(
         "edit_lecture",
         "draw_qi",
@@ -255,6 +234,8 @@ def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True):
         figure_inputs=figure_inputs,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -789,11 +770,29 @@ def pack_latexdiff_vc(input_file, commit_hash):
 
 @click.command()
 @click.argument("latex_file")
+def tex_count(latex_file):
+    stats = get_tex_count(latex_file)
+    if stats is not None:
+        print(f"Statistics for {latex_file}:")
+        print(stats)
+
+
+@click.command()
+@click.argument("latex_file")
 def extract_figure_path(latex_file):
     figure_paths = extract_figure_paths(latex_file)
     print("Extracted figure file paths:")
     for figure in figure_paths:
         print(figure)
+
+
+@click.command()
+@click.argument("latex_file")
+def extract_tikzpictures(latex_file):
+    compiled_files = extract_and_compile_tikzpictures(latex_file)
+    print("Compiled TikZ pictures:")
+    for file in compiled_files:
+        print(file)
 
 
 if __name__ == "__main__":
@@ -804,10 +803,6 @@ cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
 
-# cli.add_command(correct_tex_long)
-# cli.add_command(polish_tex_long)
-# cli.add_command(draw_texLong)
-
 # edit_lecture.py
 cli.add_command(correct_st)
 cli.add_command(correct_qi)
@@ -815,8 +810,6 @@ cli.add_command(polish_st)
 cli.add_command(polish_qi)
 cli.add_command(draw_st)
 cli.add_command(draw_qi)
-
-# cli.add_command(polish_st_long)
 
 # meeting2text.py
 cli.add_command(meeting2text)
@@ -855,7 +848,9 @@ cli.add_command(latexdiff)
 cli.add_command(latexdiff_vc)
 
 # tools
+cli.add_command(tex_count)
 cli.add_command(extract_figure_path)
+cli.add_command(extract_tikzpictures)
 
 
 if __name__ == "__main__":
