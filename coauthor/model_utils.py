@@ -75,15 +75,17 @@ def compute_api_price(input_tokens, output_tokens, model):
     return input_price + output_price
 
 
-def print_message_summary(state, model):
+def get_summary_string(state, model):
     total_input_tokens = state["total_input_tokens"]
     total_output_tokens = state["total_output_tokens"]
     total_response_time = state["total_response_time"]
-    print(
-        f"Total input tokens  : {colored(total_input_tokens, 'cyan')}\n"
-        f"Total output tokens : {colored(total_output_tokens, 'cyan')}\n"
-        f"Total response time : {colored(total_response_time, 'green')} seconds\n"
-        f"Total cost          : ${compute_api_price(total_input_tokens, total_output_tokens, model):.2f}"
+    cost = compute_api_price(total_input_tokens, total_output_tokens, model)
+
+    return (
+        f"Total input tokens  : {total_input_tokens}\n"
+        f"Total output tokens : {total_output_tokens}\n"
+        f"Total response time : {total_response_time:.2f} seconds\n"
+        f"Total cost          : ${cost:.2f}\n"
     )
 
 
@@ -196,10 +198,12 @@ def handle_images(figure_inputs, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url" if is_openai_model(model) else "source": {
-                        "url" if is_openai_model(model) else "type": (
-                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
-                        ),
+                    "image_url"
+                    if is_openai_model(model)
+                    else "source": {
+                        "url"
+                        if is_openai_model(model)
+                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
