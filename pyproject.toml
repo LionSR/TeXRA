@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coauthor"
-version = "0.6.0"
+version = "0.7.0"
 authors = [
   { name="Sirui Lu", email="sirui.lu.phys@gmail.com" },
 ]
@@ -41,7 +41,7 @@ coauthor = "coauthor.cli:cli"
 
 [tool.black]
 line-length = 151
-target-version = ['py39', 'py310', 'py311']
+target-version = ['py39', 'py310', 'py311', 'py312']
 include = '\.(pyi?|ipynb)$'
 exclude = '''
 /(
