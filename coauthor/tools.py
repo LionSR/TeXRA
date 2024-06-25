@@ -28,6 +28,7 @@ def get_tex_count(file_path):
 
 def extract_figure_paths(latex_file_path):
     figure_paths = []
+    latex_dir = os.path.dirname(latex_file_path)
 
     # Regular expressions to match figure inclusion commands
     figure_patterns = [re.compile(r"\\includegraphics(?:\[.*?\])?\{(.+?)\}"), re.compile(r"\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}")]
@@ -39,7 +40,16 @@ def extract_figure_paths(latex_file_path):
         # Find all matches in the content for both patterns
         for pattern in figure_patterns:
             matches = pattern.findall(content)
-            figure_paths.extend(matches)
+            for match in matches:
+                # Normalize the path, but keep it relative
+                norm_path = os.path.normpath(os.path.join(latex_dir, match))
+                rel_path = os.path.relpath(norm_path, start=latex_dir)
+                figure_paths.append(rel_path)
+
+        # Find all matches in the content for both patterns
+        # for pattern in figure_patterns:
+        #     matches = pattern.findall(content)
+        #     figure_paths.extend(matches)
 
     except FileNotFoundError:
         print(f"Error: File '{latex_file_path}' not found.")
