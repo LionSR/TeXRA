@@ -618,13 +618,33 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         padding: 2px;
         background-color: #ffffff;
       }
+      .remove-button {
+        margin-left: 10px;
+        color: red;
+        cursor: pointer;
+      }
       </style>
       <script>
         const vscode = acquireVsCodeApi();
 
+        function addFileToList(containerId, file) {
+          const container = document.getElementById(containerId);
+          const fileElement = document.createElement('div');
+          fileElement.textContent = file;
+          const removeButton = document.createElement('span');
+          removeButton.textContent = ' -';
+          removeButton.className = 'remove-button';
+          removeButton.addEventListener('click', () => {
+            container.removeChild(fileElement);
+            saveState();
+          });
+          fileElement.appendChild(removeButton);
+          container.appendChild(fileElement);
+        }
+
         function getSelectedFiles(multipleFilesSelectDiv) {
           const fileElements = multipleFilesSelectDiv.getElementsByTagName('div');
-          return Array.from(fileElements).map(el => el.textContent || '');
+          return Array.from(fileElements).map(el => el.textContent.replace(' -', '') || '');
         }
 
         window.onload = function() {
@@ -869,23 +889,19 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFilesSelectDiv.innerHTML = '';
             if (previousState.multipleFilesSelect && previousState.multipleFilesSelect.length > 0) {
               previousState.multipleFilesSelect.forEach(file => {
-                const fileElement = document.createElement('div');
-                fileElement.textContent = file;
-                multipleFilesSelectDiv.appendChild(fileElement);
+                addFileToList('multipleFilesSelect', file);
               });
               multipleFilesSelectDiv.style.display = 'block';
             } else {
               multipleFilesSelectDiv.style.display = 'none';
             }
-
+        
             // Restore selected multiple auxiliary files
             const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
             multipleAuxFilesSelectDiv.innerHTML = '';
             if (previousState.multipleAuxFilesSelect && previousState.multipleAuxFilesSelect.length > 0) {
               previousState.multipleAuxFilesSelect.forEach(file => {
-                const fileElement = document.createElement('div');
-                fileElement.textContent = file;
-                multipleAuxFilesSelectDiv.appendChild(fileElement);
+                addFileToList('multipleAuxFilesSelect', file);
               });
               multipleAuxFilesSelectDiv.style.display = 'block';
             } else {
@@ -897,9 +913,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFiguresSelectDiv.innerHTML = '';
             if (previousState.multipleFiguresSelect && previousState.multipleFiguresSelect.length > 0) {
               previousState.multipleFiguresSelect.forEach(file => {
-                const fileElement = document.createElement('div');
-                fileElement.textContent = file;
-                multipleFiguresSelectDiv.appendChild(fileElement);
+                addFileToList('multipleFiguresSelect', file);
               });
               multipleFiguresSelectDiv.style.display = 'block';
             } else {
@@ -913,46 +927,37 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           switch (message.command) {
             case 'setMultipleFiles':
               const multipleFilesSelectDiv = document.getElementById('multipleFilesSelect');
-              if (message.files && message.files.length > 0) {
-                message.files.forEach(file => {
-                  const fileElement = document.createElement('div');
-                  fileElement.textContent = file;
-                  multipleFilesSelectDiv.appendChild(fileElement);
+              const existingFiles = getSelectedFiles(multipleFilesSelectDiv);
+              const newFiles = message.files.filter(file => !existingFiles.includes(file));
+              if (newFiles.length > 0) {
+                newFiles.forEach(file => {
+                  addFileToList('multipleFilesSelect', file);
                 });
                 multipleFilesSelectDiv.style.display = 'block';
-              } else {
-                multipleFilesSelectDiv.style.display = 'none';
               }
               saveState();
               break;
             case 'setMultipleAuxFiles':
               const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-              if (message.files && message.files.length > 0) {
-                message.files.forEach(file => {
-                  const fileElement = document.createElement('div');
-                  fileElement.textContent = file;
-                  multipleAuxFilesSelectDiv.appendChild(fileElement);
+              const existingAuxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
+              const newAuxFiles = message.files.filter(file => !existingAuxFiles.includes(file));
+              if (newAuxFiles.length > 0) {
+                newAuxFiles.forEach(file => {
+                  addFileToList('multipleAuxFilesSelect', file);
                 });
                 multipleAuxFilesSelectDiv.style.display = 'block';
-              } else {
-                multipleAuxFilesSelectDiv.style.display = 'none';
               }
               saveState();
               break;
             case 'setMultipleFigures':
               const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-              if (message.files && message.files.length > 0) {
-                message.files.forEach(file => {
-                  const fileElement = document.createElement('div');
-                  fileElement.textContent = file;
-                  multipleFiguresSelectDiv.appendChild(fileElement);
+              const existingFigures = getSelectedFiles(multipleFiguresSelectDiv);
+              const newFigures = message.files.filter(file => !existingFigures.includes(file));
+              if (newFigures.length > 0) {
+                newFigures.forEach(file => {
+                  addFileToList('multipleFiguresSelect', file);
                 });
                 multipleFiguresSelectDiv.style.display = 'block';
-                // document.getElementById('figureFileSelect').value = '';
-              } else {
-                multipleFiguresSelectDiv.style.display = 'none';
-                // Restore the previously selected single figure file if no multiple figures are selected
-                document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
               }
               saveState();
               break;
