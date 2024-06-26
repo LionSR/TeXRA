@@ -1,14 +1,17 @@
 import os
 from termcolor import colored
 import coauthor
-from coauthor import (
-    read_file,
-    extract_text_from_tags,
-    get_common_argparser,
-    get_prompt_path,
+from coauthor import get_common_argparser, get_prompt_path, extract_text_from_tags
+from coauthor.process import process_file_with_llm
+from coauthor.edit_utils import (
+    get_user_prefix_vars,
+    log_start,
+    log_summary,
+    handle_reflection,
+    get_llm_settings,
+    get_output_settings,
 )
 
-# Define the settings for each mode
 all_tasks_settings = {
     "transcribe": {
         "document_tag": "improved_document",
@@ -41,7 +44,6 @@ prompt_path = get_prompt_path(coauthor, "lecture2text")
 
 def main():
     parser = get_common_argparser()
-
     parser.add_argument(
         "--task",
         type=str,
@@ -49,37 +51,44 @@ def main():
         help="Mode of operation, either 'transcribe', 'punctuate', '2tex', or 'reflect'.",
         choices=["transcribe", "punctuate", "2tex", "reflect"],
     )
-
     args = parser.parse_args()
-    print(colored(f"args: {args}", "blue"))
 
+    print(colored(f"args: {args}", "blue"))
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
-    user_prefix_vars = {
-        "INPUT_FILE": os.path.basename(args.input_file),
-        "DOCUMENT_CLS": "lecture.cls",
-        "DOCUMENT_CLS_CONTENT": read_file("lecture.cls"),
-        "COMMANDS": "commands_qi.tex",
-        "COMMANDS_CONTENT": read_file("commands_qi.tex"),
-    }
+    user_prefix_vars = get_user_prefix_vars(args)
+    user_prefix_vars.update(
+        {
+            "DOCUMENT_CLS": "lecture.cls",
+            "DOCUMENT_CLS_CONTENT": coauthor.read_file("lecture.cls"),
+            "COMMANDS": "commands_qi.tex",
+            "COMMANDS_CONTENT": coauthor.read_file("commands_qi.tex"),
+        }
+    )
 
     if args.task in ["2tex", "reflect"]:
-        user_prefix_vars["INPUT_CONTENT"] = extract_text_from_tags(read_file(args.input_file), "improved_document")
+        user_prefix_vars["INPUT_CONTENT"] = extract_text_from_tags(coauthor.read_file(args.input_file), "improved_document")
     elif args.task in ["transcribe", "punctuate"]:
-        user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
+        user_prefix_vars["INPUT_CONTENT"] = coauthor.read_file(args.input_file)
 
-    # Get the settings for the selected mode
     task_settings = all_tasks_settings[args.task]
 
-    coauthor.process_file_with_llm(
-        args.task,
-        task_settings,
-        args.input_file,
-        user_prefix_vars,
-        reflect=args.reflect,
-        model=args.model,
-        prompt_path=prompt_path,
+    log_start(args)
+
+    llm_settings = get_llm_settings(args, prompt_path)
+    output_settings = get_output_settings(args)
+
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
+        args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
     )
+
+    print(colored(f"Output file: {output_file}", "yellow"))
+    coauthor.run_latexdiff(args.input_file, output_file)
+
+    log_summary(args, state)
+
+    if args.reflect and end_turn:
+        handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)
 
 
 if __name__ == "__main__":

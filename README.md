@@ -12,6 +12,17 @@ pip install -e .
 
 ## Changelog
 
+### 0.7.4 [backend]
+
+- Created new `edit_utils.py` for shared edit functionality
+- Refactored `adapt.py`, `lecture2text.py`, `meeting2text.py`, `merge.py`, `paper2note.py`, `prl_edit.py`, `prl_reply.py`, and `txt2tex.py` to use shared utilities
+- Updated `model_utils.py` for improved image handling
+- Enhanced error handling and input validation across multiple scripts
+- Improved code readability and maintainability
+- Updated version to 0.7.4 in `pyproject.toml`
+- Various minor improvements and bug fixes
+
+
 ### 0.7.3 [backend]
 - Created new edit_utils.py file for shared edit functionality
 - Refactored edit_lecture.py and edit_tex.py to use shared utilities
