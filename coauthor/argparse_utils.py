@@ -51,6 +51,8 @@ def get_common_argparser():
         default=[],
         help="Path to the auxiliary file(s). Multiple files can be specified.",
     )
+    parser.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
+    parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
     return parser
 
 
