@@ -12,6 +12,14 @@ pip install -e .
 
 ## Changelog
 
+### 0.7.3 [backend]
+- Created new edit_utils.py file for shared edit functionality
+- Refactored edit_lecture.py and edit_tex.py to use shared utilities
+- Updated model_utils.py for improved image handling
+- Enhanced error handling and input validation
+- Improved code readability and maintainability
+- Various minor improvements and bug fixes
+
 ### 0.7.2 [backend]
 - Extensively refactored process.py for improved code organization and maintainability:
   - Separated file processing logic into dedicated functions
