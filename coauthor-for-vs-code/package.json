@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "Sirui Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -20,12 +20,17 @@
       "properties": {
         "coauthor.includedDirectories": {
           "type": "array",
-          "default": ["Discrete-Time", "FiguresEx"],
+          "default": [
+            "Discrete-Time",
+            "FiguresEx"
+          ],
           "description": "Directories to include in the figure path"
         },
         "coauthor.ignoredFilePatterns": {
           "type": "array",
-          "default": ["*_log.txt"],
+          "default": [
+            "*_log.txt"
+          ],
           "description": "File patterns to ignore when selecting files"
         }
       }
@@ -139,10 +144,15 @@
   "license": "MIT",
   "author": "Sirui LU",
   "icon": "resources/unicorn.png",
-  "keywords": ["latex", "academic", "writing", "coauthor", "vscode"],
+  "keywords": [
+    "latex",
+    "academic",
+    "writing",
+    "coauthor",
+    "vscode"
+  ],
   "bugs": {
     "url": "https://github.com/LionSR/coauthor-for-vs-code/issues"
   },
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme"
 }
-
