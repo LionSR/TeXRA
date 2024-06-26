@@ -1,5 +1,6 @@
 from termcolor import colored
 import difflib
+import re
 
 
 def read_file(file_path):
@@ -147,3 +148,13 @@ def run_latexdiff_vc(input_file, commit_hash):
                 diff_file.write("\n")
 
     print(colored(f"Line breaks added to {diff_file_name}", "blue"))
+__all__ = [
+    "read_file",
+    "write_file",
+    "append_file",
+    "find_last_non_empty_line",
+    "extract_text_from_tags",
+    "check_for_massive_repetition",
+    "run_latexdiff",
+    "run_latexdiff_vc",
+]
