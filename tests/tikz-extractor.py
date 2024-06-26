@@ -8,6 +8,7 @@ from pathlib import Path
 TEMPLATE_TEX = Template(
     r"""
 \documentclass[tikz,border=10pt]{standalone}
+% \input{commands}
 \usepackage{tikz}
 \usetikzlibrary{positioning}
 \begin{document}
@@ -49,13 +50,17 @@ def extract_tikzpictures_with_labels(latex_file):
 
 
 def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
-    standalone_content = r"""
+    standalone_content = (
+        r"""
 \documentclass[tikz,border=10pt]{standalone}
 \usepackage{tikz}
 \begin{document}
-""" + tikzpicture + r"""
+"""
+        + tikzpicture
+        + r"""
 \end{document}
 """
+    )
 
     filename = build_dir / f"{label}_{index}.tex"
     with open(filename, "w") as file:

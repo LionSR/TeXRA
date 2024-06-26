@@ -16,7 +16,6 @@ from .model_utils import (
     handle_images,
     create_response,
     extract_response_statistics,
-    get_summary_string,
 )
 from .openai_utils import best_connection_method
 
@@ -30,75 +29,67 @@ def load_prompt(prompt_type, task, prompt_path, task_settings):
     return read_file(prompt_file_path).strip()
 
 
-def process_file_with_llm(
-    task,
-    task_settings,
-    input_file,
-    user_prefix_vars,
-    reflect=False,
-    model="sonnet+",
-    api_key=None,
-    prompt_path=None,
-    use_prefill_from_input=True,
-    append_mode=False,
-    overwrite=False,
-    k=200,
-    max_tokens=4096,
-    temperature=0,
-    figure_inputs=None,
-):
-    client, model_name = get_model_client(model, api_key)
-
-    system_prompt = load_prompt("system_prompt", task, prompt_path, task_settings)
-    user_prefix_template = load_prompt("user_prefix", task, prompt_path, task_settings)
-    user_request = load_prompt("user_request", task, prompt_path, task_settings)
-
-    user_prefix = user_prefix_template.format(**user_prefix_vars)
-
-    print("System prompt:", colored(system_prompt, "magenta"), "\n")
-
-    print(
-        "User prompt prefix template:",
-        colored(user_prefix_template, "magenta"),
-        "\n",
-    )
-    print("User prompt request:", colored(user_request, "magenta"), "\n")
-
-    output_type = task_settings.get("output_type", "txt")
-    file_name, _ = os.path.splitext(input_file)
-    first_task_chunk = task.split("_")[0]
-    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
-    print(f"Output file: {colored(output_file, 'cyan')}")
-
+def initialize_messages(system_prompt, user_prefix, user_request, figure_inputs, model):
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
 
     if figure_inputs:
-        print(f"Figure input: {colored(figure_inputs, 'cyan')}")
         image_content = handle_images(figure_inputs, model)
         messages[-1]["content"].extend(image_content)
 
     messages[-1]["content"].append({"type": "text", "text": user_request})
+    return messages
+
+
+def handle_output_file(file_name, task, model, output_type):
+    first_task_chunk = task.split("_")[0]
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    print(f"Output file: {colored(output_file, 'cyan')}")
+    return output_file
+
+
+def process_file_with_llm(task, task_settings, input_file, user_prefix_vars, llm_settings, output_settings):
+    client, model_name = get_model_client(llm_settings["model"], llm_settings["api_key"])
+
+    system_prompt = load_prompt("system_prompt", task, llm_settings["prompt_path"], task_settings)
+    user_prefix_template = load_prompt("user_prefix", task, llm_settings["prompt_path"], task_settings)
+    user_request = load_prompt("user_request", task, llm_settings["prompt_path"], task_settings)
+
+    user_prefix = user_prefix_template.format(**user_prefix_vars)
+
+    print("System prompt:", colored(system_prompt, "magenta"), "\n")
+    print("User prompt prefix template:", colored(user_prefix_template, "magenta"), "\n")
+    print("User prompt request:", colored(user_request, "magenta"), "\n")
+
+    output_type = task_settings.get("output_type", "txt")
+    file_name, _ = os.path.splitext(input_file)
+    output_file = handle_output_file(file_name, task, llm_settings["model"], output_type)
+
+    messages = initialize_messages(system_prompt, user_prefix, user_request, llm_settings["figure_inputs"], llm_settings["model"])
 
     document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)
 
     assistant_prefill_first = task_settings.get("first_prefill", None)
-    accumulated_output, messages, overwrite = handle_prefill(
-        model,
+    accumulated_output, messages, output_settings["overwrite"] = handle_prefill(
+        llm_settings["model"],
         output_type,
-        use_prefill_from_input,
+        output_settings["use_prefill_from_input"],
         assistant_prefill_first,
         input_file,
-        k,
-        append_mode,
+        output_settings["k"],
+        output_settings["append_mode"],
         output_file,
         messages,
         document_tag,
-        overwrite,
+        output_settings["overwrite"],
     )
+
+    # If the file already exists and we're not overwriting, read its content
+    if os.path.exists(output_file) and not output_settings["overwrite"]:
+        accumulated_output = read_file(output_file)
 
     state = {
         "continuation_count": 0,
@@ -111,20 +102,12 @@ def process_file_with_llm(
 
     model_settings = {
         "client": client,
-        "model": model,
+        "model": llm_settings["model"],
         "model_name": model_name,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
+        "max_tokens": llm_settings["max_tokens"],
+        "temperature": llm_settings["temperature"],
         "end_tag": end_tag,
         "system_prompt": system_prompt,
-    }
-
-    output_settings = {
-        "k": k,
-        "best_connector": " ",
-        "overwrite": overwrite,
-        "append_mode": append_mode,
-        "document_tag": document_tag,
     }
 
     state, accumulated_output, end_turn = process_response_cycle(
@@ -189,37 +172,21 @@ def process_reflection(
     return state, accumulated_output, end_turn, output_file_reflect, messages
 
 
-def process_response_cycle(
-    state,
-    accumulated_output,
-    messages,
-    output_file,
-    model_settings=None,
-    output_settings=None,
-):
+def process_response_cycle(state, accumulated_output, messages, output_file, model_settings, output_settings):
     end_turn = False
-
     k = output_settings["k"]
-
     file_exists = os.path.exists(output_file)
 
     while not end_turn:
         start_time = time.time()
-        response_object = create_response(
-            client=model_settings["client"],
-            messages=messages,
-            model_settings=model_settings,
-        )
+        response_object = create_response(client=model_settings["client"], messages=messages, model_settings=model_settings)
         response_time = time.time() - start_time
         state["total_response_time"] += response_time
         print(f"### Response time: {colored(response_time, 'green')} seconds")
 
-        (
-            new_response,
-            input_tokens,
-            output_tokens,
-            stop_reason,
-        ) = extract_response_statistics(response_object, model_settings["model"], model_settings["end_tag"])
+        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(
+            response_object, model_settings["model"], model_settings["end_tag"]
+        )
 
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
@@ -235,36 +202,14 @@ def process_response_cycle(
             print("### The first {} characters of the new response are:".format(k))
             print(colored(f"### {new_response[:k]}", "yellow"))
 
-        best_connector, _ = best_connection_method(
-            state["last_response"][-k:],
-            new_response[:k],
-        )
+        best_connector, _ = best_connection_method(state["last_response"][-k:], new_response[:k])
 
         accumulated_output += best_connector + new_response
 
-        if not file_exists:
-            # or not output_settings["append_mode"]
-            print("Creating the file")
-            if "<scractchpad>" in state["last_response"]:
-                write_file(output_file, state["last_response"] + best_connector + new_response)
-            else:
-                write_file(output_file, new_response)
-            file_exists = True
-        elif output_settings["overwrite"]:
-            print("Overwriting file")
-            write_file(output_file, new_response)
-            output_settings["overwrite"] = False
-        else:
-            print("Appending to file")
-            append_file(output_file, best_connector + new_response)
+        file_exists = handle_file_output(file_exists, output_settings, state, best_connector, new_response, output_file)
 
         print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
 
-        # the previous continue logic (see below)
-        # messages[-1] = {"role": "assistant", "content": new_response}
-
-        # maybe
-        # messages.append({"role": "assistant", "content": new_response})
         if messages[-1]["role"] == "assistant":
             messages[-1]["content"] = accumulated_output
 
@@ -272,49 +217,71 @@ def process_response_cycle(
 
         state["last_response"] = new_response
 
-        end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-        encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
-        continuation_limit = state["continuation_count"] > 10
-        input_token_limit = input_tokens > 100000
-
-        output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]  # should be 1.3 for translation/transcribe tasks
-
-        if output_token_limit:
-            print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
-        if continuation_limit:
-            print("Stopping after 10 continuations or 100,000 input tokens")
-
-        should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
+        end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected)
 
         if should_stop:
-            print("Printing the flags")
-            print(f"end_turn: {end_turn}")
-            print(f"encounter_document_tag: {encounter_document_tag}")
-            print(f"continuation_limit: {continuation_limit}")
-            print(f"input_token_limit: {input_token_limit}")
-            print(f"massive_repetition_detected: {massive_repetition_detected}")
-            print(f"output_token_limit: {output_token_limit}")
-            print("### The last {} characters of the previous response are:".format(k))
-            print(colored(f"### {state['last_response'][-k:]}", "yellow"))
+            print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected)
             break
 
         state["continuation_count"] += 1
         print(f"\nContinuation #{state['continuation_count']}")
 
-        # does this apply to openai models or only anthropic models?
         if is_openai_model(model_settings["model"]):
-            prefill_tokens = new_response[-k:]
-            user_message = (
-                f"Your response got cut off, because you only have limited response space. "
-                f"Please continue writing from where you left off until the very end, "
-                f"marked by {model_settings['end_tag']}. Avoid repetition and begin your response with:"
-            )
-            print("User message:", colored(user_message, "magenta"))
-            print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-            messages.append({"role": "user", "content": user_message + prefill_tokens})
-
-            # previous version: which somehow worked for gpts?
-            # messages.append({"role": "user", "content": user_message})
-            # messages.append({"role": "assistant", "content": prefill_tokens})
+            handle_openai_continuation(messages, new_response, k, model_settings["end_tag"])
 
     return state, accumulated_output, end_turn
+
+
+def handle_file_output(file_exists, output_settings, state, best_connector, new_response, output_file):
+    if not file_exists:
+        print("Creating the file")
+        write_file(output_file, new_response)
+        file_exists = True
+    elif output_settings["overwrite"]:
+        print("Overwriting file")
+        write_file(output_file, new_response)
+        output_settings["overwrite"] = False
+    else:
+        print("Appending to file")
+        append_file(output_file, best_connector + new_response)
+
+    return file_exists
+
+
+def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
+    end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
+    encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
+    continuation_limit = state["continuation_count"] > 10
+    input_token_limit = state["total_input_tokens"] > 100000
+    output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
+
+    if output_token_limit:
+        print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
+
+    should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
+
+    return end_turn, should_stop
+
+
+def print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected):
+    print("Printing the flags")
+    print(f"end_turn: {end_turn}")
+    print(f"encounter_document_tag: {'</latex_document>' in new_response}")
+    print(f"continuation_limit: {state['continuation_count'] > 10}")
+    print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
+    print(f"massive_repetition_detected: {massive_repetition_detected}")
+    print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
+    print("### The last {} characters of the previous response are:".format(output_settings["k"]))
+    print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))
+
+
+def handle_openai_continuation(messages, new_response, k, end_tag):
+    prefill_tokens = new_response[-k:]
+    user_message = (
+        f"Your response got cut off, because you only have limited response space. "
+        f"Please continue writing from where you left off until the very end, "
+        f"marked by {end_tag}. Avoid repetition and begin your response with:"
+    )
+    print("User message:", colored(user_message, "magenta"))
+    print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
+    messages.append({"role": "user", "content": user_message + prefill_tokens})
