@@ -131,6 +131,7 @@ def handle_prefill(
     messages,
     document_tag,
     overwrite,
+    task_settings,
 ):
     accumulated_output = assistant_prefill_first
     if output_type == "tex":
