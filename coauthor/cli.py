@@ -42,7 +42,7 @@ def shared_arguments_long(func):
         "--figure_inputs",
         required=False,
         default=None,
-        help="Path to the figure input file(s).",
+        help="Path to the figure input file(s). Multiple files can be specified as a comma-separated list.",
     )(func)
     return func
 
@@ -57,19 +57,8 @@ def execute_task(script, task, model, input_file, **kwargs):
         f"--input_file={input_file}",
     ]
 
-    if kwargs.get("auto_extract_figure"):
-        extracted_figure_paths = extract_figure_paths(input_file)
-        if extracted_figure_paths:
-            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
-                kwargs["figure_inputs"] = extracted_figure_paths
-            else:
-                kwargs["figure_inputs"].extend(extracted_figure_paths)
-
-    if kwargs.get("include_tex_count"):
-        tex_count_stats = get_tex_count(input_file)
-        if tex_count_stats:
-            instruction = kwargs.get("instruction", "")
-            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
+    handle_auto_extract_figure(kwargs, input_file)
+    handle_tex_count(kwargs, input_file)
 
     for key, value in kwargs.items():
         if value is not None:
@@ -80,12 +69,30 @@ def execute_task(script, task, model, input_file, **kwargs):
                 if isinstance(value, str):
                     value = [value]
                 command.append(f"--{key}")
-                command.extend([shlex.quote(file).strip("'") for file in value])
+                command.append(",".join(value))  # Join the list into a single comma-separated string
             else:
                 command.append(f"--{key}")
                 command.append(shlex.quote(str(value)).strip("'"))
 
     subprocess.run(command)
+
+
+def handle_auto_extract_figure(kwargs, input_file):
+    if kwargs.get("auto_extract_figure"):
+        extracted_figure_paths = extract_figure_paths(input_file)
+        if extracted_figure_paths:
+            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
+                kwargs["figure_inputs"] = extracted_figure_paths
+            else:
+                kwargs["figure_inputs"].extend(extracted_figure_paths)
+
+
+def handle_tex_count(kwargs, input_file):
+    if kwargs.get("include_tex_count"):
+        tex_count_stats = get_tex_count(input_file)
+        if tex_count_stats:
+            instruction = kwargs.get("instruction", "")
+            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
 
 
 @click.group()
@@ -160,14 +167,18 @@ def draw_tex(model, input_file, figure_inputs, instruction=None, reflect=True, a
 
 @click.command()
 @shared_arguments
-def correct_qi(model, input_file, reflect=False):
-    execute_task("edit_lecture", "correct_qi", model, input_file, reflect=reflect)
+def correct_qi(model, input_file, reflect=False, auto_extract_figure=False, include_tex_count=False):
+    execute_task(
+        "edit_lecture", "correct_qi", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, include_tex_count=include_tex_count
+    )
 
 
 @click.command()
 @shared_arguments
-def correct_st(model, input_file, reflect=False):
-    execute_task("edit_lecture", "correct_st", model, input_file, reflect=reflect)
+def correct_st(model, input_file, reflect=False, auto_extract_figure=False, include_tex_count=False):
+    execute_task(
+        "edit_lecture", "correct_st", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, include_tex_count=include_tex_count
+    )
 
 
 @click.command()
@@ -251,6 +262,8 @@ def paper2note(
     sample_paper=None,
     sample_note=None,
     reflect=False,
+    auto_extract_figure=False,
+    include_tex_count=False,
 ):
     execute_task(
         "paper2note",
@@ -261,6 +274,8 @@ def paper2note(
         sample_paper=sample_paper,
         sample_note=sample_note,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -278,6 +293,8 @@ def adapt(
     commands_file="command.tex",
     instruction=None,
     reflect=True,
+    auto_extract_figure=False,
+    include_tex_count=False,
 ):
     execute_task(
         "adapt",
@@ -289,6 +306,8 @@ def adapt(
         commands_file=commands_file,
         instruction=instruction,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -304,6 +323,8 @@ def meeting2text(
     example_transcript=None,
     example_edited_transcript=None,
     reflect=True,
+    auto_extract_figure=False,
+    include_tex_count=False,
 ):
     execute_task(
         "meeting2text",
@@ -314,6 +335,8 @@ def meeting2text(
         example_transcript=example_transcript,
         example_edited_transcript=example_edited_transcript,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -329,6 +352,8 @@ def txt2tex(
     commands_file="command.tex",
     sample_tex=None,
     reflect=True,
+    auto_extract_figure=False,
+    include_tex_count=False,
 ):
     execute_task(
         "txt2tex",
@@ -339,19 +364,23 @@ def txt2tex(
         commands_file=commands_file,
         sample_tex=sample_tex,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments
-def correct_prl(model, input_file, reflect=True):
-    execute_task("edit_prl", "correct_prl", model, input_file, reflect=reflect)
+def correct_prl(model, input_file, reflect=True, auto_extract_figure=False, include_tex_count=False):
+    execute_task(
+        "edit_prl", "correct_prl", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, include_tex_count=include_tex_count
+    )
 
 
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
-def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True):
+def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
     execute_task(
         "edit_prl",
         "correct_supp_prl",
@@ -359,13 +388,15 @@ def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True):
         input_file,
         auxiliary_files=auxiliary_files,
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
-def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True):
+def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True, auto_extract_figure=False, include_tex_count=False):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -380,6 +411,8 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True):
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -387,7 +420,9 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True):
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True):
+def revise_main_prl(
+    model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True, auto_extract_figure=False, include_tex_count=False
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -403,6 +438,8 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -420,6 +457,8 @@ def revise_supp_prl(
     draft_main_content,
     supp_file="supp.tex",
     reflect=True,
+    auto_extract_figure=False,
+    include_tex_count=False,
 ):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
@@ -438,6 +477,8 @@ def revise_supp_prl(
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -445,7 +486,7 @@ def revise_supp_prl(
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", reflect=True):
+def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", reflect=True, auto_extract_figure=False, include_tex_count=False):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -462,6 +503,8 @@ def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", refl
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        include_tex_count=include_tex_count,
     )
 
 
