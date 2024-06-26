@@ -1,0 +1,121 @@
+import os
+from datetime import datetime
+from termcolor import colored
+from coauthor import read_file, run_latexdiff
+from coauthor.process import process_reflection
+
+from coauthor.model_utils import get_summary_string
+
+
+def get_user_prefix_vars(args):
+    user_prefix_vars = {
+        "INPUT_FILE": os.path.basename(args.input_file),
+        "INPUT_CONTENT": read_file(args.input_file),
+        "INSTRUCTION": args.instruction if args.instruction else None,
+    }
+    return user_prefix_vars
+
+
+def handle_long_task(args, user_prefix_vars, task_settings):
+    task_shared = args.task.split("_")[0]
+    task_settings["user_prefix_file"] = f"user_prefix_{task_shared}_long.txt"
+    user_prefix_vars["AUXILIARY_FILES"] = get_auxiliary_files_content(args.auxiliary_files)
+    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = get_additional_input_files_content(
+        args.input_files, len(args.auxiliary_files) if args.auxiliary_files else 0
+    )
+
+
+def handle_non_long_task(args, user_prefix_vars, task_settings):
+    if args.input_files:
+        raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
+    if args.auxiliary_files:
+        if len(args.auxiliary_files) > 1:
+            raise ValueError("Only one auxiliary file is allowed. Please provide a single file.")
+        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
+        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
+        task_settings["user_prefix_file"] = task_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
+
+
+def get_auxiliary_files_content(auxiliary_files):
+    return format_file_content(auxiliary_files, 2) if auxiliary_files else ""
+
+
+def get_additional_input_files_content(input_files, num_auxiliary_files):
+    return format_file_content(input_files, num_auxiliary_files + 2) if input_files else ""
+
+
+def format_file_content(files, start_index):
+    return "\n".join(
+        f'<document index="{i+start_index}">\n'
+        f"    <source>{os.path.basename(file)}</source>\n"
+        f"    <document_content>\n"
+        f"        {read_file(file)}\n"
+        f"    </document_content>\n"
+        f"</document>"
+        for i, file in enumerate(files)
+    )
+
+
+def log_start(args):
+    with open(args.input_file.replace(".tex", "_log.txt"), "a+") as log_file:
+        log_file.write(
+            f"Start logging: {datetime.now()}\nTask: {args.task}\nModel: {args.model}\nInstruction:\n<request>\n{args.instruction}\n</request>\n"
+        )
+
+
+def log_summary(args, state):
+    summary = get_summary_string(state, args.model)
+    print(f"Summary: {summary}")
+    with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
+        log_file.write(f"Summary:\n{summary}\n")
+
+
+def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
+    state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
+        args.task,
+        task_settings,
+        args.input_file,
+        output_file,
+        state,
+        accumulated_output,
+        messages,
+        model_settings,
+        output_settings,
+        prompt_path,
+        use_prefill_from_input=False,
+    )
+    print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
+    run_latexdiff(args.input_file, output_file_reflect)
+    run_latexdiff(output_file, output_file_reflect, args.model)
+
+    reflection_summary = get_summary_string(state, args.model)
+    print(f"Reflection summary: {reflection_summary}")
+
+    with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
+        log_file.write(f"Reflection summary:\n{reflection_summary}\n")
+
+
+def get_llm_settings(args, prompt_path):
+    figure_inputs = args.figure_inputs
+    if isinstance(figure_inputs, str):
+        figure_inputs = figure_inputs.split(",")
+    elif not isinstance(figure_inputs, list):
+        figure_inputs = None
+
+    return {
+        "model": args.model,
+        "api_key": None,  # Add API key if needed
+        "prompt_path": prompt_path,
+        "figure_inputs": figure_inputs,
+        "max_tokens": 4096,  # Adjust as needed
+        "temperature": 0,  # Adjust as needed
+    }
+
+
+def get_output_settings(args):
+    return {
+        "use_prefill_from_input": False,
+        "append_mode": args.append_mode,
+        "overwrite": False,
+        "k": 200,  # Adjust as needed
+    }
