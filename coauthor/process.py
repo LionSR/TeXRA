@@ -110,6 +110,8 @@ def process_file_with_llm(task, task_settings, input_file, user_prefix_vars, llm
         "system_prompt": system_prompt,
     }
 
+    output_settings["document_tag"] = document_tag
+
     state, accumulated_output, end_turn = process_response_cycle(
         state,
         accumulated_output,
