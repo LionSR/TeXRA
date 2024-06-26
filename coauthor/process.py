@@ -7,6 +7,7 @@ from .file_utils import (
     write_file,
     append_file,
     check_for_massive_repetition,
+    split_content_with_scratchpad,
 )
 from .model_utils import (
     get_model_client,
@@ -16,6 +17,8 @@ from .model_utils import (
     handle_images,
     create_response,
     extract_response_statistics,
+    handle_claude_partial_output,
+    handle_openai_partial_output,
 )
 from .openai_utils import best_connection_method
 
@@ -50,7 +53,9 @@ def handle_output_file(file_name, task, model, output_type):
     return output_file
 
 
-def process_file_with_llm(task, task_settings, input_file, user_prefix_vars, llm_settings, output_settings):
+def process_file_with_llm(
+    task, task_settings, input_file, user_prefix_vars, llm_settings, output_settings, state=None, accumulated_output=None, messages=None
+):
     client, model_name = get_model_client(llm_settings["model"], llm_settings["api_key"])
 
     system_prompt = load_prompt("system_prompt", task, llm_settings["prompt_path"], task_settings)
@@ -67,38 +72,43 @@ def process_file_with_llm(task, task_settings, input_file, user_prefix_vars, llm
     file_name, _ = os.path.splitext(input_file)
     output_file = handle_output_file(file_name, task, llm_settings["model"], output_type)
 
-    messages = initialize_messages(system_prompt, user_prefix, user_request, llm_settings["figure_inputs"], llm_settings["model"])
+    if messages is None:
+        messages = initialize_messages(system_prompt, user_prefix, user_request, llm_settings["figure_inputs"], llm_settings["model"])
 
     document_tag = task_settings.get("document_tag", None)
     end_tag = task_settings.get("end_tag", None)
 
     assistant_prefill_first = task_settings.get("first_prefill", None)
-    accumulated_output, messages, output_settings["overwrite"] = handle_prefill(
-        llm_settings["model"],
-        output_type,
-        output_settings["use_prefill_from_input"],
-        assistant_prefill_first,
-        input_file,
-        output_settings["k"],
-        output_settings["append_mode"],
-        output_file,
-        messages,
-        document_tag,
-        output_settings["overwrite"],
-    )
+    if accumulated_output is None:
+        accumulated_output, messages, output_settings["overwrite"] = handle_prefill(
+            llm_settings["model"],
+            output_type,
+            output_settings["use_prefill_from_input"],
+            assistant_prefill_first,
+            input_file,
+            output_settings["k"],
+            output_settings["append_mode"],
+            output_file,
+            messages,
+            document_tag,
+            output_settings["overwrite"],
+            task_settings,
+        )
 
-    # If the file already exists and we're not overwriting, read its content
-    if os.path.exists(output_file) and not output_settings["overwrite"]:
-        accumulated_output = read_file(output_file)
-
-    state = {
-        "continuation_count": 0,
-        "total_input_tokens": 0,
-        "total_output_tokens": 0,
-        "total_response_time": 0,
-        "last_response": accumulated_output,
-        "first_input_tokens": 0,
-    }
+    if state is None:
+        state = {
+            "continuation_count": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_response_time": 0,
+            "last_response": accumulated_output,
+            "first_input_tokens": 0,
+        }
+    else:
+        # Ensure all necessary keys are present in the state dictionary
+        for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
+            if key not in state:
+                state[key] = 0 if key != "last_response" else accumulated_output
 
     model_settings = {
         "client": client,
@@ -138,7 +148,7 @@ def process_reflection(
     prompt_path,
     use_prefill_from_input,
 ):
-    print("\n\n", colored("### Reflection round started.", "blue"), "\n\n")
+    print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
 
     assistant_reflect_prefill_first = task_settings.get("first_prefill_reflect", task_settings.get("first_prefill"))
     user_request_reflect = load_prompt("user_reflect", task, prompt_path, task_settings)
@@ -158,6 +168,14 @@ def process_reflection(
     messages.append({"role": "assistant", "content": assistant_reflect_prefill_first})
     print(f"assistant_reflect_prefill_first: {colored(assistant_reflect_prefill_first, 'yellow')}")
 
+    # Ensure all necessary keys are present in the state dictionary
+    if state is None:
+        state = {}
+    
+    for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
+        if key not in state:
+            state[key] = 0 if key != "last_response" else accumulated_output
+    
     state["last_response"] = accumulated_output
     state["continuation_count"] = 0
 
