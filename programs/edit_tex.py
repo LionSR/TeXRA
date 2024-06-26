@@ -74,7 +74,15 @@ def main():
     output_settings = get_output_settings(args)
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
-        args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
+        args.task,
+        task_settings,
+        args.input_file,
+        user_prefix_vars,
+        llm_settings,
+        output_settings,
+        state=state,
+        accumulated_output=accumulated_output,
+        messages=messages,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
