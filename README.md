@@ -12,6 +12,12 @@ pip install -e .
 
 ## Changelog
 
+### 0.7.1 [backend] 
+- Bumped version to 0.7.1
+- Updated Python target versions to include Python 3.12
+- Various minor improvements and bug fixes
+- Added TikZ extractor update
+
 ### 0.7.0 [backend] 
 - Added new merge functionality for LaTeX documents
 - Implemented merge command in CLI
