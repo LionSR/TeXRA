@@ -1,17 +1,21 @@
-# edit_tex.py
 import os
 from termcolor import colored
-
 import coauthor
-from coauthor import read_file, get_common_argparser, get_prompt_path
+from coauthor import get_common_argparser, get_prompt_path
+from coauthor.process import process_file_with_llm
+from coauthor.edit_utils import (
+    get_user_prefix_vars,
+    log_start,
+    log_summary,
+    handle_reflection,
+    get_llm_settings,
+    get_output_settings,
+)
 
-
-# Define the settings for the "correct" mode tailored for research papers
 all_tasks_settings = {
     "correct_prl": {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
-        # "end_tag": "\\end{document}",
         "output_type": "tex",
         "first_prefill": "Now we output the corrected supp.tex as follows.\n<latex_document>",
     },
@@ -28,12 +32,7 @@ prompt_path = get_prompt_path(coauthor, "prl_edit")
 
 def main():
     parser = get_common_argparser()
-
-    parser.add_argument(
-        "--auxiliary_files",
-        type=str,
-        help="Path to the auxiliary TeX file to be processed.",
-    )
+    parser.add_argument("--auxiliary_files", type=str, help="Path to the auxiliary TeX file to be processed.")
     parser.add_argument(
         "--task",
         type=str,
@@ -41,32 +40,37 @@ def main():
         help="Mode of operation, either 'correct_prl', 'correct_supp_prl'.",
         choices=["correct_prl", "correct_supp_prl"],
     )
-
     args = parser.parse_args()
+
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
-    user_prefix_vars = {
-        "INPUT_FILE": os.path.basename(args.input_file),
-        "INPUT_CONTENT": read_file(args.input_file),
-    }
-    user_prefix_vars["PREAMBLE_CONTENT"] = read_file("preamble.tex")
+    user_prefix_vars = get_user_prefix_vars(args)
+    user_prefix_vars["PREAMBLE_CONTENT"] = coauthor.read_file("preamble.tex")
 
     if args.task == "correct_prl":
-        user_prefix_vars["SUPP_CONTENT"] = read_file("supp.tex")
+        user_prefix_vars["SUPP_CONTENT"] = coauthor.read_file("supp.tex")
     elif args.task == "correct_supp_prl":
-        user_prefix_vars["main_content"] = read_file(args.auxiliary_files)
+        user_prefix_vars["main_content"] = coauthor.read_file(args.auxiliary_files)
 
     task_settings = all_tasks_settings[args.task]
 
-    coauthor.process_file_with_llm(
-        args.task,
-        task_settings,
-        args.input_file,
-        user_prefix_vars,
-        model=args.model,
-        prompt_path=prompt_path,
+    log_start(args)
+
+    llm_settings = get_llm_settings(args, prompt_path)
+    output_settings = get_output_settings(args)
+
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
+        args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
     )
+
+    print(colored(f"Output file: {output_file}", "yellow"))
+    coauthor.run_latexdiff(args.input_file, output_file)
+
+    log_summary(args, state)
+
+    if args.reflect and end_turn:
+        handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)
 
 
 if __name__ == "__main__":

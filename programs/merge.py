@@ -1,8 +1,16 @@
 from termcolor import colored
 
 import coauthor
-from coauthor import read_file, get_common_argparser, get_prompt_path
-
+from coauthor import get_common_argparser, get_prompt_path
+from coauthor.process import process_file_with_llm
+from coauthor.edit_utils import (
+    get_user_prefix_vars,
+    log_start,
+    log_summary,
+    handle_reflection,
+    get_llm_settings,
+    get_output_settings,
+)
 
 # Define the settings for each mode
 all_tasks_settings = {
@@ -19,39 +27,40 @@ prompt_path = get_prompt_path(coauthor, "merge")
 
 def main():
     parser = get_common_argparser()
-    parser.add_argument(
-        "--original_latex",
-        type=str,
-        help="Path to the original LaTeX document.",
-    )
-    parser.add_argument(
-        "--edited_latex",
-        type=str,
-        help="Path to the edited LaTeX document.",
-    )
-
+    parser.add_argument("--original_latex", type=str, help="Path to the original LaTeX document.")
+    parser.add_argument("--edited_latex", type=str, help="Path to the edited LaTeX document.")
     args = parser.parse_args()
+
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Merging {args.original_latex} and {args.edited_latex}...\n", "green"))
 
-    user_prefix_vars = {
-        "ORIGINAL_LATEX": read_file(args.original_latex),
-        "EDITED_LATEX": read_file(args.edited_latex),
-    }
+    user_prefix_vars = get_user_prefix_vars(args)
+    user_prefix_vars.update(
+        {
+            "ORIGINAL_LATEX": coauthor.read_file(args.original_latex),
+            "EDITED_LATEX": coauthor.read_file(args.edited_latex),
+        }
+    )
 
     task = "merge"
     task_settings = all_tasks_settings[task]
 
-    coauthor.process_file_with_llm(
-        task,
-        task_settings,
-        args.original_latex,
-        user_prefix_vars,
-        model=args.model,
-        prompt_path=prompt_path,
-        reflect=args.reflect,
-        use_prefill_from_input=False,
+    log_start(args)
+
+    llm_settings = get_llm_settings(args, prompt_path)
+    output_settings = get_output_settings(args)
+
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
+        task, task_settings, args.original_latex, user_prefix_vars, llm_settings, output_settings
     )
+
+    print(colored(f"Output file: {output_file}", "yellow"))
+    coauthor.run_latexdiff(args.original_latex, output_file)
+
+    log_summary(args, state)
+
+    if args.reflect and end_turn:
+        handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)
 
 
 if __name__ == "__main__":
