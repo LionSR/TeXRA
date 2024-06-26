@@ -193,19 +193,24 @@ def handle_images(figure_inputs, model):
 
     content = []
     for image in image_contents:
+        image_data = {
+            "type": "image_url" if is_openai_model(model) else "image",
+            "media_type": image["media_type"],
+            "data": image["data"],
+        }
+
+        if is_openai_model(model):
+            image_data["image_url"] = f"data:{image['media_type']};base64,{image['data']}"
+        else:
+            image_data["source"] = {
+                "type": "base64",
+                "media_type": image["media_type"],
+                "data": image["data"],
+            }
         content.extend(
             [
                 {"type": "text", "text": f"Image: {image['file_name']}"},
-                {
-                    "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url" if is_openai_model(model) else "source": {
-                        "url" if is_openai_model(model) else "type": (
-                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
-                        ),
-                        "media_type": image["media_type"],
-                        "data": image["data"],
-                    },
-                },
+                image_data,
             ]
         )
 
@@ -232,6 +237,7 @@ def create_response(
             temperature=temperature,
             stop=end_tag,
         )
+        print(colored(f"using openai model: {model_name}", "green"))
     elif is_anthropic_model(model):
         response_object = client.messages.create(
             model=model_name,
@@ -241,6 +247,7 @@ def create_response(
             stop_sequences=[end_tag] if end_tag else None,
             system=system_prompt,
         )
+        print(colored(f"using anthropic model: {model_name}", "green"))
     else:
         raise ValueError(f"Unsupported model: {model}")
 
