@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
         return null;
       }
       const workspacePath = workspaceFolders[0].uri.fsPath;
-    
+
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         openLabel: 'Select Auxiliary Files',
@@ -247,7 +247,7 @@ export function activate(context: vscode.ExtensionContext) {
       terminal_new.show();
 
       let command = `coauthor ${task} ${inputFilePath}`;
-      
+
       if (additionalInputFiles && additionalInputFiles.length > 0) {
         command += ` --input_files="${additionalInputFiles.join(',')}"`;
       }
@@ -589,6 +589,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   private getWebviewContent() {
     return `<!DOCTYPE html>
     <html lang="en">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -655,8 +656,30 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ command: 'requestRecentCommits' });
           // Restore previous state
           restoreState();
-        };        
+        };
         document.addEventListener('DOMContentLoaded', function() {
+          new Sortable(document.getElementById('multipleFilesSelect'), {
+            animation: 150,
+            onEnd: function() {
+              saveState();
+            }
+          });
+      
+          // Initialize Sortable for multiple auxiliary files
+          new Sortable(document.getElementById('multipleAuxFilesSelect'), {
+            animation: 150,
+            onEnd: function() {
+              saveState();
+            }
+          });
+      
+          // Initialize Sortable for multiple figures
+          new Sortable(document.getElementById('multipleFiguresSelect'), {
+            animation: 150,
+            onEnd: function() {
+              saveState();
+            }
+          });
           document.getElementById('taskSelect').addEventListener('change', function() {
             const selectedTask = this.value;
             if (selectedTask.startsWith('correct')) {
