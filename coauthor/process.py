@@ -7,6 +7,7 @@ from .file_utils import (
     write_file,
     append_file,
     check_for_massive_repetition,
+    split_content_with_scratchpad,
 )
 from .model_utils import (
     get_model_client,
@@ -16,6 +17,8 @@ from .model_utils import (
     handle_images,
     create_response,
     extract_response_statistics,
+    handle_claude_partial_output,
+    handle_openai_partial_output,
 )
 from .openai_utils import best_connection_method
 
