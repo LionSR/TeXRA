@@ -2,11 +2,14 @@ import os
 import time
 from termcolor import colored
 
+from coauthor.log_utils import log_and_print_summary, log_output_files
+
 from .file_utils import (
     read_file,
     write_file,
     append_file,
     check_for_massive_repetition,
+    run_latexdiff
 )
 from .model_utils import (
     get_model_client,
@@ -52,6 +55,7 @@ def handle_output_file(file_name, task, model, output_type):
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
+
 
 
 def process_file_with_llm(
@@ -251,6 +255,30 @@ def process_response_cycle(state, accumulated_output, messages, output_file, mod
             handle_openai_continuation(messages, new_response, k, model_settings["end_tag"])
 
     return state, accumulated_output, end_turn
+
+
+
+def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
+    state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
+        args.task,
+        task_settings,
+        args.input_file,
+        output_file,
+        state,
+        accumulated_output,
+        messages,
+        model_settings,
+        output_settings,
+        prompt_path,
+        use_prefill_from_input=False,
+    )
+    print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
+    log_file_reflect = args.input_file.replace(".tex", "_log.txt")
+    log_output_files(log_file_reflect, output_file_reflect)
+    log_and_print_summary(state, args.model, log_file_reflect)
+
+    run_latexdiff(args.input_file, output_file_reflect)
+    run_latexdiff(output_file, output_file_reflect, args.model)
 
 
 def handle_file_output(file_exists, output_settings, state, best_connector, new_response, output_file):

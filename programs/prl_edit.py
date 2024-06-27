@@ -1,11 +1,10 @@
 from termcolor import colored
 import coauthor
 from coauthor import get_common_argparser, get_prompt_path
-from coauthor.process import process_file_with_llm
+from coauthor.process import process_file_with_llm, handle_reflection
 from coauthor.edit_utils import (
     get_user_prefix_vars,
     handle_long_task,
-    handle_reflection,
     get_llm_settings,
     get_output_settings,
 )
