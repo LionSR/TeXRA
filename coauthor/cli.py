@@ -5,8 +5,9 @@ import os
 import glob
 import shutil
 from datetime import datetime
-from coauthor.file_utils import run_latexdiff, run_latexdiff_vc
-from coauthor.tools import get_tex_count, extract_figure_paths, extract_and_compile_tikzpictures
+from .tex_tools import run_latexdiff, run_latexdiff_vc
+from .tex_tools import get_tex_count
+from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures
 
 from dotenv import load_dotenv
 
