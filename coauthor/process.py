@@ -2,26 +2,16 @@ import os
 import time
 from termcolor import colored
 
-from coauthor.log_utils import log_and_print_summary, log_output_files
-
-from .file_utils import (
-    read_file,
-    write_file,
-    append_file,
-    check_for_massive_repetition,
-    run_latexdiff
-)
-from .model_utils import (
-    get_model_client,
-    is_openai_model,
-    is_anthropic_model,
-)
+from .log_utils import log_and_print_statistics, log_output_files
+from .file_utils import read_file, write_file, append_file, check_for_massive_repetition
+from .model_utils import get_model_client, is_openai_model, is_anthropic_model
 from .message_utils import (
     handle_prefill,
     handle_images,
     create_response,
     extract_response_statistics,
 )
+from .tex_tools import run_latexdiff
 
 
 from .openai_utils import best_connection_method
@@ -57,8 +47,7 @@ def handle_output_file(file_name, task, model, output_type):
     return output_file
 
 
-
-def process_file_with_llm(
+def process_one_round(
     task, task_settings, input_file, user_prefix_vars, llm_settings, output_settings, state=None, accumulated_output=None, messages=None
 ):
     client, model_name = get_model_client(llm_settings["model"], llm_settings["api_key"])
@@ -257,7 +246,6 @@ def process_response_cycle(state, accumulated_output, messages, output_file, mod
     return state, accumulated_output, end_turn
 
 
-
 def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
     state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
         args.task,
@@ -273,9 +261,10 @@ def handle_reflection(args, task_settings, state, accumulated_output, messages, 
         use_prefill_from_input=False,
     )
     print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
-    log_file_reflect = args.input_file.replace(".tex", "_log.txt")
-    log_output_files(log_file_reflect, output_file_reflect)
-    log_and_print_summary(state, args.model, log_file_reflect)
+    log_file_path = args.input_file.replace(".tex", "_log.txt")
+    log_output_files(log_file_path, output_file_reflect)
+    log_file_reflect = output_file_reflect.replace(".tex", "_log.txt")
+    log_and_print_statistics(state, args.model, log_file_reflect)
 
     run_latexdiff(args.input_file, output_file_reflect)
     run_latexdiff(output_file, output_file_reflect, args.model)
