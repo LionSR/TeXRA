@@ -80,6 +80,30 @@ Calling out known issues can help limit users opening duplicate issues against y
 
 ## Release Notes
 
+### 0.4.7
+- Significantly improved UI layout and design for better user experience
+- Redesigned file selection interface with support for multiple file selection
+- Added compact selections for task, model, and reflect options
+- Enhanced styling of buttons, selectors, and input areas
+- Reorganized housekeeping and LaTeXDiff sections for improved clarity
+- Increased initial height of task input textarea
+- Various minor UI improvements and optimizations
+
+### 0.4.6
+- Added the ability to reorder file lists in the UI
+- Implemented drag-and-drop functionality for input files, auxiliary files, and figures
+- Integrated Sortable.js library for smooth reordering experience
+- Ensured state preservation after reordering files
+- Minor UI improvements and bug fixes
+
+### 0.4.5
+- Enhanced support for multiple file selection in the UI
+- Implemented file removal functionality for input files, auxiliary files, and figures
+- Improved state management for selected files
+- Added visual feedback for file selection and removal
+- Prevented duplicate file entries when selecting multiple files
+- Various UI improvements and bug fixes
+
 ### 0.4.4
 - Added tex count functionality for LaTeX documents
 - Improved figure handling with auto-extraction

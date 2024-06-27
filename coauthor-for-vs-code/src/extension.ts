@@ -595,34 +595,206 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>CoAuthor Panel</title>
       <style>
-      select#inputFileSelect,
-      select#auxFileSelect,
-      select#figureFileSelect,
-      select#revisionFileSelect,
-      select#commitSelect {
-        width: 100%;
+      .compact-selections {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
       }
-      #multipleFilesSelect,
-      #multipleAuxFilesSelect,
-      #multipleFiguresSelect {
-        margin-top: 10px;
-        padding: 5px;
+      
+      .select-group {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+      }
+      
+      .select-group label {
+        font-size: 12px;
+        margin-bottom: 2px;
+      }
+      
+      .select-group select {
+        width: 100%;
+        padding: 4px;
+        height: 28px;
         border: 1px solid #ccc;
+        border-radius: 3px;
+        background-color: #fff;
+      }
+      
+      .file-selection-group {
+        background-color: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 15px;
+      }
+      
+      .file-select {
+        margin-bottom: 8px;
+      }
+
+      .file-select-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      
+      .file-select-header label {
+        font-size: 12px;
+        font-weight: bold;
+      }
+      
+      .file-select label {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 12px;
+      }
+
+      .file-select-buttons {
+        display: flex;
+        gap: 5px;
+        margin-left: auto;
+      }
+            
+      .small-button {
+        padding: 2px 8px;
+        font-size: 11px;
+        background-color: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      .file-select select {
+        width: 100%;
+        padding: 4px;
+        height: 28px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        background-color: #fff;
+        font-size: 12px;
+      }
+      
+      .multiple-files-list {
+        margin-top: 5px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        padding: 5px;
+        font-size: 12px;
         max-height: 100px;
         overflow-y: auto;
-        background-color: #f0f0f0;
       }
-      #multipleFilesSelect div,
-      #multipleAuxFilesSelect div,
-      #multipleFiguresSelect div {
-        margin-bottom: 2px;
-        padding: 2px;
-        background-color: #ffffff;
+      
+      .multiple-files-list div {
+        padding: 2px 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
       }
+      
       .remove-button {
-        margin-left: 10px;
-        color: red;
+        color: #ff4444;
         cursor: pointer;
+      }
+      
+      .instruction-box {
+        margin-bottom: 5px;
+      }
+      
+      .instruction-box label {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 12px;
+      }
+      
+      #taskInput {
+        width: 100%;
+        min-height: 150px;  /* Increased initial height */
+        max-height: 300px;  /* Maximum height before scrolling */
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 13px;
+        resize: vertical;  /* Allows vertical resizing */
+        overflow-y: auto;  /* Adds vertical scrollbar when needed */
+        background-color: #fff;
+        box-sizing: border-box;
+      }
+      
+      .checkbox-group {
+        display: flex;
+        gap: 2px;
+        flex-direction: column;
+      }
+      
+      .checkbox-group label {
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+      }
+
+      .checkbox-group input[type="checkbox"] {
+        margin-right: 5px;
+      }
+      
+      #executeButton {
+        padding: 6px 12px;
+        font-size: 14px;
+        background-color: #007acc;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+
+      #executeButton:hover {
+        background-color: #005999;
+      }
+
+      .section {
+        margin-bottom: 10px;
+      }
+      
+      .section-header {
+        font-size: 12px;
+        font-weight: bold;
+        margin-top: 10px;
+        margin-bottom: 6px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #ccc;
+      }
+      .button-group {
+        margin-bottom: 10px;
+      }
+      .button-group label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+      .button-container {
+        display: flex;
+        gap: 5px;
+      }
+
+      .tool-use-execute {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 5px;
+        margin-bottom: tpx;
+      }
+      
+      .tool-use {
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .tool-use label {
+        font-size: 12px;
+        margin-bottom: 2px;
       }
       </style>
       <script>
@@ -711,6 +883,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               currentInputFile: currentInputFile
             });
           });
+          document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'selectMultipleAuxFiles'
+            });
+          });
           document.getElementById('selectMultipleFiguresButton').addEventListener('click', function() {
             const currentFigureFile = document.getElementById('figureFileSelect').value;
             vscode.postMessage({
@@ -724,14 +901,11 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFilesSelectDiv.style.display = 'none';
             saveState();
           });
-          document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
-            const isChecked = event.target.checked;
-            vscode.postMessage({ command: 'updateAutoExtractFigure', value: isChecked });
-          });
-          document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function() {
-            vscode.postMessage({
-              command: 'selectMultipleAuxFiles'
-            });
+          document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function() {
+            const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
+            multipleAuxFilesSelectDiv.innerHTML = '';
+            multipleAuxFilesSelectDiv.style.display = 'none';
+            saveState();
           });
           document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function() {
             const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
@@ -739,11 +913,9 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             multipleFiguresSelectDiv.style.display = 'none';
             saveState();
           });
-          document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function() {
-            const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-            multipleAuxFilesSelectDiv.innerHTML = '';
-            multipleAuxFilesSelectDiv.style.display = 'none';
-            saveState();
+          document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
+            const isChecked = event.target.checked;
+            vscode.postMessage({ command: 'updateAutoExtractFigure', value: isChecked });
           });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
             vscode.postMessage({
@@ -1076,111 +1248,153 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </script>
     </head>
     <body>
-      <p>
-        <label for="taskSelect">Task:</label>
-        <select id="taskSelect">
-          <option value="correct-tex">Correct TeX</option>
-          <option value="polish-tex">Polish TeX</option>
-          <option value="draw-tex">Draw TeX</option>
-          <!-- <option value="correct-tex-long">Correct TeX (Long)</option> -->
-          <!-- <option value="polish-tex-long">Polish TeX (Long)</option> -->
-          <!-- <option value="draw-tex-long">Draw TeX (Long)</option> -->
-          <option value="correct-st">Correct ST</option>
-          <option value="polish-st">Polish ST</option>
-          <option value="draw-st">Draw ST</option>
-          <!-- <option value="correct-st-long">Correct ST (Long)</option> -->
-          <!-- <option value="polish-st-long">Polish ST (Long)</option> -->
-          <!-- <option value="draw-st-long">Draw ST (Long)</option> -->
-          <option value="correct-qi">Correct QI</option>
-          <option value="polish-qi">Polish QI</option>
-          <option value="meeting2text">Meeting to Text</option>
-          <option value="paper2note">Paper to Note</option>
-          <option value="txt2tex">Txt to TeX</option>
-        </select>
+      <div class="compact-selections">
+        <div class="select-group">
+          <label for="taskSelect">Task:</label>
+          <select id="taskSelect">
+            <option value="correct-tex">Correct TeX</option>
+            <option value="polish-tex">Polish TeX</option>
+            <option value="draw-tex">Draw TeX</option>
+            <!-- <option value="correct-tex-long">Correct TeX (Long)</option> -->
+            <!-- <option value="polish-tex-long">Polish TeX (Long)</option> -->
+            <!-- <option value="draw-tex-long">Draw TeX (Long)</option> -->
+            <option value="correct-st">Correct ST</option>
+            <option value="polish-st">Polish ST</option>
+            <option value="draw-st">Draw ST</option>
+            <!-- <option value="correct-st-long">Correct ST (Long)</option> -->
+            <!-- <option value="polish-st-long">Polish ST (Long)</option> -->
+            <!-- <option value="draw-st-long">Draw ST (Long)</option> -->
+            <option value="correct-qi">Correct QI</option>
+            <option value="polish-qi">Polish QI</option>
+            <option value="meeting2text">Meeting to Text</option>
+            <option value="paper2note">Paper to Note</option>
+            <option value="txt2tex">Txt to TeX</option>
+          </select>
+        </div>
+        <div class="select-group">
+          <label for="modelSelect">Model:</label>
+          <select id="modelSelect">
+            <option value="sonnet+">Sonnet+</option>
+            <option value="opus">Opus</option>
+            <option value="sonnet">Sonnet</option>
+            <option value="haiku">Haiku</option>
+            <option value="gpt4o">GPT-4 Omni</option>
+            <option value="gpt4t">GPT-4 Turbo</option>
+          </select>
+        </div>
+        <div class="select-group">
+          <label for="reflectSelect">Reflect:</label>
+          <select id="reflectSelect">
+            <option value="default">Default</option>
+            <option value="True">True</option>
+            <option value="False">False</option>
+          </select>
+        </div>
+      </div>
       </p>
+      <div class="file-selection-group">
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="inputFileSelect">Select Input File:</label>
+            <div class="file-select-buttons">
+              <button id="emptyMultipleFilesButton" class="small-button">Empty</button>
+              <button id="selectMultipleFilesButton" class="small-button">Multiple</button>
+            </div>
+          </div>
+          <select id="inputFileSelect">
+            <option value="">None</option>
+          </select>
+          <div id="multipleFilesSelect" class="multiple-files-list" style="display: none;"></div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="auxFileSelect">Select Auxiliary File:</label>
+            <div class="file-select-buttons">
+              <button id="emptyMultipleAuxFilesButton" class="small-button">Empty</button>
+              <button id="selectMultipleAuxFilesButton" class="small-button">Multiple</button>
+            </div>
+          </div>
+          <select id="auxFileSelect">
+            <option value="">None</option>
+          </select>
+          <div id="multipleAuxFilesSelect" class="multiple-files-list" style="display: none;"></div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="figureFileSelect">Select Figure File:</label>
+            <div class="file-select-buttons">
+              <button id="emptyMultipleFiguresButton" class="small-button">Empty</button>
+              <button id="selectMultipleFiguresButton" class="small-button">Multiple</button>
+            </div>
+          </div>
+          <select id="figureFileSelect">
+            <option value="">None</option>
+          </select>
+          <div id="multipleFiguresSelect" class="multiple-files-list" style="display: none;"></div>
+        </div>
+      </div>
       <p>
-        <label for="inputFileSelect">Select Input File:</label>
-        <button id="selectMultipleFilesButton" style="float: right;">Select Multiple</button>
-        <button id="emptyMultipleFilesButton" style="float: right; margin-right: 10px;">Empty</button><br>
-        <select id="inputFileSelect">
+        <div class="instruction-box">
+          <label for="taskInput">Specific Instructions:</label>
+          <textarea id="taskInput" placeholder="Gently correct mathematical mistakes and typos."></textarea>
+        </div>
+        <div class="tool-use-execute">
+        <div class="tool-use">
+          <label>Tool use:</label>
+          <div class="checkbox-group">
+            <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
+            <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
+          </div>
+        </div>
+        <button id="executeButton">Execute</button>
+      </div>
+      </p>
+      <div class="section">
+      <h5 class="section-header">Housekeeping</h5>
+      <div class="button-group">
+        <label>For the Selected Task and Files:</label>
+        <div class="button-container">
+          <button id="packSingleButton" class="small-button">Pack</button>
+          <button id="cleanSingleButton" class="small-button">Clean</button>
+        </div>
+      </div>
+      <div class="button-group">
+        <label>For All the Files:</label>
+        <div class="button-container">
+          <button id="indentTexButton" class="small-button">Indent TeX</button>
+          <button id="cleanOutputButton" class="small-button">Clean Output</button>
+          <button id="cleanBuildButton" class="small-button">Clean Build</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h5 class="section-header">LaTeXDiff</h5>
+      <div class="file-select">
+        <div class="file-select-header">
+          <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
+          <div class="file-select-buttons">
+            <button id="latexDiffButton" class="small-button">latexdiff</button>
+          </div>
+        </div>
+        <select id="revisionFileSelect">
           <option value="">None</option>
         </select>
-        <div id="multipleFilesSelect" style="display: none;"></div>
-      </p>
-      <p>
-        <label for="auxFileSelect">Select Auxiliary File:</label>
-        <button id="selectMultipleAuxFilesButton" style="float: right;">Select Multiple</button>
-        <button id="emptyMultipleAuxFilesButton" style="float: right; margin-right: 10px;">Empty</button><br>
-        <select id="auxFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleAuxFilesSelect" style="display: none;"></div>
-      </p>
-      <p>
-        <label for="figureFileSelect">Select Figure File:</label>
-        <button id="selectMultipleFiguresButton" style="float: right;">Select Multiple</button>
-        <button id="emptyMultipleFiguresButton" style="float: right; margin-right: 10px;">Empty</button>
-        <br>
-        <select id="figureFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleFiguresSelect" style="display: none;"></div>
-      </p>
-      <p>
-        <label for="taskInputArea">Specific Instructions:</label>
-        <textarea id="taskInput" style="width: 100%; height: 200px;" placeholder=''></textarea>
-      </p>
-      <p>
-        <label for="reflectSelect">Reflect:</label>
-        <select id="reflectSelect">
-          <option value="default">Default</option>
-          <option value="True">True</option>
-          <option value="False">False</option>
-        </select>
-        <label for="modelSelect">Model:</label>
-        <select id="modelSelect">
-          <option value="sonnet+">Sonnet+</option>
-          <option value="opus">Opus</option>
-          <option value="sonnet">Sonnet</option>
-          <option value="haiku">Haiku</option>
-          <option value="gpt4o">GPT-4 Omni</option>
-          <option value="gpt4t">GPT-4 Turbo</option>
-        </select><br>
-        <label for="autoExtractFigure">
-          Auto-extract Figs: <input type="checkbox" id="autoExtractFigure">
-        </label>
-        <label for="includeTexCount">
-          Include Tex Count: <input type="checkbox" id="includeTexCount">
-        </label>
-        <button id="executeButton" style="float: right;">Execute</button>
-      </p>
-      <p>
-        <h5>Housekeeping</h5>
-        <label>For the Selected File:</label><br>
-        <button id="packSingleButton">Pack Single</button>
-        <button id="cleanSingleButton">Clean Single</button>
-      </p>
-      <p>
-        <label>For All the Files:</label><br>
-        <button id="indentTexButton">Indent TeX</button>
-        <button id="cleanOutputButton">Clean Output</button>
-        <button id="cleanBuildButton">Clean Build</button>
-      </p>
-      <p>
-        <h5>LaTeXDiff</h5>
-        <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
-        <button id="latexDiffButton" style="float: right;">latexdiff</button>
-        <select id="revisionFileSelect"></select>
-      </p>
-      <p>
-        <label for="commitSelect">Select Commit:</label>
-        <button id="latexDiffVCButton" style="float: right;">latexdiff-vc</button>
-        <button id="packLatexDiffVCButton" style="float: right; margin-right: 10px;">Pack</button>
-        <button id="refreshCommitsButton" style="float: right; margin-right: 10px;">Refresh</button>
+      </div>
+      <div class="file-select">
+        <div class="file-select-header">
+          <label for="commitSelect">Select Commit:</label>
+          <div class="file-select-buttons">
+            <button id="refreshCommitsButton" class="small-button">Refresh</button>
+            <button id="packLatexDiffVCButton" class="small-button">Pack</button>
+            <button id="latexDiffVCButton" class="small-button">latexdiff-vc</button>
+          </div>
+        </div>
         <select id="commitSelect">
           <option value="HEAD">HEAD</option>
         </select>
-      </p>
+      </div>
+    </div>
     </body>
     </html>`;
   }
