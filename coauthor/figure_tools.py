@@ -3,29 +3,6 @@ import os
 import subprocess
 
 
-def get_tex_count(file_path):
-    """
-    Get full statistics for a LaTeX document using the texcount Perl script.
-
-    :param file_path: Path to the LaTeX file
-    :return: String containing full texcount output, or None if an error occurred
-    """
-    if not os.path.exists(file_path):
-        print(f"Error: File {file_path} does not exist.")
-        return None
-
-    try:
-        # Run texcount command with full statistics
-        result = subprocess.run(["texcount", "-inc", file_path], capture_output=True, text=True, check=True)
-
-        # Return the full output
-        return result.stdout.strip()
-
-    except subprocess.CalledProcessError as e:
-        print(f"Error running texcount: {e}")
-        return None
-
-
 def extract_figure_paths(latex_file_path):
     figure_paths = []
     latex_dir = os.path.dirname(latex_file_path)

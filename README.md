@@ -12,6 +12,17 @@ pip install -e .
 
 ## Changelog
 
+### 0.7.6 [backend]
+
+- Refactored codebase for improved modularity and organization
+- Split functionality into separate modules (tex_tools, figure_tools, etc.)
+- Renamed process_file_with_llm to process_one_round for clarity
+- Moved common utilities to dedicated files (arg_utils, prompt_utils)
+- Updated imports across all programs to use new module structure
+- Standardized function naming and parameter passing
+- Removed redundant code and consolidated shared functionality
+- Improved consistency in logging and error handling
+
 ### 0.7.5 [backend]
 
 - Refactored codebase for improved modularity and maintainability
