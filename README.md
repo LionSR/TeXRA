@@ -16,9 +16,11 @@ pip install -e .
 
 - Refactored codebase for improved modularity and maintainability
 - Created new `log_utils.py` for centralized logging functionality
-- Moved message handling from `model_utils.py` to new `message_utils.py`
-- Updated all program files to use new logging and message utilities
+- Moved `handle_reflection` function from `edit_utils.py` to `process.py`
+- Updated all program files to use new logging utilities
 - Improved error handling and input validation across multiple scripts
+- Enhanced `log_start` function to include more detailed information
+- Adjusted checkbox group styling in VS Code extension
 - Various minor improvements and bug fixes
 
 ### 0.7.4 [backend]
