@@ -1,16 +1,16 @@
-import os
 from termcolor import colored
 import coauthor
 from coauthor import get_common_argparser, get_prompt_path
 from coauthor.process import process_file_with_llm
 from coauthor.edit_utils import (
     get_user_prefix_vars,
-    log_start,
-    log_summary,
+    handle_long_task,
     handle_reflection,
     get_llm_settings,
     get_output_settings,
 )
+from coauthor.log_utils import log_start, log_and_print_summary, log_output_files
+
 
 all_tasks_settings = {
     "transcribe": {
@@ -48,10 +48,10 @@ def main():
 
     task_settings = all_tasks_settings[args.task]
 
-    log_start(args)
+    log_file_path = log_start(args)
 
     llm_settings = get_llm_settings(args, prompt_path)
-    output_settings = get_output_settings(args)
+    output_settings = get_output_settings(args, task_settings)
     output_settings["append_mode"] = args.append_mode
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
@@ -61,7 +61,8 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     coauthor.run_latexdiff(args.input_file, output_file)
 
-    log_summary(args, state)
+    log_output_files(log_file_path, output_file)
+    log_and_print_summary(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
         handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)

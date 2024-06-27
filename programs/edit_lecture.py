@@ -6,12 +6,11 @@ from coauthor.process import process_file_with_llm
 from coauthor.edit_utils import (
     get_user_prefix_vars,
     handle_long_task,
-    log_start,
-    log_summary,
     handle_reflection,
     get_llm_settings,
     get_output_settings,
 )
+from coauthor.log_utils import log_start, log_and_print_summary, log_output_files
 
 prompt_path = get_prompt_path(coauthor, "lecture")
 
@@ -76,10 +75,10 @@ def main():
     elif args.input_files:
         raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
 
-    log_start(args)
+    log_file_path = log_start(args)
 
     llm_settings = get_llm_settings(args, prompt_path)
-    output_settings = get_output_settings(args)
+    output_settings = get_output_settings(args, task_settings)
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
         args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
@@ -88,7 +87,8 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     run_latexdiff(args.input_file, output_file)
 
-    log_summary(args, state)
+    log_output_files(log_file_path, output_file)
+    log_and_print_summary(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
         handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)

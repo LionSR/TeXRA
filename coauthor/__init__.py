@@ -1,11 +1,10 @@
 # coauthor/__init__.py
 from .process import process_file_with_llm, process_reflection
-from .model_utils import (
+from .model_utils import is_openai_model, is_anthropic_model, compute_api_price
+
+from .message_utils import (
     create_response,
     extract_response_statistics,
-    is_openai_model,
-    is_anthropic_model,
-    compute_api_price,
 )
 
 from .file_utils import (
