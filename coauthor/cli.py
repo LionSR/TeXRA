@@ -18,7 +18,7 @@ def get_common_env(model):
     if model is None:
         model = os.getenv("MODEL", "opus")
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/prompts")
+    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/tasks")
     return model, script_dir, prompt_dir
 
 
@@ -52,7 +52,7 @@ def execute_task(script, task, model, input_file, **kwargs):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
-        f"{script_dir}/programs/{script}.py",
+        f"{script_dir}/tasks/{script}.py",
         f"--task={task}",
         f"--model={model}",
         f"--input_file={input_file}",
@@ -848,7 +848,7 @@ def merge(original_latex, edited_latex, model, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
-        f"{script_dir}/programs/merge.py",
+        f"{script_dir}/tasks/merge.py",
         f"--original_latex={original_latex}",
         f"--edited_latex={edited_latex}",
         f"--model={model}",
