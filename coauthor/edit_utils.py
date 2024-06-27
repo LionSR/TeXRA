@@ -1,10 +1,9 @@
 import os
-from datetime import datetime
 from termcolor import colored
-from coauthor import read_file, run_latexdiff
+from coauthor.file_utils import read_file, run_latexdiff
 from coauthor.process import process_reflection
 
-from coauthor.model_utils import get_summary_string
+from coauthor.log_utils import log_and_print_summary, log_output_files
 
 
 def get_user_prefix_vars(args):
@@ -56,20 +55,6 @@ def format_file_content(files, start_index):
     )
 
 
-def log_start(args):
-    with open(args.input_file.replace(".tex", "_log.txt"), "a+") as log_file:
-        log_file.write(
-            f"Start logging: {datetime.now()}\nTask: {args.task}\nModel: {args.model}\nInstruction:\n<request>\n{args.instruction}\n</request>\n"
-        )
-
-
-def log_summary(args, state):
-    summary = get_summary_string(state, args.model)
-    print(f"Summary: {summary}")
-    with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
-        log_file.write(f"Summary:\n{summary}\n")
-
-
 def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
     state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
         args.task,
@@ -85,14 +70,12 @@ def handle_reflection(args, task_settings, state, accumulated_output, messages, 
         use_prefill_from_input=False,
     )
     print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
+    log_file_reflect = args.input_file.replace(".tex", "_log.txt")
+    log_output_files(log_file_reflect, output_file_reflect)
+    log_and_print_summary(state, args.model, log_file_reflect)
+
     run_latexdiff(args.input_file, output_file_reflect)
     run_latexdiff(output_file, output_file_reflect, args.model)
-
-    reflection_summary = get_summary_string(state, args.model)
-    print(f"Reflection summary: {reflection_summary}")
-
-    with open(args.input_file.replace(".tex", "_log.txt"), "a") as log_file:
-        log_file.write(f"Reflection summary:\n{reflection_summary}\n")
 
 
 def get_llm_settings(args, prompt_path):
@@ -112,10 +95,12 @@ def get_llm_settings(args, prompt_path):
     }
 
 
-def get_output_settings(args):
+def get_output_settings(args, task_settings):
     return {
         "use_prefill_from_input": False,
         "append_mode": args.append_mode,
         "overwrite": False,
-        "k": 200,  # Adjust as needed
+        "k": 200,
+        "document_tag": task_settings.get("document_tag"),
+        "output_type": task_settings.get("output_type", "txt"),
     }
