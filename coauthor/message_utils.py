@@ -1,4 +1,5 @@
 from termcolor import colored
+
 import os
 from .file_utils import read_file
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
@@ -6,34 +7,41 @@ from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .model_utils import is_openai_model, is_anthropic_model
 
 
-def extract_response_statistics(response_object, model, end_tag=None):
+def create_response(
+    client,
+    messages,
+    model_settings,
+):
+    model = model_settings["model"]
+    model_name = model_settings["model_name"]
+    max_tokens = model_settings["max_tokens"]
+    temperature = model_settings["temperature"]
+    end_tag = model_settings["end_tag"]
+    system_prompt = model_settings["system_prompt"]
+
     if is_openai_model(model):
-        input_tokens = response_object.usage.prompt_tokens
-        output_tokens = response_object.usage.completion_tokens
-        stop_reason = response_object.choices[0].finish_reason
-        new_response = response_object.choices[0].message.content.strip()
+        response_object = client.chat.completions.create(
+            model=model_name,
+            max_tokens=max_tokens,
+            messages=messages,
+            temperature=temperature,
+            stop=end_tag,
+        )
+        print(colored(f"using openai model: {model_name}", "green"))
     elif is_anthropic_model(model):
-        input_tokens = response_object.usage.input_tokens
-        output_tokens = response_object.usage.output_tokens
-        stop_reason = response_object.stop_reason
-        if output_tokens == 3:
-            print("Some errors might have appeared. No output generated")
-            print(f"### DEBUG response_object: {response_object}")
-            print(f"### DEBUG response_object.content: {response_object.content}")
-            raise ValueError("No output generated")
-        if response_object.type == "error":
-            print("Error from the API:")
-            print(f"### DEBUG output_tokens: {output_tokens}")
-            print(f"### DEBUG error: {response_object.error}")
-            raise ValueError("Error from the API")
-        new_response = response_object.content[0].text.strip()
+        response_object = client.messages.create(
+            model=model_name,
+            max_tokens=max_tokens,
+            messages=messages,
+            temperature=temperature,
+            stop_sequences=[end_tag] if end_tag else None,
+            system=system_prompt,
+        )
+        print(colored(f"using anthropic model: {model_name}", "green"))
     else:
         raise ValueError(f"Unsupported model: {model}")
 
-    if "stop" in stop_reason and "\\end{document}" not in new_response:
-        new_response += "\n" + end_tag
-
-    return new_response, input_tokens, output_tokens, stop_reason
+    return response_object
 
 
 def handle_prefill(
@@ -132,38 +140,31 @@ def handle_images(figure_inputs, model):
     return content
 
 
-def create_response(
-    client,
-    messages,
-    model_settings,
-):
-    model = model_settings["model"]
-    model_name = model_settings["model_name"]
-    max_tokens = model_settings["max_tokens"]
-    temperature = model_settings["temperature"]
-    end_tag = model_settings["end_tag"]
-    system_prompt = model_settings["system_prompt"]
-
+def extract_response_statistics(response_object, model, end_tag=None):
     if is_openai_model(model):
-        response_object = client.chat.completions.create(
-            model=model_name,
-            max_tokens=max_tokens,
-            messages=messages,
-            temperature=temperature,
-            stop=end_tag,
-        )
-        print(colored(f"using openai model: {model_name}", "green"))
+        input_tokens = response_object.usage.prompt_tokens
+        output_tokens = response_object.usage.completion_tokens
+        stop_reason = response_object.choices[0].finish_reason
+        new_response = response_object.choices[0].message.content.strip()
     elif is_anthropic_model(model):
-        response_object = client.messages.create(
-            model=model_name,
-            max_tokens=max_tokens,
-            messages=messages,
-            temperature=temperature,
-            stop_sequences=[end_tag] if end_tag else None,
-            system=system_prompt,
-        )
-        print(colored(f"using anthropic model: {model_name}", "green"))
+        input_tokens = response_object.usage.input_tokens
+        output_tokens = response_object.usage.output_tokens
+        stop_reason = response_object.stop_reason
+        if output_tokens == 3:
+            print("Some errors might have appeared. No output generated")
+            print(f"### DEBUG response_object: {response_object}")
+            print(f"### DEBUG response_object.content: {response_object.content}")
+            raise ValueError("No output generated")
+        if response_object.type == "error":
+            print("Error from the API:")
+            print(f"### DEBUG output_tokens: {output_tokens}")
+            print(f"### DEBUG error: {response_object.error}")
+            raise ValueError("Error from the API")
+        new_response = response_object.content[0].text.strip()
     else:
         raise ValueError(f"Unsupported model: {model}")
 
-    return response_object
+    if "stop" in stop_reason and "\\end{document}" not in new_response:
+        new_response += "\n" + end_tag
+
+    return new_response, input_tokens, output_tokens, stop_reason
