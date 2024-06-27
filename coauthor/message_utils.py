@@ -3,7 +3,6 @@ from termcolor import colored
 import os
 from .file_utils import read_file
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
-
 from .model_utils import is_openai_model, is_anthropic_model
 
 
@@ -44,6 +43,20 @@ def create_response(
     return response_object
 
 
+def initialize_messages(system_prompt, user_prefix, user_request, figure_inputs, model):
+    messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
+
+    if is_openai_model(model):
+        messages.insert(0, {"role": "system", "content": system_prompt})
+
+    if figure_inputs:
+        image_content = handle_images(figure_inputs, model)
+        messages[-1]["content"].extend(image_content)
+
+    messages[-1]["content"].append({"type": "text", "text": user_request})
+    return messages
+
+
 def handle_prefill(
     model,
     output_type,
@@ -56,7 +69,6 @@ def handle_prefill(
     messages,
     document_tag,
     overwrite,
-    task_settings,
 ):
     accumulated_output = assistant_prefill_first
     if output_type == "tex":
@@ -124,12 +136,10 @@ def handle_images(figure_inputs, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
@@ -168,3 +178,42 @@ def extract_response_statistics(response_object, model, end_tag=None):
         new_response += "\n" + end_tag
 
     return new_response, input_tokens, output_tokens, stop_reason
+
+
+def handle_openai_continuation(messages, new_response, k, end_tag):
+    prefill_tokens = new_response[-k:]
+    user_message = (
+        f"Your response got cut off, because you only have limited response space. "
+        f"Please continue writing from where you left off until the very end, "
+        f"marked by {end_tag}. Avoid repetition and begin your response with:"
+    )
+    print("User message:", colored(user_message, "magenta"))
+    print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
+    messages.append({"role": "user", "content": user_message + prefill_tokens})
+
+
+def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
+    end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
+    encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
+    continuation_limit = state["continuation_count"] > 10
+    input_token_limit = state["total_input_tokens"] > 100000
+    output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
+
+    if output_token_limit:
+        print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
+
+    should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
+
+    return end_turn, should_stop
+
+
+def print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected):
+    print("Printing the flags")
+    print(f"end_turn: {end_turn}")
+    print(f"encounter_document_tag: {'</latex_document>' in new_response}")
+    print(f"continuation_limit: {state['continuation_count'] > 10}")
+    print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
+    print(f"massive_repetition_detected: {massive_repetition_detected}")
+    print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
+    print("### The last {} characters of the previous response are:".format(output_settings["k"]))
+    print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))
