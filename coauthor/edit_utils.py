@@ -1,9 +1,6 @@
 import os
-from termcolor import colored
-from coauthor.file_utils import read_file, run_latexdiff
-from coauthor.process import process_reflection
+from coauthor.file_utils import read_file
 
-from coauthor.log_utils import log_and_print_summary, log_output_files
 
 
 def get_user_prefix_vars(args):
@@ -54,28 +51,6 @@ def format_file_content(files, start_index):
         for i, file in enumerate(files)
     )
 
-
-def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
-    state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
-        args.task,
-        task_settings,
-        args.input_file,
-        output_file,
-        state,
-        accumulated_output,
-        messages,
-        model_settings,
-        output_settings,
-        prompt_path,
-        use_prefill_from_input=False,
-    )
-    print(colored(f"Reflect mode is on. Output files: {output_file}, {output_file_reflect}", "yellow"))
-    log_file_reflect = args.input_file.replace(".tex", "_log.txt")
-    log_output_files(log_file_reflect, output_file_reflect)
-    log_and_print_summary(state, args.model, log_file_reflect)
-
-    run_latexdiff(args.input_file, output_file_reflect)
-    run_latexdiff(output_file, output_file_reflect, args.model)
 
 
 def get_llm_settings(args, prompt_path):
