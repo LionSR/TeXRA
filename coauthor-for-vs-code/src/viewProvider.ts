@@ -284,7 +284,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       
       .checkbox-group {
         display: flex;
-        gap: 2px;
+        gap: 1px;
         flex-direction: column;
       }
       
@@ -898,7 +898,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="tool-use-execute">
         <div class="tool-use">
-          <label>Tool use:</label>
           <div class="checkbox-group">
             <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
             <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>

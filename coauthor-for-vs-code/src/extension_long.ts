@@ -1340,7 +1340,6 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="tool-use-execute">
         <div class="tool-use">
-          <label>Tool use:</label>
           <div class="checkbox-group">
             <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
             <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
