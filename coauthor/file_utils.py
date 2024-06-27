@@ -2,6 +2,12 @@ from termcolor import colored
 import difflib
 
 
+def get_prompt_path(library, prompt_name):
+    import os
+
+    return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "tasks", prompt_name)
+
+
 def read_file(file_path):
     with open(file_path, "r") as file:
         return file.read()
@@ -47,12 +53,6 @@ def check_for_massive_repetition(last_response, new_response):
         print(colored(f"### Longest matching substring: {longest_matching_substring}", "red"))
         print("WARNING: Massive repetition detected. Stopping the process.")
     return massive_repetition_detected
-
-
-def get_prompt_path(library, prompt_name):
-    import os
-
-    return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "prompts", prompt_name)
 
 
 __all__ = [
