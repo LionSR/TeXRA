@@ -1,5 +1,5 @@
 # coauthor/__init__.py
-from .process import process_one_round, process_reflection
+from .process import process_first_round, process_reflection_round
 from .model_utils import is_openai_model, is_anthropic_model, compute_api_price
 
 from .message_utils import (
@@ -24,7 +24,7 @@ from .arg_utils import get_common_argparser
 from .file_utils import get_prompt_path
 
 __all__ = [
-    "process_one_round",
+    "process_first_round",
     "create_response",
     "extract_response_statistics",
     "is_openai_model",
