@@ -12,6 +12,19 @@ pip install -e .
 
 ## Changelog
 
+### 0.7.5 [backend]
+
+- Refactored codebase for improved modularity and maintainability
+- Created new `log_utils.py` for centralized logging functionality
+- Moved message handling from `model_utils.py` to new `message_utils.py`
+- Updated all program files to use new logging and message utilities
+- Improved error handling and input validation across multiple scripts
+- Various minor improvements and bug fixes
+
+### 0.7.4 [backend]
+
+- Fix the broken backend
+
 ### 0.7.4 [backend]
 
 - Created new `edit_utils.py` for shared edit functionality
