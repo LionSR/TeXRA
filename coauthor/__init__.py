@@ -1,5 +1,5 @@
 # coauthor/__init__.py
-from .process import process_file_with_llm, process_reflection
+from .process import process_one_round, process_reflection
 from .model_utils import is_openai_model, is_anthropic_model, compute_api_price
 
 from .message_utils import (
@@ -13,15 +13,18 @@ from .file_utils import (
     find_last_non_empty_line,
     extract_text_from_tags,
     check_for_massive_repetition,
-    run_latexdiff,
 )
+
+from .tex_tools import run_latexdiff
 
 from .img_utils import get_base64_encoded_image
 
-from .argparse_utils import get_common_argparser, get_prompt_path
+from .arg_utils import get_common_argparser
+
+from .file_utils import get_prompt_path
 
 __all__ = [
-    "process_file_with_llm",
+    "process_one_round",
     "create_response",
     "extract_response_statistics",
     "is_openai_model",

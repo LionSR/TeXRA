@@ -1,14 +1,15 @@
 from termcolor import colored
 import coauthor
-from coauthor import get_common_argparser, get_prompt_path, extract_text_from_tags
-from coauthor.process import process_file_with_llm, handle_reflection
+from coauthor.arg_utils import get_common_argparser
+from coauthor.file_utils import get_prompt_path, extract_text_from_tags
+from coauthor.tex_tools import run_latexdiff
+from coauthor.process import process_one_round, handle_reflection
+from coauthor.prompt_utils import get_user_prefix_vars
 from coauthor.edit_utils import (
-    get_user_prefix_vars,
-    handle_long_task,
     get_llm_settings,
     get_output_settings,
 )
-from coauthor.log_utils import log_start, log_and_print_summary, log_output_files
+from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
 
 
 all_tasks_settings = {
@@ -77,15 +78,15 @@ def main():
     llm_settings = get_llm_settings(args, prompt_path)
     output_settings = get_output_settings(args, task_settings)
 
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_file_with_llm(
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_one_round(
         args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
-    coauthor.run_latexdiff(args.input_file, output_file)
+    run_latexdiff(args.input_file, output_file)
 
     log_output_files(log_file_path, output_file)
-    log_and_print_summary(state, args.model, log_file_path)
+    log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
         handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path)
