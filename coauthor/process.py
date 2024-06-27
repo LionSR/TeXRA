@@ -47,7 +47,7 @@ def handle_output_file(file_name, task, model, output_type):
     return output_file
 
 
-def process_one_round(
+def process_first_round(
     task, task_settings, input_file, user_prefix_vars, llm_settings, output_settings, state=None, accumulated_output=None, messages=None
 ):
     client, model_name = get_model_client(llm_settings["model"], llm_settings["api_key"])
@@ -129,7 +129,7 @@ def process_one_round(
     return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings
 
 
-def process_reflection(
+def process_reflection_round(
     task,
     task_settings,
     input_file,
@@ -220,7 +220,7 @@ def process_response_cycle(state, accumulated_output, messages, output_file, mod
 
         accumulated_output += best_connector + new_response
 
-        file_exists = handle_file_output(file_exists, output_settings, state, best_connector, new_response, output_file)
+        file_exists = handle_file_output(file_exists, output_settings, best_connector, new_response, output_file)
 
         print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
 
@@ -247,7 +247,7 @@ def process_response_cycle(state, accumulated_output, messages, output_file, mod
 
 
 def handle_reflection(args, task_settings, state, accumulated_output, messages, model_settings, output_settings, output_file, prompt_path):
-    state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
+    state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection_round(
         args.task,
         task_settings,
         args.input_file,
@@ -270,7 +270,7 @@ def handle_reflection(args, task_settings, state, accumulated_output, messages, 
     run_latexdiff(output_file, output_file_reflect, args.model)
 
 
-def handle_file_output(file_exists, output_settings, state, best_connector, new_response, output_file):
+def handle_file_output(file_exists, output_settings, best_connector, new_response, output_file):
     if not file_exists:
         print("Creating the file")
         write_file(output_file, new_response)

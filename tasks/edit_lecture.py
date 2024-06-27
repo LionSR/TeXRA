@@ -4,7 +4,7 @@ import coauthor
 from coauthor.arg_utils import get_common_argparser
 from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
-from coauthor.process import process_one_round, process_reflection
+from coauthor.process import process_first_round, process_reflection_round
 from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input
 from coauthor.edit_utils import (
     get_llm_settings,
@@ -80,7 +80,7 @@ def main():
     llm_settings = get_llm_settings(args, prompt_path)
     output_settings = get_output_settings(args, task_settings)
 
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_one_round(
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_first_round(
         args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
     )
 
@@ -91,7 +91,7 @@ def main():
     log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
-        state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection(
+        state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection_round(
             args.task,
             task_settings,
             args.input_file,
