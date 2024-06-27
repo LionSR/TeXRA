@@ -2,17 +2,16 @@
 
 ## Usage
 
-CoAuthor provides a CLI with several commands for different tasks.
+CoAuthor is a powerful VS Code extension designed to assist developers and researchers in their coding and writing tasks. It provides a seamless integration with large language models to enhance productivity and streamline workflows.
+
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **AI-Powered Assistance**: Leverage the power of large language models to get intelligent suggestions and help with your coding and writing tasks.
+- **Multiple File Support**: Work with multiple input files simultaneously for complex projects.
+- **LaTeX Integration**: Special support for LaTeX documents, including diff functionality and figure extraction.
+- **Customizable Settings**: Tailor the prompt to your needs with configurable settings.
+- **Version Control Integration**: Easily access and compare recent commits in your project.
 
 ## Installation Guide
 
@@ -74,202 +73,28 @@ Users can customize the included directories by modifying their VS Code settings
 }
 ```
 
+## Commands
+
+CoAuthor provides several commands that can be accessed via the command palette:
+
+- `coauthor.cleanOutput`: Clean output files
+- `coauthor.cleanBuild`: Clean all build files
+- `coauthor.indentTex`: Indent TeX files
+- `coauthor.packSingle`: Pack a single file
+- `coauthor.cleanSingle`: Clean a single file
+- `coauthor.latexDiff`: Generate LaTeX diff
+- `coauthor.latexDiffVC`: Generate LaTeX diff with version control
+- `coauthor.getRecentCommits`: Get recent commits
+- `coauthor.refreshCommits`: Refresh commit information
+- `coauthor.selectMultipleFiles`: Select multiple input files
+- `coauthor.selectInputFile`: Select an input file
+- `coauthor.selectAuxFile`: Select an auxiliary file
+- `coauthor.selectFigureFile`: Select a figure file
+- `coauthor.execute`: Execute a task
+
 ## Known Issues
 
 Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-### 0.4.7
-- Significantly improved UI layout and design for better user experience
-- Redesigned file selection interface with support for multiple file selection
-- Added compact selections for task, model, and reflect options
-- Enhanced styling of buttons, selectors, and input areas
-- Reorganized housekeeping and LaTeXDiff sections for improved clarity
-- Increased initial height of task input textarea
-- Various minor UI improvements and optimizations
-
-### 0.4.6
-- Added the ability to reorder file lists in the UI
-- Implemented drag-and-drop functionality for input files, auxiliary files, and figures
-- Integrated Sortable.js library for smooth reordering experience
-- Ensured state preservation after reordering files
-- Minor UI improvements and bug fixes
-
-### 0.4.5
-- Enhanced support for multiple file selection in the UI
-- Implemented file removal functionality for input files, auxiliary files, and figures
-- Improved state management for selected files
-- Added visual feedback for file selection and removal
-- Prevented duplicate file entries when selecting multiple files
-- Various UI improvements and bug fixes
-
-### 0.4.4
-- Added tex count functionality for LaTeX documents
-- Improved figure handling with auto-extraction
-- Enhanced CoAuthor extension UI to include tex count option
-- Updated CLI to support new tex count feature
-- Various minor improvements and bug fixes
-
-### 0.4.3
-- Added auto-extract figure option in VS Code extension
-- Implemented automatic figure path extraction from LaTeX files
-- Improved polish functionality with refined prompts and better figure handling
-- Enhanced reflection process for polishing task
-- Various minor improvements and bug fixes
-
-### 0.4.2
-- Streamlined TeX and ST processing by removing long versions of commands
-- Merged polish_tex and polish_tex_long functionality
-- Enhanced logging with summary statistics
-- Added figure extraction and word count utility scripts
-- Updated prompts for more detailed improvement plans
-- Refactored model utility functions for better reusability
-- Improved reflection process with more detailed action plans
-- Added summary logging for both initial processing and reflection steps
-
-## [0.4.1]
-
-* small fixes to the execute button for the single auxiliary file case.
-
-## [0.4.0]
-
-* added the handling of multiple figures in the backend and make it works also in the frontend.
-
-## [0.3.12]
-
-* more fixes for selecting multiple input files and/or figures
-
-## [0.3.11]
-
-* fixes for selecting multiple input files and/or figures
-
-## [0.3.10]
-
-* UI optimizations
-
-## [0.3.9]
-
-* polish pass the multiple selected input files and/or figures to the backend: only show relative path if softlinks is encountered.
-
-## [0.3.8]
-
-* now possible to pass the multiple selected input files and/or figures to the backend
-
-## [0.3.7]
-
-* Added the possibility to select multiple input files and or figures, and display selected files in the extension UI (Activity Bar tab).
-* Set the default open dialog for file selection to the same path of the select input file if it is set.
-
-## [0.3.6]
-
-* Set figure file to "None" and reflect to "False" when a task starting with "Correct" is selected.
-
-## [0.3.5]
-
-* increase the number of git commit message to show up to 20.
-* handled softlinks folders
-
-## [0.3.4]
-
-* Added draw-tex and draw-st tasks in the backend and the UI.
-
-## [0.3.3]
-
-* Further Fixes to the clean-single function.
-
-## [0.3.2]
-
-* Fixed the clean-single function.
-
-## [0.3.1]
-
-* Safe housekeeping terminal.
-
-## [0.3.0]
-
-* A functional latexdiff/latexdiff-vs UI that automatically open the generated diff file
-
-## [0.2.9]
-
-* Added the latexdiff-vc button
-
-## [0.2.8]
-
-UI improvements and refresh button fix.
-
-## [0.2.8]
-
-UI improvements: 
-* moved to using h3 for section headers and h4 for subsections.
-* right-aligned the button for latexdiff and latexdiff-vc
-
-## [0.2.7]
-
-* added the latexdiff-vs button to diff with a version in the commit history 
-
-## [0.2.6]
-
-* small UI bump
-
-## [0.2.5]
-
-* added the automatic call to update the select revision file for latexdiff only for those that match the input.
-
-## [0.2.4]
-
-* handled the case when the housekeeping terminal is not available.
-
-## [0.2.3]
-
-* added the latexdiff button
-
-## [0.2.2]
-
-Quality of life improvements: 
-* gave a name to the housekeeping terminal.
-* ignored more files and directories when searching for files.
-* tweaking the continuation mode for claude and GPTs on the backend side.
-
-
-## [0.2.1]
-
-* Supported the pdf figure inputs.
-
-## [0.2.0]
-
-* Supported png and jpeg figure inputs.
-
-## [0.1.9]
-
-* Added a CleanSingle Button to clean up the generated file for the selected input.
-* UI changes
-
-## [0.1.8]
-
-* Fixed the file filter to exclude certain files and directories
-
-## [0.1.7]
-
-* Fixed the passing of the reflection parameter to the backend
-
-## [0.1.6]
-
-* Fixed the bug that the model parameter is not passed to the backend correctly
-
-## [0.1.5]
-
-* Added hacks to process the scratchpad in the generated tex files
-
-## [0.1.4]
-
-* Created the Clean-Output Button
-* Simplifies the execute logic
-
-## [0.1.0]
-
-* Added basic functionalities
-* Initial release
 
 ---
 
@@ -279,13 +104,6 @@ Ensure that you've read through the extensions guidelines and follow the best pr
 
 * [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
 
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
 
 
 
