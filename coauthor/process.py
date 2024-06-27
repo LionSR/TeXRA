@@ -7,13 +7,14 @@ from .file_utils import read_file, write_file, append_file, check_for_massive_re
 from .model_utils import get_model_client, is_openai_model, is_anthropic_model
 from .message_utils import (
     handle_prefill,
-    handle_images,
+    initialize_messages,
     create_response,
     extract_response_statistics,
+    check_stop_conditions,
+    print_stop_flags,
+    handle_openai_continuation,
 )
 from .tex_tools import run_latexdiff
-
-
 from .openai_utils import best_connection_method
 
 
@@ -26,25 +27,27 @@ def load_prompt(prompt_type, task, prompt_path, task_settings):
     return read_file(prompt_file_path).strip()
 
 
-def initialize_messages(system_prompt, user_prefix, user_request, figure_inputs, model):
-    messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
-
-    if is_openai_model(model):
-        messages.insert(0, {"role": "system", "content": system_prompt})
-
-    if figure_inputs:
-        image_content = handle_images(figure_inputs, model)
-        messages[-1]["content"].extend(image_content)
-
-    messages[-1]["content"].append({"type": "text", "text": user_request})
-    return messages
-
-
 def handle_output_file(file_name, task, model, output_type):
     first_task_chunk = task.split("_")[0]
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
+
+
+def handle_file_output(file_exists, output_settings, best_connector, new_response, output_file):
+    if not file_exists:
+        print("Creating the file")
+        write_file(output_file, new_response)
+        file_exists = True
+    elif output_settings["overwrite"]:
+        print("Overwriting file")
+        write_file(output_file, new_response)
+        output_settings["overwrite"] = False
+    else:
+        print("Appending to file")
+        append_file(output_file, best_connector + new_response)
+
+    return file_exists
 
 
 def process_first_round(
@@ -86,7 +89,6 @@ def process_first_round(
             messages,
             document_tag,
             output_settings["overwrite"],
-            task_settings,
         )
 
     if state is None:
@@ -224,6 +226,7 @@ def process_response_cycle(state, accumulated_output, messages, output_file, mod
 
         print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
 
+        # for anthropic, we set the accumulated output as the prefill
         if messages[-1]["role"] == "assistant":
             messages[-1]["content"] = accumulated_output
 
@@ -268,58 +271,3 @@ def handle_reflection(args, task_settings, state, accumulated_output, messages, 
 
     run_latexdiff(args.input_file, output_file_reflect)
     run_latexdiff(output_file, output_file_reflect, args.model)
-
-
-def handle_file_output(file_exists, output_settings, best_connector, new_response, output_file):
-    if not file_exists:
-        print("Creating the file")
-        write_file(output_file, new_response)
-        file_exists = True
-    elif output_settings["overwrite"]:
-        print("Overwriting file")
-        write_file(output_file, new_response)
-        output_settings["overwrite"] = False
-    else:
-        print("Appending to file")
-        append_file(output_file, best_connector + new_response)
-
-    return file_exists
-
-
-def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
-    end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-    encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
-    continuation_limit = state["continuation_count"] > 10
-    input_token_limit = state["total_input_tokens"] > 100000
-    output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
-
-    if output_token_limit:
-        print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
-
-    should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
-
-    return end_turn, should_stop
-
-
-def print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected):
-    print("Printing the flags")
-    print(f"end_turn: {end_turn}")
-    print(f"encounter_document_tag: {'</latex_document>' in new_response}")
-    print(f"continuation_limit: {state['continuation_count'] > 10}")
-    print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
-    print(f"massive_repetition_detected: {massive_repetition_detected}")
-    print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
-    print("### The last {} characters of the previous response are:".format(output_settings["k"]))
-    print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))
-
-
-def handle_openai_continuation(messages, new_response, k, end_tag):
-    prefill_tokens = new_response[-k:]
-    user_message = (
-        f"Your response got cut off, because you only have limited response space. "
-        f"Please continue writing from where you left off until the very end, "
-        f"marked by {end_tag}. Avoid repetition and begin your response with:"
-    )
-    print("User message:", colored(user_message, "magenta"))
-    print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-    messages.append({"role": "user", "content": user_message + prefill_tokens})
