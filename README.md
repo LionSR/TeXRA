@@ -12,6 +12,15 @@ pip install -e .
 
 ## Backend Changelog
 
+### 0.7.10
+
+- Removed redundant comments and unused imports.
+- Simplified function definitions and improved readability.
+- Consolidated model settings and prompt settings retrieval.
+- Enhanced logging and error handling.
+- Updated function signatures for consistency.
+- Improved handling of file paths and content extraction.
+
 ### 0.7.9
 
 - Refactored continuation logic for improved handling of existing files
