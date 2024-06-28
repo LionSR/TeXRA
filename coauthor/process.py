@@ -65,9 +65,9 @@ def initialize_state(state, accumulated_output):
 def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
     end_turn = False
     k = output_settings["k"]
-    file_exists = os.path.exists(output_file)
 
     while not end_turn:
+        file_exists = os.path.exists(output_file)
         start_time = time.time()
         response_object = create_response(
             client=client, messages=messages, model_settings=model_settings, output_settings=output_settings, prompt_settings=prompt_settings
