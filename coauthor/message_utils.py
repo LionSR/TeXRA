@@ -6,6 +6,21 @@ from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .model_utils import is_openai_model, is_anthropic_model
 
 
+def has_end_tag(file_content, end_tag, document_tag):
+    """
+    Check if the end tag or document tag is present in the given file content.
+
+    Args:
+        file_content (str): The content of the file to check.
+        end_tag (str): The end tag to look for.
+        document_tag (str): The document tag to look for.
+
+    Returns:
+        bool: True if the end tag or document tag is found, False otherwise.
+    """
+    return end_tag in file_content or f"</{document_tag}>" in file_content or "\\end{document}" in file_content
+
+
 def create_response(
     client,
     messages,
@@ -71,7 +86,6 @@ def add_prefill_message(
 
     k = output_settings["k"]
     output_type = output_settings["output_type"]
-    append_mode = output_settings["append_mode"]
     overwrite = output_settings["overwrite"]
     document_tag = output_settings["document_tag"]
 
@@ -92,8 +106,8 @@ def add_prefill_message(
             accumulated_output = ""
 
     if is_anthropic_model(model):
-        if append_mode and os.path.exists(output_file):
-            file_content = read_file(output_file).strip()
+        if os.path.exists(output_file):
+            file_content = read_file(output_file)
             if output_type == "tex" and "\\end{document}" in file_content:
                 print("### end_tag detected in existing file content. Overwriting...")
                 overwrite = True
