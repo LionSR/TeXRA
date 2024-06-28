@@ -1,5 +1,6 @@
 import os
 import subprocess
+from termcolor import colored
 
 
 def get_tex_count(file_path):
@@ -16,25 +17,18 @@ def get_tex_count(file_path):
     try:
         # Run texcount command with full statistics
         result = subprocess.run(["texcount", "-inc", file_path], capture_output=True, text=True, check=True)
-
-        # Return the full output
         return result.stdout.strip()
-
     except subprocess.CalledProcessError as e:
         print(f"Error running texcount: {e}")
         return None
 
 
 def run_latexdiff(input_file, output_file, model=None):
-    import os
-    from termcolor import colored
-
     log_file_name = output_file.replace(".tex", "_log.txt")
     diff_file_name = output_file.replace(".tex", "_diff.tex")
 
-    if model is not None:
-        if model in input_file and model in output_file:
-            diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
+    if model and model in input_file and model in output_file:
+        diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
     # Handle scratchpad content
     with open(output_file, "r") as file:
@@ -92,9 +86,6 @@ def run_latexdiff(input_file, output_file, model=None):
 
 
 def run_latexdiff_vc(input_file, commit_hash):
-    import os
-    from termcolor import colored
-
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command

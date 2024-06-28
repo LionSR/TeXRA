@@ -3,7 +3,7 @@ import argparse
 
 def comma_separated_list(value):
     items = [item.strip() for item in value.split(",")]
-    return [item.strip("'\"") for item in items]  # Remove surrounding quotes
+    return [item.strip("'\"") for item in items]
 
 
 def get_common_argparser():

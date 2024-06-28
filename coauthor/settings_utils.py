@@ -5,9 +5,9 @@ from termcolor import colored
 def get_model_settings(args):
     model_settings = {
         "model": args.model,
+        "model_name": model_mapping[args.model],
         "max_tokens": 4096,
         "temperature": 0,
-        "model_name": model_mapping[args.model],
     }
 
     return model_settings
@@ -16,7 +16,6 @@ def get_model_settings(args):
 def get_output_settings(args, task_settings):
     output_settings = {
         "k": 200,
-        "overwrite": False,
         "document_tag": task_settings.get("document_tag"),
         "output_type": task_settings.get("output_type", "txt"),
         "end_tag": task_settings.get("end_tag", "\\end{document}"),
