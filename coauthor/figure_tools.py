@@ -6,22 +6,33 @@ import subprocess
 def extract_figure_paths(latex_file_path):
     figure_paths = []
     latex_dir = os.path.dirname(latex_file_path)
+    graphicspaths = [latex_dir]  # Start with the directory of the LaTeX file
 
-    # Regular expressions to match figure inclusion commands
+    # Regular expressions to match figure inclusion commands and graphicspath
     figure_patterns = [re.compile(r"\\includegraphics(?:\[.*?\])?\{(.+?)\}"), re.compile(r"\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}")]
+    graphicspath_pattern = re.compile(r"\\graphicspath\{(.+?)\}")
 
     try:
         with open(latex_file_path, "r", encoding="utf-8") as file:
             content = file.read()
 
+        # Find all graphicspaths
+        graphicspath_matches = graphicspath_pattern.findall(content)
+        for match in graphicspath_matches:
+            paths = re.findall(r"\{(.*?)\}", match)
+            for path in paths:
+                graphicspaths.append(os.path.normpath(os.path.join(latex_dir, path)))
+
         # Find all matches in the content for both patterns
         for pattern in figure_patterns:
             matches = pattern.findall(content)
             for match in matches:
-                # Normalize the path, but keep it relative
-                norm_path = os.path.normpath(os.path.join(latex_dir, match))
-                rel_path = os.path.relpath(norm_path, start=latex_dir)
-                figure_paths.append(rel_path)
+                for base_path in graphicspaths:
+                    norm_path = os.path.normpath(os.path.join(base_path, match))
+                    if os.path.exists(norm_path):
+                        rel_path = os.path.relpath(norm_path, start=latex_dir)
+                        figure_paths.append(rel_path)
+                        break
 
     except FileNotFoundError:
         print(f"Error: File '{latex_file_path}' not found.")
