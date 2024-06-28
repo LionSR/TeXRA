@@ -12,6 +12,15 @@ pip install -e .
 
 ## Backend Changelog
 
+### 0.7.9
+
+- Refactored continuation logic for improved handling of existing files
+- Implemented new has_end_tag function to check for end tags in file content
+- Removed append_mode from output settings and related command-line arguments
+- Improved handling of existing files in both initial and reflection rounds
+- Enhanced "continue to reflect" functionality
+- Various code cleanup and minor improvements
+
 ### 0.7.8
 
 - Refactored settings and prompt handling for improved modularity and consistency

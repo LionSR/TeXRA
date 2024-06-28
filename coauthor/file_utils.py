@@ -11,7 +11,7 @@ def read_file(file_path):
     if not os.path.exists(file_path):
         return ""
     with open(file_path, "r") as file:
-        return file.read()
+        return file.read().strip()
 
 
 def write_file(file_path, content):

@@ -16,7 +16,6 @@ def get_model_settings(args):
 def get_output_settings(args, task_settings):
     output_settings = {
         "k": 200,
-        "append_mode": args.append_mode,
         "overwrite": False,
         "document_tag": task_settings.get("document_tag"),
         "output_type": task_settings.get("output_type", "txt"),

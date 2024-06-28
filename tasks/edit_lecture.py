@@ -52,7 +52,6 @@ def main():
         default="correct_qi",
         choices=["correct_qi", "correct_st", "polish_qi", "polish_st", "draw_st", "draw_qi", "polish_st_long", "draw_st_long", "correct_st_long"],
     )
-    parser.add_argument("--append_mode", type=bool, default=True, help="Whether to append the output to the input file instead of overwriting it.")
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
@@ -81,7 +80,6 @@ def main():
     client = get_model_client(model_settings["model"])
 
     log_file_path = log_start(args)
-
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = process_first_round(
         client,
         args.task,
