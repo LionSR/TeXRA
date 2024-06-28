@@ -14,7 +14,7 @@ def get_user_prefix_vars(args):
 
 def format_file_content(files, start_index):
     return "\n".join(
-        f'<document index="{i+start_index}">\n'
+        f'<document index="{i + start_index}">\n'
         f"    <source>{os.path.basename(file)}</source>\n"
         f"    <document_content>\n"
         f"        {read_file(file)}\n"

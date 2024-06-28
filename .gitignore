@@ -2,6 +2,7 @@
 node_modules/
 
 # Byte-compiled / optimized / DLL files
+__pycache__
 __pycache__/
 dist/
 *.py[cod]
