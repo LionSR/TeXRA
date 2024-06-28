@@ -5,7 +5,7 @@ from coauthor.arg_utils import get_common_argparser
 from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
 from coauthor.process import process_first_round, process_reflection_round
-from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
+from coauthor.prompt_utils import get_user_prefix_vars, handle_single_input
 from coauthor.settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 from coauthor.model_utils import get_model_client
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
