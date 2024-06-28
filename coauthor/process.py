@@ -3,15 +3,15 @@ import time
 from termcolor import colored
 
 from .file_utils import read_file, write_file, append_file, check_for_massive_repetition
-from .model_utils import is_openai_model
+from .model_utils import is_openai_model, is_anthropic_model
 from .message_utils import (
-    add_prefill_message,
     initialize_messages,
     create_response,
     extract_response_statistics,
     check_stop_conditions,
     print_stop_flags,
     handle_openai_continuation,
+    has_end_tag,
 )
 from .openai_utils import best_connection_method
 
@@ -54,6 +54,24 @@ def write_to_output_file(file_exists, output_settings, best_connector, new_respo
         append_file(output_file, best_connector + new_response)
 
     return file_exists
+
+
+def initialize_state(state, accumulated_output):
+    if state is None:
+        state = {
+            "continuation_count": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_response_time": 0,
+            "last_response": accumulated_output,
+            "first_input_tokens": 0,
+        }
+    else:
+        for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
+            if key not in state:
+                state[key] = 0 if key != "last_response" else accumulated_output
+
+    return state
 
 
 def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
@@ -114,24 +132,6 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
     return state, accumulated_output, end_turn
 
 
-def initialize_state(state, accumulated_output):
-    if state is None:
-        state = {
-            "continuation_count": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "total_response_time": 0,
-            "last_response": accumulated_output,
-            "first_input_tokens": 0,
-        }
-    else:
-        for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
-            if key not in state:
-                state[key] = 0 if key != "last_response" else accumulated_output
-
-    return state
-
-
 def process_first_round(
     client,
     task,
@@ -141,11 +141,9 @@ def process_first_round(
     output_settings,
     prompt_settings,
     state=None,
-    accumulated_output=None,
     messages=None,
 ):
     model = model_settings["model"]
-
     system_prompt = load_prompt("system_prompt", task, prompt_settings)
     user_prefix_template = load_prompt("user_prefix", task, prompt_settings)
     user_request = load_prompt("user_request", task, prompt_settings)
@@ -156,18 +154,44 @@ def process_first_round(
     output_type = output_settings.get("output_type", "txt")
     output_file = get_output_file_name(input_file, task, model, output_type)
 
-    if messages is None:
-        messages = initialize_messages(model, system_prompt, user_prefix, user_request, prompt_settings["figure_inputs"])
+    messages = initialize_messages(model, system_prompt, user_prefix, user_request, prompt_settings["figure_inputs"])
 
-    if accumulated_output is None:
-        accumulated_output, messages, output_settings["overwrite"] = add_prefill_message(
-            input_file,
-            output_file,
-            messages,
-            model_settings=model_settings,
-            output_settings=output_settings,
-            prompt_settings=prompt_settings,
-        )
+    accumulated_output = None
+    if os.path.exists(output_file):
+        file_content = read_file(output_file)
+        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
+            print("### end_tag detected in the first prospect output file. Skipping continuation.")
+
+            # here should incldue the scratchpad log from the log file too.
+            log_file_name = output_file.replace(".tex", "_log.txt")
+            if os.path.exists(log_file_name):
+                file_content = read_file(log_file_name) + file_content
+            messages.append({"role": "assistant", "content": file_content})
+            return initialize_state(state, None), accumulated_output, True, output_file, messages, model_settings, output_settings, prompt_settings
+        else:
+            print(colored("### The first prospect output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
+            accumulated_output = file_content
+
+            messages.append({"role": "assistant", "content": file_content})
+            print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
+            if is_openai_model(model_settings["model"]):
+                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
+    else:
+        # starting from scratch
+        prefill_first = prompt_settings["prefill_first"]
+        use_prefill_from_input = prompt_settings["use_prefill_from_input"]
+        accumulated_output = prefill_first
+
+        if output_type == "tex" and use_prefill_from_input:
+            first_k_tex_document = read_file(input_file)[: output_settings["k"]]
+            prefill_first += first_k_tex_document
+            if is_anthropic_model(model):
+                accumulated_output = first_k_tex_document
+            elif is_openai_model(model):
+                accumulated_output = ""
+                messages.append({"role": "assistant", "content": "```latex\n"})
+
+        messages.append({"role": "assistant", "content": prefill_first})
 
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
@@ -195,19 +219,32 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
     output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=True)
 
     messages.append({"role": "user", "content": user_message})
-    if prompt_settings.get("first_prefill_reflect"):
-        prefill_first = prompt_settings.get("first_prefill_reflect")
-    else:
-        prefill_first = prompt_settings.get("prefill_first")
 
-    if output_settings["document_tag"] == "tex" and use_prefill_from_input:
-        first_k_tex_document = read_file(input_file)[: output_settings["k"]].strip()
-        accumulated_output = first_k_tex_document
+    accumulated_output = None
+    if os.path.exists(output_file):
+        file_content = read_file(output_file)
+        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
+            print("### end_tag detected in the reflection output file. Skipping continuation.")
+            messages.append({"role": "assistant", "content": file_content})
+            return initialize_state(state, None), accumulated_output, True, output_file, messages, model_settings, output_settings, prompt_settings
+        else:
+            print(colored("### The reflection output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
+            accumulated_output = file_content
+            messages.append({"role": "assistant", "content": file_content})
     else:
-        accumulated_output = prefill_first
+        if prompt_settings.get("first_prefill_reflect"):
+            prefill_first = prompt_settings.get("first_prefill_reflect")
+        else:
+            prefill_first = prompt_settings.get("prefill_first")
 
-    messages.append({"role": "assistant", "content": prefill_first})
-    print(f"prefill_first: {colored(prefill_first, 'yellow')}")
+        if output_settings["document_tag"] == "tex" and use_prefill_from_input:
+            first_k_tex_document = read_file(input_file)[: output_settings["k"]]
+            accumulated_output = first_k_tex_document
+        else:
+            accumulated_output = prefill_first
+
+            messages.append({"role": "assistant", "content": prefill_first})
+            print(f"prefill_first: {colored(prefill_first, 'yellow')}")
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output

@@ -51,7 +51,6 @@ all_task_settings = {
 def main():
     parser = get_common_argparser()
     parser.add_argument("--task", type=str, default="correct", choices=["correct", "polish", "draw", "polish_long", "draw_long"])
-    parser.add_argument("--append_mode", type=bool, default=True, help="Whether to append the output to the input file instead of overwriting it.")
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
