@@ -107,9 +107,8 @@ def main():
             prompt_settings=prompt_settings,
             use_prefill_from_input=False,
         )
-        log_file_reflect = output_file_reflect.replace(".tex", "_log.txt")
-        log_output_files(log_file_path, output_file_reflect)
-        log_and_print_statistics(state, args.model, log_file_reflect)
+        log_output_files(output_file_reflect, log_file_path)
+        log_and_print_statistics(state, args.model, log_file_path)
         if end_turn_reflect:
             run_latexdiff(args.input_file, output_file_reflect)
             run_latexdiff(output_file, output_file_reflect, args.model)

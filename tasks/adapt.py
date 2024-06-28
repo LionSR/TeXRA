@@ -60,8 +60,7 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     run_latexdiff(args.input_file, output_file)
 
-    log_output_files(log_file_path, output_file)
-    log_output_files(log_file_path, output_file)
+    log_output_files(output_file, log_file_path)
     log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
