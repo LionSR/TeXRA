@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 model_mapping = {
     "sonnet+": "claude-3-5-sonnet-20240620",
     "opus": "claude-3-opus-20240229",
@@ -32,21 +36,20 @@ def is_anthropic_model(model):
     return False
 
 
-def get_model_client(model, api_key=None):
+def get_model_client(model):
     from openai import OpenAI
     from anthropic import Anthropic
     import os
 
-    model_name = model_mapping[model]
     if is_openai_model(model):
-        OPENAI_API_KEY = api_key or os.getenv("OPENAI_API_KEY")
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         client = OpenAI(api_key=OPENAI_API_KEY)
     elif is_anthropic_model(model):
-        ANTHROPIC_API_KEY = api_key or os.getenv("ANTHROPIC_API_KEY")
+        ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
         client = Anthropic(api_key=ANTHROPIC_API_KEY)
     else:
         raise ValueError("Unsupported model type")
-    return client, model_name
+    return client
 
 
 def compute_api_price(input_tokens, output_tokens, model):

@@ -18,25 +18,25 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "</reply_letter>",
         "output_type": "txt",
-        "first_prefill": "<reply_letter>\n<cover_letter>",
+        "prefill_first": "<reply_letter>\n<cover_letter>",
     },
     "revise_main": {
         "document_tag": "latex_document",
         "end_tag": "</revised_main>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised main paper.\n <revised_main>",
+        "prefill_first": "Now output the revised main paper.\n <revised_main>",
     },
     "revise_supp": {
         "document_tag": "latex_document",
         "end_tag": "</revise_supp>",
         "output_type": "tex",
-        "first_prefill": "Now output the revised supplementary material.\n <revise_supp>",
+        "prefill_first": "Now output the revised supplementary material.\n <revise_supp>",
     },
     "polish_reply": {
         "document_tag": "latex_document",
         "end_tag": "</reply_letter>",
         "output_type": "txt",
-        "first_prefill": "Now output the polished reply letter.\n <reply_letter>",
+        "prefill_first": "Now output the polished reply letter.\n <reply_letter>",
     },
 }
 

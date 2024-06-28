@@ -6,7 +6,7 @@ import os
 def main(input_file, append_mode=False):
     # Read the prefill content for the assistant from the prefill file
     with open(input_file, "r") as file:
-        assistant_prefill_first = file.read().strip()
+        prefill_first = file.read().strip()
 
     # output_file = "test_prefill_output.txt"
     output_file = input_file.replace(".txt", "_output.txt")
@@ -38,7 +38,7 @@ def main(input_file, append_mode=False):
             ],
         },
     ]
-    messages.append({"role": "assistant", "content": assistant_prefill_first})
+    messages.append({"role": "assistant", "content": prefill_first})
 
     # Create a message with the Claude model
     message = client.messages.create(
