@@ -30,7 +30,6 @@ def main():
     parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
     parser.add_argument("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
     parser.add_argument("--task", type=str, default="transcribe", help="Task to perform, currently only 'transcribe'.", choices=["transcribe"])
-    parser.add_argument("--append_mode", type=bool, default=True, help="Whether to append the output to the input file instead of overwriting it.")
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
@@ -52,7 +51,6 @@ def main():
 
     model_settings = get_model_settings(args, prompt_path)
     output_settings = get_output_settings(args, task_settings)
-    output_settings["append_mode"] = args.append_mode
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_first_round(
         args.task, task_settings, args.input_file, user_prefix_vars, model_settings, output_settings
