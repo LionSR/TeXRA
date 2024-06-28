@@ -59,32 +59,36 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
     return messages
 
 
-def handle_prefill(
-    model,
-    assistant_prefill_first,
+def add_prefill_message(
     input_file,
     output_file,
     messages,
+    model_settings,
     output_settings,
+    prompt_settings,
 ):
+    model = model_settings["model"]
+
     k = output_settings["k"]
     output_type = output_settings["output_type"]
-    use_prefill_from_input = output_settings["use_prefill_from_input"]
     append_mode = output_settings["append_mode"]
     overwrite = output_settings["overwrite"]
     document_tag = output_settings["document_tag"]
 
-    accumulated_output = assistant_prefill_first
+    prefill_first = prompt_settings["prefill_first"]
+    use_prefill_from_input = prompt_settings["use_prefill_from_input"]
+
+    accumulated_output = prefill_first
     if output_type == "tex":
         if use_prefill_from_input:
             first_k_tex_document = read_file(input_file)[:k].strip()
-            assistant_prefill_first += first_k_tex_document
+            prefill_first += first_k_tex_document
             if is_anthropic_model(model):
                 accumulated_output = first_k_tex_document
             elif is_openai_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex"})
-        elif "<scratchpad>" not in assistant_prefill_first:
+        elif "<scratchpad>" not in prefill_first:
             accumulated_output = ""
 
     if is_anthropic_model(model):
@@ -93,15 +97,15 @@ def handle_prefill(
             if output_type == "tex" and "\\end{document}" in file_content:
                 print("### end_tag detected in existing file content. Overwriting...")
                 overwrite = True
-                print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-                messages.append({"role": "assistant", "content": assistant_prefill_first})
+                print(f"prefill_first: {colored(prefill_first, 'yellow')}")
+                messages.append({"role": "assistant", "content": prefill_first})
             else:
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
                 print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
         else:
-            print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
-            messages.append({"role": "assistant", "content": assistant_prefill_first})
+            print(f"prefill_first: {colored(prefill_first, 'yellow')}")
+            messages.append({"role": "assistant", "content": prefill_first})
 
     encounter_document_tag = f"</{document_tag}>" in accumulated_output or "\\end{document}" in accumulated_output
     if encounter_document_tag:
