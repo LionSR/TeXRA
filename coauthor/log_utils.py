@@ -12,18 +12,15 @@ def log_start(args):
         log_file.write(f"Task: {args.task}\n")
         log_file.write(f"Model: {args.model}\n")
 
+        log_file.write(f"Input file: {args.input_file}\n")
+        if args.input_files:
+            log_file.write(f"Additional input files: {args.input_files}\n")
+        if args.auxiliary_files:
+            log_file.write(f"Auxiliary files: {args.auxiliary_files}\n")
         if args.figure_inputs:
             log_file.write(f"Figure inputs: {args.figure_inputs}\n")
 
-        log_file.write(f"Input file: {args.input_file}\n")
-
-        if args.input_files:
-            log_file.write(f"Additional input files: {args.input_files}\n")
-
-        if args.auxiliary_files:
-            log_file.write(f"Auxiliary files: {args.auxiliary_files}\n")
-
-        log_file.write(f"Instruction:\n<request>\n{args.instruction}\n</request>\n")
+        log_file.write(f"Instruction:\n<instruction>\n{args.instruction}\n</instruction>\n")
 
     return log_file_path
 

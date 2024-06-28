@@ -1371,7 +1371,7 @@ class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <h5 class="section-header">LaTeXDiff</h5>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="revisionFileSelect">Select Revision File for LaTeX Diff:</label>
+          <label for="revisionFileSelect">Select Revision File:</label>
           <div class="file-select-buttons">
             <button id="latexDiffButton" class="small-button">latexdiff</button>
           </div>
