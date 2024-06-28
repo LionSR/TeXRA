@@ -17,7 +17,7 @@ all_tasks_settings = {
         "document_tag": "edited_transcript",
         "end_tag": "</edited_transcript>",
         "output_type": "md",
-        "first_prefill": "Here is the faithfully and correctly edited transcript:\n<edited_transcript>",
+        "prefill_first": "Here is the faithfully and correctly edited transcript:\n<edited_transcript>",
     },
 }
 

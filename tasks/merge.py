@@ -19,7 +19,7 @@ all_tasks_settings = {
         "document_tag": "full_edited_latex",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "<full_edited_latex>",
+        "prefill_first": "<full_edited_latex>",
     },
 }
 

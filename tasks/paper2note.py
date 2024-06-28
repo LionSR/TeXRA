@@ -18,7 +18,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "</lecture_note>",
         "output_type": "tex",
-        "first_prefill": "Here is the output lecture note <lecture_note>.\n\\documentclass{lecture}\n\\input{command}\n\\course",
+        "prefill_first": "Here is the output lecture note <lecture_note>.\n\\documentclass{lecture}\n\\input{command}\n\\course",
     },
 }
 
