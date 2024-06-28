@@ -5,11 +5,13 @@ from coauthor.arg_utils import get_common_argparser
 from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
 from coauthor.process import process_first_round, process_reflection_round
-from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input
-from coauthor.edit_utils import (
-    get_llm_settings,
+from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
+from coauthor.settings_utils import (
+    get_model_settings,
     get_output_settings,
+    get_prompt_settings,
 )
+from coauthor.model_utils import get_model_client
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
 
 prompt_path = get_prompt_path(coauthor, "lecture")
@@ -72,45 +74,56 @@ def main():
 
     if "long" in args.task:
         handle_long_input(args, user_prefix_vars, task_settings)
-    elif args.input_files:
-        raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
+    else:
+        handle_single_input(args, user_prefix_vars, task_settings)
 
     log_file_path = log_start(args)
 
-    llm_settings = get_llm_settings(args, prompt_path)
+    model_settings = get_model_settings(args)
     output_settings = get_output_settings(args, task_settings)
+    print(colored(f"prompt_path: {prompt_path}", "yellow"), colored(f"task_sub: {task_sub}", "yellow"))
+    prompt_settings = get_prompt_settings(prompt_path, task_settings, task_sub)
 
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings = process_first_round(
-        args.task, task_settings, args.input_file, user_prefix_vars, llm_settings, output_settings
+    client, model_name = get_model_client(model_settings["model"], model_settings["api_key"])
+    model_settings.update({"model_name": model_name})
+
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = process_first_round(
+        client,
+        args.task,
+        args.input_file,
+        user_prefix_vars,
+        model_settings=model_settings,
+        output_settings=output_settings,
+        prompt_settings=prompt_settings,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
-    run_latexdiff(args.input_file, output_file)
+    if end_turn:
+        run_latexdiff(args.input_file, output_file)
 
     log_output_files(log_file_path, output_file)
     log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
-        state, accumulated_output, end_turn, output_file_reflect, messages = process_reflection_round(
+        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = process_reflection_round(
+            client,
             args.task,
-            task_settings,
             args.input_file,
             output_file,
             state,
-            accumulated_output,
             messages,
-            model_settings,
-            output_settings,
-            prompt_path,
+            model_settings=model_settings,
+            output_settings=output_settings,
+            prompt_settings=prompt_settings,
             use_prefill_from_input=False,
         )
         print(colored(f"Reflect mode is on. Output files: {output_file_reflect}", "yellow"))
         log_file_reflect = output_file_reflect.replace(".tex", "_log.txt")
         log_output_files(log_file_path, output_file_reflect)
         log_and_print_statistics(state, args.model, log_file_reflect)
-
-        run_latexdiff(args.input_file, output_file_reflect)
-        run_latexdiff(output_file, output_file_reflect, args.model)
+        if end_turn_reflect:
+            run_latexdiff(args.input_file, output_file_reflect)
+            run_latexdiff(output_file, output_file_reflect, args.model)
 
 
 if __name__ == "__main__":

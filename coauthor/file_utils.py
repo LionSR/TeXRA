@@ -1,14 +1,15 @@
 from termcolor import colored
 import difflib
+import os
 
 
 def get_prompt_path(library, prompt_name):
-    import os
-
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "tasks", prompt_name)
 
 
 def read_file(file_path):
+    if not os.path.exists(file_path):
+        return ""
     with open(file_path, "r") as file:
         return file.read()
 
@@ -56,6 +57,7 @@ def check_for_massive_repetition(last_response, new_response):
 
 
 __all__ = [
+    "get_prompt_path",
     "read_file",
     "write_file",
     "append_file",
