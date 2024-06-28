@@ -1,5 +1,6 @@
 import os
 from .file_utils import read_file
+from termcolor import colored
 
 
 def get_user_prefix_vars(args):
@@ -12,6 +13,7 @@ def get_user_prefix_vars(args):
 
 
 def handle_long_input(args, user_prefix_vars, task_settings):
+    print(colored(f"Handling long input for task: {args.task}", "yellow"))
     task_shared = args.task.split("_")[0]
     task_settings["user_prefix_file"] = f"user_prefix_{task_shared}_long.txt"
     user_prefix_vars["AUXILIARY_FILES"] = get_auxiliary_files_content(args.auxiliary_files)
@@ -20,7 +22,8 @@ def handle_long_input(args, user_prefix_vars, task_settings):
     )
 
 
-def handle_non_long_input(args, user_prefix_vars, task_settings):
+def handle_single_input(args, user_prefix_vars, task_settings):
+    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
     if args.input_files:
         raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
     if args.auxiliary_files:
