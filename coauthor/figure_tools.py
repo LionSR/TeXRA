@@ -23,11 +23,6 @@ def extract_figure_paths(latex_file_path):
                 rel_path = os.path.relpath(norm_path, start=latex_dir)
                 figure_paths.append(rel_path)
 
-        # Find all matches in the content for both patterns
-        # for pattern in figure_patterns:
-        #     matches = pattern.findall(content)
-        #     figure_paths.extend(matches)
-
     except FileNotFoundError:
         print(f"Error: File '{latex_file_path}' not found.")
     except Exception as e:
