@@ -1,4 +1,4 @@
-# CoAuthor
+# CoAuthor Backend
 
 CoAuthor is a Python package containing utility functions for copiloting with large language models (LLMs) like Anthropic's Claude AI for academic research. It provides a command-line interface (CLI) to perform various text processing and generation tasks.
 
@@ -10,9 +10,9 @@ pip install -e .
 ```
 
 
-## Changelog
+## Backend Changelog
 
-### 0.7.6 [backend]
+### 0.7.7
 
 - Refactored codebase for improved modularity and organization
 - Split functionality into separate modules (tex_tools, figure_tools, etc.)
@@ -23,7 +23,18 @@ pip install -e .
 - Removed redundant code and consolidated shared functionality
 - Improved consistency in logging and error handling
 
-### 0.7.5 [backend]
+### 0.7.6
+
+- Refactored codebase for improved modularity and organization
+- Split functionality into separate modules (tex_tools, figure_tools, etc.)
+- Renamed process_file_with_llm to process_first_round for clarity
+- Moved common utilities to dedicated files (arg_utils, prompt_utils)
+- Updated imports across all tasks to use new module structure
+- Standardized function naming and parameter passing
+- Removed redundant code and consolidated shared functionality
+- Improved consistency in logging and error handling
+
+### 0.7.5
 
 - Refactored codebase for improved modularity and maintainability
 - Created new `log_utils.py` for centralized logging functionality
@@ -34,11 +45,11 @@ pip install -e .
 - Adjusted checkbox group styling in VS Code extension
 - Various minor improvements and bug fixes
 
-### 0.7.4 [backend]
+### 0.7.4
 
 - Fix the broken backend
 
-### 0.7.4 [backend]
+### 0.7.4
 
 - Created new `edit_utils.py` for shared edit functionality
 - Refactored `adapt.py`, `lecture2text.py`, `meeting2text.py`, `merge.py`, `paper2note.py`, `prl_edit.py`, `prl_reply.py`, and `txt2tex.py` to use shared utilities
@@ -49,7 +60,7 @@ pip install -e .
 - Various minor improvements and bug fixes
 
 
-### 0.7.3 [backend]
+### 0.7.3
 - Created new edit_utils.py file for shared edit functionality
 - Refactored edit_lecture.py and edit_tex.py to use shared utilities
 - Updated model_utils.py for improved image handling
@@ -57,7 +68,7 @@ pip install -e .
 - Improved code readability and maintainability
 - Various minor improvements and bug fixes
 
-### 0.7.2 [backend]
+### 0.7.2
 - Extensively refactored process.py for improved code organization and maintainability:
   - Separated file processing logic into dedicated functions
   - Enhanced error handling with specific exception catching
@@ -70,13 +81,13 @@ pip install -e .
 - Improved error handling and logging for better user feedback and debugging
 - Various minor improvements and bug fixes
 
-### 0.7.1 [backend] 
+### 0.7.1 
 - Bumped version to 0.7.1
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes
 - Added TikZ extractor update
 
-### 0.7.0 [backend] 
+### 0.7.0 
 - Added new merge functionality for LaTeX documents
 - Implemented merge command in CLI
 - Created merge.py program for merging LaTeX documents

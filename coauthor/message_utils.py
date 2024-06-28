@@ -10,13 +10,15 @@ def create_response(
     client,
     messages,
     model_settings,
+    output_settings,
+    prompt_settings,
 ):
     model = model_settings["model"]
     model_name = model_settings["model_name"]
     max_tokens = model_settings["max_tokens"]
     temperature = model_settings["temperature"]
-    end_tag = model_settings["end_tag"]
-    system_prompt = model_settings["system_prompt"]
+    end_tag = output_settings["end_tag"]
+    system_prompt = prompt_settings["system_prompt"]
 
     if is_openai_model(model):
         response_object = client.chat.completions.create(
@@ -43,14 +45,14 @@ def create_response(
     return response_object
 
 
-def initialize_messages(system_prompt, user_prefix, user_request, figure_inputs, model):
+def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs):
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
     if is_openai_model(model):
         messages.insert(0, {"role": "system", "content": system_prompt})
 
     if figure_inputs:
-        image_content = handle_images(figure_inputs, model)
+        image_content = create_image_message(model, figure_inputs)
         messages[-1]["content"].extend(image_content)
 
     messages[-1]["content"].append({"type": "text", "text": user_request})
@@ -59,17 +61,19 @@ def initialize_messages(system_prompt, user_prefix, user_request, figure_inputs,
 
 def handle_prefill(
     model,
-    output_type,
-    use_prefill_from_input,
     assistant_prefill_first,
     input_file,
-    k,
-    append_mode,
     output_file,
     messages,
-    document_tag,
-    overwrite,
+    output_settings,
 ):
+    k = output_settings["k"]
+    output_type = output_settings["output_type"]
+    use_prefill_from_input = output_settings["use_prefill_from_input"]
+    append_mode = output_settings["append_mode"]
+    overwrite = output_settings["overwrite"]
+    document_tag = output_settings["document_tag"]
+
     accumulated_output = assistant_prefill_first
     if output_type == "tex":
         if use_prefill_from_input:
@@ -87,7 +91,7 @@ def handle_prefill(
         if append_mode and os.path.exists(output_file):
             file_content = read_file(output_file).strip()
             if output_type == "tex" and "\\end{document}" in file_content:
-                print("end_tag detected in existing file content. Overwriting...")
+                print("### end_tag detected in existing file content. Overwriting...")
                 overwrite = True
                 print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
                 messages.append({"role": "assistant", "content": assistant_prefill_first})
@@ -99,14 +103,14 @@ def handle_prefill(
             print(f"assistant_prefill_first: {colored(assistant_prefill_first, 'yellow')}")
             messages.append({"role": "assistant", "content": assistant_prefill_first})
 
-    encounter_document_tag = f"</{document_tag}>" in accumulated_output
+    encounter_document_tag = f"</{document_tag}>" in accumulated_output or "\\end{document}" in accumulated_output
     if encounter_document_tag:
-        raise ValueError(f"</{document_tag}> encountered in the prefill.")
+        raise ValueError(f"</{document_tag}> or \\end{{document}} encountered in the prefill.")
 
     return accumulated_output, messages, overwrite
 
 
-def handle_images(figure_inputs, model):
+def create_image_message(model, figure_inputs):
     image_contents = []
 
     if not isinstance(figure_inputs, list):
@@ -136,10 +140,12 @@ def handle_images(figure_inputs, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url" if is_openai_model(model) else "source": {
-                        "url" if is_openai_model(model) else "type": (
-                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
-                        ),
+                    "image_url"
+                    if is_openai_model(model)
+                    else "source": {
+                        "url"
+                        if is_openai_model(model)
+                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
