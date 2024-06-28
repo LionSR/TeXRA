@@ -5,11 +5,9 @@ from coauthor.arg_utils import get_common_argparser
 from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
 from coauthor.process import process_first_round, handle_reflection
-from coauthor.prompt_utils import get_user_prefix_vars
-from coauthor.edit_utils import (
-    handle_long_input,
-    handle_non_long_input,
-    get_llm_settings,
+from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
+from coauthor.settings_utils import (
+    get_model_settings,
     get_output_settings,
 )
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
@@ -66,11 +64,11 @@ def main():
     if "long" in args.task:
         handle_long_input(args, user_prefix_vars, task_settings)
     else:
-        handle_non_long_input(args, user_prefix_vars, task_settings)
+        handle_single_input(args, user_prefix_vars, task_settings)
 
     log_file_path = log_start(args)
 
-    llm_settings = get_llm_settings(args, prompt_path)
+    model_settings = get_model_settings(args, prompt_path)
     output_settings = get_output_settings(args, task_settings)
 
     # Determine whether to continue or start new
@@ -83,7 +81,7 @@ def main():
         task_settings,
         args.input_file,
         user_prefix_vars,
-        llm_settings,
+        model_settings,
         output_settings,
         state=state,
         accumulated_output=accumulated_output,

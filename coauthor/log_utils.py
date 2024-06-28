@@ -1,6 +1,7 @@
 from datetime import datetime
 from termcolor import colored
 from .model_utils import compute_api_price
+import os
 
 
 def log_start(args):
@@ -27,7 +28,7 @@ def log_start(args):
     return log_file_path
 
 
-def log_and_print_statistics(state, model, log_file_path):
+def log_and_print_statistics(state, model, log_file_path=None):
     total_input_tokens = state.get("total_input_tokens", 0)
     total_output_tokens = state.get("total_output_tokens", 0)
     total_response_time = state.get("total_response_time", 0)
@@ -39,11 +40,12 @@ def log_and_print_statistics(state, model, log_file_path):
     print("Total response time : {} seconds".format(colored(total_response_time, "green")))
     print("Total cost          : ${}".format(colored("{:.2f}".format(cost), "yellow")))
 
-    # Log the statistics to the log file
-    with open(log_file_path, "a") as log_file:
-        log_file.write(
-            f"Statistics: Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f}\n"
-        )
+    # Log the statistics to the log file if exists in the directory
+    if os.path.exists(log_file_path):
+        with open(log_file_path, "a") as log_file:
+            log_file.write(
+                f"Statistics: Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f}\n"
+            )
 
 
 def log_output_files(log_file_path, output_file):
