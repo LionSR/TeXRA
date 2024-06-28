@@ -9,6 +9,7 @@ from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handl
 from coauthor.settings_utils import (
     get_model_settings,
     get_output_settings,
+    get_prompt_settings,
 )
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
 
@@ -19,7 +20,7 @@ all_task_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "Here is the revised latex document. <latex_document>",
+        "prefill_first": "Here is the revised latex document. <latex_document>",
         "system_prompt_file": "system_prompt_correct.txt",
         "user_prefix_file": "user_prefix_correct.txt",
         "user_request_file": "user_request_correct.txt",
@@ -28,7 +29,7 @@ all_task_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "<scratchpad>",
+        "prefill_first": "<scratchpad>",
         "system_prompt_file": "system_prompt_polish.txt",
         "user_prefix_file": "user_prefix_polish.txt",
         "user_request_file": "user_request_polish.txt",
@@ -38,7 +39,7 @@ all_task_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "<scratchpad>",
+        "prefill_first": "<scratchpad>",
         "system_prompt_file": "system_prompt_draw.txt",
         "user_prefix_file": "user_prefix_draw.txt",
         "user_request_file": "user_request_draw.txt",
@@ -61,15 +62,16 @@ def main():
     user_prefix_vars = get_user_prefix_vars(args)
     task_settings = all_task_settings[task_shared]
 
-    if "long" in args.task:
-        handle_long_input(args, user_prefix_vars, task_settings)
-    else:
-        handle_single_input(args, user_prefix_vars, task_settings)
-
     log_file_path = log_start(args)
 
     model_settings = get_model_settings(args, prompt_path)
     output_settings = get_output_settings(args, task_settings)
+    prompt_settings = get_prompt_settings(args, task_settings)
+
+    if "long" in args.task:
+        handle_long_input(args, user_prefix_vars, prompt_settings)
+    else:
+        handle_single_input(args, user_prefix_vars, prompt_settings)
 
     # Determine whether to continue or start new
     state = None

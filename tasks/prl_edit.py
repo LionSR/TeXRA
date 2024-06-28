@@ -17,13 +17,13 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "Now we output the corrected supp.tex as follows.\n<latex_document>",
+        "prefill_first": "Now we output the corrected supp.tex as follows.\n<latex_document>",
     },
     "correct_supp_prl": {
         "document_tag": "latex_document",
         "output_type": "tex",
         "end_tag": "</latex_document>",
-        "first_prefill": "Now we output the corrected supp.tex as follows.\n<latex_document>",
+        "prefill_first": "Now we output the corrected supp.tex as follows.\n<latex_document>",
     },
 }
 

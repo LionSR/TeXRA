@@ -21,13 +21,13 @@ all_task_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "Here is the revised latex document. <latex_document>",
+        "prefill_first": "Here is the revised latex document. <latex_document>",
     },
     "polish": {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "<scratchpad>",
+        "prefill_first": "<scratchpad>",
         "user_prefix_file": "user_prefix_polish.txt",
         "user_request_file": "user_request_polish.txt",
         "user_reflect_file": "user_reflect_polish.txt",
@@ -36,7 +36,7 @@ all_task_settings = {
         "document_tag": "latex_document",
         "end_tag": "</latex_document>",
         "output_type": "tex",
-        "first_prefill": "<scratchpad>",
+        "prefill_first": "<scratchpad>",
         "user_prefix_file": "user_prefix_draw.txt",
         "user_request_file": "user_request_draw.txt",
         "user_reflect_file": "user_reflect_draw.txt",
@@ -67,25 +67,20 @@ def main():
     user_prefix_vars["COMMANDS"] = "commands_qi.tex" if "qi" in args.task else "command.tex"
     user_prefix_vars["COMMANDS_CONTENT"] = coauthor.read_file(user_prefix_vars["COMMANDS"])
 
-    task_settings = all_task_settings.get(task_shared, {})
-    task_settings.setdefault("system_prompt_file", f"system_prompt_{task_sub}.txt")
-    task_settings.setdefault("user_prefix_file", f"user_prefix_{task_sub}.txt")
-    task_settings.setdefault("user_request_file", f"user_request_{task_sub}.txt")
-
-    if "long" in args.task:
-        handle_long_input(args, user_prefix_vars, task_settings)
-    else:
-        handle_single_input(args, user_prefix_vars, task_settings)
-
-    log_file_path = log_start(args)
+    task_settings = all_task_settings[task_shared]
 
     model_settings = get_model_settings(args)
     output_settings = get_output_settings(args, task_settings)
-    print(colored(f"prompt_path: {prompt_path}", "yellow"), colored(f"task_sub: {task_sub}", "yellow"))
-    prompt_settings = get_prompt_settings(prompt_path, task_settings, task_sub)
+    prompt_settings = get_prompt_settings(args, prompt_path, task_settings, task_sub)
 
-    client, model_name = get_model_client(model_settings["model"], model_settings["api_key"])
-    model_settings.update({"model_name": model_name})
+    if "long" in args.task:
+        handle_long_input(args, user_prefix_vars, prompt_settings)
+    else:
+        handle_single_input(args, user_prefix_vars, prompt_settings)
+
+    client = get_model_client(model_settings["model"])
+
+    log_file_path = log_start(args)
 
     state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = process_first_round(
         client,
@@ -96,8 +91,6 @@ def main():
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-
-    print(colored(f"Output file: {output_file}", "yellow"))
     if end_turn:
         run_latexdiff(args.input_file, output_file)
 
@@ -109,7 +102,6 @@ def main():
             client,
             args.task,
             args.input_file,
-            output_file,
             state,
             messages,
             model_settings=model_settings,
@@ -117,7 +109,6 @@ def main():
             prompt_settings=prompt_settings,
             use_prefill_from_input=False,
         )
-        print(colored(f"Reflect mode is on. Output files: {output_file_reflect}", "yellow"))
         log_file_reflect = output_file_reflect.replace(".tex", "_log.txt")
         log_output_files(log_file_path, output_file_reflect)
         log_and_print_statistics(state, args.model, log_file_reflect)

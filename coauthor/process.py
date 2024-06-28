@@ -5,7 +5,7 @@ from termcolor import colored
 from .file_utils import read_file, write_file, append_file, check_for_massive_repetition
 from .model_utils import is_openai_model
 from .message_utils import (
-    handle_prefill,
+    add_prefill_message,
     initialize_messages,
     create_response,
     extract_response_statistics,
@@ -23,12 +23,19 @@ def load_prompt(prompt_type, task, prompt_settings):
         prompt_file_path = os.path.join(prompt_path, prompt_file)
     else:
         prompt_file_path = os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
-    return read_file(prompt_file_path).strip()
+
+    prompt = read_file(prompt_file_path).strip()
+    print(f"{prompt_type}: {colored(prompt, 'magenta')}")
+    return prompt
 
 
-def get_output_file_name(file_name, task, model, output_type):
+def get_output_file_name(input_file, task, model, output_type, reflect=False):
+    file_name, _ = os.path.splitext(input_file)
     first_task_chunk = task.split("_")[0]
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    if reflect:
+        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
+
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -137,40 +144,32 @@ def process_first_round(
     accumulated_output=None,
     messages=None,
 ):
-    model_name = model_settings["model"]
+    model = model_settings["model"]
 
     system_prompt = load_prompt("system_prompt", task, prompt_settings)
     user_prefix_template = load_prompt("user_prefix", task, prompt_settings)
     user_request = load_prompt("user_request", task, prompt_settings)
+    prompt_settings.update({"system_prompt": system_prompt})
 
     user_prefix = user_prefix_template.format(**user_prefix_vars)
 
-    print("System prompt:", colored(system_prompt, "magenta"), "\n")
-    print("User prompt prefix template:", colored(user_prefix_template, "magenta"), "\n")
-    print("User prompt request:", colored(user_request, "magenta"), "\n")
-
     output_type = output_settings.get("output_type", "txt")
-    file_name, _ = os.path.splitext(input_file)
-    output_file = get_output_file_name(file_name, task, model_name, output_type)
+    output_file = get_output_file_name(input_file, task, model, output_type)
 
     if messages is None:
-        messages = initialize_messages(model_name, system_prompt, user_prefix, user_request, model_settings["figure_inputs"])
+        messages = initialize_messages(model, system_prompt, user_prefix, user_request, prompt_settings["figure_inputs"])
 
-    assistant_prefill_first = prompt_settings.get("first_prefill", None)
     if accumulated_output is None:
-        accumulated_output, messages, output_settings["overwrite"] = handle_prefill(
-            model_name,
-            assistant_prefill_first,
+        accumulated_output, messages, output_settings["overwrite"] = add_prefill_message(
             input_file,
             output_file,
             messages,
-            output_settings,
+            model_settings=model_settings,
+            output_settings=output_settings,
+            prompt_settings=prompt_settings,
         )
 
     state = initialize_state(state, accumulated_output)
-
-    prompt_settings.update({"system_prompt": system_prompt})
-
     state, accumulated_output, end_turn = process_response_cycle(
         client,
         state,
@@ -186,32 +185,29 @@ def process_first_round(
     return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings
 
 
-def process_reflection_round(
-    client, task, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, use_prefill_from_input
-):
+def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings, use_prefill_from_input):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
-    model_name = model_settings["model"]
+    model = model_settings["model"]
 
     user_request_reflect = load_prompt("user_reflect", task, prompt_settings)
-    print(f"User prompt reflect: {colored(user_request_reflect, 'magenta')}")
     user_message = f"{user_request_reflect}\n"
-    output_file_reflect = output_file.replace(f"_{model_name}", f"_reflect_{model_name}")
-    print(f"output_file_reflect: {colored(output_file_reflect, 'cyan')}")
-    messages.append({"role": "user", "content": user_message})
 
+    output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=True)
+
+    messages.append({"role": "user", "content": user_message})
     if prompt_settings.get("first_prefill_reflect"):
-        assistant_prefill_first_reflect = prompt_settings.get("first_prefill_reflect")
+        prefill_first = prompt_settings.get("first_prefill_reflect")
     else:
-        assistant_prefill_first_reflect = prompt_settings.get("first_prefill")
+        prefill_first = prompt_settings.get("prefill_first")
 
     if output_settings["document_tag"] == "tex" and use_prefill_from_input:
         first_k_tex_document = read_file(input_file)[: output_settings["k"]].strip()
         accumulated_output = first_k_tex_document
     else:
-        accumulated_output = assistant_prefill_first_reflect
+        accumulated_output = prefill_first
 
-    messages.append({"role": "assistant", "content": assistant_prefill_first_reflect})
-    print(f"assistant_prefill_first_reflect: {colored(assistant_prefill_first_reflect, 'yellow')}")
+    messages.append({"role": "assistant", "content": prefill_first})
+    print(f"prefill_first: {colored(prefill_first, 'yellow')}")
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output
@@ -222,11 +218,11 @@ def process_reflection_round(
         state,
         accumulated_output,
         messages,
-        output_file_reflect,
+        output_file,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    print(f"\n\nProcessed {input_file} and saved as {output_file_reflect}")
+    print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    return state, accumulated_output, end_turn, output_file_reflect, messages
+    return state, accumulated_output, end_turn, output_file, messages

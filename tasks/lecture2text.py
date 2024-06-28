@@ -17,25 +17,25 @@ all_tasks_settings = {
         "document_tag": "improved_document",
         "end_tag": "</improved_document>",
         "output_type": "txt",
-        "first_prefill": "Here is the faithfully and correctly improved document:\n<improved_document>",
+        "prefill_first": "Here is the faithfully and correctly improved document:\n<improved_document>",
     },
     "punctuate": {
         "document_tag": "improved_document",
         "end_tag": "</improved_document>",
         "output_type": "txt",
-        "first_prefill": "Here is the faithfully and correctly improved document:\n<improved_document>",
+        "prefill_first": "Here is the faithfully and correctly improved document:\n<improved_document>",
     },
     "2tex": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
+        "prefill_first": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
     },
     "reflect": {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "\\documentclass{lecture}\n\\input{commands_qi}",
+        "prefill_first": "\\documentclass{lecture}\n\\input{commands_qi}",
     },
 }
 
