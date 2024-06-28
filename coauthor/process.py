@@ -19,11 +19,7 @@ from .openai_utils import best_connection_method
 def load_prompt(prompt_type, task, prompt_settings):
     prompt_path = prompt_settings.get("prompt_path")
     prompt_file = prompt_settings.get(f"{prompt_type}_file")
-    if prompt_file:
-        prompt_file_path = os.path.join(prompt_path, prompt_file)
-    else:
-        prompt_file_path = os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
-
+    prompt_file_path = os.path.join(prompt_path, prompt_file) if prompt_file else os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
     prompt = read_file(prompt_file_path).strip()
     print(f"{prompt_type}: {colored(prompt, 'magenta')}")
     return prompt
@@ -35,7 +31,6 @@ def get_output_file_name(input_file, task, model, output_type, reflect=False):
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     if reflect:
         output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
-
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -45,15 +40,9 @@ def write_to_output_file(file_exists, output_settings, best_connector, new_respo
         print("Creating the file")
         write_file(output_file, new_response)
         file_exists = True
-    elif output_settings["overwrite"]:
-        print("Overwriting file")
-        write_file(output_file, new_response)
-        output_settings["overwrite"] = False
     else:
         print("Appending to file")
         append_file(output_file, best_connector + new_response)
-
-    return file_exists
 
 
 def initialize_state(state, accumulated_output):
@@ -70,7 +59,6 @@ def initialize_state(state, accumulated_output):
         for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
             if key not in state:
                 state[key] = 0 if key != "last_response" else accumulated_output
-
     return state
 
 
@@ -99,21 +87,18 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         if state["continuation_count"] == 0:
             state["first_input_tokens"] = input_tokens
         else:
-            print("### The last {} characters of the previous response are:".format(k))
-            print(colored(f"### {state['last_response'][-k:]}", "yellow"))
-            print("### The first {} characters of the new response are:".format(k))
-            print(colored(f"### {new_response[:k]}", "yellow"))
+            print(f"### The last {k} characters of the previous response are: {colored(state['last_response'][-k:], 'yellow')}")
+            print(f"### The first {k} characters of the new response are: {colored(new_response[:k], 'yellow')}")
 
         best_connector, _ = best_connection_method(state["last_response"][-k:], new_response[:k])
 
         massive_repetition_detected = check_for_massive_repetition(state["last_response"], new_response)
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
-            file_exists = write_to_output_file(file_exists, output_settings, best_connector, new_response, output_file)
+            write_to_output_file(file_exists, output_settings, best_connector, new_response, output_file)
             print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
             state["last_response"] = new_response
 
-            # for anthropic, we set the accumulated output as the prefill
             if messages[-1]["role"] == "assistant":
                 messages[-1]["content"] = accumulated_output
 
@@ -162,7 +147,6 @@ def process_first_round(
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
 
-            # here should incldue the scratchpad log from the log file too.
             log_file_name = output_file.replace(".tex", "_log.txt")
             if os.path.exists(log_file_name):
                 file_content = read_file(log_file_name) + file_content
@@ -171,13 +155,11 @@ def process_first_round(
         else:
             print(colored("### The first prospect output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
-
             messages.append({"role": "assistant", "content": file_content})
             print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
             if is_openai_model(model_settings["model"]):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
-        # starting from scratch
         prefill_first = prompt_settings["prefill_first"]
         use_prefill_from_input = prompt_settings["use_prefill_from_input"]
         accumulated_output = prefill_first
@@ -209,9 +191,10 @@ def process_first_round(
     return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings
 
 
-def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings, use_prefill_from_input):
+def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
+    use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
 
     user_request_reflect = load_prompt("user_reflect", task, prompt_settings)
     user_message = f"{user_request_reflect}\n"
@@ -242,7 +225,6 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
             accumulated_output = first_k_tex_document
         else:
             accumulated_output = prefill_first
-
             messages.append({"role": "assistant", "content": prefill_first})
             print(f"prefill_first: {colored(prefill_first, 'yellow')}")
 

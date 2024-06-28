@@ -1,15 +1,14 @@
 from termcolor import colored
 
+from termcolor import colored
+
 import coauthor
 from coauthor.arg_utils import get_common_argparser
 from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
-from coauthor.process import process_first_round, handle_reflection
+from coauthor.process import process_first_round, process_reflection_round
 from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
-from coauthor.settings_utils import (
-    get_model_settings,
-    get_output_settings,
-)
+from coauthor.settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
 
 
@@ -104,7 +103,7 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     run_latexdiff(args.input_file, output_file)
 
-    log_output_files(log_file_path, output_file)
+    log_output_files(output_file, log_file_path)
     log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:

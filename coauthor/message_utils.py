@@ -1,7 +1,5 @@
 from termcolor import colored
-
 import os
-from .file_utils import read_file
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .model_utils import is_openai_model, is_anthropic_model
 
@@ -21,13 +19,7 @@ def has_end_tag(file_content, end_tag, document_tag):
     return end_tag in file_content or f"</{document_tag}>" in file_content or "\\end{document}" in file_content
 
 
-def create_response(
-    client,
-    messages,
-    model_settings,
-    output_settings,
-    prompt_settings,
-):
+def create_response(client, messages, model_settings, output_settings, prompt_settings):
     model = model_settings["model"]
     model_name = model_settings["model_name"]
     max_tokens = model_settings["max_tokens"]
@@ -72,60 +64,6 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
 
     messages[-1]["content"].append({"type": "text", "text": user_request})
     return messages
-
-
-def add_prefill_message(
-    input_file,
-    output_file,
-    messages,
-    model_settings,
-    output_settings,
-    prompt_settings,
-):
-    model = model_settings["model"]
-
-    k = output_settings["k"]
-    output_type = output_settings["output_type"]
-    overwrite = output_settings["overwrite"]
-    document_tag = output_settings["document_tag"]
-
-    prefill_first = prompt_settings["prefill_first"]
-    use_prefill_from_input = prompt_settings["use_prefill_from_input"]
-
-    accumulated_output = prefill_first
-    if output_type == "tex":
-        if use_prefill_from_input:
-            first_k_tex_document = read_file(input_file)[:k].strip()
-            prefill_first += first_k_tex_document
-            if is_anthropic_model(model):
-                accumulated_output = first_k_tex_document
-            elif is_openai_model(model):
-                accumulated_output = ""
-                messages.append({"role": "assistant", "content": "```latex"})
-        elif "<scratchpad>" not in prefill_first:
-            accumulated_output = ""
-
-    if is_anthropic_model(model):
-        if os.path.exists(output_file):
-            file_content = read_file(output_file)
-            if output_type == "tex" and "\\end{document}" in file_content:
-                print("### end_tag detected in existing file content. Overwriting...")
-                overwrite = True
-                print(f"prefill_first: {colored(prefill_first, 'yellow')}")
-                messages.append({"role": "assistant", "content": prefill_first})
-            else:
-                accumulated_output = file_content
-                messages.append({"role": "assistant", "content": file_content})
-                print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
-        else:
-            print(f"prefill_first: {colored(prefill_first, 'yellow')}")
-            messages.append({"role": "assistant", "content": prefill_first})
-
-    encounter_document_tag = f"</{document_tag}>" in accumulated_output or "\\end{document}" in accumulated_output
-    if encounter_document_tag:
-        raise ValueError(f"</{document_tag}> or \\end{{document}} encountered in the prefill.")
-
-    return accumulated_output, messages, overwrite
 
 
 def create_image_message(model, figure_inputs):
@@ -197,7 +135,7 @@ def extract_response_statistics(response_object, model, end_tag=None):
         raise ValueError(f"Unsupported model: {model}")
 
     if "stop" in stop_reason and "\\end{document}" not in new_response:
-        new_response += "\n" + end_tag
+        new_response += f"\n{end_tag}"
 
     return new_response, input_tokens, output_tokens, stop_reason
 
@@ -237,5 +175,5 @@ def print_stop_flags(end_turn, new_response, state, output_settings, massive_rep
     print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
     print(f"massive_repetition_detected: {massive_repetition_detected}")
     print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
-    print("### The last {} characters of the previous response are:".format(output_settings["k"]))
+    print(f"### The last {output_settings['k']} characters of the previous response are:")
     print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))

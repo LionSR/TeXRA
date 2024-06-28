@@ -6,11 +6,7 @@ from coauthor.file_utils import get_prompt_path
 from coauthor.tex_tools import run_latexdiff
 from coauthor.process import process_first_round, process_reflection_round
 from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
-from coauthor.settings_utils import (
-    get_model_settings,
-    get_output_settings,
-    get_prompt_settings,
-)
+from coauthor.settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 from coauthor.model_utils import get_model_client
 from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
 
@@ -58,7 +54,7 @@ def main():
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
     task_shared = args.task.split("_")[0]
-    task_sub = args.task.split("_")[0] + "_" + args.task.split("_")[1]
+    task_sub = f"{task_shared}_{args.task.split('_')[1]}"
 
     user_prefix_vars = get_user_prefix_vars(args)
     user_prefix_vars["DOCUMENT_CLS"] = "lecture.cls"
@@ -92,7 +88,7 @@ def main():
     if end_turn:
         run_latexdiff(args.input_file, output_file)
 
-    log_output_files(log_file_path, output_file)
+    log_output_files(output_file, log_file_path)
     log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
@@ -105,7 +101,6 @@ def main():
             model_settings=model_settings,
             output_settings=output_settings,
             prompt_settings=prompt_settings,
-            use_prefill_from_input=False,
         )
         log_output_files(output_file_reflect, log_file_path)
         log_and_print_statistics(state, args.model, log_file_path)
