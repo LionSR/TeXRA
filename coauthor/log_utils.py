@@ -45,7 +45,7 @@ def log_and_print_statistics(state, model, log_file_path=None):
             )
 
 
-def log_output_files(log_file_path, output_file):
+def log_output_files(output_file, log_file_path):
     with open(log_file_path, "a") as log_file:
         if "reflect" in log_file_path:
             log_file.write(f"Reflection output file: {output_file}\n")

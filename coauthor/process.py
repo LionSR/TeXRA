@@ -226,7 +226,7 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the reflection output file. Skipping continuation.")
             messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, output_file, messages, model_settings, output_settings, prompt_settings
+            return initialize_state(state, None), accumulated_output, True, output_file, messages
         else:
             print(colored("### The reflection output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
