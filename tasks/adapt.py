@@ -19,7 +19,7 @@ all_tasks_settings = {
         "document_tag": "latex_document",
         "end_tag": "\\end{document}",
         "output_type": "tex",
-        "first_prefill": "<scratchpad>",
+        "prefill_first": "<scratchpad>",
     },
 }
 

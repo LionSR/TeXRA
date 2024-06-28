@@ -12,6 +12,15 @@ pip install -e .
 
 ## Backend Changelog
 
+### 0.7.8
+
+- Refactored settings and prompt handling for improved modularity and consistency
+- Introduced centralized functions in settings_utils.py for model, output, and prompt settings
+- Renamed 'first_prefill' to 'prefill_first' across all files for clarity
+- Updated all task files to use new settings and prompt utilities
+- Improved error handling and removed redundant code
+- Enhanced code readability and maintainability
+
 ### 0.7.7
 
 - Refactored codebase for improved modularity and organization
@@ -59,8 +68,8 @@ pip install -e .
 - Updated version to 0.7.4 in `pyproject.toml`
 - Various minor improvements and bug fixes
 
-
 ### 0.7.3
+
 - Created new edit_utils.py file for shared edit functionality
 - Refactored edit_lecture.py and edit_tex.py to use shared utilities
 - Updated model_utils.py for improved image handling
@@ -69,6 +78,7 @@ pip install -e .
 - Various minor improvements and bug fixes
 
 ### 0.7.2
+
 - Extensively refactored process.py for improved code organization and maintainability:
   - Separated file processing logic into dedicated functions
   - Enhanced error handling with specific exception catching
@@ -82,12 +92,14 @@ pip install -e .
 - Various minor improvements and bug fixes
 
 ### 0.7.1 
+
 - Bumped version to 0.7.1
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes
 - Added TikZ extractor update
 
 ### 0.7.0 
+
 - Added new merge functionality for LaTeX documents
 - Implemented merge command in CLI
 - Created merge.py program for merging LaTeX documents
