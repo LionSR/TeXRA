@@ -8,9 +8,18 @@ To install the python backedn of CoAuthor, download the latest release and run
 ```bash
 pip install -e .
 ```
-
+Set `.env` to use the OpenAI and Anthropic API keys.
 
 ## Backend Changelog
+
+### 0.7.11
+
+- Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
+- Added regular expression to match `\graphicspath` and extract paths.
+- Updated logic to normalize and check figure paths within the specified graphicspaths.
+- Added logging to `create_image_message` in `message_utils.py` for used images.
+- Removed unused import in `adapt.py`, `paper2note.py`, and `txt2tex.py`.
+
 
 ### 0.7.10
 
