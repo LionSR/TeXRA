@@ -34,10 +34,10 @@ def extract_figure_paths(latex_file_path):
         print(f"Graphicspath matches: {graphicspath_matches}")  # Debug print
 
         for match in graphicspath_matches:
-            paths = [match.strip('{}')]  # Remove outer braces
+            paths = [match.strip("{}")]  # Remove outer braces
             print(f"Paths found in graphicspath: {paths}")  # Debug print
             for path in paths:
-                normalized_path = os.path.normpath(os.path.join(latex_dir, path.strip('/')))
+                normalized_path = os.path.normpath(os.path.join(latex_dir, path.strip("/")))
                 graphicspaths.append(normalized_path)
                 print(f"Added graphicspath: {normalized_path}")
 
@@ -127,4 +127,3 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
                 aux_file.unlink()
 
     return compiled_files
-
