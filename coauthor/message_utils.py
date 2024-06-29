@@ -106,7 +106,7 @@ def create_image_message(model, figure_inputs):
                 },
             ]
         )
-    
+
     print(f"Using images: {colored(figure_inputs, 'green')}")
 
     return content
