@@ -224,7 +224,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, includeTexCount: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTexCount: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -269,6 +269,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       if (autoExtractFigure) {
         command += ' --auto_extract_figure';
+      }
+      if (autoExtractTikzFigure) {
+        command += ' --auto_extract_tikz_figure';
       }
       if (includeTexCount) {
         command += ' --include_tex_count';

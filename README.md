@@ -12,6 +12,15 @@ Set `.env` to use the OpenAI and Anthropic API keys.
 
 ## Backend Changelog
 
+### 0.8.0
+
+- Added auto-extract TikZ figure functionality
+- Improved figure path extraction, including support for `\graphicspath`
+- Enhanced logging for figure-related operations
+- Refactored figure handling code for better modularity
+- Updated CLI to support new TikZ figure extraction option
+- Improved error handling and debugging output for figure operations
+
 ### 0.7.11
 
 - Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
