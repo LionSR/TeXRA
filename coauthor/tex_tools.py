@@ -16,8 +16,10 @@ def get_tex_count(file_path):
 
     try:
         # Run texcount command with full statistics
-        result = subprocess.run(["texcount", "-inc", file_path], capture_output=True, text=True, check=True)
-        return result.stdout.strip()
+        result = subprocess.run(["texcount", "-merge", file_path], capture_output=True, text=True, check=True)
+        tex_count_output = result.stdout.strip()
+        print(colored(f"Tex Count Results: {tex_count_output}", "yellow"))
+        return tex_count_output
     except subprocess.CalledProcessError as e:
         print(f"Error running texcount: {e}")
         return None

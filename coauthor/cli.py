@@ -61,7 +61,6 @@ def execute_task(script, task, model, input_file, **kwargs):
 
     handle_auto_extract_figure(kwargs, input_file)
     handle_auto_extract_tikz_figure(kwargs, input_file)
-    handle_tex_count(kwargs, input_file)
 
     for key, value in kwargs.items():
         if value is not None:
@@ -91,6 +90,7 @@ def handle_auto_extract_figure(kwargs, input_file):
             else:
                 kwargs["figure_inputs"].extend(extracted_figure_paths)
 
+
 def handle_auto_extract_tikz_figure(kwargs, input_file):
     if kwargs.get("auto_extract_tikz_figure"):
         extracted_tikz_figure_paths = extract_and_compile_tikzpictures_with_labels(input_file)
@@ -99,6 +99,7 @@ def handle_auto_extract_tikz_figure(kwargs, input_file):
                 kwargs["figure_inputs"] = extracted_tikz_figure_paths
             else:
                 kwargs["figure_inputs"].extend(extracted_tikz_figure_paths)
+
 
 def handle_tex_count(kwargs, input_file):
     if kwargs.get("include_tex_count"):
@@ -117,7 +118,16 @@ def cli():
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
 @click.option("--instruction", required=False, default=None, help="Instruction for processing")
-def correct_tex(model, input_file, auxiliary_files=None, reflect=False, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False, instruction=None):
+def correct_tex(
+    model,
+    input_file,
+    auxiliary_files=None,
+    reflect=False,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
+    instruction=None,
+):
     execute_task(
         "edit_tex",
         "correct",
@@ -201,7 +211,14 @@ def draw_tex(
 @shared_arguments
 def correct_qi(model, input_file, reflect=False, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False):
     execute_task(
-        "edit_lecture", "correct_qi", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, auto_extract_tikz_figure=auto_extract_tikz_figure, include_tex_count=include_tex_count
+        "edit_lecture",
+        "correct_qi",
+        model,
+        input_file,
+        reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -209,7 +226,14 @@ def correct_qi(model, input_file, reflect=False, auto_extract_figure=False, auto
 @shared_arguments
 def correct_st(model, input_file, reflect=False, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False):
     execute_task(
-        "edit_lecture", "correct_st", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, auto_extract_tikz_figure=auto_extract_tikz_figure, include_tex_count=include_tex_count
+        "edit_lecture",
+        "correct_st",
+        model,
+        input_file,
+        reflect=reflect,
+        auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
+        include_tex_count=include_tex_count,
     )
 
 
@@ -217,9 +241,17 @@ def correct_st(model, input_file, reflect=False, auto_extract_figure=False, auto
 @shared_arguments_long
 @click.option("--input_files", default=None, help="Path to the multiple input files")
 def polish_st(
-    model, input_file, input_files=None, figure_inputs=None, instruction=None, reflect=True, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False
+    model,
+    input_file,
+    input_files=None,
+    figure_inputs=None,
+    instruction=None,
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
 ):
-    task = "polish_st_long" if (input_files is None or input_files == []) else "polish_st"
+    task = "polish_st" if (input_files is None or input_files == []) else "polish_st_long"
     execute_task(
         "edit_lecture",
         task,
@@ -719,7 +751,7 @@ def pack_single(input_file, model, reflect, task):
     now = datetime.now().strftime("%Y%m%d%H%M")
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-    output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{model}")
+    output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_file_patterns(base, task, model, reflect):
