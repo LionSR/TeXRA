@@ -1,6 +1,19 @@
 import re
 import os
 import subprocess
+from pathlib import Path
+from string import Template
+
+TIKZ_TEMPLATE = Template(
+    r"""
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\begin{document}
+$tikzpicture
+\end{document}
+"""
+)
 
 
 def extract_figure_paths(latex_file_path):
@@ -10,7 +23,7 @@ def extract_figure_paths(latex_file_path):
 
     # Regular expressions to match figure inclusion commands and graphicspath
     figure_patterns = [re.compile(r"\\includegraphics(?:\[.*?\])?\{(.+?)\}"), re.compile(r"\\begin\{overpic\}(?:\[.*?\])?\{(.+?)\}")]
-    graphicspath_pattern = re.compile(r"\\graphicspath\{(.+?)\}")
+    graphicspath_pattern = re.compile(r"\\graphicspath\s*\{(.+?)\}")
 
     try:
         with open(latex_file_path, "r", encoding="utf-8") as file:
@@ -18,10 +31,18 @@ def extract_figure_paths(latex_file_path):
 
         # Find all graphicspaths
         graphicspath_matches = graphicspath_pattern.findall(content)
+        print(f"Graphicspath matches: {graphicspath_matches}")  # Debug print
+
         for match in graphicspath_matches:
-            paths = re.findall(r"\{(.*?)\}", match)
+            paths = [match.strip('{}')]  # Remove outer braces
+            print(f"Paths found in graphicspath: {paths}")  # Debug print
             for path in paths:
-                graphicspaths.append(os.path.normpath(os.path.join(latex_dir, path)))
+                normalized_path = os.path.normpath(os.path.join(latex_dir, path.strip('/')))
+                graphicspaths.append(normalized_path)
+                print(f"Added graphicspath: {normalized_path}")
+
+        # Debug print to check graphicspaths
+        print(f"Graphicspaths: {graphicspaths}")
 
         # Find all matches in the content for both patterns
         for pattern in figure_patterns:
@@ -32,6 +53,7 @@ def extract_figure_paths(latex_file_path):
                     if os.path.exists(norm_path):
                         rel_path = os.path.relpath(norm_path, start=latex_dir)
                         figure_paths.append(rel_path)
+                        print(f"Found figure: {rel_path}")
                         break
 
     except FileNotFoundError:
@@ -39,30 +61,33 @@ def extract_figure_paths(latex_file_path):
     except Exception as e:
         print(f"An error occurred: {str(e)}")
 
+    print(f"Found figure paths: {figure_paths}")
     return figure_paths
 
 
-def extract_tikzpictures(latex_file):
+def extract_tikzpictures_with_labels(latex_file):
     with open(latex_file, "r") as file:
         content = file.read()
 
-    # Regular expression to match tikzpicture environments
-    pattern = r"\\begin{tikzpicture}.*?\\end{tikzpicture}"
-    tikzpictures = re.findall(pattern, content, re.DOTALL)
+    # Regular expression to match entire figure environments with labels and tikzpicture environments
+    figure_pattern = re.compile(r"(\\begin{figure}.*?\\label\{.*?\}.*?\\end{figure})", re.DOTALL)
+    tikz_pattern = re.compile(r"\\begin{tikzpicture}.*?\\end{tikzpicture}", re.DOTALL)
 
-    return tikzpictures
+    labeled_tikzpictures = []
+    for figure in figure_pattern.findall(content):
+        label_match = re.search(r"\\label\{(.*?)\}", figure)
+        if label_match:
+            label = label_match.group(1)
+            for tikz in tikz_pattern.findall(figure):
+                labeled_tikzpictures.append((label, tikz))
+
+    return labeled_tikzpictures
 
 
-def create_standalone_latex(tikzpicture, index):
-    standalone_content = f"""
-\\documentclass[tikz,border=10pt]{{standalone}}
-\\usepackage{{tikz}}
-\\begin{{document}}
-{tikzpicture}
-\\end{{document}}
-"""
+def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
+    standalone_content = TIKZ_TEMPLATE.substitute(tikzpicture=tikzpicture)
 
-    filename = f"tikzpicture_{index}.tex"
+    filename = build_dir / f"{label}_{index}.tex"
     with open(filename, "w") as file:
         file.write(standalone_content)
 
@@ -71,25 +96,35 @@ def create_standalone_latex(tikzpicture, index):
 
 def compile_latex_to_pdf(tex_file):
     try:
-        subprocess.run(["pdflatex", "-interaction=nonstopmode", tex_file], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={tex_file.parent}", tex_file], check=True, capture_output=True, text=True
+        )
         print(f"Compiled {tex_file} successfully.")
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
         print(f"Error compiling {tex_file}")
+        print("Error message:")
+        print(e.stdout)
+        print(e.stderr)
 
 
-def extract_and_compile_tikzpictures(latex_file):
-    tikzpictures = extract_tikzpictures(latex_file)
+def extract_and_compile_tikzpictures_with_labels(latex_file):
+    input_file = Path(latex_file)
+    build_dir = Path("build") / input_file.stem
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
     compiled_files = []
 
-    for index, tikzpicture in enumerate(tikzpictures, start=1):
-        tex_file = create_standalone_latex(tikzpicture, index)
+    for index, (label, tikzpicture) in enumerate(labeled_tikzpictures, start=1):
+        tex_file = create_standalone_latex_with_labels(tikzpicture, label, index, build_dir)
         compile_latex_to_pdf(tex_file)
-        compiled_files.append(tex_file.replace(".tex", ".pdf"))
+        compiled_files.append(tex_file.with_suffix(".pdf"))
 
         # Clean up auxiliary files
         for ext in [".aux", ".log", ".tex"]:
-            aux_file = tex_file.replace(".tex", ext)
-            if os.path.exists(aux_file):
-                os.remove(aux_file)
+            aux_file = tex_file.with_suffix(ext)
+            if aux_file.exists():
+                aux_file.unlink()
 
     return compiled_files
+

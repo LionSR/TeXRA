@@ -1,5 +1,4 @@
 import re
-import os
 import subprocess
 import argparse
 from string import Template
