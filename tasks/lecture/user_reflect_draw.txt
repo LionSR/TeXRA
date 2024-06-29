@@ -19,7 +19,7 @@ your detailed analysis of the exisitng figure and how it compares with the provi
 
 6. Textual Integration: Evaluate the coherence of figure references throughout the main text. Identify any missing or unnecessary references.
 
-7. TikZ Code Quality: Assess the clarity, efficiency, and commenting of the TikZ code for each figure.
+7. TikZ Code Quality: Assess the clarity, efficiency, and commenting of the TikZ code for each figure. Would the added or revised figure compile in latex with zero errors?
 
 8. Caption Quality: Evaluate the originality and informativeness of figure captions.
 </reflection>
