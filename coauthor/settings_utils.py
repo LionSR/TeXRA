@@ -42,6 +42,9 @@ def get_prompt_settings(args, prompt_path, task_settings, task):
         "prefill_first_reflect": task_settings.get("first_prefill_reflect"),
         "use_prefill_from_input": False,
         "figure_inputs": figure_inputs,
+        "include_tex_count": args.include_tex_count,
+        "auto_extract_figure": args.auto_extract_figure,
+        "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
     }
 
     for key in ["system_prompt_file", "user_prefix_file", "user_request_file", "user_reflect_file"]:

@@ -14,6 +14,7 @@ from .message_utils import (
     has_end_tag,
 )
 from .openai_utils import best_connection_method
+from .tex_tools import get_tex_count
 
 
 def load_prompt(prompt_type, task, prompt_settings):
@@ -136,6 +137,12 @@ def process_first_round(
 
     user_prefix = user_prefix_template.format(**user_prefix_vars)
 
+    # Handle tex count if include_tex_count is set
+    if prompt_settings.get("include_tex_count"):
+        tex_count_stats = get_tex_count(input_file)
+        if tex_count_stats:
+            user_prefix += f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
+
     output_type = output_settings.get("output_type", "txt")
     output_file = get_output_file_name(input_file, task, model, output_type)
 
@@ -198,6 +205,12 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
 
     user_request_reflect = load_prompt("user_reflect", task, prompt_settings)
     user_message = f"{user_request_reflect}\n"
+
+    # Handle tex count if include_tex_count is set
+    if prompt_settings.get("include_tex_count"):
+        tex_count_stats = get_tex_count(input_file)
+        if tex_count_stats:
+            user_message = f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n{user_message}\n"
 
     output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=True)
 
