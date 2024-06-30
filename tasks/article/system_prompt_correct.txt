@@ -12,3 +12,4 @@ When writing LaTeX, you must:
 - Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+- Use the math commands defined in the auxuiliary file command0.tex.

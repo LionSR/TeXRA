@@ -5,10 +5,16 @@ CoAuthor is a Python package containing utility functions for copiloting with la
 ## Installation
 
 To install the python backedn of CoAuthor, download the latest release and run
+
 ```bash
 pip install -e .
 ```
+
 Set `.env` to use the OpenAI and Anthropic API keys.
+
+To ease the installation and usage of the front end + backend, we recommend using a git client such as tower or github desktop to track the diffs, and working on your papers/lecture notes in a git-tracked folder.
+
+We also recommend installing locally a tex live distribution with latexdiff, latexindent, latexdiff-vs installed.
 
 ## Backend Changelog
 
@@ -28,7 +34,6 @@ Set `.env` to use the OpenAI and Anthropic API keys.
 - Updated logic to normalize and check figure paths within the specified graphicspaths.
 - Added logging to `create_image_message` in `message_utils.py` for used images.
 - Removed unused import in `adapt.py`, `paper2note.py`, and `txt2tex.py`.
-
 
 ### 0.7.10
 
@@ -93,9 +98,6 @@ Set `.env` to use the OpenAI and Anthropic API keys.
 ### 0.7.4
 
 - Fix the broken backend
-
-### 0.7.4
-
 - Created new `edit_utils.py` for shared edit functionality
 - Refactored `adapt.py`, `lecture2text.py`, `meeting2text.py`, `merge.py`, `paper2note.py`, `prl_edit.py`, `prl_reply.py`, and `txt2tex.py` to use shared utilities
 - Updated `model_utils.py` for improved image handling
@@ -127,14 +129,14 @@ Set `.env` to use the OpenAI and Anthropic API keys.
 - Improved error handling and logging for better user feedback and debugging
 - Various minor improvements and bug fixes
 
-### 0.7.1 
+### 0.7.1
 
 - Bumped version to 0.7.1
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes
 - Added TikZ extractor update
 
-### 0.7.0 
+### 0.7.0
 
 - Added new merge functionality for LaTeX documents
 - Implemented merge command in CLI
@@ -143,4 +145,4 @@ Set `.env` to use the OpenAI and Anthropic API keys.
 - Updated model_utils for improved image handling
 - Bumped version to 0.7.0
 - Updated Python target versions to include Python 3.12
-- Various minor improvements and bug fixes
+- Various minor improvements and bug fixes.
