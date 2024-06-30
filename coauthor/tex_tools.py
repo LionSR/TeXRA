@@ -33,7 +33,7 @@ def run_latexdiff(input_file, output_file, model=None):
         diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
     # Handle scratchpad content
-    with open(output_file, "r") as file:
+    with open(output_file, "r", encoding="utf-8") as file:
         output_content = file.read()
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
@@ -47,7 +47,7 @@ def run_latexdiff(input_file, output_file, model=None):
             ("<latex_document>" if "<latex_document>" in output_content else "</scratchpad>"),
             1,
         )[1].lstrip()
-        with open(output_file, "w") as file:
+        with open(output_file, "w", encoding="utf-8") as file:
             file.write(output_content)
 
     # Run latexdiff
@@ -57,10 +57,10 @@ def run_latexdiff(input_file, output_file, model=None):
     print(colored(f"latexdiff completed. Output saved to {diff_file_name}", "blue"))
 
     # Process diff file
-    with open(diff_file_name, "r") as diff_file:
+    with open(diff_file_name, "r", encoding="utf-8") as diff_file:
         lines = diff_file.readlines()
 
-    with open(diff_file_name, "w") as diff_file:
+    with open(diff_file_name, "w", encoding="utf-8") as diff_file:
         add_block = False
         packages_to_add_newline = [
             "\\usepackage{tikz}",
@@ -97,10 +97,10 @@ def run_latexdiff_vc(input_file, commit_hash):
     print(colored(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue"))
 
     # Process diff file
-    with open(diff_file_name, "r") as diff_file:
+    with open(diff_file_name, "r", encoding="utf-8") as diff_file:
         lines = diff_file.readlines()
 
-    with open(diff_file_name, "w") as diff_file:
+    with open(diff_file_name, "w", encoding="utf-8") as diff_file:
         packages_to_add_newline = [
             "\\usepackage{tikz}",
             "\\usepackage{pgfplots}",
