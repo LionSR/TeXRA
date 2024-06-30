@@ -269,7 +269,16 @@ def polish_st(
 
 @click.command()
 @shared_arguments_long
-def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
+def polish_qi(
+    model,
+    input_file,
+    figure_inputs,
+    instruction=None,
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
+):
     execute_task(
         "edit_lecture",
         "polish_qi",
@@ -279,13 +288,23 @@ def polish_qi(model, input_file, figure_inputs, instruction=None, reflect=True, 
         instruction=instruction,
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments_long
-def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
+def draw_st(
+    model,
+    input_file,
+    figure_inputs,
+    instruction=None,
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
+):
     execute_task(
         "edit_lecture",
         "draw_st",
@@ -295,13 +314,23 @@ def draw_st(model, input_file, figure_inputs, instruction=None, reflect=True, au
         instruction=instruction,
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
 
 @click.command()
 @shared_arguments_long
-def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
+def draw_qi(
+    model,
+    input_file,
+    figure_inputs,
+    instruction=None,
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
+):
     execute_task(
         "edit_lecture",
         "draw_qi",
@@ -311,6 +340,7 @@ def draw_qi(model, input_file, figure_inputs, instruction=None, reflect=True, au
         instruction=instruction,
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -389,6 +419,7 @@ def meeting2text(
     example_edited_transcript=None,
     reflect=True,
     auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
     include_tex_count=False,
 ):
     execute_task(
@@ -401,6 +432,7 @@ def meeting2text(
         example_edited_transcript=example_edited_transcript,
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -445,7 +477,9 @@ def correct_prl(model, input_file, reflect=True, auto_extract_figure=False, incl
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
-def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True, auto_extract_figure=False, include_tex_count=False):
+def correct_supp_prl(
+    model, input_file, auxiliary_files=None, reflect=True, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False
+):
     execute_task(
         "edit_prl",
         "correct_supp_prl",
@@ -454,6 +488,7 @@ def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True, auto
         auxiliary_files=auxiliary_files,
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -461,7 +496,9 @@ def correct_supp_prl(model, input_file, auxiliary_files=None, reflect=True, auto
 @click.command()
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
-def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True, auto_extract_figure=False, include_tex_count=False):
+def reply_letter_prl(
+    model, input_file, supp_file="supp.tex", reflect=True, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -477,6 +514,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True, auto
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -486,7 +524,14 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", reflect=True, auto
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
 def revise_main_prl(
-    model, input_file, supp_file="supp.tex", draft_reply_letter=None, reflect=True, auto_extract_figure=False, include_tex_count=False
+    model,
+    input_file,
+    supp_file="supp.tex",
+    draft_reply_letter=None,
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
 ):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
@@ -504,6 +549,7 @@ def revise_main_prl(
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -523,6 +569,7 @@ def revise_supp_prl(
     supp_file="supp.tex",
     reflect=True,
     auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
     include_tex_count=False,
 ):
     _, _, prompt_dir = get_common_env(model)
@@ -543,6 +590,7 @@ def revise_supp_prl(
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 
@@ -551,7 +599,16 @@ def revise_supp_prl(
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", reflect=True, auto_extract_figure=False, include_tex_count=False):
+def polish_prl_reply(
+    model,
+    input_file,
+    main_content,
+    supp_file="supp.tex",
+    reflect=True,
+    auto_extract_figure=False,
+    auto_extract_tikz_figure=False,
+    include_tex_count=False,
+):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -569,6 +626,7 @@ def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", refl
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
         reflect=reflect,
         auto_extract_figure=auto_extract_figure,
+        auto_extract_tikz_figure=auto_extract_tikz_figure,
         include_tex_count=include_tex_count,
     )
 

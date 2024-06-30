@@ -158,7 +158,7 @@ def check_stop_conditions(stop_reason, new_response, state, output_settings, mas
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
     encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
     continuation_limit = state["continuation_count"] > 10
-    input_token_limit = state["total_input_tokens"] > 100000
+    input_token_limit = state["total_input_tokens"] > 1000000
     output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
 
     if output_token_limit:
