@@ -315,7 +315,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         canSelectFiles: true,
         canSelectFolders: false,
         filters: {
-          'Images': ['png', 'pdf', 'jpeg']
+          'Images': ['png', 'pdf', 'jpeg', 'jpg']
         }
       });
       if (fileUri && fileUri[0]) {
