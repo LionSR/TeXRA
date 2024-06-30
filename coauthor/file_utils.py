@@ -11,17 +11,17 @@ def get_prompt_path(library, prompt_name):
 def read_file(file_path):
     if not os.path.exists(file_path):
         return ""
-    with open(file_path, "r") as file:
+    with open(file_path, "r", encoding="utf-8") as file:
         return file.read().strip()
 
 
 def write_file(file_path, content):
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
 
 def append_file(file_path, content):
-    with open(file_path, "a+") as file:
+    with open(file_path, "a+", encoding="utf-8") as file:
         file.write(content)
 
 

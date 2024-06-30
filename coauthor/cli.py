@@ -1,13 +1,18 @@
+import sys
+import os
+
+# Add the parent directory to the system path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import click
 import shlex
 import subprocess
-import os
 import glob
 import shutil
 from datetime import datetime
-from .tex_tools import run_latexdiff, run_latexdiff_vc
-from .tex_tools import get_tex_count
-from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
+from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc
+from coauthor.tex_tools import get_tex_count
+from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 
 from dotenv import load_dotenv
 
