@@ -20,7 +20,7 @@ def log_start(args):
         if args.figure_inputs:
             log_file.write(f"Figure inputs: {args.figure_inputs}\n")
 
-        log_file.write(f"Instruction:\n<instruction>\n{args.instruction}\n</instruction>\n")
+        log_file.write(f"\n<instruction>\n{args.instruction}\n</instruction>\n")
 
     return log_file_path
 
