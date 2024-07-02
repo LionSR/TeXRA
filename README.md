@@ -18,6 +18,12 @@ We also recommend installing locally a tex live distribution with latexdiff, lat
 
 ## Backend Changelog
 
+### 0.8.1
+
+- Added auto-merge partial output functionality
+- Improved error handling and logging for auto-merge operations
+- Refactored auto-merge code for better modularity
+
 ### 0.8.0
 
 - Added auto-extract TikZ figure functionality
