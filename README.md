@@ -18,12 +18,12 @@ We also recommend installing locally a tex live distribution with latexdiff, lat
 
 ## Backend Changelog
 
-### 0.8.2 - 2024-07-02
+### 0.8.2
 
-- Bumped version to 0.8.2
-- Updated Python target versions to include Python 3.12
-- Various minor improvements and bug fixes
-- Added TikZ extractor update
+- Simplified CLI command implementations using shared arguments and kwargs
+- Updated log_utils.py to format instruction logging
+- Enhanced image message creation for different model types
+- Updated user prefix for merge task
 
 ### 0.8.1
 
