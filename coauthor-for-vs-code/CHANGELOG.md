@@ -1,5 +1,14 @@
 # Change Log
 
+
+### [0.5.1]
+- Added auto-extract TikZ figure option in VS Code extension
+- Implemented automatic TikZ figure extraction from LaTeX files
+- Updated UI to include new auto-extract-relction TikZ figure checkbox
+- Improved figure handling and extraction process
+- Enhanced error handling and logging for figure-related operations
+- Add Include TikZ Reflection and Auto-merge Partial Output Flags in the UI
+
 ### [0.5.0]
 - Added auto-extract TikZ figure option in VS Code extension
 - Implemented automatic TikZ figure extraction from LaTeX files

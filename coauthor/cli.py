@@ -967,17 +967,17 @@ def extract_tikzpictures(latex_file):
 
 
 @click.command()
-@click.argument("original_latex")
-@click.argument("edited_latex")
+@click.argument("input_file")
+@click.argument("edited_file")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-def merge(original_latex, edited_latex, model, reflect):
+def merge(input_file, edited_file, model, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
         f"{script_dir}/tasks/merge.py",
-        f"--original_latex={original_latex}",
-        f"--edited_latex={edited_latex}",
+        f"--input_file={input_file}",
+        f"--edited_file={edited_file}",
         f"--model={model}",
     ]
     if reflect:

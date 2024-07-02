@@ -215,8 +215,6 @@ export function registerCommands(context: vscode.ExtensionContext) {
               reject(stderr);
             } else {
               const commits = stdout.split('\n').map(line => line.trim());
-              // Add "HEAD" as the first option
-              commits.unshift("HEAD");
               resolve(commits);
             }
           });
@@ -224,7 +222,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTexCount: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, autoMergePartialOutput: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -272,6 +270,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       if (autoExtractTikzFigure) {
         command += ' --auto_extract_tikz_figure';
+      }
+      if (includeTikzReflection) {
+        command += ' --include_tikz_reflection';
+      }
+      if (autoMergePartialOutput) {
+        command += ' --auto_merge_partial_output';
       }
       if (includeTexCount) {
         command += ' --include_tex_count';
