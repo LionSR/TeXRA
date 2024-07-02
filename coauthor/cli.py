@@ -10,8 +10,7 @@ import subprocess
 import glob
 import shutil
 from datetime import datetime
-from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc
-from coauthor.tex_tools import get_tex_count
+from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 
 from dotenv import load_dotenv
@@ -33,24 +32,28 @@ def comma_separated_list(value):
 
 # Define a decorator for shared arguments
 def shared_arguments(func):
-    func = click.argument("input_file")(func)
-    func = click.option("--model", required=False, default="opus", help="Model to use")(func)
-    func = click.option("--reflect", required=False, default=None, help="Reflect on the changes")(func)
-    func = click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file")(func)
-    func = click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file")(func)
-    func = click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message")(func)
-    return func
-
-
-def shared_arguments_long(func):
-    func = shared_arguments(func)
-    func = click.option("--instruction", required=False, default=None, help="Instruction for processing")(func)
-    func = click.option(
-        "--figure_inputs",
-        required=False,
-        default=None,
-        help="Path to the figure input file(s). Multiple files can be specified as a comma-separated list.",
-    )(func)
+    options = [
+        click.argument("input_file"),
+        click.option("--model", required=False, default="opus", help="Model to use"),
+        click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
+        click.option("--instruction", required=False, default=None, help="Instruction for processing"),
+        click.option("--input_files", default=None, help="Path to the multiple input files"),
+        click.option("--auxiliary_files", default=None, help="Path to the auxiliary file"),
+        click.option(
+            "--figure_inputs",
+            required=False,
+            default=None,
+            help="Path to the figure input file(s). Multiple files can be specified as a comma-separated list.",
+        ),
+        click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file"),
+        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file"),
+        click.option("--include_tikz_reflection", is_flag=True, help="Include TikZ reflection in the output"),
+        click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--auto_merge_partial_output", is_flag=True, help="Automatically merge partial output files"),
+        click.option("--auxiliary_files", default=None),
+    ]
+    for option in options:
+        func = option(func)
     return func
 
 
@@ -63,6 +66,10 @@ def execute_task(script, task, model, input_file, **kwargs):
         f"--model={model}",
         f"--input_file={input_file}",
     ]
+
+    # Convert figure_inputs to a list if it's a string
+    if "figure_inputs" in kwargs and isinstance(kwargs["figure_inputs"], str):
+        kwargs["figure_inputs"] = kwargs["figure_inputs"].split(",")
 
     handle_auto_extract_figure(kwargs, input_file)
     handle_auto_extract_tikz_figure(kwargs, input_file)
@@ -121,233 +128,85 @@ def cli():
 
 @click.command()
 @shared_arguments
-@click.option("--auxiliary_files", default=None)
-@click.option("--instruction", required=False, default=None, help="Instruction for processing")
-def correct_tex(
-    model,
-    input_file,
-    auxiliary_files=None,
-    reflect=False,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-    instruction=None,
-):
-    execute_task(
-        "edit_tex",
-        "correct",
-        model,
-        input_file,
-        auxiliary_files=auxiliary_files,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-        instruction=instruction,
-    )
+def correct_tex(model, input_file, **kwargs):
+    execute_task("edit_tex", "correct", model, input_file, **kwargs)
 
 
 @click.command()
-@shared_arguments_long
-@click.option("--input_files", default=None, help="Path to the multiple input files")
-@click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
-def polish_tex(
-    model,
-    input_file,
-    input_files=None,
-    auxiliary_files=None,
-    figure_inputs=None,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    task = "polish" if (input_files is None or input_files == []) else "polish_long"
+@shared_arguments
+def polish_tex(model, input_file, **kwargs):
+    task = "polish" if not kwargs.get("input_files") else "polish_long"
+    execute_task("edit_tex", task, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def draw_tex(model, input_file, **kwargs):
+    execute_task("edit_tex", "draw", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def correct_qi(model, input_file, **kwargs):
+    execute_task("edit_lecture", "correct_qi", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def correct_st(model, input_file, **kwargs):
+    execute_task("edit_lecture", "correct_st", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def polish_st(model, input_file, **kwargs):
+    task = "polish_st" if not kwargs.get("input_files") else "polish_st_long"
+    execute_task("edit_lecture", task, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def polish_qi(model, input_file, **kwargs):
+    execute_task("edit_lecture", "polish_qi", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def draw_st(model, input_file, **kwargs):
+    execute_task("edit_lecture", "draw_st", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def draw_qi(model, input_file, **kwargs):
+    execute_task("edit_lecture", "draw_qi", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+@click.option("--context_file", type=str, required=True, help="Path to the file containing the context for the discussion transcript.")
+@click.option("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
+@click.option("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
+def meeting2text(model, input_file, context_file, example_transcript=None, example_edited_transcript=None, task="transcribe", **kwargs):
     execute_task(
-        "edit_tex",
+        "meeting2text",
         task,
         model,
         input_file,
-        input_files=input_files,
-        auxiliary_files=auxiliary_files,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments_long
-@click.option("--input_files", default=None, help="Path to the multiple input files")
-@click.option("--auxiliary_files", default=None, help="Path to the auxiliary file")
-def draw_tex(
-    model,
-    input_file,
-    input_files=None,
-    auxiliary_files=None,
-    figure_inputs=None,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "edit_tex",
-        "draw",
-        model,
-        input_file,
-        input_files=input_files,
-        auxiliary_files=auxiliary_files,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
+        context_file=context_file,
+        example_transcript=example_transcript,
+        example_edited_transcript=example_edited_transcript,
+        **kwargs,
     )
 
 
 @click.command()
 @shared_arguments
-def correct_qi(model, input_file, reflect=False, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False):
-    execute_task(
-        "edit_lecture",
-        "correct_qi",
-        model,
-        input_file,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments
-def correct_st(model, input_file, reflect=False, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False):
-    execute_task(
-        "edit_lecture",
-        "correct_st",
-        model,
-        input_file,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments_long
-@click.option("--input_files", default=None, help="Path to the multiple input files")
-def polish_st(
-    model,
-    input_file,
-    input_files=None,
-    figure_inputs=None,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    task = "polish_st" if (input_files is None or input_files == []) else "polish_st_long"
-    execute_task(
-        "edit_lecture",
-        task,
-        model,
-        input_file,
-        input_files=input_files,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments_long
-def polish_qi(
-    model,
-    input_file,
-    figure_inputs,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "edit_lecture",
-        "polish_qi",
-        model,
-        input_file,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments_long
-def draw_st(
-    model,
-    input_file,
-    figure_inputs,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "edit_lecture",
-        "draw_st",
-        model,
-        input_file,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments_long
-def draw_qi(
-    model,
-    input_file,
-    figure_inputs,
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "edit_lecture",
-        "draw_qi",
-        model,
-        input_file,
-        figure_inputs=figure_inputs,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
+@click.option("--sample_tex", type=str, help="Path to a sample LaTeX file in the desired style.")
+@click.option("--document_cls", type=str, help="Path to the document class file.")
+@click.option("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
+def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file=None, task="txt2tex", **kwargs):
+    execute_task("txt2tex", task, model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
 
 
 @click.command()
@@ -355,27 +214,9 @@ def draw_qi(
 @click.argument("sample_chapters")
 @click.argument("sample_paper", required=False, default=None)
 @click.argument("sample_note", required=False, default=None)
-def paper2note(
-    model,
-    input_file,
-    sample_chapters,
-    sample_paper=None,
-    sample_note=None,
-    reflect=False,
-    auto_extract_figure=False,
-    include_tex_count=False,
-):
+def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_note=None, **kwargs):
     execute_task(
-        "paper2note",
-        "paper2note",
-        model,
-        input_file,
-        sample_chapters=sample_chapters,
-        sample_paper=sample_paper,
-        sample_note=sample_note,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        include_tex_count=include_tex_count,
+        "paper2note", "paper2note", model, input_file, sample_chapters=sample_chapters, sample_paper=sample_paper, sample_note=sample_note, **kwargs
     )
 
 
@@ -385,125 +226,27 @@ def paper2note(
 @click.argument("document_cls", required=False, default="lecture.cls")
 @click.argument("commands_file", required=False, default="command.tex")
 @click.option("--instruction", required=False, default=None, help="Instruction for processing")
-def adapt(
-    model,
-    input_file,
-    sample_tex,
-    document_cls="lecture.cls",
-    commands_file="command.tex",
-    instruction=None,
-    reflect=True,
-    auto_extract_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "adapt",
-        "adapt",
-        model,
-        input_file,
-        sample_tex=sample_tex,
-        document_cls=document_cls,
-        commands_file=commands_file,
-        instruction=instruction,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        include_tex_count=include_tex_count,
-    )
+def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex", **kwargs):
+    execute_task("adapt", "adapt", model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-@click.argument("context_file")
-@click.argument("example_transcript", required=False, default=None)
-@click.argument("example_edited_transcript", required=False, default=None)
-def meeting2text(
-    model,
-    input_file,
-    context_file,
-    example_transcript=None,
-    example_edited_transcript=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "meeting2text",
-        "transcribe",
-        model,
-        input_file,
-        context_file=context_file,
-        example_transcript=example_transcript,
-        example_edited_transcript=example_edited_transcript,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments
-@click.argument("document_cls", required=False, default="lecture.cls")
-@click.argument("commands_file", required=False, default="command.tex")
-@click.argument("sample_tex", required=False, default=None)
-def txt2tex(
-    model,
-    input_file,
-    document_cls="lecture.cls",
-    commands_file="command.tex",
-    sample_tex=None,
-    reflect=True,
-    auto_extract_figure=False,
-    include_tex_count=False,
-):
-    execute_task(
-        "txt2tex",
-        "txt2tex",
-        model,
-        input_file,
-        document_cls=document_cls,
-        commands_file=commands_file,
-        sample_tex=sample_tex,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        include_tex_count=include_tex_count,
-    )
-
-
-@click.command()
-@shared_arguments
-def correct_prl(model, input_file, reflect=True, auto_extract_figure=False, include_tex_count=False):
-    execute_task(
-        "edit_prl", "correct_prl", model, input_file, reflect=reflect, auto_extract_figure=auto_extract_figure, include_tex_count=include_tex_count
-    )
+def correct_prl(model, input_file, **kwargs):
+    execute_task("edit_prl", "correct_prl", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
-def correct_supp_prl(
-    model, input_file, auxiliary_files=None, reflect=True, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False
-):
-    execute_task(
-        "edit_prl",
-        "correct_supp_prl",
-        model,
-        input_file,
-        auxiliary_files=auxiliary_files,
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
-    )
+def correct_supp_prl(model, input_file, **kwargs):
+    execute_task("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
-def reply_letter_prl(
-    model, input_file, supp_file="supp.tex", reflect=True, auto_extract_figure=False, auto_extract_tikz_figure=False, include_tex_count=False
-):
+def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -517,10 +260,7 @@ def reply_letter_prl(
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
+        **kwargs,
     )
 
 
@@ -528,16 +268,7 @@ def reply_letter_prl(
 @shared_arguments
 @click.argument("supp_file", required=False, default="supp.tex")
 @click.argument("draft_reply_letter")
-def revise_main_prl(
-    model,
-    input_file,
-    supp_file="supp.tex",
-    draft_reply_letter=None,
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
+def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -552,10 +283,7 @@ def revise_main_prl(
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
+        **kwargs,
     )
 
 
@@ -565,18 +293,7 @@ def revise_main_prl(
 @click.argument("draft_reply_letter")
 @click.argument("draft_main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def revise_supp_prl(
-    model,
-    input_file,
-    main_content,
-    draft_reply_letter,
-    draft_main_content,
-    supp_file="supp.tex",
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
+def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -593,10 +310,7 @@ def revise_supp_prl(
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
+        **kwargs,
     )
 
 
@@ -604,16 +318,7 @@ def revise_supp_prl(
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(
-    model,
-    input_file,
-    main_content,
-    supp_file="supp.tex",
-    reflect=True,
-    auto_extract_figure=False,
-    auto_extract_tikz_figure=False,
-    include_tex_count=False,
-):
+def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_task(
         "prl_reply",
@@ -629,25 +334,32 @@ def polish_prl_reply(
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
         example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
-        reflect=reflect,
-        auto_extract_figure=auto_extract_figure,
-        auto_extract_tikz_figure=auto_extract_tikz_figure,
-        include_tex_count=include_tex_count,
+        **kwargs,
     )
 
 
 @click.command()
+@click.argument("input_file")
+@click.argument("edited_file")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
+@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
+def merge(input_file, edited_file, model, reflect):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/tasks/merge.py",
+        f"--input_file={input_file}",
+        f"--edited_file={edited_file}",
+        f"--model={model}",
+    ]
+    if reflect:
+        command.append(f"--reflect={reflect}")
+    subprocess.run(command)
+
+
+@click.command()
 def clean_output():
-    excluded_dirs = {
-        "Figs",
-        "Figures",
-        "build",
-        "Versions",
-        "versions",
-        "figs",
-        "figures",
-        "Notes",
-    }
+    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
     models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o"]
 
     patterns = [f"*_{model}*.tex" for model in models]
@@ -679,16 +391,7 @@ def clean_output():
 
 @click.command()
 def clean_build():
-    excluded_dirs = {
-        "Figs",
-        "Figures",
-        "build",
-        "Versions",
-        "versions",
-        "figs",
-        "figures",
-        "Notes",
-    }
+    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 
     def remove_files(directory, pattern):
         for file in glob.glob(os.path.join(directory, pattern)):
@@ -722,16 +425,7 @@ def clean_build():
 
 @click.command()
 def indent_tex():
-    excluded_dirs = {
-        "Figs",
-        "Figures",
-        "build",
-        "Versions",
-        "versions",
-        "figs",
-        "figures",
-        "Notes",
-    }
+    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
 
     for root, dirs, files in os.walk(".", topdown=True):
@@ -742,11 +436,7 @@ def indent_tex():
                 command = ["latexindent", tex_file, "-w", "-s"]
                 if latexindent_config:
                     command.append(f"-l={latexindent_config}")
-                subprocess.run(
-                    command,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Delete .bak0 and indent.log files
     for pattern in ["**/*.bak0", "**/indent.log"]:
@@ -782,17 +472,7 @@ def clean_single(input_file, model, reflect, task):
     if reflect and reflect != "False":
         temp_patterns.extend([f"{base_name}_{first_task_chunk}_reflect_{model}{suffix}" for suffix in ["", "_diff", "Notes", "_diffNotes"]])
 
-    temp_extensions = [
-        ".bib",
-        ".aux",
-        ".bbl",
-        ".blg",
-        ".fdb_latexmk",
-        ".fls",
-        ".log",
-        ".out",
-        ".synctex.gz",
-    ]
+    temp_extensions = [".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz"]
 
     for pattern in file_patterns + [f"{p}{{ext}}" for p in temp_patterns]:
         for search_dir in [os.path.join(input_dir, "build"), input_dir]:
@@ -865,7 +545,7 @@ def pack_single(input_file, model, reflect, task):
                 file_path = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                    print(f"Removed: {file_path}")
+                    print(f"Deleted: {file_path}")
 
 
 @click.command()
@@ -966,25 +646,6 @@ def extract_tikzpictures(latex_file):
         print(file)
 
 
-@click.command()
-@click.argument("input_file")
-@click.argument("edited_file")
-@click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-def merge(input_file, edited_file, model, reflect):
-    model, script_dir, _ = get_common_env(model)
-    command = [
-        "python",
-        f"{script_dir}/tasks/merge.py",
-        f"--input_file={input_file}",
-        f"--edited_file={edited_file}",
-        f"--model={model}",
-    ]
-    if reflect:
-        command.append(f"--reflect={reflect}")
-    subprocess.run(command)
-
-
 if __name__ == "__main__":
     cli()
 
@@ -1031,14 +692,17 @@ cli.add_command(clean_single)
 # latexindent
 cli.add_command(indent_tex)
 
-# pack single
-cli.add_command(pack_single)
-cli.add_command(pack_latexdiff_vc)
-cli.add_command(latexdiff)
-cli.add_command(latexdiff_vc)
-
 # merge
 cli.add_command(merge)
+
+# pack single
+cli.add_command(pack_single)
+
+# latexdiff
+cli.add_command(latexdiff)
+cli.add_command(latexdiff_vc)
+cli.add_command(pack_latexdiff_vc)
+
 
 # tools
 cli.add_command(tex_count)

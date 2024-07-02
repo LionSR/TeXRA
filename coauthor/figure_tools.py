@@ -78,16 +78,17 @@ def extract_tikzpictures_with_labels(latex_file):
         label_match = re.search(r"\\label\{(.*?)\}", figure)
         if label_match:
             label = label_match.group(1)
-            for tikz in tikz_pattern.findall(figure):
-                labeled_tikzpictures.append((label, tikz))
+            tikz_matches = tikz_pattern.findall(figure)
+            if tikz_matches:
+                labeled_tikzpictures.append((label, tikz_matches))
 
     return labeled_tikzpictures
 
 
-def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
+def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
     standalone_content = TIKZ_TEMPLATE.substitute(tikzpicture=tikzpicture)
 
-    filename = build_dir / f"{label}_{index}.tex"
+    filename = build_dir / f"{label}_{suffix}.tex"
     with open(filename, "w") as file:
         file.write(standalone_content)
 
@@ -115,15 +116,17 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
     compiled_files = []
 
-    for index, (label, tikzpicture) in enumerate(labeled_tikzpictures, start=1):
-        tex_file = create_standalone_latex_with_labels(tikzpicture, label, index, build_dir)
-        compile_latex_to_pdf(tex_file)
-        compiled_files.append(tex_file.with_suffix(".pdf"))
+    for label, tikzpictures in labeled_tikzpictures:
+        for i, tikzpicture in enumerate(tikzpictures):
+            suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
+            tex_file = create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir)
+            compile_latex_to_pdf(tex_file)
+            compiled_files.append(tex_file.with_suffix(".pdf"))
 
-        # Clean up auxiliary files
-        for ext in [".aux", ".log", ".tex"]:
-            aux_file = tex_file.with_suffix(ext)
-            if aux_file.exists():
-                aux_file.unlink()
+            # Clean up auxiliary files
+            for ext in [".aux", ".log", ".tex"]:
+                aux_file = tex_file.with_suffix(ext)
+                if aux_file.exists():
+                    aux_file.unlink()
 
     return compiled_files

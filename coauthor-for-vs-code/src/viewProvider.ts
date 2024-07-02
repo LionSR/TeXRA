@@ -838,6 +838,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               });
               break;
           }
+          // Restore previous state
+          restoreState();
         });
       </script>
     </head>
