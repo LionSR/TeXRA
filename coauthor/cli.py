@@ -567,36 +567,32 @@ def latexdiff_vc(input_file, commit_hash):
 @click.command()
 @click.argument("input_file")
 @click.argument("commit_hash")
-def pack_latexdiff_vc(input_file, commit_hash):
-    """Pack the files generated from latexdiff-vc and delete temporary files."""
-    now = datetime.now().strftime("%Y%m%d%H%M")
+@click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
+def pack_latexdiff_vc(input_file, commit_hash, clean):
+    """Pack or clean the files generated from latexdiff-vc."""
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-    output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
+    
+    if not clean:
+        now = datetime.now().strftime("%Y%m%d%H%M")
+        output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
 
-    # File patterns to keep
-    keep_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
+    # File patterns to keep/delete
+    file_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
 
     # Build file extensions to delete
     delete_extensions = [
-        ".aux",
-        ".bbl",
-        ".blg",
-        ".fdb_latexmk",
-        ".fls",
-        ".log",
-        ".out",
-        ".synctex.gz",
+        ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz",
     ]
 
-    files_to_move = []
+    files_to_process = []
     files_to_delete = []
 
-    for pattern in keep_patterns:
+    for pattern in file_patterns:
         for search_dir in [os.path.join(input_dir, "build"), input_dir]:
             file_path = os.path.join(search_dir, pattern)
             if os.path.exists(file_path):
-                files_to_move.append(file_path)
+                files_to_process.append(file_path)
                 # Look for associated build files to delete
                 for ext in delete_extensions:
                     temp_file = os.path.splitext(file_path)[0] + ext
@@ -604,19 +600,25 @@ def pack_latexdiff_vc(input_file, commit_hash):
                         files_to_delete.append(temp_file)
                 break
 
-    if files_to_move:
-        os.makedirs(output_folder, exist_ok=True)
-        for file_path in files_to_move:
-            shutil.move(file_path, output_folder)
-            print(f"Moved: {file_path}")
+    if files_to_process:
+        if clean:
+            for file_path in files_to_process + files_to_delete:
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+            print("Cleanup complete.")
+        else:
+            os.makedirs(output_folder, exist_ok=True)
+            for file_path in files_to_process:
+                shutil.move(file_path, output_folder)
+                print(f"Moved: {file_path}")
 
-        for file_path in files_to_delete:
-            os.remove(file_path)
-            print(f"Deleted: {file_path}")
+            for file_path in files_to_delete:
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
 
-        print(f"Files packed into {output_folder}")
+            print(f"Files packed into {output_folder}")
     else:
-        print("No files found to pack.")
+        print("No files found to process.")
 
 
 @click.command()
