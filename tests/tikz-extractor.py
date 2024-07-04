@@ -70,7 +70,7 @@ def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
     input_file = Path(latex_file)
-    build_dir = Path("build") / input_file.stem
+    build_dir = input_file.parent / "build" / input_file.stem
     build_dir.mkdir(parents=True, exist_ok=True)
 
     print("Extracting TikZ pictures with labels...")
@@ -87,12 +87,13 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
         compiled_files.append(tex_file.with_suffix(".pdf"))
 
         # Clean up auxiliary files
-        for ext in [".aux", ".log", ".tex"]:
+        for ext in [".aux", ".log"]:
             aux_file = tex_file.with_suffix(ext)
             if aux_file.exists():
                 aux_file.unlink()
-
-    return compiled_files
+    
+    extracted_tikz_figures = [str(fig) for fig in compiled_files]
+    return extracted_tikz_figures
 
 
 def compile_latex_to_pdf(tex_file):

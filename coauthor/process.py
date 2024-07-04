@@ -15,15 +15,9 @@ from .message_utils import (
 )
 from .openai_utils import best_connection_method
 from .tex_tools import get_tex_count
-
-
-def load_prompt(prompt_type, task, prompt_settings):
-    prompt_path = prompt_settings.get("prompt_path")
-    prompt_file = prompt_settings.get(f"{prompt_type}_file")
-    prompt_file_path = os.path.join(prompt_path, prompt_file) if prompt_file else os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
-    prompt = read_file(prompt_file_path).strip()
-    print(f"{prompt_type}: {colored(prompt, 'magenta')}")
-    return prompt
+from coauthor.figure_tools import extract_and_compile_tikzpictures_with_labels
+from coauthor.message_utils import create_image_message
+from coauthor.prompt_utils import load_prompt
 
 
 def get_output_file_name(input_file, task, model, output_type, reflect=False):
@@ -126,6 +120,7 @@ def process_first_round(
     model_settings,
     output_settings,
     prompt_settings,
+    figure_inputs=None,
     state=None,
     messages=None,
 ):
@@ -146,7 +141,8 @@ def process_first_round(
     output_type = output_settings.get("output_type", "txt")
     output_file = get_output_file_name(input_file, task, model, output_type)
 
-    messages = initialize_messages(model, system_prompt, user_prefix, user_request, prompt_settings["figure_inputs"])
+    print(f"figure_inputs: {colored(figure_inputs, 'yellow')}")
+    messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 
     accumulated_output = None
     if os.path.exists(output_file):
@@ -198,7 +194,7 @@ def process_first_round(
     return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings
 
 
-def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings):
+def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
     use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
@@ -214,7 +210,35 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
 
     output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=True)
 
-    messages.append({"role": "user", "content": user_message})
+    # Extract TikZ pictures if include_tikz_reflection is set
+    if prompt_settings.get("include_tikz_reflection"):
+        generated_output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=False)
+        print(f"Extracting TikZ figures from {generated_output_file}")
+        extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
+        if extracted_tikz_figures:
+            if figure_inputs is None:
+                figure_inputs = extracted_tikz_figures
+            else:
+                figure_inputs.extend(extracted_tikz_figures)
+
+    # Ensure all figure_inputs are strings
+    if figure_inputs:
+        figure_inputs = [str(fig) for fig in figure_inputs]
+
+    # Create a new message for the reflection round
+    reflection_message = {"role": "user", "content": []}
+
+    # Add figure inputs to the message if available
+    if figure_inputs:
+        print(f"Creating image message with {len(figure_inputs)} figures")
+        image_content = create_image_message(model, figure_inputs)
+        reflection_message["content"].extend(image_content)
+
+    # Add the user message text
+    reflection_message["content"].append({"type": "text", "text": user_message})
+
+    # Append the reflection message to the messages list
+    messages.append(reflection_message)
 
     accumulated_output = None
     if os.path.exists(output_file):

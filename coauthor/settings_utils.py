@@ -26,12 +26,6 @@ def get_output_settings(args, task_settings):
 def get_prompt_settings(args, prompt_path, task_settings, task):
     print(colored(f"prompt_path: {prompt_path}", "yellow"), colored(f"task: {task}", "yellow"))
 
-    figure_inputs = args.figure_inputs
-    if isinstance(figure_inputs, str):
-        figure_inputs = figure_inputs.split(",")
-    elif not isinstance(figure_inputs, list):
-        figure_inputs = None
-
     prompt_settings = {
         "prompt_path": prompt_path,
         "system_prompt_file": f"system_prompt_{task}.txt",
@@ -41,10 +35,10 @@ def get_prompt_settings(args, prompt_path, task_settings, task):
         "prefill_first": task_settings.get("prefill_first"),
         "prefill_first_reflect": task_settings.get("first_prefill_reflect"),
         "use_prefill_from_input": False,
-        "figure_inputs": figure_inputs,
         "include_tex_count": args.include_tex_count,
         "auto_extract_figure": args.auto_extract_figure,
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
+        "include_tikz_reflection": args.include_tikz_reflection,
     }
 
     for key in ["system_prompt_file", "user_prefix_file", "user_request_file", "user_reflect_file"]:
