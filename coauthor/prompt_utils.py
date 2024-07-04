@@ -32,6 +32,15 @@ def get_additional_input_files_content(input_files, num_auxiliary_files):
     return format_file_content(input_files, num_auxiliary_files + 2) if input_files else ""
 
 
+def load_prompt(prompt_type, task, prompt_settings):
+    prompt_path = prompt_settings.get("prompt_path")
+    prompt_file = prompt_settings.get(f"{prompt_type}_file")
+    prompt_file_path = os.path.join(prompt_path, prompt_file) if prompt_file else os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
+    prompt = read_file(prompt_file_path).strip()
+    print(f"{prompt_type}: {colored(prompt, 'magenta')}")
+    return prompt
+
+
 def handle_single_input(args, user_prefix_vars, prompt_settings):
     user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
     if args.input_files:

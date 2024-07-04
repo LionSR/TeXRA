@@ -8,6 +8,7 @@ TIKZ_TEMPLATE = Template(
     r"""
 \documentclass[tikz,border=10pt]{standalone}
 \usepackage{tikz}
+\usepackage{pgfplots}
 \usetikzlibrary{positioning}
 \begin{document}
 $tikzpicture
