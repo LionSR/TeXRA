@@ -13,10 +13,11 @@ from coauthor.log_utils import log_start, log_and_print_statistics, log_output_f
 # Define the settings for each mode
 all_tasks_settings = {
     "merge": {
-        "document_tag": "edited_file",
-        "end_tag": ["\\end{document}", "</edited_file>"],
+        "document_tag": "full_edited_latex",
+        # "end_tag": ["\\end{document}", "</edited_file>", "</full_edited_latex>"],
+        "end_tag": "</full_edited_latex>",
         "output_type": "tex",
-        "prefill_first": "<edited_file>",
+        "prefill_first": "<full_edited_latex>",
     },
 }
 

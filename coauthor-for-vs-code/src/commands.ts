@@ -110,10 +110,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
-    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFilePath: string, commitHash: string) => {
+    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFilePath: string, commitHash: string, clean: boolean = false) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFilePath} ${commitHash}`);
+      const cleanFlag = clean ? '--clean' : '';
+      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFilePath} ${commitHash} ${cleanFlag}`);
     }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       const terminal = ensureTerminal();

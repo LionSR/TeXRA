@@ -141,7 +141,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits_refresh });
           break;
         case 'packLatexDiffVC':
-          vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFilePath, message.commitHash);
+          vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFilePath, message.commitHash, message.clean);
           break;
       }
     });
@@ -609,7 +609,18 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({
               command: 'packLatexDiffVC',
               inputFilePath: inputFilePath,
-              commitHash: commitHash
+              commitHash: commitHash,
+              clean: false
+            });
+          });
+          document.getElementById('cleanLatexDiffVCButton').addEventListener('click', function() {
+            const inputFilePath = document.getElementById('inputFileSelect').value;
+            const commitHash = document.getElementById('commitSelect').value;
+            vscode.postMessage({
+              command: 'packLatexDiffVC',
+              inputFilePath: inputFilePath,
+              commitHash: commitHash,
+              clean: true
             });
           });
 
@@ -979,6 +990,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           <div class="file-select-buttons">
             <button id="refreshCommitsButton" class="small-button">Refresh</button>
             <button id="packLatexDiffVCButton" class="small-button">Pack</button>
+            <button id="cleanLatexDiffVCButton" class="small-button">Clean</button>
             <button id="latexDiffVCButton" class="small-button">latexdiff-vc</button>
           </div>
         </div>
