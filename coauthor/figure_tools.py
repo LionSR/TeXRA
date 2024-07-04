@@ -1,7 +1,6 @@
 import re
 import os
 import subprocess
-from pathlib import Path
 from string import Template
 
 TIKZ_TEMPLATE = Template(
@@ -89,7 +88,7 @@ def extract_tikzpictures_with_labels(latex_file):
 def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
     standalone_content = TIKZ_TEMPLATE.substitute(tikzpicture=tikzpicture)
 
-    filename = build_dir / f"{label}_{suffix}.tex"
+    filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
     with open(filename, "w") as file:
         file.write(standalone_content)
 
@@ -98,8 +97,10 @@ def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
 
 def compile_latex_to_pdf(tex_file):
     try:
+        output_directory = os.path.dirname(tex_file)
         result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={tex_file.parent}", tex_file], check=True, capture_output=True, text=True
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file],
+            check=True, capture_output=True, text=True
         )
         print(f"Compiled {tex_file} successfully.")
     except subprocess.CalledProcessError as e:
@@ -110,9 +111,9 @@ def compile_latex_to_pdf(tex_file):
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
-    input_file = Path(latex_file)
-    build_dir = Path("build") / input_file.stem
-    build_dir.mkdir(parents=True, exist_ok=True)
+    input_file = os.path.basename(latex_file)
+    build_dir = os.path.join("Discrete-Time", "build", os.path.splitext(input_file)[0])
+    os.makedirs(build_dir, exist_ok=True)
 
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
     compiled_files = []
@@ -122,12 +123,12 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
             suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
             tex_file = create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir)
             compile_latex_to_pdf(tex_file)
-            compiled_files.append(tex_file.with_suffix(".pdf"))
+            compiled_files.append(os.path.splitext(tex_file)[0] + ".pdf")
 
-            # Clean up auxiliary files
-            for ext in [".aux", ".log", ".tex"]:
-                aux_file = tex_file.with_suffix(ext)
-                if aux_file.exists():
-                    aux_file.unlink()
+        # Clean up auxiliary files
+        for ext in [".aux", ".log"]:
+            aux_file = os.path.splitext(tex_file)[0] + ext
+            if os.path.exists(aux_file):
+                os.remove(aux_file)
 
     return compiled_files

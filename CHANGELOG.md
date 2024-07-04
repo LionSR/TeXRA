@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## 0.8.4
+
+- Implemented figure inputs support in the reflection round
+- Refactored TikZ extraction process for improved compatibility and file handling
+- Updated CLI to support new figure-related options, including --include_tikz_reflection
+- Improved error handling and file processing in various utilities
+- Enhanced modularity and organization of the codebase
+- Updated figure handling in process.py and figure_tools.py
+- Refactored settings handling to separate figure inputs
+
 ## 0.8.3
 
 - Modified pack_latexdiff_vc function to handle both packing and cleaning

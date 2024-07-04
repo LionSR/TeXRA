@@ -2,7 +2,7 @@ import re
 import subprocess
 import argparse
 from string import Template
-from pathlib import Path
+import os
 
 TEMPLATE_TEX = Template(
     r"""
@@ -61,7 +61,7 @@ def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
 """
     )
 
-    filename = build_dir / f"{label}_{index}.tex"
+    filename = os.path.join(build_dir, f"{label}_{index}.tex")
     with open(filename, "w") as file:
         file.write(standalone_content)
 
@@ -69,9 +69,11 @@ def create_standalone_latex_with_labels(tikzpicture, label, index, build_dir):
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
-    input_file = Path(latex_file)
-    build_dir = input_file.parent / "build" / input_file.stem
-    build_dir.mkdir(parents=True, exist_ok=True)
+    input_dir = os.path.dirname(latex_file)
+    input_filename = os.path.basename(latex_file)
+    input_name = os.path.splitext(input_filename)[0]
+    build_dir = os.path.join(input_dir, f"build_{input_name}")
+    os.makedirs(build_dir, exist_ok=True)
 
     print("Extracting TikZ pictures with labels...")
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
@@ -84,22 +86,21 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
         tex_file = create_standalone_latex_with_labels(tikzpicture, label, index, build_dir)
         print(f"Compiling LaTeX file: {tex_file}")
         compile_latex_to_pdf(tex_file)
-        compiled_files.append(tex_file.with_suffix(".pdf"))
+        compiled_files.append(os.path.splitext(tex_file)[0] + ".pdf")
 
         # Clean up auxiliary files
         for ext in [".aux", ".log"]:
-            aux_file = tex_file.with_suffix(ext)
-            if aux_file.exists():
-                aux_file.unlink()
+            aux_file = os.path.splitext(tex_file)[0] + ext
+            if os.path.exists(aux_file):
+                os.remove(aux_file)
     
-    extracted_tikz_figures = [str(fig) for fig in compiled_files]
-    return extracted_tikz_figures
+    return compiled_files
 
 
 def compile_latex_to_pdf(tex_file):
     try:
         result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={tex_file.parent}", tex_file], check=True, capture_output=True, text=True
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={os.path.dirname(tex_file)}", tex_file], check=True, capture_output=True, text=True
         )
         print(f"Compiled {tex_file} successfully.")
     except subprocess.CalledProcessError as e:
