@@ -1,6 +1,11 @@
 # Change Log
 
 
+### [0.5.2]
+- Added "Clean" button for latexdiff-vc functionality
+- Updated packLatexDiffVC command to support cleaning option
+- Improved UI for latexdiff-vc section
+
 ### [0.5.1]
 - Added auto-extract TikZ figure option in VS Code extension
 - Implemented automatic TikZ figure extraction from LaTeX files
@@ -206,4 +211,3 @@ Quality of life improvements:
 
 * Added basic functionalities
 * Initial release
-
