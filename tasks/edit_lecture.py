@@ -68,6 +68,13 @@ def main():
     output_settings = get_output_settings(args, task_settings)
     prompt_settings = get_prompt_settings(args, prompt_path, task_settings, task_sub)
 
+    # Handle figure_inputs separately
+    figure_inputs = args.figure_inputs
+    if isinstance(figure_inputs, str):
+        figure_inputs = figure_inputs.split(",")
+    elif not isinstance(figure_inputs, list):
+        figure_inputs = None
+
     if "long" in args.task:
         handle_long_input(args, user_prefix_vars, prompt_settings)
     else:
@@ -84,6 +91,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=figure_inputs,
     )
     if end_turn:
         run_latexdiff(args.input_file, output_file)
