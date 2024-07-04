@@ -479,8 +479,16 @@ def clean_single(input_file, model, reflect, task):
             for ext in [""] + temp_extensions:
                 file_path = os.path.join(search_dir, pattern.format(ext=ext))
                 if os.path.exists(file_path):
-                    os.remove(file_path)
-                    print(f"Deleted: {file_path}")
+                    try:
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                        print(f"Deleted: {file_path}")
+                    except PermissionError:
+                        print(f"Warning: Unable to delete {file_path}. It may be in use or you may not have permission.")
+                    except Exception as e:
+                        print(f"Error deleting {file_path}: {str(e)}")
 
     print(f"Cleanup complete for {input_file}.")
 
