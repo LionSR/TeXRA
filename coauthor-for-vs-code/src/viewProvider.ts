@@ -472,6 +472,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
             multipleFiguresSelectDiv.innerHTML = '';
             multipleFiguresSelectDiv.style.display = 'none';
+            
+            // Set the single figure file select to "None"
+            document.getElementById('figureFileSelect').value = '';
+            
             saveState();
           });
           document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
@@ -922,7 +926,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="figureFileSelect">Select Figure File:</label>
+            <label for="figureFileSelect">Select Figure:</label>
             <div class="file-select-buttons">
               <button id="emptyMultipleFiguresButton" class="small-button">Empty</button>
               <button id="selectMultipleFiguresButton" class="small-button">Multiple</button>
