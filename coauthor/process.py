@@ -141,7 +141,6 @@ def process_first_round(
     output_type = output_settings.get("output_type", "txt")
     output_file = get_output_file_name(input_file, task, model, output_type)
 
-    print(f"figure_inputs: {colored(figure_inputs, 'yellow')}")
     messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 
     accumulated_output = None

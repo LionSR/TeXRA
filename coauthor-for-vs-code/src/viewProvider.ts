@@ -869,8 +869,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             <option value="correct-st">Correct ST</option>
             <option value="polish-st">Polish ST</option>
             <option value="draw-st">Draw ST</option>
-            <option value="correct-qi">Correct QI</option>
-            <option value="polish-qi">Polish QI</option>
+            <!-- <option value="correct-qi">Correct QI</option>
+            <option value="polish-qi">Polish QI</option> -->
             <option value="meeting2text">Meeting to Text</option>
             <option value="paper2note">Paper to Note</option>
             <option value="txt2tex">Txt to TeX</option>
