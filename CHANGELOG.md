@@ -1,5 +1,16 @@
 # Backend Changelog
 
+## 0.8.5
+
+- Refactored codebase for improved modularity and efficiency
+- Simplified imports using 'import coauthor as coa' across all task files
+- Removed redundant code and consolidated shared functionality
+- Updated all task files to use new module structure
+- Improved error handling and logging
+- Enhanced code readability and maintainability
+- Updated reflection prompts to emphasize critical review
+- Various minor improvements and bug fixes
+
 ## 0.8.4
 
 - Implemented figure inputs support in the reflection round

@@ -580,7 +580,7 @@ def pack_latexdiff_vc(input_file, commit_hash, clean):
     """Pack or clean the files generated from latexdiff-vc."""
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-    
+
     if not clean:
         now = datetime.now().strftime("%Y%m%d%H%M")
         output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
@@ -590,7 +590,14 @@ def pack_latexdiff_vc(input_file, commit_hash, clean):
 
     # Build file extensions to delete
     delete_extensions = [
-        ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz",
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
     ]
 
     files_to_process = []

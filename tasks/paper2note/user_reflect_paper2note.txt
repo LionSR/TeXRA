@@ -1,6 +1,6 @@
 Your output lecture notes adapted from the research paper are too generic and not specific enough, with some parts of the paper missing from the notes
 
-After thoroughly reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
+After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
 <instruction>
 - Increase the level of detail from moderate (6/10) to high (9/10)
 - Ensure that all major mathematical formulations and derivations from the paper are covered in-depth, with clear explanations and step-by-step derivations.

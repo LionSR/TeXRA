@@ -1,4 +1,4 @@
-After thoroughly reviewing the original LaTeX document (under the <original_latex></original_latex> tag), the edited version of the document (under the <edited_latex></edited_latex> tag), and your generated merged document (under the <full_edited_latex></full_edited_latex> tag), please check that your output satisfies the following requirements:
+After thoroughly reviewing the original LaTeX document (under the <original_latex></original_latex> tag), the edited version of the document (under the <edited_latex></edited_latex> tag), and your generated merged document (under the <full_edited_latex></full_edited_latex> tag), please critically check that your output satisfies the following requirements:
 
 <requirements>
 - All changes and additions from the edited version are accurately incorporated.

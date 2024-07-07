@@ -1,5 +1,5 @@
 Your output draft paper does not closely match the proposed changes in the reply letter. In light of the new changes, the abstract, introduction, and the conclusion also needs to be updated accordingly.
-After thoroughly reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new version of the paper that satisfies the following requirements:
+After thoroughly reviewing and critically the paper, the cover letters, the report, the reply letter, and the example, write a new version of the paper that satisfies the following requirements:
 <requirements>
 - All the proposed changes mentioned in the reply letter have been implemented in the new version of the paper.
 - Make sure all the referee's comments (criticisms, or questions) have been addressed in the main text.

@@ -1,4 +1,4 @@
-Let's reflect on the changes made according to the givne instructions. Consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
+Let's critically reflect on the changes made according to the givne instructions. Consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
 <scratchpad>
 <reflection>
 1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?

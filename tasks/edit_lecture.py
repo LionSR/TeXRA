@@ -1,16 +1,7 @@
 from termcolor import colored
+import coauthor as coa
 
-import coauthor
-from coauthor.arg_utils import get_common_argparser
-from coauthor.file_utils import get_prompt_path
-from coauthor.tex_tools import run_latexdiff
-from coauthor.process import process_first_round, process_reflection_round
-from coauthor.prompt_utils import get_user_prefix_vars, handle_long_input, handle_single_input
-from coauthor.settings_utils import get_model_settings, get_output_settings, get_prompt_settings
-from coauthor.model_utils import get_model_client
-from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
-
-prompt_path = get_prompt_path(coauthor, "lecture")
+prompt_path = coa.get_prompt_path(coa, "lecture")
 
 all_task_settings = {
     "correct": {
@@ -41,7 +32,7 @@ all_task_settings = {
 
 
 def main():
-    parser = get_common_argparser()
+    parser = coa.get_common_argparser()
     parser.add_argument(
         "--task",
         type=str,
@@ -56,34 +47,34 @@ def main():
     task_shared = args.task.split("_")[0]
     task_sub = f"{task_shared}_{args.task.split('_')[1]}"
 
-    user_prefix_vars = get_user_prefix_vars(args)
-    user_prefix_vars["DOCUMENT_CLS"] = "lecture.cls"
-    user_prefix_vars["DOCUMENT_CLS_CONTENT"] = coauthor.read_file("lecture.cls")
-    user_prefix_vars["COMMANDS"] = "commands_qi.tex" if "qi" in args.task else "command.tex"
-    user_prefix_vars["COMMANDS_CONTENT"] = coauthor.read_file(user_prefix_vars["COMMANDS"])
+    user_prefix_vars = coa.get_user_prefix_vars(args)
+    user_prefix_vars.update(
+        {
+            "DOCUMENT_CLS": "lecture.cls",
+            "COMMANDS": "commands_qi.tex" if "qi" in args.task else "command.tex",
+        }
+    )
+    user_prefix_vars.update(
+        {
+            "DOCUMENT_CLS_CONTENT": coa.read_file(user_prefix_vars["DOCUMENT_CLS"]),
+            "COMMANDS_CONTENT": coa.read_file(user_prefix_vars["COMMANDS"]),
+        }
+    )
 
     task_settings = all_task_settings[task_shared]
-
-    model_settings = get_model_settings(args)
-    output_settings = get_output_settings(args, task_settings)
-    prompt_settings = get_prompt_settings(args, prompt_path, task_settings, task_sub)
-
-    # Handle figure_inputs separately
-    figure_inputs = args.figure_inputs
-    if isinstance(figure_inputs, str):
-        figure_inputs = figure_inputs.split(",")
-    elif not isinstance(figure_inputs, list):
-        figure_inputs = None
+    model_settings = coa.get_model_settings(args)
+    output_settings = coa.get_output_settings(args, task_settings)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, task_sub)
 
     if "long" in args.task:
-        handle_long_input(args, user_prefix_vars, prompt_settings)
+        coa.handle_long_input(args, user_prefix_vars, prompt_settings)
     else:
-        handle_single_input(args, user_prefix_vars, prompt_settings)
+        coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
-    client = get_model_client(model_settings["model"])
+    client = coa.get_model_client(model_settings["model"])
+    log_file_path = coa.log_start(args)
 
-    log_file_path = log_start(args)
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = process_first_round(
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = coa.process_first_round(
         client,
         args.task,
         args.input_file,
@@ -91,16 +82,16 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
-        figure_inputs=figure_inputs,
+        figure_inputs=args.figure_inputs,
     )
     if end_turn:
-        run_latexdiff(args.input_file, output_file)
+        coa.run_latexdiff(args.input_file, output_file)
 
-    log_output_files(output_file, log_file_path)
-    log_and_print_statistics(state, args.model, log_file_path)
+    coa.log_output_files(output_file, log_file_path)
+    coa.log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
-        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = process_reflection_round(
+        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = coa.process_reflection_round(
             client,
             args.task,
             args.input_file,
@@ -110,11 +101,11 @@ def main():
             output_settings=output_settings,
             prompt_settings=prompt_settings,
         )
-        log_output_files(output_file_reflect, log_file_path)
-        log_and_print_statistics(state, args.model, log_file_path)
+        coa.log_output_files(output_file_reflect, log_file_path)
+        coa.log_and_print_statistics(state, args.model, log_file_path)
         if end_turn_reflect:
-            run_latexdiff(args.input_file, output_file_reflect)
-            run_latexdiff(output_file, output_file_reflect, args.model)
+            coa.run_latexdiff(args.input_file, output_file_reflect)
+            coa.run_latexdiff(output_file, output_file_reflect, args.model)
 
 
 if __name__ == "__main__":
