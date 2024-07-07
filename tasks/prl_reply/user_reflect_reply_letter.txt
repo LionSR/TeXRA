@@ -1,5 +1,5 @@
 Your output (cover letter to the editor and the response letter to the referees) is too generic and not specific enough.
-After thoroughly reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new reply letter that satisfies the following requirements:
+After thoroughly and critically reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new reply letter that satisfies the following requirements:
 <requirements>
 - Increases the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
 - Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical arguement. 

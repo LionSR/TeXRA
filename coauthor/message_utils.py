@@ -73,6 +73,10 @@ def create_image_message(model, figure_inputs):
         figure_inputs = [figure_inputs]
 
     for figure_input in figure_inputs:
+        if not os.path.exists(figure_input):
+            print(f"Warning: File {figure_input} does not exist. Skipping.")
+            continue
+
         _, file_extension = os.path.splitext(figure_input)
         if file_extension.lower() == ".pdf":
             img_data = single_page_pdf_to_png(figure_input)
@@ -96,12 +100,10 @@ def create_image_message(model, figure_inputs):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
