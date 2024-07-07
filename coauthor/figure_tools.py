@@ -9,6 +9,10 @@ TIKZ_TEMPLATE = Template(
 \usepackage{tikz}
 \usepackage{pgfplots}
 \usetikzlibrary{positioning}
+\usetikzlibrary{patterns}
+\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}
+\usetikzlibrary{shapes, arrows}
+
 \begin{document}
 $tikzpicture
 \end{document}
@@ -99,8 +103,7 @@ def compile_latex_to_pdf(tex_file):
     try:
         output_directory = os.path.dirname(tex_file)
         result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file],
-            check=True, capture_output=True, text=True
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file], check=True, capture_output=True, text=True
         )
         print(f"Compiled {tex_file} successfully.")
     except subprocess.CalledProcessError as e:

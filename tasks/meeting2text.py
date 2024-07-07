@@ -1,14 +1,5 @@
 from termcolor import colored
-
-import coauthor
-from coauthor.arg_utils import get_common_argparser
-from coauthor.file_utils import get_prompt_path
-from coauthor.process import process_first_round, process_reflection_round
-from coauthor.prompt_utils import get_user_prefix_vars, handle_single_input
-from coauthor.settings_utils import get_model_settings, get_output_settings, get_prompt_settings
-from coauthor.model_utils import get_model_client
-from coauthor.log_utils import log_start, log_and_print_statistics, log_output_files
-
+import coauthor as coa
 
 all_tasks_settings = {
     "transcribe": {
@@ -19,11 +10,11 @@ all_tasks_settings = {
     },
 }
 
-prompt_path = get_prompt_path(coauthor, "meeting2text")
+prompt_path = coa.get_prompt_path(coa, "meeting2text")
 
 
 def main():
-    parser = get_common_argparser()
+    parser = coa.get_common_argparser()
     parser.add_argument("--context_file", type=str, required=True, help="Path to the file containing the context for the discussion transcript.")
     parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
     parser.add_argument("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
@@ -33,29 +24,29 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
-    user_prefix_vars = get_user_prefix_vars(args)
+    user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
-            "TRANSCRIPT": coauthor.read_file(args.input_file),
-            "CONTEXT": coauthor.read_file(args.context_file),
-            "EXAMPLE_TRANSCRIPT": coauthor.read_file(args.example_transcript) if args.example_transcript else "",
-            "EXAMPLE_EDITED_TRANSCRIPT": coauthor.read_file(args.example_edited_transcript) if args.example_edited_transcript else "",
+            "TRANSCRIPT": coa.read_file(args.input_file),
+            "CONTEXT": coa.read_file(args.context_file),
+            "EXAMPLE_TRANSCRIPT": coa.read_file(args.example_transcript) if args.example_transcript else "",
+            "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(args.example_edited_transcript) if args.example_edited_transcript else "",
         }
     )
 
     task_settings = all_tasks_settings[args.task]
 
-    log_file_path = log_start(args)
+    log_file_path = coa.log_start(args)
 
-    model_settings = get_model_settings(args)
-    output_settings = get_output_settings(args, task_settings)
-    prompt_settings = get_prompt_settings(args, prompt_path, task_settings, args.task)
+    model_settings = coa.get_model_settings(args)
+    output_settings = coa.get_output_settings(args, task_settings)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
 
-    handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
-    client = get_model_client(model_settings["model"])
+    client = coa.get_model_client(model_settings["model"])
 
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = process_first_round(
+    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = coa.process_first_round(
         client,
         args.task,
         args.input_file,
@@ -67,11 +58,11 @@ def main():
 
     print(colored(f"Output file: {output_file}", "yellow"))
 
-    log_output_files(output_file, log_file_path)
-    log_and_print_statistics(state, args.model, log_file_path)
+    coa.log_output_files(output_file, log_file_path)
+    coa.log_and_print_statistics(state, args.model, log_file_path)
 
     if args.reflect and end_turn:
-        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = process_reflection_round(
+        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = coa.process_reflection_round(
             client,
             args.task,
             args.input_file,
@@ -82,8 +73,8 @@ def main():
             prompt_settings=prompt_settings,
             use_prefill_from_input=False,
         )
-        log_output_files(output_file_reflect, log_file_path)
-        log_and_print_statistics(state, args.model, log_file_path)
+        coa.log_output_files(output_file_reflect, log_file_path)
+        coa.log_and_print_statistics(state, args.model, log_file_path)
 
 
 if __name__ == "__main__":
