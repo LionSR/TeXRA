@@ -93,14 +93,17 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
             aux_file = os.path.splitext(tex_file)[0] + ext
             if os.path.exists(aux_file):
                 os.remove(aux_file)
-    
+
     return compiled_files
 
 
 def compile_latex_to_pdf(tex_file):
     try:
         result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={os.path.dirname(tex_file)}", tex_file], check=True, capture_output=True, text=True
+            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={os.path.dirname(tex_file)}", tex_file],
+            check=True,
+            capture_output=True,
+            text=True,
         )
         print(f"Compiled {tex_file} successfully.")
     except subprocess.CalledProcessError as e:

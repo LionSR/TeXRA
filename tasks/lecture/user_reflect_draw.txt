@@ -1,4 +1,4 @@
-Let's reflect on the changes made to the figures. Based on this reflection, propose targeted refinements. Use the following format for thinking:
+Let's critically reflect on the changes made to the figures. Based on this reflection, propose targeted refinements. Use the following format for thinking:
 <scratchpad>
 <figure_analysis>
 your detailed analysis of the exisitng figure and how it compares with the provided image input
