@@ -403,7 +403,8 @@ def clean_build():
         if os.path.isdir(build_dir):
             for item in os.listdir(build_dir):
                 item_path = os.path.join(build_dir, item)
-                if os.path.isfile(item_path) and os.path.getsize(item_path) > 0:
+                # if os.path.isfile(item_path) and os.path.getsize(item_path) > 0:
+                if os.path.isfile(item_path):
                     os.remove(item_path)
                     print(f"Deleted: {item_path}")
                 elif os.path.isdir(item_path):
