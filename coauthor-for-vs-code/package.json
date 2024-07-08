@@ -154,5 +154,8 @@
   "bugs": {
     "url": "https://github.com/LionSR/coauthor-for-vs-code/issues"
   },
-  "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme"
+  "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
+  "dependencies": {
+    "jest-worker": "^29.7.0"
+  }
 }
