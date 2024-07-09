@@ -25,7 +25,7 @@ def get_tex_count(file_path):
         return None
 
 
-def run_latexdiff(input_file, output_file, model=None):
+def run_latexdiff(input_file, output_file, task, model=None):
     log_file_name = output_file.replace(".tex", "_log.txt")
     diff_file_name = output_file.replace(".tex", "_diff.tex")
 
@@ -49,6 +49,9 @@ def run_latexdiff(input_file, output_file, model=None):
         )[1].lstrip()
         with open(output_file, "w", encoding="utf-8") as file:
             file.write(output_content)
+
+    if "draw" in task:
+        return None
 
     # Run latexdiff
     latexdiff_command = f"latexdiff -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
