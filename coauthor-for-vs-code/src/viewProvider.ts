@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { listInputFiles, listAuxFiles, listFigureFiles, listRevisionFiles } from './utils';
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
@@ -142,6 +143,23 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'packLatexDiffVC':
           vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFilePath, message.commitHash, message.clean);
+          break;
+        case 'getCurrentFile':
+          const currentFilePath = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
+          if (currentFilePath) {
+            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentFilePath });
+          } else {
+            vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
+          }
+          break;
+        case 'getCurrentRevisionFile':
+          const inputFile = message.inputFile;
+          if (inputFile) {
+            const revisionFiles = await listRevisionFiles(inputFile);
+            webviewView.webview.postMessage({ command: 'setRevisionFiles', files: revisionFiles });
+          } else {
+            vscode.window.showInformationMessage('Please select an input file first.');
+          }
           break;
       }
     });
@@ -627,6 +645,18 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               clean: true
             });
           });
+          document.getElementById('currentFileButton').addEventListener('click', function() {
+            vscode.postMessage({
+              command: 'getCurrentFile'
+            });
+          });
+          document.getElementById('currentRevisionButton').addEventListener('click', function() {
+            const inputFile = document.getElementById('inputFileSelect').value;
+            vscode.postMessage({
+              command: 'getCurrentRevisionFile',
+              inputFile: inputFile
+            });
+          });
 
           // Save state on input changes
           document.getElementById('modelSelect').addEventListener('change', saveState);
@@ -852,6 +882,19 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 commitSelect.appendChild(option);
               });
               break;
+            case 'setCurrentFile':
+              const inputFileSelect_val = document.getElementById('inputFileSelect');
+              const options = Array.from(inputFileSelect_val.options);
+              const matchingOption = options.find(option => option.value === message.filePath);
+              if (matchingOption) {
+                inputFileSelect_val.value = message.filePath;
+                // Trigger change event to update related fields
+                inputFileSelect_val.dispatchEvent(new Event('change'));
+              } else {
+                // Print the name of the current file,
+                vscode.window.showInformationMessage('The current file is not in the input file list: ' + message.filePath);
+              }
+              break;
           }
           // Restore previous state
           restoreState();
@@ -902,6 +945,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           <div class="file-select-header">
             <label for="inputFileSelect">Select Input File:</label>
             <div class="file-select-buttons">
+              <button id="currentFileButton" class="small-button">Current</button>
               <button id="emptyMultipleFilesButton" class="small-button">Empty</button>
               <button id="selectMultipleFilesButton" class="small-button">Multiple</button>
             </div>
@@ -981,6 +1025,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <div class="file-select-header">
           <label for="revisionFileSelect">Select Revision File:</label>
           <div class="file-select-buttons">
+            <button id="currentRevisionButton" class="small-button">Current</button>
             <button id="latexDiffButton" class="small-button">latexdiff</button>
           </div>
         </div>
