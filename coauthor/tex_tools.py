@@ -25,7 +25,7 @@ def get_tex_count(file_path):
         return None
 
 
-def run_latexdiff(input_file, output_file, task, model=None):
+def run_latexdiff(input_file, output_file, task=None, model=None):
     log_file_name = output_file.replace(".tex", "_log.txt")
     diff_file_name = output_file.replace(".tex", "_diff.tex")
 
@@ -50,7 +50,7 @@ def run_latexdiff(input_file, output_file, task, model=None):
         with open(output_file, "w", encoding="utf-8") as file:
             file.write(output_content)
 
-    if "draw" in task:
+    if task is not None and "draw" in task:
         return None
 
     # Run latexdiff
