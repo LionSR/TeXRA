@@ -1,6 +1,13 @@
 # Change Log
 
 
+### [0.5.3]
+- Added "Current" button for quick selection of the currently open file as input
+- Added "Current" button to select the latest revision of the current input file
+- Implemented backend logic to support new file selection features
+- Updated UI to include new buttons and handle their functionality
+- Improved file path handling for better cross-platform compatibility
+
 ### [0.5.2]
 - Added "Clean" button for latexdiff-vc functionality
 - Updated packLatexDiffVC command to support cleaning option
