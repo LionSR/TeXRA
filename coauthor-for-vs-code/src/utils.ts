@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 
 export async function listInputFiles(): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', 'Versions', 'Diffs'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'preamble.tex', 'diff', 'draw']);
+    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', 'Versions'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'preamble.tex', 'diff', 'draw']);
   }
   return [];
 }
@@ -31,10 +32,13 @@ export async function listRevisionFiles(inputFileName?: string): Promise<string[
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    const files = await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex']);
+    const files = await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'Diffs']);
     if (inputFileName) {
-      const inputFileBaseName = inputFileName.split('.').slice(0, -1).join('.');
-      return files.filter(file => file.startsWith(inputFileBaseName) && file !== inputFileName);
+      const inputFileBaseName = path.basename(inputFileName, path.extname(inputFileName));
+      return files.filter(file => {
+        const fileBaseName = path.basename(file, path.extname(file));
+        return fileBaseName.startsWith(inputFileBaseName) && file !== inputFileName;
+      });
     }
     return files;
   }

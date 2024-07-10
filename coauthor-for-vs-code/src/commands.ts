@@ -342,6 +342,18 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
+    vscode.commands.registerCommand('coauthor.getCurrentFile', async () => {
+      const currentFile = vscode.window.activeTextEditor?.document;
+      if (currentFile && currentFile.uri.scheme === 'file') {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+          const workspacePath = workspaceFolders[0].uri.fsPath;
+          const relativePath = path.relative(workspacePath, currentFile.uri.fsPath);
+          return relativePath;
+        }
+      }
+      return null;
+    }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
 }
