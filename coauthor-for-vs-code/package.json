@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -119,7 +119,8 @@
             "_diff",
             "diff",
             "draw",
-            "Versions"
+            "Versions",
+            ".egg-info"
           ],
           "description": "Keywords to ignore when selecting files",
           "scope": "resource"
