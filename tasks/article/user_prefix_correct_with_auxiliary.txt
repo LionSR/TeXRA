@@ -5,12 +5,12 @@ Here is the LaTeX document with additional LaTeX auxiliary files (where has defi
 <documents>
     <document index="1">
         <source>{AUXILIARY_FILE}</source>
-    <document_content>
-        {AUXILIARY_CONTENT}
-    </document_content>
+        <document_content>
+            {AUXILIARY_CONTENT}
+        </document_content>
     <document index="2">
         <source>{INPUT_FILE}</source>
-    <document_content>
-        {INPUT_CONTENT}
-    </document_content>
+        <document_content>
+            {INPUT_CONTENT}
+        </document_content>
 </documents>
