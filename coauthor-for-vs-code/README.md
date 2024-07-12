@@ -21,7 +21,22 @@ The VS Code extension provides a user interface for interacting with the CoAutho
 
 ## Installation
 
-Follow these steps to install the necessary components for the extension:
+### Quick Installation (Recommended for most users)
+
+If you don't want to customize and recompile the frontend yourself, you can simply install the latest pre-built version:
+
+1. Open VS Code.
+2. Open the folder containing the CoAuthor extension (where the `releases` folder is located).
+3. In the VS Code file explorer, navigate to the `releases` folder.
+4. Find the newest `.vsix` file (e.g., `coauthor-0.5.6.vsix`).
+5. Right-click on the `.vsix` file.
+6. From the context menu, select "Install Extension VSIX".
+
+This method allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
+
+### Manual Installation (For developers or customization)
+
+If you want to customize or contribute to the extension, follow these steps:
 
 1. **Node.js and npm**: Ensure that Node.js and npm are installed on your system. Download them from [Node.js official site](https://nodejs.org/en/download/package-manager) and select the LTS version for stability.
 
@@ -55,18 +70,20 @@ Follow these steps to install the necessary components for the extension:
    npm run build
    ```
 
-6. Install the companion Python package (backend):
+### Installing the backend
 
-   ```bash
-   cd coauthor
-   pip install -e .
-   ```
+Install the companion Python package (backend):
 
-   See the README for the backend for more information.
+```bash
+cd coauthor
+pip install -e .
+```
+
+See the README for the backend [CoAuthor Backend README](../README.md). for more information.
 
 ## Usage
 
-CoAuthor provides several commands that can be accessed via the command palette:
+CoAuthor frontend provides several commands that can be accessed via the command palette:
 
 - `coauthor.cleanOutput`: Clean output files
 - `coauthor.cleanBuild`: Clean all build files
