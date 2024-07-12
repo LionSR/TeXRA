@@ -91,8 +91,10 @@ def extract_tikzpictures_with_labels(latex_file):
 
 def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
     standalone_content = TIKZ_TEMPLATE.substitute(tikzpicture=tikzpicture)
-
-    filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
+    if suffix is not None and suffix != "":
+        filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
+    else:
+        filename = os.path.join(build_dir, f"{label}.tex")
     with open(filename, "w") as file:
         file.write(standalone_content)
 
@@ -114,15 +116,10 @@ def compile_latex_to_pdf(tex_file):
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
-    # input_file = os.path.basename(latex_file)
-    # this is problematic...
-    # build_dir = os.path.join("Discrete-Time", "build", os.path.splitext(input_file)[0])
-    # os.makedirs(build_dir, exist_ok=True)
-
     input_dir = os.path.dirname(latex_file)
     input_filename = os.path.basename(latex_file)
     input_name = os.path.splitext(input_filename)[0]
-    build_dir = os.path.join(input_dir, f"build_{input_name}")
+    build_dir = os.path.join(input_dir, "build", f"{input_name}")
     os.makedirs(build_dir, exist_ok=True)
 
     print("Extracting TikZ pictures with labels...")
@@ -132,7 +129,10 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
 
     for label, tikzpictures in labeled_tikzpictures:
         for i, tikzpicture in enumerate(tikzpictures):
-            suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
+            if len(tikzpictures) > 1:
+                suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
+            else:
+                suffix = None
             tex_file = create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir)
             compile_latex_to_pdf(tex_file)
             compiled_files.append(os.path.splitext(tex_file)[0] + ".pdf")

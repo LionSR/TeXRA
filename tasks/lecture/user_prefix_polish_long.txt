@@ -10,14 +10,16 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
     </document_content>
     <document index="2">
         <source>{COMMANDS}</source>
-    <document_content>
-        {COMMANDS_CONTENT}
-    </document_content>
+        <document_content>
+            {COMMANDS_CONTENT}
+        </document_content>
+    </document>
     <document index="3">
         <source>{INPUT_FILE}</source>
-    <document_content>
-        {INPUT_CONTENT}
-    </document_content>
+        <document_content>
+            {INPUT_CONTENT}
+        </document_content>
+    </document>
     {ADDITIONAL_INPUT_FILES}
 </documents>
 

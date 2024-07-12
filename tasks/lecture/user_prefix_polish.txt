@@ -5,19 +5,22 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <documents>
     <document index="1">
         <source>{DOCUMENT_CLS}</source>
-    <document_content>
-        {DOCUMENT_CLS_CONTENT}
-    </document_content>
+        <document_content>
+            {DOCUMENT_CLS_CONTENT}
+        </document_content>
+    </document>
     <document index="2">
         <source>{COMMANDS}</source>
-    <document_content>
-        {COMMANDS_CONTENT}
-    </document_content>
+        <document_content>
+            {COMMANDS_CONTENT}
+        </document_content>
+    </document>
     <document index="3">
         <source>{INPUT_FILE}</source>
-    <document_content>
-        {INPUT_CONTENT}
-    </document_content>
+        <document_content>
+            {INPUT_CONTENT}
+        </document_content>
+    </document>
     {ADDITIONAL_INPUT_FILES}
 </documents>
 
@@ -27,4 +30,3 @@ Your task is to enhance this chapter focusing solely on the following specific i
 {INSTRUCTION}
 </instruction>
 Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
-
