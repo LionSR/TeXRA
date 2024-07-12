@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.8.8]
+
+- Refactored TikZ figure extraction process for improved file handling and compatibility
+- Updated user prefix templates for better consistency and XML formatting
+- Enhanced latexdiff functionality to include task-specific differentiation (a fix)
+- Simplified imports in various task files using 'import coauthor as coa'
+- Improved file path handling in figure extraction and compilation
+- Fixed XML formatting issues in user prefix templates
+- Various minor code improvements and bug fixes
+
 ## [0.8.7]
 
 - Refactored CLI and argument handling for improved modularity
