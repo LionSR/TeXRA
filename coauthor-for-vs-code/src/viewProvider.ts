@@ -375,6 +375,19 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         font-size: 12px;
         margin-bottom: 2px;
       }
+      
+      .instruction-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+
+      .instruction-header label {
+        font-size: 12px;
+        font-weight: bold;
+      }
+
       </style>
       <script>
         const vscode = acquireVsCodeApi();
@@ -494,6 +507,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             // Set the single figure file select to "None"
             document.getElementById('figureFileSelect').value = '';
             
+            saveState();
+          });
+          document.getElementById('emptyInstructionsButton').addEventListener('click', function() {
+            document.getElementById('taskInput').value = '';
             saveState();
           });
           document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
@@ -984,8 +1001,11 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       </div>
       <p>
         <div class="instruction-box">
-          <label for="taskInput">Specific Instructions:</label>
-          <textarea id="taskInput" placeholder="Gently correct mathematical mistakes and typos."></textarea>
+          <div class="instruction-header">
+            <label for="taskInput">Specific Instructions:</label>
+            <button id="emptyInstructionsButton" class="small-button">Empty</button>
+          </div>
+          <textarea id="taskInput" placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos.></textarea>
         </div>
         <div class="tool-use-execute">
         <div class="tool-use">
