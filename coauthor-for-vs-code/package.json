@@ -2,13 +2,15 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.5.5",
-  "publisher": "Sirui Lu",
+  "version": "0.5.6",
+  "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages",
+    "Linters",
+    "Formatters"
   ],
   "activationEvents": [
     "onView:coauthor"
@@ -16,6 +18,7 @@
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
+      "type": "object",
       "title": "CoAuthor",
       "properties": {
         "coauthor.includedDirectories": {
@@ -39,6 +42,24 @@
             "*_log.txt"
           ],
           "description": "File patterns to ignore when selecting files",
+          "scope": "resource"
+        },
+        "coauthor.tasks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "correct-tex",
+            "polish-tex",
+            "draw-tex",
+            "adapt-tex",
+            "write-tex",
+            "meeting2text",
+            "paper2note",
+            "txt2tex"
+          ],
+          "description": "List of available tasks",
           "scope": "resource"
         }
       }
