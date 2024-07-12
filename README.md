@@ -38,6 +38,31 @@ To ease the installation and usage of the front end + backend, we recommend usin
 
 We also recommend installing locally a tex live distribution with latexdiff, latexindent, latexdiff-vs installed.
 
+### Configuring Global Git Ignore
+
+We recommend adding the contents of `.gitignore.sample` to your global Git ignore file. This helps prevent unnecessary files from being tracked across all your Git repositories. Here's how to do it:
+
+1. First, check if you already have a global gitignore file:
+
+   ```bash
+   git config --global core.excludesfile
+   ```
+
+2. If you don't have one, create it:
+
+   ```bash
+   touch ~/.gitignore_global
+   git config --global core.excludesfile ~/.gitignore_global
+   ```
+
+3. Append the contents of `.gitignore.sample` to your global gitignore:
+
+   ```bash
+   cat .gitignore.sample >> ~/.gitignore_global
+   ```
+
+This will ensure that the files and patterns listed in `.gitignore.sample` are ignored across all your Git repositories, helping to keep your commits clean and focused on relevant changes.
+
 ## Usage
 
 ### CLI Commands

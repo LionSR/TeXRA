@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -21,7 +21,7 @@
       "type": "object",
       "title": "CoAuthor",
       "properties": {
-        "coauthor.includedDirectories": {
+        "coauthor.includedFigureDirectories": {
           "type": "array",
           "items": {
             "type": "string"
@@ -30,18 +30,22 @@
             "Discrete-Time",
             "FiguresEx"
           ],
-          "description": "Directories to include in the figure path",
+          "description": "Directories to include in the figure path when selecting multiple figures",
           "scope": "resource"
         },
-        "coauthor.ignoredFilePatterns": {
+        "coauthor.includedFigureExtensions": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [
-            "*_log.txt"
+            ".png",
+            ".pdf",
+            ".jpeg",
+            ".jpg",
+            ".svg"
           ],
-          "description": "File patterns to ignore when selecting files",
+          "description": "File extensions to include when listing figure files",
           "scope": "resource"
         },
         "coauthor.tasks": {
@@ -60,6 +64,76 @@
             "txt2tex"
           ],
           "description": "List of available tasks",
+          "scope": "resource"
+        },
+        "coauthor.ignoredFileExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".pdf",
+            ".bst",
+            ".bib",
+            ".cls",
+            ".sty",
+            ".json",
+            ".py",
+            ".ipynb",
+            ".png",
+            ".vsix",
+            ".ts",
+            ".js"
+          ],
+          "description": "File extensions to ignore when listing text files",
+          "scope": "resource"
+        },
+        "coauthor.ignoredDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "build",
+            "node_modules",
+            "figures",
+            "Figs",
+            "__pycache__",
+            "Figures",
+            "figs",
+            "Versions"
+          ],
+          "description": "Directories to ignore when listing files",
+          "scope": "resource"
+        },
+        "coauthor.ignoredKeywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "_log_",
+            "Makefile",
+            "template",
+            "_log",
+            "_diff",
+            "diff",
+            "draw",
+            "Versions"
+          ],
+          "description": "Keywords to ignore when selecting files",
+          "scope": "resource"
+        },
+        "coauthor.ignoredInputFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "command.tex",
+            "preamble.tex"
+          ],
+          "description": "Files to ignore when listing input, sample, and revision files, but not auxiliary files",
           "scope": "resource"
         }
       }

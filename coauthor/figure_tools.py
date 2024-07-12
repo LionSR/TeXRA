@@ -114,11 +114,20 @@ def compile_latex_to_pdf(tex_file):
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
-    input_file = os.path.basename(latex_file)
-    build_dir = os.path.join("Discrete-Time", "build", os.path.splitext(input_file)[0])
+    # input_file = os.path.basename(latex_file)
+    # this is problematic...
+    # build_dir = os.path.join("Discrete-Time", "build", os.path.splitext(input_file)[0])
+    # os.makedirs(build_dir, exist_ok=True)
+
+    input_dir = os.path.dirname(latex_file)
+    input_filename = os.path.basename(latex_file)
+    input_name = os.path.splitext(input_filename)[0]
+    build_dir = os.path.join(input_dir, f"build_{input_name}")
     os.makedirs(build_dir, exist_ok=True)
 
+    print("Extracting TikZ pictures with labels...")
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
+    print(f"Found {len(labeled_tikzpictures)} labeled TikZ pictures.")
     compiled_files = []
 
     for label, tikzpictures in labeled_tikzpictures:
