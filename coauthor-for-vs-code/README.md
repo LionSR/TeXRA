@@ -1,29 +1,21 @@
-# CoAuthor Front End
+# CoAuthor Frontend (VS Code Extension)
 
-## VS Code Extension
-
-The VS Code extension provides a user interface for interacting with the CoAuthor backend. It includes features such as:
-
-- File selection for input, auxiliary, and figure files
-- Task selection (e.g., correct, polish, draw)
-- Model selection
-- Execution of CoAuthor commands
-- LaTeX diff functionality
-- Housekeeping operations (clean output, clean build, indent TeX)
+This is the frontend component of the CoAuthor project, a Visual Studio Code extension that provides a user-friendly interface for interacting with the CoAuthor backend.
 
 ## Features
 
-- **AI-Powered Assistance**: Leverage the power of large language models to get intelligent suggestions and help with your coding and writing tasks.
-- **Multiple File Support**: Work with multiple input files simultaneously for complex projects.
-- **LaTeX Integration**: Special support for LaTeX documents, including diff functionality and figure extraction.
-- **Customizable Settings**: Tailor the prompt to your needs with configurable settings.
-- **Version Control Integration**: Easily access and compare recent commits in your project.
+- File selection for input, auxiliary, and figure files
+- Task and model selection
+- Execution of CoAuthor commands directly from VS Code
+- LaTeX diff visualization
+- Housekeeping operations (clean output, clean build, indent TeX)
+- Customizable settings
 
 ## Installation
 
-### Quick Installation (Recommended for most users)
+For quick installation, refer to the [main README](../README.md).
 
-If you don't want to customize and recompile the frontend yourself, you can simply install the latest pre-built version:
+For manual installation or development setup:
 
 1. Open VS Code.
 2. Open the folder containing the CoAuthor extension (where the `releases` folder is located).
@@ -70,37 +62,24 @@ If you want to customize or contribute to the extension, follow these steps:
    npm run build
    ```
 
-### Installing the backend
-
-Install the companion Python package (backend):
-
-```bash
-cd coauthor
-pip install -e .
-```
-
-See the README for the backend [CoAuthor Backend README](../README.md). for more information.
-
 ## Usage
 
-CoAuthor frontend provides several commands that can be accessed via the command palette:
+CoAuthor frontend provides several commands that can be accessed via the command palette (Ctrl+Shift+P or Cmd+Shift+P on macOS):
 
-- `coauthor.cleanOutput`: Clean output files
-- `coauthor.cleanBuild`: Clean all build files
-- `coauthor.indentTex`: Indent TeX files
-- `coauthor.packSingle`: Pack a single file
-- `coauthor.cleanSingle`: Clean a single file
-- `coauthor.latexDiff`: Generate LaTeX diff
-- `coauthor.latexDiffVC`: Generate LaTeX diff with version control
-- `coauthor.getRecentCommits`: Get recent commits
-- `coauthor.refreshCommits`: Refresh commit information
-- `coauthor.selectMultipleFiles`: Select multiple input files
-- `coauthor.selectInputFile`: Select an input file
-- `coauthor.selectAuxFile`: Select an auxiliary file
-- `coauthor.selectFigureFile`: Select a figure file
-- `coauthor.execute`: Execute a task
-
-## Customization
+- `CoAuthor: Clean Output Files`
+- `CoAuthor: Clean Build Files`
+- `CoAuthor: Indent TeX Files`
+- `CoAuthor: Pack Single File`
+- `CoAuthor: Clean Single File`
+- `CoAuthor: Generate LaTeX Diff`
+- `CoAuthor: Generate LaTeX Diff (Version Control)`
+- `CoAuthor: Get Recent Commits`
+- `CoAuthor: Refresh Commit Information`
+- `CoAuthor: Select Multiple Input Files`
+- `CoAuthor: Select Input File`
+- `CoAuthor: Select Auxiliary File`
+- `CoAuthor: Select Figure File`
+- `CoAuthor: Execute Task`
 
 ### Customizing Tasks
 
@@ -138,8 +117,3 @@ Users can customize the included directories by modifying their VS Code settings
   "coauthor.includedDirectories": ["Discrete-Time", "FiguresEx", "AnotherDirectory"]
 }
 ```
-
-## Known Issues
-
-- If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name.
-- Make sure your VS code installation is newer than 1.89.0.

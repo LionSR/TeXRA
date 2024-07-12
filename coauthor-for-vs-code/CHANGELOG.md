@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.5.7]
+
+- Removed unused `autoMergePartialOutput` option
+- Updated main README with clearer project overview and installation instructions
+- Revised frontend README with more detailed usage instructions
+- Minor UI improvements and code cleanup
+
 ## [0.5.6]
 
 - Implemented customizable tasks feature in VS Code settings

@@ -252,7 +252,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, autoMergePartialOutput: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -312,9 +312,6 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       if (includeTikzReflection) {
         command += ' --include_tikz_reflection';
-      }
-      if (autoMergePartialOutput) {
-        command += ' --auto_merge_partial_output';
       }
       if (includeTexCount) {
         command += ' --include_tex_count';

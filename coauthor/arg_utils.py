@@ -53,7 +53,6 @@ def get_common_argparser():
     parser.add_argument("--instruction", type=str, default=None, help="The specific instruction or the hints to be followed.")
     parser.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
     parser.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ figure paths from the input file")
-    parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
     parser.add_argument("--include_tikz_reflection", action="store_true", help="Include TikZ reflection in the output")
-    parser.add_argument("--auto_merge_partial_output", action="store_true", help="Automatically merge partial output files")
+    parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
     return parser
