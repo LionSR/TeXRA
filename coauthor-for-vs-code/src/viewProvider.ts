@@ -25,14 +25,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'execute':
           const task_val = message.task;
+          const model_val = message.model;
+          const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
+          const additionalInputFiles_val = message.additionalInputFiles;
           const sampleFiles_val = message.sampleFiles;
           const auxFiles_val = message.auxFiles;
-          const instructions_val = message.instructions;
-          const reflect_val = message.reflect;
-          const model_val = message.model;
-          const additionalInputFiles_val = message.additionalInputFiles;
           const figureFiles_val = message.figureFiles;
+
+          const instructions_val = message.instructions;
+
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
           const includeTikzReflection_val = message.includeTikzReflection;
@@ -783,7 +785,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('sampleFileSelect').value = previousState.sampleFileSelect || '';
             document.getElementById('revisionFileSelect').value = previousState.revisionFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
-            document.getElementById('reflectSelect').value = previousState.reflectSelect || 'default';
+            document.getElementById('reflectSelect').value = previousState.reflectSelect || 'True';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
             document.getElementById('autoExtractFigure').checked = previousState.autoExtractFigure || false;
             document.getElementById('autoExtractTikzFigure').checked = previousState.autoExtractTikzFigure || false;
@@ -1026,6 +1028,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             <option value="polish-tex">Polish</option>
             <option value="draw-tex">Draw</option>
             <option value="adapt-tex">Adapt</option>
+            <option value="write-tex">Write</option>
             <option value="correct-st">Correct(Lect)</option>
             <option value="polish-st">Polish(Lect)</option>
             <option value="draw-st">Draw(Lect)</option>
@@ -1049,7 +1052,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <div class="select-group">
           <label for="reflectSelect">Reflect:</label>
           <select id="reflectSelect">
-            <option value="default">Default</option>
             <option value="True">True</option>
             <option value="False">False</option>
           </select>
