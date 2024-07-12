@@ -12,6 +12,7 @@ all_task_settings = {
         "system_prompt_file": "system_prompt_correct.txt",
         "user_prefix_file": "user_prefix_correct.txt",
         "user_request_file": "user_request_correct.txt",
+        "user_reflect_file": "user_reflect_correct.txt",
     },
     "polish": {
         "document_tag": "latex_document",
@@ -33,17 +34,22 @@ all_task_settings = {
         "user_request_file": "user_request_draw.txt",
         "user_reflect_file": "user_reflect_draw.txt",
     },
+    "write": {
+        "document_tag": "cover_letter",
+        "end_tag": "</cover_letter>",
+        "output_type": "tex",
+        "prefill_first": "<scratchpad>",
+        "system_prompt_file": "system_prompt_write.txt",
+        "user_prefix_file": "user_prefix_write.txt",
+        "user_request_file": "user_request_write.txt",
+        "user_reflect_file": "user_reflect_write.txt",
+    },
 }
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument(
-        "--task",
-        type=str,
-        default="correct",
-        choices=["correct", "polish", "draw", "polish_long", "draw_long"],
-    )
+    parser.add_argument("--task", type=str, default="correct", choices=["correct", "polish", "draw", "polish_long", "draw_long", "write"])
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
@@ -76,7 +82,7 @@ def main():
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    if end_turn:
+    if end_turn and task_settings["output_type"] == "txt":
         coa.run_latexdiff(args.input_file, output_file, args.task)
 
     coa.log_output_files(output_file, log_file_path)
@@ -95,7 +101,7 @@ def main():
         )
         coa.log_output_files(output_file_reflect, log_file_path)
         coa.log_and_print_statistics(state, args.model, log_file_path)
-        if end_turn_reflect:
+        if end_turn_reflect and task_settings["output_type"] == "txt":
             coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
             coa.run_latexdiff(output_file, output_file_reflect, args.model)
 
