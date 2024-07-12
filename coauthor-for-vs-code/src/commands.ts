@@ -35,6 +35,35 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
+    vscode.commands.registerCommand('coauthor.selectMultipleSampleFiles', async (currentSampleFile: string) => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      const defaultUri = currentSampleFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentSampleFile)))
+        : vscode.Uri.file(workspacePath);
+
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Sample Files',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Text files': ['tex', 'txt']
+        }
+      });
+      if (fileUris && fileUris.length > 0) {
+        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        vscode.window.showInformationMessage(`Selected sample files: ${relativePaths.join(', ')}`);
+        return relativePaths;
+      }
+      return null;
+    }),
     vscode.commands.registerCommand('coauthor.selectMultipleAuxFiles', async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
@@ -105,16 +134,16 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.packSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
+    vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor pack-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
+      terminal.sendText(`coauthor pack-single ${inputFile} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
-    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFilePath: string, commitHash: string, clean: boolean = false) => {
+    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFile: string, commitHash: string, clean: boolean = false) => {
       const terminal = ensureTerminal();
       terminal.show();
       const cleanFlag = clean ? '--clean' : '';
-      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFilePath} ${commitHash} ${cleanFlag}`);
+      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFile} ${commitHash} ${cleanFlag}`);
     }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       const terminal = ensureTerminal();
@@ -131,23 +160,23 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFilePath: string, task: string, reflect: string, model: string) => {
+    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor clean-single ${inputFilePath} --task=${task} --reflect=${reflect} --model=${model}`);
+      terminal.sendText(`coauthor clean-single ${inputFile} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
-    vscode.commands.registerCommand('coauthor.latexDiff', (inputFilePath: string, revisionFilePath: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, revisionFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      const revisionFileName = revisionFilePath.split('/').pop();
+      const revisionFileName = revisionFile.split('/').pop();
       const baseName = revisionFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}_diff.tex`;
-      const inputSubdirectory = inputFilePath.substring(0, inputFilePath.lastIndexOf('/'));
+      const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      terminal.sendText(`coauthor latexdiff ${inputFilePath} ${revisionFilePath}`);
+      terminal.sendText(`coauthor latexdiff ${inputFile} ${revisionFile}`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -170,19 +199,19 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
-    vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFilePath: string, commitHash: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFile: string, commitHash: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      const inputFileName = inputFilePath.split('/').pop();
+      const inputFileName = inputFile.split('/').pop();
       const baseName = inputFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}-diff${commitHash}.tex`;
-      const inputSubdirectory = inputFilePath.substring(0, inputFilePath.lastIndexOf('/'));
+      const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFilePath}`);
-      terminal.sendText(`coauthor latexdiff-vc ${inputFilePath} ${commitHash}`);
+      // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFile}`);
+      terminal.sendText(`coauthor latexdiff-vc ${inputFile} ${commitHash}`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -223,12 +252,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFilePath: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, autoMergePartialOutput: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, autoMergePartialOutput: boolean) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
 
-      let command = `coauthor ${task} ${inputFilePath}`;
+      let command = `coauthor ${task} ${inputFile}`;
 
       if (additionalInputFiles && additionalInputFiles.length > 0) {
         command += ` --input_files="${additionalInputFiles.join(',')}"`;
@@ -248,6 +277,15 @@ export function registerCommands(context: vscode.ExtensionContext) {
           command += ` --figure_inputs="${figureFileList[0]}"`;
         } else if (figureFileList.length > 1) {
           command += ` --figure_inputs="${figureFileList.join(',')}"`;
+        }
+      }
+
+      if (sampleFiles) {
+        const sampleFileList = Array.isArray(sampleFiles) ? sampleFiles : [sampleFiles];
+        if (sampleFileList.length === 1) {
+          command += ` --sample_files="${sampleFileList[0]}"`;
+        } else if (sampleFileList.length > 1) {
+          command += ` --sample_files="${sampleFileList.join(',')}"`;
         }
       }
 
@@ -310,6 +348,35 @@ export function registerCommands(context: vscode.ExtensionContext) {
         const relativePath = path.relative(workspacePath, fileUri[0].fsPath);
         vscode.window.showInformationMessage(`Selected file: ${relativePath}`);
         return relativePath;
+      }
+      return null;
+    }),
+    vscode.commands.registerCommand('coauthor.selectMultipleSampleFile', async (currentSampleFile: string) => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return null;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      const defaultUri = currentSampleFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentSampleFile)))
+        : vscode.Uri.file(workspacePath);
+
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Select Sample File',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Text files': ['tex', 'txt']
+        }
+      });
+      if (fileUris && fileUris.length > 0) {
+        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
+        vscode.window.showInformationMessage(`Selected sample file: ${relativePaths.join(', ')}`);
+        return relativePaths;
       }
       return null;
     }),

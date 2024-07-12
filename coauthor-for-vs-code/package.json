@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "publisher": "Sirui Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -20,18 +20,26 @@
       "properties": {
         "coauthor.includedDirectories": {
           "type": "array",
+          "items": {
+            "type": "string"
+          },
           "default": [
             "Discrete-Time",
             "FiguresEx"
           ],
-          "description": "Directories to include in the figure path"
+          "description": "Directories to include in the figure path",
+          "scope": "resource"
         },
         "coauthor.ignoredFilePatterns": {
           "type": "array",
+          "items": {
+            "type": "string"
+          },
           "default": [
             "*_log.txt"
           ],
-          "description": "File patterns to ignore when selecting files"
+          "description": "File patterns to ignore when selecting files",
+          "scope": "resource"
         }
       }
     },

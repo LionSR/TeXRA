@@ -38,6 +38,7 @@ def shared_arguments(func):
         click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
         click.option("--input_files", default=None, help="Path to the multiple input files"),
+        click.option("--sample_files", default=None, help="Path to the multiple sample files"),
         click.option("--auxiliary_files", default=None, help="Path to the auxiliary file"),
         click.option(
             "--figure_inputs",
