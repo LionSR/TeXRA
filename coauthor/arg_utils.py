@@ -33,6 +33,12 @@ def get_common_argparser():
         help="Path to additional input files. Multiple files can be specified.",
     )
     parser.add_argument(
+        "--sample_files",
+        type=comma_separated_list,
+        default=[],
+        help="Path to the sample file(s). Multiple files can be specified.",
+    )
+    parser.add_argument(
         "--auxiliary_files",
         type=comma_separated_list,
         default=[],

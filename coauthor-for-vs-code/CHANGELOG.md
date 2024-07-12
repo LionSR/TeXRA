@@ -1,5 +1,16 @@
 # Frontend Changelog
 
+### [0.5.5]
+
+- Added support for sample file selection in the UI
+- Implemented backend functionality for handling sample files
+- Updated task options to include "Adapt" for both TeX and ST
+- Improved file handling and diff operations
+- Enhanced UI with better descriptions and layout
+- Fixed issues with multiple file selection
+- Optimized state management for selected files
+- Various minor UI improvements and bug fixes
+
 ### [0.5.4]
 
 - Added a "Empty" button for cleaning up the specific instructions
