@@ -118,4 +118,155 @@ To modify existing prompts:
 
 Remember to follow the existing code structure and conventions when adding new tasks or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
 
-For any issues or feature requests related to the backend, please open an issue in the GitHub repository.
+## Task Execution Logic
+
+CoAuthor's task execution follows a sophisticated process inspired by advanced AI reasoning techniques such as Chain of Thought (CoT) and Reasoning and Acting (ReAct). This approach allows for more nuanced, multi-step problem solving and self-correction.
+
+### Basic Execution Flow
+
+1. **Input Processing**: The program reads the input file and any additional files specified (e.g., auxiliary files, figure inputs).
+
+2. **Initial Generation**: Based on the task type and input, the AI model generates an initial output. This output is saved as the first version of the result.
+
+3. **Continuation Handling**: If the initial generation is incomplete (e.g., due to token limits), the program automatically continues the generation in chunks. Each chunk is appended to the output file, ensuring a cohesive final result.
+
+4. **Output Files**: Several files are generated during this process:
+   - Main output file (e.g., `input_file_task_model.tex`)
+   - Log file (e.g., `input_file_log.txt`) containing execution details and statistics
+
+### Reflection Mechanism
+
+If the `--reflect` option is enabled, CoAuthor implements a self-reflection step, similar to the introspection phase in ReAct:
+
+1. **Reflection Generation**: After the initial output, the AI model reviews its work and generates reflections on potential improvements.
+
+2. **Refinement**: Based on these reflections, the model produces a refined version of the output.
+
+3. **Additional Output Files**:
+   - Reflection output file (e.g., `input_file_task_reflect_model.tex`)
+   - Updated log file with reflection statistics
+
+This reflection process embodies the principle of Chain of Thought, allowing the AI to explicitly reason about its own output and make improvements.
+
+### LaTeX Diff Generation
+
+To facilitate easy comparison between versions, CoAuthor automatically generates LaTeX diff files:
+
+1. **Initial Diff**: A diff between the original input and the first output is generated (e.g., `input_file_task_model_diff.tex`).
+
+2. **Reflection Diff**: If reflection is enabled, additional diffs are created:
+   - Between the original input and the reflected output
+   - Between the initial output and the reflected output
+
+These diff files use `latexdiff` to highlight changes, making it easy for users to review modifications.
+
+### Design Principles
+
+The multi-stage execution process in CoAuthor, including the reflection mechanism, is inspired by advanced AI reasoning frameworks:
+
+1. **Chain of Thought (CoT)**: By allowing the AI to generate, then reflect, and then refine, we implement a form of explicit reasoning. This mimics the CoT approach, where intermediate steps of thinking are made explicit, leading to more accurate and thoughtful outputs.
+
+2. **ReAct (Reasoning and Acting)**: The reflection stage is analogous to the "Reflect" step in the ReAct framework. It allows the AI to introspect on its own output, identify potential issues or improvements, and then act on those reflections in the refinement stage.
+
+3. **Iterative Refinement**: The continuation handling and reflection processes implement a form of iterative refinement, allowing the AI to build upon and improve its initial outputs.
+
+This design allows CoAuthor to produce more thoughtful, accurate, and refined outputs, especially for complex tasks like academic writing and LaTeX document processing.
+
+## Advanced Features
+
+### Figure and TikZ Extraction
+
+CoAuthor can automatically extract and process figures from your LaTeX documents:
+
+- Use `--auto_extract_figure` to automatically extract figure paths from the input file.
+- Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file.
+
+Example:
+```bash
+coauthor polish-tex --input_file your_file.tex --auto_extract_figure --auto_extract_tikz_figure
+```
+
+### Multiple Input Files
+
+For complex projects, CoAuthor supports processing multiple input files:
+
+```bash
+coauthor polish-tex --input_file main.tex --input_files chapter1.tex,chapter2.tex
+```
+
+### Tex Count Integration
+
+CoAuthor can provide LaTeX document statistics using the `texcount` tool:
+
+```bash
+coauthor tex-count your_file.tex
+```
+
+This command will output statistics like word count, number of headers, number of floats, etc.
+
+## Task-Specific Features
+
+### Meeting Transcription (meeting2text)
+
+CoAuthor can improve and structure meeting transcripts:
+
+```bash
+coauthor meeting2text --input_file transcript.txt --context_file context.txt
+```
+
+The `context_file` should contain information about the meeting participants and topic.
+
+### Paper to Lecture Notes Conversion (paper2note)
+
+Convert research papers into lecture notes:
+
+```bash
+coauthor paper2note --input_file paper.tex --sample_chapters chapter1.tex,chapter2.tex --sample_paper sample_paper.tex --sample_note sample_note.tex
+```
+
+## Version Control Integration
+
+CoAuthor integrates with version control systems:
+
+- Use `coauthor latexdiff input.tex revision.tex` to generate a diff between two LaTeX files.
+- Use `coauthor latexdiff-vc input.tex commit_hash` to generate a diff against a specific git commit.
+
+## Cleaning and Packing
+
+CoAuthor provides utilities for cleaning up and packing your work:
+
+- `coauthor clean-output`: Cleans up output files.
+- `coauthor clean-build`: Cleans up build directories.
+- `coauthor pack-single input.tex --task polish --model opus`: Packs the output files for a specific task into a versioned folder.
+
+## Environment Variables
+
+CoAuthor uses the following environment variables:
+
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `ANTHROPIC_API_KEY`: Your Anthropic API key
+- `MODEL`: Default model to use (e.g., "opus", "gpt4o")
+- `PROMPT_DIR`: Directory containing prompt files
+- `LATEXINDENT_CONFIG`: Path to custom latexindent configuration file
+
+These can be set in your `.env` file or your system's environment variables.
+
+## Code Structure
+
+The main logic for CoAuthor is distributed across several Python files:
+
+- `coauthor/cli.py`: Defines the command-line interface
+- `coauthor/process.py`: Contains the core logic for processing tasks
+- `coauthor/model_utils.py`: Utilities for interacting with AI models
+- `coauthor/file_utils.py`: File handling utilities
+- `coauthor/tex_tools.py`: LaTeX-specific utilities
+
+Task-specific logic is contained in individual files in the `tasks/` directory, such as `tasks/edit_tex.py`, `tasks/prl_reply.py`, etc.
+
+## Extending CoAuthor
+
+To add a new task to CoAuthor:
+
+1. Create a new Python file in the `tasks/` directory
+2. Define your task logic, following the pattern in existing task files
+3. Add necessary prompt files in a subdirectory of `tasks/`
