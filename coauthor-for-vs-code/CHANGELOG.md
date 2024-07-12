@@ -1,5 +1,14 @@
 # Frontend Changelog
 
+### [0.5.6]
+
+- Implemented customizable tasks feature in VS Code settings
+- Updated README with instructions for task customization
+- Refactor task selection in WebView to use customizable tasks
+- Bump version to 0.5.6
+- Update package.json with new categories and publisher name
+- Various minor improvements and bug fixes
+
 ### [0.5.5]
 
 - Added support for sample file selection in the UI
@@ -12,7 +21,6 @@
 - Various minor UI improvements and bug fixes
 
 ### [0.5.4]
-
 - Added a "Empty" button for cleaning up the specific instructions
 
 ### [0.5.3]
