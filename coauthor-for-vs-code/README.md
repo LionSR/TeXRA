@@ -1,8 +1,15 @@
-# Coauthor README
+# CoAuthor Front End
 
-## Usage
+## VS Code Extension
 
-CoAuthor is a powerful VS Code extension designed to assist developers and researchers in their coding and writing tasks. It provides a seamless integration with large language models to enhance productivity and streamline workflows.
+The VS Code extension provides a user interface for interacting with the CoAuthor backend. It includes features such as:
+
+- File selection for input, auxiliary, and figure files
+- Task selection (e.g., correct, polish, draw)
+- Model selection
+- Execution of CoAuthor commands
+- LaTeX diff functionality
+- Housekeeping operations (clean output, clean build, indent TeX)
 
 ## Features
 
@@ -12,7 +19,7 @@ CoAuthor is a powerful VS Code extension designed to assist developers and resea
 - **Customizable Settings**: Tailor the prompt to your needs with configurable settings.
 - **Version Control Integration**: Easily access and compare recent commits in your project.
 
-## Installation Guide
+## Installation
 
 Follow these steps to install the necessary components for the extension:
 
@@ -48,40 +55,16 @@ Follow these steps to install the necessary components for the extension:
    npm run build
    ```
 
-6. **Install the Companion Python Package**:
+6. Install the companion Python package (backend):
 
    ```bash
    cd coauthor
    pip install -e .
    ```
 
-7. **Put your OpenAI/ANTHROPIC API Key environment variable**:
+   See the README for the backend for more information.
 
-   ```bash
-   export OPENAI_API_KEY="your_openai_api_key"
-   export ANTHROPIC_API_KEY="your_anthropic_api_key"
-   ```
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-- `myExtension.enable`: Enable/disable this extension.
-- `myExtension.thing`: Set to `blah` to do something.
-
-Users can customize the included directories by modifying their VS Code settings, either in the UI or in their settings.json file:
-
-```json
-{
-  "coauthor.includedDirectories": ["Discrete-Time", "FiguresEx", "AnotherDirectory"]
-}
-```
-
-## Commands
+## Usage
 
 CoAuthor provides several commands that can be accessed via the command palette:
 
@@ -100,14 +83,45 @@ CoAuthor provides several commands that can be accessed via the command palette:
 - `coauthor.selectFigureFile`: Select a figure file
 - `coauthor.execute`: Execute a task
 
+## Customization
+
+### Customizing Tasks
+
+You can customize the list of available tasks in your VS Code settings:
+
+1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`).
+2. Search for "CoAuthor" in the settings search bar.
+3. Look for the "Coauthor: Tasks" setting.
+4. Edit the task list to add, remove, or modify tasks.
+
+Example custom task list:
+
+```json
+"coauthor.tasks": [
+  "correct-tex",
+  "polish-tex",
+  "draw-tex",
+  "adapt-tex",
+  "write-tex",
+  "meeting2text",
+  "paper2note",
+  "txt2tex",
+  "correct-st",
+  "polish-st",
+  "draw-st"
+]
+```
+
+### Extension Settings
+
+Users can customize the included directories by modifying their VS Code settings:
+
+```json
+{
+  "coauthor.includedDirectories": ["Discrete-Time", "FiguresEx", "AnotherDirectory"]
+}
+```
+
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-- [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name.
