@@ -1,5 +1,12 @@
 # Backend Changelog
 
+## [0.8.7]
+
+- Refactored CLI and argument handling for improved modularity
+- Removed unused `autoMergePartialOutput` option
+- Adjusted log output formatting
+- Minor code cleanup and improvements
+
 ## [0.8.6]
 
 - Added 'write-tex' command to CLI
