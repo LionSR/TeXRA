@@ -1,29 +1,37 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+function getConfig() {
+  return vscode.workspace.getConfiguration('coauthor');
+}
+
 export async function listInputFiles(): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', 'Versions'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'preamble.tex', 'diff', 'draw']);
+    const config = getConfig();
+    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
+    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
+    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') || [];
+    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ignoredExtensions, ignoredDirectories, ignoredKeywords, ignoredInputFiles);
   }
   return [];
 }
 
 export async function listSampleFiles(): Promise<string[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const workspacePath = workspaceFolders[0].uri.fsPath;
-    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', 'Versions'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'preamble.tex', 'diff', 'draw']);
-  }
-  return [];
+  return listInputFiles(); // Same logic as listInputFiles
 }
 
 export async function listAuxFiles(): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    return await getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ['.bst', '.bib', '.pdf', '.sty', '.py', '.json', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['_log_', 'Makefile', 'template', '_log', '_diff', 'draw']);
+    const config = getConfig();
+    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
+    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
+    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    return await getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, ignoredKeywords);
   }
   return [];
 }
@@ -32,7 +40,11 @@ export async function listFigureFiles(): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    return await getFilesRecursively(workspacePath, workspacePath, ['.png', '.pdf', '.jpeg'], ['.txt', '.tex', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.vslx', '.ts', '.js'], ['build', 'node_modules', '__pycache__', "Versions"], ['_log', 'Makefile', 'template', '_diff']);
+    const config = getConfig();
+    const includedFigureExtensions = config.get<string[]>('includedFigureExtensions') || ['.png', '.pdf', '.jpeg', '.jpg', '.svg'];
+    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
+    return await getFilesRecursively(workspacePath, workspacePath, includedFigureExtensions, [], ignoredDirectories, ignoredKeywords);
   }
   return [];
 }
@@ -41,7 +53,12 @@ export async function listRevisionFiles(inputFileName?: string): Promise<string[
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    const files = await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ['.pdf', '.bst', '.bib', '.cls', '.sty', '.json', '.py', '.ipynb', '.png', '.pdf', '.vslx', '.ts', '.js'], ['build', 'node_modules', 'figures', 'Figs', '__pycache__', 'Figures', 'figs', "Versions"], ['_log_', 'Makefile', 'template', '_log', '_diff', 'command.tex', 'Diffs']);
+    const config = getConfig();
+    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
+    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
+    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') || [];
+    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const files = await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ignoredExtensions, ignoredDirectories, ignoredKeywords, ignoredInputFiles);
     if (inputFileName) {
       const inputFileBaseName = path.basename(inputFileName, path.extname(inputFileName));
       return files.filter(file => {
@@ -54,7 +71,7 @@ export async function listRevisionFiles(inputFileName?: string): Promise<string[
   return [];
 }
 
-export async function getFilesInDirectory(dir: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
+export async function getFilesInDirectory(dir: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
   const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
   return dirEntries
     .filter(([name, type]) =>
@@ -62,12 +79,13 @@ export async function getFilesInDirectory(dir: string, includeExtensions: string
       !name.startsWith('.') &&
       (includeExtensions.length === 0 || includeExtensions.some(ext => name.endsWith(ext))) &&
       !excludeExtensions.some(ext => name.endsWith(ext)) &&
-      !excludeKeywords.some(keyword => name.includes(keyword))
+      !excludeKeywords.some(keyword => name.includes(keyword)) &&
+      !excludeDirectories.includes(path.dirname(name))
     )
     .map(([name]) => name);
 }
 
-export async function getFilesRecursively(dir: string, root: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
+export async function getFilesRecursively(dir: string, root: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = [], excludeFiles: string[] = []): Promise<string[]> {
   const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
   const files = await Promise.all(dirEntries.map(async ([name, type]) => {
     const fullPath = `${dir}/${name}`;
@@ -77,11 +95,12 @@ export async function getFilesRecursively(dir: string, root: string, includeExte
     const isSymbolicLink = (stat.type & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
 
     if ((type === vscode.FileType.Directory || isSymbolicLink) && !name.startsWith('.') && !excludeDirectories.includes(name)) {
-      return await getFilesRecursively(fullPath, root, includeExtensions, excludeExtensions, excludeDirectories, excludeKeywords);
+      return await getFilesRecursively(fullPath, root, includeExtensions, excludeExtensions, excludeDirectories, excludeKeywords, excludeFiles);
     } else if (type === vscode.FileType.File && !name.startsWith('.') &&
       (includeExtensions.length === 0 || includeExtensions.some(ext => name.endsWith(ext))) &&
       !excludeExtensions.some(ext => name.endsWith(ext)) &&
-      !excludeKeywords.some(keyword => name.includes(keyword))) {
+      !excludeKeywords.some(keyword => name.includes(keyword)) &&
+      !excludeFiles.includes(name)) {
       return [relativePath];
     } else {
       return [];

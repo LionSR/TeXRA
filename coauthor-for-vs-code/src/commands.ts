@@ -98,7 +98,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       // Get the configuration
       const config = vscode.workspace.getConfiguration('coauthor');
-      const includeDirectories = config.get<string[]>('includedDirectories') || ['Discrete-Time', 'FiguresEx'];
+      const includedFigureDirectories = config.get<string[]>('includedFigureDirectories') || ['FiguresEx'];
 
       const defaultUri = currentFigureFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
@@ -120,7 +120,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           const relativePath = path.relative(workspacePath, uri.fsPath);
           const pathParts = relativePath.split(path.sep);
 
-          const startIndex = pathParts.findIndex(part => includeDirectories.includes(part));
+          const startIndex = pathParts.findIndex(part => includedFigureDirectories.includes(part));
 
           if (startIndex !== -1) {
             return pathParts.slice(startIndex).join(path.sep);
