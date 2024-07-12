@@ -4,25 +4,25 @@ You will be editing a noisy academic discussion transcript that has been transcr
     <document index="1">
         <source>example_transcript</source>
         <document_content>
-{EXAMPLE_TRANSCRIPT}
+        {EXAMPLE_TRANSCRIPT}
         </document_content>
     </document>
     <document index="2">
         <source>example_edited_transcript</source>
         <document_content>
-{EXAMPLE_EDITED_TRANSCRIPT}
+        {EXAMPLE_EDITED_TRANSCRIPT}
         </document_content>
     </document>
     <document index="3">
         <source>transcript_to_edit</source>
         <document_content>
-{TRANSCRIPT}
+        {TRANSCRIPT}
         </document_content>
     </document>
     <document index="4">
         <source>context</source>
         <document_content>
-{CONTEXT}
+        {CONTEXT}
         </document_content>
     </document>
 </documents>
