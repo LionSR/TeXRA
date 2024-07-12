@@ -1,5 +1,8 @@
-# Change Log
+# Frontend Changelog
 
+### [0.5.4]
+
+- Added a "Empty" button for cleaning up the specific instructions
 
 ### [0.5.3]
 - Added "Current" button for quick selection of the currently open file as input
@@ -76,103 +79,103 @@
 - Improved reflection process with more detailed action plans
 - Added summary logging for both initial processing and reflection steps
 
-## [0.4.1]
+### [0.4.1]
 
 * small fixes to the execute button for the single auxiliary file case.
 
-## [0.4.0]
+### [0.4.0]
 
 * added the handling of multiple figures in the backend and make it works also in the frontend.
 
-## [0.3.12]
+### [0.3.12]
 
 * more fixes for selecting multiple input files and/or figures
 
-## [0.3.11]
+### [0.3.11]
 
 * fixes for selecting multiple input files and/or figures
 
-## [0.3.10]
+### [0.3.10]
 
 * UI optimizations
 
-## [0.3.9]
+### [0.3.9]
 
 * polish pass the multiple selected input files and/or figures to the backend: only show relative path if softlinks is encountered.
 
-## [0.3.8]
+### [0.3.8]
 
 * now possible to pass the multiple selected input files and/or figures to the backend
 
-## [0.3.7]
+### [0.3.7]
 
 * Added the possibility to select multiple input files and or figures, and display selected files in the extension UI (Activity Bar tab).
 * Set the default open dialog for file selection to the same path of the select input file if it is set.
 
-## [0.3.6]
+### [0.3.6]
 
 * Set figure file to "None" and reflect to "False" when a task starting with "Correct" is selected.
 
-## [0.3.5]
+### [0.3.5]
 
 * increase the number of git commit message to show up to 20.
 * handled softlinks folders
 
-## [0.3.4]
+### [0.3.4]
 
 * Added draw-tex and draw-st tasks in the backend and the UI.
 
-## [0.3.3]
+### [0.3.3]
 
 * Further Fixes to the clean-single function.
 
-## [0.3.2]
+### [0.3.2]
 
 * Fixed the clean-single function.
 
-## [0.3.1]
+### [0.3.1]
 
 * Safe housekeeping terminal.
 
-## [0.3.0]
+### [0.3.0]
 
 * A functional latexdiff/latexdiff-vs UI that automatically open the generated diff file
 
-## [0.2.9]
+### [0.2.9]
 
 * Added the latexdiff-vc button
 
-## [0.2.8]
+### [0.2.8]
 
 UI improvements and refresh button fix.
 
-## [0.2.8]
+### [0.2.8]
 
 UI improvements: 
 * moved to using h3 for section headers and h4 for subsections.
 * right-aligned the button for latexdiff and latexdiff-vc
 
-## [0.2.7]
+### [0.2.7]
 
 * added the latexdiff-vs button to diff with a version in the commit history 
 
-## [0.2.6]
+### [0.2.6]
 
 * small UI bump
 
-## [0.2.5]
+### [0.2.5]
 
 * added the automatic call to update the select revision file for latexdiff only for those that match the input.
 
-## [0.2.4]
+### [0.2.4]
 
 * handled the case when the housekeeping terminal is not available.
 
-## [0.2.3]
+### [0.2.3]
 
 * added the latexdiff button
 
-## [0.2.2]
+### [0.2.2]
 
 Quality of life improvements: 
 * gave a name to the housekeeping terminal.
@@ -180,41 +183,41 @@ Quality of life improvements:
 * tweaking the continuation mode for claude and GPTs on the backend side.
 
 
-## [0.2.1]
+### [0.2.1]
 
 * Supported the pdf figure inputs.
 
-## [0.2.0]
+### [0.2.0]
 
 * Supported png and jpeg figure inputs.
 
-## [0.1.9]
+### [0.1.9]
 
 * Added a CleanSingle Button to clean up the generated file for the selected input.
 * UI changes
 
-## [0.1.8]
+### [0.1.8]
 
 * Fixed the file filter to exclude certain files and directories
 
-## [0.1.7]
+### [0.1.7]
 
 * Fixed the passing of the reflection parameter to the backend
 
-## [0.1.6]
+### [0.1.6]
 
 * Fixed the bug that the model parameter is not passed to the backend correctly
 
-## [0.1.5]
+### [0.1.5]
 
 * Added hacks to process the scratchpad in the generated tex files
 
-## [0.1.4]
+### [0.1.4]
 
 * Created the Clean-Output Button
 * Simplifies the execute logic
 
-## [0.1.0]
+### [0.1.0]
 
 * Added basic functionalities
 * Initial release
