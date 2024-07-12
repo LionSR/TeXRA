@@ -141,4 +141,5 @@ Users can customize the included directories by modifying their VS Code settings
 
 ## Known Issues
 
-If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name.
+- If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name.
+- Make sure your VS code installation is newer than 1.89.0.
