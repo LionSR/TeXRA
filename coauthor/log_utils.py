@@ -41,7 +41,7 @@ def log_and_print_statistics(state, model, log_file_path=None):
     if os.path.exists(log_file_path):
         with open(log_file_path, "a") as log_file:
             log_file.write(
-                f"Statistics: Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f}\n"
+                f"Statistics: (Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f})\n"
             )
 
 
