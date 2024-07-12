@@ -1,5 +1,12 @@
 # Backend Changelog
 
+### [0.8.6]
+
+- Added 'write-tex' command to CLI
+- Fixed typos in system prompts
+- Updated version to 0.8.6 in pyproject.toml
+- Minor code improvements and refactoring
+
 ### [0.8.5]
 
 - Refactored codebase for improved modularity and efficiency

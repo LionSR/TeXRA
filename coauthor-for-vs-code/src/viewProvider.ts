@@ -188,6 +188,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getWebviewContent() {
+    const config = vscode.workspace.getConfiguration('coauthor');
+    const tasks = config.get<string[]>('tasks') || [];
+
+    const taskOptions = tasks.map(task => 
+      `<option value="${task}">${task}</option>`
+    ).join('\n');
+
     return `<!DOCTYPE html>
     <html lang="en">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
@@ -1024,18 +1031,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         <div class="select-group">
           <label for="taskSelect">Task:</label>
           <select id="taskSelect">
-            <option value="correct-tex">Correct</option>
-            <option value="polish-tex">Polish</option>
-            <option value="draw-tex">Draw</option>
-            <option value="adapt-tex">Adapt</option>
-            <option value="write-tex">Write</option>
-            <option value="correct-st">Correct(Lect)</option>
-            <option value="polish-st">Polish(Lect)</option>
-            <option value="draw-st">Draw(Lect)</option>
-            <option value="adapt-st">Adapt(Lect)</option>
-            <option value="meeting2text">Meeting to Text</option>
-            <option value="paper2note">Paper to Note</option>
-            <option value="txt2tex">Txt to TeX</option>
+            ${taskOptions}
           </select>
         </div>
         <div class="select-group">

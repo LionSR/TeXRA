@@ -53,3 +53,54 @@ The VS Code extension provides a user interface for interacting with the CoAutho
 - LaTeX diff functionality
 - Housekeeping operations (clean output, clean build, indent TeX)
 
+### Customization
+
+#### Customizing Tasks
+
+CoAuthor allows you to customize the list of available tasks directly in your VS Code settings. This feature enables you to tailor the extension to your specific needs.
+
+To customize the tasks:
+
+1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`).
+2. Search for "CoAuthor" in the settings search bar.
+3. Look for the "Coauthor: Tasks" setting.
+4. Click on the pencil icon next to the setting to edit the task list.
+
+The default task list looks like this:
+
+```json
+"coauthor.tasks": [
+  "correct-tex",
+  "polish-tex",
+  "draw-tex",
+  "adapt-tex",
+  "write-tex",
+  "meeting2text",
+  "paper2note",
+  "txt2tex"
+]
+```
+
+You can add, remove, or modify tasks in this list. Each task is represented by a string that serves as both the task's value and label in the CoAuthor interface.
+
+For example, if you want to add a new task for editing lecture notes, you could modify the list like this:
+
+```json
+"coauthor.tasks": [
+  "correct-tex",
+  "polish-tex",
+  "draw-tex",
+  "adapt-tex",
+  "write-tex",
+  "meeting2text",
+  "paper2note",
+  "txt2tex",
+  "correct-st",
+  "polish-st",
+  "draw-st",
+]
+```
+
+After saving your changes, the new task will appear in the CoAuthor task selection dropdown in the VS Code sidebar.
+
+Remember to ensure that any custom tasks you add are supported by your CoAuthor backend implementation.
