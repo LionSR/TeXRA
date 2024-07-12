@@ -39,9 +39,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
           const includeTikzReflection_val = message.includeTikzReflection;
           const includeTexCount_val = message.includeTexCount;
-          const autoMergePartialOutput_val = message.autoMergePartialOutput;
 
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val, autoMergePartialOutput_val);
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val);
           break;
         case 'selectInputFile':
           const inputFile = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
@@ -586,10 +585,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const isChecked = event.target.checked;
             vscode.postMessage({ command: 'updateIncludeTexCount', value: isChecked });
           });
-          document.getElementById('autoMergePartialOutput').addEventListener('change', (event) => {
-            const isChecked = event.target.checked;
-            vscode.postMessage({ command: 'updateAutoMergePartialOutput', value: isChecked });
-          });
           document.getElementById('cleanOutputButton').addEventListener('click', function() {
             vscode.postMessage({
               command: 'cleanOutput'
@@ -618,7 +613,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             const autoExtractTikzFigure = document.getElementById('autoExtractTikzFigure').checked;
             const includeTikzReflection = document.getElementById('includeTikzReflection').checked;
             const includeTexCount = document.getElementById('includeTexCount').checked;
-            const autoMergePartialOutput = document.getElementById('autoMergePartialOutput').checked;
           
             // Get additional input files
             const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
@@ -654,7 +648,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               autoExtractTikzFigure: autoExtractTikzFigure,
               includeTikzReflection: includeTikzReflection,
               includeTexCount: includeTexCount,
-              autoMergePartialOutput: autoMergePartialOutput,
             });
           });
           document.getElementById('packSingleButton').addEventListener('click', function() {
@@ -753,7 +746,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('autoExtractTikzFigure').addEventListener('change', saveState);
           document.getElementById('includeTikzReflection').addEventListener('change', saveState);
           document.getElementById('includeTexCount').addEventListener('change', saveState);
-          document.getElementById('autoMergePartialOutput').addEventListener('change', saveState);
         });
 
         function saveState() {
@@ -772,7 +764,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             autoExtractTikzFigure: document.getElementById('autoExtractTikzFigure').checked,
             includeTikzReflection: document.getElementById('includeTikzReflection').checked,
             includeTexCount: document.getElementById('includeTexCount').checked,
-            autoMergePartialOutput: document.getElementById('autoMergePartialOutput').checked,
             multipleInputFilesSelect: getSelectedFiles(document.getElementById('multipleInputFilesSelect')),
             multipleSampleFilesSelect: getSelectedFiles(document.getElementById('multipleSampleFilesSelect')),
             multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
@@ -785,7 +776,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const previousState = vscode.getState();
           if (previousState) {
             document.getElementById('modelSelect').value = previousState.modelSelect || '';
-            document.getElementById('taskSelect').value = previousState.taskSelect || '';
+            document.getElementById('taskSelect').value = previousState.taskSelect || 'correct-tex';
             document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
             document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
             document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
@@ -798,7 +789,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('autoExtractTikzFigure').checked = previousState.autoExtractTikzFigure || false;
             document.getElementById('includeTikzReflection').checked = previousState.includeTikzReflection || false;
             document.getElementById('includeTexCount').checked = previousState.includeTexCount || false;
-            document.getElementById('autoMergePartialOutput').checked = previousState.autoMergePartialOutput || false;
 
             // Restore selected multiple files
             const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
@@ -1071,7 +1061,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="sampleFileSelect">Select Sample File:</label>
+            <label for="sampleFileSelect">Select Reference File:</label>
             <div class="file-select-buttons">
               <button id="emptyMultipleSampleFilesButton" class="small-button">Empty</button>
               <button id="selectMultipleSampleFilesButton" class="small-button">Multiple</button>
@@ -1123,7 +1113,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
             <label><input type="checkbox" id="autoExtractTikzFigure"> Auto-extract TikZ Figs</label>
             <label><input type="checkbox" id="includeTikzReflection"> Include TikZ Reflection</label>
-            <label><input type="checkbox" id="autoMergePartialOutput"> Auto-merge Partial Output</label>
             <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
           </div>
         </div>

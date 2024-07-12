@@ -1,19 +1,18 @@
 import sys
 import os
-
-# Add the parent directory to the system path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import click
 import shlex
 import subprocess
 import glob
 import shutil
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Add the parent directory to the system path for the windows users
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
-
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -50,8 +49,6 @@ def shared_arguments(func):
         click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file"),
         click.option("--include_tikz_reflection", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
-        click.option("--auto_merge_partial_output", is_flag=True, help="Automatically merge partial output files"),
-        click.option("--auxiliary_files", default=None),
     ]
     for option in options:
         func = option(func)
