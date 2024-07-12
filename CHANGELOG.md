@@ -1,13 +1,13 @@
 # Backend Changelog
 
-### [0.8.6]
+## [0.8.6]
 
 - Added 'write-tex' command to CLI
 - Fixed typos in system prompts
 - Updated version to 0.8.6 in pyproject.toml
 - Minor code improvements and refactoring
 
-### [0.8.5]
+## [0.8.5]
 
 - Refactored codebase for improved modularity and efficiency
 - Simplified imports using 'import coauthor as coa' across all task files
@@ -18,7 +18,7 @@
 - Updated reflection prompts to emphasize critical review
 - Various minor improvements and bug fixes
 
-### [0.8.4]
+## [0.8.4]
 
 - Implemented figure inputs support in the reflection round
 - Refactored TikZ extraction process for improved compatibility and file handling
@@ -28,26 +28,26 @@
 - Updated figure handling in process.py and figure_tools.py
 - Refactored settings handling to separate figure inputs
 
-### [0.8.3]
+## [0.8.3]
 
 - Modified pack_latexdiff_vc function to handle both packing and cleaning
 - Added --clean flag to pack_latexdiff_vc CLI command
 - Improved error handling and file processing in pack_latexdiff_vc
 
-### [0.8.2]
+## [0.8.2]
 
 - Simplified CLI command implementations using shared arguments and kwargs
 - Updated log_utils.py to format instruction logging
 - Enhanced image message creation for different model types
 - Updated user prefix for merge task
 
-### [0.8.1]
+## [0.8.1]
 
 - Added auto-merge partial output functionality
 - Improved error handling and logging for auto-merge operations
 - Refactored auto-merge code for better modularity
 
-### [0.8.0]
+## [0.8.0]
 
 - Added auto-extract TikZ figure functionality
 - Improved figure path extraction, including support for `\graphicspath`
@@ -56,7 +56,7 @@
 - Updated CLI to support new TikZ figure extraction option
 - Improved error handling and debugging output for figure operations
 
-### [0.7.11]
+## [0.7.11]
 
 - Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
 - Added regular expression to match `\graphicspath` and extract paths.
@@ -64,7 +64,7 @@
 - Added logging to `create_image_message` in `message_utils.py` for used images.
 - Removed unused import in `adapt.py`, `paper2note.py`, and `txt2tex.py`.
 
-### [0.7.10]
+## [0.7.10]
 
 - Removed redundant comments and unused imports.
 - Simplified function definitions and improved readability.
@@ -73,7 +73,7 @@
 - Updated function signatures for consistency.
 - Improved handling of file paths and content extraction.
 
-### [0.7.9]
+## [0.7.9]
 
 - Refactored continuation logic for improved handling of existing files
 - Implemented new has_end_tag function to check for end tags in file content
@@ -82,7 +82,7 @@
 - Enhanced "continue to reflect" functionality
 - Various code cleanup and minor improvements
 
-### [0.7.8]
+## [0.7.8]
 
 - Refactored settings and prompt handling for improved modularity and consistency
 - Introduced centralized functions in settings_utils.py for model, output, and prompt settings
@@ -91,7 +91,7 @@
 - Improved error handling and removed redundant code
 - Enhanced code readability and maintainability
 
-### [0.7.7]
+## [0.7.7]
 
 - Refactored codebase for improved modularity and organization
 - Split functionality into separate modules (tex_tools, figure_tools, etc.)
@@ -102,7 +102,7 @@
 - Removed redundant code and consolidated shared functionality
 - Improved consistency in logging and error handling
 
-### [0.7.6]
+## [0.7.6]
 
 - Refactored codebase for improved modularity and organization
 - Split functionality into separate modules (tex_tools, figure_tools, etc.)
@@ -113,7 +113,7 @@
 - Removed redundant code and consolidated shared functionality
 - Improved consistency in logging and error handling
 
-### [0.7.5]
+## [0.7.5]
 
 - Refactored codebase for improved modularity and maintainability
 - Created new `log_utils.py` for centralized logging functionality
@@ -124,7 +124,7 @@
 - Adjusted checkbox group styling in VS Code extension
 - Various minor improvements and bug fixes
 
-### [0.7.4]
+## [0.7.4]
 
 - Fix the broken backend
 - Created new `edit_utils.py` for shared edit functionality
@@ -135,7 +135,7 @@
 - Updated version to 0.7.4 in `pyproject.toml`
 - Various minor improvements and bug fixes
 
-### [0.7.3]
+## [0.7.3]
 
 - Created new edit_utils.py file for shared edit functionality
 - Refactored edit_lecture.py and edit_tex.py to use shared utilities
@@ -144,7 +144,7 @@
 - Improved code readability and maintainability
 - Various minor improvements and bug fixes
 
-### [0.7.2]
+## [0.7.2]
 
 - Extensively refactored process.py for improved code organization and maintainability:
   - Separated file processing logic into dedicated functions
@@ -158,14 +158,14 @@
 - Improved error handling and logging for better user feedback and debugging
 - Various minor improvements and bug fixes
 
-### [0.7.1]
+## [0.7.1]
 
 - Bumped version to 0.7.1
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes
 - Added TikZ extractor update
 
-### [0.7.0]
+## [0.7.0]
 
 - Added new merge functionality for LaTeX documents
 - Implemented merge command in CLI
