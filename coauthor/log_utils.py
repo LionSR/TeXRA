@@ -1,31 +1,32 @@
 from datetime import datetime
 from termcolor import colored
 from .model_utils import compute_api_price
+from .file_utils import append_file
 import os
 
 
 def log_start(args):
-    log_file_path = args.input_file.replace(".tex", "_log.txt")
-    with open(log_file_path, "a+") as log_file:
-        log_file.write("\n--------------------------------\n")
-        log_file.write(f"Time: {datetime.now()}\n")
-        log_file.write(f"Task: {args.task}\n")
-        log_file.write(f"Model: {args.model}\n")
+    log_file = args.input_file.replace(".tex", "_log.txt")
+    with open(log_file, "a+") as f:
+        f.write("\n--------------------------------\n")
+        f.write(f"Time: {datetime.now()}\n")
+        f.write(f"Task: {args.task}\n")
+        f.write(f"Model: {args.model}\n")
 
-        log_file.write(f"Input file: {args.input_file}\n")
+        f.write(f"Input file: {args.input_file}\n")
         if args.input_files:
-            log_file.write(f"Additional input files: {args.input_files}\n")
+            f.write(f"Additional input files: {args.input_files}\n")
         if args.auxiliary_files:
-            log_file.write(f"Auxiliary files: {args.auxiliary_files}\n")
+            f.write(f"Auxiliary files: {args.auxiliary_files}\n")
         if args.figure_inputs:
-            log_file.write(f"Figure inputs: {args.figure_inputs}\n")
+            f.write(f"Figure inputs: {args.figure_inputs}\n")
 
-        log_file.write(f"\n<instruction>\n{args.instruction}\n</instruction>\n")
+        f.write(f"\n<instruction>\n{args.instruction}\n</instruction>\n")
 
-    return log_file_path
+    return log_file
 
 
-def log_and_print_statistics(state, model, log_file_path=None):
+def log_and_print_statistics(state, model, log_file=None):
     total_input_tokens = state.get("total_input_tokens", 0)
     total_output_tokens = state.get("total_output_tokens", 0)
     total_response_time = state.get("total_response_time", 0)
@@ -38,16 +39,15 @@ def log_and_print_statistics(state, model, log_file_path=None):
     print("Total cost          : ${}".format(colored("{:.2f}".format(cost), "yellow")))
 
     # Log the statistics to the log file if exists in the directory
-    if os.path.exists(log_file_path):
-        with open(log_file_path, "a") as log_file:
-            log_file.write(
-                f"Statistics: (Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f})\n"
-            )
+    if os.path.exists(log_file):
+        append_file(
+            log_file,
+            f"Statistics: (Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f})\n",
+        )
 
 
-def log_output_files(output_file, log_file_path):
-    with open(log_file_path, "a") as log_file:
-        if "reflect" in log_file_path:
-            log_file.write(f"Reflection output file: {output_file}\n")
-        else:
-            log_file.write(f"Output file: {output_file}\n")
+def log_output_files(output_file, log_file):
+    if "reflect" in log_file:
+        append_file(log_file, f"Reflection output file: {output_file}\n")
+    else:
+        append_file(log_file, f"Output file: {output_file}\n")

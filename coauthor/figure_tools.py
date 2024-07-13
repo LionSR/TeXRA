@@ -2,6 +2,7 @@ import re
 import os
 import subprocess
 from string import Template
+from .file_utils import read_file, write_file
 
 TIKZ_TEMPLATE = Template(
     r"""
@@ -30,8 +31,7 @@ def extract_figure_paths(latex_file_path):
     graphicspath_pattern = re.compile(r"\\graphicspath\s*\{(.+?)\}")
 
     try:
-        with open(latex_file_path, "r", encoding="utf-8") as file:
-            content = file.read()
+        content = read_file(latex_file_path)
 
         # Find all graphicspaths
         graphicspath_matches = graphicspath_pattern.findall(content)
@@ -70,8 +70,7 @@ def extract_figure_paths(latex_file_path):
 
 
 def extract_tikzpictures_with_labels(latex_file):
-    with open(latex_file, "r") as file:
-        content = file.read()
+    content = read_file(latex_file)
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments
     figure_pattern = re.compile(r"(\\begin{figure}.*?\\label\{.*?\}.*?\\end{figure})", re.DOTALL)
@@ -95,8 +94,7 @@ def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
         filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
     else:
         filename = os.path.join(build_dir, f"{label}.tex")
-    with open(filename, "w") as file:
-        file.write(standalone_content)
+    write_file(filename, standalone_content)
 
     return filename
 
