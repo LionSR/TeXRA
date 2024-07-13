@@ -14,23 +14,14 @@ from .message_utils import (
     has_end_tag,
 )
 from .openai_utils import best_connection_method
+from .output_utils import get_output_file_name
 from .tex_tools import get_tex_count
 from coauthor.figure_tools import extract_and_compile_tikzpictures_with_labels
 from coauthor.message_utils import create_image_message
 from coauthor.prompt_utils import load_prompt
 
 
-def get_output_file_name(input_file, task, model, output_type, reflect=False):
-    file_name, _ = os.path.splitext(input_file)
-    first_task_chunk = task.split("_")[0]
-    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
-    if reflect:
-        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
-    print(f"Output file: {colored(output_file, 'cyan')}")
-    return output_file
-
-
-def write_to_output_file(file_exists, output_settings, best_connector, new_response, output_file):
+def write_to_output_file(file_exists, best_connector, new_response, output_file):
     if not file_exists:
         print("Creating the file")
         write_file(output_file, new_response)
@@ -90,7 +81,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         massive_repetition_detected = check_for_massive_repetition(state["last_response"], new_response)
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
-            write_to_output_file(file_exists, output_settings, best_connector, new_response, output_file)
+            write_to_output_file(file_exists, best_connector, new_response, output_file)
             print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
             state["last_response"] = new_response
 
@@ -116,6 +107,7 @@ def process_first_round(
     client,
     task,
     input_file,
+    output_file,
     user_prefix_vars,
     model_settings,
     output_settings,
@@ -139,7 +131,6 @@ def process_first_round(
             user_prefix += f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
 
     output_type = output_settings.get("output_type", "txt")
-    output_file = get_output_file_name(input_file, task, model, output_type)
 
     messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 
@@ -149,11 +140,11 @@ def process_first_round(
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
 
-            log_file_name = output_file.replace(".tex", "_log.txt")
-            if os.path.exists(log_file_name):
-                file_content = read_file(log_file_name) + file_content
+            log_file = output_file.replace(".tex", "_log.txt")
+            if os.path.exists(log_file):
+                file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, output_file, messages, model_settings, output_settings, prompt_settings
+            return initialize_state(state, None), accumulated_output, True, messages, model_settings, output_settings, prompt_settings
         else:
             print(colored("### The first prospect output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
@@ -190,10 +181,12 @@ def process_first_round(
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    return state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings
+    return state, accumulated_output, end_turn, messages, model_settings, output_settings, prompt_settings
 
 
-def process_reflection_round(client, task, input_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None):
+def process_reflection_round(
+    client, task, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None
+):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
     use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
@@ -206,8 +199,6 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
         tex_count_stats = get_tex_count(input_file)
         if tex_count_stats:
             user_message = f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n{user_message}\n"
-
-    output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=True)
 
     # Extract TikZ pictures if include_tikz_reflection is set
     if prompt_settings.get("include_tikz_reflection"):
@@ -245,7 +236,7 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the reflection output file. Skipping continuation.")
             messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, output_file, messages
+            return initialize_state(state, None), accumulated_output, True, messages
         else:
             print(colored("### The reflection output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
@@ -280,4 +271,4 @@ def process_reflection_round(client, task, input_file, state, messages, model_se
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    return state, accumulated_output, end_turn, output_file, messages
+    return state, accumulated_output, end_turn, messages

@@ -182,6 +182,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.window.showInformationMessage('Please select an input file first.');
           }
           break;
+        case 'merge':
+          vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.revisionFile);
+          break;
       }
     });
   }
@@ -190,7 +193,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coauthor');
     const tasks = config.get<string[]>('tasks') || [];
 
-    const taskOptions = tasks.map(task => 
+    const taskOptions = tasks.map(task =>
       `<option value="${task}">${task}</option>`
     ).join('\n');
 
@@ -730,6 +733,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               inputFile: document.getElementById('inputFileSelect').value,
             });
           });
+          document.getElementById('mergeButton').addEventListener('click', function() {
+            const inputFile = document.getElementById('inputFileSelect').value;
+            const revisionFile = document.getElementById('revisionFileSelect').value;
+            vscode.postMessage({
+              command: 'merge',
+              inputFile: inputFile,
+              revisionFile: revisionFile
+            });
+          });
 
           // Save state on input changes
           document.getElementById('modelSelect').addEventListener('change', saveState);
@@ -1145,6 +1157,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           <label for="revisionFileSelect">Select Revision File:</label>
           <div class="file-select-buttons">
             <button id="currentRevisionButton" class="small-button">Current</button>
+            <button id="mergeButton" class="small-button">Merge</button>
             <button id="latexDiffButton" class="small-button">latexdiff</button>
           </div>
         </div>

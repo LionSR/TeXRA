@@ -418,6 +418,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
+    vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, revisionFile: string) => {
+      const terminal = ensureTerminal();
+      terminal.show();
+      const model = vscode.workspace.getConfiguration('coauthor').get('defaultMergeModel', 'sonnet+');
+      const reflect = vscode.workspace.getConfiguration('coauthor').get('defaultMergeReflect', 'False');
+      terminal.sendText(`coauthor merge ${inputFile} ${revisionFile} --model=${model} --reflect=${reflect}`);
+    }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
 }

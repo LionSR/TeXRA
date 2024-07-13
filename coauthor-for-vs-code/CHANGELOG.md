@@ -1,5 +1,16 @@
 # Frontend Changelog
 
+## [0.5.9]
+
+- Added the merge button/functionality
+
+## [0.5.8]
+
+- Updated to support backend changes related to latexdiff functionality
+- Improved handling of scratchpad output in the UI
+- Enhanced error handling and user feedback for latexdiff operations
+- Minor UI improvements and code cleanup
+
 ## [0.5.7]
 
 - Removed unused `autoMergePartialOutput` option
