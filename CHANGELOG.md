@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.8.9]
+
+- Refactored latexdiff functionality for improved performance and reliability
+- Introduced new `split_scratchpad_output` function to handle scratchpad content separately
+- Updated latexdiff and latexdiff-vc commands with improved options, including UTF-8 encoding support
+- Implemented scratchpad splitting in various task files (adapt.py, edit_lecture.py, edit_tex.py, lecture2text.py, merge.py)
+- Fixed an issue with "\end{document}" tag handling in scratchpad output
+- Improved error handling and logging in latexdiff-related functions
+- Various minor code improvements and optimizations
+
 ## [0.8.8]
 
 - Refactored TikZ figure extraction process for improved file handling and compatibility

@@ -25,19 +25,14 @@ def get_tex_count(file_path):
         return None
 
 
-def run_latexdiff(input_file, output_file, task=None, model=None):
+def split_scratchpad_output(output_file):
     log_file_name = output_file.replace(".tex", "_log.txt")
-    diff_file_name = output_file.replace(".tex", "_diff.tex")
 
-    if model and model in input_file and model in output_file:
-        diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
-
-    # Handle scratchpad content
     with open(output_file, "r", encoding="utf-8") as file:
         output_content = file.read()
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
+    output_content = output_content.replace("\\end{document}", "\\end{document}")
 
     if "</scratchpad>" in output_content:
         with open(log_file_name, "a+") as log_file:
@@ -50,14 +45,23 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
         with open(output_file, "w", encoding="utf-8") as file:
             file.write(output_content)
 
+    return output_content
+
+
+def run_latexdiff(input_file, output_file, task=None, model=None):
+    diff_file_name = output_file.replace(".tex", "_diff.tex")
+
+    if model and model in input_file and model in output_file:
+        diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
+
     if task is not None and "draw" in task:
         return None
 
     # Run latexdiff
-    latexdiff_command = f"latexdiff -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
-    print(colored(f"Running latexdiff command: {latexdiff_command}", "green"))
+    latexdiff_command = f"latexdiff --flatten --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
+    print("Running latexdiff command:", colored(f"{latexdiff_command}", "green"))
     os.system(latexdiff_command)
-    print(colored(f"latexdiff completed. Output saved to {diff_file_name}", "blue"))
+    print("latexdiff completed. Output saved to", colored(f"{diff_file_name}", "blue"))
 
     # Process diff file
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
@@ -94,10 +98,11 @@ def run_latexdiff_vc(input_file, commit_hash):
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command
-    latexdiff_vc_command = f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
-    print(colored(f"Running latexdiff-vc command: {latexdiff_vc_command}", "green"))
+    # latexdiff_vc_command = f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
+    latexdiff_vc_command = f"latexdiff-vc --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' --force --flatten --git -r {commit_hash} {input_file}"
+    print("Running latexdiff-vc command:", colored(f"{latexdiff_vc_command}", "green"))
     os.system(latexdiff_vc_command)
-    print(colored(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue"))
+    print("latexdiff-vc completed. Output saved to", colored(f"{diff_file_name}", "blue"))
 
     # Process diff file
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
