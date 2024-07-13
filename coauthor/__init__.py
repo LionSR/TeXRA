@@ -20,7 +20,7 @@ from .file_utils import (
     check_for_massive_repetition,
     get_prompt_path,
 )
-from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
+from .tex_tools import split_scratchpad_output, run_latexdiff, run_latexdiff_vc, get_tex_count
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .arg_utils import get_common_argparser, comma_separated_list
 from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
@@ -59,6 +59,7 @@ __all__ = [
     "extract_text_from_tags",
     "check_for_massive_repetition",
     "get_prompt_path",
+    "split_scratchpad_output",
     "run_latexdiff",
     "run_latexdiff_vc",
     "get_tex_count",
