@@ -71,6 +71,7 @@ def main():
         coa.log_output_files(output_file_reflect, log_file_path)
         coa.log_and_print_statistics(state, args.model, log_file_path)
         if end_turn_reflect and output_settings["output_type"] == "tex":
+            coa.split_scratchpad_output(output_file_reflect)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
 
