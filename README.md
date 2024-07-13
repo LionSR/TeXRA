@@ -76,6 +76,8 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 7. Click "Execute" to run the AI-assisted task
 8. Review the output in the newly created file
 
+Although GPT models are supported, we recommend using sonnet+ or opus for the best experience.
+
 ## Available Tasks
 
 CoAuthor supports a variety of tasks, including but not limited to:
