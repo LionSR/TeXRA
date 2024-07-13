@@ -25,29 +25,6 @@ def get_tex_count(file_path):
         return None
 
 
-def split_scratchpad_output(output_file):
-    log_file_name = output_file.replace(".tex", "_log.txt")
-
-    with open(output_file, "r", encoding="utf-8") as file:
-        output_content = file.read()
-
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    output_content = output_content.replace("\\end{document}", "\\end{document}")
-
-    if "</scratchpad>" in output_content:
-        with open(log_file_name, "a+") as log_file:
-            log_file.write("\n<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
-
-        output_content = output_content.split(
-            ("<latex_document>" if "<latex_document>" in output_content else "</scratchpad>"),
-            1,
-        )[1].lstrip()
-        with open(output_file, "w", encoding="utf-8") as file:
-            file.write(output_content)
-
-    return output_content
-
-
 def run_latexdiff(input_file, output_file, task=None, model=None):
     diff_file_name = output_file.replace(".tex", "_diff.tex")
 
@@ -59,9 +36,9 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
 
     # Run latexdiff
     latexdiff_command = f"latexdiff --flatten --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
-    print("Running latexdiff command:", colored(f"{latexdiff_command}", "green"))
+    print("\nRunning latexdiff command:", colored(f"{latexdiff_command}", "green"))
     os.system(latexdiff_command)
-    print("latexdiff completed. Output saved to", colored(f"{diff_file_name}", "blue"))
+    print("\nlatexdiff completed. Output saved to", colored(f"{diff_file_name}", "blue"))
 
     # Process diff file
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:

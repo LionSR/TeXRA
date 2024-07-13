@@ -72,11 +72,17 @@ def main():
 
     client = coa.get_model_client(model_settings["model"])
 
-    log_file_path = coa.log_start(args)
-    state, accumulated_output, end_turn, output_file, messages, model_settings, output_settings, prompt_settings = coa.process_first_round(
+    model = model_settings["model"]
+    output_type = output_settings["output_type"]
+
+    output_file = coa.get_output_file_name(args.input_file, args.task, model, output_type)
+
+    log_file = coa.log_start(args)
+    state, accumulated_output, end_turn, messages, model_settings, output_settings, prompt_settings = coa.process_first_round(
         client,
         args.task,
         args.input_file,
+        output_file,
         user_prefix_vars,
         model_settings=model_settings,
         output_settings=output_settings,
@@ -86,22 +92,25 @@ def main():
         coa.split_scratchpad_output(output_file)
         coa.run_latexdiff(args.input_file, output_file, args.task)
 
-    coa.log_output_files(output_file, log_file_path)
-    coa.log_and_print_statistics(state, args.model, log_file_path)
+    coa.log_output_files(output_file, log_file)
+    coa.log_and_print_statistics(state, args.model, log_file)
 
     if args.reflect and end_turn:
-        state, accumulated_output_reflect, end_turn_reflect, output_file_reflect, messages = coa.process_reflection_round(
+        output_file_reflect = coa.get_output_file_name(args.input_file, args.task, model, output_type, reflect=True)
+
+        state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
             client,
             args.task,
             args.input_file,
+            output_file_reflect,
             state,
             messages,
             model_settings=model_settings,
             output_settings=output_settings,
             prompt_settings=prompt_settings,
         )
-        coa.log_output_files(output_file_reflect, log_file_path)
-        coa.log_and_print_statistics(state, args.model, log_file_path)
+        coa.log_output_files(output_file_reflect, log_file)
+        coa.log_and_print_statistics(state, args.model, log_file)
         if end_turn_reflect and task_settings["output_type"] == "tex":
             coa.split_scratchpad_output(output_file_reflect)
             coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
