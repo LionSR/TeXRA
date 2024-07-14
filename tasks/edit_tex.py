@@ -87,6 +87,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=args.figure_inputs,
     )
     if end_turn and task_settings["output_type"] == "tex":
         coa.split_scratchpad_output(output_file)
@@ -115,6 +116,8 @@ def main():
             coa.split_scratchpad_output(output_file_reflect)
             coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
+
+    coa.log_end(log_file)
 
 
 if __name__ == "__main__":

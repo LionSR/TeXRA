@@ -140,7 +140,8 @@ def process_first_round(
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
 
-            log_file = output_file.replace(".tex", "_log.txt")
+            _, extension = os.path.splitext(output_file)
+            log_file = output_file.replace(f"{extension}", "_log.txt")
             if os.path.exists(log_file):
                 file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})

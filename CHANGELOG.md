@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.9.1]
+
+- Added `log_end` function to properly close log files
+- Implemented figure input support in reflection rounds
+- Improved error handling and file processing across multiple tasks
+- Enhanced modularity and organization of the codebase
+- Updated all task files to use new logging utilities and figure input handling (a bug fix!)
+- Improved consistency in logging and error handling
+- Various minor code improvements and optimizations
+
 ## [0.9.0]
 
 - Refactored latexdiff functionality for improved performance and reliability
