@@ -15,14 +15,15 @@ def get_output_file_name(input_file, task, model, output_type, reflect=False):
 
 def split_scratchpad_output(output_file):
     _, extension = os.path.splitext(output_file)
-    log_file = output_file.replace(f".{extension}", "_log.txt")
+    log_file_thinking = output_file.replace(f"{extension}", "_log.txt")
+    print(f"Log file: {colored(log_file_thinking, 'cyan')}")
     output_content = read_file(output_file)
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
     output_content = output_content.replace("\\end{document}", "\\end{document}")
 
     if "</scratchpad>" in output_content:
-        append_file(log_file, "\n<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
+        append_file(log_file_thinking, "\n<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
 
         output_content = output_content.split(
             ("<latex_document>" if "<latex_document>" in output_content else "</scratchpad>"),

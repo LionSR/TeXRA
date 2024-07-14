@@ -25,7 +25,7 @@ from .output_utils import split_scratchpad_output, get_output_file_name
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .arg_utils import get_common_argparser, comma_separated_list
 from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
-from .log_utils import log_start, log_and_print_statistics, log_output_files
+from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .openai_utils import best_connection_method
 from .prompt_utils import (
     get_user_prefix_vars,
@@ -70,6 +70,7 @@ __all__ = [
     "extract_figure_paths",
     "extract_and_compile_tikzpictures_with_labels",
     "log_start",
+    "log_end",
     "log_and_print_statistics",
     "log_output_files",
     "best_connection_method",

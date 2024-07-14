@@ -21,9 +21,13 @@ def log_start(args):
         if args.figure_inputs:
             f.write(f"Figure inputs: {args.figure_inputs}\n")
 
-        f.write(f"\n<instruction>\n{args.instruction}\n</instruction>\n")
+        f.write(f"<instruction>\n{args.instruction}\n</instruction>\n")
 
     return log_file
+
+
+def log_end(log_file):
+    append_file(log_file, "--------------------------------\n")
 
 
 def log_and_print_statistics(state, model, log_file=None):

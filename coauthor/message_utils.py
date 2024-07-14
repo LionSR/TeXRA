@@ -68,6 +68,7 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
 
 def create_image_message(model, figure_inputs):
     image_contents = []
+    added_figures = []
 
     if not isinstance(figure_inputs, list):
         figure_inputs = [figure_inputs]
@@ -92,6 +93,7 @@ def create_image_message(model, figure_inputs):
             }.get(file_extension.lower(), "image/jpeg")
 
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
+        added_figures.append(figure_input)
 
     content = []
     for image in image_contents:
@@ -112,6 +114,7 @@ def create_image_message(model, figure_inputs):
         )
 
     print(f"Using images: {colored(figure_inputs, 'green')}")
+    print(f"Successfully added figures: {colored(added_figures, 'cyan')}")
 
     return content
 

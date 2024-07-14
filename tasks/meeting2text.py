@@ -60,6 +60,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=args.figure_inputs,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
@@ -83,6 +84,8 @@ def main():
         )
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
+
+    coa.log_end(log_file)
 
 
 if __name__ == "__main__":
