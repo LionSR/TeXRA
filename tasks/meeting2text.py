@@ -51,7 +51,7 @@ def main():
 
     output_file = coa.get_output_file_name(args.input_file, args.task, model, output_type)
 
-    state, accumulated_output, end_turn, messages, model_settings, output_settings, prompt_settings = coa.process_first_round(
+    state, accumulated_output, end_turn, messages = coa.process_first_round(
         client,
         args.task,
         args.input_file,

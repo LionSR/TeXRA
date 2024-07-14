@@ -1,5 +1,6 @@
-from .model_utils import model_mapping
 from termcolor import colored
+from .model_utils import model_mapping
+from coauthor.prompt_utils import load_prompt
 
 
 def get_model_settings(args):
@@ -44,5 +45,9 @@ def get_prompt_settings(args, prompt_path, task_settings, task):
     for key in ["system_prompt_file", "user_prefix_file", "user_request_file", "user_reflect_file"]:
         if key in task_settings and task_settings[key] is not None:
             prompt_settings[key] = task_settings[key]
+
+    # Load and update the system prompt
+    system_prompt = load_prompt("system_prompt", task, prompt_settings)
+    prompt_settings["system_prompt"] = system_prompt
 
     return prompt_settings
