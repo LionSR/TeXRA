@@ -117,10 +117,9 @@ def process_first_round(
     messages=None,
 ):
     model = model_settings["model"]
-    system_prompt = load_prompt("system_prompt", task, prompt_settings)
+    system_prompt = prompt_settings["system_prompt"]
     user_prefix_template = load_prompt("user_prefix", task, prompt_settings)
     user_request = load_prompt("user_request", task, prompt_settings)
-    prompt_settings.update({"system_prompt": system_prompt})
 
     user_prefix = user_prefix_template.format(**user_prefix_vars)
 
@@ -145,7 +144,7 @@ def process_first_round(
             if os.path.exists(log_file):
                 file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, messages, model_settings, output_settings, prompt_settings
+            return initialize_state(state, None), accumulated_output, True, messages
         else:
             print(colored("### The first prospect output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
@@ -182,7 +181,7 @@ def process_first_round(
     )
     print(f"\n\nProcessed {input_file} and saved as {output_file}")
 
-    return state, accumulated_output, end_turn, messages, model_settings, output_settings, prompt_settings
+    return state, accumulated_output, end_turn, messages
 
 
 def process_reflection_round(
