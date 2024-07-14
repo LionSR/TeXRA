@@ -118,6 +118,8 @@ def main():
             coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
+    coa.log_end(log_file)
+
 
 if __name__ == "__main__":
     main()
