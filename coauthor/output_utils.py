@@ -23,7 +23,7 @@ def split_scratchpad_output(output_file):
     output_content = output_content.replace("\\end{document}", "\\end{document}")
 
     if "</scratchpad>" in output_content:
-        append_file(log_file_thinking, "\n<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
+        append_file(log_file_thinking, "<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
 
         output_content = output_content.split(
             ("<latex_document>" if "<latex_document>" in output_content else "</scratchpad>"),
