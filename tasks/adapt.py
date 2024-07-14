@@ -83,6 +83,7 @@ def main():
             model_settings=model_settings,
             output_settings=output_settings,
             prompt_settings=prompt_settings,
+            figure_inputs=args.figure_inputs,
         )
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
@@ -90,6 +91,8 @@ def main():
             coa.split_scratchpad_output(output_file_reflect)
             coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
+
+    coa.log_end(log_file)
 
 
 if __name__ == "__main__":

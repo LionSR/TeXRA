@@ -55,6 +55,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=args.figure_inputs,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
@@ -81,6 +82,8 @@ def main():
         if end_turn_reflect and output_settings["output_type"] == "tex":
             coa.split_scratchpad_output(output_file_reflect)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
+
+    coa.log_end(log_file)
 
 
 if __name__ == "__main__":
