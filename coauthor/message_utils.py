@@ -37,6 +37,11 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
         )
         print(colored(f"using openai model: {model_name}", "green"))
     elif is_anthropic_model(model):
+        extra_headers = None
+        if "claude-3-5-sonnet" in model_name.lower():
+            extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
+            max_tokens = 8192
+
         response_object = client.messages.create(
             model=model_name,
             max_tokens=max_tokens,
@@ -44,6 +49,7 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
             system=system_prompt,
+            extra_headers=extra_headers
         )
         print(colored(f"using anthropic model: {model_name}", "green"))
     else:
