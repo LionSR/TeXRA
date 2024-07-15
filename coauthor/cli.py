@@ -145,12 +145,6 @@ def draw_tex(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-def write_tex(model, input_file, **kwargs):
-    execute_task("edit_tex", "write", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
 def correct_qi(model, input_file, **kwargs):
     execute_task("edit_lecture", "correct_qi", model, input_file, **kwargs)
 
@@ -451,6 +445,13 @@ def indent_tex():
     print("All .tex files have been indented and temporary files have been deleted.")
 
 
+def get_first_task_chunk(task):
+    if task.startswith("write-"):
+        return task.split("-")[1]
+    else:
+        return task.split("_")[0] if "_" in task else task.split("-")[0]
+
+
 @click.command()
 @click.argument("input_file")
 @click.option("--model", required=False, default="opus", help="Model to use")
@@ -459,7 +460,7 @@ def indent_tex():
 def clean_single(input_file, model, reflect, task):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
-    first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
+    first_task_chunk = get_first_task_chunk(task)
 
     def get_patterns(base, model, task, reflect):
         patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_thinking.txt"]]
@@ -508,7 +509,7 @@ def pack_single(input_file, model, reflect, task):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
     output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
-    first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
+    first_task_chunk = get_first_task_chunk(task)
 
     def get_file_patterns(base, task, model, reflect):
         patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_thinking.txt"]]
@@ -668,6 +669,18 @@ def extract_tikzpictures(latex_file):
         print(file)
 
 
+@click.command()
+@shared_arguments
+def write_cover(model, input_file, **kwargs):
+    execute_task("write_tex", "cover", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def write_proposal(model, input_file, **kwargs):
+    execute_task("write_tex", "proposal", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -675,7 +688,6 @@ if __name__ == "__main__":
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
-cli.add_command(write_tex)
 
 # edit_lecture.py
 cli.add_command(correct_st)
@@ -731,6 +743,10 @@ cli.add_command(pack_latexdiff_vc)
 cli.add_command(tex_count)
 cli.add_command(extract_figure_path)
 cli.add_command(extract_tikzpictures)
+
+# write_tex.py
+cli.add_command(write_cover)
+cli.add_command(write_proposal)
 
 
 if __name__ == "__main__":

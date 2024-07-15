@@ -1,5 +1,17 @@
 # Backend Changelog
 
+## [0.9.3]
+
+- Added new write-cover and write-proposal tasks
+- Implemented write_tex.py for handling new writing tasks
+- Fixed bug in scratchpad output handling in output_utils.py
+- Enhanced task handling with get_first_task_chunk function in cli.py
+- Updated CLI to support new writing tasks
+- Improved file handling for sample/reference files
+- Refactored code for better modularity and consistency
+- Added new user prefix templates for cover letter and proposal tasks
+- Updated package.json to include new tasks in VS Code extension
+
 ## [0.9.2]
 
 - Refactored `process_first_round` function to return fewer values
