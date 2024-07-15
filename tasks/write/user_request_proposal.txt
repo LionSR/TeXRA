@@ -1,0 +1,45 @@
+Based on the provided information and the reference proposal, please draft a comprehensive experimental physics proposal. Your proposal should include the following sections:
+
+1. Abstract
+2. Introduction and Background
+3. Experimental Setup
+4. Proposed Methodology
+5. Expected Results and Analysis
+6. Potential Challenges and Mitigation Strategies
+7. Conclusion and Future Directions
+
+Use LaTeX formatting and ensure that your proposal is well-structured, scientifically sound, and highly detailed. Emulate the style and tone of the provided reference while creating original content for your proposal. 
+
+Key requirements:
+- Use LaTeX equations extensively. Any concept that can be expressed mathematically should be formulated as an equation.
+- Minimize verbal descriptions where mathematical formulations can be used instead.
+- Include relevant figures using TikZ or other appropriate LaTeX packages.
+- Provide detailed, step-by-step derivations where appropriate.
+- Use precise physics terminology and notation consistently.
+- Avoid generic statements or "fluff". Every sentence should contribute specific, technical information.
+- Include citations for all relevant background information and techniques.
+
+Use the following latex template to structure your proposal:
+<research_proposal_template>
+\documentclass[aps, pra, preprint, 11pt, amsmath, amssymb, notitlepage, nofootinbib]{revtex4-2}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx} 
+\usepackage{natbib}
+\usepackage{xcolor}
+\usepackage{braket}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,decorations.pathmorphing}
+
+\begin{document}
+\title{Your Proposal Title}
+\author{Your Institution}
+\date{\today}
+\maketitle
+
+... [Your proposal content here] ...
+
+\bibliography{biblio}
+\end{document}
+<research_proposal_template>
+
+Please output your complete LaTeX proposal within the <research_proposal></research_proposal> tags.

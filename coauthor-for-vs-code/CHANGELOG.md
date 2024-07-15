@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.6.0]
+
+- Added support for new write-cover and write-proposal tasks
+- Updated package.json to include new tasks in VS Code extension
+- Enhanced UI to accommodate new writing tasks
+- Improved file handling for sample/reference files in the extension
+
 ## [0.5.9]
 
 - Added the merge button/functionality

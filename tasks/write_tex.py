@@ -1,64 +1,53 @@
 from termcolor import colored
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "article")
+prompt_path = coa.get_prompt_path(coa, "write")
 
 all_task_settings = {
-    "correct": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
-        "output_type": "tex",
-        "prefill_first": "Here is the revised latex document. <latex_document>",
-        "system_prompt_file": "system_prompt_correct.txt",
-        "user_prefix_file": "user_prefix_correct.txt",
-        "user_request_file": "user_request_correct.txt",
-        "user_reflect_file": "user_reflect_correct.txt",
-    },
-    "polish": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
+    "cover": {
+        "document_tag": "cover_letter",
+        "end_tag": "</cover_letter>",
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
-        "system_prompt_file": "system_prompt_polish.txt",
-        "user_prefix_file": "user_prefix_polish.txt",
-        "user_request_file": "user_request_polish.txt",
-        "user_reflect_file": "user_reflect_polish.txt",
+        "system_prompt_file": "system_prompt_cover.txt",
+        "user_prefix_file": "user_prefix_cover.txt",
+        "user_request_file": "user_request_cover.txt",
+        "user_reflect_file": "user_reflect_cover.txt",
     },
-    "draw": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
+    "proposal": {
+        "document_tag": "research_proposal",
+        "end_tag": "</research_proposal>",
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
-        "system_prompt_file": "system_prompt_draw.txt",
-        "user_prefix_file": "user_prefix_draw.txt",
-        "user_request_file": "user_request_draw.txt",
-        "user_reflect_file": "user_reflect_draw.txt",
+        "system_prompt_file": "system_prompt_proposal.txt",
+        "user_prefix_file": "user_prefix_proposal.txt",
+        "user_request_file": "user_request_proposal.txt",
+        "user_reflect_file": "user_reflect_proposal.txt",
     },
 }
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--task", type=str, default="correct", choices=["correct", "polish", "draw", "polish_long", "draw_long"])
+    parser.add_argument("--task", type=str, default="cover", choices=["cover", "proposal"])
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
-    print(colored(f"Revising {args.input_file}...\n", "green"))
-
-    task_shared = args.task.split("_")[0]
+    print(colored(f"Writing {args.task} for {args.input_file}...\n", "green"))
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
+    if args.sample_files:
+        user_prefix_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in args.sample_files])
+    else:
+        user_prefix_vars["REFERENCE_CONTENT"] = ""
 
-    task_settings = all_task_settings[task_shared]
+    task_settings = all_task_settings[args.task]
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, task_shared)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
 
-    if "long" in args.task:
-        coa.handle_long_input(args, user_prefix_vars, prompt_settings)
-    else:
-        coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -81,7 +70,6 @@ def main():
     )
     if end_turn and task_settings["output_type"] == "tex":
         coa.split_scratchpad_output(output_file, task_settings["document_tag"])
-        coa.run_latexdiff(args.input_file, output_file, args.task)
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
@@ -104,7 +92,6 @@ def main():
         coa.log_and_print_statistics(state, args.model, log_file)
         if end_turn_reflect and task_settings["output_type"] == "tex":
             coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
-            coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
             coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
