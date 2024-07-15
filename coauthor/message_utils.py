@@ -49,7 +49,7 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
             system=system_prompt,
-            extra_headers=extra_headers
+            extra_headers=extra_headers,
         )
         print(colored(f"using anthropic model: {model_name}", "green"))
     else:
@@ -108,12 +108,10 @@ def create_image_message(model, figure_inputs):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
