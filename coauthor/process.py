@@ -140,7 +140,7 @@ def process_first_round(
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
 
             _, extension = os.path.splitext(output_file)
-            log_file = output_file.replace(f"{extension}", "_log.txt")
+            log_file = output_file.replace(f"{extension}", "_thinking.txt")
             if os.path.exists(log_file):
                 file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})

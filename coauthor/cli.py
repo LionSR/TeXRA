@@ -462,12 +462,12 @@ def clean_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_patterns(base, model, task, reflect):
-        patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
+        patterns = [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_thinking.txt"]]
         if reflect and reflect != "False":
             patterns.extend(
                 [
                     f"{base}_{task}_reflect_{model}{ext}"
-                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_log.txt"]
+                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_thinking.txt"]
                 ]
             )
         return patterns
@@ -511,12 +511,12 @@ def pack_single(input_file, model, reflect, task):
     first_task_chunk = task.split("_")[0] if "_" in task else task.split("-")[0]
 
     def get_file_patterns(base, task, model, reflect):
-        patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_log.txt"]]
+        patterns = [f"{base}.pdf"] + [f"{base}_{task}_{model}{ext}" for ext in [".pdf", "_diff.pdf", ".tex", "_diff.tex", "_thinking.txt"]]
         if reflect and reflect != "False":
             patterns.extend(
                 [
                     f"{base}_{task}_reflect_{model}{ext}"
-                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_log.txt"]
+                    for ext in [".pdf", "_diff.pdf", "_diffdiff.pdf", ".tex", "_diff.tex", "_diffdiff.tex", "_thinking.txt"]
                 ]
             )
         return patterns
