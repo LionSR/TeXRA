@@ -15,7 +15,7 @@ def get_output_file_name(input_file, task, model, output_type, reflect=False):
 
 def split_scratchpad_output(output_file):
     _, extension = os.path.splitext(output_file)
-    log_file_thinking = output_file.replace(f"{extension}", "_log.txt")
+    log_file_thinking = output_file.replace(f"{extension}", "_thinking.txt")
     print(f"Log file: {colored(log_file_thinking, 'cyan')}")
     output_content = read_file(output_file)
 

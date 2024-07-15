@@ -112,10 +112,10 @@
             "type": "string"
           },
           "default": [
-            "_log_",
             "Makefile",
             "template",
             "_log",
+            "_thinking",
             "_diff",
             "diff",
             "draw",
