@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -61,7 +61,9 @@
             "write-tex",
             "meeting2text",
             "paper2note",
-            "txt2tex"
+            "txt2tex",
+            "write-cover",
+            "write-proposal"
           ],
           "description": "List of available tasks",
           "scope": "resource"
