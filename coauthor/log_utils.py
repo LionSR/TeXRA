@@ -6,7 +6,17 @@ import os
 
 
 def log_start(args):
-    log_file = args.input_file.replace(".tex", "_log.txt")
+    # Get the directory of the input file
+    input_dir = os.path.dirname(args.input_file)
+
+    # Create the Log subdirectory if it doesn't exist
+    log_dir = os.path.join(input_dir, "Log")
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Create the log file path
+    log_filename = os.path.basename(args.input_file).replace(".tex", "_log.txt")
+    log_file = os.path.join(log_dir, log_filename)
+
     with open(log_file, "a+") as f:
         f.write("\n--------------------------------\n")
         f.write(f"Time: {datetime.now()}\n")
