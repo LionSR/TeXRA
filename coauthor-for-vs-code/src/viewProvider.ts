@@ -906,6 +906,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             case 'setInputFile':
               const inputFileSelect = document.getElementById('inputFileSelect');
               inputFileSelect.innerHTML = '';
+              const emptyInputOption = document.createElement('option');
+              emptyInputOption.value = '';
+              emptyInputOption.textContent = 'None';
+              inputFileSelect.appendChild(emptyInputOption);
               message.files.forEach(file => {
                 const option = document.createElement('option');
                 option.value = file;
