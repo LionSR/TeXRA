@@ -1,5 +1,11 @@
 # Frontend Changelog
 
+## [0.6.2]
+
+- Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command
+- Improved user feedback for file selection errors
+- Updated version to 0.6.2 in package.json
+
 ## [0.6.1]
 
 - Renamed "revision" to "edited" throughout the extension for improved consistency
