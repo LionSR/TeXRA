@@ -90,6 +90,7 @@ CoAuthor supports a variety of tasks, including but not limited to:
 - `meeting2text`: Convert meeting transcripts into structured text
 - `paper2note`: Transform research papers into lecture notes
 - `txt2tex`: Convert plain text to LaTeX format
+- `merge-tex`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
 
 For a full list of tasks and their descriptions, refer to the backend and frontend READMEs.
 
@@ -108,6 +109,7 @@ CoAuthor offers various customization options:
 - Automatic TikZ figure extraction and compilation
 - LaTeX diff functionality for version comparison
 - Integration with git for accessing recent commits
+- **Intelligent Merge**: Automatically merges LaTeX documents, ensuring consistency and handling conflicts intelligently
 
 For detailed information on these features, consult the respective backend and frontend READMEs.
 
