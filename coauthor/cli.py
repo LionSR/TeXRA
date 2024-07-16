@@ -564,10 +564,10 @@ def pack_single(input_file, model, reflect, task):
 
 @click.command()
 @click.argument("input_file")
-@click.argument("revision_file")
-def latexdiff(input_file, revision_file):
-    """Run latexdiff on the given input and revision files."""
-    run_latexdiff(input_file, revision_file)
+@click.argument("edited_file")
+def latexdiff(input_file, edited_file):
+    """Run latexdiff on the given input and edited files."""
+    run_latexdiff(input_file, edited_file)
 
 
 @click.command()

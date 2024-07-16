@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -136,7 +136,7 @@
             "command.tex",
             "preamble.tex"
           ],
-          "description": "Files to ignore when listing input, sample, and revision files, but not auxiliary files",
+          "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
           "scope": "resource"
         },
         "coauthor.defaultMergeModel": {
