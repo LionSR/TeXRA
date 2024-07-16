@@ -19,7 +19,7 @@ load_dotenv()
 
 def get_common_env(model):
     if model is None:
-        model = os.getenv("MODEL", "opus")
+        model = os.getenv("MODEL", "sonnet+")
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/tasks")
     return model, script_dir, prompt_dir
@@ -32,7 +32,7 @@ def comma_separated_list(value):
 # Define a decorator for shared arguments
 def shared_arguments(func):
     options = [
-        click.argument("input_file"),
+        click.option("--input_file", required=True, help="Path to the input file"),
         click.option("--model", required=False, default="opus", help="Model to use"),
         click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
@@ -337,11 +337,11 @@ def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", **kw
 
 
 @click.command()
-@click.argument("input_file")
-@click.argument("edited_file")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--edited_file", required=True, help="Path to the edited file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-def merge(input_file, edited_file, model, reflect):
+def merge(model, input_file, edited_file, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
@@ -453,11 +453,11 @@ def get_first_task_chunk(task):
 
 
 @click.command()
-@click.argument("input_file")
 @click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-def clean_single(input_file, model, reflect, task):
+def clean_single(model, input_file, reflect, task):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
     first_task_chunk = get_first_task_chunk(task)
@@ -500,11 +500,11 @@ def clean_single(input_file, model, reflect, task):
 
 
 @click.command()
-@click.argument("input_file")
 @click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-def pack_single(input_file, model, reflect, task):
+def pack_single(model, input_file, reflect, task):
     now = datetime.now().strftime("%Y%m%d%H%M")
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
@@ -563,24 +563,24 @@ def pack_single(input_file, model, reflect, task):
 
 
 @click.command()
-@click.argument("input_file")
-@click.argument("edited_file")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--edited_file", required=True, help="Path to the edited file")
 def latexdiff(input_file, edited_file):
     """Run latexdiff on the given input and edited files."""
     run_latexdiff(input_file, edited_file)
 
 
 @click.command()
-@click.argument("input_file")
-@click.argument("commit_hash")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--commit_hash", required=True, help="Commit hash to compare against")
 def latexdiff_vc(input_file, commit_hash):
     """Run latexdiff-vc on the given input file and commit hash."""
     run_latexdiff_vc(input_file, commit_hash)
 
 
 @click.command()
-@click.argument("input_file")
-@click.argument("commit_hash")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--commit_hash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
 def pack_latexdiff_vc(input_file, commit_hash, clean):
     """Pack or clean the files generated from latexdiff-vc."""
