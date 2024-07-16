@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.9.6]
+
+- Added intelligent merge functionality for LaTeX documents
+- Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command
+- Added new function get_output_file_name_merge in output_utils.py
+- Improved pattern handling in clean_single and pack_single functions in cli.py
+- Added process_tikzpicture_endings function in tex_tools.py for better TikZ handling
+- Updated process_first_round and process_reflection_round functions in process.py to handle scratchpad output
+- Updated merge.py to use get_output_file_name_merge function
+
 ## [0.9.5]
 
 - Updated CLI commands to use --input_file and --edited_file options for improved clarity and consistency
