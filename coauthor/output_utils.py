@@ -20,10 +20,13 @@ def split_scratchpad_output(output_file, document_tag="latex_document"):
     output_content = read_file(output_file)
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
+    output_content = output_content.replace("\\end{document}", "\\end{document}")
 
     if "</scratchpad>" in output_content:
-        append_file(log_file_thinking, "<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
+        if "<scratchpad>" in output_content:
+            append_file(log_file_thinking, output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
+        else:
+            append_file(log_file_thinking, "<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
 
         output_content = output_content.split(
             ("<" + document_tag + ">" if "<" + document_tag + ">" in output_content else "</scratchpad>"),
@@ -32,3 +35,23 @@ def split_scratchpad_output(output_file, document_tag="latex_document"):
         write_file(output_file, output_content)
 
     return output_content
+
+
+def get_output_file_name_merge(input_file, edited_file):
+    input_dir = os.path.dirname(input_file)
+    input_base, _ = os.path.splitext(os.path.basename(input_file))
+    edited_base, _ = os.path.splitext(os.path.basename(edited_file))
+
+    parts = edited_base.split("_")
+    task = parts[1]  # Assuming the task is always the second part
+
+    if "reflect" in parts:
+        model = parts[-1]
+        output = f"{input_base}_{task}_reflect_full_{model}.tex"
+    else:
+        model = parts[-1]
+        output = f"{input_base}_{task}_full_{model}.tex"
+
+    output = os.path.join(input_dir, output)
+    print(f"Merge output file: {colored(output, 'cyan')}")
+    return output
