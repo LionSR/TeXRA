@@ -1,5 +1,10 @@
 # Backend Changelog
 
+## [0.9.7]
+- Refactored pack_single and clean_single functions in cli.py for improved file handling and consistency
+- Added get_file_patterns function to centralize file pattern generation
+- Improved logging and debugging output in pack and clean operations
+
 ## [0.9.6]
 
 - Added intelligent merge functionality for LaTeX documents
