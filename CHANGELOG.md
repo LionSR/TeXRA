@@ -1,5 +1,13 @@
 # Backend Changelog
 
+## [0.9.5]
+
+- Updated CLI commands to use --input_file and --edited_file options for improved clarity and consistency
+- Changed default model in get_common_env function from "opus" to "sonnet+"
+- Refactored CLI commands to use new input file options
+- Improved error handling and input validation for file paths
+- Various minor code improvements and optimizations
+
 ## [0.9.4]
 
 - Renamed "revision" to "edited" throughout the codebase for improved consistency
