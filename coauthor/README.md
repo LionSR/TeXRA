@@ -254,7 +254,7 @@ coauthor paper2note --input_file paper.tex --sample_chapters chapter1.tex,chapte
 
 CoAuthor integrates with version control systems:
 
-- Use `coauthor latexdiff input.tex revision.tex` to generate a diff between two LaTeX files.
+- Use `coauthor latexdiff input.tex edited.tex` to generate a diff between two LaTeX files.
 - Use `coauthor latexdiff-vc input.tex commit_hash` to generate a diff against a specific git commit.
 
 ## Cleaning and Packing

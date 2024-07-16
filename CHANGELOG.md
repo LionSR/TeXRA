@@ -1,5 +1,11 @@
 # Backend Changelog
 
+## [0.9.4]
+
+- Renamed "revision" to "edited" throughout the codebase for improved consistency
+- Updated function names, variables, and UI elements to reflect this change
+- Improved clarity in file handling and user interactions
+
 ## [0.9.3]
 
 - Added new write-cover and write-proposal tasks
