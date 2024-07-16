@@ -137,13 +137,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor pack-single ${inputFile} --task=${task} --reflect=${reflect} --model=${model}`);
+      terminal.sendText(`coauthor pack-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`);
     }),
     vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFile: string, commitHash: string, clean: boolean = false) => {
       const terminal = ensureTerminal();
       terminal.show();
       const cleanFlag = clean ? '--clean' : '';
-      terminal.sendText(`coauthor pack-latexdiff-vc ${inputFile} ${commitHash} ${cleanFlag}`);
+      terminal.sendText(`coauthor pack-latexdiff-vc --input_file="${inputFile}" --commit_hash=${commitHash} ${cleanFlag}`);
     }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       const terminal = ensureTerminal();
@@ -163,7 +163,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, task: string, reflect: string, model: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor clean-single ${inputFile} --task=${task} --reflect=${reflect} --model=${model}`);
+      terminal.sendText(`coauthor clean-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`);
     }),
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
@@ -176,7 +176,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      terminal.sendText(`coauthor latexdiff ${inputFile} ${editedFile}`);
+      terminal.sendText(`coauthor latexdiff --input_file="${inputFile}" --edited_file="${editedFile}"`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -210,8 +210,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      // terminal.sendText(`latexdiff-vc --force --flatten --git -r ${commitHash} ${inputFile}`);
-      terminal.sendText(`coauthor latexdiff-vc ${inputFile} ${commitHash}`);
+      terminal.sendText(`coauthor latexdiff-vc --input_file="${inputFile}" --commit_hash=${commitHash}`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -257,7 +256,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
 
-      let command = `coauthor ${task} ${inputFile}`;
+      let command = `coauthor ${task} --input_file="${inputFile}"`;
 
       if (additionalInputFiles && additionalInputFiles.length > 0) {
         command += ` --input_files="${additionalInputFiles.join(',')}"`;
@@ -423,7 +422,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       const model = vscode.workspace.getConfiguration('coauthor').get('defaultMergeModel', 'sonnet+');
       const reflect = vscode.workspace.getConfiguration('coauthor').get('defaultMergeReflect', 'False');
-      terminal.sendText(`coauthor merge ${inputFile} ${editedFile} --model=${model} --reflect=${reflect}`);
+      terminal.sendText(`coauthor merge --input_file="${inputFile}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
