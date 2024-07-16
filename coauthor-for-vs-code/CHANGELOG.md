@@ -1,5 +1,11 @@
 # Frontend Changelog
 
+## [0.6.1]
+
+- Renamed "revision" to "edited" throughout the extension for improved consistency
+- Updated UI elements, messages, and file handling to reflect this change
+- Improved clarity in user interactions and file selection
+
 ## [0.6.0]
 
 - Added support for new write-cover and write-proposal tasks

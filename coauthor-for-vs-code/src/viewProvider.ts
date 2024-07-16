@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listRevisionFiles } from './utils';
+import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listEditedFiles } from './utils';
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) { }
@@ -90,10 +90,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'setMultipleFigures', files: multipleFiguresSelect });
           }
           break;
-        case 'selectRevisionFile':
-          const revisionFile = await vscode.commands.executeCommand<string>('coauthor.selectRevisionFile');
-          if (revisionFile) {
-            webviewView.webview.postMessage({ command: 'revisionFileSelected', filePath: revisionFile });
+        case 'selectEditedFile':
+          const editedFile = await vscode.commands.executeCommand<string>('coauthor.selectEditedFile');
+          if (editedFile) {
+            webviewView.webview.postMessage({ command: 'editedFileSelected', filePath: editedFile });
           }
           break;
         case 'requestInputFile':
@@ -113,14 +113,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
           break;
 
-        case 'requestRevisionFile':
-          const allRevisionFiles = await listRevisionFiles(message.inputFile);
-          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: allRevisionFiles });
+        case 'requestEditedFile':
+          const allEditedFiles = await listEditedFiles(message.inputFile);
+          webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
-          const filteredRevisionFiles = await listRevisionFiles(message.filePath);
-          webviewView.webview.postMessage({ command: 'setRevisionFiles', files: filteredRevisionFiles });
+          const filteredEditedFiles = await listEditedFiles(message.filePath);
+          webviewView.webview.postMessage({ command: 'setEditedFiles', files: filteredEditedFiles });
           break;
         case 'sampleFileSelected':
           vscode.window.showInformationMessage(`Selected sample file: ${message.filePath}`);
@@ -131,8 +131,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'figureFileSelected':
           vscode.window.showInformationMessage(`Selected figure file: ${message.filePath}`);
           break;
-        case 'revisionFileSelected':
-          vscode.window.showInformationMessage(`Selected revision file: ${message.filePath}`);
+        case 'editedFileSelected':
+          vscode.window.showInformationMessage(`Selected edited file: ${message.filePath}`);
           break;
         case 'modelSelect':
           vscode.window.showInformationMessage(`Selected model: ${message.model}`);
@@ -150,7 +150,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.task, message.reflect, message.model);
           break;
         case 'latexDiff':
-          vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.revisionFile);
+          vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.editedFile);
           break;
         case 'latexDiffVC':
           vscode.commands.executeCommand('coauthor.latexDiffVC', message.inputFile, message.commitHash);
@@ -174,16 +174,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
           }
           break;
-        case 'getCurrentRevisionFile':
+        case 'getCurrentEditedFile':
           if (message.inputFile) {
-            const revisionFiles = await listRevisionFiles(message.inputFile);
-            webviewView.webview.postMessage({ command: 'setRevisionFiles', files: revisionFiles });
+            const editedFiles = await listEditedFiles(message.inputFile);
+            webviewView.webview.postMessage({ command: 'setEditedFiles', files: editedFiles });
           } else {
             vscode.window.showInformationMessage('Please select an input file first.');
           }
           break;
         case 'merge':
-          vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.revisionFile);
+          vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.editedFile);
           break;
       }
     });
@@ -448,7 +448,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.postMessage({ command: 'requestSampleFile' });
           vscode.postMessage({ command: 'requestAuxFile' });
           vscode.postMessage({ command: 'requestFigureFile' });
-          vscode.postMessage({ command: 'requestRevisionFile' });
+          vscode.postMessage({ command: 'requestEditedFile' });
           vscode.postMessage({ command: 'requestRecentCommits' });
           // Restore previous state
           restoreState();
@@ -681,11 +681,11 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           });
           document.getElementById('latexDiffButton').addEventListener('click', function() {
             const inputFile = document.getElementById('inputFileSelect').value;
-            const revisionFile = document.getElementById('revisionFileSelect').value;
+            const editedFile = document.getElementById('editedFileSelect').value;
             vscode.postMessage({
               command: 'latexDiff',
               inputFile: inputFile,
-              revisionFile: revisionFile
+              editedFile: editedFile
             });
           });
           document.getElementById('latexDiffVCButton').addEventListener('click', function() {
@@ -727,19 +727,19 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               command: 'getCurrentFile'
             });
           });
-          document.getElementById('currentRevisionButton').addEventListener('click', function() {
+          document.getElementById('currentEditedFileButton').addEventListener('click', function() {
             vscode.postMessage({
-              command: 'getCurrentRevisionFile',
+              command: 'getCurrentEditedFile',
               inputFile: document.getElementById('inputFileSelect').value,
             });
           });
           document.getElementById('mergeButton').addEventListener('click', function() {
             const inputFile = document.getElementById('inputFileSelect').value;
-            const revisionFile = document.getElementById('revisionFileSelect').value;
+            const editedFile = document.getElementById('editedFileSelect').value;
             vscode.postMessage({
               command: 'merge',
               inputFile: inputFile,
-              revisionFile: revisionFile
+              editedFile: editedFile
             });
           });
 
@@ -750,7 +750,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           document.getElementById('sampleFileSelect').addEventListener('change', saveState);
           document.getElementById('auxFileSelect').addEventListener('change', saveState);
           document.getElementById('figureFileSelect').addEventListener('change', saveState);
-          document.getElementById('revisionFileSelect').addEventListener('change', saveState);
+          document.getElementById('editedFileSelect').addEventListener('change', saveState);
           document.getElementById('taskInput').addEventListener('input', saveState);
           document.getElementById('reflectSelect').addEventListener('change', saveState);
           document.getElementById('commitSelect').addEventListener('change', saveState);
@@ -768,7 +768,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             sampleFileSelect: document.getElementById('sampleFileSelect').value,
             auxFileSelect: document.getElementById('auxFileSelect').value,
             figureFileSelect: document.getElementById('figureFileSelect').value,
-            revisionFileSelect: document.getElementById('revisionFileSelect').value,
+            editedFileSelect: document.getElementById('editedFileSelect').value,
             taskInput: document.getElementById('taskInput').value,
             reflectSelect: document.getElementById('reflectSelect').value,
             commitSelect: document.getElementById('commitSelect').value,
@@ -793,7 +793,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
             document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
             document.getElementById('sampleFileSelect').value = previousState.sampleFileSelect || '';
-            document.getElementById('revisionFileSelect').value = previousState.revisionFileSelect || '';
+            document.getElementById('editedFileSelect').value = previousState.editedFileSelect || '';
             document.getElementById('taskInput').value = previousState.taskInput || '';
             document.getElementById('reflectSelect').value = previousState.reflectSelect || 'True';
             document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
@@ -955,24 +955,24 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 figureFileSelect.appendChild(option);
               });
               break;
-            case 'setRevisionFiles':
-              const revisionFileSelect = document.getElementById('revisionFileSelect');
-              revisionFileSelect.innerHTML = '';
-              const emptyRevisionOption = document.createElement('option');
-              emptyRevisionOption.value = '';
-              emptyRevisionOption.textContent = 'None';
-              revisionFileSelect.appendChild(emptyRevisionOption);
+            case 'setEditedFiles':
+              const editedFileSelect = document.getElementById('editedFileSelect');
+              editedFileSelect.innerHTML = '';
+              const emptyEditedFile = document.createElement('option');
+              emptyEditedFile.value = '';
+              emptyEditedFile.textContent = 'None';
+              editedFileSelect.appendChild(emptyEditedFile);
               message.files.forEach(file => {
                 const option = document.createElement('option');
                 option.value = file;
                 option.textContent = file;
-                revisionFileSelect.appendChild(option);
+                editedFileSelect.appendChild(option);
               });
               break;
             case 'inputFileSelected':
               document.getElementById('inputFileSelect').value = message.filePath;
               vscode.postMessage({
-                command: 'requestRevisionFile',
+                command: 'requestEditedFile',
                 inputFile: message.filePath
               });
               break;
@@ -988,8 +988,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               document.getElementById('multipleFiguresSelect').innerHTML = '';
               document.getElementById('multipleFiguresSelect').style.display = 'none';
               break;
-            case 'revisionFileSelected':
-              document.getElementById('revisionFileSelect').value = message.filePath;
+            case 'editedFileSelected':
+              document.getElementById('editedFileSelect').value = message.filePath;
               break;
             case 'modelSelected':
               document.getElementById('modelSelect').value = message.model;
@@ -1154,14 +1154,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <h5 class="section-header">Smart Diffs</h5>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="revisionFileSelect">Select Revision File:</label>
+          <label for="editedFileSelect">Select Edited File:</label>
           <div class="file-select-buttons">
-            <button id="currentRevisionButton" class="small-button">Current</button>
+            <button id="currentEditedFileButton" class="small-button">Current</button>
             <button id="mergeButton" class="small-button">Merge</button>
             <button id="latexDiffButton" class="small-button">latexdiff</button>
           </div>
         </div>
-        <select id="revisionFileSelect">
+        <select id="editedFileSelect">
           <option value="">None</option>
         </select>
       </div>
