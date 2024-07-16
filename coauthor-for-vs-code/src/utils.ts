@@ -49,7 +49,7 @@ export async function listFigureFiles(): Promise<string[]> {
   return [];
 }
 
-export async function listRevisionFiles(inputFileName?: string): Promise<string[]> {
+export async function listEditedFiles(inputFileName?: string): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
