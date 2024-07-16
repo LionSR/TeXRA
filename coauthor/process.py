@@ -168,6 +168,9 @@ def process_first_round(
 
         messages.append({"role": "assistant", "content": prefill_first})
 
+        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>":
+            write_file(output_file, prefill_first)
+
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
         client,
@@ -254,6 +257,9 @@ def process_reflection_round(
             accumulated_output = prefill_first
             messages.append({"role": "assistant", "content": prefill_first})
             print(f"prefill_first: {colored(prefill_first, 'yellow')}")
+
+        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>":
+            write_file(output_file, prefill_first)
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output

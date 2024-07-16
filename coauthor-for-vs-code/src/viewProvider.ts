@@ -112,10 +112,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFiles = await listFigureFiles();
           webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
           break;
-
         case 'requestEditedFile':
-          const allEditedFiles = await listEditedFiles(message.inputFile);
-          webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
+          if (message.inputFile) {
+            const allEditedFiles = await listEditedFiles(message.inputFile);
+            webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
+          } else {
+            vscode.window.showInformationMessage('Please select an input file first.');
+          }
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
