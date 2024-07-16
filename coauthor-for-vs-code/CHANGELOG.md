@@ -5,6 +5,8 @@
 - Renamed "revision" to "edited" throughout the extension for improved consistency
 - Updated UI elements, messages, and file handling to reflect this change
 - Improved clarity in user interactions and file selection
+- Added "None" option for input file selection in UI
+- Enhanced file path handling for better cross-platform compatibility
 
 ## [0.6.0]
 
