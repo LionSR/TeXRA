@@ -165,18 +165,18 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText(`coauthor clean-single ${inputFile} --task=${task} --reflect=${reflect} --model=${model}`);
     }),
-    vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, revisionFile: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      const revisionFileName = revisionFile.split('/').pop();
-      const baseName = revisionFileName?.split('.').slice(0, -1).join('.');
+      const editedFileName = editedFile.split('/').pop();
+      const baseName = editedFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}_diff.tex`;
       const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      terminal.sendText(`coauthor latexdiff ${inputFile} ${revisionFile}`);
+      terminal.sendText(`coauthor latexdiff ${inputFile} ${editedFile}`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -393,15 +393,15 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.selectRevisionFile', async () => {
+    vscode.commands.registerCommand('coauthor.selectEditedFile', async () => {
       const fileUri = await vscode.window.showOpenDialog({
         canSelectMany: false,
-        openLabel: 'Select Revision File',
+        openLabel: 'Select Edited File',
         canSelectFiles: true,
         canSelectFolders: false
       });
       if (fileUri && fileUri[0]) {
-        vscode.window.showInformationMessage(`Selected revision file: ${fileUri[0].fsPath}`);
+        vscode.window.showInformationMessage(`Selected edited file: ${fileUri[0].fsPath}`);
         return fileUri[0].fsPath;
       }
       return null;
@@ -418,12 +418,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, revisionFile: string) => {
+    vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
       const model = vscode.workspace.getConfiguration('coauthor').get('defaultMergeModel', 'sonnet+');
       const reflect = vscode.workspace.getConfiguration('coauthor').get('defaultMergeReflect', 'False');
-      terminal.sendText(`coauthor merge ${inputFile} ${revisionFile} --model=${model} --reflect=${reflect}`);
+      terminal.sendText(`coauthor merge ${inputFile} ${editedFile} --model=${model} --reflect=${reflect}`);
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
