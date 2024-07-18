@@ -11,6 +11,11 @@
 - Streamlined WebView message handling
 - Reorganized HTML structure for better maintainability
 - Improved error handling and user feedback
+- Added output name override feature to pack-single and clean-single operations
+- Updated UI to include input field for custom output file names
+- Modified WebView message handling to include output name override
+- Enhanced command execution to support custom output file names
+- Improved error handling and user feedback for output name override feature
 
 ## [0.6.9]
 
@@ -54,12 +59,13 @@
 - Adjusted CSP settings for proper resource loading
 - Improved file handling and WebView content generation
 
-## [0.6.4] Broken!!
+## [0.6.4]
 
 - Refactored WebView implementation for improved maintainability
 - Split HTML, CSS, and JavaScript into separate files
 - Updated viewProvider.ts to load content from separate files
 - Improved code organization and readability
+- This version is broken and only fixed in the next version
 
 ## [0.6.3]
 

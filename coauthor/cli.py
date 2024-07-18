@@ -475,8 +475,9 @@ def get_file_patterns(base, model, task, reflect):
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-def clean_single(model, input_file, reflect, task):
-    base_name = os.path.splitext(os.path.basename(input_file))[0]
+@click.option("--output_name_override", type=str, default=None, help="Override base output name")
+def clean_single(model, input_file, reflect, task, output_name_override):
+    base_name = os.path.splitext(os.path.basename(output_name_override or input_file))[0]
     input_dir = os.path.dirname(input_file)
     first_task_chunk = get_first_task_chunk(task)
 
@@ -515,8 +516,9 @@ def clean_single(model, input_file, reflect, task):
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-def pack_single(model, input_file, reflect, task):
-    base_name = os.path.splitext(os.path.basename(input_file))[0]
+@click.option("--output_name_override", type=str, default=None, help="Override base output name")
+def pack_single(model, input_file, reflect, task, output_name_override):
+    base_name = os.path.splitext(os.path.basename(output_name_override or input_file))[0]
     input_dir = os.path.dirname(input_file)
     first_task_chunk = get_first_task_chunk(task)
 
