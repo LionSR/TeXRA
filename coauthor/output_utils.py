@@ -1,4 +1,5 @@
 import os
+import difflib
 from termcolor import colored
 from .file_utils import read_file, write_file, append_file
 
@@ -56,3 +57,18 @@ def get_output_file_name_merge(input_file, edited_file):
     output = os.path.join(input_dir, output)
     print(f"Merge output file: {colored(output, 'cyan')}")
     return output
+
+
+def check_for_massive_repetition(last_response, new_response):
+    sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
+    repetition_ratio = sequence_matcher.ratio()
+    longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
+    longest_matching_substring = last_response[longest_match.a : longest_match.a + longest_match.size]
+    massive_repetition_detected = len(longest_matching_substring) > 1000
+
+    if massive_repetition_detected:
+        print(colored(f"### repetition_ratio is {repetition_ratio}", "red"))
+        print(colored(f"### Longest matching substring: {longest_matching_substring}", "red"))
+        print("WARNING: Massive repetition detected. Stopping the process.")
+
+    return massive_repetition_detected

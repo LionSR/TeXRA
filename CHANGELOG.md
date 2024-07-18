@@ -1,5 +1,12 @@
 # Backend Changelog
 
+## [0.9.9]
+
+- Updated backend to support new output file options from frontend
+- Enhanced error handling for new output file functionality
+- Improved modularity and organization of the codebase
+- Various minor code improvements and optimizations
+
 ## [0.9.8]
 
 - Added new GPT-4 Omni- model option with 16k token limit

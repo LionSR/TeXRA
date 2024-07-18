@@ -267,7 +267,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, outputFiles: string[], outputNameOverride: string) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -330,6 +330,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       if (includeTexCount) {
         command += ' --include_tex_count';
+      }
+
+      if (outputFiles && outputFiles.length > 0) {
+        command += ` --output_files="${outputFiles.join(',')}"`;
+      }
+      if (outputNameOverride) {
+        command += ` --output_name_override="${outputNameOverride}"`;
       }
 
       terminal_new.sendText(command);

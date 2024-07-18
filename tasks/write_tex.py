@@ -50,13 +50,14 @@ def main():
     coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
     client = coa.get_model_client(model_settings["model"])
+    log_file = coa.log_start(args)
 
     model = model_settings["model"]
     output_type = output_settings["output_type"]
 
-    output_file = coa.get_output_file_name(args.input_file, args.task, model, output_type)
+    base_output_file = args.output_name_override if args.output_name_override else args.input_file
+    output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
 
-    log_file = coa.log_start(args)
     state, accumulated_output, end_turn, messages = coa.process_first_round(
         client,
         args.task,
@@ -75,7 +76,7 @@ def main():
     coa.log_and_print_statistics(state, args.model, log_file)
 
     if args.reflect and end_turn:
-        output_file_reflect = coa.get_output_file_name(args.input_file, args.task, model, output_type, reflect=True)
+        output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
 
         state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
             client,
