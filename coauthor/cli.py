@@ -7,6 +7,7 @@ import glob
 import shutil
 from datetime import datetime
 from dotenv import load_dotenv
+from termcolor import colored
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -93,7 +94,7 @@ def execute_task(script, task, model, input_file, **kwargs):
 def handle_auto_extract_figure(kwargs, input_file):
     if kwargs.get("auto_extract_figure"):
         extracted_figure_paths = extract_figure_paths(input_file)
-        print(f"Extracting figure paths: {extracted_figure_paths}")
+        print("Extracting figure paths:", colored(extracted_figure_paths, "cyan"))
         if extracted_figure_paths:
             if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
                 kwargs["figure_inputs"] = extracted_figure_paths

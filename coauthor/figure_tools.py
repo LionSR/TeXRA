@@ -3,6 +3,7 @@ import os
 import subprocess
 from string import Template
 from .file_utils import read_file, write_file
+from termcolor import colored
 
 TIKZ_TEMPLATE = Template(
     r"""
@@ -57,7 +58,7 @@ def extract_figure_paths(latex_file_path):
                     if os.path.exists(norm_path):
                         rel_path = os.path.relpath(norm_path, start=latex_dir)
                         figure_paths.append(rel_path)
-                        print(f"Found figure: {rel_path}")
+                        # print(f"Found figure: {rel_path}")
                         break
 
     except FileNotFoundError:
@@ -65,7 +66,7 @@ def extract_figure_paths(latex_file_path):
     except Exception as e:
         print(f"An error occurred: {str(e)}")
 
-    print(f"Found figure paths: {figure_paths}")
+    print("Found figure paths:", colored(figure_paths, "gren"))
     return figure_paths
 
 

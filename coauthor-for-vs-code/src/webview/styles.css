@@ -1,0 +1,247 @@
+:root {
+  --background-color: var(--vscode-sideBar-background);
+  --text-color: var(--vscode-sideBar-foreground);
+  --button-background: var(--vscode-button-background);
+  --button-foreground: var(--vscode-button-foreground);
+  --button-hover-background: var(--vscode-button-hoverBackground);
+  --input-background: var(--vscode-input-background);
+  --input-foreground: var(--vscode-input-foreground);
+  --input-border: var(--vscode-input-border);
+  --dropdown-background: var(--vscode-dropdown-background);
+  --dropdown-foreground: var(--vscode-dropdown-foreground);
+  --dropdown-border: var(--vscode-dropdown-border);
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+
+.compact-selections {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.select-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.select-group label {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.select-group select {
+  width: 100%;
+  padding: 4px;
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+}
+
+.file-selection-group {
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+.file-select {
+  margin-bottom: 8px;
+}
+
+.file-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.file-select-header label {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.file-select label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.file-select-buttons {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.small-button {
+  padding: 2px 8px;
+  font-size: 11px;
+  background-color: var(--button-background);
+  color: var(--button-foreground);
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.small-button:hover {
+  background-color: var(--button-hover-background);
+}
+
+.file-select select {
+  width: 100%;
+  padding: 4px;
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  background-color: var(--dropdown-background);
+  color: var(--dropdown-foreground);
+  font-size: 12px;
+}
+
+.multiple-files-list {
+  margin-top: 5px;
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 3px;
+  padding: 5px;
+  font-size: 12px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.multiple-files-list div {
+  padding: 2px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.remove-button {
+  color: #ff4444;
+  cursor: pointer;
+}
+
+.instruction-box {
+  margin-bottom: 5px;
+}
+
+.instruction-box label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+#taskInput {
+  width: 100%;
+  min-height: 150px;
+  /* Increased initial height */
+  max-height: 300px;
+  /* Maximum height before scrolling */
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 13px;
+  resize: vertical;
+  /* Allows vertical resizing */
+  overflow-y: auto;
+  /* Adds vertical scrollbar when needed */
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  box-sizing: border-box;
+}
+
+.checkbox-group {
+  display: flex;
+  gap: 1px;
+  flex-direction: column;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+#executeButton {
+  padding: 6px 12px;
+  font-size: 14px;
+  background-color: #007acc;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#executeButton:hover {
+  background-color: #005999;
+}
+
+.section {
+  margin-bottom: 10px;
+}
+
+.section-header {
+  font-size: 12px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #ccc;
+}
+
+.button-group {
+  margin-bottom: 10px;
+}
+
+.button-group label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.button-container {
+  display: flex;
+  gap: 5px;
+}
+
+.tool-use-execute {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 5px;
+  margin-bottom: tpx;
+}
+
+.tool-use {
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-use label {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.instruction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.instruction-header label {
+  font-size: 12px;
+  font-weight: bold;
+}
