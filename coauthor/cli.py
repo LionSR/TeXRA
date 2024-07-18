@@ -359,7 +359,7 @@ def merge(model, input_file, edited_file, reflect):
 @click.command()
 def clean_output():
     excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o"]
+    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
 
     patterns = [f"*_{model}*.tex" for model in models]
     patterns_build = [f"*/build/*_{model}*" for model in models]
