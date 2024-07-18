@@ -1,5 +1,26 @@
 const vscode = acquireVsCodeApi();
 
+function handleCheckboxChange(event) {
+  const checkboxId = event.target.id;
+  const isChecked = event.target.checked;
+  vscode.postMessage({ command: `update${checkboxId.charAt(0).toUpperCase() + checkboxId.slice(1)}`, value: isChecked });
+}
+
+function updateFileSelect(selectId, files) {
+  const select = document.getElementById(selectId);
+  select.innerHTML = '';
+  const emptyOption = document.createElement('option');
+  emptyOption.value = '';
+  emptyOption.textContent = 'None';
+  select.appendChild(emptyOption);
+  files.forEach(file => {
+    const option = document.createElement('option');
+    option.value = file;
+    option.textContent = file;
+    select.appendChild(option);
+  });
+}
+
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
   const fileElement = document.createElement('div');
@@ -20,13 +41,34 @@ function getSelectedFiles(multipleInputFilesSelectDiv) {
   return Array.from(fileElements).map(el => el.textContent.replace(' -', '') || '');
 }
 
+function updateMultipleFileSelect(selectId, files) {
+  const selectDiv = document.getElementById(selectId);
+  const existingFiles = getSelectedFiles(selectDiv);
+  const newFiles = files.filter(file => !existingFiles.includes(file));
+  if (newFiles.length > 0) {
+    newFiles.forEach(file => {
+      addFileToList(selectId, file);
+    });
+    selectDiv.style.display = 'block';
+  }
+  saveState();
+}
+
+
 window.onload = function () {
-  vscode.postMessage({ command: 'requestInputFile' });
-  vscode.postMessage({ command: 'requestSampleFile' });
-  vscode.postMessage({ command: 'requestAuxFile' });
-  vscode.postMessage({ command: 'requestFigureFile' });
-  vscode.postMessage({ command: 'requestEditedFile' });
-  vscode.postMessage({ command: 'requestRecentCommits' });
+  const dataRequests = [
+    'requestInputFile',
+    'requestSampleFile',
+    'requestAuxFile',
+    'requestFigureFile',
+    'requestEditedFile',
+    'requestRecentCommits'
+  ];
+  
+  dataRequests.forEach(request => {
+    vscode.postMessage({ command: request });
+  });
+
   // Restore previous state
   restoreState();
 };
@@ -92,10 +134,10 @@ document.addEventListener('DOMContentLoaded', function () {
       filePath: sampleFile
     });
   });
-  document.getElementById('selectMultipleFilesButton').addEventListener('click', function () {
+  document.getElementById('selectMultipleInputFilesButton').addEventListener('click', function () {
     const currentInputFile = document.getElementById('inputFileSelect').value;
     vscode.postMessage({
-      command: 'selectMultipleFiles',
+      command: 'selectMultipleInputFiles',
       currentInputFile: currentInputFile
     });
   });
@@ -118,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
       currentFigureFile: currentFigureFile
     });
   });
-  document.getElementById('emptyMultipleFilesButton').addEventListener('click', function () {
+  document.getElementById('emptyMultipleInputFilesButton').addEventListener('click', function () {
     const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
     multipleInputFilesSelectDiv.innerHTML = '';
     multipleInputFilesSelectDiv.style.display = 'none';
@@ -149,22 +191,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('taskInput').value = '';
     saveState();
   });
-  document.getElementById('autoExtractFigure').addEventListener('change', (event) => {
-    const isChecked = event.target.checked;
-    vscode.postMessage({ command: 'updateAutoExtractFigure', value: isChecked });
-  });
-  document.getElementById('autoExtractTikzFigure').addEventListener('change', (event) => {
-    const isChecked = event.target.checked;
-    vscode.postMessage({ command: 'updateAutoExtractTikzFigure', value: isChecked });
-  });
-  document.getElementById('includeTikzReflection').addEventListener('change', (event) => {
-    const isChecked = event.target.checked;
-    vscode.postMessage({ command: 'updateIncludeTikzReflection', value: isChecked });
-  });
-  document.getElementById('includeTexCount').addEventListener('change', (event) => {
-    const isChecked = event.target.checked;
-    vscode.postMessage({ command: 'updateIncludeTexCount', value: isChecked });
-  });
+  document.getElementById('autoExtractFigure').addEventListener('change', handleCheckboxChange);
+  document.getElementById('autoExtractTikzFigure').addEventListener('change', handleCheckboxChange);
+  document.getElementById('includeTikzReflection').addEventListener('change', handleCheckboxChange);
+  document.getElementById('includeTexCount').addEventListener('change', handleCheckboxChange);
   document.getElementById('cleanOutputButton').addEventListener('click', function () {
     vscode.postMessage({
       command: 'cleanOutput'
@@ -432,109 +462,29 @@ function restoreState() {
 window.addEventListener('message', event => {
   const message = event.data;
   switch (message.command) {
-    case 'setMultipleFiles':
-      const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-      const existingFiles = getSelectedFiles(multipleInputFilesSelectDiv);
-      const newFiles = message.files.filter(file => !existingFiles.includes(file));
-      if (newFiles.length > 0) {
-        newFiles.forEach(file => {
-          addFileToList('multipleInputFilesSelect', file);
-        });
-        multipleInputFilesSelectDiv.style.display = 'block';
-      }
-      saveState();
-      break;
-    case 'setMultipleSampleFiles':
-      const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
-      const existingSampleFiles = getSelectedFiles(multipleSampleFilesSelectDiv);
-      const newSampleFiles = message.files.filter(file => !existingSampleFiles.includes(file));
-      if (newSampleFiles.length > 0) {
-        newSampleFiles.forEach(file => {
-          addFileToList('multipleSampleFilesSelect', file);
-        });
-        multipleSampleFilesSelectDiv.style.display = 'block';
-      }
-      saveState();
-      break;
-    case 'setMultipleAuxFiles':
-      const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-      const existingAuxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
-      const newAuxFiles = message.files.filter(file => !existingAuxFiles.includes(file));
-      if (newAuxFiles.length > 0) {
-        newAuxFiles.forEach(file => {
-          addFileToList('multipleAuxFilesSelect', file);
-        });
-        multipleAuxFilesSelectDiv.style.display = 'block';
-      }
-      saveState();
-      break;
-    case 'setMultipleFigures':
-      const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-      const existingFigures = getSelectedFiles(multipleFiguresSelectDiv);
-      const newFigures = message.files.filter(file => !existingFigures.includes(file));
-      if (newFigures.length > 0) {
-        newFigures.forEach(file => {
-          addFileToList('multipleFiguresSelect', file);
-        });
-        multipleFiguresSelectDiv.style.display = 'block';
-      }
-      saveState();
-      break;
     case 'setInputFile':
-      const inputFileSelect = document.getElementById('inputFileSelect');
-      inputFileSelect.innerHTML = '';
-      const emptyInputOption = document.createElement('option');
-      emptyInputOption.value = '';
-      emptyInputOption.textContent = 'None';
-      inputFileSelect.appendChild(emptyInputOption);
-      message.files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        inputFileSelect.appendChild(option);
-      });
+      updateFileSelect('inputFileSelect', message.files);
       break;
     case 'setSampleFile':
-      const sampleFileSelect = document.getElementById('sampleFileSelect');
-      sampleFileSelect.innerHTML = '';
-      const emptySampleOption = document.createElement('option');
-      emptySampleOption.value = '';
-      emptySampleOption.textContent = 'None';
-      sampleFileSelect.appendChild(emptySampleOption);
-      message.files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        sampleFileSelect.appendChild(option);
-      });
+      updateFileSelect('sampleFileSelect', message.files);
       break;
     case 'setAuxFile':
-      const auxFileSelect = document.getElementById('auxFileSelect');
-      auxFileSelect.innerHTML = '';
-      const emptyOption = document.createElement('option');
-      emptyOption.value = '';
-      emptyOption.textContent = 'None';
-      auxFileSelect.appendChild(emptyOption);
-      message.files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        auxFileSelect.appendChild(option);
-      });
+      updateFileSelect('auxFileSelect', message.files);
       break;
     case 'setFigureFile':
-      const figureFileSelect = document.getElementById('figureFileSelect');
-      figureFileSelect.innerHTML = '';
-      const emptyFigureOption = document.createElement('option');
-      emptyFigureOption.value = '';
-      emptyFigureOption.textContent = 'None';
-      figureFileSelect.appendChild(emptyFigureOption);
-      message.files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        figureFileSelect.appendChild(option);
-      });
+      updateFileSelect('figureFileSelect', message.files);
+      break;
+    case 'setMultipleInputFiles':
+      updateMultipleFileSelect('multipleInputFilesSelect', message.files);
+      break;
+    case 'setMultipleSampleFiles':
+      updateMultipleFileSelect('multipleSampleFilesSelect', message.files);
+      break;
+    case 'setMultipleAuxFiles':
+      updateMultipleFileSelect('multipleAuxFilesSelect', message.files);
+      break;
+    case 'setMultipleFigures':
+      updateMultipleFileSelect('multipleFiguresSelect', message.files);
       break;
     case 'setEditedFiles':
       const editedFileSelect = document.getElementById('editedFileSelect');
