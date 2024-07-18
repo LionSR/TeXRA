@@ -8,16 +8,9 @@ function handleCheckboxChange(event) {
 
 function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
-  select.innerHTML = '';
-  const emptyOption = document.createElement('option');
-  emptyOption.value = '';
-  emptyOption.textContent = 'None';
-  select.appendChild(emptyOption);
+  select.innerHTML = '<option value="">None</option>';
   files.forEach(file => {
-    const option = document.createElement('option');
-    option.value = file;
-    option.textContent = file;
-    select.appendChild(option);
+    select.appendChild(new Option(file, file));
   });
 }
 
@@ -57,14 +50,15 @@ function updateMultipleFileSelect(selectId, files) {
 
 window.onload = function () {
   const dataRequests = [
+    'getTheme',
     'requestInputFile',
     'requestSampleFile',
     'requestAuxFile',
     'requestFigureFile',
-    'requestEditedFile',
-    'requestRecentCommits'
+    'requestRecentCommits',
+    // 'requestEditedFile',
   ];
-  
+
   dataRequests.forEach(request => {
     vscode.postMessage({ command: request });
   });
@@ -72,37 +66,22 @@ window.onload = function () {
   // Restore previous state
   restoreState();
 };
+
 document.addEventListener('DOMContentLoaded', function () {
-  new Sortable(document.getElementById('multipleInputFilesSelect'), {
-    animation: 150,
-    onEnd: function () {
-      saveState();
-    }
+  const sortableElements = [
+    'multipleInputFilesSelect',
+    'multipleAuxFilesSelect',
+    'multipleFiguresSelect',
+    'multipleSampleFilesSelect'
+  ];
+
+  sortableElements.forEach(id => {
+    new Sortable(document.getElementById(id), {
+      animation: 150,
+      onEnd: saveState
+    });
   });
 
-  // Initialize Sortable for multiple auxiliary files
-  new Sortable(document.getElementById('multipleAuxFilesSelect'), {
-    animation: 150,
-    onEnd: function () {
-      saveState();
-    }
-  });
-
-  // Initialize Sortable for multiple figures
-  new Sortable(document.getElementById('multipleFiguresSelect'), {
-    animation: 150,
-    onEnd: function () {
-      saveState();
-    }
-  });
-
-  // Initialize Sortable for multiple sample files
-  new Sortable(document.getElementById('multipleSampleFilesSelect'), {
-    animation: 150,
-    onEnd: function () {
-      saveState();
-    }
-  });
   document.getElementById('taskSelect').addEventListener('change', function () {
     const selectedTask = this.value;
     if (selectedTask.startsWith('correct')) {
@@ -116,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('modelSelect').addEventListener('change', function () {
     vscode.postMessage({
-      command: 'modelSelect',
+      command: 'modelSelected',
       model: this.value
     });
   });
@@ -149,8 +128,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
   document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function () {
+    const currentAuxFile = document.getElementById('auxFileSelect').value;
     vscode.postMessage({
-      command: 'selectMultipleAuxFiles'
+      command: 'selectMultipleAuxFiles',
+      currentAuxFile: currentAuxFile
     });
   });
   document.getElementById('selectMultipleFiguresButton').addEventListener('click', function () {
@@ -160,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
       currentFigureFile: currentFigureFile
     });
   });
+
   document.getElementById('emptyMultipleInputFilesButton').addEventListener('click', function () {
     const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
     multipleInputFilesSelectDiv.innerHTML = '';
@@ -172,44 +154,48 @@ document.addEventListener('DOMContentLoaded', function () {
     multipleAuxFilesSelectDiv.style.display = 'none';
     saveState();
   });
-  document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function () {
-    const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-    multipleFiguresSelectDiv.innerHTML = '';
-    multipleFiguresSelectDiv.style.display = 'none';
-
-    // Set the single figure file select to "None"
-    document.getElementById('figureFileSelect').value = '';
-    saveState();
-  });
   document.getElementById('emptyMultipleSampleFilesButton').addEventListener('click', function () {
     const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
     multipleSampleFilesSelectDiv.innerHTML = '';
     multipleSampleFilesSelectDiv.style.display = 'none';
     saveState();
   });
+  document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function () {
+    const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
+    multipleFiguresSelectDiv.innerHTML = '';
+    multipleFiguresSelectDiv.style.display = 'none';
+    document.getElementById('figureFileSelect').value = '';
+    saveState();
+  });
   document.getElementById('emptyInstructionsButton').addEventListener('click', function () {
     document.getElementById('taskInput').value = '';
     saveState();
   });
-  document.getElementById('autoExtractFigure').addEventListener('change', handleCheckboxChange);
-  document.getElementById('autoExtractTikzFigure').addEventListener('change', handleCheckboxChange);
-  document.getElementById('includeTikzReflection').addEventListener('change', handleCheckboxChange);
-  document.getElementById('includeTexCount').addEventListener('change', handleCheckboxChange);
-  document.getElementById('cleanOutputButton').addEventListener('click', function () {
-    vscode.postMessage({
-      command: 'cleanOutput'
+
+  const checkBoxes = [
+    'autoExtractFigure',
+    'autoExtractTikzFigure',
+    'includeTikzReflection',
+    'includeTexCount'
+  ];
+  checkBoxes.forEach(id => {
+    document.getElementById(id).addEventListener('change', handleCheckboxChange);
+  });
+
+  const buttonCommands = {
+    'cleanOutputButton': 'cleanOutput',
+    'cleanBuildButton': 'cleanBuild',
+    'indentTexButton': 'indentTex',
+    'refreshCommitsButton': 'refreshCommits',
+    'currentFileButton': 'getCurrentFile'
+  };
+
+  Object.entries(buttonCommands).forEach(([id, command]) => {
+    document.getElementById(id).addEventListener('click', () => {
+      vscode.postMessage({ command });
     });
   });
-  document.getElementById('cleanBuildButton').addEventListener('click', function () {
-    vscode.postMessage({
-      command: 'cleanBuild'
-    });
-  });
-  document.getElementById('indentTexButton').addEventListener('click', function () {
-    vscode.postMessage({
-      command: 'indentTex'
-    });
-  });
+
   document.getElementById('executeButton').addEventListener('click', function () {
     const task = document.getElementById('taskSelect').value;
     const inputFile = document.getElementById('inputFileSelect').value;
@@ -304,11 +290,6 @@ document.addEventListener('DOMContentLoaded', function () {
       commitHash: commitHash
     });
   });
-  document.getElementById('refreshCommitsButton').addEventListener('click', function () {
-    vscode.postMessage({
-      command: 'refreshCommits'
-    });
-  });
   document.getElementById('packLatexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
@@ -329,11 +310,6 @@ document.addEventListener('DOMContentLoaded', function () {
       clean: true
     });
   });
-  document.getElementById('currentFileButton').addEventListener('click', function () {
-    vscode.postMessage({
-      command: 'getCurrentFile'
-    });
-  });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
     vscode.postMessage({
       command: 'requestEditedFile',
@@ -351,20 +327,19 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Save state on input changes
-  document.getElementById('modelSelect').addEventListener('change', saveState);
-  document.getElementById('taskSelect').addEventListener('change', saveState);
-  document.getElementById('inputFileSelect').addEventListener('change', saveState);
-  document.getElementById('sampleFileSelect').addEventListener('change', saveState);
-  document.getElementById('auxFileSelect').addEventListener('change', saveState);
-  document.getElementById('figureFileSelect').addEventListener('change', saveState);
-  document.getElementById('editedFileSelect').addEventListener('change', saveState);
+  const elementsToWatch = [
+    'modelSelect', 'taskSelect', 'inputFileSelect', 'sampleFileSelect',
+    'auxFileSelect', 'figureFileSelect', 'reflectSelect',
+    'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
+    'includeTikzReflection', 'includeTexCount'
+  ];
+
+  elementsToWatch.forEach(id => {
+    document.getElementById(id).addEventListener('change', saveState);
+  });
+
+  // Special case for taskInput as it uses 'input' event
   document.getElementById('taskInput').addEventListener('input', saveState);
-  document.getElementById('reflectSelect').addEventListener('change', saveState);
-  document.getElementById('commitSelect').addEventListener('change', saveState);
-  document.getElementById('autoExtractFigure').addEventListener('change', saveState);
-  document.getElementById('autoExtractTikzFigure').addEventListener('change', saveState);
-  document.getElementById('includeTikzReflection').addEventListener('change', saveState);
-  document.getElementById('includeTexCount').addEventListener('change', saveState);
 });
 
 function saveState() {
@@ -375,7 +350,6 @@ function saveState() {
     sampleFileSelect: document.getElementById('sampleFileSelect').value,
     auxFileSelect: document.getElementById('auxFileSelect').value,
     figureFileSelect: document.getElementById('figureFileSelect').value,
-    editedFileSelect: document.getElementById('editedFileSelect').value,
     taskInput: document.getElementById('taskInput').value,
     reflectSelect: document.getElementById('reflectSelect').value,
     commitSelect: document.getElementById('commitSelect').value,
@@ -394,68 +368,49 @@ function saveState() {
 function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
-    document.getElementById('modelSelect').value = previousState.modelSelect || '';
-    document.getElementById('taskSelect').value = previousState.taskSelect || 'correct-tex';
-    document.getElementById('inputFileSelect').value = previousState.inputFileSelect || '';
-    document.getElementById('auxFileSelect').value = previousState.auxFileSelect || '';
-    document.getElementById('figureFileSelect').value = previousState.figureFileSelect || '';
-    document.getElementById('sampleFileSelect').value = previousState.sampleFileSelect || '';
-    document.getElementById('editedFileSelect').value = previousState.editedFileSelect || '';
-    document.getElementById('taskInput').value = previousState.taskInput || '';
-    document.getElementById('reflectSelect').value = previousState.reflectSelect || 'True';
-    document.getElementById('commitSelect').value = previousState.commitSelect || 'HEAD';
-    document.getElementById('autoExtractFigure').checked = previousState.autoExtractFigure || false;
-    document.getElementById('autoExtractTikzFigure').checked = previousState.autoExtractTikzFigure || false;
-    document.getElementById('includeTikzReflection').checked = previousState.includeTikzReflection || false;
-    document.getElementById('includeTexCount').checked = previousState.includeTexCount || false;
+    const defaultValues = {
+      taskSelect: 'correct-tex',
+      reflectSelect: 'True',
+      commitSelect: 'HEAD'
+    };
 
-    // Restore selected multiple files
-    const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-    multipleInputFilesSelectDiv.innerHTML = '';
-    if (previousState.multipleInputFilesSelect && previousState.multipleInputFilesSelect.length > 0) {
-      previousState.multipleInputFilesSelect.forEach(file => {
-        addFileToList('multipleInputFilesSelect', file);
-      });
-      multipleInputFilesSelectDiv.style.display = 'block';
-    } else {
-      multipleInputFilesSelectDiv.style.display = 'none';
-    }
+    const valueElements = [
+      'modelSelect', 'taskSelect', 'inputFileSelect', 'auxFileSelect',
+      'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
+      'taskInput', 'reflectSelect', 'commitSelect'
+    ];
 
-    // Restore selected multiple sample files
-    const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
-    multipleSampleFilesSelectDiv.innerHTML = '';
-    if (previousState.multipleSampleFilesSelect && previousState.multipleSampleFilesSelect.length > 0) {
-      previousState.multipleSampleFilesSelect.forEach(file => {
-        addFileToList('multipleSampleFilesSelect', file);
-      });
-      multipleSampleFilesSelectDiv.style.display = 'block';
-    } else {
-      multipleSampleFilesSelectDiv.style.display = 'none';
-    }
+    valueElements.forEach(id => {
+      document.getElementById(id).value = previousState[id] || defaultValues[id] || '';
+    });
 
-    // Restore selected multiple auxiliary files
-    const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-    multipleAuxFilesSelectDiv.innerHTML = '';
-    if (previousState.multipleAuxFilesSelect && previousState.multipleAuxFilesSelect.length > 0) {
-      previousState.multipleAuxFilesSelect.forEach(file => {
-        addFileToList('multipleAuxFilesSelect', file);
-      });
-      multipleAuxFilesSelectDiv.style.display = 'block';
-    } else {
-      multipleAuxFilesSelectDiv.style.display = 'none';
-    }
+    const checkboxElements = [
+      'autoExtractFigure', 'autoExtractTikzFigure',
+      'includeTikzReflection', 'includeTexCount'
+    ];
+    checkboxElements.forEach(id => {
+      document.getElementById(id).checked = previousState[id] || false;
+    });
 
-    // Restore selected multiple figures
-    const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-    multipleFiguresSelectDiv.innerHTML = '';
-    if (previousState.multipleFiguresSelect && previousState.multipleFiguresSelect.length > 0) {
-      previousState.multipleFiguresSelect.forEach(file => {
-        addFileToList('multipleFiguresSelect', file);
-      });
-      multipleFiguresSelectDiv.style.display = 'block';
-    } else {
-      multipleFiguresSelectDiv.style.display = 'none';
-    }
+    const multipleSelections = [
+      'multipleInputFilesSelect',
+      'multipleSampleFilesSelect',
+      'multipleAuxFilesSelect',
+      'multipleFiguresSelect'
+    ];
+
+    multipleSelections.forEach(id => {
+      const selectDiv = document.getElementById(id);
+      selectDiv.innerHTML = '';
+      if (previousState[id] && previousState[id].length > 0) {
+        previousState[id].forEach(file => {
+          addFileToList(id, file);
+        });
+        selectDiv.style.display = 'block';
+      } else {
+        selectDiv.style.display = 'none';
+      }
+    });
   }
 }
 
@@ -487,18 +442,7 @@ window.addEventListener('message', event => {
       updateMultipleFileSelect('multipleFiguresSelect', message.files);
       break;
     case 'setEditedFiles':
-      const editedFileSelect = document.getElementById('editedFileSelect');
-      editedFileSelect.innerHTML = '';
-      const emptyEditedFile = document.createElement('option');
-      emptyEditedFile.value = '';
-      emptyEditedFile.textContent = 'None';
-      editedFileSelect.appendChild(emptyEditedFile);
-      message.files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        editedFileSelect.appendChild(option);
-      });
+      updateFileSelect('editedFileSelect', message.files);
       break;
     case 'inputFileSelected':
       document.getElementById('inputFileSelect').value = message.filePath;
@@ -526,6 +470,11 @@ window.addEventListener('message', event => {
       document.getElementById('modelSelect').value = message.model;
       break;
     case 'setRecentCommits':
+      const commitButtons = [
+        'packLatexDiffVCButton',
+        'cleanLatexDiffVCButton',
+        'latexDiffVCButton'
+      ];
       const commitSelect = document.getElementById('commitSelect');
       commitSelect.innerHTML = '';
       if (message.isGitRepo === false) {
@@ -534,10 +483,9 @@ window.addEventListener('message', event => {
         option.textContent = 'Not a Git repository';
         commitSelect.appendChild(option);
         commitSelect.disabled = true;
-        document.getElementById('refreshCommitsButton').disabled = true;
-        document.getElementById('packLatexDiffVCButton').disabled = true;
-        document.getElementById('cleanLatexDiffVCButton').disabled = true;
-        document.getElementById('latexDiffVCButton').disabled = true;
+        commitButtons.forEach(id => {
+          document.getElementById(id).disabled = true;
+        });
       } else {
         const emptyCommitOption = document.createElement('option');
         emptyCommitOption.value = 'HEAD';
@@ -551,10 +499,9 @@ window.addEventListener('message', event => {
           commitSelect.appendChild(option);
         });
         commitSelect.disabled = false;
-        document.getElementById('refreshCommitsButton').disabled = false;
-        document.getElementById('packLatexDiffVCButton').disabled = false;
-        document.getElementById('cleanLatexDiffVCButton').disabled = false;
-        document.getElementById('latexDiffVCButton').disabled = false;
+        commitButtons.forEach(id => {
+          document.getElementById(id).disabled = false;
+        });
       }
       break;
     case 'setCurrentFile':
@@ -570,27 +517,10 @@ window.addEventListener('message', event => {
         vscode.window.showInformationMessage('The current file is not in the input file list: ' + message.filePath);
       }
       break;
-    case 'getTheme':
-      const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
-      vscode.postMessage({ command: 'setTheme', theme });
+    case 'setTheme':
+      document.body.className = message.theme;
       break;
   }
   // Restore previous state
   restoreState();
 });
-
-// Request the theme when the page loads
-window.addEventListener('load', requestTheme);
-
-// Add this event listener to apply the theme
-window.addEventListener('message', event => {
-  const message = event.data;
-  if (message.command === 'setTheme') {
-    document.body.className = message.theme;
-  }
-});
-
-// Add this function to request the current theme
-function requestTheme() {
-  vscode.postMessage({ command: 'getTheme' });
-}
