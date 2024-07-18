@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
     vscode.postMessage({
-      command: 'getCurrentEditedFile',
+      command: 'requestEditedFile',
       inputFile: document.getElementById('inputFileSelect').value,
     });
   });
