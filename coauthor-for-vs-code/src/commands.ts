@@ -233,14 +233,30 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
+    vscode.commands.registerCommand('coauthor.isGitRepository', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders) {
+        const workspacePath = workspaceFolders[0].uri.fsPath;
+        return new Promise<boolean>((resolve) => {
+          exec('git rev-parse --is-inside-work-tree', { cwd: workspacePath }, (error) => {
+            resolve(!error);
+          });
+        });
+      }
+      return false;
+    }),
     vscode.commands.registerCommand('coauthor.getRecentCommits', async () => {
+      const isGitRepo = await vscode.commands.executeCommand('coauthor.isGitRepository');
+      if (!isGitRepo) {
+        return null; // Return null if it's not a Git repository
+      }
+
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (workspaceFolders) {
         const workspacePath = workspaceFolders[0].uri.fsPath;
         return new Promise<string[]>((resolve, reject) => {
           exec('git log -n 20 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
             if (error) {
-              vscode.window.showErrorMessage(`Error fetching commits: ${stderr}`);
               reject(stderr);
             } else {
               const commits = stdout.split('\n').map(line => line.trim());
