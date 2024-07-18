@@ -1,6 +1,19 @@
 # Frontend Changelog
 
+## [0.7.0]
+
+- Added multiple file output functionality to the frontend
+- Implemented output name override feature
+- Refactored WebView for improved maintainability and performance
+- Enhanced UI with adaptive theming for light and dark VS Code themes
+- Improved file selection and management interface
+- Updated backend to support new output file options
+- Streamlined WebView message handling
+- Reorganized HTML structure for better maintainability
+- Improved error handling and user feedback
+
 ## [0.6.9]
+
 - Extensive code refactoring for improved maintainability and performance
 - Optimized event handling and state management in WebView
 - Improved file selection and UI update logic

@@ -41,8 +41,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
           const includeTikzReflection_val = message.includeTikzReflection;
           const includeTexCount_val = message.includeTexCount;
+          const outputFiles_val = message.outputFiles;
+          const outputNameOverride_val = message.outputNameOverride;
 
-          vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val);
+          vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val, outputFiles_val, outputNameOverride_val);
           break;
         case 'selectInputFile':
           const inputFile = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');

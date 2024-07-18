@@ -30,8 +30,12 @@ export async function listAuxFiles(): Promise<string[]> {
     const config = getConfig();
     const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
     const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
+    const additionalIgnoredAuxKeywords = config.get<string[]>('additionalIgnoredAuxKeywords') || [];
     const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
-    return await getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, ignoredKeywords);
+    
+    const combinedIgnoredKeywords = [...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords])];
+    
+    return await getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, combinedIgnoredKeywords);
   }
   return [];
 }
@@ -42,9 +46,9 @@ export async function listFigureFiles(): Promise<string[]> {
     const workspacePath = workspaceFolders[0].uri.fsPath;
     const config = getConfig();
     const includedFigureExtensions = config.get<string[]>('includedFigureExtensions') || ['.png', '.pdf', '.jpeg', '.jpg', '.svg'];
-    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const ignoreFigureDirectories = config.get<string[]>('ignoreFigureDirectories') || [];
     const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    return await getFilesRecursively(workspacePath, workspacePath, includedFigureExtensions, [], ignoredDirectories, ignoredKeywords);
+    return await getFilesRecursively(workspacePath, workspacePath, includedFigureExtensions, [], ignoreFigureDirectories, ignoredKeywords);
   }
   return [];
 }

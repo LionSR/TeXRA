@@ -19,7 +19,7 @@ body {
 
 .compact-selections {
   display: flex;
-  gap: 10px;
+  gap: 5px;
   margin-bottom: 15px;
 }
 
@@ -221,7 +221,7 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   margin-top: 5px;
-  margin-bottom: tpx;
+  margin-bottom: 5px;
 }
 
 .tool-use {
@@ -244,4 +244,29 @@ body {
 .instruction-header label {
   font-size: 12px;
   font-weight: bold;
+}
+
+.execute-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.output-name-override-container {
+  margin-bottom: 10px;
+}
+
+#outputNameOverride {
+  width: 200px;
+  padding: 4px;
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  font-size: 12px;
+}
+
+.toggle-icon {
+  cursor: pointer;
+  user-select: none;
 }
