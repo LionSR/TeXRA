@@ -4,12 +4,19 @@ from coauthor.prompt_utils import load_prompt
 
 
 def get_model_settings(args):
+
+    model = args.model.lower()
+    model_name = model_mapping[model]
     model_settings = {
-        "model": args.model,
-        "model_name": model_mapping[args.model],
+        "model": model,
+        "model_name": model_name,
         "max_tokens": 4096,
         "temperature": 0,
     }
+    if "gpt-4o-mini" in model_name:
+        model_settings["max_tokens"] = 16384
+    elif "claude-3-5-sonnet" in model_name:
+        model_settings["max_tokens"] = 8192
 
     return model_settings
 

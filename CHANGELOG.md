@@ -1,6 +1,14 @@
 # Backend Changelog
 
+## [0.9.8]
+
+- Added new GPT-4 Omni- model option with 16k token limit
+- Updated model selection options in CLI and configuration
+- Adjusted model handling logic to accommodate the new GPT-4 Omni- option
+- Enhanced token limit management for the new model
+
 ## [0.9.7]
+
 - Refactored pack_single and clean_single functions in cli.py for improved file handling and consistency
 - Added get_file_patterns function to centralize file pattern generation
 - Improved logging and debugging output in pack and clean operations
@@ -272,4 +280,5 @@
 - Updated model_utils for improved image handling
 - Bumped version to 0.7.0
 - Updated Python target versions to include Python 3.12
+- Various minor improvements and bug fixes.
 - Various minor improvements and bug fixes.
