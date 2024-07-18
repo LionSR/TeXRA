@@ -50,6 +50,8 @@ def shared_arguments(func):
         click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file"),
         click.option("--include_tikz_reflection", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--output_files", type=comma_separated_list, default=None, help="Paths to the output files"),
+        click.option("--output_name_override", type=str, default=None, help="Override base output name"),
     ]
     for option in options:
         func = option(func)
@@ -78,7 +80,7 @@ def execute_task(script, task, model, input_file, **kwargs):
             if isinstance(value, bool):
                 if value:
                     command.append(f"--{key}")
-            elif key in ["input_files", "figure_inputs", "auxiliary_files"]:
+            elif key in ["input_files", "figure_inputs", "auxiliary_files", "output_files"]:
                 if isinstance(value, str):
                     value = [value]
                 # Convert all elements to strings before joining

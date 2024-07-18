@@ -41,9 +41,6 @@ def main():
 
     client = coa.get_model_client(model_settings["model"])
 
-    model = model_settings["model"]
-    output_type = output_settings["output_type"]
-
     output_file = coa.get_output_file_name_merge(args.input_file, args.edited_file)
 
     state, accumulated_output, end_turn, messages = coa.process_first_round(
@@ -62,27 +59,6 @@ def main():
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
-
-    # assuming that the merge is very good so no need to reflect?
-    # if args.reflect and end_turn:
-    #     output_file_reflect = coa.get_output_file_name_merge(args.input_file, args.edited_file)
-
-    #     state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
-    #         client,
-    #         args.task,
-    #         args.input_file,
-    #         output_file_reflect,
-    #         state,
-    #         messages,
-    #         model_settings=model_settings,
-    #         output_settings=output_settings,
-    #         prompt_settings=prompt_settings,
-    #     )
-    #     coa.log_output_files(output_file_reflect, log_file)
-    #     coa.log_and_print_statistics(state, args.model, log_file)
-    #     if end_turn_reflect and output_settings["output_type"] == "tex":
-    #         coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
-    #         coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
 

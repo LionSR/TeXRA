@@ -2,7 +2,7 @@ import os
 import time
 from termcolor import colored
 
-from .file_utils import read_file, write_file, append_file, check_for_massive_repetition
+from .file_utils import read_file, write_file, append_file
 from .model_utils import is_openai_model, is_anthropic_model
 from .message_utils import (
     initialize_messages,
@@ -14,7 +14,7 @@ from .message_utils import (
     has_end_tag,
 )
 from .openai_utils import best_connection_method
-from .output_utils import get_output_file_name
+from .output_utils import check_for_massive_repetition, get_output_file_name
 from .tex_tools import get_tex_count
 from coauthor.figure_tools import extract_and_compile_tikzpictures_with_labels
 from coauthor.message_utils import create_image_message
