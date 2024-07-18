@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; style-src ${styleUri}; script-src 'nonce-${nonce}';">
+  <title>CoAuthor Panel</title>
+  <style>
+    ${cssContent}
+  </style>
+</head>
+
+<body>
+  <div class="compact-selections">
+    <div class="select-group">
+      <label for="taskSelect">Task:</label>
+      <select id="taskSelect">
+        ${taskOptions}
+      </select>
+    </div>
+    <div class="select-group">
+      <label for="modelSelect">Model:</label>
+      <select id="modelSelect">
+        <option value="sonnet+">Sonnet+</option>
+        <option value="opus">Opus</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+        <option value="gpt4o">GPT-4 Omni</option>
+        <option value="gpt4t">GPT-4 Turbo</option>
+      </select>
+    </div>
+    <div class="select-group">
+      <label for="reflectSelect">Reflect:</label>
+      <select id="reflectSelect">
+        <option value="True">True</option>
+        <option value="False">False</option>
+      </select>
+    </div>
+  </div>
+  </p>
+  <div class="file-selection-group">
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="inputFileSelect">Select Input File:</label>
+        <div class="file-select-buttons">
+          <button id="currentFileButton" class="small-button">Current</button>
+          <button id="emptyMultipleFilesButton" class="small-button">Empty</button>
+          <button id="selectMultipleFilesButton" class="small-button">Multiple</button>
+        </div>
+      </div>
+      <select id="inputFileSelect">
+        <option value="">None</option>
+      </select>
+      <div id="multipleInputFilesSelect" class="multiple-files-list" style="display: none;"></div>
+    </div>
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="sampleFileSelect">Select Reference File:</label>
+        <div class="file-select-buttons">
+          <button id="emptyMultipleSampleFilesButton" class="small-button">Empty</button>
+          <button id="selectMultipleSampleFilesButton" class="small-button">Multiple</button>
+        </div>
+      </div>
+      <select id="sampleFileSelect">
+        <option value="">None</option>
+      </select>
+      <div id="multipleSampleFilesSelect" class="multiple-files-list" style="display: none;"></div>
+    </div>
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="auxFileSelect">Select Auxiliary File:</label>
+        <div class="file-select-buttons">
+          <button id="emptyMultipleAuxFilesButton" class="small-button">Empty</button>
+          <button id="selectMultipleAuxFilesButton" class="small-button">Multiple</button>
+        </div>
+      </div>
+      <select id="auxFileSelect">
+        <option value="">None</option>
+      </select>
+      <div id="multipleAuxFilesSelect" class="multiple-files-list" style="display: none;"></div>
+    </div>
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="figureFileSelect">Select Figure:</label>
+        <div class="file-select-buttons">
+          <button id="emptyMultipleFiguresButton" class="small-button">Empty</button>
+          <button id="selectMultipleFiguresButton" class="small-button">Multiple</button>
+        </div>
+      </div>
+      <select id="figureFileSelect">
+        <option value="">None</option>
+      </select>
+      <div id="multipleFiguresSelect" class="multiple-files-list" style="display: none;"></div>
+    </div>
+  </div>
+  <p>
+  <div class="instruction-box">
+    <div class="instruction-header">
+      <label for="taskInput">Specific Instructions:</label>
+      <button id="emptyInstructionsButton" class="small-button">Empty</button>
+    </div>
+    <textarea id="taskInput"
+      placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."></textarea>
+  </div>
+  <div class="tool-use-execute">
+    <div class="tool-use">
+      <div class="checkbox-group">
+        <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
+        <label><input type="checkbox" id="autoExtractTikzFigure"> Auto-extract TikZ Figs</label>
+        <label><input type="checkbox" id="includeTikzReflection"> Include TikZ Reflection</label>
+        <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
+      </div>
+    </div>
+    <button id="executeButton">Execute</button>
+  </div>
+  </p>
+  <div class="section">
+    <h5 class="section-header">Housekeeping</h5>
+    <div class="button-group">
+      <label>For the Selected Task and Files:</label>
+      <div class="button-container">
+        <button id="packSingleButton" class="small-button">Pack</button>
+        <button id="cleanSingleButton" class="small-button">Clean</button>
+      </div>
+    </div>
+    <div class="button-group">
+      <label>For All the Files:</label>
+      <div class="button-container">
+        <button id="indentTexButton" class="small-button">Indent TeX</button>
+        <button id="cleanOutputButton" class="small-button">Clean Output</button>
+        <button id="cleanBuildButton" class="small-button">Clean Build</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h5 class="section-header">Smart Diffs</h5>
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="editedFileSelect">Select Edited File:</label>
+        <div class="file-select-buttons">
+          <button id="currentEditedFileButton" class="small-button">Current</button>
+          <button id="mergeButton" class="small-button">Merge</button>
+          <button id="latexDiffButton" class="small-button">latexdiff</button>
+        </div>
+      </div>
+      <select id="editedFileSelect">
+        <option value="">None</option>
+      </select>
+    </div>
+    <div class="file-select">
+      <div class="file-select-header">
+        <label for="commitSelect">Select Commit:</label>
+        <div class="file-select-buttons">
+          <button id="refreshCommitsButton" class="small-button">Refresh</button>
+          <button id="packLatexDiffVCButton" class="small-button">Pack</button>
+          <button id="cleanLatexDiffVCButton" class="small-button">Clean</button>
+          <button id="latexDiffVCButton" class="small-button">latexdiff-vc</button>
+        </div>
+      </div>
+      <select id="commitSelect">
+        <option value="HEAD">HEAD</option>
+      </select>
+    </div>
+  </div>
+  <script nonce="${nonce}">
+    ${jsContent}
+  </script>
+</body>
+
+</html>
