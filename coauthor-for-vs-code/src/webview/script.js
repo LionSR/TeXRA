@@ -23,10 +23,25 @@ function addFileToList(containerId, file) {
   removeButton.className = 'remove-button';
   removeButton.addEventListener('click', () => {
     container.removeChild(fileElement);
+    if (container.children.length === 0) {
+      if (containerId === 'outputFilesList') {
+        handleEmptyOutputFiles();
+      } else {
+        container.style.display = 'none';
+      }
+    }
     saveState();
   });
   fileElement.appendChild(removeButton);
   container.appendChild(fileElement);
+}
+
+function handleEmptyOutputFiles() {
+  const outputFilesContainer = document.getElementById('outputFilesContainer');
+  const toggleIcon = document.getElementById('toggleOutputFiles');
+  outputFilesContainer.style.display = 'none';
+  toggleIcon.textContent = '▼';
+  saveState();
 }
 
 function getSelectedFiles(multipleInputFilesSelectDiv) {
@@ -47,6 +62,37 @@ function updateMultipleFileSelect(selectId, files) {
   saveState();
 }
 
+function initializeOutputFiles() {
+  const inputFileSelect = document.getElementById('inputFileSelect');
+  const multipleInputFilesSelect = document.getElementById('multipleInputFilesSelect');
+  const outputFilesList = document.getElementById('outputFilesList');
+  outputFilesList.innerHTML = '';
+  
+  // Add the main input file
+  if (inputFileSelect.value) {
+    addFileToList('outputFilesList', inputFileSelect.value);
+  }
+  
+  // Add multiple input files
+  const additionalFiles = getSelectedFiles(multipleInputFilesSelect);
+  additionalFiles.forEach(file => {
+    addFileToList('outputFilesList', file);
+  });
+}
+
+function toggleOutputFiles() {
+  const outputFilesContainer = document.getElementById('outputFilesContainer');
+  const toggleIcon = document.getElementById('toggleOutputFiles');
+  if (outputFilesContainer.style.display === 'none') {
+    outputFilesContainer.style.display = 'block';
+    toggleIcon.textContent = '▲';
+    initializeOutputFiles();
+  } else {
+    outputFilesContainer.style.display = 'none';
+    toggleIcon.textContent = '▼';
+  }
+  saveState();
+}
 
 window.onload = function () {
   const dataRequests = [
@@ -146,6 +192,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
     multipleInputFilesSelectDiv.innerHTML = '';
     multipleInputFilesSelectDiv.style.display = 'none';
+    // Also clear and hide the output files list
+    const outputFilesList = document.getElementById('outputFilesList');
+    outputFilesList.innerHTML = '';
+    handleEmptyOutputFiles();
     saveState();
   });
   document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function () {
@@ -229,6 +279,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const multipleFigures = getSelectedFiles(multipleFiguresSelectDiv);
     const figureFiles = multipleFigures.length > 0 ? multipleFigures : (figureFile ? [figureFile] : []);
 
+    const outputFilesContainer = document.getElementById('outputFilesContainer');
+    const outputFiles = outputFilesContainer.style.display === 'block' 
+      ? getSelectedFiles(document.getElementById('outputFilesList'))
+      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value;
+
     vscode.postMessage({
       command: 'execute',
       task: task,
@@ -244,6 +300,8 @@ document.addEventListener('DOMContentLoaded', function () {
       autoExtractTikzFigure: autoExtractTikzFigure,
       includeTikzReflection: includeTikzReflection,
       includeTexCount: includeTexCount,
+      outputFiles: outputFiles,
+      outputNameOverride: outputNameOverride,
     });
   });
   document.getElementById('packSingleButton').addEventListener('click', function () {
@@ -340,6 +398,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Special case for taskInput as it uses 'input' event
   document.getElementById('taskInput').addEventListener('input', saveState);
+
+  document.getElementById('toggleOutputFiles').addEventListener('click', toggleOutputFiles);
+
+  new Sortable(document.getElementById('outputFilesList'), {
+    animation: 150,
+    onEnd: saveState
+  });
+
+  document.getElementById('outputNameOverride').addEventListener('input', saveState);
 });
 
 function saveState() {
@@ -361,6 +428,9 @@ function saveState() {
     multipleSampleFilesSelect: getSelectedFiles(document.getElementById('multipleSampleFilesSelect')),
     multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
     multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
+    outputFilesContainerVisible: document.getElementById('outputFilesContainer').style.display === 'block',
+    outputFiles: getSelectedFiles(document.getElementById('outputFilesList')),
+    outputNameOverride: document.getElementById('outputNameOverride').value,
   };
   vscode.setState(state);
 }
@@ -377,7 +447,7 @@ function restoreState() {
     const valueElements = [
       'modelSelect', 'taskSelect', 'inputFileSelect', 'auxFileSelect',
       'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
-      'taskInput', 'reflectSelect', 'commitSelect'
+      'taskInput', 'reflectSelect', 'commitSelect', 'outputNameOverride'
     ];
 
     valueElements.forEach(id => {
@@ -411,6 +481,21 @@ function restoreState() {
         selectDiv.style.display = 'none';
       }
     });
+
+    const outputFilesContainer = document.getElementById('outputFilesContainer');
+    const toggleIcon = document.getElementById('toggleOutputFiles');
+    if (previousState.outputFilesContainerVisible && previousState.outputFiles && previousState.outputFiles.length > 0) {
+      outputFilesContainer.style.display = 'block';
+      toggleIcon.textContent = '▲';
+      const outputFilesList = document.getElementById('outputFilesList');
+      outputFilesList.innerHTML = '';
+      previousState.outputFiles.forEach(file => {
+        addFileToList('outputFilesList', file);
+      });
+    } else {
+      outputFilesContainer.style.display = 'none';
+      toggleIcon.textContent = '▼';
+    }
   }
 }
 

@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.6.9",
+  "version": "0.7.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -99,14 +99,28 @@
           "default": [
             "build",
             "node_modules",
+            "__pycache__",
             "figures",
             "Figs",
-            "__pycache__",
             "Figures",
             "figs",
             "Versions"
           ],
           "description": "Directories to ignore when listing files",
+          "scope": "resource"
+        },
+        "coauthor.ignoredFigureDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "build",
+            "node_modules",
+            "__pycache__",
+            "Versions"
+          ],
+          "description": "Directories to ignore when listing figure files",
           "scope": "resource"
         },
         "coauthor.ignoredKeywords": {
@@ -126,6 +140,22 @@
             ".egg-info"
           ],
           "description": "Keywords to ignore when selecting files",
+          "scope": "resource"
+        },
+        "coauthor.additionalIgnoredAuxKeywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "gpt",
+            "sonnet",
+            "haiku",
+            "opus",
+            "gpt4t",
+            "gpt4o"
+          ],
+          "description": "Additional keywords to ignore when listing auxiliary files, including model names",
           "scope": "resource"
         },
         "coauthor.ignoredInputFiles": {
