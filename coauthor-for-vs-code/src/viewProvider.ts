@@ -188,6 +188,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'merge':
           vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.editedFile);
           break;
+        case 'getTheme':
+          const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+          webviewView.webview.postMessage({ command: 'setTheme', theme });
+          break;
       }
     });
   }
@@ -208,6 +212,25 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>CoAuthor Panel</title>
       <style>
+      :root {
+        --background-color: var(--vscode-editor-background);
+        --text-color: var(--vscode-editor-foreground);
+        --button-background: var(--vscode-button-background);
+        --button-foreground: var(--vscode-button-foreground);
+        --button-hover-background: var(--vscode-button-hoverBackground);
+        --input-background: var(--vscode-input-background);
+        --input-foreground: var(--vscode-input-foreground);
+        --input-border: var(--vscode-input-border);
+        --dropdown-background: var(--vscode-dropdown-background);
+        --dropdown-foreground: var(--vscode-dropdown-foreground);
+        --dropdown-border: var(--vscode-dropdown-border);
+      }
+
+      body {
+        background-color: var(--background-color);
+        color: var(--text-color);
+      }
+
       .compact-selections {
         display: flex;
         gap: 10px;
@@ -229,14 +252,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         width: 100%;
         padding: 4px;
         height: 28px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--input-border);
         border-radius: 3px;
-        background-color: #fff;
+        background-color: var(--input-background);
+        color: var(--input-foreground);
       }
       
       .file-selection-group {
-        background-color: #f5f5f5;
-        border: 1px solid #ddd;
+        background-color: var(--dropdown-background);
+        border: 1px solid var(--dropdown-border);
         border-radius: 4px;
         padding: 10px;
         margin-bottom: 15px;
@@ -273,26 +297,32 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       .small-button {
         padding: 2px 8px;
         font-size: 11px;
-        background-color: #f0f0f0;
-        border: 1px solid #ccc;
+        background-color: var(--button-background);
+        color: var(--button-foreground);
+        border: 1px solid var(--input-border);
         border-radius: 3px;
         cursor: pointer;
+      }
+
+      .small-button:hover {
+        background-color: var(--button-hover-background);
       }
 
       .file-select select {
         width: 100%;
         padding: 4px;
         height: 28px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--input-border);
         border-radius: 3px;
-        background-color: #fff;
+        background-color: var(--dropdown-background);
+        color: var(--dropdown-foreground);
         font-size: 12px;
       }
       
       .multiple-files-list {
         margin-top: 5px;
-        background-color: #fff;
-        border: 1px solid #ddd;
+        background-color: var(--dropdown-background);
+        border: 1px solid var(--dropdown-border);
         border-radius: 3px;
         padding: 5px;
         font-size: 12px;
@@ -327,13 +357,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         min-height: 150px;  /* Increased initial height */
         max-height: 300px;  /* Maximum height before scrolling */
         padding: 8px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--input-border);
         border-radius: 4px;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         font-size: 13px;
         resize: vertical;  /* Allows vertical resizing */
         overflow-y: auto;  /* Adds vertical scrollbar when needed */
-        background-color: #fff;
+        background-color: var(--input-background);
+        color: var(--input-foreground);
         box-sizing: border-box;
       }
       
@@ -1029,10 +1060,30 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showInformationMessage('The current file is not in the input file list: ' + message.filePath);
               }
               break;
+            case 'getTheme':
+              const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+              vscode.postMessage({ command: 'setTheme', theme });
+              break;
           }
           // Restore previous state
           restoreState();
         });
+
+        // Request the theme when the page loads
+        window.addEventListener('load', requestTheme);
+
+        // Add this event listener to apply the theme
+        window.addEventListener('message', event => {
+          const message = event.data;
+          if (message.command === 'setTheme') {
+            document.body.className = message.theme;
+          }
+        });
+
+        // Add this function to request the current theme
+        function requestTheme() {
+          vscode.postMessage({ command: 'getTheme' });
+        }
       </script>
     </head>
     <body>
