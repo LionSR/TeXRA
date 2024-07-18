@@ -1,5 +1,14 @@
 # Frontend Changelog
 
+## [0.6.8]
+
+- Renamed 'selectMultipleFiles' to 'selectMultipleInputFiles' for improved clarity
+- Refactored checkbox event handling in script.js
+- Improved file selection update logic with new helper functions
+- Reduced code duplication in WebView message handling
+- Enhanced code organization and readability in script.js
+- Updated version to 0.6.8 in package.json
+
 ## [0.6.7]
 
 - Refactored 'getCurrentEditedFile' command to 'requestEditedFile' in script.js
