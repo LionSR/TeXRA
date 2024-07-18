@@ -1,5 +1,11 @@
 # Frontend Changelog
 
+## [0.6.7]
+
+- Refactored 'getCurrentEditedFile' command to 'requestEditedFile' in script.js
+- Removed unused 'getCurrentEditedFile' case in viewProvider.ts
+- Improved code formatting in terminal.ts
+
 ## [0.6.6]
 
 - Improved Git repository handling in VS Code extension
