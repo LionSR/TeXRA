@@ -455,14 +455,17 @@ def get_first_task_chunk(task):
 def get_file_patterns(base, model, task, reflect):
     patterns = [f"{base}_{task}_{model}", f"{base}_{task}_{model}_diff", f"{base}_{task}_full_{model}", f"{base}_{task}_full_{model}_diff"]
     if reflect and reflect != "False":
-        patterns.extend([
-            f"{base}_{task}_reflect_{model}",
-            f"{base}_{task}_reflect_{model}_diff",
-            f"{base}_{task}_reflect_{model}_diffdiff",
-            f"{base}_{task}_reflect_full_{model}",
-            f"{base}_{task}_reflect_full_{model}_diff"
-        ])
+        patterns.extend(
+            [
+                f"{base}_{task}_reflect_{model}",
+                f"{base}_{task}_reflect_{model}_diff",
+                f"{base}_{task}_reflect_{model}_diffdiff",
+                f"{base}_{task}_reflect_full_{model}",
+                f"{base}_{task}_reflect_full_{model}_diff",
+            ]
+        )
     return patterns
+
 
 @click.command()
 @click.option("--model", required=False, default="opus", help="Model to use")
@@ -475,7 +478,7 @@ def clean_single(model, input_file, reflect, task):
     first_task_chunk = get_first_task_chunk(task)
 
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
-    
+
     # Add the thinking.txt pattern separately
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
 
@@ -513,15 +516,15 @@ def pack_single(model, input_file, reflect, task):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
     first_task_chunk = get_first_task_chunk(task)
-    
+
     now = datetime.now().strftime("%Y%m%d%H%M")
     output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
 
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
-    
+
     # Add the thinking.txt pattern separately
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
-    
+
     # Add the original file pattern
     file_patterns.append(base_name)
 
