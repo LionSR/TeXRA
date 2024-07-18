@@ -1,6 +1,13 @@
 # Frontend Changelog
 
-## [0.6.4]
+## [0.6.5]
+
+- Fixed WebView implementation issues
+- Updated HTML file to use external CSS and JS files
+- Adjusted CSP settings for proper resource loading
+- Improved file handling and WebView content generation
+
+## [0.6.4] Broken!!
 
 - Refactored WebView implementation for improved maintainability
 - Split HTML, CSS, and JavaScript into separate files

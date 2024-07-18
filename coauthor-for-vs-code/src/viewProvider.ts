@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import * as fs from 'fs';
 import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listEditedFiles } from './utils';
 
@@ -10,11 +9,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.file(path.join(this.context.extensionPath, 'src', 'webview'))
+        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview')
       ]
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
+    // vscode.window.showInformationMessage(`HTML Content Length: ${webviewView.webview.html.length}`);
 
     webviewView.webview.onDidReceiveMessage(async message => {
       switch (message.command) {
@@ -36,9 +36,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const sampleFiles_val = message.sampleFiles;
           const auxFiles_val = message.auxFiles;
           const figureFiles_val = message.figureFiles;
-
           const instructions_val = message.instructions;
-
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
           const includeTikzReflection_val = message.includeTikzReflection;
@@ -201,15 +199,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
-    const htmlPath = path.join(this.context.extensionPath, 'src', 'webview', 'index.html');
-    const cssPath = path.join(this.context.extensionPath, 'src', 'webview', 'styles.css');
-    const jsPath = path.join(this.context.extensionPath, 'src', 'webview', 'script.js');
+    const htmlPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'index.html');
+    const cssPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'styles.css');
+    const jsPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'script.js');
 
-    let htmlContent = fs.readFileSync(htmlPath, 'utf-8');
-    const cssContent = fs.readFileSync(cssPath, 'utf-8');
-    const jsContent = fs.readFileSync(jsPath, 'utf-8');
+    let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
     const nonce = this.getNonce();
+
+    const styleUri = webview.asWebviewUri(cssPath);
+    const scriptUri = webview.asWebviewUri(jsPath);
 
     const config = vscode.workspace.getConfiguration('coauthor');
     const tasks = config.get<string[]>('tasks') || [];
@@ -217,12 +216,11 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
     // Replace placeholders in HTML with actual content
     htmlContent = htmlContent
-      .replace('${styleUri}', webview.asWebviewUri(vscode.Uri.file(cssPath)).toString())
-      .replace('${scriptUri}', webview.asWebviewUri(vscode.Uri.file(jsPath)).toString())
-      .replace('${nonce}', nonce)
-      .replace('${cssContent}', cssContent)
-      .replace('${jsContent}', jsContent)
-      .replace('${taskOptions}', taskOptions);
+      .replace('${styleUri}', styleUri.toString())
+      .replace('${scriptUri}', scriptUri.toString())
+      .replace(/\${nonce}/g, nonce)
+      .replace('${taskOptions}', taskOptions)
+      .replace('${cspSource}', webview.cspSource);
 
     return htmlContent;
   }
