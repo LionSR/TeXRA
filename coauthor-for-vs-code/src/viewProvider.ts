@@ -213,8 +213,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       <title>CoAuthor Panel</title>
       <style>
       :root {
-        --background-color: var(--vscode-editor-background);
-        --text-color: var(--vscode-editor-foreground);
+        --background-color: var(--vscode-sideBar-background);
+        --text-color: var(--vscode-sideBar-foreground);
         --button-background: var(--vscode-button-background);
         --button-foreground: var(--vscode-button-foreground);
         --button-hover-background: var(--vscode-button-hoverBackground);
