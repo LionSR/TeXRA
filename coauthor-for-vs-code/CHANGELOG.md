@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.6.4]
+
+- Refactored WebView implementation for improved maintainability
+- Split HTML, CSS, and JavaScript into separate files
+- Updated viewProvider.ts to load content from separate files
+- Improved code organization and readability
+
 ## [0.6.3]
 
 - Adaptive theming support for light and dark VS Code themes
