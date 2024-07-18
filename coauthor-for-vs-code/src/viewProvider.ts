@@ -161,12 +161,22 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.latexDiffVC', message.inputFile, message.commitHash);
           break;
         case 'requestRecentCommits':
-          const commits = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
-          webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits });
+          const isGitRepo = await vscode.commands.executeCommand<boolean>('coauthor.isGitRepository');
+          if (isGitRepo) {
+            const commits = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
+            webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits });
+          } else {
+            webviewView.webview.postMessage({ command: 'setRecentCommits', isGitRepo: false });
+          }
           break;
         case 'refreshCommits':
-          const commits_refresh = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
-          webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits_refresh });
+          const isGitRepoRefresh = await vscode.commands.executeCommand<boolean>('coauthor.isGitRepository');
+          if (isGitRepoRefresh) {
+            const commits_refresh = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
+            webviewView.webview.postMessage({ command: 'setRecentCommits', commits: commits_refresh });
+          } else {
+            webviewView.webview.postMessage({ command: 'setRecentCommits', isGitRepo: false });
+          }
           break;
         case 'packLatexDiffVC':
           vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFile, message.commitHash, message.clean);
