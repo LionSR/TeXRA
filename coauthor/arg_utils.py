@@ -13,7 +13,7 @@ def get_common_argparser():
         type=str,
         default="sonnet+",
         help="Model name to use for processing.",
-        choices=["sonnet+", "opus", "sonnet", "haiku", "gpt4o", "gpt4turbo"],
+        choices=["sonnet+", "opus", "sonnet", "haiku", "gpt4t", "gpt4o", "gpt4o-"],
     )
     parser.add_argument(
         "--reflect",
