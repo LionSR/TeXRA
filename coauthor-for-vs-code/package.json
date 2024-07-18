@@ -13,7 +13,8 @@
     "Formatters"
   ],
   "activationEvents": [
-    "onView:coauthor"
+    "onView:coauthor",
+    "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
