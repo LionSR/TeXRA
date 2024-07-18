@@ -189,14 +189,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
           }
           break;
-        case 'getCurrentEditedFile':
-          if (message.inputFile) {
-            const editedFiles = await listEditedFiles(message.inputFile);
-            webviewView.webview.postMessage({ command: 'setEditedFiles', files: editedFiles });
-          } else {
-            vscode.window.showInformationMessage('Please select an input file first.');
-          }
-          break;
         case 'merge':
           vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.editedFile);
           break;
