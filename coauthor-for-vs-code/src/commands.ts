@@ -134,10 +134,14 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, task: string, reflect: string, model: string) => {
+    vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, task: string, reflect: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor pack-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`);
+      let command = `coauthor pack-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`;
+      if (outputNameOverride) {
+        command += ` --output_name_override="${outputNameOverride}"`;
+      }
+      terminal.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFile: string, commitHash: string, clean: boolean = false) => {
       const terminal = ensureTerminal();
@@ -160,10 +164,14 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, task: string, reflect: string, model: string) => {
+    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, task: string, reflect: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      terminal.sendText(`coauthor clean-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`);
+      let command = `coauthor clean-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`;
+      if (outputNameOverride) {
+        command += ` --output_name_override="${outputNameOverride}"`;
+      }
+      terminal.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
