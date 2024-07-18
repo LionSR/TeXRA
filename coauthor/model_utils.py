@@ -9,6 +9,7 @@ model_mapping = {
     "haiku": "claude-3-haiku-20240307",
     "gpt4o": "gpt-4o-2024-05-13",
     "gpt4t": "gpt-4-turbo-2024-04-09",
+    "gpt4o-": "gpt-4o-mini-2024-07-18",
 }
 
 
@@ -62,12 +63,16 @@ def compute_api_price(input_tokens, output_tokens, model):
     elif model == "haiku":
         input_price = input_tokens * 0.25 / 1e6
         output_price = output_tokens * 1.25 / 1e6
-    elif model == "gpt4o":
-        input_price = input_tokens * 5 / 1e6
-        output_price = output_tokens * 15 / 1e6
     elif model == "gpt4t":
         input_price = input_tokens * 10 / 1e6
         output_price = output_tokens * 30 / 1e6
+    elif model == "gpt4o":
+        input_price = input_tokens * 5 / 1e6
+        output_price = output_tokens * 15 / 1e6
+    elif model == "gpt4o-":
+        input_price = input_tokens * 0.15 / 1e6
+        output_price = output_tokens * 0.6 / 1e6
+
     else:
         raise ValueError("Invalid model name for computing price.")
     return input_price + output_price
