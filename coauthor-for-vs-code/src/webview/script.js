@@ -578,17 +578,34 @@ window.addEventListener('message', event => {
     case 'setRecentCommits':
       const commitSelect = document.getElementById('commitSelect');
       commitSelect.innerHTML = '';
-      const emptyCommitOption = document.createElement('option');
-      emptyCommitOption.value = 'HEAD';
-      emptyCommitOption.textContent = 'HEAD';
-      commitSelect.appendChild(emptyCommitOption);
-      message.commits.forEach(commit => {
+      if (message.isGitRepo === false) {
         const option = document.createElement('option');
-        const [commitHash, ...commitMessage] = commit.split(': ');
-        option.value = commitHash;
-        option.textContent = commit;
+        option.value = '';
+        option.textContent = 'Not a Git repository';
         commitSelect.appendChild(option);
-      });
+        commitSelect.disabled = true;
+        document.getElementById('refreshCommitsButton').disabled = true;
+        document.getElementById('packLatexDiffVCButton').disabled = true;
+        document.getElementById('cleanLatexDiffVCButton').disabled = true;
+        document.getElementById('latexDiffVCButton').disabled = true;
+      } else {
+        const emptyCommitOption = document.createElement('option');
+        emptyCommitOption.value = 'HEAD';
+        emptyCommitOption.textContent = 'HEAD';
+        commitSelect.appendChild(emptyCommitOption);
+        message.commits.forEach(commit => {
+          const option = document.createElement('option');
+          const [commitHash, ...commitMessage] = commit.split(': ');
+          option.value = commitHash;
+          option.textContent = commit;
+          commitSelect.appendChild(option);
+        });
+        commitSelect.disabled = false;
+        document.getElementById('refreshCommitsButton').disabled = false;
+        document.getElementById('packLatexDiffVCButton').disabled = false;
+        document.getElementById('cleanLatexDiffVCButton').disabled = false;
+        document.getElementById('latexDiffVCButton').disabled = false;
+      }
       break;
     case 'setCurrentFile':
       const inputFileSelect_val = document.getElementById('inputFileSelect');
