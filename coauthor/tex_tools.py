@@ -29,17 +29,17 @@ def get_tex_count(file_path):
 def process_tikzpicture_endings(file_path):
     """
     Process the file to fix tikzpicture endings with proper indentation.
-    
+
     :param file_path: Path to the LaTeX diff file
     """
-    with open(file_path, 'r', encoding='utf-8') as file:
+    with open(file_path, "r", encoding="utf-8") as file:
         content = file.read()
 
-    pattern = re.compile(r'(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}')
-    replacement = r'\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}'
+    pattern = re.compile(r"(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}")
+    replacement = r"\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}"
     content = re.sub(pattern, replacement, content)
 
-    with open(file_path, 'w', encoding='utf-8') as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
     print(colored(f"Tikzpicture endings fixed in {file_path}", "blue"))
@@ -89,7 +89,7 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
                 diff_file.write(line)
 
     print(colored(f"Line breaks added to {diff_file_name}", "blue"))
-    
+
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)
 
@@ -124,6 +124,5 @@ def run_latexdiff_vc(input_file, commit_hash):
             if "\\RequirePackage{color}" in line:
                 diff_file.write("\n")
 
-    
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)
