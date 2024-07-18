@@ -64,7 +64,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.selectMultipleAuxFiles', async () => {
+    vscode.commands.registerCommand('coauthor.selectMultipleAuxFiles', async (currentAuxFile: string) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showErrorMessage('No workspace folder open');

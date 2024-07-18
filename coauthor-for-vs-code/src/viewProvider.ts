@@ -81,7 +81,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'selectMultipleAuxFiles':
-          const multipleAuxFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleAuxFiles');
+          const multipleAuxFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleAuxFiles', message.currentAuxFile);
           if (multipleAuxFilesSelect) {
             webviewView.webview.postMessage({ command: 'setMultipleAuxFiles', files: multipleAuxFilesSelect });
           }
@@ -128,18 +128,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setEditedFiles', files: filteredEditedFiles });
           break;
         case 'sampleFileSelected':
-          vscode.window.showInformationMessage(`Selected sample file: ${message.filePath}`);
-          break;
         case 'auxFileSelected':
-          vscode.window.showInformationMessage(`Selected auxiliary file: ${message.filePath}`);
-          break;
         case 'figureFileSelected':
-          vscode.window.showInformationMessage(`Selected figure file: ${message.filePath}`);
-          break;
         case 'editedFileSelected':
-          vscode.window.showInformationMessage(`Selected edited file: ${message.filePath}`);
+          vscode.window.showInformationMessage(`${message.command}: ${message.filePath}`);
           break;
-        case 'modelSelect':
+        case 'modelSelected':
           vscode.window.showInformationMessage(`Selected model: ${message.model}`);
           if (message.model) {
             webviewView.webview.postMessage({

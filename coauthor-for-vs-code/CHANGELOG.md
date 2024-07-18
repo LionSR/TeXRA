@@ -1,5 +1,16 @@
 # Frontend Changelog
 
+## [0.6.9]
+- Extensive code refactoring for improved maintainability and performance
+- Optimized event handling and state management in WebView
+- Improved file selection and UI update logic
+- Enhanced error handling and user feedback
+- Streamlined WebView message handling
+- Added GPT-4 Omni- model option to the model selection dropdown
+- Updated package.json to version 0.6.9
+- Reorganized HTML structure for better maintainability
+- Improved theme handling and application in WebView
+
 ## [0.6.8]
 
 - Renamed 'selectMultipleFiles' to 'selectMultipleInputFiles' for improved clarity
