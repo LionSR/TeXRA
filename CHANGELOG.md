@@ -6,6 +6,11 @@
 - Enhanced error handling for new output file functionality
 - Improved modularity and organization of the codebase
 - Various minor code improvements and optimizations
+- Added output_name_override option to pack-single and clean-single CLI commands
+- Updated pack_single and clean_single functions to use output name override
+- Improved file naming logic to support custom output names
+- Enhanced error handling for new output name override functionality
+
 
 ## [0.9.8]
 
