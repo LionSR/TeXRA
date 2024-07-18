@@ -11,7 +11,6 @@
 - Improved file naming logic to support custom output names
 - Enhanced error handling for new output name override functionality
 
-
 ## [0.9.8]
 
 - Added new GPT-4 Omni- model option with 16k token limit
