@@ -1,5 +1,13 @@
 # Frontend Changelog
 
+## [0.6.6]
+
+- Improved Git repository handling in VS Code extension
+- Added check for Git repository before fetching commits
+- Updated UI to display message when workspace is not a Git repository
+- Disabled Git-related buttons when not in a Git repository
+- Enhanced error handling for Git operations
+
 ## [0.6.5]
 
 - Fixed WebView implementation issues
