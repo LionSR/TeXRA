@@ -309,12 +309,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
+    const outputNameOverride = document.getElementById('outputNameOverride').value;
     vscode.postMessage({
       command: 'packSingle',
       inputFile: inputFile,
       task: task,
       reflect: reflect,
-      model: model
+      model: model,
+      outputNameOverride: outputNameOverride
     });
   });
   document.getElementById('cleanSingleButton').addEventListener('click', function () {
@@ -322,12 +324,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
+    const outputNameOverride = document.getElementById('outputNameOverride').value;
     vscode.postMessage({
       command: 'cleanSingle',
       inputFile: inputFile,
       task: task,
       reflect: reflect,
-      model: model
+      model: model,
+      outputNameOverride: outputNameOverride
     });
   });
   document.getElementById('latexDiffButton').addEventListener('click', function () {
