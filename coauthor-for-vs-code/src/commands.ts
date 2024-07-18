@@ -6,7 +6,7 @@ import * as path from 'path';
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.selectMultipleFiles', async (currentInputFile: string) => {
+    vscode.commands.registerCommand('coauthor.selectMultipleInputFiles', async (currentInputFile: string) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showErrorMessage('No workspace folder open');
