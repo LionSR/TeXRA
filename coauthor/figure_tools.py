@@ -66,7 +66,7 @@ def extract_figure_paths(latex_file_path):
     except Exception as e:
         print(f"An error occurred: {str(e)}")
 
-    print("Found figure paths:", colored(figure_paths, "gren"))
+    print("Found figure paths:", colored(figure_paths, "green"))
     return figure_paths
 
 
