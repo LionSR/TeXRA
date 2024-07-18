@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.6.3]
+
+- Adaptive theming support for light and dark VS Code themes
+- Improved UI consistency across different color schemes
+- Updated file selection area to match VS Code's native dropdown styles
+- Refactored CSS to use VS Code theme variables for better integration
+
 ## [0.6.2]
 
 - Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command

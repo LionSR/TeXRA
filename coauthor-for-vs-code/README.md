@@ -10,6 +10,7 @@ This is the frontend component of the CoAuthor project, a Visual Studio Code ext
 - LaTeX diff visualization
 - Housekeeping operations (clean output, clean build, indent TeX)
 - Customizable settings
+- **Adaptive Theming**: CoAuthor now automatically adapts to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience.
 
 ## Installation
 
