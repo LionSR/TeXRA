@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.10.2]
+
+- Implemented prototype for multi-file output processing
+- Added new 'polish_multiple_tex' command in CLI
+- Created 'polish_multiple' task settings in edit_tex.py
+- Implemented 'handle_multiple_input' function for processing multiple input files
+- Fixed end_tag detection issue in split_scratchpad_output
+- Updated main function in edit_tex.py to support 'polish_multiple' task
+- Enhanced error handling for multi-file input validation
+
 ## [0.10.1]
 
 - Added `ensure_correct_xml_structure` function to fix XML structure issues
