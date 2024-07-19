@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -182,6 +182,12 @@
           "default": "False",
           "enum": ["True", "False"],
           "description": "Default reflect setting for CoAuthor operations",
+          "scope": "resource"
+        },
+        "coauthor.numberOfCommitsToShow": {
+          "type": "number",
+          "default": 20,
+          "description": "Number of recent commits to show in the commit selection dropdown",
           "scope": "resource"
         }
       }
