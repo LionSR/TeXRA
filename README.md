@@ -81,7 +81,7 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 ## Basic Usage
 
 1. Open a LaTeX or text file in VS Code
-2. Access the CoAuthor sidebar (look for the unicorn icon in the Activity Bar)
+2. Access the CoAuthor sidebar (look for the scholarly duck icon in the Activity Bar)
 3. Select your desired task (e.g., polish, correct, draw)
 4. Choose your input file(s) and any additional options
 5. (Optional) Select auxiliary files or figures

@@ -253,7 +253,7 @@
         {
           "id": "coauthor",
           "title": "CoAuthor",
-          "icon": "resources/unicorn.svg"
+          "icon": "resources/scholarly-duck.svg"
         }
       ]
     },
@@ -298,7 +298,7 @@
   },
   "license": "MIT",
   "author": "Sirui LU",
-  "icon": "resources/unicorn.png",
+  "icon": "resources/scholarly-duck.png",
   "keywords": [
     "latex",
     "academic",
