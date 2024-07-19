@@ -51,6 +51,7 @@ def initialize_state(state, accumulated_output):
 def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
     end_turn = False
     k = output_settings["k"]
+    document_tag = output_settings["document_tag"]
 
     while not end_turn:
         file_exists = os.path.exists(output_file)
@@ -168,7 +169,7 @@ def process_first_round(
 
         messages.append({"role": "assistant", "content": prefill_first})
 
-        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>":
+        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>" and is_anthropic_model(model):
             write_file(output_file, prefill_first)
 
     state = initialize_state(state, accumulated_output)

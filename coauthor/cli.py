@@ -486,7 +486,7 @@ def clean_single(model, input_file, reflect, task, output_name_override):
     # Add the thinking.txt pattern separately
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
 
-    extensions = [".pdf", ".tex", ".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".txt"]
+    extensions = [".pdf", ".tex", ".text", ".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".txt"]
 
     print(f"file_patterns: {file_patterns}")
     print(f"extensions: {extensions}")
@@ -533,7 +533,7 @@ def pack_single(model, input_file, reflect, task, output_name_override):
     # Add the original file pattern
     file_patterns.append(base_name)
 
-    extensions = [".pdf", ".tex", ".txt"]
+    extensions = [".pdf", ".tex", ".txt", ".text"]
 
     moved_files = []
     copied_files = []

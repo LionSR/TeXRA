@@ -1,7 +1,9 @@
 import os
-import difflib
+import re
 from termcolor import colored
-from .file_utils import read_file, write_file, append_file
+from .file_utils import read_file, write_file
+import difflib
+import xml.etree.ElementTree as ET
 
 
 def get_output_file_name(input_file, task, model, output_type, reflect=False):
@@ -49,26 +51,101 @@ def check_for_massive_repetition(last_response, new_response):
     return massive_repetition_detected
 
 
+def ensure_correct_xml_structure(file_path, document_tag):
+    with open(file_path, "r+", encoding="utf-8") as file:
+        content = file.read()
+        if content.startswith("<scratchpad>"):
+            if not content.endswith(f"</{document_tag}>"):
+                if "</{document_tag}>" not in content:
+                    content += f"</{document_tag}>"
+                else:
+                    # Move the closing tag to the end
+                    content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
+                    content += f"</{document_tag}>"
+            file.seek(0)
+            file.write(content)
+            file.truncate()
+
+
 def split_scratchpad_output(output_file, document_tag="latex_document"):
-    _, extension = os.path.splitext(output_file)
-    log_file_thinking = output_file.replace(f"{extension}", "_thinking.txt")
+    base_name, extension = os.path.splitext(output_file)
+    log_file_thinking = f"{base_name}_thinking.txt"
+    tex_file = f"{base_name}.tex"
     print(f"Log file: {colored(log_file_thinking, 'cyan')}")
+    print(f"TeX file: {colored(tex_file, 'cyan')}")
+
     output_content = read_file(output_file)
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
     # do not change this line
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
+    output_content = output_content.replace("\\end{document}", "\\end{document}")
 
     if "</scratchpad>" in output_content:
-        if "<scratchpad>" in output_content:
-            append_file(log_file_thinking, output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
-        else:
-            append_file(log_file_thinking, "<scratchpad>\n" + output_content.split("</scratchpad>")[0] + "</scratchpad>\n")
+        scratchpad_content, document_content = output_content.split("</scratchpad>", 1)
 
-        output_content = output_content.split(
-            ("<" + document_tag + ">" if "<" + document_tag + ">" in output_content else "</scratchpad>"),
-            1,
-        )[1].lstrip()
-        write_file(output_file, output_content)
+        if "<scratchpad>" in scratchpad_content:
+            scratchpad_content = scratchpad_content.split("<scratchpad>", 1)[1]
 
-    return output_content
+        write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
+
+        document_content = document_content.split(("<" + document_tag + ">" if "<" + document_tag + ">" in document_content else ""), 1)[1].lstrip()
+
+        # Remove the closing document tag if present
+        document_content = document_content.replace(f"</{document_tag}>", "").strip()
+
+        write_file(tex_file, document_content)
+    else:
+        # If there's no scratchpad, write the entire content to the tex file
+        document_content = output_content.split(("<" + document_tag + ">" if "<" + document_tag + ">" in output_content else ""), 1)[1].lstrip()
+        document_content = document_content.replace(f"</{document_tag}>", "").strip()
+        write_file(tex_file, document_content)
+
+    # Remove the original .text file
+    os.remove(output_file)
+
+    return tex_file
+
+
+def split_scratchpad_output_xml(output_file, document_tag="latex_document"):
+    base_name, extension = os.path.splitext(output_file)
+    log_file_thinking = f"{base_name}_thinking.txt"
+    tex_file = f"{base_name}.tex"
+    print(f"Log file: {colored(log_file_thinking, 'cyan')}")
+    print(f"TeX file: {colored(tex_file, 'cyan')}")
+
+    # Read the content of the output file
+    output_content = read_file(output_file)
+
+    # Wrap the content in a root element for proper XML parsing
+    root_content = f"<root>{output_content}</root>"
+
+    # Parse the XML content
+    root = ET.fromstring(root_content)
+
+    # Extract scratchpad content
+    scratchpad_elements = root.findall(".//scratchpad")
+    scratchpad_content = "\n".join(ET.tostring(elem, encoding="unicode") for elem in scratchpad_elements)
+
+    if scratchpad_content:
+        write_file(log_file_thinking, scratchpad_content)
+
+    # Extract latex document content
+    latex_document = root.find(f".//{document_tag}")
+    if latex_document is not None:
+        # Remove any nested scratchpad elements from the latex document
+        for scratchpad in latex_document.findall(".//scratchpad"):
+            latex_document.remove(scratchpad)
+
+        # Get the text content of the latex document, excluding the document_tag itself
+        latex_content = "".join(latex_document.itertext()).strip()
+        write_file(tex_file, latex_content)
+    else:
+        print(f"Warning: No {document_tag} found in the output file.")
+        # If no latex document is found, write the entire content (excluding scratchpads) to the tex file
+        full_content = "".join(root.itertext()).strip()
+        write_file(tex_file, full_content)
+
+    # Remove the original .text file
+    # os.remove(output_file)
+
+    return tex_file
