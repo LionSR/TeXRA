@@ -4,7 +4,6 @@ from coauthor.prompt_utils import load_prompt
 
 
 def get_model_settings(args):
-
     model = args.model.lower()
     model_name = model_mapping[model]
     model_settings = {

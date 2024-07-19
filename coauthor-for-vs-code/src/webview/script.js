@@ -582,7 +582,8 @@ window.addEventListener('message', event => {
         commitSelect.appendChild(emptyCommitOption);
         message.commits.forEach(commit => {
           const option = document.createElement('option');
-          const [commitHash, ...commitMessage] = commit.split(': ');
+          const [commitHash, ...commitMessageParts] = commit.split(': ');
+          const commitMessage = commitMessageParts.join(': '); // Rejoin in case the commit message contained ': '
           option.value = commitHash;
           option.textContent = commit;
           commitSelect.appendChild(option);

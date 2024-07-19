@@ -262,8 +262,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (workspaceFolders) {
         const workspacePath = workspaceFolders[0].uri.fsPath;
+        const config = vscode.workspace.getConfiguration('coauthor');
+        const numberOfCommits = config.get('numberOfCommitsToShow', 20);
         return new Promise<string[]>((resolve, reject) => {
-          exec('git log -n 20 --pretty=format:"%h: %s"', { cwd: workspacePath }, (error, stdout, stderr) => {
+          exec(`git log -n ${numberOfCommits} --pretty=format:"%h: %s (%cr)"`, { cwd: workspacePath }, (error, stdout, stderr) => {
             if (error) {
               reject(stderr);
             } else {
