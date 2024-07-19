@@ -20,7 +20,14 @@ from .file_utils import (
     get_prompt_path,
 )
 from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
-from .output_utils import split_scratchpad_output, check_for_massive_repetition, get_output_file_name, get_output_file_name_merge
+from .output_utils import (
+    check_for_massive_repetition,
+    get_output_file_name,
+    get_output_file_name_merge,
+    ensure_correct_xml_structure,
+    split_scratchpad_output,
+    split_scratchpad_output_xml,
+)
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .arg_utils import get_common_argparser, comma_separated_list
 from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
@@ -78,8 +85,10 @@ __all__ = [
     "get_auxiliary_files_content",
     "get_additional_input_files_content",
     "split_scratchpad_output",
+    "split_scratchpad_output_xml",
     "get_output_file_name",
     "get_output_file_name_merge",
+    "ensure_correct_xml_structure",
     "load_prompt",
     "handle_single_input",
     "handle_long_input",
