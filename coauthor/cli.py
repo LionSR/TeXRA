@@ -148,6 +148,12 @@ def draw_tex(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def polish_multiple_tex(model, input_file, **kwargs):
+    execute_task("edit_tex", "polish_multiple", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def correct_qi(model, input_file, **kwargs):
     execute_task("edit_lecture", "correct_qi", model, input_file, **kwargs)
 
@@ -698,6 +704,7 @@ if __name__ == "__main__":
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
+cli.add_command(polish_multiple_tex)
 
 # edit_lecture.py
 cli.add_command(correct_st)
