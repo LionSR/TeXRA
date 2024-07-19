@@ -101,7 +101,7 @@ def split_scratchpad_output(output_file, document_tag="latex_document"):
         write_file(tex_file, document_content)
 
     # Remove the original .text file
-    os.remove(output_file)
+    # os.remove(output_file)
 
     return tex_file
 
