@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.10.1]
+
+- Added `ensure_correct_xml_structure` function to fix XML structure issues
+- Implemented `split_scratchpad_output_xml` for improved XML parsing of scratchpad output
+- Updated `edit_lecture.py`, `edit_tex.py`, and `write_tex.py` to use new XML handling functions
+- Refactored file processing in task files to support initial .text output for scratchpad content
+- Added support for .text extension in `clean_single` and `pack_single` functions
+- Improved error handling and file processing across multiple tasks
+- Various minor code improvements and optimizations
+
 ## [0.10.0]
 
 - Minor code reorganization and cleanup in various utility files
