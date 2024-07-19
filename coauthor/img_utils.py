@@ -12,6 +12,7 @@ def get_base64_encoded_image(image_path):
         return base64_string
 
 
+# in principle can be extended to multiple pages
 def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 1024)):
     """
     Convert a single page of a PDF to a PNG image.

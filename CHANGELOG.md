@@ -1,5 +1,12 @@
 # Backend Changelog
 
+## [0.10.0]
+
+- Minor code reorganization and cleanup in various utility files
+- Improved handling of image messages for different model types
+- Refactored split_scratchpad_output function for better readability
+- Updated pyproject.toml to version 0.10.0
+
 ## [0.9.9]
 
 - Updated backend to support new output file options from frontend
