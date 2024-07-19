@@ -1,5 +1,13 @@
 # Frontend Changelog
 
+## [0.7.1]
+
+- Added new setting 'coauthor.numberOfCommitsToShow' to control how many recent commits are displayed in the dropdown
+- Updated git log command to use the configured number of commits
+- Improved commit message display in dropdown to include relative time
+- Enhanced UI layout for better readability
+- Improved select group label alignment in WebView
+
 ## [0.7.0]
 
 - Added multiple file output functionality to the frontend
