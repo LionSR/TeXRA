@@ -36,7 +36,7 @@ In your conversion, focus on the following:
 - Accurately transcribe all text, formulas, equations, and any figures/diagrams from the original text file
 - Use the LaTeX commands and mathematical notations consistently, as demonstrated in the sample file
 - Maintain the same equation numbering as in the original text file
-- Cross-reference sections, equations, theorems, etc. using meaningful and concise labels ((use exp for exponential etc).)
+- Cross-reference sections, equations, theorems, etc. using meaningful and condensed labels ((use exp for exponential etc).)
 - Organize the LaTeX code clearly with appropriate sectioning, labeling, and comments
 - Prioritize accuracy and clarity in your transcription
 </requirements>

@@ -6,7 +6,7 @@ Let's critically reflect on the cover letter we've written. Consider these point
 2. Is the explanation of why the paper is suitable for the chosen Physical Review journal clear and compelling?
 3. Is the tone appropriately formal and professional for academic correspondence?
 4. Are all necessary components (paper title, authors, contact information) included?
-5. Is the letter concise and focused, typically not exceeding one page?
+5. Is the letter condensed and focused, typically not exceeding one page?
 6. Are there any areas where the letter could be more persuasive or impactful?
 </reflection>
 <improvements>

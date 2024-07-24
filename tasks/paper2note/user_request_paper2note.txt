@@ -1,4 +1,4 @@
-Please carefully read the provided research paper {INPUT_FILE} and adapt it into a concise lecture note with derivations. 
+Please carefully read the provided research paper {INPUT_FILE} and adapt it into a condensed lecture note with derivations. 
 
 In your adaptation, focus on the following:
 <requirements>
