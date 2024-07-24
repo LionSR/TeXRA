@@ -15,7 +15,7 @@ your detailed analysis of the exisitng figure and how it compares with the provi
 
 4. Stylistic Consistency: Assess how well the figures maintain consistency with the overall document style. Suggest adjustments if needed.
 
-5. Comparative Effectiveness: Compare the modified figures to any reference figures provided. Are they more concise and visually appealing while conveying the same information?
+5. Comparative Effectiveness: Compare the modified figures to any reference figures provided. Are they more condensed and visually appealing while conveying the same information?
 
 6. Textual Integration: Evaluate the coherence of figure references throughout the main text. Identify any missing or unnecessary references.
 
@@ -41,7 +41,7 @@ your detailed analysis of the exisitng figure and how it compares with the provi
 Now, implement these refinements by outputting a further enhanced and complete version of the LaTeX document. Ensure that your changes:
 1. Address all points raised in the reflection and idea.
 2. Maintain focus on the original instruction.
-3. Result in figures that are correct, aesthetically pleasing, informative, and concise.
+3. Result in figures that are correct, aesthetically pleasing, informative, and condensed.
 4. Adhere to the style of a professional graduate physics textbook.
 
 Please provide the complete LaTeX document with your refinements in the <latex_document> ... </latex_document> tag.

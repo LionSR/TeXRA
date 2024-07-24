@@ -2,12 +2,12 @@ Let's take a moment to reflect on the changes made:
 
 <reflection>
 1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
-2. Are the enhancements clear, concise, and effective in improving the quality of the latex document? If not, how could they be further refined?
+2. Are the enhancements clear, condensed, and effective in improving the quality of the latex document? If not, how could they be further refined?
 3. Do the changes maintain the overall structure and coherence of the original latex document? If not, what adjustments could be made to ensure a smooth flow?
 4. Have the added parts been coherently and logically incorporated into the exisiting contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
 5. Are there any super important information or details from the original version that are now missing in the new version?
 6. Are there any notations or quantities used before being defined?
-7. If there are any figures added in the first round, compare the generated figure to the figure given as the reference, create a new version of the figure that is correct, informative, and yet concise.
+7. If there are any figures added in the first round, compare the generated figure to the figure given as the reference, create a new version of the figure that is correct, informative, and yet condensed.
 </reflection>
 
 Please carefully consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.

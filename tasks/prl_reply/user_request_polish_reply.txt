@@ -61,6 +61,6 @@ Please review the drafted reply letter and the referee comments carefully. Then,
 3. Address all the referee comments thoroughly and convincingly
 4. Ensure the tone is professional and respectful
 
-Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start polishing the reply letter in the the <reply_letter></reply_letter> tag. Your polished reply letter should be well-structured, concise, and free of errors in grammar, punctuation, and spelling.
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start polishing the reply letter in the the <reply_letter></reply_letter> tag. Your polished reply letter should be well-structured, condensed, and free of errors in grammar, punctuation, and spelling.
 
 
