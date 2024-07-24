@@ -46,9 +46,9 @@ export async function listFigureFiles(): Promise<string[]> {
     const workspacePath = workspaceFolders[0].uri.fsPath;
     const config = getConfig();
     const includedFigureExtensions = config.get<string[]>('includedFigureExtensions') || ['.png', '.pdf', '.jpeg', '.jpg', '.svg'];
-    const ignoreFigureDirectories = config.get<string[]>('ignoreFigureDirectories') || [];
+    const ignoredFigureDirectories = config.get<string[]>('ignoredFigureDirectories') || [];
     const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    return await getFilesRecursively(workspacePath, workspacePath, includedFigureExtensions, [], ignoreFigureDirectories, ignoredKeywords);
+    return await getFilesRecursively(workspacePath, workspacePath, includedFigureExtensions, [], ignoredFigureDirectories, ignoredKeywords);
   }
   return [];
 }
