@@ -12,7 +12,7 @@ After thoroughly reviewing the original text file, the sample LaTeX file, and yo
 <requirements>
 - Ensure all equations, formulas, and mathematical expressions are accurately transcribed from the original text file
 - Maintain consistency with the formatting, style, and structure of the provided sample LaTeX file
-- Properly cross-reference and label all equations, sections, theorems, etc. using meaningful and concise labels
+- Properly cross-reference and label all equations, sections, theorems, etc. using meaningful and condensed labels
 - Improve the overall clarity and readability of the LaTeX code, making it publication-ready
 </requirements>
 
