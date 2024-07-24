@@ -44,7 +44,7 @@ When approaching this task, consider the following:
 Please use your expertise in physics, machine learning, LaTeX, and TikZ to create figures that are:
 - Mathematically accurate
 - Visually appealing
-- Informative and concise
+- Informative and condensed
 - Well-integrated with the text
 - Consistent with graduate-level physics textbook standards
 
