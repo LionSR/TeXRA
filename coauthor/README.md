@@ -250,6 +250,26 @@ Convert research papers into lecture notes:
 coauthor paper2note --input_file paper.tex --sample_chapters chapter1.tex,chapter2.tex --sample_paper sample_paper.tex --sample_note sample_note.tex
 ```
 
+### Slide to Paper Conversion (slide2paper)
+
+Convert presentation slides into a research paper format:
+
+```bash
+coauthor slide2paper --input_file draft.tex --figure_inputs slides.pdf
+```
+
+This task takes slide images or a PDF of a presentation (specified by `--figure_inputs`) and generates a comprehensive LaTeX research paper. The `--input_file` can be an existing draft of the paper or an empty file. It expands on key points from the slides, incorporating additional details, explanations, and mathematical formulations. The output is a well-structured, publication-ready LaTeX document.
+
+### Paper to Slide Conversion (paper2slide)
+
+Convert research paper into a LaTeX Beamer presentation:
+
+```bash
+coauthor paper2slide --input_file paper.tex
+```
+
+This task takes a LaTeX research paper as input and creates a professional LaTeX Beamer presentation. It condenses the paper's content into a series of slides, focusing on key points, methodology, results, and conclusions. The output is a LaTeX Beamer document ready for academic presentations.
+
 ## Version Control Integration
 
 CoAuthor integrates with version control systems:

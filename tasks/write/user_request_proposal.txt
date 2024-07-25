@@ -42,4 +42,4 @@ Use the following latex template to structure your proposal:
 \end{document}
 <research_proposal_template>
 
-Please output your complete LaTeX proposal within the <research_proposal></research_proposal> tags.
+Please output your complete LaTeX proposal within the <research_proposal> tags.
