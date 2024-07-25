@@ -42,4 +42,4 @@ Please review your draft research paper critically, focusing on the following po
 
 Based on this reflection, please revise the paper to enhance its content, mathematical rigor, and overall quality. Ensure that the paper fully expands on the slide content while maintaining a high level of technical detail and precision. Make sure you've addressed the specific instruction provided for this task.
 
-Output your revised paper within the <research_paper></research_paper> tags.
+Output your revised paper within the <research_paper> tags.
