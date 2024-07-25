@@ -1,4 +1,4 @@
-## Philosophy and Approach
+# Philosophy and Approach
 
 CoAuthor's development is driven by the author's observation that current large language models (LLMs) possess remarkable, yet often underutilized capabilities in scientific research and academic writing. These models, trained on vast corpora including the entirety of arXiv and outputs from mathematica, demonstrate an ability to understand, manipulate, and generate complex scientific content that extends far beyond simple algebra and solving brain twists.
 
