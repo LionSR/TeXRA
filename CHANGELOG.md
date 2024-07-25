@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.10.5]
+
+- Refactored user prefix templates for various tasks (write-proposal, slide2paper, paper2slide)
+- Updated CLI commands to use consistent input file options
+- Enhanced LaTeX Beamer presentation template with improved structure and packages
+- Improved file handling and error messages in multiple tasks
+- Added slide2paper and paper2slide task descriptions to README
+- Updated pyproject.toml to version 0.10.5
+- Various minor improvements and bug fixes
+
 ## [0.10.4]
 
 - Implemented new paper2slide task for converting research papers to LaTeX Beamer presentations
