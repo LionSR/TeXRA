@@ -104,6 +104,8 @@ CoAuthor supports a variety of tasks, including but not limited to:
 - `paper2note`: Transform research papers into lecture notes
 - `txt2tex`: Convert plain text to LaTeX format
 - `merge-tex`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
+- `slide2paper`: Convert presentation slides into a research paper format
+- `paper2slide`: Convert research paper into a latex beamer presentation slides
 
 For a full list of tasks and their descriptions, refer to the backend and frontend READMEs.
 

@@ -130,7 +130,9 @@ Example custom task list:
   "txt2tex",
   "correct-st",
   "polish-st",
-  "draw-st"
+  "draw-st",
+  "paper2slide",
+  "slide2paper"
 ]
 ```
 
