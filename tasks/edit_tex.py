@@ -158,12 +158,12 @@ def handle_multiple_input(args, user_prefix_vars, prompt_settings):
         user_prefix_vars[
             "ADDITIONAL_INPUT_FILES"
         ] += f"""
-    <document index="{i}">
-        <source>{input_file}</source>
-        <document_content>
-            {content}
-        </document_content>
-    </document>"""
+<document index="{i}">
+<source>{input_file}</source>
+<document_content>
+{content}
+</document_content>
+</document>"""
 
     user_prefix_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
@@ -185,12 +185,12 @@ def handle_multiple_input(args, user_prefix_vars, prompt_settings):
     # Add AUXILIARY_FILE_CONTENT
     user_prefix_vars["AUXILIARY_FILE_CONTENT"] = (
         f"""
-    <document index="0">
-        <source>{user_prefix_vars['AUXILIARY_FILE']}</source>
-        <document_content>
-            {user_prefix_vars['AUXILIARY_CONTENT']}
-        </document_content>
-    </document>
+<document index="0">
+<source>{user_prefix_vars['AUXILIARY_FILE']}</source>
+<document_content>
+{user_prefix_vars['AUXILIARY_CONTENT']}
+</document_content>
+</document>
 """
         if user_prefix_vars["AUXILIARY_FILE"] != "No auxiliary file provided"
         else ""
