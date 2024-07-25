@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.10.4]
+
+- Implemented new paper2slide task for converting research papers to LaTeX Beamer presentations
+- Refactored write_tex.py to support paper2slide and improve modularity
+- Updated CLI to include paper2slide option
+- Improved file handling and task processing for write_tex tasks
+- Enhanced error handling and input validation for new task
+- Updated user prefix templates to support paper2slide task
+- Various minor code improvements and optimizations
+
 ## [0.10.3]
 
 - Added new slide2paper task for converting slides to research papers
