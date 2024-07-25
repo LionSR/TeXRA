@@ -4,15 +4,9 @@ import coauthor as coa
 prompt_path = coa.get_prompt_path(coa, "write")
 
 all_task_settings = {
-    "cover": {
+    "paper2cover": {
         "document_tag": "cover_letter",
         "end_tag": "</cover_letter>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-    "proposal": {
-        "document_tag": "research_proposal",
-        "end_tag": "</research_proposal>",
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
     },
@@ -22,12 +16,24 @@ all_task_settings = {
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
     },
+    "paper2slide": {
+        "document_tag": "beamer_presentation",
+        "end_tag": "</beamer_presentation>",
+        "output_type": "tex",
+        "prefill_first": "<scratchpad>",
+    },
+    "proposal": {
+        "document_tag": "research_proposal",
+        "end_tag": "</research_proposal>",
+        "output_type": "tex",
+        "prefill_first": "<scratchpad>",
+    },
 }
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--task", type=str, default="cover", choices=["cover", "proposal", "slide2paper"])
+    parser.add_argument("--task", type=str, default="paper2cover", choices=["paper2cover", "proposal", "slide2paper", "paper2slide"])
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
@@ -35,10 +41,17 @@ def main():
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
 
+    user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
     if args.task == "slide2paper":
-        user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)  # Paper draft/template
         user_prefix_vars["INSTRUCTION"] = (
             args.instruction if args.instruction else ("Write a comprehensive research paper based on the provided slides and draft.")
+        )
+    elif args.task == "paper2slide":
+        # Research paper
+        user_prefix_vars["INSTRUCTION"] = (
+            args.instruction
+            if args.instruction
+            else ("Create a professional LaTeX Beamer presentation based on the provided research paper for a physics audience.")
         )
     else:
         if args.sample_files:

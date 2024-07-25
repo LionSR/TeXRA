@@ -1,5 +1,14 @@
 # Frontend Changelog
 
+## [0.7.4]
+
+- Added support for new paper2slide task in UI
+- Updated task selection to include paper2slide option
+- Improved file handling for LaTeX inputs in write_tex tasks
+- Enhanced WebView to accommodate new task options
+- Updated error handling and user feedback for new features
+- Various UI improvements and bug fixes
+
 ## [0.7.3]
 
 - Added support for new slide2paper task in UI
