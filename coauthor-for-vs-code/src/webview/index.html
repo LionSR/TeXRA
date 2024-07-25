@@ -117,18 +117,14 @@
         placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."></textarea>
     </div>
     <div class="tool-use-execute">
-      <div class="tool-use">
-        <div class="checkbox-group">
-          <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
-          <label><input type="checkbox" id="autoExtractTikzFigure"> Auto-extract TikZ Figs</label>
-          <label><input type="checkbox" id="includeTikzReflection"> Include TikZ Reflection</label>
-          <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
-        </div>
+      <div class="checkbox-grid">
+        <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
+        <label><input type="checkbox" id="autoExtractTikzFigure"> Auto-extract TikZ Figs</label>
+        <label><input type="checkbox" id="includeTikzReflection"> Include TikZ Reflection</label>
+        <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
       </div>
       <div class="execute-column">
-        <div class="output-name-override-container">
-          <input type="text" id="outputNameOverride" placeholder="Override base output name">
-        </div>
+        <input type="text" id="outputNameOverride" placeholder="Override base output name">
         <button id="executeButton">Execute</button>
       </div>
     </div>
