@@ -63,8 +63,8 @@
             "meeting2text",
             "paper2note",
             "paper2cover",
-            "slide2paper",
             "paper2slide",
+            "slide2paper",
             "write-proposal",
             "txt2tex"
           ],

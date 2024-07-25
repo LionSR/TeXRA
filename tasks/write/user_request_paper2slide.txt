@@ -16,23 +16,48 @@ Now, please create the LaTeX Beamer presentation, incorporating the key points o
 
 <beamer_presentation>
 \documentclass{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{dolphin}
+
+\setbeamertemplate{footline}[page number]
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{frametitle}[default][center]
+
+\AtBeginSection[]
+{
+\begin{frame}<beamer>
+\frametitle{Outline}
+\tableofcontents[currentsection]
+\end{frame}
+}
+
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{physics}
+\usepackage{hyperref}
+\usepackage{natbib}
 
-\usetheme{Madrid}
-\usecolortheme{whale}
+% Include any other packages needed use \usepackage{...} 
+% Include any other external preamble in the paper using \input{...}
+
+\begin{document}
 
 \title{Your Presentation Title}
 \author{Authors of the Paper}
 \institute{Your Institution}
 \date{\today}
 
-\begin{document}
-
 \frame{\titlepage}
 
 % Your presentation content here
+
+\section*{Reference*}
+
+\begin{frame}[allowframebreaks]{Reference}
+\bibliography{the bib file used to generate the paper} 
+\end{frame}
 
 \end{document}
 </beamer_presentation>
