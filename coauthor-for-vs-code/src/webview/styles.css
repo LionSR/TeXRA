@@ -219,20 +219,57 @@ body {
 
 .tool-use-execute {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-top: 5px;
-  margin-bottom: 5px;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
-.tool-use {
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.checkbox-grid label {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.checkbox-grid input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.execute-column {
   display: flex;
   flex-direction: column;
+  gap: 5px;
 }
 
-.tool-use label {
+#outputNameOverride {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
   font-size: 12px;
-  margin-bottom: 2px;
+}
+
+#executeButton {
+  padding: 6px 12px;
+  font-size: 14px;
+  background-color: #007acc;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+#executeButton:hover {
+  background-color: #005999;
 }
 
 .instruction-header {
@@ -247,24 +284,8 @@ body {
   font-weight: bold;
 }
 
-.execute-column {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
 .output-name-override-container {
   margin-bottom: 10px;
-}
-
-#outputNameOverride {
-  width: 200px;
-  padding: 4px;
-  border: 1px solid var(--input-border);
-  border-radius: 3px;
-  background-color: var(--input-background);
-  color: var(--input-foreground);
-  font-size: 12px;
 }
 
 .toggle-icon {
