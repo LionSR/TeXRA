@@ -3,14 +3,14 @@ I am going to give you a latex document of a research paper. You are about to co
 Here is the LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
 <documents>
-    <document index="1">
-        <source>{AUXILIARY_FILE}</source>
-        <document_content>
+<document index="1">
+<source>{AUXILIARY_FILE}</source>
+<document_content>
             {AUXILIARY_CONTENT}
-        </document_content>
-    <document index="2">
-        <source>{INPUT_FILE}</source>
-        <document_content>
-            {INPUT_CONTENT}
-        </document_content>
+</document_content>
+<document index="2">
+<source>{INPUT_FILE}</source>
+<document_content>
+{INPUT_CONTENT}
+</document_content>
 </documents>

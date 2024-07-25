@@ -3,22 +3,22 @@ I am going to give you a long latex document of a chapter on stochastic thermody
 Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-    <document index="1">
-        <source>{DOCUMENT_CLS}</source>
-        <document_content>
-            {DOCUMENT_CLS_CONTENT}
-        </document_content>
-    </document>
-    <document index="2">
-        <source>{COMMANDS}</source>
-        <document_content>
-            {COMMANDS_CONTENT}
-        </document_content>
-    </document>
-    <document index="3">
-        <source>{INPUT_FILE}</source>
-        <document_content>
-            {INPUT_CONTENT}
-        </document_content>
-    </document>
+<document index="1">
+<source>{DOCUMENT_CLS}</source>
+<document_content>
+    {DOCUMENT_CLS_CONTENT}
+</document_content>
+</document>
+<document index="2">
+<source>{COMMANDS}</source>
+<document_content>
+{COMMANDS_CONTENT}
+</document_content>
+</document>
+<document index="3">
+<source>{INPUT_FILE}</source>
+<document_content>
+{INPUT_CONTENT}
+</document_content>
+</document>
 </documents>

@@ -4,13 +4,13 @@ Here are the LaTeX documents with additional LaTeX auxiliary files (where the ma
 
 <documents>
     {AUXILIARY_FILE_CONTENT}
-    <document index="1">
-        <source>{INPUT_FILE}</source>
-        <document_content>
-            {INPUT_CONTENT}
-        </document_content>
-    </document>
-    {ADDITIONAL_INPUT_FILES}
+<document index="1">
+<source>{INPUT_FILE}</source>
+<document_content>
+{INPUT_CONTENT}
+</document_content>
+</document>
+{ADDITIONAL_INPUT_FILES}
 </documents>
 
 Please carefully read through all the research papers above and ensure you fully understand all the details.

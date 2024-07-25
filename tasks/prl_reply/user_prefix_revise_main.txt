@@ -1,60 +1,60 @@
 You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
 <documents>
-    <document index="1">
-        <source>Cover Letter</source>
-        <document_content>
-            {COVER_LETTER}
-        </document_content>
-    </document>
-    <document index="2">
-        <source>{INPUT_FILE}</source>
-        <document_content>
-            {MAIN_CONTENT}
-        </document_content>
-    </document>
-    <document index="3">
-        <source>Appendix</source>
-        <document_content>
-            {SUPP_CONTENT}
-        </document_content>
-    </document>
-    <document index="4">
-        <source>Editor Decision Letter</source>
-        <document_content>
-            {EDITOR_DECISION_LETTER}
-        </document_content>
-    </document>
-    <document index="5">
-        <source>Referee Report A</source>
-        <document_content>
-            {REFEREE_REPORT_A}
-        </document_content>
-    </document>
-    <document index="6">
-        <source>Referee Report B</source>
-        <document_content>
-            {REFEREE_REPORT_B}
-        </document_content>
-    </document>
-    <document index="7">
-        <source>Example Reply Letter</source>
-        <document_content>
-            {EXAMPLE_REPLY_LETTER}
-        </document_content>
-    </document>
-    <document index="8">
-        <source>Instruction</source>
-        <document_content>
+<document index="1">
+<source>Cover Letter</source>
+<document_content>
+{COVER_LETTER}
+</document_content>
+</document>
+<document index="2">
+<source>{INPUT_FILE}</source>
+<document_content>
+{MAIN_CONTENT}
+</document_content>
+</document>
+<document index="3">
+<source>Appendix</source>
+<document_content>
+{SUPP_CONTENT}
+</document_content>
+</document>
+<document index="4">
+<source>Editor Decision Letter</source>
+<document_content>
+{EDITOR_DECISION_LETTER}
+</document_content>
+</document>
+<document index="5">
+<source>Referee Report A</source>
+<document_content>
+{REFEREE_REPORT_A}
+</document_content>
+</document>
+<document index="6">
+<source>Referee Report B</source>
+<document_content>
+{REFEREE_REPORT_B}
+</document_content>
+</document>
+<document index="7">
+<source>Example Reply Letter</source>
+<document_content>
+{EXAMPLE_REPLY_LETTER}
+</document_content>
+</document>
+<document index="8">
+<source>Instruction</source>
+<document_content>
             {INSTRUCTION}
-        </document_content>
-    </document>
-    <document index="9">
-        <source>Draft Reply Letter</source>
-        <document_content>
-            {DRAFT_REPLY_LETTER}
-        </document_content>
-    </document>
+</document_content>
+</document>
+<document index="1">9">
+<source>Draft Reply Letter</source>
+<document_content>
+{DRAFT_REPLY_LETTER}
+</document_content>
+</document>
 </documents>
 
 Explanation of documents:
