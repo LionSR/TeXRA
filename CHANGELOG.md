@@ -1,5 +1,16 @@
 # Backend Changelog
 
+## [0.10.3]
+
+- Added new slide2paper task for converting slides to research papers
+- Implemented multi-page PDF processing functionality
+- Enhanced process_pdf_input function to handle both single and multi-page PDFs
+- Improved file handling with output name override in various functions
+- Updated CLI to support new slide2paper task
+- Refactored code for better modularity and error handling
+- Enhanced image message creation for different model types
+- Various minor code improvements and optimizations
+
 ## [0.10.2]
 
 - Implemented prototype for multi-file output processing

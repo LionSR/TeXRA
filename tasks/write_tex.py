@@ -9,37 +9,42 @@ all_task_settings = {
         "end_tag": "</cover_letter>",
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
-        "system_prompt_file": "system_prompt_cover.txt",
-        "user_prefix_file": "user_prefix_cover.txt",
-        "user_request_file": "user_request_cover.txt",
-        "user_reflect_file": "user_reflect_cover.txt",
     },
     "proposal": {
         "document_tag": "research_proposal",
         "end_tag": "</research_proposal>",
         "output_type": "tex",
         "prefill_first": "<scratchpad>",
-        "system_prompt_file": "system_prompt_proposal.txt",
-        "user_prefix_file": "user_prefix_proposal.txt",
-        "user_request_file": "user_request_proposal.txt",
-        "user_reflect_file": "user_reflect_proposal.txt",
+    },
+    "slide2paper": {
+        "document_tag": "research_paper",
+        "end_tag": "</research_paper>",
+        "output_type": "tex",
+        "prefill_first": "<scratchpad>",
     },
 }
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--task", type=str, default="cover", choices=["cover", "proposal"])
+    parser.add_argument("--task", type=str, default="cover", choices=["cover", "proposal", "slide2paper"])
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Writing {args.task} for {args.input_file}...\n", "green"))
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
-    if args.sample_files:
-        user_prefix_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in args.sample_files])
+
+    if args.task == "slide2paper":
+        user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)  # Paper draft/template
+        user_prefix_vars["INSTRUCTION"] = (
+            args.instruction if args.instruction else ("Write a comprehensive research paper based on the provided slides and draft.")
+        )
     else:
-        user_prefix_vars["REFERENCE_CONTENT"] = ""
+        if args.sample_files:
+            user_prefix_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in args.sample_files])
+        else:
+            user_prefix_vars["REFERENCE_CONTENT"] = ""
 
     task_settings = all_task_settings[args.task]
 
