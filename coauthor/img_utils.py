@@ -12,7 +12,6 @@ def get_base64_encoded_image(image_path):
         return base64_string
 
 
-# in principle can be extended to multiple pages
 def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 1024)):
     """
     Convert a single page of a PDF to a PNG image.
@@ -25,11 +24,6 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 10
 
     Returns:
         str: Base64 encoded PNG image.
-
-    Example usage:
-        pdf_path = "../images/reading_charts_graphs/twilio_q4_2023.pdf"
-        encoded_png = single_page_pdf_to_png(pdf_path, page_num=0)
-        print(encoded_png)
     """
     # Open the PDF file
     doc = fitz.open(pdf_path)
@@ -62,3 +56,58 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 10
     doc.close()
 
     return base64_encoded
+
+
+def multi_page_pdf_to_png(pdf_path, quality=300, max_size=(1024, 1024), max_pages=20):
+    """
+    Convert multiple pages of a PDF to PNG images.
+
+    Args:
+        pdf_path (str): Path to the PDF file.
+        quality (int): Quality of the output PNG images.
+        max_size (tuple): Maximum size of the output images.
+        max_pages (int): Maximum number of pages to convert.
+
+    Returns:
+        List[str]: List of base64 encoded PNG images.
+    """
+    # Open the PDF file
+    doc = fitz.open(pdf_path)
+
+    base64_encoded_pngs = []
+
+    # Iterate through each page of the PDF
+    for page_num in range(min(doc.page_count, max_pages)):
+        base64_encoded = single_page_pdf_to_png(pdf_path, page_num, quality, max_size)
+        base64_encoded_pngs.append(base64_encoded)
+
+    # Close the PDF document
+    doc.close()
+
+    return base64_encoded_pngs
+
+
+def process_pdf_input(pdf_path, is_openai=False, **kwargs):
+    """
+    Process a PDF file and return base64 encoded PNG image(s).
+
+    Args:
+        pdf_path (str): Path to the PDF file.
+        is_openai (bool): Whether to use OpenAI API (allows more than 20 images).
+        **kwargs: Additional arguments to pass to the conversion functions.
+
+    Returns:
+        Union[str, List[str]]: Base64 encoded PNG image(s).
+    """
+    # Open the PDF file to check the number of pages
+    doc = fitz.open(pdf_path)
+    page_count = doc.page_count
+    doc.close()
+
+    if page_count == 1:
+        # Single page PDF
+        return single_page_pdf_to_png(pdf_path, **kwargs)
+    else:
+        # Multi-page PDF
+        max_pages = kwargs.get("max_pages", 20 if not is_openai else float("inf"))
+        return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)

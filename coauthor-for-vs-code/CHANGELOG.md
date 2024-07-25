@@ -1,5 +1,15 @@
 # Frontend Changelog
 
+## [0.7.3]
+
+- Added support for new slide2paper task in UI
+- Updated task selection to include slide2paper option
+- Improved file handling for PDF inputs
+- Enhanced output name override functionality in UI
+- Refactored WebView code for better maintainability
+- Updated error handling and user feedback for new features
+- Various UI improvements and bug fixes
+
 ## [0.7.2]
 
 - Reorganized checkboxes into a 2x2 grid for better space utilization
