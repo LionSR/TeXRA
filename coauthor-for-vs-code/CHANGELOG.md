@@ -1,5 +1,14 @@
 # Frontend Changelog
 
+## [0.7.2]
+
+- Reorganized checkboxes into a 2x2 grid for better space utilization
+- Moved "Override base output name" input to span full width below checkboxes
+- Kept Execute button right-aligned for consistency
+- Updated CSS for improved layout and responsiveness
+- Enhanced overall UI layout for better user experience
+- Fixed the ignoredFigureDirectories setting
+
 ## [0.7.1]
 
 - Added new setting 'coauthor.numberOfCommitsToShow' to control how many recent commits are displayed in the dropdown
