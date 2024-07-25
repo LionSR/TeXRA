@@ -7,5 +7,5 @@ When writing LaTeX, you must:
 - Use \de for \delta etc following command.tex.
 - Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in thte output.
 - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
-- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing concise and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
+- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
 
