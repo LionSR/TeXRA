@@ -51,6 +51,8 @@ function getSelectedFiles(multipleInputFilesSelectDiv) {
 
 function updateMultipleFileSelect(selectId, files) {
   const selectDiv = document.getElementById(selectId);
+  selectDiv.style.display = 'none'; // Hide by default
+  selectDiv.innerHTML = ''; // Clear any existing content
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter(file => !existingFiles.includes(file));
   if (newFiles.length > 0) {
@@ -58,6 +60,8 @@ function updateMultipleFileSelect(selectId, files) {
       addFileToList(selectId, file);
     });
     selectDiv.style.display = 'block';
+  } else {
+    selectDiv.style.display = 'none';
   }
   saveState();
 }
@@ -102,15 +106,11 @@ window.onload = function () {
     'requestAuxFile',
     'requestFigureFile',
     'requestRecentCommits',
-    // 'requestEditedFile',
   ];
 
   dataRequests.forEach(request => {
     vscode.postMessage({ command: request });
   });
-
-  // Restore previous state
-  restoreState();
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -476,6 +476,7 @@ function restoreState() {
     multipleSelections.forEach(id => {
       const selectDiv = document.getElementById(id);
       selectDiv.innerHTML = '';
+      selectDiv.style.display = 'none'; // Hide by default
       if (previousState[id] && previousState[id].length > 0) {
         previousState[id].forEach(file => {
           addFileToList(id, file);
@@ -611,6 +612,7 @@ window.addEventListener('message', event => {
       document.body.className = message.theme;
       break;
   }
+  
   // Restore previous state
   restoreState();
 });
