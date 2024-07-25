@@ -2,6 +2,8 @@ import os
 import subprocess
 import re
 from termcolor import colored
+import shutil
+from datetime import datetime
 
 
 def get_tex_count(file_path):
@@ -126,3 +128,58 @@ def run_latexdiff_vc(input_file, commit_hash):
 
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)
+
+
+def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    input_dir = os.path.dirname(input_file)
+
+    if not clean:
+        now = datetime.now().strftime("%Y%m%d%H%M")
+        output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
+
+    file_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
+    delete_extensions = [
+        ".aux",
+        ".bbl",
+        ".blg",
+        ".fdb_latexmk",
+        ".fls",
+        ".log",
+        ".out",
+        ".synctex.gz",
+    ]
+
+    files_to_process = []
+    files_to_delete = []
+
+    for pattern in file_patterns:
+        for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+            file_path = os.path.join(search_dir, pattern)
+            if os.path.exists(file_path):
+                files_to_process.append(file_path)
+                for ext in delete_extensions:
+                    temp_file = os.path.splitext(file_path)[0] + ext
+                    if os.path.exists(temp_file):
+                        files_to_delete.append(temp_file)
+                break
+
+    if files_to_process:
+        if clean:
+            for file_path in files_to_process + files_to_delete:
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+            print("Cleanup complete.")
+        else:
+            os.makedirs(output_folder, exist_ok=True)
+            for file_path in files_to_process:
+                shutil.move(file_path, output_folder)
+                print(f"Moved: {file_path}")
+
+            for file_path in files_to_delete:
+                os.remove(file_path)
+                print(f"Deleted: {file_path}")
+
+            print(f"Files packed into {output_folder}")
+    else:
+        print("No files found to process.")
