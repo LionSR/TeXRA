@@ -78,7 +78,7 @@ def split_scratchpad_output(output_file, document_tag="latex_document"):
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
     # do not change this line
-    output_content = output_content.replace("\\end{document}", "\\end{document}")
+    output_content = output_content.replace("\\end{document>", "\\end{document}")
 
     if "</scratchpad>" in output_content:
         scratchpad_content, document_content = output_content.split("</scratchpad>", 1)
