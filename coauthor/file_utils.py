@@ -6,9 +6,13 @@ def get_prompt_path(library, prompt_name):
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "tasks", prompt_name)
 
 
-def read_file(file_path):
+def read_file(file_path, raise_warning=True):
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
+        if raise_warning:
+            import warnings
+
+            warnings.warn(f"File not found: {file_path}")
+        return ""
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read().strip()
 

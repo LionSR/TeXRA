@@ -6,15 +6,27 @@ import os
 
 
 def log_start(args):
-    # Get the directory of the input file
-    input_dir = os.path.dirname(args.input_file)
+    # Get the directory of the output name override or input file, or use appropriate fallback
+    if args.output_name_override:
+        input_dir = os.path.dirname(args.output_name_override)
+    elif args.input_file and args.input_file.strip():
+        input_dir = os.path.dirname(args.input_file)
+    else:
+        input_dir = os.getcwd()
 
     # Create the Log subdirectory if it doesn't exist
     log_dir = os.path.join(input_dir, "Log")
     os.makedirs(log_dir, exist_ok=True)
 
     # Create the log file path
-    log_filename = os.path.basename(args.input_file).replace(".tex", "_log.txt")
+    if args.output_name_override:
+        base_filename = os.path.basename(args.output_name_override)
+    elif args.input_file and args.input_file.strip():
+        base_filename = os.path.basename(args.input_file)
+    else:
+        base_filename = "default"
+
+    log_filename = base_filename.replace(".tex", "_log.txt")
     log_file = os.path.join(log_dir, log_filename)
 
     with open(log_file, "a+") as f:
@@ -23,7 +35,12 @@ def log_start(args):
         f.write(f"Task: {args.task}\n")
         f.write(f"Model: {args.model}\n")
 
-        f.write(f"Input file: {args.input_file}\n")
+        if args.output_name_override:
+            f.write(f"Output name override: {args.output_name_override}\n")
+        if args.input_file and args.input_file.strip():
+            f.write(f"Input file: {args.input_file}\n")
+        else:
+            f.write("Input file: Not specified\n")
         if args.input_files:
             f.write(f"Additional input files: {args.input_files}\n")
         if args.auxiliary_files:

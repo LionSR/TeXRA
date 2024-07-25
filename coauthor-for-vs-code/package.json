@@ -64,7 +64,8 @@
             "paper2note",
             "txt2tex",
             "write-cover",
-            "write-proposal"
+            "write-proposal",
+            "slide2paper"
           ],
           "description": "List of available tasks",
           "scope": "resource"
