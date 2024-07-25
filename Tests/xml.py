@@ -1,8 +1,7 @@
-
 import xml.etree.ElementTree as ET
 
 # Define the XML structure with dummy data
-xml_data = '''<documents>
+xml_data = """<documents>
 <document index="1">
 <source>annual_report_2023.pdf</source>
 <document_content>
@@ -15,16 +14,16 @@ ANNUAL_REPORT_CONTENT
 COMPETITOR_ANALYSIS_CONTENT
 </document_content>
 </document>
-</documents>'''
+</documents>"""
 
 # Parse the XML data
 root = ET.fromstring(xml_data)
 
 # Extract and print the data
-for document in root.findall('document'):
-    index = document.get('index')
-    source = document.find('source').text
-    content = document.find('document_content').text
+for document in root.findall("document"):
+    index = document.get("index")
+    source = document.find("source").text
+    content = document.find("document_content").text
     print(f"Document Index: {index}")
     print(f"Source: {source}")
     print(f"Content: {content}")

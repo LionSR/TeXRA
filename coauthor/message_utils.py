@@ -1,6 +1,6 @@
 from termcolor import colored
 import os
-from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
+from .img_utils import get_base64_encoded_image, process_pdf_input
 from .model_utils import is_openai_model, is_anthropic_model
 
 
@@ -86,7 +86,7 @@ def create_image_message(model, figure_inputs):
 
         _, file_extension = os.path.splitext(figure_input)
         if file_extension.lower() == ".pdf":
-            img_data = single_page_pdf_to_png(figure_input)
+            img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
             media_type = "image/png"
         else:
             img_data = get_base64_encoded_image(figure_input)
@@ -98,8 +98,13 @@ def create_image_message(model, figure_inputs):
                 ".webp": "image/webp",
             }.get(file_extension.lower(), "image/jpeg")
 
-        image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
-        added_figures.append(figure_input)
+        if isinstance(img_data, list):
+            for i, data in enumerate(img_data):
+                image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
+            added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
+        else:
+            image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
+            added_figures.append(figure_input)
 
     content = []
     for image in image_contents:
@@ -108,12 +113,10 @@ def create_image_message(model, figure_inputs):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
