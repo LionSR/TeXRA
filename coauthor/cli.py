@@ -700,8 +700,8 @@ def extract_tikzpictures(latex_file):
 
 @click.command()
 @shared_arguments
-def write_cover(model, input_file, **kwargs):
-    execute_task("write_tex", "cover", model, input_file, **kwargs)
+def paper2cover(model, input_file, **kwargs):
+    execute_task("write_tex", "paper2cover", model, input_file, **kwargs)
 
 
 @click.command()
@@ -714,6 +714,12 @@ def write_proposal(model, input_file, **kwargs):
 @shared_arguments
 def slide2paper(model, input_file, **kwargs):
     execute_task("write_tex", "slide2paper", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def paper2slide(model, input_file, **kwargs):
+    execute_task("write_tex", "paper2slide", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":
@@ -781,9 +787,10 @@ cli.add_command(extract_figure_path)
 cli.add_command(extract_tikzpictures)
 
 # write_tex.py
-cli.add_command(write_cover)
+cli.add_command(paper2cover)
 cli.add_command(write_proposal)
 cli.add_command(slide2paper)
+cli.add_command(paper2slide)
 
 
 if __name__ == "__main__":
