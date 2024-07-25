@@ -190,20 +190,20 @@ body {
 }
 
 .section {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
 .section-header {
   font-size: 12px;
   font-weight: bold;
-  margin-top: 10px;
-  margin-bottom: 6px;
+  margin-top: 5px;
+  margin-bottom: 5px;
   padding-bottom: 4px;
   border-bottom: 1px solid #ccc;
 }
 
 .button-group {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
 .button-group label {
@@ -215,14 +215,6 @@ body {
 .button-container {
   display: flex;
   gap: 5px;
-}
-
-.tool-use-execute {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-  margin-bottom: 10px;
 }
 
 .checkbox-grid {
@@ -248,7 +240,7 @@ body {
 }
 
 #outputNameOverride {
-  width: 100%;
+  width: 90%;
   padding: 4px;
   border: 1px solid var(--input-border);
   border-radius: 3px;
@@ -285,7 +277,7 @@ body {
 }
 
 .output-name-override-container {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
 .toggle-icon {
