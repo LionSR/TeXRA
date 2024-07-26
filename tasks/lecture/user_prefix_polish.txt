@@ -6,7 +6,7 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document index="1">
 <source>{DOCUMENT_CLS}</source>
 <document_content>
-    {DOCUMENT_CLS_CONTENT}
+{DOCUMENT_CLS_CONTENT}
 </document_content>
 </document>
 <document index="2">
