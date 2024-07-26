@@ -4,36 +4,24 @@ Please review your draft research paper critically, focusing on the following po
 <scratchpad>
 <reflection>
 1. Content Expansion: Have you sufficiently expanded on the content from the slides? Identify any areas where more detail or explanation is needed.
-
 2. Mathematical Rigor: Have you used LaTeX equations extensively throughout the paper? Identify any sections where verbal descriptions can be replaced with mathematical formulations.
-
 3. Technical Precision: Is the language consistently technical and precise? Eliminate any generic or vague statements that don't contribute specific, technical information.
-
 4. Structure and Flow: Does the paper follow a logical structure? Are there smooth transitions between sections?
-
 5. Figure Integration: Have you effectively referenced the slide images and proposed new figures where necessary? Do they enhance the understanding of the content?
-
 6. Derivation Detail: Are step-by-step derivations provided where appropriate? Ensure that no important mathematical steps are skipped or glossed over.
-
 7. Notation Consistency: Is the use of physics notation and terminology consistent throughout the document? Standardize any inconsistencies.
-
 8. Citation Thoroughness: Have you included citations for all background information, techniques, and related work mentioned in the slides or added to the paper?
-
 9. Abstract and Conclusion: Do these sections effectively summarize the key points and findings of the research?
-
 10. LaTeX Utilization: Have you made full use of LaTeX features for equations, cross-referencing, and formatting? Ensure all mathematical expressions are properly typeset.
-
 11. Instruction Adherence: Have you followed the specific instruction provided for this task?
 </reflection>
 <improvements>
 1. [Improvement 1]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 2. [Improvement 2]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 3. [Improvement 3]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]

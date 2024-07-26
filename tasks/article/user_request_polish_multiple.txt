@@ -5,12 +5,10 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
    - Affected papers: [List of papers]
    - Rationale: [explanation]
    - Implementation: [Concrete steps]
-
 2. [Specific improvement 2 addressing the instruction]
    - Affected papers: [List of papers]
    - Rationale: [explanation]
    - Implementation: [Concrete steps]
-
 3. [Specific improvement 3 addressing the instruction]
    - Affected papers: [List of papers]
    - Rationale: [explanation]

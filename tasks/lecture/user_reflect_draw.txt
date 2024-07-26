@@ -5,33 +5,24 @@ your detailed analysis of the exisitng figure and how it compares with the provi
 </figure_analysis>
 <reflection>
 1. Instruction Alignment: How well do the modifications address the specific instruction? Identify any areas where alignment could be improved.
-
 2. Visual Clarity:
    - Are there any overlapping texts or objects?
    - Are all elements clearly visible?
    - Suggest specific adjustments for size, width, or boldness if needed.
-
 3. Mathematical and Conceptual Accuracy: Evaluate the figures for mathematical correctness and effectiveness in conveying key concepts.
-
 4. Stylistic Consistency: Assess how well the figures maintain consistency with the overall document style. Suggest adjustments if needed.
-
 5. Comparative Effectiveness: Compare the modified figures to any reference figures provided. Are they more condensed and visually appealing while conveying the same information?
-
 6. Textual Integration: Evaluate the coherence of figure references throughout the main text. Identify any missing or unnecessary references.
-
 7. TikZ Code Quality: Assess the clarity, efficiency, and commenting of the TikZ code for each figure. Would the added or revised figure compile in latex with zero errors?
-
 8. Caption Quality: Evaluate the originality and informativeness of figure captions.
 </reflection>
 <idea>
 1. [Refinement 1]
    - Rationale:
    - Implementation details:
-
 2. [Refinement 2]
    - Rationale:
    - Implementation details:
-
 3. [Refinement 3]
    - Rationale:
    - Implementation details:
