@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from termcolor import cprint
 
 with open("xml_file.txt", "r") as file:
     xml_data = file.read()
@@ -7,11 +8,32 @@ with open("xml_file.txt", "r") as file:
 root = ET.fromstring(xml_data)
 
 # Extract and print the data
-for document in root.findall("document"):
-    index = document.get("index")
-    source = document.find("source").text
-    content = document.find("document_content").text
-    print(f"Document Index: {index}")
-    print(f"Source: {source}")
-    print(f"Content: {content}")
-    print()
+prompts = root.find("prompts")
+settings = root.find("settings")
+
+system_prompt = prompts.find("system_prompt").text.strip()
+user_prefix = prompts.find("user_prefix").text.strip()
+user_request = prompts.find("user_request").text.strip()
+user_reflect = prompts.find("user_reflect").text.strip()
+
+document_tag = settings.get("document_tag")
+end_tag = settings.get("end_tag")
+output_type = settings.get("output_type")
+prefill_first = settings.get("prefill_first")
+
+print("\nSettings:")
+cprint(f"Document Tag: {document_tag}", "blue")
+cprint(f"End Tag: {end_tag}", "blue")
+cprint(f"Output Type: {output_type}", "blue")
+cprint(f"Prefill First: {prefill_first}", "blue")
+
+print("System Prompt:")
+cprint(system_prompt, "green")
+print("\nUser Prefix:")
+cprint(user_prefix, "green")
+print("\nUser Request:")
+cprint(user_request, "green")
+print("\nUser Reflect:")
+cprint(user_reflect, "green")
+
+cprint("Hello, World!", "white", "on_red")

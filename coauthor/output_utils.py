@@ -1,6 +1,6 @@
 import os
 import re
-from termcolor import colored
+from termcolor import colored, cprint
 from .file_utils import read_file, write_file
 import difflib
 import xml.etree.ElementTree as ET
@@ -46,7 +46,7 @@ def check_for_massive_repetition(last_response, new_response):
     if massive_repetition_detected:
         print(colored(f"### repetition_ratio is {repetition_ratio}", "red"))
         print(colored(f"### Longest matching substring: {longest_matching_substring}", "red"))
-        print("WARNING: Massive repetition detected. Stopping the process.")
+        cprint("WARNING: Massive repetition detected. Stopping the process.", "white", "on_red")
 
     return massive_repetition_detected
 
@@ -140,7 +140,7 @@ def split_scratchpad_output_xml(output_file, document_tag="latex_document"):
         latex_content = "".join(latex_document.itertext()).strip()
         write_file(tex_file, latex_content)
     else:
-        print(f"Warning: No {document_tag} found in the output file.")
+        cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
         # If no latex document is found, write the entire content (excluding scratchpads) to the tex file
         full_content = "".join(root.itertext()).strip()
         write_file(tex_file, full_content)

@@ -3,7 +3,6 @@ import os
 import click
 import shlex
 import subprocess
-import glob
 from dotenv import load_dotenv
 from termcolor import colored
 
@@ -13,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 from coauthor.arg_utils import comma_separated_list
-from coauthor.housekeeping_utils import run_clean_single, run_pack_single, run_clean_build, run_indent_tex
+from coauthor.housekeeping_utils import run_clean_single, run_pack_single, run_clean_build, run_indent_tex, run_clean_output
 from coauthor.tex_tools import run_pack_latexdiff_vc
 
 load_dotenv()
@@ -361,35 +360,32 @@ def merge(model, input_file, edited_file, reflect):
 
 
 @click.command()
+@shared_arguments
+def paper2cover(model, input_file, **kwargs):
+    execute_task("write_tex", "paper2cover", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def write_proposal(model, input_file, **kwargs):
+    execute_task("write_tex", "proposal", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def slide2paper(model, input_file, **kwargs):
+    execute_task("write_tex", "slide2paper", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def paper2slide(model, input_file, **kwargs):
+    execute_task("write_tex", "paper2slide", model, input_file, **kwargs)
+
+
+@click.command()
 def clean_output():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
-
-    patterns = [f"*_{model}*.tex" for model in models]
-    patterns_build = [f"*/build/*_{model}*" for model in models]
-
-    files_to_delete = []
-
-    for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
-
-        for pattern in patterns:
-            files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
-
-        for pattern in patterns_build:
-            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
-
-    for file in set(files_to_delete):
-        try:
-            if os.path.exists(file):  # Check if file exists before attempting to delete
-                os.remove(file)
-                print(f"Deleted: {file}")
-            else:
-                print(f"File not found: {file}")
-        except OSError as e:
-            print(f"Error deleting {file}: {e}")
-
-    print("Cleanup complete.")
+    run_clean_output()
 
 
 @click.command()
@@ -471,30 +467,6 @@ def extract_tikzpictures(latex_file):
     print("Compiled TikZ pictures:")
     for file in compiled_files:
         print(file)
-
-
-@click.command()
-@shared_arguments
-def paper2cover(model, input_file, **kwargs):
-    execute_task("write_tex", "paper2cover", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def write_proposal(model, input_file, **kwargs):
-    execute_task("write_tex", "proposal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def slide2paper(model, input_file, **kwargs):
-    execute_task("write_tex", "slide2paper", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2slide(model, input_file, **kwargs):
-    execute_task("write_tex", "paper2slide", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":
