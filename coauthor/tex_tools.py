@@ -44,7 +44,7 @@ def process_tikzpicture_endings(file_path):
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
-    print(colored(f"Tikzpicture endings fixed in {file_path}", "blue"))
+    print("Tikzpicture endings fixed in", colored(f"{file_path}", "blue"))
 
 
 def run_latexdiff(input_file, output_file, task=None, model=None):
@@ -90,7 +90,7 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
             if not add_block:
                 diff_file.write(line)
 
-    print(colored(f"Line breaks added to {diff_file_name}", "blue"))
+    print("Line breaks added to", colored(f"{diff_file_name}", "blue"))
 
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)

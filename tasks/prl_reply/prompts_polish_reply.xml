@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="polish_reply">
+<settings>
+<document_tag>latex_document</document_tag>
+<end_tag>&lt;/reply_letter&gt;</end_tag>
+<output_type>txt</output_type>
+<prefill_first>Now output the polished reply letter.
+&lt;reply_letter&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+You have been provided with a drafted reply letter that addresses the referee comments for a research paper. Your task is to polish this reply letter to make it more clear, specific, and thorough in addressing all the referee comments.
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You will be polishing a draft of a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
+
+<documents>
+<document index="1">
+<source>Cover Letter</source>
+<document_content>
+{COVER_LETTER}
+</document_content>
+</document>
+<document index="2">
+<source>{INPUT_FILE}</source>
+<document_content>
+{MAIN_CONTENT}
+</document_content>
+</document>
+<document index="3">
+<source>Appendix</source>
+<document_content>
+{SUPP_CONTENT}
+</document_content>
+</document>
+<document index="4">
+<source>Editor Decision Letter</source>
+<document_content>
+{EDITOR_DECISION_LETTER}
+</document_content>
+</document>
+<document index="5">
+<source>Referee Report A</source>
+<document_content>
+{REFEREE_REPORT_A}
+</document_content>
+</document>
+<document index="6">
+<source>Referee Report B</source>
+<document_content>
+{REFEREE_REPORT_B}
+</document_content>
+</document>
+<document index="7">
+<source>Example Reply Letter</source>
+<document_content>
+{EXAMPLE_REPLY_LETTER}
+</document_content>
+</document>
+<document index="8">
+<source>Draft Reply Letter</source>
+<document_content>
+{DRAFT_REPLY_LETTER}
+</document_content>
+</document>
+</documents>
+
+When polishing, use your own words, but keep the detail and structure of the drafted reply letter.
+
+Explanation of documents:
+1. Cover Letter: The original cover letter submitted with the paper.
+2. Main Paper: The full text of the submitted paper, identified by {INPUT_FILE}.
+3. Appendix: Supplementary information for the paper.
+4. Editor Decision Letter: The full text of the editor's decision and comments.
+5. Referee Report A: The full report from the first referee.
+6. Referee Report B: The full report from the second referee.
+7. Example Reply Letter: A sample reply letter for reference.
+8. Draft Reply Letter: The initial draft of the reply letter that needs polishing.
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Please read the paper, referee reports, the example reply, and the drafted reply letter carefully. Then, think carefully about your plan. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
+
+The draft letter has the following structure
+1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <cover_letter></cover_letter> tag.
+2. A point-by-point response to the referee comments. To do this:
+- Split each referee report in the <referee_report_a></referee_report_a> or <referee_report_b></referee_report_b> tag into individual segment. Copy each exact comments as verbatim segment within the <referee_comment></referee_comment> tag.
+- Similar to the provided example, all the referee's comments (summary, recommendtions, criticisms, questions) need to be covered covered and addressed in the <point_by_point_reply_a></point_by_point_reply_a> or <point_by_point_reply_b></point_by_point_reply_b> tag. For recommendtions by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what are changed in the paper, similar to the provided example.
+- Make sure everything the referee wrote in the original report have been responded in the point by point reply.
+- Write your rebuttal to each comment inside <author_response></author_response> tag immediately after each <referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use "Show, not tell" approach - be specific about what are changed in the paper, similar to the provided example.
+3. At the end of each reply to the referers, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
+
+Write the full reply letter in the following format:
+
+<reply_letter>
+<cover_letter>
+Your 1-page cover letter to the editor here.
+</cover_letter>
+
+Responses to Referee A:
+<point_by_point_reply_a>
+<referee_comment>
+First comment from the referee A here. Potentially it is a summary of our work.
+</referee_comment>
+<author_response>
+Your rebuttal to the first comment here.
+</author_response>
+
+<referee_comment>
+Second comment from the referee A here. 
+</referee_comment>
+<author_response>
+Your rebuttal to the second comment here.
+</author_response>
+
+(Continue this pattern for each comment from the referee.)
+
+</point_by_point_reply_a>
+
+Responses to Referee B:
+<point_by_point_reply_b>
+...
+</point_by_point_reply_b>
+
+<list_of_major_changes>
+List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
+</list_of_major_changes>
+
+</reply_letter>
+
+<revised_paper>
+Full text of your revised paper here.
+</revised_paper>
+
+Please review the drafted reply letter and the referee comments carefully. Then, polish the drafted reply letter to:
+1. Clarify any unclear or ambiguous points
+2. Provide more specific details and examples to support your arguments
+3. Address all the referee comments thoroughly and convincingly
+4. Ensure the tone is professional and respectful
+
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start polishing the reply letter in the the <reply_letter></reply_letter> tag. Your polished reply letter should be well-structured, condensed, and free of errors in grammar, punctuation, and spelling.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Your output (cover letter to the editor and the response letter to the referees) is too generic and not specific enough.
+After thoroughly and critically reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new reply letter that satisfies the following requirements:
+<requirements>
+- Increases the level of details from high (8/10) to very high (9/10), with specific references to the changes in the new version of the paper.
+- Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical arguement. 
+- The style and tone of the reply letter should be similar to the provided example (under <example_reply_letter>).
+</requirements>
+
+Please output the revised cover letter (under <cover_letter>) and the revised response letter (under <point_by_point_reply_a> and <point_by_point_reply_b>) that meets the above requirements.
+]]>
+</user_reflect>
+</prompts>
+</task>

@@ -1,33 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-all_tasks_settings = {
-    "reply_letter": {
-        "document_tag": "latex_document",
-        "end_tag": "</reply_letter>",
-        "output_type": "txt",
-        "prefill_first": "<reply_letter>\n<cover_letter>",
-    },
-    "revise_main": {
-        "document_tag": "latex_document",
-        "end_tag": "</revised_main>",
-        "output_type": "tex",
-        "prefill_first": "Now output the revised main paper.\n <revised_main>",
-    },
-    "revise_supp": {
-        "document_tag": "latex_document",
-        "end_tag": "</revise_supp>",
-        "output_type": "tex",
-        "prefill_first": "Now output the revised supplementary material.\n <revise_supp>",
-    },
-    "polish_reply": {
-        "document_tag": "latex_document",
-        "end_tag": "</reply_letter>",
-        "output_type": "txt",
-        "prefill_first": "Now output the polished reply letter.\n <reply_letter>",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "prl_reply")
 
 
@@ -52,6 +25,8 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Preparing response for {args.input_file}...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
@@ -66,8 +41,6 @@ def main():
             "EXAMPLE_REPLY_LETTER": coa.read_file(args.example_reply_letter) if args.example_reply_letter else "",
         }
     )
-
-    task_settings = all_tasks_settings[args.task]
 
     if "revise" in args.task or "polish" in args.task:
         user_prefix_vars["DRAFT_REPLY_LETTER"] = coa.read_file(args.draft_reply_letter) if args.draft_reply_letter else ""
@@ -84,10 +57,9 @@ def main():
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
-    log_file = coa.log_start(args)
 
     model = model_settings["model"]
     output_type = output_settings["output_type"]
