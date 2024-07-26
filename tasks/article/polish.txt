@@ -1,4 +1,3 @@
-
 In some places only bare equations are presented (see the attached example). Can you add some explainations to make it more readable yet being condensed? 
 
 - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 

@@ -1,5 +1,6 @@
-You are tasked with writing a research paper based on slide images and a paper draft/template. The slide images will be provided separately as vision inputs. The paper draft/template is as follows:
+You are tasked with writing a research paper based on slide images and a paper draft/template. The slide images will be provided separately as vision inputs.
 
+The paper draft/template is as follows:
 <paper_draft>
 {INPUT_CONTENT}
 </paper_draft>

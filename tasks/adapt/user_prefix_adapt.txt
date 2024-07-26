@@ -1,7 +1,6 @@
 You will be adapting a new lecture notes to match the notation, style, and level of detail of your existing long set of lecture notes on stochastic thermodynamics and machine learning. So please read the documents carefully.
 
 Here are your existing lecture notes with consistent notation and style with additional LaTeX document class and commands:
-
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>
