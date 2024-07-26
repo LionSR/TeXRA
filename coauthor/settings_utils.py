@@ -1,6 +1,5 @@
 from termcolor import colored
 from .model_utils import model_mapping
-from coauthor.prompt_utils import load_prompt
 
 
 def get_model_settings(args):
@@ -30,15 +29,15 @@ def get_output_settings(args, task_settings):
     return output_settings
 
 
-def get_prompt_settings(args, prompt_path, task_settings, task):
+def get_prompt_settings(args, prompt_path, task_settings, task, prompt_dict):
     print(colored(f"prompt_path: {prompt_path}", "yellow"), colored(f"task: {task}", "yellow"))
 
     prompt_settings = {
         "prompt_path": prompt_path,
-        "system_prompt_file": f"system_prompt_{task}.txt",
-        "user_prefix_file": f"user_prefix_{task}.txt",
-        "user_request_file": f"user_request_{task}.txt",
-        "user_reflect_file": f"user_reflect_{task}.txt",
+        "system_prompt": prompt_dict.get("system_prompt", ""),
+        "user_prefix_prompt": prompt_dict.get("user_prefix", ""),
+        "user_request_prompt": prompt_dict.get("user_request", ""),
+        "user_reflect_prompt": prompt_dict.get("user_reflect", ""),
         "prefill_first": task_settings.get("prefill_first"),
         "prefill_first_reflect": task_settings.get("first_prefill_reflect"),
         "use_prefill_from_input": False,
@@ -47,13 +46,5 @@ def get_prompt_settings(args, prompt_path, task_settings, task):
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
         "include_tikz_reflection": args.include_tikz_reflection,
     }
-
-    for key in ["system_prompt_file", "user_prefix_file", "user_request_file", "user_reflect_file"]:
-        if key in task_settings and task_settings[key] is not None:
-            prompt_settings[key] = task_settings[key]
-
-    # Load and update the system prompt
-    system_prompt = load_prompt("system_prompt", task, prompt_settings)
-    prompt_settings["system_prompt"] = system_prompt
 
     return prompt_settings

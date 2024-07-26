@@ -1,33 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-all_tasks_settings = {
-    "transcribe": {
-        "document_tag": "improved_document",
-        "end_tag": "</improved_document>",
-        "output_type": "txt",
-        "prefill_first": "Here is the faithfully and correctly improved document:\n<improved_document>",
-    },
-    "punctuate": {
-        "document_tag": "improved_document",
-        "end_tag": "</improved_document>",
-        "output_type": "txt",
-        "prefill_first": "Here is the faithfully and correctly improved document:\n<improved_document>",
-    },
-    "2tex": {
-        "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
-        "output_type": "tex",
-        "prefill_first": "\\documentclass{lecture}\n\\input{commands_qi}\n\\course{",
-    },
-    "reflect": {
-        "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
-        "output_type": "tex",
-        "prefill_first": "\\documentclass{lecture}\n\\input{commands_qi}",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "lecture2text")
 
 
@@ -43,7 +16,9 @@ def main():
     args = parser.parse_args()
 
     print(colored(f"args: {args}", "blue"))
-    print(colored(f"Transcribing {args.input_file}...\n", "green"))
+    print(colored(f"Processing {args.input_file} with task: {args.task}...\n", "green"))
+
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
@@ -54,24 +29,25 @@ def main():
             "COMMANDS_CONTENT": coa.read_file("commands_qi.tex"),
         }
     )
-
     if args.task in ["2tex", "reflect"]:
         user_prefix_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(args.input_file), "improved_document")
+        user_prefix_vars.update(
+            {
+                "corrected_transcription_content": coa.extract_text_from_tags(coa.read_file(args.input_file), "improved_document"),
+                "converted_tex_file": args.input_file.replace(".txt", ".tex"),
+                "converted_tex_content": coa.read_file(args.input_file.replace(".txt", ".tex")),
+            }
+        )
     elif args.task in ["transcribe", "punctuate"]:
         user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
-
-    task_settings = all_tasks_settings[args.task]
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    if "long" in args.task:
-        coa.handle_long_input(args, user_prefix_vars, prompt_settings)
-    else:
-        coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -90,6 +66,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=args.figure_inputs,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
@@ -113,7 +90,6 @@ def main():
             model_settings=model_settings,
             output_settings=output_settings,
             prompt_settings=prompt_settings,
-            figure_inputs=args.figure_inputs,
         )
 
         coa.log_output_files(output_file_reflect, log_file)

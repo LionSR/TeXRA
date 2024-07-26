@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="revise_main">
+<settings>
+<document_tag>latex_document</document_tag>
+<end_tag>&lt;/revised_main&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>Now output the revised main paper.
+&lt;revised_main&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+Your task is to write research paper on developing a new variational method for quantum many body physics and rebuttal againsit the referrees.
+
+When writing LaTeX, you must:
+- Use \be for \begin{equation} and \ee for \end{equation}. 
+- Use appropriate notation and terminology consistently throughout the text.
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
+
+<documents>
+<document index="1">
+<source>Cover Letter</source>
+<document_content>
+{COVER_LETTER}
+</document_content>
+</document>
+<document index="2">
+<source>{INPUT_FILE}</source>
+<document_content>
+{MAIN_CONTENT}
+</document_content>
+</document>
+<document index="3">
+<source>Appendix</source>
+<document_content>
+{SUPP_CONTENT}
+</document_content>
+</document>
+<document index="4">
+<source>Editor Decision Letter</source>
+<document_content>
+{EDITOR_DECISION_LETTER}
+</document_content>
+</document>
+<document index="5">
+<source>Referee Report A</source>
+<document_content>
+{REFEREE_REPORT_A}
+</document_content>
+</document>
+<document index="6">
+<source>Referee Report B</source>
+<document_content>
+{REFEREE_REPORT_B}
+</document_content>
+</document>
+<document index="7">
+<source>Example Reply Letter</source>
+<document_content>
+{EXAMPLE_REPLY_LETTER}
+</document_content>
+</document>
+<document index="8">
+<source>Instruction</source>
+<document_content>
+{INSTRUCTION}
+</document_content>
+</document>
+<document index="1">9">
+<source>Draft Reply Letter</source>
+<document_content>
+{DRAFT_REPLY_LETTER}
+</document_content>
+</document>
+</documents>
+
+Explanation of documents:
+1. Cover Letter: The original letter submitted with the paper, explaining its significance and suitability for the journal.
+2. Main Paper: The full text of the submitted research paper, containing the core content and findings.
+3. Appendix: Supplementary material that provides additional details, data, or explanations to support the main paper.
+4. Editor Decision Letter: The letter from the journal editor, typically containing their initial decision and a summary of the referee reports.
+5. Referee Report A: The detailed feedback and critique from the first referee.
+6. Referee Report B: The detailed feedback and critique from the second referee.
+7. Example Reply Letter: A sample response letter to guide the structure and tone of your reply.
+8. Instruction: Specific guidelines or requirements for drafting the reply letter.
+9. Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Please read the submission cover letter, the paper, referee reports, and  the drafted reply letter carefully. Refer to the example for the tone and the structure. Afterwards, propose a new version of the main text of the paper which address all the proposed changes mentioned in the drafted reply letter. 
+- Note that the abstract, introduction, and the conclusion also needs to be updated accordingly. 
+- Make sure figure and their captions match the description in the text.
+
+<revised_main>
+Full main text of your revised paper here.
+</revised_main>
+
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Remeber that the main text of Physical Review Letters has the 4.5 page or 3500 words length limit. The overall length in the main text of the new version should stay constant.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Your output draft paper does not closely match the proposed changes in the reply letter. In light of the new changes, the abstract, introduction, and the conclusion also needs to be updated accordingly.
+After thoroughly reviewing and critically the paper, the cover letters, the report, the reply letter, and the example, write a new version of the paper that satisfies the following requirements:
+<requirements>
+- All the proposed changes mentioned in the reply letter have been implemented in the new version of the paper.
+- Make sure all the referee's comments (criticisms, or questions) have been addressed in the main text.
+- The abstract, introduction, and the conclusion are updated accordingly.
+- Make sure figure and their captions match the description in the text.
+</requirements>
+Please output the revised paper that meets the above requirements.
+]]>
+</user_reflect>
+</prompts>
+</task>

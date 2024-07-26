@@ -3,33 +3,6 @@ import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "write")
 
-all_task_settings = {
-    "paper2cover": {
-        "document_tag": "cover_letter",
-        "end_tag": "</cover_letter>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-    "slide2paper": {
-        "document_tag": "research_paper",
-        "end_tag": "</research_paper>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-    "paper2slide": {
-        "document_tag": "beamer_presentation",
-        "end_tag": "</beamer_presentation>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-    "proposal": {
-        "document_tag": "research_proposal",
-        "end_tag": "</research_proposal>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-}
-
 
 def main():
     parser = coa.get_common_argparser()
@@ -39,19 +12,16 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Writing {args.task} for {args.input_file}...\n", "green"))
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
+    user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
+
     if args.task == "slide2paper":
-        user_prefix_vars["INSTRUCTION"] = (
-            args.instruction if args.instruction else ("Write a comprehensive research paper based on the provided slides and draft.")
-        )
+        user_prefix_vars["INSTRUCTION"] = args.instruction or "Write a comprehensive research paper based on the provided slides and draft."
     elif args.task == "paper2slide":
-        # Research paper
         user_prefix_vars["INSTRUCTION"] = (
-            args.instruction
-            if args.instruction
-            else ("Create a professional LaTeX Beamer presentation based on the provided research paper for a physics audience.")
+            args.instruction or "Create a professional LaTeX Beamer presentation based on the provided research paper for a physics audience."
         )
     else:
         if args.sample_files:
@@ -59,11 +29,9 @@ def main():
         else:
             user_prefix_vars["REFERENCE_CONTENT"] = ""
 
-    task_settings = all_task_settings[args.task]
-
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 

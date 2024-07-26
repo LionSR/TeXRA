@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="adapt">
+<settings>
+<document_tag>latex_document</document_tag>
+<end_tag>&lt;/latex_document&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Your task is to write a long book entitled "Stochastic Thermodynamics in the World of Machine Learning".
+
+When writing LaTeX, you must:
+- Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
+- Use \begin{align} ... \end{align} for displayed equations- Use \de for \delta.
+- Use appropriate mathematical notation and terminology consistently throughout the text.
+- For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
+- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You will be adapting a new lecture notes to match the notation, style, and level of detail of your existing long set of lecture notes on stochastic thermodynamics and machine learning. So please read the documents carefully.
+
+Here are your existing lecture notes with consistent notation and style with additional LaTeX document class and commands:
+<document_class>
+{DOCUMENT_CLS_CONTENT}
+</document_class>
+
+<commands>
+{COMMANDS_CONTENT}
+</commands>
+
+<existing_lecture_notes>
+{EXISTING_LECTURE_NOTES}
+</existing_lecture_notes>
+
+And here are the new lecture notes {INPUT_FILE} you want to understand, paraphrase, and adapt:
+
+<new_lecture_notes>
+{INPUT_CONTENT}
+</new_lecture_notes>
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Please carefully read and understand both sets of lecture notes. Identify all the concepts, notations, and derivations in the new lecture notes. 
+
+You need to include the derivations of the path probability for the langevin systems, including the forward and the backward formulation using the Ito/Anti-Ito convention. Start with all the details of the derivation of the path probability for the overdamped langevin systems. The difference between the forward and backward action which will include the Stratonovich integral. Then go to the first and second law of the overdamped langevin systems. Include all the deriational steps. Include all the derivations for the expression of the total entroy production in terms of the probability current. Incorporate seeminglessly the derivations from the appendix of the new lecture notes into your output. 
+
+- You should use the same notations as the existing lecture notes.  For example, you used use \rho for the path probability as in the exisitng lecture notes. Use $x_n$ instead of $x_\ell$ for dividing the path. You should use use the notations for the SDE for the overdamped Langevin systems (ie., continue to use \mu and \sigma defined in the exisitng lecture notes  to replace $\mu_P F$ and $\sqrt{2D}$ in the new output) 
+- The output should standalone without any appendix.
+
+In <scratchpad></scratchpad> tag, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
+
+- Use the same document class (lecture.cls) and auxiliary command files (command.tex) as your existing notes
+- Maintain a consistent set of notations throughout 
+- Match the tone and style of writing in your existing notes
+- Provide the same level of detail in explanations and derivations as your existing notes, using multi-line align environments for detailed derivations where appropriate
+
+After showing your work, please output the fully adapted content inside <adapted_lecture_notes></adapted_lecture_notes> tag, ready to be integrated with your existing lecture notes.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
+
+After thoroughly reviewing the exisiting lecture notes (under the <existing_lecture_notes></existing_lecture_notes> tag), the new lecture notes (under the <new_lecture_notes></new_lecture_notes> tag), and your generated lecture notes (under the <adapted_lecture_notes></adapted_lecture_notes> tag), please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
+<instruction>
+- Increase the level of detail from moderate (5/10) to high (9/10)
+- Ensure that all major mathematical formulations and derivations from the new lecture note are covered in-depth, with clear explanations and step-by-step derivations.
+- The style, notation, and structure of the output lecture notes should closely match the provided exisiting lecture notes.
+- Make sure all the math commands exists inside the commands file <command></command> tag or from the packages imported there.
+</instruction>
+
+Please output the revised lecture notes (under the <adapted_lecture_notes></adapted_lecture_notes> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+
+<adapted_lecture_notes>
+% Your revised LaTeX source here
+</adapted_lecture_notes>
+]]>
+</user_reflect>
+</prompts>
+</task>

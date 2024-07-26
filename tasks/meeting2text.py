@@ -1,15 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-all_tasks_settings = {
-    "transcribe": {
-        "document_tag": "edited_transcript",
-        "end_tag": "</edited_transcript>",
-        "output_type": "md",
-        "prefill_first": "Here is the faithfully and correctly edited transcript:\n<edited_transcript>",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "meeting2text")
 
 
@@ -24,23 +15,23 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
             "TRANSCRIPT": coa.read_file(args.input_file),
             "CONTEXT": coa.read_file(args.context_file),
-            "EXAMPLE_TRANSCRIPT": coa.read_file(args.example_transcript) if args.example_transcript else "",
-            "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(args.example_edited_transcript) if args.example_edited_transcript else "",
+            "EXAMPLE_TRANSCRIPT": coa.read_file(args.example_transcript),
+            "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(args.example_edited_transcript),
         }
     )
-
-    task_settings = all_tasks_settings[args.task]
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
