@@ -4,7 +4,7 @@ I am going to give you a latex document of a research paper. You are about to co
 <document index="1">
 <source>Preamble</source>
 <document_content>
-            {PREAMBLE_CONTENT}
+{PREAMBLE_CONTENT}
 </document_content>
 </document>
 <document index="2">

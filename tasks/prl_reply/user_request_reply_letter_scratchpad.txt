@@ -1,16 +1,12 @@
 Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside <scratchpad></scratchpad> tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
 
 After your planning, draft a reply letter that includes the following:
-
 1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <cover_letter></cover_letter> tag.
-
 2. A point-by-point response to the referee comments. To do this:
 - Split each referee report in the <referee_report_a></referee_report_a> or <referee_report_b></referee_report_b> tag into individual segment. Copy each exact comments as verbatim segment within the <referee_comment></referee_comment> tag.
 - Similar to the provided example, all the referee's comments (summary, recommendtions, criticisms, questions) need to be covered covered and addressed in the <point_by_point_reply_a></point_by_point_reply_a> or <point_by_point_reply_b></point_by_point_reply_b> tag. For recommendtions by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what are changed in the paper, similar to the provided example.
 - Write your rebuttal to each comment inside the <author_response></author_response> tag immediately after each <referee_comment></referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use "Show, not tell" approach - be specific about what are changed in the paper, similar to the provided example.
-
 3. At the end of each reply to the referers, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
-
 4. A revised version of the paper that addresses the referee comments and implement all the proposed changes mentioned in the reply letter. Include the full text of the revised paper inside the <revised_paper></revised_paper> tag.
 
 Write the full reply letter in the following format:
