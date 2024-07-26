@@ -1,15 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-all_tasks_settings = {
-    "txt2tex": {
-        "document_tag": "txt_content",
-        "end_tag": "</latex_content>",
-        "output_type": "tex",
-        "prefill_first": "<latex_content> \\chapter",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "txt2tex")
 
 
@@ -24,6 +15,8 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Converting {args.input_file} to LaTeX...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
@@ -33,11 +26,9 @@ def main():
         }
     )
 
-    task_settings = all_tasks_settings[args.task]
-
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)

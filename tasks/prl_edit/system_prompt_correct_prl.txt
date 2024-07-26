@@ -1,6 +1,0 @@
-Your task is to write research paper on developing a new variational method for quantum many body physics.
-
-When writing LaTeX, you must:
-- Use \be for \begin{equation} and \ee for \end{equation}. 
-- Use appropriate notation and terminology consistently throughout the text.
-

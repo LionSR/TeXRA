@@ -1,6 +1,20 @@
 import os
 from .file_utils import read_file
 from termcolor import colored
+import xml.etree.ElementTree as ET
+
+
+def load_task_settings_and_prompts(prompt_path, task):
+    tree = ET.parse(f"{prompt_path}/prompts_{task}.xml")
+    root = tree.getroot()
+
+    settings = root.find("settings")
+    task_settings = {child.tag: child.text for child in settings}
+
+    prompts = root.find("prompts")
+    prompt_dict = {child.tag: child.text.strip() for child in prompts}
+
+    return task_settings, prompt_dict
 
 
 def get_user_prefix_vars(args):
@@ -33,10 +47,7 @@ def get_additional_input_files_content(input_files, num_auxiliary_files):
 
 
 def load_prompt(prompt_type, task, prompt_settings):
-    prompt_path = prompt_settings.get("prompt_path")
-    prompt_file = prompt_settings.get(f"{prompt_type}_file")
-    prompt_file_path = os.path.join(prompt_path, prompt_file) if prompt_file else os.path.join(prompt_path, f"{prompt_type}_{task}.txt")
-    prompt = read_file(prompt_file_path).strip()
+    prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
     print(f"{prompt_type}: {colored(prompt, 'magenta')}")
     return prompt
 
@@ -87,7 +98,6 @@ def handle_multiple_input(args, user_prefix_vars, prompt_settings):
 
     user_prefix_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
-    # Handle auxiliary files
     if args.auxiliary_files:
         user_prefix_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
         user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
@@ -102,7 +112,6 @@ def handle_multiple_input(args, user_prefix_vars, prompt_settings):
     user_prefix_vars["INPUT_FILE"] = args.input_file
     user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
 
-    # Add AUXILIARY_FILE_CONTENT
     user_prefix_vars["AUXILIARY_FILE_CONTENT"] = (
         f"""
 <document index="0">
