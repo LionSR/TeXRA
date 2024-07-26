@@ -79,9 +79,8 @@ def main():
 
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
 
-    # Modify this part to output to .text first if conditions are met
     if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-        initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, "text")
+        initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, "xml")
     else:
         initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
 
@@ -113,7 +112,7 @@ def main():
 
     if args.reflect and end_turn:
         if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-            initial_output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, "text", reflect=True)
+            initial_output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, "xml", reflect=True)
         else:
             initial_output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
         print(f"initial_output_file_reflect: {initial_output_file_reflect}")

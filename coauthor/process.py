@@ -170,7 +170,7 @@ def process_first_round(
         messages.append({"role": "assistant", "content": prefill_first})
 
         if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>" and is_anthropic_model(model):
-            write_file(output_file, prefill_first)
+            write_file(output_file, prefill_first + "\n")
 
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
