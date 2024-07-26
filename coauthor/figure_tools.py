@@ -3,7 +3,7 @@ import os
 import subprocess
 from string import Template
 from .file_utils import read_file, write_file
-from termcolor import colored
+from termcolor import cprint, colored
 
 TIKZ_TEMPLATE = Template(
     r"""
@@ -62,9 +62,9 @@ def extract_figure_paths(latex_file_path):
                         break
 
     except FileNotFoundError:
-        print(f"Error: File '{latex_file_path}' not found.")
+        cprint(f"Error: File '{latex_file_path}' not found.", "white", "on_red")
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        cprint(f"An error occurred: {str(e)}", "white", "on_red")
 
     print("Found figure paths:", colored(figure_paths, "green"))
     return figure_paths
@@ -108,10 +108,10 @@ def compile_latex_to_pdf(tex_file):
         )
         print(f"Compiled {tex_file} successfully.")
     except subprocess.CalledProcessError as e:
-        print(f"Error compiling {tex_file}")
+        cprint(f"Error compiling {tex_file}", "white", "on_red")
         print("Error message:")
-        print(e.stdout)
-        print(e.stderr)
+        cprint(e.stdout, "magenta")
+        cprint(e.stderr, "red")
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):
