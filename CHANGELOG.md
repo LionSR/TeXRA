@@ -1,5 +1,22 @@
 # Backend Changelog
 
+## [0.10.9]
+
+- Transitioned from text-based prompts to XML-formatted prompts across all tasks
+- Implemented new function `load_task_settings_and_prompts` in prompt_utils.py for loading XML prompts
+- Refactored task files to use XML prompt loading:
+  - lecture2text.py
+  - meeting2text.py
+  - merge.py
+  - paper2note.py
+  - prl_edit.py
+  - prl_reply.py
+  - txt2tex.py
+- Removed obsolete text-based prompt files
+- Updated task processing logic to handle XML-formatted prompts
+- Improved error handling and input validation for XML prompt loading
+- Enhanced modularity and maintainability of prompt handling system
+
 ## [0.10.8]
 
 - Transitioned from .text to .xml for intermediate output and scratchpad content
