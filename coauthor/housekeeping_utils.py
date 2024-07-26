@@ -3,6 +3,7 @@ import shutil
 import glob
 import subprocess
 from datetime import datetime
+from termcolor import cprint
 
 
 def get_first_task_chunk(task):
@@ -54,9 +55,9 @@ def run_clean_single(model, input_file, reflect, task, output_name_override):
                             shutil.rmtree(file_path)
                             print(f"Deleted directory: {file_path}")
                     except PermissionError:
-                        print(f"Warning: Unable to delete {file_path}. It may be in use or you may not have permission.")
+                        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
                     except Exception as e:
-                        print(f"Error deleting {file_path}: {str(e)}")
+                        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
 
     print(f"Cleanup complete for {output_name_override or input_file}.")
 
@@ -160,3 +161,34 @@ def run_indent_tex():
             os.remove(file)
 
     print("All .tex files have been indented and temporary files have been deleted.")
+
+
+def run_clean_output():
+    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
+
+    patterns = [f"*_{model}*.tex" for model in models]
+    patterns_build = [f"*/build/*_{model}*" for model in models]
+
+    files_to_delete = []
+
+    for root, dirs, files in os.walk(".", topdown=True):
+        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
+
+        for pattern in patterns:
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
+
+        for pattern in patterns_build:
+            files_to_delete.extend(glob.glob(os.path.join(root, pattern), recursive=True))
+
+    for file in set(files_to_delete):
+        try:
+            if os.path.exists(file):  # Check if file exists before attempting to delete
+                os.remove(file)
+                print(f"Deleted: {file}")
+            else:
+                print(f"File not found: {file}")
+        except OSError as e:
+            print(f"Error deleting {file}: {e}")
+
+    print("Cleanup complete.")
