@@ -1,4 +1,4 @@
-from termcolor import colored
+from termcolor import colored, cprint
 import os
 from .img_utils import get_base64_encoded_image, process_pdf_input
 from .model_utils import is_openai_model, is_anthropic_model
@@ -81,7 +81,7 @@ def create_image_message(model, figure_inputs):
 
     for figure_input in figure_inputs:
         if not os.path.exists(figure_input):
-            print(f"Warning: File {figure_input} does not exist. Skipping.")
+            cprint(f"WARNING: File {figure_input} does not exist. Skipping.", "white", "on_red")
             continue
 
         _, file_extension = os.path.splitext(figure_input)
@@ -143,12 +143,12 @@ def extract_response_statistics(response_object, model, end_tag=None):
         output_tokens = response_object.usage.output_tokens
         stop_reason = response_object.stop_reason
         if output_tokens == 3:
-            print("Some errors might have appeared. No output generated")
+            cprint("WARNING: Some errors might have appeared. No output generated", "white", "on_red")
             print(f"### DEBUG response_object: {response_object}")
             print(f"### DEBUG response_object.content: {response_object.content}")
             raise ValueError("No output generated")
         if response_object.type == "error":
-            print("Error from the API:")
+            cprint("WARNING: Error from the API:", "white", "on_red")
             print(f"### DEBUG output_tokens: {output_tokens}")
             print(f"### DEBUG error: {response_object.error}")
             raise ValueError("Error from the API")
@@ -182,7 +182,7 @@ def check_stop_conditions(stop_reason, new_response, state, output_settings, mas
     output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
 
     if output_token_limit:
-        print("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.")
+        cprint("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.", "white", "on_red")
 
     should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
 

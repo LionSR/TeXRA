@@ -1,5 +1,17 @@
 # Backend Changelog
 
+## [0.10.7]
+
+- Refactored CLI and housekeeping utilities for improved modularity
+- Created new utility file: housekeeping_utils.py
+- Moved housekeeping functions (clean_single, pack_single, clean_build, indent_tex, clean_output) to housekeeping_utils.py
+- Simplified CLI command implementations using shared arguments and kwargs
+- Updated imports and function calls across multiple files
+- Improved error handling and file processing in housekeeping operations
+- Enhanced code readability and maintainability
+- Added colored output for warnings and errors using termcolor
+- Various minor improvements and optimizations
+
 ## [0.10.6]
 
 - Refactored CLI and housekeeping utilities for improved modularity
