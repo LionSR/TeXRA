@@ -41,6 +41,7 @@ from .prompt_utils import (
     load_prompt,
     handle_single_input,
     handle_long_input,
+    handle_multiple_input,
 )
 from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 
@@ -92,6 +93,7 @@ __all__ = [
     "load_prompt",
     "handle_single_input",
     "handle_long_input",
+    "handle_multiple_input",
     "get_model_settings",
     "get_output_settings",
     "get_prompt_settings",
