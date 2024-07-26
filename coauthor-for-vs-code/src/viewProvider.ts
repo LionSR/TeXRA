@@ -136,7 +136,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.window.showInformationMessage(`${message.command}: ${message.filePath}`);
           break;
         case 'modelSelected':
-          vscode.window.showInformationMessage(`Selected model: ${message.model}`);
+          // vscode.window.showInformationMessage(`Selected model: ${message.model}`);
           if (message.model) {
             webviewView.webview.postMessage({
               command: 'modelSelected',

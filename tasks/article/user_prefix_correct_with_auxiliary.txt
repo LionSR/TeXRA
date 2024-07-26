@@ -6,7 +6,7 @@ Here is the LaTeX document with additional LaTeX auxiliary files (where has defi
 <document index="1">
 <source>{AUXILIARY_FILE}</source>
 <document_content>
-            {AUXILIARY_CONTENT}
+{AUXILIARY_CONTENT}
 </document_content>
 <document index="2">
 <source>{INPUT_FILE}</source>
