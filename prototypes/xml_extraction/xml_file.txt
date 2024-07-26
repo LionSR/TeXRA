@@ -1,0 +1,14 @@
+<documents>
+<document index="1">
+<source>annual_report_2023.pdf</source>
+<document_content>
+ANNUAL_REPORT_CONTENT
+</document_content>
+</document>
+<document index="2">
+<source>competitor_analysis_q2.xlsx</source>
+<document_content>
+COMPETITOR_ANALYSIS_CONTENT
+</document_content>
+</document>
+</documents>
