@@ -13,11 +13,9 @@ Let's critically reflect on the cover letter we've written. Consider these point
 1. [Potential improvement 1]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 2. [Potential improvement 2]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 3. [Potential improvement 3]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]

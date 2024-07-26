@@ -9,11 +9,9 @@ your detailed analysis of the exisitng figure or the provided image input. When 
 1. [Specific figure creation/improvement idea 1]
    - Rationale:
    - Implementation details:
-
 2. [Specific figure creation/improvement idea 2]
    - Rationale:
    - Implementation details:
-
 3. [Specific figure creation/improvement idea 3]
    - Rationale:
    - Implementation details:

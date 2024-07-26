@@ -1,5 +1,4 @@
 Based on the provided information and the reference proposal, please draft a comprehensive experimental physics proposal. Your proposal should include the following sections:
-
 1. Abstract
 2. Introduction and Background
 3. Experimental Setup

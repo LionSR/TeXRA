@@ -46,7 +46,7 @@ You will be drafting a reply letter to referee reports for a paper submitted to 
 <document index="8">
 <source>Instructions</source>
 <document_content>
-            {INSTRUCTION}
+{INSTRUCTION}
 </document_content>
 </document>
 </documents>
