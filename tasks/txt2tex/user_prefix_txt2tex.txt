@@ -1,5 +1,4 @@
 You are provided with the following text content:
-
 <txt_content>
 {INPUT_CONTENT}
 </txt_content>
@@ -7,7 +6,6 @@ You are provided with the following text content:
 This content is related to your working book on stochastic differential equations. Your task is to generate a new LaTeX file based on this content, following the provided guidelines.
 
 You are also provided with a sample LaTeX file in the desired style:
-
 <sample_tex>
 {EXISTING_LECTURE_NOTES}
 </sample_tex>
@@ -15,7 +13,6 @@ You are also provided with a sample LaTeX file in the desired style:
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
 
 The document class and custom commands for the LaTeX file are as follows:
-
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>

@@ -11,12 +11,10 @@ Additional refinements:
    - Affected papers: [List of papers]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 2. [Additional refinement 2]
    - Affected papers: [List of papers]
    - Rationale: [Brief explanation]
    - Implementation: [Concrete steps]
-
 3. [Additional refinement 3]
    - Affected papers: [List of papers]
    - Rationale: [Brief explanation]

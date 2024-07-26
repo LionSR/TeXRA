@@ -47,7 +47,7 @@ are the inputs you will need:
 <document index="8">
 <source>Instruction</source>
 <document_content>
-            {INSTRUCTION}
+{INSTRUCTION}
 </document_content>
 </document>
 <document index="1">9">
