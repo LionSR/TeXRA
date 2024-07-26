@@ -1,16 +1,5 @@
 from termcolor import colored
 import coauthor as coa
-import shutil
-
-# Define the settings for each mode
-all_tasks_settings = {
-    "adapt": {
-        "document_tag": "latex_document",
-        "end_tag": "\\end{document}",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-    },
-}
 
 prompt_path = coa.get_prompt_path(coa, "adapt")
 
@@ -26,6 +15,8 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
@@ -35,13 +26,11 @@ def main():
         }
     )
 
-    task_settings = all_tasks_settings[args.task]
-
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     coa.handle_single_input(args, user_prefix_vars, prompt_settings)
 
@@ -62,6 +51,7 @@ def main():
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
+        figure_inputs=args.figure_inputs,
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
@@ -85,7 +75,6 @@ def main():
             model_settings=model_settings,
             output_settings=output_settings,
             prompt_settings=prompt_settings,
-            figure_inputs=args.figure_inputs,
         )
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)

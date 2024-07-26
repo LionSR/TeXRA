@@ -34,6 +34,7 @@ from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .openai_utils import best_connection_method
 from .prompt_utils import (
+    load_task_settings_and_prompts,
     get_user_prefix_vars,
     format_file_content,
     get_auxiliary_files_content,
@@ -81,6 +82,7 @@ __all__ = [
     "log_and_print_statistics",
     "log_output_files",
     "best_connection_method",
+    "load_task_settings_and_prompts",
     "get_user_prefix_vars",
     "format_file_content",
     "get_auxiliary_files_content",

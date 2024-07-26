@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="slide2paper">
+<settings>
+<document_tag>research_paper</document_tag>
+<end_tag>&lt;/research_paper&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+You are an expert scientific writer specializing in physics research papers. Your task is to write a detailed research paper in LaTeX format based on provided slide images and a draft/template of the paper. The paper should expand on the key points from the slides, incorporating additional details, explanations, and mathematical formulations. Maintain scientific rigor, clarity, and a high level of technical detail.
+
+When writing the paper, follow these guidelines:
+- Use precise, technical language appropriate for a physics audience
+- Structure the paper with relevant sections as indicated in the draft/template
+- Include relevant citations using \cite{} commands
+- Use LaTeX environments for equations, figures, and tables extensively
+- Maintain a professional and mathematically rigorous tone throughout the document
+- Use appropriate physics notation and terminology consistently
+- Expand on the content from the slides, providing in-depth explanations and derivations
+- Ensure smooth transitions between sections and a logical flow of ideas
+- Follow any specific instructions provided for the paper writing task
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You are tasked with writing a research paper based on slide images and a paper draft/template. The slide images will be provided separately as vision inputs.
+
+The paper draft/template is as follows:
+<paper_draft>
+{INPUT_CONTENT}
+</paper_draft>
+
+Please carefully review the provided slide images (which will be shown to you separately) and the paper draft/template before writing the full research paper.
+
+A specific instruction for this task has been provided:
+<instruction>
+{INSTRUCTION}
+</instruction>
+
+Make sure to follow this instruction closely while drafting your paper.
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Based on the provided slide images and paper draft/template, please write a comprehensive research paper. Your paper should expand on the key points from the slides, incorporating additional details, explanations, and mathematical formulations. Use the structure provided in the draft/template, but feel free to modify or expand sections as needed.
+
+Key requirements:
+- Use LaTeX formatting and ensure your paper is well-structured and scientifically sound.
+- Expand on each slide's content, providing in-depth explanations and context.
+- Use LaTeX equations extensively. Any concept that can be expressed mathematically should be formulated as an equation.
+- Reference the relevant slide images when discussing specific points or data.
+- Include relevant figures, either describing those from the slides or proposing new ones using TikZ or other appropriate LaTeX packages.
+- Provide detailed derivations where appropriate.
+- Use precise physics terminology and notation consistently.
+- Include citations for all relevant background information, techniques, and related work.
+- Ensure a logical flow of ideas and smooth transitions between sections.
+- Adhere to the specific instruction provided for this task.
+
+Please output your complete LaTeX research paper within the <research_paper> tags. Please be reminded that you will be writing a professional latex document so you should never use bare markdown style lists.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Please review your draft research paper critically, focusing on the following points:
+
+<scratchpad>
+<reflection>
+1. Content Expansion: Have you sufficiently expanded on the content from the slides? Identify any areas where more detail or explanation is needed.
+2. Mathematical Rigor: Have you used LaTeX equations extensively throughout the paper? Identify any sections where verbal descriptions can be replaced with mathematical formulations.
+3. Technical Precision: Is the language consistently technical and precise? Eliminate any generic or vague statements that don't contribute specific, technical information.
+4. Structure and Flow: Does the paper follow a logical structure? Are there smooth transitions between sections?
+5. Figure Integration: Have you effectively referenced the slide images and proposed new figures where necessary? Do they enhance the understanding of the content?
+6. Derivation Detail: Are step-by-step derivations provided where appropriate? Ensure that no important mathematical steps are skipped or glossed over.
+7. Notation Consistency: Is the use of physics notation and terminology consistent throughout the document? Standardize any inconsistencies.
+8. Citation Thoroughness: Have you included citations for all background information, techniques, and related work mentioned in the slides or added to the paper?
+9. Abstract and Conclusion: Do these sections effectively summarize the key points and findings of the research?
+10. LaTeX Utilization: Have you made full use of LaTeX features for equations, cross-referencing, and formatting? Ensure all mathematical expressions are properly typeset.
+11. Instruction Adherence: Have you followed the specific instruction provided for this task?
+</reflection>
+<improvements>
+1. [Improvement 1]
+- Rationale: [Brief explanation]
+- Implementation: [Concrete steps]
+2. [Improvement 2]
+- Rationale: [Brief explanation]
+- Implementation: [Concrete steps]
+3. [Improvement 3]
+- Rationale: [Brief explanation]
+- Implementation: [Concrete steps]
+</improvements>
+</scratchpad>
+
+Based on this reflection, please revise the paper to enhance its content, mathematical rigor, and overall quality. Ensure that the paper fully expands on the slide content while maintaining a high level of technical detail and precision. Make sure you've addressed the specific instruction provided for this task.
+
+Output your revised paper within the <research_paper> tags.
+]]>
+</user_reflect>
+</prompts>
+</task>
