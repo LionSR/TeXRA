@@ -40,7 +40,7 @@ def run_clean_single(model, input_file, reflect, task, output_name_override):
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
 
-    extensions = [".pdf", ".tex", ".text", ".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".txt"]
+    extensions = [".pdf", ".tex", ".xml", ".text", ".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".txt"]
 
     for pattern in file_patterns:
         for ext in extensions:
@@ -78,7 +78,7 @@ def run_pack_single(model, input_file, reflect, task, output_name_override):
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
     file_patterns.append(base_name)
 
-    extensions = [".pdf", ".tex", ".txt", ".text"]
+    extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
 
     moved_files = []
     copied_files = []
