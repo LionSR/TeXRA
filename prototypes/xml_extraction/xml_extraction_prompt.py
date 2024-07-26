@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from termcolor import cprint
 
-with open("xml_file.txt", "r") as file:
+with open("polish_prompt2.xml", "r") as file:
     xml_data = file.read()
 
 # Parse the XML data
@@ -16,9 +16,9 @@ user_prefix = prompts.find("user_prefix").text.strip()
 user_request = prompts.find("user_request").text.strip()
 user_reflect = prompts.find("user_reflect").text.strip()
 
-document_tag = settings.get("document_tag")
-end_tag = settings.get("end_tag")
-output_type = settings.get("output_type")
+document_tag = settings.find("document_tag").text.strip()
+end_tag = settings.find("end_tag").text.strip()
+output_type = settings.find("output_type").text.strip()
 prefill_first = settings.get("prefill_first")
 
 print("\nSettings:")
