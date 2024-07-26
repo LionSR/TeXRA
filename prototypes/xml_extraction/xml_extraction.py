@@ -1,20 +1,7 @@
 import xml.etree.ElementTree as ET
 
-# Define the XML structure with dummy data
-xml_data = """<documents>
-<document index="1">
-<source>annual_report_2023.pdf</source>
-<document_content>
-ANNUAL_REPORT_CONTENT
-</document_content>
-</document>
-<document index="2">
-<source>competitor_analysis_q2.xlsx</source>
-<document_content>
-COMPETITOR_ANALYSIS_CONTENT
-</document_content>
-</document>
-</documents>"""
+with open("xml_file.txt", "r") as file:
+    xml_data = file.read()
 
 # Parse the XML data
 root = ET.fromstring(xml_data)
