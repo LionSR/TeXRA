@@ -10,6 +10,9 @@
 - Improved error handling and file processing in housekeeping operations
 - Enhanced code readability and maintainability
 - Various minor improvements and optimizations
+- Added handle_multiple_input function in prompt_utils.py for processing multiple input files.
+- Updated imports and __all__ list in __init__.py to include handle_multiple_input.
+- Refactored edit_tex.py to use the new handle_multiple_input function.
 
 ## [0.10.5]
 
@@ -362,3 +365,4 @@
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes.
 - Various minor improvements and bug fixes.
+
