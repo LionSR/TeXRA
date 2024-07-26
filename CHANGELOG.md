@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.10.8]
+
+- Transitioned from .text to .xml for intermediate output and scratchpad content
+- Updated edit_lecture.py, edit_tex.py, and write_tex.py to use .xml extension for scratchpad output
+- Modified housekeeping_utils.py to include .xml in file extensions for cleaning and packing operations
+- Refactored file handling in task files to support .xml output for scratchpad content
+- Removed unused test files related to XML parsing
+- Added newline after prefill_first content in process.py for improved output formatting
+
+
 ## [0.10.7]
 
 - Refactored CLI and housekeeping utilities for improved modularity
