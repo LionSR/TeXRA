@@ -1,16 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-# Define the settings for each mode
-all_tasks_settings = {
-    "paper2note": {
-        "document_tag": "latex_document",
-        "end_tag": "</lecture_note>",
-        "output_type": "tex",
-        "prefill_first": "Here is the output lecture note <lecture_note>.\n\\documentclass{lecture}\n\\input{command}\n\\course",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "paper2note")
 
 
@@ -25,6 +15,8 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Preparing lecture notes for {args.input_file}...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars.update(
         {
@@ -36,13 +28,11 @@ def main():
         }
     )
 
-    task_settings = all_tasks_settings[args.task]
-
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     model = model_settings["model"]
     output_type = output_settings["output_type"]

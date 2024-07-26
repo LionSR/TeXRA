@@ -1,21 +1,6 @@
 from termcolor import colored
 import coauthor as coa
 
-all_tasks_settings = {
-    "correct_prl": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
-        "output_type": "tex",
-        "prefill_first": "Now we output the corrected supp.tex as follows.\n<latex_document>",
-    },
-    "correct_supp_prl": {
-        "document_tag": "latex_document",
-        "output_type": "tex",
-        "end_tag": "</latex_document>",
-        "prefill_first": "Now we output the corrected supp.tex as follows.\n<latex_document>",
-    },
-}
-
 prompt_path = coa.get_prompt_path(coa, "prl_edit")
 
 
@@ -34,19 +19,19 @@ def main():
     print(colored(f"args: {args}", "blue"))
     print(colored(f"Revising {args.input_file}...\n", "green"))
 
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
+
     user_prefix_vars = coa.get_user_prefix_vars(args)
     user_prefix_vars["PREAMBLE_CONTENT"] = coa.read_file("preamble.tex")
 
     if args.task == "correct_prl":
         user_prefix_vars["SUPP_CONTENT"] = coa.read_file("supp.tex")
     elif args.task == "correct_supp_prl":
-        user_prefix_vars["main_content"] = coa.read_file(args.auxiliary_files)
-
-    task_settings = all_tasks_settings[args.task]
+        user_prefix_vars["MAIN_CONTENT"] = coa.read_file(args.auxiliary_files)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)

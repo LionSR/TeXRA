@@ -8,6 +8,7 @@ Here is the LaTeX document with additional LaTeX auxiliary files (where has defi
 <document_content>
 {AUXILIARY_CONTENT}
 </document_content>
+</document>
 <document index="2">
 <source>{INPUT_FILE}</source>
 <document_content>

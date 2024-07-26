@@ -1,7 +1,0 @@
-export MODEL=opus
-
-# reply
-paper2note paper2note/escortedfreeenergy.tex Discrete-Time/Stoch-Therm.tex paper2note/mcmcvb.tex paper2note/MCMC-Bridge-Sirui.tex
-
-
-paper2note paper2note/Feedback_PRE.tex Discrete-Time/Stoch-Therm.tex paper2note/mcmcvb.tex paper2note/MCMC-Bridge-Sirui.tex
