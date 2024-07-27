@@ -1,3 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="correct_more" inherits="correct">
+<prompts>
+<system_prompt>
+<![CDATA[
 Your task is to write a research paper.
 
 When writing LaTeX, you must:
@@ -43,5 +48,7 @@ should just be:
 	\frac{E_{\pm k}}{N} &=-\zeta_{\pm k}\frac{E_{Gs}^{\pm k}}{N}
 \end{align}
 - Get rid of unnecessary hypertarget.
-
-
+]]>
+</system_prompt>
+</prompts>
+</task>

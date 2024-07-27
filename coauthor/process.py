@@ -51,7 +51,6 @@ def initialize_state(state, accumulated_output):
 def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
     end_turn = False
     k = output_settings["k"]
-    document_tag = output_settings["document_tag"]
 
     while not end_turn:
         file_exists = os.path.exists(output_file)
@@ -118,9 +117,9 @@ def process_first_round(
     messages=None,
 ):
     model = model_settings["model"]
-    system_prompt = prompt_settings["system_prompt"]
-    user_prefix_template = load_prompt("user_prefix", task, prompt_settings)
-    user_request = load_prompt("user_request", task, prompt_settings)
+    system_prompt = load_prompt("system_prompt", prompt_settings)
+    user_prefix_template = load_prompt("user_prefix", prompt_settings)
+    user_request = load_prompt("user_request", prompt_settings)
 
     user_prefix = user_prefix_template.format(**user_prefix_vars)
 
@@ -141,7 +140,7 @@ def process_first_round(
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
 
             _, extension = os.path.splitext(output_file)
-            log_file = output_file.replace(f"{extension}", "_thinking.txt")
+            log_file = output_file.replace(f"{extension}", "_thinking.xml")
             if os.path.exists(log_file):
                 file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})
@@ -154,23 +153,23 @@ def process_first_round(
             if is_openai_model(model_settings["model"]):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
-        prefill_first = prompt_settings["prefill_first"]
+        prefill = prompt_settings["prefill_first"]
         use_prefill_from_input = prompt_settings["use_prefill_from_input"]
-        accumulated_output = prefill_first
+        accumulated_output = prefill
 
         if output_type == "tex" and use_prefill_from_input:
             first_k_tex_document = read_file(input_file)[: output_settings["k"]]
-            prefill_first += first_k_tex_document
+            prefill += first_k_tex_document
             if is_anthropic_model(model):
                 accumulated_output = first_k_tex_document
             elif is_openai_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex\n"})
 
-        messages.append({"role": "assistant", "content": prefill_first})
+        messages.append({"role": "assistant", "content": prefill})
 
-        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>" and is_anthropic_model(model):
-            write_file(output_file, prefill_first + "\n")
+        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
+            write_file(output_file, prefill + "\n")
 
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
@@ -195,7 +194,7 @@ def process_reflection_round(
     model = model_settings["model"]
     use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
 
-    user_request_reflect = load_prompt("user_reflect", task, prompt_settings)
+    user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_message = f"{user_request_reflect}\n"
 
     # Handle tex count if include_tex_count is set
@@ -246,21 +245,18 @@ def process_reflection_round(
             accumulated_output = file_content
             messages.append({"role": "assistant", "content": file_content})
     else:
-        if prompt_settings.get("first_prefill_reflect"):
-            prefill_first = prompt_settings.get("first_prefill_reflect")
-        else:
-            prefill_first = prompt_settings.get("prefill_first")
+        prefill = prompt_settings.get("prefill_reflect")
 
         if output_settings["document_tag"] == "tex" and use_prefill_from_input:
             first_k_tex_document = read_file(input_file)[: output_settings["k"]]
             accumulated_output = first_k_tex_document
         else:
-            accumulated_output = prefill_first
-            messages.append({"role": "assistant", "content": prefill_first})
-            print(f"prefill_first: {colored(prefill_first, 'yellow')}")
+            accumulated_output = prefill
+            messages.append({"role": "assistant", "content": prefill})
+            print(f"prefill: {colored(prefill, 'yellow')}")
 
-        if accumulated_output == "<scratchpad>" and prefill_first == "<scratchpad>":
-            write_file(output_file, prefill_first)
+        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
+            write_file(output_file, prefill)
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output

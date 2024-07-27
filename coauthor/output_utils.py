@@ -44,8 +44,8 @@ def check_for_massive_repetition(last_response, new_response):
     massive_repetition_detected = len(longest_matching_substring) > 1000
 
     if massive_repetition_detected:
-        print(colored(f"### repetition_ratio is {repetition_ratio}", "red"))
-        print(colored(f"### Longest matching substring: {longest_matching_substring}", "red"))
+        cprint(f"### repetition_ratio is {repetition_ratio}", "red")
+        print(f"### Longest matching substring: {colored(longest_matching_substring, 'yellow')}")
         cprint("WARNING: Massive repetition detected. Stopping the process.", "white", "on_red")
 
     return massive_repetition_detected
@@ -57,11 +57,11 @@ def ensure_correct_xml_structure(file_path, document_tag):
         if content.startswith("<scratchpad>"):
             if not content.endswith(f"</{document_tag}>"):
                 if "</{document_tag}>" not in content:
-                    content += f"</{document_tag}>"
+                    content += f"\n</{document_tag}>"
                 else:
                     # Move the closing tag to the end
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
-                    content += f"</{document_tag}>"
+                    content += f"\n</{document_tag}>"
             file.seek(0)
             file.write(content)
             file.truncate()
@@ -69,7 +69,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
 
 def split_scratchpad_output(output_file, document_tag="latex_document"):
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.txt"
+    log_file_thinking = f"{base_name}_thinking.xml"
     tex_file = f"{base_name}.tex"
     print(f"Log file: {colored(log_file_thinking, 'cyan')}")
     print(f"TeX file: {colored(tex_file, 'cyan')}")
@@ -108,7 +108,7 @@ def split_scratchpad_output(output_file, document_tag="latex_document"):
 
 def split_scratchpad_output_xml(output_file, document_tag="latex_document"):
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.txt"
+    log_file_thinking = f"{base_name}_thinking.xml"
     tex_file = f"{base_name}.tex"
     print(f"Log file: {colored(log_file_thinking, 'cyan')}")
     print(f"TeX file: {colored(tex_file, 'cyan')}")

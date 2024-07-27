@@ -40,9 +40,8 @@ from .prompt_utils import (
     get_auxiliary_files_content,
     get_additional_input_files_content,
     load_prompt,
-    handle_single_input,
-    handle_long_input,
-    handle_multiple_input,
+    handle_single_output,
+    handle_multiple_output,
 )
 from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 
@@ -93,9 +92,8 @@ __all__ = [
     "get_output_file_name_merge",
     "ensure_correct_xml_structure",
     "load_prompt",
-    "handle_single_input",
-    "handle_long_input",
-    "handle_multiple_input",
+    "handle_single_output",
+    "handle_multiple_output",
     "get_model_settings",
     "get_output_settings",
     "get_prompt_settings",

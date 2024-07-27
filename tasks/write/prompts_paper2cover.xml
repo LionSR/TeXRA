@@ -34,8 +34,9 @@ If a sample cover letter has been provided, it is enclosed in the following tags
 {REFERENCE_CONTENT}
 </sample_cover_letter>
 
-Please carefully read through the entire research paper above and ensure you fully understand all the details.
-Your task is to write a cover letter for this paper, focusing on the following specific instruction:
+Please carefully read through the entire research paper above and ensure you fully understand all the details. Your task is to write a cover letter for this paper.
+
+Additonally, if provided, focus on the following specific instruction:
 <instruction>
 {INSTRUCTION}
 </instruction>

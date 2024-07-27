@@ -121,7 +121,7 @@ CoAuthor's tasks are defined in the `tasks` directory. Each task typically has i
 
 - Each task is usually defined in a separate Python file in the `tasks` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
 - These Python files define the main logic for each task, including argument parsing, file handling, and interaction with the AI model.
-- Associated prompt files (e.g., system prompts, user prompts) are stored in subdirectories within the `tasks` directory, named after the task (e.g., `tasks/article`, `tasks/lecture`).
+- Associated prompt files (e.g., system prompts, user prompts) are stored in XML format in subdirectories within the `tasks` directory, named after the task (e.g., `tasks/article`, `tasks/lecture`). These XML files contain the prompts that guide the AI model in generating outputs for the task.
 
 ### Adding New Tasks
 
@@ -130,7 +130,7 @@ To add a new task:
 1. Create a new Python file in the `tasks` directory (e.g., `new_task.py`).
 2. Define the task logic, following the structure of existing tasks.
 3. Create a new subdirectory in `tasks` for your task's prompt files (e.g., `tasks/new_task`).
-4. Add necessary prompt files (e.g., `system_prompt.txt`, `user_prefix.txt`, `user_request.txt`).
+4. Add necessary prompt files in XML format (e.g., `prompts.xml`).
 5. Update the CLI interface in `coauthor/cli.py` to include your new task.
 
 ### Modifying Prompts
@@ -138,10 +138,58 @@ To add a new task:
 To modify existing prompts:
 
 1. Navigate to the appropriate subdirectory in `tasks` (e.g., `tasks/article` for article-related tasks).
-2. Edit the relevant prompt files (e.g., `system_prompt_correct.txt`, `user_request_polish.txt`).
+2. Edit the relevant XML prompt files (e.g., `prompts.xml`).
 3. Your changes will be automatically picked up by the task scripts when they load the prompts.
 
-Remember to follow the existing code structure and conventions when adding new tasks or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
+Remember to follow the existing XML structure and conventions when adding new tasks or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
+
+### Prompt Inheritance
+
+CoAuthor supports a hierarchical structure for prompts, allowing child prompts to inherit from parent prompts. This feature promotes code reuse and makes it easier to create specialized versions of existing tasks. Here's how it works:
+
+1. In the child XML file, use the `inherits` attribute in the `<task>` tag to specify the parent task.
+2. The child prompt will inherit all settings and prompts from the parent.
+3. You can override or add to the inherited content in the child prompt file.
+
+For example, let's look at how `prompts_polish_with_auxiliary.xml` inherits from `prompts_polish.xml`:
+
+Parent prompt (`prompts_polish.xml`):
+
+```xml
+<task name="polish">
+  <settings>
+    <!-- Parent settings -->
+  </settings>
+  <prompts>
+    <system_prompt>
+      <!-- Parent system prompt -->
+      You are a computer scientist
+    </system_prompt>
+    <user_prefix>
+      <!-- Parent user prefix -->
+    </user_prefix>
+    ...
+  </prompts>
+</task>
+```
+
+Child prompt (`prompts_polish_physics.xml`):
+
+```xml
+<task name="polish_physicist" inherits="polish">
+  <settings>
+    <!-- Child settings -->
+  </settings>
+  <prompts>
+    <system_prompt>
+      <!-- Child system prompt -->
+      You are a physicist.
+    </system_prompt>
+  </prompts>
+</task>
+```
+
+In this example, `prompts_polish_with_auxiliary.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of tasks while reusing most of the existing prompt structure.
 
 ## Task Execution Logic
 
@@ -260,6 +308,8 @@ coauthor slide2paper --input_file draft.tex --figure_inputs slides.pdf
 
 This task takes slide images or a PDF of a presentation (specified by `--figure_inputs`) and generates a comprehensive LaTeX research paper. The `--input_file` can be an existing draft of the paper or an empty file. It expands on key points from the slides, incorporating additional details, explanations, and mathematical formulations. The output is a well-structured, publication-ready LaTeX document.
 
+Additional specific instructions for this task can be found in the `prompts_slide2paper.xml` file in the appropriate task directory.
+
 ### Paper to Slide Conversion (paper2slide)
 
 Convert research paper into a LaTeX Beamer presentation:
@@ -269,6 +319,8 @@ coauthor paper2slide --input_file paper.tex
 ```
 
 This task takes a LaTeX research paper as input and creates a professional LaTeX Beamer presentation. It condenses the paper's content into a series of slides, focusing on key points, methodology, results, and conclusions. The output is a LaTeX Beamer document ready for academic presentations.
+
+Additional specific instructions for this task can be found in the `prompts_paper2slide.xml` file in the appropriate task directory.
 
 ## Version Control Integration
 
@@ -315,7 +367,7 @@ To add a new task to CoAuthor:
 
 1. Create a new Python file in the `tasks/` directory
 2. Define your task logic, following the pattern in existing task files
-3. Add necessary prompt files in a subdirectory of `tasks/`
+3. Add necessary prompt files in XML format in a subdirectory of `tasks/`
 
 ## Known Issues
 

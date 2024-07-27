@@ -25,10 +25,7 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 10
     Returns:
         str: Base64 encoded PNG image.
     """
-    # Open the PDF file
     doc = fitz.open(pdf_path)
-
-    # Load the specified page
     page = doc.load_page(page_num)
 
     # Render the page as a PNG image
@@ -36,8 +33,6 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 10
 
     # Save the PNG image to a BytesIO object
     image_data = io.BytesIO(pix.tobytes())
-
-    # Open the image with PIL
     image = Image.open(image_data)
 
     # Resize the image if it exceeds the maximum size
@@ -52,7 +47,6 @@ def single_page_pdf_to_png(pdf_path, page_num=0, quality=300, max_size=(1024, 10
     # Encode the image to base64
     base64_encoded = base64.b64encode(resized_image_data.getvalue()).decode("utf-8")
 
-    # Close the PDF document
     doc.close()
 
     return base64_encoded
@@ -71,17 +65,14 @@ def multi_page_pdf_to_png(pdf_path, quality=300, max_size=(1024, 1024), max_page
     Returns:
         List[str]: List of base64 encoded PNG images.
     """
-    # Open the PDF file
     doc = fitz.open(pdf_path)
 
     base64_encoded_pngs = []
 
-    # Iterate through each page of the PDF
     for page_num in range(min(doc.page_count, max_pages)):
         base64_encoded = single_page_pdf_to_png(pdf_path, page_num, quality, max_size)
         base64_encoded_pngs.append(base64_encoded)
 
-    # Close the PDF document
     doc.close()
 
     return base64_encoded_pngs
