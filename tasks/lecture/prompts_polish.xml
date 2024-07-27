@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="polish">
+<settings>
+<document_tag>latex_document</document_tag>
+<end_tag>&lt;/latex_document&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+When writing LaTeX, you must:
+- Use \begin{align} ... \end{align} for displayed equations.
+- Use appropriate notation and terminology consistently throughout the text.
+- Use non-breaking spaces when referencing equations, figures, sections, and references e.g., use "Eq.~\eqref{eq:label}"; "see Fig.~\ref{fig:label}"; "Section~\ref{sec:label}"; "see Ref.~\cite{Jarzynski1997Nonequilibrium}".
+- Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"odinger'' over "Schrodinger".
+- Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
+- Keep comments that start with % in the document.
+- When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+- Label referenced equations and figures using \label{eq:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You will be given a LaTeX document of a draft textbook chapter to revise. Read the document carefully before proceeding.
+
+Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
+
+<documents>
+<document index="1">
+<source>{DOCUMENT_CLS}</source>
+<document_content>
+{DOCUMENT_CLS_CONTENT}
+</document_content>
+</document>
+<document index="2">
+<source>{COMMANDS}</source>
+<document_content>
+{COMMANDS_CONTENT}
+</document_content>
+</document>
+<document index="3">
+<source>{INPUT_FILE}</source>
+<document_content>
+{INPUT_CONTENT}
+</document_content>
+</document>
+{ADDITIONAL_INPUT_FILES}
+</documents>
+
+Please carefully read through the entire chapter and ensure you fully understand all the details.
+Your task is to enhance this chapter focusing solely on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
+Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the improvements):
+
+<scratchpad>
+1. [Specific improvement 1 addressing the instruction]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+2. [Specific improvement 2 addressing the instruction]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+3. [Specific improvement 3 addressing the instruction]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+</scratchpad>
+
+Now, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
+<latex_document>
+{1ST_UPDATED_LATEX_DOCUMENT}
+</latex_document>
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted refinements in the scratchpad below:
+
+<scratchpad>
+<reflection>
+1. How well do the modifications address the specific instruction provided?
+2. Are the enhancements clear and effective in improving the quality of the latex document?
+3. Do the changes maintain the overall structure and coherence of the original latex document?
+4. Have the added/revised parts been coherently and logically incorporated, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them? 
+5. Is any crucial information from the original version now missing in the new version?
+6. Are all notations and quantities properly defined before use?
+7. If figures were added, are they correct, informative, and condensed compared to the given reference or the previous version?
+8. Are there any proof or mathematical reasonings that can be expanded using more equations?
+</reflection>
+
+<idea>
+1. [Additional refinement 1]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+2. [Additional refinement 2]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+3. [Additional refinement 3]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+</idea>
+</scratchpad>
+
+Now, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+]]>
+</user_reflect>
+</prompts>
+</task>

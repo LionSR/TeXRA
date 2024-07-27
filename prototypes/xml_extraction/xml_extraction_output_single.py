@@ -16,7 +16,7 @@ input_xml = "output_single.xml"
 
 # Generate the thinking and LaTeX filenames
 base_name = os.path.splitext(input_xml)[0]
-thinking_filename = f"{base_name}_thinking.txt"
+thinking_filename = f"{base_name}_thinking.xml"
 latex_filename = f"{base_name}.tex"
 
 # Read the XML file

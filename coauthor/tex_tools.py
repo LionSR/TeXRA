@@ -1,7 +1,7 @@
 import os
 import subprocess
 import re
-from termcolor import colored
+from termcolor import colored, cprint
 import shutil
 from datetime import datetime
 
@@ -48,13 +48,16 @@ def process_tikzpicture_endings(file_path):
 
 
 def run_latexdiff(input_file, output_file, task=None, model=None):
-    diff_file_name = output_file.replace(".tex", "_diff.tex")
-
-    if model and model in input_file and model in output_file:
-        diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
+    if not input_file:
+        cprint("WARNING: input_file is None or empty", "white", "on_red")
+        return None
 
     if task is not None and "draw" in task:
         return None
+
+    diff_file_name = output_file.replace(".tex", "_diff.tex")
+    if model and model in input_file and model in output_file:
+        diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
     # Run latexdiff
     latexdiff_command = f"latexdiff --flatten --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
@@ -97,6 +100,10 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
 
 
 def run_latexdiff_vc(input_file, commit_hash):
+    if not input_file:
+        cprint("WARNING: input_file is None or empty", "white", "on_red")
+        return None
+
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command
