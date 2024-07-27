@@ -137,9 +137,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, task: string, reflect: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      let command = `coauthor pack-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor pack-single --task=${task} --reflect=${reflect} --model=${model}`;
       if (outputNameOverride) {
-        command += ` --output_name_override="${outputNameOverride}"`;
+        command += ` --input_file="${outputNameOverride}"`;
+      }
+      else {
+        command += ` --input_file="${inputFile}"`;
       }
       terminal.sendText(command);
     }),
@@ -167,9 +170,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, task: string, reflect: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      let command = `coauthor clean-single --input_file="${inputFile}" --task=${task} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor clean-single --task=${task} --reflect=${reflect} --model=${model}`;
       if (outputNameOverride) {
-        command += ` --output_name_override="${outputNameOverride}"`;
+        command += ` --input_file="${outputNameOverride}"`;
+      }
+      else {
+        command += ` --input_file="${inputFile}"`;
       }
       terminal.sendText(command);
     }),
@@ -456,6 +462,25 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const model = vscode.workspace.getConfiguration('coauthor').get('defaultMergeModel', 'sonnet+');
       const reflect = vscode.workspace.getConfiguration('coauthor').get('defaultMergeReflect', 'False');
       terminal.sendText(`coauthor merge --input_file="${inputFile}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
+    }),
+    vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], task: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
+      const terminal = ensureTerminal();
+      terminal.show();
+      const allInputFiles = [inputFile, ...additionalInputFiles];
+      let command = `coauthor pack-multiple --input_files="${outputFiles.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
+      if (outputNameOverride) {
+        command += ` --output_name_override="${outputNameOverride}"`;
+      }
+
+      terminal.sendText(command);
+    }),
+    vscode.commands.registerCommand('coauthor.cleanMultiple', (inputFile: string, additionalInputFiles: string[], task: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
+      const terminal = ensureTerminal();
+      terminal.show();
+      const allInputFiles = [inputFile, ...additionalInputFiles];
+      let inputFilesWithOverride = outputNameOverride ? [outputNameOverride, ...outputFiles] : outputFiles;
+      let command = `coauthor clean-multiple --input_files="${inputFilesWithOverride.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
+      terminal.sendText(command);
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );

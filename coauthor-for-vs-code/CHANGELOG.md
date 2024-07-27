@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.7.5]
+- Added UI support for packing and cleaning multiple files
+- Implemented new buttons for pack-multiple and clean-multiple operations
+- Updated WebView to handle multiple file selection for new operations
+- Enhanced message handling between WebView and extension
+- Improved error handling and user feedback for multiple file operations
+
 ## [0.7.4]
 
 - Added support for new paper2slide task in UI
