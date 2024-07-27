@@ -6,9 +6,6 @@ import subprocess
 from dotenv import load_dotenv
 from termcolor import colored
 
-# Add the parent directory to the system path for the windows users
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 from coauthor.arg_utils import comma_separated_list
@@ -22,6 +19,9 @@ from coauthor.housekeeping_utils import (
     run_pack_multiple,
 )
 from coauthor.tex_tools import run_pack_latexdiff_vc
+
+# Add the parent directory to the system path for the windows users
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
 
