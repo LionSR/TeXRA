@@ -138,7 +138,7 @@ def run_pack_single(model, input_file, reflect, task, output_name_override, outp
 def run_clean_multiple(model, input_files, reflect, task):
     for input_file in input_files:
         run_clean_single(model, input_file, reflect, task)
-    print(f"Cleanup complete for multiple files.")
+    print("\nCleanup complete for multiple files.")
 
 
 def run_pack_multiple(model, input_files, reflect, task, output_name_override):
