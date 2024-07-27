@@ -138,11 +138,6 @@ def process_first_round(
         file_content = read_file(output_file)
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
-
-            _, extension = os.path.splitext(output_file)
-            log_file = output_file.replace(f"{extension}", "_thinking.xml")
-            if os.path.exists(log_file):
-                file_content = read_file(log_file) + file_content
             messages.append({"role": "assistant", "content": file_content})
             return initialize_state(state, None), accumulated_output, True, messages
         else:
@@ -182,7 +177,7 @@ def process_first_round(
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    print(f"\n\nProcessed {input_file} and saved as {output_file}")
+    print(f"\n\nProcessed {colored(input_file, 'green')} and saved as {colored(output_file, 'green')}")
 
     return state, accumulated_output, end_turn, messages
 
@@ -272,6 +267,6 @@ def process_reflection_round(
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    print(f"\n\nProcessed {input_file} and saved as {output_file}")
+    print(f"\n\nProcessed {colored(input_file, 'green')} and saved as {colored(output_file, 'green')}")
 
     return state, accumulated_output, end_turn, messages

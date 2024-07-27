@@ -6,7 +6,7 @@ import os
 
 def add_cdata_to_tags(xml_data, tags):
     for tag in tags:
-        pattern = f"(<{tag}(?:\s+[^>]*)?>)(.*?)(</{tag}>)"
+        pattern = f"(<{tag}(?:\\s+[^>]*)?>)(.*?)(</{tag}>)"
         xml_data = re.sub(pattern, r"\1<![CDATA[\2]]>\3", xml_data, flags=re.DOTALL)
     return xml_data
 
