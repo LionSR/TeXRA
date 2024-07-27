@@ -45,13 +45,9 @@ def get_folder_datetime(input_dir, file_patterns, extensions):
         return datetime.now().strftime("%Y%m%d%H%M")
 
 
-def run_clean_single(model, input_file, reflect, task, output_name_override):
-    if output_name_override:
-        base_name = os.path.splitext(os.path.basename(output_name_override))[0]
-        input_dir = os.path.dirname(output_name_override)
-    else:
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        input_dir = os.path.dirname(input_file)
+def run_clean_single(model, input_file, reflect, task):
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    input_dir = os.path.dirname(input_file)
 
     first_task_chunk = get_first_task_chunk(task)
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
@@ -76,16 +72,12 @@ def run_clean_single(model, input_file, reflect, task, output_name_override):
                     except Exception as e:
                         cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
 
-    print(f"Cleanup complete for {output_name_override or input_file}.")
+    print(f"Cleanup complete for {input_file}.")
 
 
-def run_pack_single(model, input_file, reflect, task, output_name_override, output_folder=None):
-    if output_name_override:
-        base_name = os.path.splitext(os.path.basename(output_name_override))[0]
-        input_dir = os.path.dirname(output_name_override)
-    else:
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        input_dir = os.path.dirname(input_file)
+def run_pack_single(model, input_file, reflect, task, output_folder=None):
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    input_dir = os.path.dirname(input_file)
 
     first_task_chunk = get_first_task_chunk(task)
 
@@ -131,7 +123,7 @@ def run_pack_single(model, input_file, reflect, task, output_name_override, outp
                     os.remove(file_path)
                     print(f"Deleted: {file_path}")
 
-    print(f"Packing complete for {output_name_override or input_file}.")
+    print(f"Packing complete for {input_file}.")
     return output_folder
 
 
@@ -165,7 +157,7 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
     # Pack input files
     for input_file in input_files:
         print(f"\nPacking {input_file} into {common_output_folder}")
-        run_pack_single(model, input_file, reflect, task, output_name_override=None, output_folder=common_output_folder)
+        run_pack_single(model, input_file, reflect, task, output_folder=common_output_folder)
 
     # Pack additional XML files
     for pattern in additional_patterns:
