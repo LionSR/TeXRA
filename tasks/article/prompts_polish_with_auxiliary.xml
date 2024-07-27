@@ -1,4 +1,9 @@
-I am going to give you a draft of a research paper. 
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="polish_with_auxiliary" inherits="polish">
+<prompts>
+<user_prefix>
+<![CDATA[
+I am going to give you the latex document of a research paper draft.
 
 Here is the LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
@@ -23,3 +28,7 @@ Your task is to enhance this paper focusing solely on the following specific ins
 {INSTRUCTION}
 </instruction>
 For example, in the instruction, if I ask you to revise section A, you do not need to revise section B.
+]]>
+</user_prefix>
+</prompts>
+</task>

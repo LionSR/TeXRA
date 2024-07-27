@@ -15,7 +15,7 @@ def add_cdata_to_tags(xml_data, tags):
 input_xml = "output_multiple.xml"
 
 # Generate the thinking filename
-thinking_filename = os.path.splitext(input_xml)[0] + "_thinking.txt"
+thinking_filename = os.path.splitext(input_xml)[0] + "_thinking.xml"
 
 # Read the XML file
 with open(input_xml, "r") as file:

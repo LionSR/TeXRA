@@ -15,25 +15,18 @@ def main():
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
 
-    if args.task == "slide2paper":
-        user_prefix_vars["INSTRUCTION"] = args.instruction or "Write a comprehensive research paper based on the provided slides and draft."
-    elif args.task == "paper2slide":
-        user_prefix_vars["INSTRUCTION"] = (
-            args.instruction or "Create a professional LaTeX Beamer presentation based on the provided research paper for a physics audience."
-        )
+    # this handling of sample_files is problematic
+    if args.sample_files:
+        user_prefix_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in args.sample_files])
     else:
-        if args.sample_files:
-            user_prefix_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in args.sample_files])
-        else:
-            user_prefix_vars["REFERENCE_CONTENT"] = ""
+        user_prefix_vars["REFERENCE_CONTENT"] = ""
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)
@@ -43,7 +36,7 @@ def main():
 
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
 
-    if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
+    if prompt_settings["prefill_first"] == "<scratchpad>":
         initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, "xml")
     else:
         initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
@@ -60,21 +53,23 @@ def main():
         figure_inputs=args.figure_inputs,
     )
 
-    # Ensure correct XML structure in the output file
-    if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-        coa.ensure_correct_xml_structure(initial_output_file, task_settings["document_tag"])
+    output_file = initial_output_file
 
-    if end_turn and task_settings["output_type"] == "tex":
-        # output_file = coa.split_scratchpad_output_xml(initial_output_file, task_settings["document_tag"])
-        output_file = coa.split_scratchpad_output(initial_output_file, task_settings["document_tag"])
-    else:
-        output_file = initial_output_file
+    # Ensure correct XML structure in the output file
+    if end_turn:
+        if prompt_settings["prefill_first"] == "<scratchpad>":
+            coa.ensure_correct_xml_structure(initial_output_file, task_settings["document_tag"])
+            # output_file = coa.split_scratchpad_output_xml(initial_output_file, task_settings["document_tag"])
+            output_file = coa.split_scratchpad_output(initial_output_file, task_settings["document_tag"])
+
+        if output_type == "tex":
+            coa.run_latexdiff(args.input_file, output_file, args.task, args.model)
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
 
-    if args.reflect and end_turn:
-        if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
+    if end_turn and args.reflect:
+        if prompt_settings["prefill_reflect"] == "<scratchpad>":
             output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, "xml", reflect=True)
         else:
             output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
@@ -92,16 +87,17 @@ def main():
         )
 
         # Ensure correct XML structure in the reflection output file
-        if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-            coa.ensure_correct_xml_structure(output_file_reflect, task_settings["document_tag"])
+        if end_turn_reflect:
+            if prompt_settings["prefill_reflect"] == "<scratchpad>":
+                coa.ensure_correct_xml_structure(output_file_reflect, task_settings["document_tag"])
+                # output_file_reflect = coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
+                output_file_reflect = coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
+
+            if output_type == "tex":
+                coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
-
-        if end_turn_reflect and task_settings["output_type"] == "tex":
-            # output_file_reflect = coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
-            output_file_reflect = coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
-            coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
 

@@ -31,10 +31,7 @@ You are tasked with creating a LaTeX Beamer presentation based on the following 
 
 Please carefully review the provided research paper before creating the presentation.
 
-Your task is to create a professional LaTeX Beamer presentation for a physics audience, focusing on the following specific instruction:
-<instruction>
-{INSTRUCTION}
-</instruction>
+Your task is to create a professional LaTeX Beamer presentation for a physics audience.
 
 When creating the presentation, please follow these guidelines:
 1. Use LaTeX Beamer syntax and commands correctly.
@@ -47,6 +44,11 @@ When creating the presentation, please follow these guidelines:
 8. Prioritize visual representations and key takeaways over verbose descriptions.
 9. Include slide numbers for easy reference.
 10. End with a conclusion slide summarizing the main findings and potential future work.
+
+Additonally, if provided, focus on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
 ]]>
 </user_prefix>
 <user_request>

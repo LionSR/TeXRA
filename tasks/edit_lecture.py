@@ -3,33 +3,6 @@ import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "lecture")
 
-all_task_settings = {
-    "correct": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
-        "output_type": "tex",
-        "prefill_first": "Here is the revised latex document. <latex_document>",
-    },
-    "polish": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-        "user_prefix_file": "user_prefix_polish.txt",
-        "user_request_file": "user_request_polish.txt",
-        "user_reflect_file": "user_reflect_polish.txt",
-    },
-    "draw": {
-        "document_tag": "latex_document",
-        "end_tag": "</latex_document>",
-        "output_type": "tex",
-        "prefill_first": "<scratchpad>",
-        "user_prefix_file": "user_prefix_draw.txt",
-        "user_request_file": "user_request_draw.txt",
-        "user_reflect_file": "user_reflect_draw.txt",
-    },
-}
-
 
 def main():
     parser = coa.get_common_argparser()
@@ -61,15 +34,12 @@ def main():
         }
     )
 
-    task_settings = all_task_settings[task_shared]
+    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, task_sub)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, task_sub, prompt_dict)
 
-    if "long" in args.task:
-        coa.handle_long_input(args, user_prefix_vars, prompt_settings)
-    else:
-        coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)
@@ -79,7 +49,7 @@ def main():
 
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
 
-    if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
+    if prompt_settings["prefill_first"] == "<scratchpad>":
         initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, "xml")
     else:
         initial_output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
@@ -96,22 +66,20 @@ def main():
         figure_inputs=args.figure_inputs,
     )
 
-    # Ensure correct XML structure in the output file
-    if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-        coa.ensure_correct_xml_structure(initial_output_file, task_settings["document_tag"])
-
-    if end_turn and task_settings["output_type"] == "tex":
-        output_file = coa.split_scratchpad_output(initial_output_file, task_settings["document_tag"])
-        # output_file = coa.split_scratchpad_output_xml(initial_output_file, task_settings["document_tag"])
+    if end_turn and output_type == "tex":
+        if prompt_settings["prefill_first"] == "<scratchpad>":
+            coa.ensure_correct_xml_structure(initial_output_file, task_settings["document_tag"])
+            output_file = coa.split_scratchpad_output(initial_output_file, task_settings["document_tag"])
+            # output_file = coa.split_scratchpad_output_xml(initial_output_file, task_settings["document_tag"])
+        else:
+            output_file = initial_output_file
         coa.run_latexdiff(args.input_file, output_file, args.task)
-    else:
-        output_file = initial_output_file
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
 
-    if args.reflect and end_turn:
-        if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
+    if end_turn and args.reflect:
+        if prompt_settings["prefill_reflect"] == "<scratchpad>":
             initial_output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, "xml", reflect=True)
         else:
             initial_output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
@@ -128,21 +96,21 @@ def main():
             output_settings=output_settings,
             prompt_settings=prompt_settings,
         )
+        if end_turn_reflect:
+            output_file_reflect = initial_output_file_reflect
+            if prompt_settings["prefill_reflect"] == "<scratchpad>":
+                print(f"initial_output_file_reflect: {initial_output_file_reflect}")
+                coa.ensure_correct_xml_structure(initial_output_file_reflect, task_settings["document_tag"])
+                output_file_reflect = coa.split_scratchpad_output(initial_output_file_reflect, task_settings["document_tag"])
+                print(f"output_file_reflect: {output_file_reflect}")
+                # output_file_reflect = coa.split_scratchpad_output_xml(initial_output_file_reflect, task_settings["document_tag"])
 
-        # Ensure correct XML structure in the reflection output file
-        if task_settings["prefill_first"] == "<scratchpad>" and output_type == "tex":
-            print(f"initial_output_file_reflect: {initial_output_file_reflect}")
-            coa.ensure_correct_xml_structure(initial_output_file_reflect, task_settings["document_tag"])
-            output_file_reflect = coa.split_scratchpad_output(initial_output_file_reflect, task_settings["document_tag"])
-            print(f"output_file_reflect: {output_file_reflect}")
-            # output_file_reflect = coa.split_scratchpad_output_xml(initial_output_file_reflect, task_settings["document_tag"])
+            if output_type == "tex":
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
+                coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
         coa.log_output_files(initial_output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
-
-        if end_turn_reflect and task_settings["output_type"] == "tex":
-            coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
-            coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
 
