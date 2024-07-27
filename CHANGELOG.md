@@ -1,5 +1,14 @@
 # Backend Changelog
 
+## [0.11.3]
+
+- Added support for packing and cleaning multiple files
+- Implemented pack-multiple and clean-multiple functions in housekeeping_utils.py
+- Updated CLI to support new multiple file operations
+- Refactored pack-single and clean-single functions for consistency
+- Enhanced file pattern handling and datetime generation for output folders
+- Improved error handling and logging for multiple file operations
+
 ## [0.11.2]
 
 ### Added

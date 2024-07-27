@@ -28,6 +28,23 @@ def get_file_patterns(base, model, task, reflect):
     return patterns
 
 
+def get_folder_datetime(input_dir, file_patterns, extensions):
+    most_recent_time = None
+    for pattern in file_patterns:
+        for ext in extensions:
+            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+                file_path = os.path.join(search_dir, f"{pattern}{ext}")
+                if os.path.exists(file_path):
+                    mod_time = os.path.getmtime(file_path)
+                    if most_recent_time is None or mod_time > most_recent_time:
+                        most_recent_time = mod_time
+
+    if most_recent_time:
+        return datetime.fromtimestamp(most_recent_time).strftime("%Y%m%d%H%M")
+    else:
+        return datetime.now().strftime("%Y%m%d%H%M")
+
+
 def run_clean_single(model, input_file, reflect, task, output_name_override):
     if output_name_override:
         base_name = os.path.splitext(os.path.basename(output_name_override))[0]
@@ -62,7 +79,7 @@ def run_clean_single(model, input_file, reflect, task, output_name_override):
     print(f"Cleanup complete for {output_name_override or input_file}.")
 
 
-def run_pack_single(model, input_file, reflect, task, output_name_override):
+def run_pack_single(model, input_file, reflect, task, output_name_override, output_folder=None):
     if output_name_override:
         base_name = os.path.splitext(os.path.basename(output_name_override))[0]
         input_dir = os.path.dirname(output_name_override)
@@ -71,8 +88,6 @@ def run_pack_single(model, input_file, reflect, task, output_name_override):
         input_dir = os.path.dirname(input_file)
 
     first_task_chunk = get_first_task_chunk(task)
-    now = datetime.now().strftime("%Y%m%d%H%M")
-    output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
 
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
@@ -94,6 +109,9 @@ def run_pack_single(model, input_file, reflect, task, output_name_override):
                     break
 
     if moved_files or copied_files:
+        now = get_folder_datetime(input_dir, file_patterns, extensions)
+        if output_folder is None:
+            output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
         os.makedirs(output_folder, exist_ok=True)
         for file_path in moved_files:
             shutil.move(file_path, output_folder)
@@ -114,6 +132,50 @@ def run_pack_single(model, input_file, reflect, task, output_name_override):
                     print(f"Deleted: {file_path}")
 
     print(f"Packing complete for {output_name_override or input_file}.")
+    return output_folder
+
+
+def run_clean_multiple(model, input_files, reflect, task):
+    for input_file in input_files:
+        run_clean_single(model, input_file, reflect, task)
+    print(f"Cleanup complete for multiple files.")
+
+
+def run_pack_multiple(model, input_files, reflect, task, output_name_override):
+    base_name = os.path.splitext(os.path.basename(output_name_override))[0]
+    output_dir = os.path.dirname(output_name_override)
+
+    first_task_chunk = get_first_task_chunk(task)
+    file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
+    extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
+
+    # Add patterns for additional XML files
+    additional_patterns = [
+        f"{base_name}_{first_task_chunk}_{model}.xml",
+        f"{base_name}_{first_task_chunk}_reflect_{model}.xml"
+    ]
+    file_patterns.extend(additional_patterns)
+
+    now = get_folder_datetime(output_dir, file_patterns, extensions)
+    common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{task}_{model}")
+
+    # Ensure the output folder exists
+    os.makedirs(common_output_folder, exist_ok=True)
+
+    # Pack input files
+    for input_file in input_files:
+        print(f"\nPacking {input_file} into {common_output_folder}")
+        run_pack_single(model, input_file, reflect, task, output_name_override=None, output_folder=common_output_folder)
+
+    # Pack additional XML files
+    for pattern in additional_patterns:
+        file_path = os.path.join(output_dir, pattern)
+        if os.path.exists(file_path):
+            shutil.move(file_path, common_output_folder)
+            print(f"Moved additional file: {file_path}")
+
+    print(f"All files packed into {common_output_folder}")
+    return common_output_folder
 
 
 def run_clean_build():
