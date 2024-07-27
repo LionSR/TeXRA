@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 def get_output_file_name(input_file, task, model, output_type, reflect=False):
     file_name, _ = os.path.splitext(input_file)
     first_task_chunk = task.split("_")[0]
+    output_type = output_type.strip(".")
     output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
     if reflect:
         output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
@@ -74,13 +75,95 @@ def add_cdata_to_tags(xml_data, tags):
     return xml_data
 
 
-def split_scratchpad_output_xml(output_file, document_tag="latex_document", thinking_tag="scratchpad", save_thinking=True):
+def add_cdata_to_tags_multiple(xml_data, tags):
+    for tag in tags:
+        pattern = f"(<{tag}(?:\s+[^>]*)?>)(.*?)(</{tag}>)"
+        xml_data = re.sub(pattern, r"\1<![CDATA[\2]]>\3", xml_data, flags=re.DOTALL)
+    return xml_data
+
+
+def split_multiple_scratchpad_output_xml(output_file, document_tag="latex_documents", thinking_tag="scratchpad", split_and_save_thinking=False):
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml" if save_thinking else None
+    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
+
+    if split_and_save_thinking:
+        print(f"Log file: {colored(log_file_thinking, 'cyan')}")
+
+    # Read the content of the output file
+    output_content = read_file(output_file)
+
+    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
+    output_content = output_content.replace("\\end{document>", "\\end{document}")
+
+    # Add CDATA sections to specified tags
+    tags_to_wrap = [thinking_tag, "document"]
+    output_content = add_cdata_to_tags_multiple(output_content, tags_to_wrap)
+
+    # Wrap the content in a root element for proper XML parsing
+    root_content = f"<root>{output_content}</root>"
+
+    try:
+        # Parse the XML content
+        root = ET.fromstring(root_content)
+
+        # Extract scratchpad content
+        if split_and_save_thinking:
+            scratchpad = root.find(thinking_tag)
+            if scratchpad is not None:
+                scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
+                write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
+
+        # Extract latex documents content
+        latex_documents = root.find(document_tag)
+        if latex_documents is not None:
+            output_files = []
+            for doc in latex_documents.findall("document"):
+                source = doc.get("name")
+                content = doc.text
+
+                if source is not None and content is not None:
+                    content_text = content.strip()
+
+                    # Extract task and model from the output file name
+                    output_parts = os.path.basename(output_file).split('_')
+                    task = output_parts[1]
+                    model = output_parts[-1].split('.')[0]
+
+                    # Determine if this is a reflection output
+                    is_reflect = "reflect" in output_file
+
+                    # Generate the output file name
+                    base_name, extension = os.path.splitext(source)
+                    tex_file = get_output_file_name(base_name, task, model, extension, reflect=is_reflect)
+
+                    # Write the content to the file
+                    write_file(tex_file, content_text)
+                    output_files.append(tex_file)
+                    print(f"TeX file written: {colored(tex_file, 'cyan')}")
+                else:
+                    cprint(f"WARNING: Invalid document structure in {document_tag}.", "white", "on_red")
+
+            return output_files
+        else:
+            cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
+            return []
+
+    except ET.ParseError as e:
+        cprint(f"ERROR: Failed to parse XML content: {str(e)}", "white", "on_red")
+        return []
+
+
+def split_scratchpad_output_xml(output_file, document_tag="latex_document", thinking_tag="scratchpad", split_and_save_thinking=False):
+    if document_tag == "latex_documents":
+        print(f"Splitting multiple scratchpad output XML: {colored(output_file, 'cyan')}")
+        return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
+
+    base_name, extension = os.path.splitext(output_file)
+    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
     tex_file = f"{base_name}.tex"
     print(f"TeX file: {colored(tex_file, 'cyan')}")
-    if save_thinking:
-        print(f"Log file: {colored(log_file_thinking, 'cyan')}")
+    if split_and_save_thinking:
+        print(f"Thinking file: {colored(log_file_thinking, 'cyan')}")
 
     # Read the content of the output file
     output_content = read_file(output_file)
@@ -100,7 +183,7 @@ def split_scratchpad_output_xml(output_file, document_tag="latex_document", thin
         root = ET.fromstring(root_content)
 
         # Extract scratchpad content
-        if save_thinking:
+        if split_and_save_thinking:
             scratchpad = root.find(thinking_tag)
             if scratchpad is not None:
                 scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")

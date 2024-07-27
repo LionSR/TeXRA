@@ -24,30 +24,30 @@ When writing LaTeX, you must:
 You will be adapting a new lecture notes to match the notation, style, and level of detail of your existing long set of lecture notes on stochastic thermodynamics and machine learning. So please read the documents carefully.
 
 Here are your existing lecture notes with consistent notation and style with additional LaTeX document class and commands:
-<document_class>
+<documents>
+<document name="{DOCUMENT_CLS}">
 {DOCUMENT_CLS_CONTENT}
-</document_class>
+</document>
 
-<commands>
+<document name="{COMMANDS}">
 {COMMANDS_CONTENT}
-</commands>
+</document>
 
-<existing_lecture_notes>
+<document name="existing_lecture_notes">
 {EXISTING_LECTURE_NOTES}
-</existing_lecture_notes>
+</document>
 
-And here are the new lecture notes {INPUT_FILE} you want to understand, paraphrase, and adapt:
-
-<new_lecture_notes>
+<document name="{INPUT_FILE}">
 {INPUT_CONTENT}
-</new_lecture_notes>
+</document>
+</documents>
 ]]>
 </user_prefix>
 <user_request>
 <![CDATA[
 Please carefully read and understand both sets of lecture notes. Identify all the concepts, notations, and derivations in the new lecture notes. 
 
-You need to include the derivations of the path probability for the langevin systems, including the forward and the backward formulation using the Ito/Anti-Ito convention. Start with all the details of the derivation of the path probability for the overdamped langevin systems. The difference between the forward and backward action which will include the Stratonovich integral. Then go to the first and second law of the overdamped langevin systems. Include all the deriational steps. Include all the derivations for the expression of the total entroy production in terms of the probability current. Incorporate seeminglessly the derivations from the appendix of the new lecture notes into your output. 
+You need to include the derivations of the path probability for the langevin systems, including the forward and the backward formulation using the Ito/Anti-Ito convention. Start with all the details of the derivation of the path probability for the overdamped langevin systems. The difference between the forward and backward action which will include the Stratonovich integral. Then go to the first and second law of the overdamped langevin systems. Include all the deriational steps. Include all the derivations for the expression of the total entropy production in terms of the probability current. Incorporate seeminglessly the derivations from the appendix of the new lecture notes into your output. 
 
 - You should use the same notations as the existing lecture notes.  For example, you used use \rho for the path probability as in the exisitng lecture notes. Use $x_n$ instead of $x_\ell$ for dividing the path. You should use use the notations for the SDE for the overdamped Langevin systems (ie., continue to use \mu and \sigma defined in the exisitng lecture notes  to replace $\mu_P F$ and $\sqrt{2D}$ in the new output) 
 - The output should standalone without any appendix.

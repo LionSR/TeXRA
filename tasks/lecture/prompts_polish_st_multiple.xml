@@ -31,20 +31,18 @@ You will be given multiple LaTeX documents representing chapters of the textbook
 Here are the LaTeX documents with additional LaTeX document class and commands (where the math commands you should use are defined):
 
 <documents>
-<document index="1">
-<source>{DOCUMENT_CLS}</source>
+<document name="{DOCUMENT_CLS}">
 <document_content>
 {DOCUMENT_CLS_CONTENT}
 </document_content>
 </document>
-<document index="2">
-<source>{COMMANDS}</source>
+<document name="{COMMANDS}">
 <document_content>
 {COMMANDS_CONTENT}
 </document_content>
 </document>
-<document index="3">
-<source>{INPUT_FILE}</source>
+
+<document name="{INPUT_FILE}">
 <document_content>
 {INPUT_CONTENT}
 </document_content>
@@ -84,15 +82,13 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 Then, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 
 <latex_documents>
-<document index="1">
-<source>{OUTPUT_FILES_ORDER[0]}</source>
+<document name="{OUTPUT_FILES_ORDER[0]}">
 <document_content>
 {1ST_UPDATED_LATEX_DOCUMENT_1}
 </document_content>
 </document>
 
-<document index="2">
-<source>{OUTPUT_FILES_ORDER[1]}</source>
+<document name="{OUTPUT_FILES_ORDER[1]}">
 <document_content>
 {1ST_UPDATED_LATEX_DOCUMENT_2}
 </document_content>

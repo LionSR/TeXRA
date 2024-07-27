@@ -6,7 +6,9 @@ prompt_path = coa.get_prompt_path(coa, "prl_edit")
 
 def main():
     parser = coa.get_common_argparser()
+    parser.add_argument("--preamble_file", default="preamble.tex", type=str, help="Path to the preamble TeX file.")
     parser.add_argument("--auxiliary_files", type=str, help="Path to the auxiliary TeX file to be processed.")
+    parser.add_argument("--supp_file", type=str, default="supp.tex", help="Path to the supplementary TeX file to be processed.")
     parser.add_argument(
         "--task",
         type=str,
@@ -22,11 +24,14 @@ def main():
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
     user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars["PREAMBLE_CONTENT"] = coa.read_file("preamble.tex")
+    user_prefix_vars["PREAMBLE_FILE"] = args.preamble_file
+    user_prefix_vars["PREAMBLE_CONTENT"] = coa.read_file(args.preamble_file)
 
     if args.task == "correct_prl":
-        user_prefix_vars["SUPP_CONTENT"] = coa.read_file("supp.tex")
+        user_prefix_vars["SUPP_FILE"] = args.supp_file
+        user_prefix_vars["SUPP_CONTENT"] = coa.read_file(args.supp_file)
     elif args.task == "correct_supp_prl":
+        user_prefix_vars["MAIN_FILE"] = args.auxiliary_files
         user_prefix_vars["MAIN_CONTENT"] = coa.read_file(args.auxiliary_files)
 
     model_settings = coa.get_model_settings(args)
