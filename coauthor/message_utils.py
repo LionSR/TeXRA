@@ -16,6 +16,7 @@ def has_end_tag(file_content, end_tag, document_tag):
     Returns:
         bool: True if the end tag or document tag is found, False otherwise.
     """
+    # this needs to be changed for multiple document output
     return end_tag in file_content or f"</{document_tag}>" in file_content or "\\end{document}" in file_content
 
 
