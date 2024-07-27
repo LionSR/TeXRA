@@ -1,6 +1,7 @@
 # Frontend Changelog
 
 ## [0.7.5]
+
 - Added UI support for packing and cleaning multiple files
 - Implemented new buttons for pack-multiple and clean-multiple operations
 - Updated WebView to handle multiple file selection for new operations
