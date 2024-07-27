@@ -69,15 +69,15 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
         input_file,
         output_file,
     ]
-    cprint(f"\nRunning latexdiff command: {' '.join(latexdiff_command)}", "green")
+    print("\nRunning latexdiff command:", colored(" ".join(latexdiff_command), "green"))
 
     try:
         with open(diff_file_name, "w", encoding="utf-8") as diff_file:
             subprocess.run(latexdiff_command, check=True, stdout=diff_file, stderr=subprocess.PIPE, text=True)
-        cprint(f"\nlatexdiff completed. Output saved to {diff_file_name}", "blue")
+        print("\nlatexdiff completed.\nOutput saved to", colored(diff_file_name, "blue"))
     except subprocess.CalledProcessError as e:
-        cprint(f"Error running latexdiff: {e}", "red")
-        cprint(f"Error output: {e.stderr}", "red")
+        print("\nError running latexdiff:", colored(f"Error running latexdiff: {e}", "red"))
+        print("\nError output:", colored(f"Error output: {e.stderr}", "red"))
         return None
 
     # Process diff file
