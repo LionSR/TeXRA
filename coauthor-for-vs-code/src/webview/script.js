@@ -411,6 +411,49 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('outputNameOverride').addEventListener('input', saveState);
+
+  // Add these event listeners
+  document.getElementById('packMultipleButton').addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    const additionalInputFiles = getSelectedFiles(document.getElementById('multipleInputFilesSelect'));
+    const task = document.getElementById('taskSelect').value;
+    const reflect = document.getElementById('reflectSelect').value;
+    const model = document.getElementById('modelSelect').value;
+    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
+    
+    vscode.postMessage({
+      command: 'packMultiple',
+      inputFile: inputFile,
+      additionalInputFiles: additionalInputFiles,
+      task: task,
+      reflect: reflect,
+      model: model,
+      outputNameOverride: outputNameOverride,
+      outputFiles: outputFiles
+    });
+  });
+
+  document.getElementById('cleanMultipleButton').addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    const additionalInputFiles = getSelectedFiles(document.getElementById('multipleInputFilesSelect'));
+    const task = document.getElementById('taskSelect').value;
+    const reflect = document.getElementById('reflectSelect').value;
+    const model = document.getElementById('modelSelect').value;
+    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
+    
+    vscode.postMessage({
+      command: 'cleanMultiple',
+      inputFile: inputFile,
+      additionalInputFiles: additionalInputFiles,
+      task: task,
+      reflect: reflect,
+      model: model,
+      outputNameOverride: outputNameOverride,
+      outputFiles: outputFiles
+    });
+  });
 });
 
 function saveState() {
