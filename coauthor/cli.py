@@ -12,7 +12,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 from coauthor.arg_utils import comma_separated_list
-from coauthor.housekeeping_utils import run_clean_single, run_pack_single, run_clean_build, run_indent_tex, run_clean_output
+from coauthor.housekeeping_utils import (
+    run_clean_single,
+    run_pack_single,
+    run_clean_build,
+    run_indent_tex,
+    run_clean_output,
+    run_clean_multiple,
+    run_pack_multiple,
+)
 from coauthor.tex_tools import run_pack_latexdiff_vc
 
 load_dotenv()
@@ -430,9 +438,8 @@ def indent_tex():
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-@click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def clean_single(model, input_file, reflect, task, output_name_override):
-    run_clean_single(model, input_file, reflect, task, output_name_override)
+def clean_single(model, input_file, reflect, task):
+    run_clean_single(model, input_file, reflect, task)
 
 
 @click.command()
@@ -443,6 +450,25 @@ def clean_single(model, input_file, reflect, task, output_name_override):
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
 def pack_single(model, input_file, reflect, task, output_name_override):
     run_pack_single(model, input_file, reflect, task, output_name_override)
+
+
+@click.command()
+@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
+@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
+@click.option("--task", required=True, help="Task to perform")
+def clean_multiple(model, input_files, reflect, task):
+    run_clean_multiple(model, input_files, reflect, task)
+
+
+@click.command()
+@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
+@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
+@click.option("--task", required=True, help="Task to perform")
+@click.option("--output_name_override", type=str, default=None, help="Override base output name")
+def pack_multiple(model, input_files, reflect, task, output_name_override):
+    run_pack_multiple(model, input_files, reflect, task, output_name_override)
 
 
 @click.command()
@@ -524,6 +550,9 @@ cli.add_command(paper2note)
 # adapt.py
 cli.add_command(adapt)
 
+# merge
+cli.add_command(merge)
+
 # prl_edit.py
 cli.add_command(correct_prl)
 cli.add_command(correct_supp_prl)
@@ -538,15 +567,14 @@ cli.add_command(polish_prl_reply)
 cli.add_command(clean_output)
 cli.add_command(clean_build)
 cli.add_command(clean_single)
+cli.add_command(clean_multiple)
+
+# pack
+cli.add_command(pack_single)
+cli.add_command(pack_multiple)
 
 # latexindent
 cli.add_command(indent_tex)
-
-# merge
-cli.add_command(merge)
-
-# pack single
-cli.add_command(pack_single)
 
 # latexdiff
 cli.add_command(latexdiff)

@@ -150,6 +150,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'packSingle':
           vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.task, message.reflect, message.model, message.outputNameOverride);
           break;
+        case 'packMultiple':
+          vscode.commands.executeCommand('coauthor.packMultiple', message.inputFile, message.additionalInputFiles, message.task, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          break;
+        case 'cleanMultiple':
+          vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.task, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          break;
         case 'latexDiff':
           vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.editedFile);
           break;
