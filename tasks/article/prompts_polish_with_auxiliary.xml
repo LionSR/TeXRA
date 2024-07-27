@@ -8,17 +8,11 @@ I am going to give you the latex document of a research paper draft.
 Here is the LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
 <documents>
-<document index="1">
-<source>{AUXILIARY_FILE}</source>
-<document_content>
+<document name="{AUXILIARY_FILE}">
 {AUXILIARY_CONTENT}
-</document_content>
 </document>
-<document index="2">
-<source>{INPUT_FILE}</source>
-<document_content>
+<document name="{INPUT_FILE}">
 {INPUT_CONTENT}
-</document_content>
 </document>
 </documents>
 
