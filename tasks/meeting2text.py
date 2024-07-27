@@ -33,7 +33,7 @@ def main():
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -60,7 +60,7 @@ def main():
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
 
-    if args.reflect and end_turn:
+    if end_turn and args.reflect:
         output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
 
         state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(

@@ -1,5 +1,19 @@
 # Backend Changelog
 
+## [0.11.0]
+
+- Pivoted from txt prompts to XML prompts across all tasks
+- Refactored prompt handling functions to support XML parsing and inheritance
+- Updated CLI commands for improved flexibility with auxiliary and multiple files
+- Enhanced image processing and message creation to align with XML prompt structure
+- Implemented massive repetition detection and XML structure validation in output utils
+- Updated settings and utilities to handle XML prompts efficiently
+- Adjusted task-specific scripts (edit_lecture, edit_tex, etc.) for XML prompt compatibility
+- Streamlined system and user prompts, removing redundant instructions
+- Added support for single/multiple outputs in various tasks
+- Improved handling of reflection rounds and latexdiff integration
+- Various code optimizations, bug fixes, and minor improvements throughout the codebase
+
 ## [0.10.9]
 
 - Transitioned from text-based prompts to XML-formatted prompts across all tasks
@@ -25,7 +39,6 @@
 - Refactored file handling in task files to support .xml output for scratchpad content
 - Removed unused test files related to XML parsing
 - Added newline after prefill_first content in process.py for improved output formatting
-
 
 ## [0.10.7]
 
@@ -404,4 +417,3 @@
 - Updated Python target versions to include Python 3.12
 - Various minor improvements and bug fixes.
 - Various minor improvements and bug fixes.
-
