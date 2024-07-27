@@ -38,13 +38,3 @@ def find_last_non_empty_line(response):
 def extract_text_from_tags(input_content, document_tag):
     match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
     return match.group(1) if match else input_content
-
-
-__all__ = [
-    "get_prompt_path",
-    "read_file",
-    "write_file",
-    "append_file",
-    "find_last_non_empty_line",
-    "extract_text_from_tags",
-]

@@ -30,7 +30,7 @@ def main():
     model = model_settings["model"]
     output_type = output_settings["output_type"]
 
-    coa.handle_single_output(args, user_prefix_vars)
+    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 

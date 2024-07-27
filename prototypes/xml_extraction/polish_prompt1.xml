@@ -46,13 +46,13 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Now, please output {an_} updated version{plural} of the LaTeX document{plural} with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, please output {an_} updated version{plural} of the LaTeX document{plural} with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 {output_format}
 {output_order_instruction}
 </user_request>
 
 <user_reflect>
-Now that you have made initial improvements to the paper{plural}, please reflect on your changes and consider any additional refinements that could further enhance the quality of the paper{plural} while staying focused on the original instruction.
+Now that you have made initial improvements to the paper{plural}, please reflect on your changes and consider any additional improvements that could further enhance the quality of the paper{plural} while staying focused on the original instruction.
 
 <scratchpad>
 <reflection>
@@ -80,7 +80,7 @@ Now that you have made initial improvements to the paper{plural}, please reflect
 </idea>
 </scratchpad>
 
-Now, output further enhanced and complete version{plural} of {the_all} LaTeX document{plural}, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Now, output further enhanced and complete version{plural} of {the_all} LaTeX document{plural}, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 
 {output_format}
 {output_order_instruction}
