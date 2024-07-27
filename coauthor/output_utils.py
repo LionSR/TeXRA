@@ -77,12 +77,14 @@ def add_cdata_to_tags(xml_data, tags):
 
 def add_cdata_to_tags_multiple(xml_data, tags):
     for tag in tags:
-        pattern = f"(<{tag}(?:\s+[^>]*)?>)(.*?)(</{tag}>)"
+        pattern = f"(<{tag}(?:\\s+[^>]*)?>)(.*?)(</{tag}>)"
         xml_data = re.sub(pattern, r"\1<![CDATA[\2]]>\3", xml_data, flags=re.DOTALL)
     return xml_data
 
 
-def split_multiple_scratchpad_output_xml(output_file, document_tag="latex_documents", thinking_tag="scratchpad", split_and_save_thinking=False):
+def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratchpad", split_and_save_thinking=False):
+    print(f"Splitting multiple scratchpad output XML: {colored(output_file, 'cyan')}")
+
     base_name, extension = os.path.splitext(output_file)
     log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
 
@@ -125,9 +127,9 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag="latex_docume
                     content_text = content.strip()
 
                     # Extract task and model from the output file name
-                    output_parts = os.path.basename(output_file).split('_')
+                    output_parts = os.path.basename(output_file).split("_")
                     task = output_parts[1]
-                    model = output_parts[-1].split('.')[0]
+                    model = output_parts[-1].split(".")[0]
 
                     # Determine if this is a reflection output
                     is_reflect = "reflect" in output_file
@@ -153,9 +155,10 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag="latex_docume
         return []
 
 
-def split_scratchpad_output_xml(output_file, document_tag="latex_document", thinking_tag="scratchpad", split_and_save_thinking=False):
+def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratchpad", split_and_save_thinking=False):
+    print(f"Splitting scratchpad output XML: {colored(output_file, 'cyan')}")
+
     if document_tag == "latex_documents":
-        print(f"Splitting multiple scratchpad output XML: {colored(output_file, 'cyan')}")
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)
