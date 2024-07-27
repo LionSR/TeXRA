@@ -47,7 +47,7 @@ def main():
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    coa.handle_single_output(args, user_prefix_vars)
+    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -72,7 +72,7 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     if end_turn:
         if prompt_settings["prefill_first"] == "<scratchpad>":
-            coa.split_scratchpad_output(output_file, task_settings["document_tag"])
+            coa.split_scratchpad_output_xml(output_file, task_settings["document_tag"])
         if output_type == "tex":
             coa.run_latexdiff(args.input_file, output_file, args.task)
 
@@ -98,7 +98,7 @@ def main():
         coa.log_and_print_statistics(state, args.model, log_file)
         if end_turn_reflect:
             if prompt_settings["prefill_first"] == "<scratchpad>":
-                coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
+                coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
 
             if output_type == "tex":
                 coa.run_latexdiff(args.input_file, output_file_reflect, args.task)

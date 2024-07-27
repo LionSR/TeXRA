@@ -79,7 +79,7 @@ def load_prompt(prompt_type, prompt_settings):
     return prompt
 
 
-def handle_single_output(args, user_prefix_vars):
+def update_user_prefix_vars_single_output(args, user_prefix_vars):
     user_prefix_vars["AUXILIARY_FILE"] = ""
     user_prefix_vars["AUXILIARY_CONTENT"] = ""
     user_prefix_vars["AUXILIARY_FILES"] = ""
@@ -97,7 +97,7 @@ def handle_single_output(args, user_prefix_vars):
         )
 
 
-def handle_multiple_output(args, user_prefix_vars):
+def update_user_prefix_vars_multiple_output(args, user_prefix_vars):
     input_files = [args.input_file] + (args.input_files or [])
     if len(input_files) < 2:
         raise ValueError("At least two input files are required for polish_multiple task.")
@@ -116,8 +116,6 @@ def handle_multiple_output(args, user_prefix_vars):
 {content}
 </document_content>
 </document>"""
-
-    user_prefix_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
     if args.auxiliary_files:
         user_prefix_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
@@ -143,3 +141,5 @@ def handle_multiple_output(args, user_prefix_vars):
         if user_prefix_vars["AUXILIARY_FILE"] != "No auxiliary file provided"
         else ""
     )
+
+    user_prefix_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)

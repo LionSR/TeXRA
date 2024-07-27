@@ -60,7 +60,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Now, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -68,7 +68,7 @@ Now, please output an updated version of the LaTeX document with targeted correc
 </user_request>
 <user_reflect>
 <![CDATA[
-Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted refinements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
+Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
 <scratchpad>
 <reflection>
 1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
@@ -92,7 +92,7 @@ Let's critically reflect on the changes made according to the given instructions
 </idea>
 </scratchpad>
 
-Now, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+Then, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
 ]]>
 </user_reflect>
 </prompts>
