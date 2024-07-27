@@ -67,85 +67,56 @@ def ensure_correct_xml_structure(file_path, document_tag):
             file.truncate()
 
 
-def split_scratchpad_output(output_file, document_tag="latex_document"):
+def add_cdata_to_tags(xml_data, tags):
+    for tag in tags:
+        pattern = f"(<{tag}>)(.*?)(</{tag}>)"
+        xml_data = re.sub(pattern, r"\1<![CDATA[\2]]>\3", xml_data, flags=re.DOTALL)
+    return xml_data
+
+
+def split_scratchpad_output_xml(output_file, document_tag="latex_document", thinking_tag="scratchpad", save_thinking=True):
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml"
+    log_file_thinking = f"{base_name}_thinking.xml" if save_thinking else None
     tex_file = f"{base_name}.tex"
-    print(f"Log file: {colored(log_file_thinking, 'cyan')}")
     print(f"TeX file: {colored(tex_file, 'cyan')}")
-
-    output_content = read_file(output_file)
-
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    # do not change this line
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
-
-    if "</scratchpad>" in output_content:
-        scratchpad_content, document_content = output_content.split("</scratchpad>", 1)
-
-        if "<scratchpad>" in scratchpad_content:
-            scratchpad_content = scratchpad_content.split("<scratchpad>", 1)[1]
-
-        write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
-
-        document_content = document_content.split(("<" + document_tag + ">" if "<" + document_tag + ">" in document_content else ""), 1)[1].lstrip()
-
-        # Remove the closing document tag if present
-        document_content = document_content.replace(f"</{document_tag}>", "").strip()
-
-        write_file(tex_file, document_content)
-    else:
-        # If there's no scratchpad, write the entire content to the tex file
-        document_content = output_content.split(("<" + document_tag + ">" if "<" + document_tag + ">" in output_content else ""), 1)[1].lstrip()
-        document_content = document_content.replace(f"</{document_tag}>", "").strip()
-        write_file(tex_file, document_content)
-
-    # Remove the original .text file
-    # os.remove(output_file)
-
-    return tex_file
-
-
-def split_scratchpad_output_xml(output_file, document_tag="latex_document"):
-    base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml"
-    tex_file = f"{base_name}.tex"
-    print(f"Log file: {colored(log_file_thinking, 'cyan')}")
-    print(f"TeX file: {colored(tex_file, 'cyan')}")
+    if save_thinking:
+        print(f"Log file: {colored(log_file_thinking, 'cyan')}")
 
     # Read the content of the output file
     output_content = read_file(output_file)
 
+    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
+    output_content = output_content.replace("\\end{document>", "\\end{document}")
+
+    # Add CDATA sections to specified tags
+    tags_to_wrap = [document_tag, thinking_tag]
+    output_content = add_cdata_to_tags(output_content, tags_to_wrap)
+
     # Wrap the content in a root element for proper XML parsing
     root_content = f"<root>{output_content}</root>"
 
-    # Parse the XML content
-    root = ET.fromstring(root_content)
+    try:
+        # Parse the XML content
+        root = ET.fromstring(root_content)
 
-    # Extract scratchpad content
-    scratchpad_elements = root.findall(".//scratchpad")
-    scratchpad_content = "\n".join(ET.tostring(elem, encoding="unicode") for elem in scratchpad_elements)
+        # Extract scratchpad content
+        if save_thinking:
+            scratchpad = root.find(thinking_tag)
+            if scratchpad is not None:
+                scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
+                write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
 
-    if scratchpad_content:
-        write_file(log_file_thinking, scratchpad_content)
+        # Extract latex document content (assuming only one)
+        latex_document = root.find(document_tag)
+        if latex_document is not None:
+            # Get the full content of the latex document
+            latex_content = ET.tostring(latex_document, encoding="unicode", method="text")
+            latex_content = latex_content.strip()
+            write_file(tex_file, latex_content)
+        else:
+            cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
 
-    # Extract latex document content
-    latex_document = root.find(f".//{document_tag}")
-    if latex_document is not None:
-        # Remove any nested scratchpad elements from the latex document
-        for scratchpad in latex_document.findall(".//scratchpad"):
-            latex_document.remove(scratchpad)
-
-        # Get the text content of the latex document, excluding the document_tag itself
-        latex_content = "".join(latex_document.itertext()).strip()
-        write_file(tex_file, latex_content)
-    else:
-        cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
-        # If no latex document is found, write the entire content (excluding scratchpads) to the tex file
-        full_content = "".join(root.itertext()).strip()
-        write_file(tex_file, full_content)
-
-    # Remove the original .text file
-    # os.remove(output_file)
+    except ET.ParseError as e:
+        cprint(f"ERROR: Failed to parse XML content: {str(e)}", "white", "on_red")
 
     return tex_file

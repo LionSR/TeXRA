@@ -67,7 +67,7 @@ Based on the research paper provided, please create a professional LaTeX Beamer 
 9. [Future work]
 </scratchpad>
 
-Now, please create the LaTeX Beamer presentation, incorporating the key points outlined above. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
+Then, please create the LaTeX Beamer presentation, incorporating the key points outlined above. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
 
 <beamer_presentation>
 \documentclass{beamer}
