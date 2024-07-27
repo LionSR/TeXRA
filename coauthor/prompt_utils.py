@@ -4,17 +4,44 @@ from termcolor import colored
 import xml.etree.ElementTree as ET
 
 
+def load_xml(file_path):
+    tree = ET.parse(file_path)
+    return tree.getroot()
+
+
+def merge_dicts(base, override):
+    result = base.copy()
+    for key, value in override.items():
+        if isinstance(value, dict) and key in result:
+            result[key] = merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 def load_task_settings_and_prompts(prompt_path, task):
-    tree = ET.parse(f"{prompt_path}/prompts_{task}.xml")
-    root = tree.getroot()
+    def load_task_xml(prompt_path, task_name):
+        task_file = f"{prompt_path}/prompts_{task_name}.xml"
+        if not os.path.exists(task_file):
+            raise FileNotFoundError(f"Task file not found: {task_file}")
 
-    settings = root.find("settings")
-    task_settings = {child.tag: child.text for child in settings}
+        root = load_xml(task_file)
+        parent = root.get("inherits")
 
-    prompts = root.find("prompts")
-    prompt_dict = {child.tag: child.text.strip() for child in prompts}
+        if parent:
+            parent_settings, parent_prompts = load_task_xml(prompt_path, parent)
+            task_settings = {child.tag: child.text for child in root.find("settings") or []}
+            task_prompts = {child.tag: child.text.strip() for child in root.find("prompts") or []}
 
-    return task_settings, prompt_dict
+            settings = merge_dicts(parent_settings, task_settings)
+            prompts = merge_dicts(parent_prompts, task_prompts)
+        else:
+            settings = {child.tag: child.text for child in root.find("settings")}
+            prompts = {child.tag: child.text.strip() for child in root.find("prompts")}
+
+        return settings, prompts
+
+    return load_task_xml(prompt_path, task)
 
 
 def get_user_prefix_vars(args):
@@ -46,37 +73,31 @@ def get_additional_input_files_content(input_files, num_auxiliary_files):
     return format_file_content(input_files, num_auxiliary_files + 2) if input_files else ""
 
 
-def load_prompt(prompt_type, task, prompt_settings):
+def load_prompt(prompt_type, prompt_settings):
     prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
     print(f"{prompt_type}: {colored(prompt, 'magenta')}")
     return prompt
 
 
-def handle_single_input(args, user_prefix_vars, prompt_settings):
-    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
-    if args.input_files:
-        raise ValueError("Input files are not allowed for non-long tasks. Please use --task=polish_long or --task=draw_long instead.")
-
+def handle_single_output(args, user_prefix_vars):
+    user_prefix_vars["AUXILIARY_FILE"] = ""
+    user_prefix_vars["AUXILIARY_CONTENT"] = ""
+    user_prefix_vars["AUXILIARY_FILES"] = ""
     if args.auxiliary_files:
         if len(args.auxiliary_files) > 1:
-            raise ValueError("Only one auxiliary file is allowed. Please provide a single file.")
-        user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
-        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
-        prompt_settings["user_prefix_file"] = prompt_settings["user_prefix_file"].replace(".txt", "_with_auxiliary.txt")
+            user_prefix_vars["AUXILIARY_FILES"] = get_auxiliary_files_content(args.auxiliary_files)
+        else:
+            user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
+            user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
+
+    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
+    if args.input_files:
+        user_prefix_vars["ADDITIONAL_INPUT_FILES"] = get_additional_input_files_content(
+            args.input_files, len(args.auxiliary_files) if args.auxiliary_files else 0
+        )
 
 
-def handle_long_input(args, user_prefix_vars, prompt_settings):
-    print(colored(f"Handling long input for task: {args.task}", "yellow"))
-    task_shared = args.task.split("_")[0]
-
-    prompt_settings["user_prefix_file"] = f"user_prefix_{task_shared}_long.txt"
-    user_prefix_vars["AUXILIARY_FILES"] = get_auxiliary_files_content(args.auxiliary_files)
-    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = get_additional_input_files_content(
-        args.input_files, len(args.auxiliary_files) if args.auxiliary_files else 0
-    )
-
-
-def handle_multiple_input(args, user_prefix_vars, prompt_settings):
+def handle_multiple_output(args, user_prefix_vars):
     input_files = [args.input_file] + (args.input_files or [])
     if len(input_files) < 2:
         raise ValueError("At least two input files are required for polish_multiple task.")
@@ -105,10 +126,8 @@ def handle_multiple_input(args, user_prefix_vars, prompt_settings):
         user_prefix_vars["AUXILIARY_FILE"] = "No auxiliary file provided"
         user_prefix_vars["AUXILIARY_CONTENT"] = "No auxiliary content"
 
-    # Update the user_prefix_file to use the multiple input version
-    prompt_settings["user_prefix_file"] = prompt_settings["user_prefix_file"].replace("polish.txt", "polish_multiple.txt")
+    # prompt_settings["user_prefix_file"] = prompt_settings["user_prefix_file"].replace("polish.txt", "polish_multiple.txt")
 
-    # Ensure the first input file is correctly set in user_prefix_vars
     user_prefix_vars["INPUT_FILE"] = args.input_file
     user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
 

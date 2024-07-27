@@ -125,26 +125,34 @@ def cli():
 @click.command()
 @shared_arguments
 def correct_tex(model, input_file, **kwargs):
-    execute_task("edit_tex", "correct", model, input_file, **kwargs)
+    task = "correct"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
+    execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_tex(model, input_file, **kwargs):
-    task = "polish" if not kwargs.get("input_files") else "polish_long"
+    task = "polish"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
     execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_tex(model, input_file, **kwargs):
-    execute_task("edit_tex", "draw", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_multiple_tex(model, input_file, **kwargs):
-    execute_task("edit_tex", "polish_multiple", model, input_file, **kwargs)
+    task = "draw"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
+    execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
 @click.command()
@@ -162,26 +170,45 @@ def correct_st(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def polish_st(model, input_file, **kwargs):
-    task = "polish_st" if not kwargs.get("input_files") else "polish_st_long"
+    task = "polish_st"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
     execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_qi(model, input_file, **kwargs):
-    execute_task("edit_lecture", "polish_qi", model, input_file, **kwargs)
+    task = "polish_qi"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
+    execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_st(model, input_file, **kwargs):
-    execute_task("edit_lecture", "draw_st", model, input_file, **kwargs)
+    task = "draw_st"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
+    execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_qi(model, input_file, **kwargs):
-    execute_task("edit_lecture", "draw_qi", model, input_file, **kwargs)
+    task = "draw_qi"
+    if kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+    if kwargs.get("output_files"):
+        task = f"{task}_multiple"
+    execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
 @click.command()
@@ -476,7 +503,6 @@ if __name__ == "__main__":
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
-cli.add_command(polish_multiple_tex)
 
 # edit_lecture.py
 cli.add_command(correct_st)

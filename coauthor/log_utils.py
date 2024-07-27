@@ -9,7 +9,7 @@ def log_start(args):
     # Get the directory of the output name override or input file, or use appropriate fallback
     if args.output_name_override:
         input_dir = os.path.dirname(args.output_name_override)
-    elif args.input_file and args.input_file.strip():
+    elif args.input_file:
         input_dir = os.path.dirname(args.input_file)
     else:
         input_dir = os.getcwd()
@@ -21,7 +21,7 @@ def log_start(args):
     # Create the log file path
     if args.output_name_override:
         base_filename = os.path.basename(args.output_name_override)
-    elif args.input_file and args.input_file.strip():
+    elif args.input_file:
         base_filename = os.path.basename(args.input_file)
     else:
         base_filename = "default"
@@ -35,18 +35,12 @@ def log_start(args):
         f.write(f"Task: {args.task}\n")
         f.write(f"Model: {args.model}\n")
 
-        if args.output_name_override:
-            f.write(f"Output name override: {args.output_name_override}\n")
-        if args.input_file and args.input_file.strip():
-            f.write(f"Input file: {args.input_file}\n")
-        else:
-            f.write("Input file: Not specified\n")
-        if args.input_files:
-            f.write(f"Additional input files: {args.input_files}\n")
-        if args.auxiliary_files:
-            f.write(f"Auxiliary files: {args.auxiliary_files}\n")
-        if args.figure_inputs:
-            f.write(f"Figure inputs: {args.figure_inputs}\n")
+        optional_output_fields = ["output_name_override", "input_file", "input_files", "auxiliary_files", "figure_inputs"]
+
+        for field in optional_output_fields:
+            value = getattr(args, field, None)
+            if value:
+                f.write(f"{field}: {value}\n")
 
         f.write(f"<instruction>\n{args.instruction}\n</instruction>\n")
 

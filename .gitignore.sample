@@ -15,7 +15,7 @@ main.pdf
 *_gpt4t-.tex  
 *_gpt4o.tex  
 *_opus.txt
-*_opus.text
+*_opus.xml
 *_gpt4o.pdf
 *_gpt4t.pdf
 *_opus.pdf
@@ -25,7 +25,7 @@ main.pdf
 *diffHEAD.tex
 *_sonnet.txt
 *_sonnet*.txt
-*_thinking.txt
+*_thinking.xml
 *opus_diff.tex
 *sonnet_diff.tex
 *haiku_diff.tex

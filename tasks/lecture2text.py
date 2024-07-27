@@ -47,7 +47,7 @@ def main():
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    coa.handle_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -70,14 +70,16 @@ def main():
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
-    if end_turn and output_settings["output_type"] == "tex":
-        coa.split_scratchpad_output(output_file, task_settings["document_tag"])
-        coa.run_latexdiff(args.input_file, output_file, args.task)
+    if end_turn:
+        if prompt_settings["prefill_first"] == "<scratchpad>":
+            coa.split_scratchpad_output(output_file, task_settings["document_tag"])
+        if output_type == "tex":
+            coa.run_latexdiff(args.input_file, output_file, args.task)
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
 
-    if args.reflect and end_turn:
+    if end_turn and args.reflect:
         output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
 
         state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
@@ -94,10 +96,13 @@ def main():
 
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
-        if end_turn_reflect and output_settings["output_type"] == "tex":
-            coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
-            coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
-            coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
+        if end_turn_reflect:
+            if prompt_settings["prefill_first"] == "<scratchpad>":
+                coa.split_scratchpad_output(output_file_reflect, task_settings["document_tag"])
+
+            if output_type == "tex":
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
+                coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
 

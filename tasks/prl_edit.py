@@ -55,13 +55,15 @@ def main():
     )
 
     print(colored(f"Output file: {output_file}", "yellow"))
+
     if end_turn:
-        coa.run_latexdiff(args.input_file, output_file, args.task)
+        if output_type == "tex":
+            coa.run_latexdiff(args.input_file, output_file, args.task)
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
 
-    if args.reflect and end_turn:
+    if end_turn and args.reflect:
         output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
 
         state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
@@ -75,11 +77,14 @@ def main():
             output_settings=output_settings,
             prompt_settings=prompt_settings,
         )
+
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
+
         if end_turn_reflect:
-            coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
-            coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
+            if output_type == "tex":
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
+                coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
 

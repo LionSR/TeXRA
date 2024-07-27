@@ -21,13 +21,16 @@ def main():
         "EDITED_LATEX": coa.read_file(args.edited_file),
     }
 
-    log_file = coa.log_start(args)
-
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
 
-    coa.handle_single_input(args, user_prefix_vars, prompt_settings)
+    log_file = coa.log_start(args)
+
+    model = model_settings["model"]
+    output_type = output_settings["output_type"]
+
+    coa.handle_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -44,6 +47,9 @@ def main():
         prompt_settings=prompt_settings,
         figure_inputs=args.figure_inputs,
     )
+    if end_turn:
+        if output_type == "tex":
+            coa.run_latexdiff(args.input_file, output_file, args.task, args.model)
 
     print(colored(f"Output file: {output_file}", "yellow"))
 
