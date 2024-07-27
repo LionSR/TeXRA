@@ -1,5 +1,29 @@
 # Backend Changelog
 
+## [0.11.2]
+
+### Added
+
+- Support for multiple document output in XML handling
+- New `split_multiple_scratchpad_output_xml` function in output_utils.py
+- 'name' attribute for documents in XML structure
+
+### Changed
+
+- Refactored XML handling across multiple files (output_utils.py, task prompts, edit_lecture.py)
+- Updated task scripts to support multiple output files
+- Modified XML structure in task prompts to use 'name' attribute
+- Improved error handling and logging in various functions
+
+### Fixed
+
+- Plan to Update `has_end_tag` function in message_utils.py for multi-doc support
+
+### Improved
+
+- Enhanced flexibility for handling multiple documents in output processing
+- Streamlined XML processing workflow across various tasks
+
 ## [0.11.1]
 
 - Refactored XML handling and improved error logging
