@@ -1,5 +1,20 @@
 # Backend Changelog
 
+## [0.11.1]
+
+- Refactored XML handling and improved error logging
+  - Replaced `split_scratchpad_output` with `split_scratchpad_output_xml`
+  - Renamed `handle_single_output` to `update_user_prefix_vars_single_output`
+  - Renamed `handle_multiple_output` to `update_user_prefix_vars_multiple_output`
+  - Added CDATA handling for XML tags
+  - Enhanced error messages and logging with consistent use of `cprint`
+- Improved code organization and cleanup
+  - Removed unnecessary comments and unused code
+  - Simplified some function calls
+- Minor prompt improvements
+  - Replaced "refinements" with "improvements" in some prompts
+  - Adjusted wording in some instructions
+
 ## [0.11.0]
 
 - Pivoted from txt prompts to XML prompts across all tasks

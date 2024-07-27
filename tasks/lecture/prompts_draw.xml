@@ -113,7 +113,7 @@ Now, implement these improvements by outputting an updated version of the LaTeX 
 3. TikZ code for each figure is clear, efficient, and well-commented.
 4. Captions are informative and original, reflecting the content of each figure.
 
-Please provide the complete LaTeX document with your refinements in the following format:
+Please provide the complete LaTeX document with your improvements in the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -121,7 +121,7 @@ Please provide the complete LaTeX document with your refinements in the followin
 </user_request>
 <user_reflect>
 <![CDATA[
-Let's critically reflect on the changes made to the figures. Based on this reflection, propose targeted refinements. Use the following format for thinking:
+Let's critically reflect on the changes made to the figures. Based on this reflection, propose targeted improvements. Use the following format for thinking:
 <scratchpad>
 <figure_analysis>
 your detailed analysis of the existing figure and how it compares with the provided image input
@@ -152,13 +152,13 @@ your detailed analysis of the existing figure and how it compares with the provi
 </idea>
 </scratchpad>
 
-Now, implement these refinements by outputting a further enhanced and complete version of the LaTeX document. Ensure that your changes:
+Now, implement these improvements by outputting a further enhanced and complete version of the LaTeX document. Ensure that your changes:
 1. Address all points raised in the reflection and idea.
 2. Maintain focus on the original instruction.
 3. Result in figures that are correct, aesthetically pleasing, informative, and condensed.
 4. Adhere to the style of a professional graduate physics textbook.
 
-Please provide the complete LaTeX document with your refinements in the <latex_document> ... </latex_document> tag.
+Please provide the complete LaTeX document with your improvements in the <latex_document> ... </latex_document> tag.
 ]]>
 </user_reflect>
 </prompts>

@@ -17,7 +17,7 @@ When writing LaTeX, you must:
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - Keep comments that start with % in the document.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
-- Label referenced equations and figures using \label{eq:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
+- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
 ]]>
 </system_prompt>
 <user_prefix>
@@ -80,7 +80,7 @@ Now, output an updated version of the LaTeX document with targeted enhancements 
 </user_request>
 <user_reflect>
 <![CDATA[
-Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted refinements in the scratchpad below:
+Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below:
 
 <scratchpad>
 <reflection>
@@ -107,7 +107,7 @@ Let's critically reflect on the changes made according to the given instructions
 </idea>
 </scratchpad>
 
-Now, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag, incorporating the reflections and additional refinements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Now, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>
 </prompts>

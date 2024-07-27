@@ -14,17 +14,17 @@ def get_tex_count(file_path):
     :return: String containing full texcount output, or None if an error occurred
     """
     if not os.path.exists(file_path):
-        print(f"Error: File {file_path} does not exist.")
+        cprint(f"Error: File {file_path} does not exist.", "red")
         return None
 
     try:
         # Run texcount command with full statistics
         result = subprocess.run(["texcount", "-merge", file_path], capture_output=True, text=True, check=True)
         tex_count_output = result.stdout.strip()
-        print(colored(f"Tex Count Results: {tex_count_output}", "yellow"))
+        cprint(f"Tex Count Results: {tex_count_output}", "yellow")
         return tex_count_output
     except subprocess.CalledProcessError as e:
-        print(f"Error running texcount: {e}")
+        cprint(f"Error running texcount: {e}", "red")
         return None
 
 
@@ -44,12 +44,12 @@ def process_tikzpicture_endings(file_path):
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
-    print("Tikzpicture endings fixed in", colored(f"{file_path}", "blue"))
+    cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
 
 
 def run_latexdiff(input_file, output_file, task=None, model=None):
     if not input_file:
-        cprint("WARNING: input_file is None or empty", "white", "on_red")
+        cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
     if task is not None and "draw" in task:
@@ -60,10 +60,25 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
         diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
     # Run latexdiff
-    latexdiff_command = f"latexdiff --flatten --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' {input_file} {output_file} > {diff_file_name}"
-    print("\nRunning latexdiff command:", colored(f"{latexdiff_command}", "green"))
-    os.system(latexdiff_command)
-    print("\nlatexdiff completed. Output saved to", colored(f"{diff_file_name}", "blue"))
+    latexdiff_command = [
+        "latexdiff",
+        "--flatten",
+        "--encoding=utf8",
+        "-c",
+        "PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*",
+        input_file,
+        output_file,
+    ]
+    cprint(f"\nRunning latexdiff command: {' '.join(latexdiff_command)}", "green")
+
+    try:
+        with open(diff_file_name, "w", encoding="utf-8") as diff_file:
+            subprocess.run(latexdiff_command, check=True, stdout=diff_file, stderr=subprocess.PIPE, text=True)
+        cprint(f"\nlatexdiff completed. Output saved to {diff_file_name}", "blue")
+    except subprocess.CalledProcessError as e:
+        cprint(f"Error running latexdiff: {e}", "red")
+        cprint(f"Error output: {e.stderr}", "red")
+        return None
 
     # Process diff file
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
@@ -93,7 +108,7 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
             if not add_block:
                 diff_file.write(line)
 
-    print("Line breaks added to", colored(f"{diff_file_name}", "blue"))
+    cprint(f"Line breaks added to {diff_file_name}", "blue")
 
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)
@@ -101,17 +116,33 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
 
 def run_latexdiff_vc(input_file, commit_hash):
     if not input_file:
-        cprint("WARNING: input_file is None or empty", "white", "on_red")
+        cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     # Run latexdiff-vc command
-    # latexdiff_vc_command = f"latexdiff-vc --force --flatten --git -r {commit_hash} {input_file}"
-    latexdiff_vc_command = f"latexdiff-vc --encoding=utf8 -c 'PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*' --force --flatten --git -r {commit_hash} {input_file}"
-    print("Running latexdiff-vc command:", colored(f"{latexdiff_vc_command}", "green"))
-    os.system(latexdiff_vc_command)
-    print("latexdiff-vc completed. Output saved to", colored(f"{diff_file_name}", "blue"))
+    latexdiff_vc_command = [
+        "latexdiff-vc",
+        "--encoding=utf8",
+        "-c",
+        "PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*",
+        "--force",
+        "--flatten",
+        "--git",
+        "-r",
+        commit_hash,
+        input_file,
+    ]
+    cprint(f"Running latexdiff-vc command: {' '.join(latexdiff_vc_command)}", "green")
+
+    try:
+        subprocess.run(latexdiff_vc_command, check=True, stderr=subprocess.PIPE, text=True)
+        cprint(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue")
+    except subprocess.CalledProcessError as e:
+        cprint(f"Error running latexdiff-vc: {e}", "red")
+        cprint(f"Error output: {e.stderr}", "red")
+        return None
 
     # Process diff file
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
@@ -175,18 +206,18 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
         if clean:
             for file_path in files_to_process + files_to_delete:
                 os.remove(file_path)
-                print(f"Deleted: {file_path}")
-            print("Cleanup complete.")
+                cprint(f"Deleted: {file_path}", "yellow")
+            cprint("Cleanup complete.", "green")
         else:
             os.makedirs(output_folder, exist_ok=True)
             for file_path in files_to_process:
                 shutil.move(file_path, output_folder)
-                print(f"Moved: {file_path}")
+                cprint(f"Moved: {file_path}", "blue")
 
             for file_path in files_to_delete:
                 os.remove(file_path)
-                print(f"Deleted: {file_path}")
+                cprint(f"Deleted: {file_path}", "yellow")
 
-            print(f"Files packed into {output_folder}")
+            cprint(f"Files packed into {output_folder}", "green")
     else:
-        print("No files found to process.")
+        cprint("No files found to process.", "yellow")
