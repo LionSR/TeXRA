@@ -245,7 +245,7 @@ body {
 }
 
 #outputNameOverride {
-  width: 90%;
+  width: 100%;
   padding: 4px;
   border: 1px solid var(--input-border);
   border-radius: 3px;
