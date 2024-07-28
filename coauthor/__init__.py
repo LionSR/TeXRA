@@ -1,3 +1,12 @@
+from .arg_utils import get_common_argparser, comma_separated_list
+from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
+from .file_utils import (
+    read_file,
+    write_file,
+    append_file,
+    extract_text_from_tags,
+    get_prompt_path,
+)
 from .process import process_first_round, process_reflection_round
 from .model_utils import is_openai_model, is_anthropic_model, compute_api_price, get_model_client
 from .message_utils import (
@@ -10,13 +19,7 @@ from .message_utils import (
     print_stop_flags,
     has_end_tag,
 )
-from .file_utils import (
-    read_file,
-    write_file,
-    append_file,
-    extract_text_from_tags,
-    get_prompt_path,
-)
+
 from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from .output_utils import (
     check_for_massive_repetition,
@@ -26,8 +29,6 @@ from .output_utils import (
     split_scratchpad_output_xml,
 )
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
-from .arg_utils import get_common_argparser, comma_separated_list
-from .figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .openai_utils import best_connection_method
 from .prompt_utils import (
