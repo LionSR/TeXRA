@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listEditedFiles } from './utils';
+import * as path from 'path';
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) { }
@@ -117,16 +118,20 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
           break;
         case 'requestEditedFile':
-          if (message.inputFile) {
-            const allEditedFiles = await listEditedFiles(message.inputFile);
+          if (message.inputFile || message.outputNameOverride) {
+            const baseFileName = message.outputNameOverride 
+              ? path.basename(message.outputNameOverride, path.extname(message.outputNameOverride))
+              : path.basename(message.inputFile, path.extname(message.inputFile));
+            const allEditedFiles = await listEditedFiles(baseFileName);
             webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
           } else {
-            vscode.window.showInformationMessage('Please select an input file first.');
+            vscode.window.showInformationMessage('Please select an input file or provide an output name override first.');
           }
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
-          const filteredEditedFiles = await listEditedFiles(message.filePath);
+          const baseFileName = path.basename(message.filePath, path.extname(message.filePath));
+          const filteredEditedFiles = await listEditedFiles(baseFileName);
           webviewView.webview.postMessage({ command: 'setEditedFiles', files: filteredEditedFiles });
           break;
         case 'sampleFileSelected':

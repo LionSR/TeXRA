@@ -69,6 +69,11 @@ body {
   font-weight: bold;
 }
 
+.file-select-header .advanced-feature {
+  font-size: 11px;
+  font-weight: normal;
+}
+
 .file-select label {
   display: block;
   margin-bottom: 2px;
