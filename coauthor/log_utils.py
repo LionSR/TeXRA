@@ -22,13 +22,13 @@ def log_start(args):
 
     log_dir = os.path.join(input_dir, "Log")
     os.makedirs(log_dir, exist_ok=True)
-    
+
     log_filename = f"{base_name}_log.xml"
     log_file = os.path.join(log_dir, log_filename)
 
     with open(log_file, "a+") as f:
         f.write("\n<log_entry>\n")
-        f.write(f"  <metadata>\n")
+        f.write("  <metadata>\n")
         f.write(f"    <time>{datetime.now()}</time>\n")
         f.write(f"    <task>{args.task}</task>\n")
         f.write(f"    <model>{args.model}</model>\n")
@@ -40,7 +40,7 @@ def log_start(args):
             if value:
                 f.write(f"    <{field}>{value}</{field}>\n")
 
-        f.write(f"  </metadata>\n")
+        f.write("  </metadata>\n")
         f.write(f"  <instruction>{args.instruction}</instruction>\n")
 
     return log_file

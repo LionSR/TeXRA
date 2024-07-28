@@ -139,7 +139,7 @@ def run_latexdiff_vc(input_file, commit_hash):
 def run_latexdiff_multiple(input_files, edited_files):
     if len(input_files) != len(edited_files):
         raise ValueError("The number of input files must match the number of edited files.")
-    
+
     for input_file, edited_file in zip(input_files, edited_files):
         run_latexdiff(input_file, edited_file)
 
@@ -198,4 +198,3 @@ def compile_latex_to_pdf(tex_file):
             stdout, stderr = output.split("\n", 1)
             cprint(stdout, "magenta")
             cprint(stderr, "red")
-
