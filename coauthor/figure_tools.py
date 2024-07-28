@@ -2,8 +2,10 @@ import re
 import os
 import subprocess
 from string import Template
-from .file_utils import read_file, write_file
 from termcolor import cprint, colored
+
+from .file_utils import read_file, write_file
+
 
 TIKZ_TEMPLATE = Template(
     r"""

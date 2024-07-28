@@ -5,6 +5,7 @@ from termcolor import colored
 from .file_utils import read_file, write_file, append_file
 from .model_utils import is_openai_model, is_anthropic_model
 from .message_utils import (
+    create_image_message,
     initialize_messages,
     create_response,
     extract_response_statistics,
@@ -16,9 +17,8 @@ from .message_utils import (
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, get_output_file_name
 from .tex_tools import get_tex_count
-from coauthor.figure_tools import extract_and_compile_tikzpictures_with_labels
-from coauthor.message_utils import create_image_message
-from coauthor.prompt_utils import load_prompt
+from .figure_tools import extract_and_compile_tikzpictures_with_labels
+from .prompt_utils import load_prompt
 
 
 def write_to_output_file(file_exists, best_connector, new_response, output_file):
