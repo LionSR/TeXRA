@@ -675,10 +675,6 @@ window.addEventListener('message', event => {
       break;
     case 'figureFileSelected':
       document.getElementById('figureFileSelect').value = message.filePath;
-      // Clear multiple figures selection when a single figure file is selected
-      document.getElementById('multipleFiguresSelect').innerHTML = '';
-      document.getElementById('multipleFiguresSelect').style.display = 'none';
-      document.getElementById('toggleMultipleFigures').textContent = '▼';
       break;
     case 'editedFileSelected':
       document.getElementById('editedFileSelect').value = message.filePath;
