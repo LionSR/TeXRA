@@ -157,3 +157,11 @@ ln -s /path/to/Dropbox/coauthor-papers/ProjectName/Versions /path/to/local/Proje
 Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.
 
 This method ensures consistent access to your CoAuthor outputs and version history across all your work environments while maintaining your preferred local directory structure.
+
+## License
+
+Before the author(s) have figured out the best way to use and distribute CoAuthor and its potential academic value and social impact, the code is under private license.
+
+© [Sirui Lu] [2024]. All rights reserved.
+This repository and its contents are proprietary and confidential.
+Unauthorized copying, distribution, or use is strictly prohibited.
