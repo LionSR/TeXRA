@@ -291,4 +291,5 @@ body {
 .toggle-icon {
   cursor: pointer;
   user-select: none;
+  margin-left: 5px;
 }

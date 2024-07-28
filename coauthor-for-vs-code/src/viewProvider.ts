@@ -33,10 +33,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const model_val = message.model;
           const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
-          const additionalInputFiles_val = message.additionalInputFiles;
-          const sampleFiles_val = message.sampleFiles;
-          const auxFiles_val = message.auxFiles;
-          const figureFiles_val = message.figureFiles;
+          const additionalInputFiles_val = message.additionalInputFiles && message.additionalInputFiles.length > 0 ? message.additionalInputFiles : null;
+          const sampleFiles_val = message.sampleFiles && message.sampleFiles.length > 0 ? message.sampleFiles : null;
+          const auxFiles_val = message.auxFiles && message.auxFiles.length > 0 ? message.auxFiles : null;
+          const figureFiles_val = message.figureFiles && message.figureFiles.length > 0 ? message.figureFiles : null;
           const instructions_val = message.instructions;
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
@@ -202,6 +202,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'getTheme':
           const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
           webviewView.webview.postMessage({ command: 'setTheme', theme });
+          break;
+        case 'setMultipleInputFiles':
+        case 'setMultipleSampleFiles':
+        case 'setMultipleAuxFiles':
+        case 'setMultipleFigures':
+          if (message.files && message.files.length > 0) {
+            webviewView.webview.postMessage({ command: message.command, files: message.files });
+          }
           break;
       }
     });
