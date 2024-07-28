@@ -99,11 +99,21 @@
       <div class="file-select">
         <div class="file-select-header">
           <label for="outputFilesSelect">
-            Multiple File Output <span id="toggleOutputFiles" class="toggle-icon">▼</span>
+            <span class="advanced-feature">Multiple File Output</span> <span id="toggleOutputFiles" class="toggle-icon">▼</span>
           </label>
         </div>
         <div id="outputFilesContainer" style="display: none;">
           <div id="outputFilesList" class="multiple-files-list"></div>
+        </div>
+      </div>
+      <div class="file-select">
+        <div class="file-select-header">
+          <label for="outputNameOverride">
+            <span class="advanced-feature">Override Output Name</span> <span id="toggleOutputNameOverride" class="toggle-icon">▼</span>
+          </label>
+        </div>
+        <div id="outputNameOverrideContainer" style="display: none;">
+          <input type="text" id="outputNameOverride" placeholder="Override base output name (please include the extension)">
         </div>
       </div>
     </div>
@@ -124,7 +134,6 @@
         <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
       </div>
       <div class="execute-column">
-        <input type="text" id="outputNameOverride" placeholder="Override base output name (please include the extension)">
         <button id="executeButton">Execute</button>
       </div>
     </div>

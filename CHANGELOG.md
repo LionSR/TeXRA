@@ -1,5 +1,27 @@
 # Backend Changelog
 
+## [0.11.6]
+
+### Added
+
+- Support for output name overrides in various tasks
+
+### Changed
+
+- Updated `get_xml_format_from_files` to handle multiple document outputs
+- Improved handling of output file names across multiple tasks
+- Enhanced error handling and logging for file operations
+
+### Fixed
+
+- Corrected XML formatting issues in various prompt files
+- Improved handling of CDATA sections in XML prompts
+
+### Improved
+
+- Optimized file pattern handling in housekeeping operations
+- Enhanced flexibility for handling multiple documents in output processing
+
 ## [0.11.5]
 
 ### Added
