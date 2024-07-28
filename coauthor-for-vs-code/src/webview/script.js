@@ -28,12 +28,17 @@ function addFileToList(containerId, file) {
         handleEmptyOutputFiles();
       } else {
         container.style.display = 'none';
-      }
+        document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`).textContent = '▼';
+      } 
     }
     saveState();
   });
   fileElement.appendChild(removeButton);
   container.appendChild(fileElement);
+  
+  // Automatically toggle and display the list
+  // container.style.display = 'block';
+  // document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`).textContent = '▲';
 }
 
 function handleEmptyOutputFiles() {
@@ -51,8 +56,7 @@ function getSelectedFiles(multipleInputFilesSelectDiv) {
 
 function updateMultipleFileSelect(selectId, files) {
   const selectDiv = document.getElementById(selectId);
-  selectDiv.style.display = 'none'; // Hide by default
-  selectDiv.innerHTML = ''; // Clear any existing content
+  const toggleIcon = document.getElementById(`toggle${selectId.charAt(0).toUpperCase() + selectId.slice(1)}`);
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter(file => !existingFiles.includes(file));
   if (newFiles.length > 0) {
@@ -60,8 +64,8 @@ function updateMultipleFileSelect(selectId, files) {
       addFileToList(selectId, file);
     });
     selectDiv.style.display = 'block';
-  } else {
-    selectDiv.style.display = 'none';
+    toggleIcon.textContent = '▲';
+    vscode.postMessage({ command: 'showInformationMessage', text: `Added ${newFiles.length} file(s) to ${selectId}` });
   }
   saveState();
 }
@@ -71,12 +75,12 @@ function initializeOutputFiles() {
   const multipleInputFilesSelect = document.getElementById('multipleInputFilesSelect');
   const outputFilesList = document.getElementById('outputFilesList');
   outputFilesList.innerHTML = '';
-  
+
   // Add the main input file
   if (inputFileSelect.value) {
     addFileToList('outputFilesList', inputFileSelect.value);
   }
-  
+
   // Add multiple input files
   const additionalFiles = getSelectedFiles(multipleInputFilesSelect);
   additionalFiles.forEach(file => {
@@ -206,34 +210,21 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('emptyMultipleInputFilesButton').addEventListener('click', function () {
-    const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-    multipleInputFilesSelectDiv.innerHTML = '';
-    multipleInputFilesSelectDiv.style.display = 'none';
-    // Also clear and hide the output files list
-    const outputFilesList = document.getElementById('outputFilesList');
-    outputFilesList.innerHTML = '';
-    handleEmptyOutputFiles();
-    saveState();
+    emptyMultipleFiles('multipleInputFilesSelect', 'toggleMultipleInputFiles');
   });
-  document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function () {
-    const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-    multipleAuxFilesSelectDiv.innerHTML = '';
-    multipleAuxFilesSelectDiv.style.display = 'none';
-    saveState();
-  });
+
   document.getElementById('emptyMultipleSampleFilesButton').addEventListener('click', function () {
-    const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
-    multipleSampleFilesSelectDiv.innerHTML = '';
-    multipleSampleFilesSelectDiv.style.display = 'none';
-    saveState();
+    emptyMultipleFiles('multipleSampleFilesSelect', 'toggleMultipleSampleFiles');
   });
+
+  document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function () {
+    emptyMultipleFiles('multipleAuxFilesSelect', 'toggleMultipleAuxFiles');
+  });
+
   document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function () {
-    const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-    multipleFiguresSelectDiv.innerHTML = '';
-    multipleFiguresSelectDiv.style.display = 'none';
-    document.getElementById('figureFileSelect').value = '';
-    saveState();
+    emptyMultipleFiles('multipleFiguresSelect', 'toggleMultipleFigures');
   });
+
   document.getElementById('emptyInstructionsButton').addEventListener('click', function () {
     document.getElementById('taskInput').value = '';
     saveState();
@@ -279,29 +270,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Get additional input files
     const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-    const additionalInputFiles = getSelectedFiles(multipleInputFilesSelectDiv).filter(file => file !== inputFile);
+    const additionalInputFiles = multipleInputFilesSelectDiv.style.display === 'block' 
+      ? getSelectedFiles(multipleInputFilesSelectDiv).filter(file => file !== inputFile)
+      : [];
 
     // Get sample files
     const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
-    const multipleSampleFiles = getSelectedFiles(multipleSampleFilesSelectDiv);
-    const sampleFiles = multipleSampleFiles.length > 0 ? multipleSampleFiles : (sampleFile ? [sampleFile] : []);
+    const sampleFiles = multipleSampleFilesSelectDiv.style.display === 'block'
+      ? getSelectedFiles(multipleSampleFilesSelectDiv)
+      : (sampleFile ? [sampleFile] : []);
 
     // Get auxiliary files
     const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-    const multipleAuxFiles = getSelectedFiles(multipleAuxFilesSelectDiv);
-    const auxFiles = multipleAuxFiles.length > 0 ? multipleAuxFiles : (auxFile ? [auxFile] : []);
+    const auxFiles = multipleAuxFilesSelectDiv.style.display === 'block'
+      ? getSelectedFiles(multipleAuxFilesSelectDiv)
+      : (auxFile ? [auxFile] : []);
 
     // Get figure files
     const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-    const multipleFigures = getSelectedFiles(multipleFiguresSelectDiv);
-    const figureFiles = multipleFigures.length > 0 ? multipleFigures : (figureFile ? [figureFile] : []);
+    const figureFiles = multipleFiguresSelectDiv.style.display === 'block'
+      ? getSelectedFiles(multipleFiguresSelectDiv)
+      : (figureFile ? [figureFile] : []);
 
     const outputFilesContainer = document.getElementById('outputFilesContainer');
-    const outputFiles = outputFilesContainer.style.display === 'block' 
+    const outputFiles = outputFilesContainer.style.display === 'block'
       ? getSelectedFiles(document.getElementById('outputFilesList'))
       : null;
     const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
       ? document.getElementById('outputNameOverride').value
       : null;
 
@@ -330,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
       ? document.getElementById('outputNameOverride').value
       : null;
     vscode.postMessage({
@@ -348,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
       ? document.getElementById('outputNameOverride').value
       : null;
     vscode.postMessage({
@@ -453,11 +449,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
       ? document.getElementById('outputNameOverride').value
       : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
-    
+
     vscode.postMessage({
       command: 'packMultiple',
       inputFile: inputFile,
@@ -477,11 +473,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
       ? document.getElementById('outputNameOverride').value
       : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
-    
+
     vscode.postMessage({
       command: 'cleanMultiple',
       inputFile: inputFile,
@@ -493,7 +489,31 @@ document.addEventListener('DOMContentLoaded', function () {
       outputFiles: outputFiles
     });
   });
+
+  const toggles = [
+    { containerId: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
+    { containerId: 'multipleSampleFilesSelect', toggleId: 'toggleMultipleSampleFiles' },
+    { containerId: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
+    { containerId: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' }
+  ];
+
+  toggles.forEach(({ containerId, toggleId }) => {
+    document.getElementById(toggleId).addEventListener('click', () => toggleMultipleFiles(containerId, toggleId));
+  });
 });
+
+function toggleMultipleFiles(containerId, toggleIconId) {
+  const container = document.getElementById(containerId);
+  const toggleIcon = document.getElementById(toggleIconId);
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    toggleIcon.textContent = '▲';
+  } else {
+    container.style.display = 'none';
+    toggleIcon.textContent = '▼';
+  }
+  saveState();
+}
 
 function saveState() {
   const state = {
@@ -510,6 +530,10 @@ function saveState() {
     autoExtractTikzFigure: document.getElementById('autoExtractTikzFigure').checked,
     includeTikzReflection: document.getElementById('includeTikzReflection').checked,
     includeTexCount: document.getElementById('includeTexCount').checked,
+    multipleInputFilesSelectVisible: document.getElementById('multipleInputFilesSelect').style.display === 'block',
+    multipleSampleFilesSelectVisible: document.getElementById('multipleSampleFilesSelect').style.display === 'block',
+    multipleAuxFilesSelectVisible: document.getElementById('multipleAuxFilesSelect').style.display === 'block',
+    multipleFiguresSelectVisible: document.getElementById('multipleFiguresSelect').style.display === 'block',
     multipleInputFilesSelect: getSelectedFiles(document.getElementById('multipleInputFilesSelect')),
     multipleSampleFilesSelect: getSelectedFiles(document.getElementById('multipleSampleFilesSelect')),
     multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
@@ -550,23 +574,25 @@ function restoreState() {
     });
 
     const multipleSelections = [
-      'multipleInputFilesSelect',
-      'multipleSampleFilesSelect',
-      'multipleAuxFilesSelect',
-      'multipleFiguresSelect'
+      { id: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
+      { id: 'multipleSampleFilesSelect', toggleId: 'toggleMultipleSampleFiles' },
+      { id: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
+      { id: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' }
     ];
 
-    multipleSelections.forEach(id => {
+    multipleSelections.forEach(({ id, toggleId }) => {
       const selectDiv = document.getElementById(id);
+      const toggleIcon = document.getElementById(toggleId);
       selectDiv.innerHTML = '';
-      selectDiv.style.display = 'none'; // Hide by default
       if (previousState[id] && previousState[id].length > 0) {
         previousState[id].forEach(file => {
           addFileToList(id, file);
         });
-        selectDiv.style.display = 'block';
+        selectDiv.style.display = previousState[`${id}Visible`] ? 'block' : 'none';
+        toggleIcon.textContent = previousState[`${id}Visible`] ? '▲' : '▼';
       } else {
         selectDiv.style.display = 'none';
+        toggleIcon.textContent = '▼';
       }
     });
 
@@ -596,6 +622,14 @@ function restoreState() {
       toggleOutputNameOverride.textContent = '▼';
     }
   }
+}
+
+function emptyMultipleFiles(containerId, toggleId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  container.style.display = 'none';
+  document.getElementById(toggleId).textContent = '▼';
+  saveState();
 }
 
 window.addEventListener('message', event => {
@@ -647,6 +681,7 @@ window.addEventListener('message', event => {
       // Clear multiple figures selection when a single figure file is selected
       document.getElementById('multipleFiguresSelect').innerHTML = '';
       document.getElementById('multipleFiguresSelect').style.display = 'none';
+      document.getElementById('toggleMultipleFigures').textContent = '▼';
       break;
     case 'editedFileSelected':
       document.getElementById('editedFileSelect').value = message.filePath;
@@ -707,7 +742,7 @@ window.addEventListener('message', event => {
       document.body.className = message.theme;
       break;
   }
-  
+
   // Restore previous state
   restoreState();
 });

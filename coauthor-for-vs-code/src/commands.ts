@@ -283,7 +283,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return [];
     }),
-    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[], instructions: string, reflect: string, model: string, figureFiles: string | string[], additionalInputFiles: string[], sampleFiles: string | string[], autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, outputFiles: string[], outputNameOverride: string) => {
+    vscode.commands.registerCommand('coauthor.execute', (task: string, inputFile: string, auxFiles: string | string[] | null, instructions: string, reflect: string, model: string, figureFiles: string | string[] | null, additionalInputFiles: string[] | null, sampleFiles: string | string[] | null, autoExtractFigure: boolean, autoExtractTikzFigure: boolean, includeTikzReflection: boolean, includeTexCount: boolean, outputFiles: string[], outputNameOverride: string) => {
       const terminalName = `${task}@${model}`;
       const terminal_new = vscode.window.createTerminal(terminalName);
       terminal_new.show();
@@ -295,27 +295,21 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       if (auxFiles) {
         const auxFileList = Array.isArray(auxFiles) ? auxFiles : [auxFiles];
-        if (auxFileList.length === 1) {
-          command += ` --auxiliary_files="${auxFileList[0]}"`;
-        } else if (auxFileList.length > 1) {
+        if (auxFileList.length > 0) {
           command += ` --auxiliary_files="${auxFileList.join(',')}"`;
         }
       }
 
       if (figureFiles) {
         const figureFileList = Array.isArray(figureFiles) ? figureFiles : [figureFiles];
-        if (figureFileList.length === 1) {
-          command += ` --figure_inputs="${figureFileList[0]}"`;
-        } else if (figureFileList.length > 1) {
+        if (figureFileList.length > 0) {
           command += ` --figure_inputs="${figureFileList.join(',')}"`;
         }
       }
 
       if (sampleFiles) {
         const sampleFileList = Array.isArray(sampleFiles) ? sampleFiles : [sampleFiles];
-        if (sampleFileList.length === 1) {
-          command += ` --sample_files="${sampleFileList[0]}"`;
-        } else if (sampleFileList.length > 1) {
+        if (sampleFileList.length > 0) {
           command += ` --sample_files="${sampleFileList.join(',')}"`;
         }
       }
