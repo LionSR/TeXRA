@@ -34,7 +34,7 @@ Here is the LaTeX document with additional input files (which may include append
 </document_content>
 </document>
 {AUXILIARY_FILES}
-{{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 
 Please carefully read through the entire research paper above and ensure you fully understand all the details.
