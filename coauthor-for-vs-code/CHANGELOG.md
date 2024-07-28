@@ -1,5 +1,22 @@
 # Frontend Changelog
 
+## [0.7.9]
+
+### Added
+
+- Implemented toggle functionality for multiple file selections
+- Added toggle buttons for input, sample, auxiliary, and figure file lists
+
+### Changed
+
+- Updated UI to show/hide multiple file selection areas
+- Improved state management to remember toggle states
+
+### Improved
+
+- Enhanced user control over file selection visibility
+- Optimized UI layout for better space utilization
+
 ## [0.7.8]
 
 ### Added
