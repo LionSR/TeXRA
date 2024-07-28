@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 from termcolor import colored
 
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
-from coauthor.figure_tools import extract_figure_paths, extract_and_compile_tikzpictures_with_labels
+from coauthor.figure_tools import (
+    extract_figure_paths,
+    extract_and_compile_tikzpictures_with_labels,
+    handle_auto_extract_figure,
+    handle_auto_extract_tikz_figure,
+)
 from coauthor.arg_utils import comma_separated_list
 from coauthor.housekeeping_utils import (
     run_clean_single,
@@ -94,35 +99,6 @@ def execute_task(script, task, model, input_file, **kwargs):
                 command.append(shlex.quote(str(value)).strip("'"))
 
     subprocess.run(command)
-
-
-def handle_auto_extract_figure(kwargs, input_file):
-    if kwargs.get("auto_extract_figure"):
-        extracted_figure_paths = extract_figure_paths(input_file)
-        print("Extracting figure paths:", colored(extracted_figure_paths, "cyan"))
-        if extracted_figure_paths:
-            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
-                kwargs["figure_inputs"] = extracted_figure_paths
-            else:
-                kwargs["figure_inputs"].extend(extracted_figure_paths)
-
-
-def handle_auto_extract_tikz_figure(kwargs, input_file):
-    if kwargs.get("auto_extract_tikz_figure"):
-        extracted_tikz_figure_paths = extract_and_compile_tikzpictures_with_labels(input_file)
-        if extracted_tikz_figure_paths:
-            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
-                kwargs["figure_inputs"] = extracted_tikz_figure_paths
-            else:
-                kwargs["figure_inputs"].extend(extracted_tikz_figure_paths)
-
-
-def handle_tex_count(kwargs, input_file):
-    if kwargs.get("include_tex_count"):
-        tex_count_stats = get_tex_count(input_file)
-        if tex_count_stats:
-            instruction = kwargs.get("instruction", "")
-            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
 
 
 @click.group()

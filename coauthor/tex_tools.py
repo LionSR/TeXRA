@@ -28,6 +28,15 @@ def get_tex_count(file_path):
         return None
 
 
+
+def handle_tex_count(kwargs, input_file):
+    if kwargs.get("include_tex_count"):
+        tex_count_stats = get_tex_count(input_file)
+        if tex_count_stats:
+            instruction = kwargs.get("instruction", "")
+            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
+            
+
 def process_tikzpicture_endings(file_path):
     """
     Process the file to fix tikzpicture endings with proper indentation.
@@ -221,3 +230,4 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
             cprint(f"Files packed into {output_folder}", "green")
     else:
         cprint("No files found to process.", "yellow")
+

@@ -12,13 +12,13 @@ def main():
     parser.add_argument("--task", type=str, default="transcribe", help="Task to perform, currently only 'transcribe'.", choices=["transcribe"])
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
+    print(f"{colored('args:', 'blue')} {args}")
     print(colored(f"Transcribing {args.input_file}...\n", "green"))
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "TRANSCRIPT": coa.read_file(args.input_file),
             "CONTEXT": coa.read_file(args.context_file),
@@ -26,14 +26,13 @@ def main():
             "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(args.example_edited_transcript),
         }
     )
+    coa.update_user_vars_single_output(args, user_vars)
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
-
-    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -48,7 +47,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,

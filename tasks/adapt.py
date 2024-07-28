@@ -12,27 +12,26 @@ def main():
     parser.add_argument("--task", type=str, default="adapt", choices=["adapt"], help="Mode of operation, either 'adapt'.")
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
-    print(colored(f"Revising {args.input_file}...\n", "green"))
+    print(f"{colored('args:', 'blue')} {args}")
+    print(f"{colored('Revising', 'green')} {args.input_file}...\n")
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "EXISTING_LECTURE_NOTES": coa.read_file(args.sample_tex),
             "DOCUMENT_CLS_CONTENT": coa.read_file(args.document_cls),
             "COMMANDS_CONTENT": coa.read_file(args.commands_file),
         }
     )
+    coa.update_user_vars_single_output(args, user_vars)
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
-
-    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -42,12 +41,15 @@ def main():
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
     output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
 
+    use_scratchpad = "<scratchpad>" in output_settings["prefill_first"]
+    use_scratchpad_reflect = "<scratchpad>" in output_settings["prefill_reflect"]
+
     state, accumulated_output, end_turn, messages = coa.process_first_round(
         client,
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
@@ -56,7 +58,7 @@ def main():
 
     print(colored(f"Output file: {output_file}", "yellow"))
     if end_turn:
-        if prompt_settings["prefill_first"] == "<scratchpad>":
+        if use_scratchpad:
             coa.split_scratchpad_output_xml(output_file, task_settings["document_tag"])
         if output_type == "tex":
             coa.run_latexdiff(args.input_file, output_file, args.task)
@@ -81,7 +83,7 @@ def main():
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
         if end_turn_reflect:
-            if prompt_settings["prefill_reflect"] == "<scratchpad>":
+            if use_scratchpad_reflect:
                 coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
             if output_type == "tex":
                 coa.run_latexdiff(args.input_file, output_file_reflect, args.task)

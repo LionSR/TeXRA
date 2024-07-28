@@ -27,14 +27,6 @@ def append_file(file_path, content):
         file.write(content)
 
 
-def find_last_non_empty_line(response):
-    lines = response.split("\n")
-    for i in range(len(lines) - 1, -1, -1):
-        if lines[i].strip():
-            return lines[i]
-    return ""
-
-
 def extract_text_from_tags(input_content, document_tag):
     match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
     return match.group(1) if match else input_content
