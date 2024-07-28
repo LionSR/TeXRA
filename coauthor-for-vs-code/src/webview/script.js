@@ -98,6 +98,19 @@ function toggleOutputFiles() {
   saveState();
 }
 
+function toggleOutputNameOverride() {
+  const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+  const toggleIcon = document.getElementById('toggleOutputNameOverride');
+  if (outputNameOverrideContainer.style.display === 'none') {
+    outputNameOverrideContainer.style.display = 'block';
+    toggleIcon.textContent = '▲';
+  } else {
+    outputNameOverrideContainer.style.display = 'none';
+    toggleIcon.textContent = '▼';
+  }
+  saveState();
+}
+
 window.onload = function () {
   const dataRequests = [
     'getTheme',
@@ -147,9 +160,13 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('inputFileSelect').addEventListener('change', function () {
     const inputFile = this.value;
+    const outputNameOverride = document.getElementById('outputNameOverrideContainer').style.display === 'block'
+      ? document.getElementById('outputNameOverride').value
+      : null;
     vscode.postMessage({
       command: 'inputFileSelected',
-      filePath: inputFile
+      filePath: inputFile,
+      outputNameOverride: outputNameOverride
     });
   });
   document.getElementById('sampleFileSelect').addEventListener('change', function () {
@@ -283,7 +300,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const outputFiles = outputFilesContainer.style.display === 'block' 
       ? getSelectedFiles(document.getElementById('outputFilesList'))
       : null;
-    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+      ? document.getElementById('outputNameOverride').value
+      : null;
 
     vscode.postMessage({
       command: 'execute',
@@ -309,7 +329,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+      ? document.getElementById('outputNameOverride').value
+      : null;
     vscode.postMessage({
       command: 'packSingle',
       inputFile: inputFile,
@@ -324,7 +347,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+      ? document.getElementById('outputNameOverride').value
+      : null;
     vscode.postMessage({
       command: 'cleanSingle',
       inputFile: inputFile,
@@ -373,9 +399,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    const outputNameOverride = document.getElementById('outputNameOverrideContainer').style.display === 'block'
+      ? document.getElementById('outputNameOverride').value
+      : null;
     vscode.postMessage({
       command: 'requestEditedFile',
-      inputFile: document.getElementById('inputFileSelect').value,
+      inputFile: inputFile,
+      outputNameOverride: outputNameOverride
     });
   });
   document.getElementById('mergeButton').addEventListener('click', function () {
@@ -412,6 +443,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('outputNameOverride').addEventListener('input', saveState);
 
+  document.getElementById('toggleOutputNameOverride').addEventListener('click', toggleOutputNameOverride);
+
   // Add these event listeners
   document.getElementById('packMultipleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
@@ -419,7 +452,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+      ? document.getElementById('outputNameOverride').value
+      : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
     
     vscode.postMessage({
@@ -440,7 +476,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverride').value;
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = outputNameOverrideContainer.style.display === 'block' 
+      ? document.getElementById('outputNameOverride').value
+      : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
     
     vscode.postMessage({
@@ -477,6 +516,7 @@ function saveState() {
     multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
     outputFilesContainerVisible: document.getElementById('outputFilesContainer').style.display === 'block',
     outputFiles: getSelectedFiles(document.getElementById('outputFilesList')),
+    outputNameOverrideVisible: document.getElementById('outputNameOverrideContainer').style.display === 'block',
     outputNameOverride: document.getElementById('outputNameOverride').value,
   };
   vscode.setState(state);
@@ -544,6 +584,17 @@ function restoreState() {
       outputFilesContainer.style.display = 'none';
       toggleIcon.textContent = '▼';
     }
+
+    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const toggleOutputNameOverride = document.getElementById('toggleOutputNameOverride');
+    if (previousState.outputNameOverrideVisible) {
+      outputNameOverrideContainer.style.display = 'block';
+      toggleOutputNameOverride.textContent = '▲';
+      document.getElementById('outputNameOverride').value = previousState.outputNameOverride || '';
+    } else {
+      outputNameOverrideContainer.style.display = 'none';
+      toggleOutputNameOverride.textContent = '▼';
+    }
   }
 }
 
@@ -581,7 +632,8 @@ window.addEventListener('message', event => {
       document.getElementById('inputFileSelect').value = message.filePath;
       vscode.postMessage({
         command: 'requestEditedFile',
-        inputFile: message.filePath
+        inputFile: message.filePath,
+        outputNameOverride: message.outputNameOverride
       });
       break;
     case 'sampleFileSelected':

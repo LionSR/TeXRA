@@ -32,7 +32,7 @@ Here are the LaTeX documents with additional LaTeX auxiliary files (where the ma
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 
 Please carefully read through all the research papers above and ensure you fully understand all the details.

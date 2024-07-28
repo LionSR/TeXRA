@@ -38,7 +38,7 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 
 Please carefully read through the entire chapter and ensure you fully understand all the details.

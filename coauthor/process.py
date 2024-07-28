@@ -240,7 +240,7 @@ def process_reflection_round(
             accumulated_output = file_content
             messages.append({"role": "assistant", "content": file_content})
     else:
-        prefill = prompt_settings.get("prefill_reflect")
+        prefill = output_settings["prefill_reflect"]
 
         if output_settings["document_tag"] == "tex" and use_prefill_from_input:
             first_k_tex_document = read_file(input_file)[: output_settings["k"]]

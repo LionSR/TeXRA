@@ -29,8 +29,9 @@ def get_output_settings(args, task_settings):
         "prefill_first": task_settings.get("prefill_first"),
     }
 
-    if task_settings.get("prefill_reflect"):
-        output_settings["prefill_reflect"] = task_settings.get("prefill_reflect")
+    prefill_reflect = task_settings.get("prefill_reflect")
+    if prefill_reflect and prefill_reflect != "":
+        output_settings["prefill_reflect"] = prefill_reflect
     else:
         output_settings["prefill_reflect"] = output_settings["prefill_first"]
 

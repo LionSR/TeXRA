@@ -1,5 +1,28 @@
 # Frontend Changelog
 
+## [0.7.6]
+
+### Added
+
+- New UI for overriding output file names
+- Support for multiple file output functionality
+
+### Changed
+
+- Refactored WebView implementation for improved maintainability
+- Updated file selection logic to support output name overrides
+- Enhanced message handling between WebView and extension for new features
+
+### Improved
+
+- Optimized state management for selected files and output overrides
+- Enhanced UI layout for better user experience and clarity
+- Improved error handling and user feedback for file operations
+
+### Fixed
+
+- Resolved issues with file path handling for better cross-platform compatibility
+
 ## [0.7.5]
 
 - Added UI support for packing and cleaning multiple files

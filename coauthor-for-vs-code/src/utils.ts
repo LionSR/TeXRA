@@ -53,7 +53,7 @@ export async function listFigureFiles(): Promise<string[]> {
   return [];
 }
 
-export async function listEditedFiles(inputFileName?: string): Promise<string[]> {
+export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
@@ -63,14 +63,11 @@ export async function listEditedFiles(inputFileName?: string): Promise<string[]>
     const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') || [];
     const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
     const files = await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ignoredExtensions, ignoredDirectories, ignoredKeywords, ignoredInputFiles);
-    if (inputFileName) {
-      const inputFileBaseName = path.basename(inputFileName, path.extname(inputFileName));
-      return files.filter(file => {
-        const fileBaseName = path.basename(file, path.extname(file));
-        return fileBaseName.startsWith(inputFileBaseName) && file !== inputFileName;
-      });
-    }
-    return files;
+    
+    return files.filter(file => {
+      const fileBaseName = path.basename(file, path.extname(file));
+      return fileBaseName.startsWith(baseFileName) && fileBaseName !== baseFileName;
+    });
   }
   return [];
 }
