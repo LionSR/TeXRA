@@ -39,7 +39,7 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{ADDITIONAL_INPUT_FILES}
+{{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 ]]>
 </user_prefix>

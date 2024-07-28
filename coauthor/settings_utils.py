@@ -25,13 +25,19 @@ def get_output_settings(args, task_settings):
         "document_tag": task_settings.get("document_tag"),
         "output_type": task_settings.get("output_type", "txt"),
         "end_tag": task_settings.get("end_tag", "\\end{document}"),
+        "prefill_first": task_settings.get("prefill_first"),
     }
+
+    if task_settings.get("prefill_reflect"):
+        output_settings["prefill_reflect"] = task_settings.get("prefill_reflect")
+    else:
+        output_settings["prefill_reflect"] = output_settings["prefill_first"]
+
     return output_settings
 
 
-def get_prompt_settings(args, prompt_path, task_settings, task, prompt_dict):
+def get_prompt_settings(args, prompt_path, prompt_dict):
     print("prompt_path:", colored(f"{prompt_path}", "yellow"))
-    print("task:", colored(f"{task}", "yellow"))
 
     prompt_settings = {
         "prompt_path": prompt_path,
@@ -39,17 +45,11 @@ def get_prompt_settings(args, prompt_path, task_settings, task, prompt_dict):
         "user_prefix_prompt": prompt_dict.get("user_prefix", ""),
         "user_request_prompt": prompt_dict.get("user_request", ""),
         "user_reflect_prompt": prompt_dict.get("user_reflect", ""),
-        "prefill_first": task_settings.get("prefill_first"),
         "use_prefill_from_input": False,
         "include_tex_count": args.include_tex_count,
         "auto_extract_figure": args.auto_extract_figure,
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
         "include_tikz_reflection": args.include_tikz_reflection,
     }
-
-    if task_settings.get("prefill_reflect"):
-        prompt_settings["prefill_reflect"] = task_settings.get("prefill_reflect")
-    else:
-        prompt_settings["prefill_reflect"] = prompt_settings["prefill_first"]
 
     return prompt_settings

@@ -28,11 +28,11 @@ I am going to give you multiple LaTeX documents to revise. Please read all docum
 Here are the LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
 
 <documents>
-{AUXILIARY_FILE_CONTENT}
+{AUXILIARY_FILE_CONTENTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{ADDITIONAL_INPUT_FILES}
+{{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 
 Please carefully read through all the research papers above and ensure you fully understand all the details.

@@ -18,25 +18,25 @@ def main():
     )
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
-    print(colored(f"Revising {args.input_file}...\n", "green"))
+    print(f"{colored('args:', 'blue')} {args}")
+    print(f"{colored('Revising', 'green')} {args.input_file}...\n")
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars["PREAMBLE_FILE"] = args.preamble_file
-    user_prefix_vars["PREAMBLE_CONTENT"] = coa.read_file(args.preamble_file)
+    user_vars = coa.get_user_vars(args)
+    user_vars["PREAMBLE_FILE"] = args.preamble_file
+    user_vars["PREAMBLE_CONTENT"] = coa.read_file(args.preamble_file)
 
     if args.task == "correct_prl":
-        user_prefix_vars["SUPP_FILE"] = args.supp_file
-        user_prefix_vars["SUPP_CONTENT"] = coa.read_file(args.supp_file)
+        user_vars["SUPP_FILE"] = args.supp_file
+        user_vars["SUPP_CONTENT"] = coa.read_file(args.supp_file)
     elif args.task == "correct_supp_prl":
-        user_prefix_vars["MAIN_FILE"] = args.auxiliary_files
-        user_prefix_vars["MAIN_CONTENT"] = coa.read_file(args.auxiliary_files)
+        user_vars["MAIN_FILE"] = args.auxiliary_files
+        user_vars["MAIN_CONTENT"] = coa.read_file(args.auxiliary_files)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)
@@ -52,7 +52,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
