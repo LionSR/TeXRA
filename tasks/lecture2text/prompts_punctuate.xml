@@ -27,7 +27,7 @@ Please help me improve the readability of the following transcription generated 
 Instuctions:
 1. Be faithful.
 2. Correct any punctuation errors and add appropriate punctuation where necessary. In particular, replace commas that were used arbitrarily to make the sentence long with periods. Period should be use before 'so' and 'then' etc. Do a line break after each sentence.
-3. Spoken equations must be transformed into latex equations (inline equations: dollar signs such as $\sigma_x$ and $\ket{{\psi}}$ or display equations $$...$$).
+3. Spoken equations must be transformed into latex equations (inline equations: dollar signs such as $\sigma_x$ and $\ket{\psi}$ or display equations $$...$$).
 
 Here are some examples:
 <example1>
