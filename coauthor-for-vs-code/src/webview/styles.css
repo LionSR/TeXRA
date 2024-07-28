@@ -10,11 +10,17 @@
   --dropdown-background: var(--vscode-dropdown-background);
   --dropdown-foreground: var(--vscode-dropdown-foreground);
   --dropdown-border: var(--vscode-dropdown-border);
+  --font-size: var(--vscode-font-size);
+  --font-family: var(--vscode-font-family);
+  --font-weight: var(--vscode-font-weight);
 }
 
 body {
   background-color: var(--background-color);
   color: var(--text-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight);
 }
 
 .compact-selections {
@@ -30,7 +36,8 @@ body {
 }
 
 .select-group label {
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
+  font-weight: bold;
   margin-bottom: 2px;
   text-align: center;
 }
@@ -65,19 +72,19 @@ body {
 }
 
 .file-select-header label {
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
   font-weight: bold;
 }
 
 .file-select-header .advanced-feature {
-  font-size: 11px;
+  font-size: calc(var(--vscode-font-size) * 0.85);
   font-weight: normal;
 }
 
 .file-select label {
   display: block;
   margin-bottom: 2px;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 .file-select-buttons {
@@ -88,7 +95,7 @@ body {
 
 .small-button {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: calc(var(--vscode-font-size) * 0.85);
   background-color: var(--button-background);
   color: var(--button-foreground);
   border: 1px solid var(--input-border);
@@ -108,7 +115,7 @@ body {
   border-radius: 3px;
   background-color: var(--dropdown-background);
   color: var(--dropdown-foreground);
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 .multiple-files-list {
@@ -117,7 +124,7 @@ body {
   border: 1px solid var(--dropdown-border);
   border-radius: 3px;
   padding: 5px;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
   max-height: 100px;
   overflow-y: auto;
 }
@@ -141,24 +148,20 @@ body {
 .instruction-box label {
   display: block;
   margin-bottom: 2px;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 #taskInput {
   width: 100%;
   min-height: 150px;
-  /* Increased initial height */
-  max-height: 300px;
-  /* Maximum height before scrolling */
+  max-height: 400px;
   padding: 8px;
   border: 1px solid var(--input-border);
   border-radius: 4px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  font-size: 13px;
+  font-family: var(--vscode-editor-font-family, var(--font-family));
+  font-size: var(--vscode-editor-font-size, var(--font-size));
   resize: vertical;
-  /* Allows vertical resizing */
   overflow-y: auto;
-  /* Adds vertical scrollbar when needed */
   background-color: var(--input-background);
   color: var(--input-foreground);
   box-sizing: border-box;
@@ -173,7 +176,7 @@ body {
 .checkbox-group label {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 .checkbox-group input[type="checkbox"] {
@@ -182,7 +185,7 @@ body {
 
 #executeButton {
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: calc(var(--vscode-font-size) * 1.15);
   background-color: #007acc;
   color: white;
   border: none;
@@ -199,7 +202,7 @@ body {
 }
 
 .section-header {
-  font-size: 12px;
+  font-size: calc(var(--vscode-font-size) * 1.1);
   font-weight: bold;
   margin-top: 5px;
   margin-bottom: 5px;
@@ -213,7 +216,7 @@ body {
 
 .button-group label {
   display: block;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
   margin-bottom: 5px;
 }
 
@@ -231,7 +234,7 @@ body {
 .checkbox-grid label {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 .checkbox-grid input[type="checkbox"] {
@@ -251,12 +254,12 @@ body {
   border-radius: 3px;
   background-color: var(--input-background);
   color: var(--input-foreground);
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
 }
 
 #executeButton {
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: calc(var(--vscode-font-size) * 1.15);
   background-color: #007acc;
   color: white;
   border: none;
@@ -277,7 +280,7 @@ body {
 }
 
 .instruction-header label {
-  font-size: 12px;
+  font-size: var(--vscode-font-size);
   font-weight: bold;
 }
 

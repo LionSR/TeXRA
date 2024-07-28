@@ -7,6 +7,12 @@ from termcolor import cprint
 
 # some refactoring work can be done to the functions here by creating common utility functions. MUST BE EXTREMELY careful with the subtle differences and edge cases
 
+excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+
+pack_extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
+
+temp_extensions = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
+
 
 def get_first_task_chunk(task):
     if task.startswith("write-"):
@@ -55,7 +61,7 @@ def run_clean_single(model, input_file, reflect, task):
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
 
-    extensions = [".pdf", ".tex", ".xml", ".text", ".bib", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".txt"]
+    extensions = temp_extensions + pack_extensions
 
     for pattern in file_patterns:
         for ext in extensions:
@@ -87,12 +93,10 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
     file_patterns.append(base_name)
 
-    extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
-
     moved_files = []
     copied_files = []
     for pattern in file_patterns:
-        for ext in extensions:
+        for ext in pack_extensions:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
                 file_path = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(file_path):
@@ -103,7 +107,7 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
                     break
 
     if moved_files or copied_files:
-        now = get_folder_datetime(input_dir, file_patterns, extensions)
+        now = get_folder_datetime(input_dir, file_patterns, pack_extensions)
         if output_folder is None:
             output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
         os.makedirs(output_folder, exist_ok=True)
@@ -116,7 +120,6 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
 
         print(f"Files packed into {output_folder}")
 
-    temp_extensions = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
     for pattern in file_patterns:
         for ext in temp_extensions:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
@@ -141,13 +144,12 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
 
     first_task_chunk = get_first_task_chunk(task)
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
-    extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
 
     # Add patterns for additional XML files
     additional_patterns = [f"{base_name}_{first_task_chunk}_{model}.xml", f"{base_name}_{first_task_chunk}_reflect_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
-    now = get_folder_datetime(output_dir, file_patterns, extensions)
+    now = get_folder_datetime(output_dir, file_patterns, pack_extensions)
     common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{task}_{model}")
 
     # Ensure the output folder exists
@@ -163,7 +165,7 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
         file_path = os.path.join(output_dir, pattern)
         if os.path.exists(file_path):
             shutil.move(file_path, common_output_folder)
-            print(f"Moved additional file: {file_path}")
+            print(f"Moved xml file: {file_path}")
 
     print(f"All files packed into {common_output_folder}")
     return common_output_folder
@@ -179,16 +181,6 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
         output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
 
     file_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
-    delete_extensions = [
-        ".aux",
-        ".bbl",
-        ".blg",
-        ".fdb_latexmk",
-        ".fls",
-        ".log",
-        ".out",
-        ".synctex.gz",
-    ]
 
     files_to_process = []
     files_to_delete = []
@@ -198,7 +190,7 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
             file_path = os.path.join(search_dir, pattern)
             if os.path.exists(file_path):
                 files_to_process.append(file_path)
-                for ext in delete_extensions:
+                for ext in temp_extensions:
                     temp_file = os.path.splitext(file_path)[0] + ext
                     if os.path.exists(temp_file):
                         files_to_delete.append(temp_file)
@@ -210,7 +202,7 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
                 os.remove(file_path)
                 cprint(f"Deleted: {file_path}", "yellow")
             cprint("Cleanup complete.", "green")
-        else:
+        else:  # move files to output folder
             os.makedirs(output_folder, exist_ok=True)
             for file_path in files_to_process:
                 shutil.move(file_path, output_folder)
@@ -237,13 +229,13 @@ def run_clean_build():
         build_dir = os.path.join(directory, "build")
         if os.path.isdir(build_dir):
             for item in os.listdir(build_dir):
-                item_path = os.path.join(build_dir, item)
-                if os.path.isfile(item_path):
-                    os.remove(item_path)
-                    print(f"Deleted: {item_path}")
-                elif os.path.isdir(item_path):
-                    shutil.rmtree(item_path)
-                    print(f"Deleted directory: {item_path}")
+                file_path = os.path.join(build_dir, item)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+                    print(f"Deleted: {file_path}")
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    print(f"Deleted directory: {file_path}")
 
     clean_build_dir(".")
 
@@ -256,29 +248,7 @@ def run_clean_build():
     print("All specified files have been deleted.")
 
 
-def run_indent_tex():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-    latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
-
-    for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in excluded_dirs]
-        for file in files:
-            if file.endswith(".tex"):
-                tex_file = os.path.join(root, file)
-                command = ["latexindent", tex_file, "-w", "-s"]
-                if latexindent_config:
-                    command.append(f"-l={latexindent_config}")
-                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    for pattern in ["**/*.bak0", "**/indent.log"]:
-        for file in glob.glob(pattern, recursive=True):
-            os.remove(file)
-
-    print("All .tex files have been indented and temporary files have been deleted.")
-
-
 def run_clean_output():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
     models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
 
     patterns = [f"*_{model}*.tex" for model in models]
@@ -297,7 +267,7 @@ def run_clean_output():
 
     for file in set(files_to_delete):
         try:
-            if os.path.exists(file):  # Check if file exists before attempting to delete
+            if os.path.exists(file):
                 os.remove(file)
                 print(f"Deleted: {file}")
             else:
@@ -306,4 +276,23 @@ def run_clean_output():
             print(f"Error deleting {file}: {e}")
 
     print("Cleanup complete.")
-    
+
+
+def run_indent_tex():
+    latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
+
+    for root, dirs, files in os.walk(".", topdown=True):
+        dirs[:] = [d for d in dirs if d not in excluded_dirs]
+        for file in files:
+            if file.endswith(".tex"):
+                tex_file = os.path.join(root, file)
+                command = ["latexindent", tex_file, "-w", "-s"]
+                if latexindent_config:
+                    command.append(f"-l={latexindent_config}")
+                subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    for pattern in ["**/*.bak0", "**/indent.log"]:
+        for file in glob.glob(pattern, recursive=True):
+            os.remove(file)
+
+    print("All .tex files have been indented and temporary files have been deleted.")
