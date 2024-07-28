@@ -1,9 +1,10 @@
 import os
 import re
 from termcolor import colored, cprint
-from .file_utils import read_file, write_file
 import difflib
 import xml.etree.ElementTree as ET
+
+from .file_utils import read_file, write_file
 
 
 def get_output_file_name(input_file, task, model, output_type, reflect=False):

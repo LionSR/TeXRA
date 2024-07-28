@@ -25,9 +25,6 @@ def is_anthropic_model(model):
         "claude-3-haiku",
         "claude-3-sonnet",
         "claude-3-opus",
-    ]:
-        return True
-    if model in [
         "claude-3-sonnet-20240229",
         "claude-3-5-sonnet-20240620",
         "claude-3-opus-20240229",
@@ -54,25 +51,10 @@ def get_model_client(model):
 
 
 def compute_api_price(input_tokens, output_tokens, model):
-    if "sonnet" in model:
-        input_price = input_tokens * 3 / 1e6
-        output_price = output_tokens * 15 / 1e6
-    elif model == "opus":
-        input_price = input_tokens * 15 / 1e6
-        output_price = output_tokens * 75 / 1e6
-    elif model == "haiku":
-        input_price = input_tokens * 0.25 / 1e6
-        output_price = output_tokens * 1.25 / 1e6
-    elif model == "gpt4t":
-        input_price = input_tokens * 10 / 1e6
-        output_price = output_tokens * 30 / 1e6
-    elif model == "gpt4o":
-        input_price = input_tokens * 5 / 1e6
-        output_price = output_tokens * 15 / 1e6
-    elif model == "gpt4o-":
-        input_price = input_tokens * 0.15 / 1e6
-        output_price = output_tokens * 0.6 / 1e6
+    prices = {"sonnet": (3, 15), "opus": (15, 75), "haiku": (0.25, 1.25), "gpt4t": (10, 30), "gpt4o": (5, 15), "gpt4o-": (0.15, 0.6)}
 
-    else:
-        raise ValueError("Invalid model name for computing price.")
-    return input_price + output_price
+    for key, (input_rate, output_rate) in prices.items():
+        if key in model:
+            return (input_tokens * input_rate + output_tokens * output_rate) / 1e6
+
+    raise ValueError("Invalid model name for computing price.")
