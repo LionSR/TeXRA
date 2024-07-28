@@ -1,21 +1,11 @@
-from termcolor import colored, cprint
 import os
+from termcolor import colored, cprint
+
 from .img_utils import get_base64_encoded_image, process_pdf_input
 from .model_utils import is_openai_model, is_anthropic_model
 
 
 def has_end_tag(file_content, end_tag, document_tag):
-    """
-    Check if the end tag or document tag is present in the given file content.
-
-    Args:
-        file_content (str): The content of the file to check.
-        end_tag (str): The end tag to look for.
-        document_tag (str): The document tag to look for.
-
-    Returns:
-        bool: True if the end tag or document tag is found, False otherwise.
-    """
     # let us see if the following works... (deleted "\\end{document}" for multiple document output)
     return end_tag in file_content or f"</{document_tag}>" in file_content
 
