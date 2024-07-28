@@ -22,13 +22,13 @@ def main():
     parser.add_argument("--draft_main_content", type=str, help="Path to the draft main content file.")
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
+    print(f"{colored('args:', 'blue')} {args}")
     print(colored(f"Preparing response for {args.input_file}...\n", "green"))
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "PREAMBLE_CONTENT": coa.read_file(args.preamble),
             "MAIN_CONTENT": coa.read_file(args.input_file),
@@ -43,21 +43,21 @@ def main():
     )
 
     if "revise" in args.task or "polish" in args.task:
-        user_prefix_vars["DRAFT_REPLY_LETTER"] = coa.read_file(args.draft_reply_letter) if args.draft_reply_letter else ""
+        user_vars["DRAFT_REPLY_LETTER"] = coa.read_file(args.draft_reply_letter) if args.draft_reply_letter else ""
 
     if "polish" in args.task:
-        user_prefix_vars["MAIN_CONTENT"] = coa.read_file(args.main_content) if args.main_content else ""
+        user_vars["MAIN_CONTENT"] = coa.read_file(args.main_content) if args.main_content else ""
 
     if args.task == "revise_supp":
-        user_prefix_vars["SUPP_CONTENT"] = coa.read_file(args.input_file)
-        user_prefix_vars["MAIN_CONTENT"] = coa.read_file(args.main_content) if args.main_content else ""
-        user_prefix_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(args.draft_main_content) if args.draft_main_content else ""
+        user_vars["SUPP_CONTENT"] = coa.read_file(args.input_file)
+        user_vars["MAIN_CONTENT"] = coa.read_file(args.main_content) if args.main_content else ""
+        user_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(args.draft_main_content) if args.draft_main_content else ""
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -72,7 +72,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,

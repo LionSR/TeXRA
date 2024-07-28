@@ -44,25 +44,24 @@ def load_task_settings_and_prompts(prompt_path, task):
     return load_task_xml(prompt_path, task)
 
 
-def get_user_prefix_vars(args):
-    user_prefix_vars = {
+def get_user_vars(args):
+    user_vars = {
         "INPUT_FILE": os.path.basename(args.input_file),
         "INPUT_CONTENT": read_file(args.input_file),
         "INSTRUCTION": args.instruction if args.instruction else None,
     }
-    return user_prefix_vars
+    return user_vars
 
 
-def format_file_content(files):
-    return "\n".join(f'<document name="{os.path.basename(file)}">\n' f"{read_file(file)}\n" f"</document>" for file in files)
+def get_xml_format_from_file(file):
+    return f'<document name="{file}">\n' f"{read_file(file)}\n" f"</document>"
 
 
-def get_auxiliary_files_content(auxiliary_files):
-    return format_file_content(auxiliary_files) if auxiliary_files else ""
-
-
-def get_additional_input_files_content(input_files):
-    return format_file_content(input_files) if input_files else ""
+def get_xml_format_from_files(files):
+    if files:
+        return "\n".join(get_xml_format_from_file(file) for file in files)
+    else:
+        return ""
 
 
 def load_prompt(prompt_type, prompt_settings):
@@ -71,58 +70,42 @@ def load_prompt(prompt_type, prompt_settings):
     return prompt
 
 
-def update_user_prefix_vars_single_output(args, user_prefix_vars):
-    user_prefix_vars["AUXILIARY_FILE"] = ""
-    user_prefix_vars["AUXILIARY_CONTENT"] = ""
-    user_prefix_vars["AUXILIARY_FILES"] = ""
+def update_user_vars_single_output(args, user_vars):
+    user_vars["{ADDITIONAL_INPUT_CONTENTS"] = ""
+    if args.input_files:
+        user_vars["{ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(args.input_files)
+
+    user_vars["AUXILIARY_FILE"] = ""
+    user_vars["AUXILIARY_CONTENT"] = ""
+    user_vars["AUXILIARY_FILES"] = ""
     if args.auxiliary_files:
         if len(args.auxiliary_files) > 1:
-            user_prefix_vars["AUXILIARY_FILES"] = get_auxiliary_files_content(args.auxiliary_files)
+            user_vars["AUXILIARY_FILES"] = get_xml_format_from_files(args.auxiliary_files)
         else:
-            user_prefix_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
-            user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
-
-    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
-    if args.input_files:
-        user_prefix_vars["ADDITIONAL_INPUT_FILES"] = get_additional_input_files_content(args.input_files)
+            user_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
+            user_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
 
 
-def update_user_prefix_vars_multiple_output(args, user_prefix_vars):
+def update_user_vars_multiple_output(args, user_vars):
     input_files = [args.input_file] + (args.input_files or [])
     if len(input_files) < 2:
-        raise ValueError("At least two input files are required for polish_multiple task.")
-    if not args.output_files or len(args.output_files) > len(input_files):
+        raise ValueError("At least two input files are required for multiple output task.")
+    if not args.output_files:
+        raise ValueError("Output files are required for multiple output task.")
+    if len(args.output_files) > len(input_files):
         raise ValueError("Number of output files must not be greater than the number of input files.")
 
-    user_prefix_vars["ADDITIONAL_INPUT_FILES"] = ""
-    for input_file in input_files[1:]:
-        content = read_file(input_file)
-        user_prefix_vars[
-            "ADDITIONAL_INPUT_FILES"
-        ] += f"""
-            <document name="{input_file}">
-            {content}
-            </document>
-            """
+    user_vars["INPUT_FILE"] = args.input_file
+    user_vars["INPUT_CONTENT"] = read_file(args.input_file)
+    user_vars["{ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(input_files[1:])
 
     if args.auxiliary_files:
-        user_prefix_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
-        user_prefix_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
+        user_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
+        user_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
     else:
-        user_prefix_vars["AUXILIARY_FILE"] = "No auxiliary file provided"
-        user_prefix_vars["AUXILIARY_CONTENT"] = "No auxiliary content"
+        user_vars["AUXILIARY_FILE"] = "No auxiliary file provided"
+        user_vars["AUXILIARY_CONTENT"] = "No auxiliary content"
 
-    user_prefix_vars["INPUT_FILE"] = args.input_file
-    user_prefix_vars["INPUT_CONTENT"] = read_file(args.input_file)
+    user_vars["AUXILIARY_FILE_CONTENTS"] = get_xml_format_from_files(args.auxiliary_files)
 
-    user_prefix_vars["AUXILIARY_FILE_CONTENT"] = (
-        f"""
-        <document name="{user_prefix_vars['AUXILIARY_FILE']}">
-        {user_prefix_vars['AUXILIARY_CONTENT']}
-        </document>
-        """
-        if user_prefix_vars["AUXILIARY_FILE"] != "No auxiliary file provided"
-        else ""
-    )
-
-    user_prefix_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
+    user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
