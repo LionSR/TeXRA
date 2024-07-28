@@ -1,5 +1,34 @@
 # Backend Changelog
 
+## [0.11.5]
+
+### Added
+
+- New argument for using prefill from input file
+
+### Changed
+
+- Refactored codebase to improve readability, organization, and efficiency
+- Optimized model pricing calculation in compute_api_price function
+- Updated model_mapping in openai_utils.py
+- Improved handling of user variables in prompt_utils.py
+- Created common utility functions for housekeeping tasks
+- Added function `run_pack_latexdiff_vc` for packing LaTeX diff files with version control information
+
+### Removed
+
+- Cleaned up unnecessary comments and docstrings
+
+### Fixed
+
+- Removed duplicate import statements
+- Improved code organization by moving imports to the top of files
+
+### Improved
+
+- Enhanced error handling and logging with consistent use of `cprint`
+- Optimized imports across multiple files for better organization
+
 ## [0.11.4]
 
 ### Changed

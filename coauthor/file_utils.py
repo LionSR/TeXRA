@@ -1,5 +1,6 @@
 import os
 import re
+import warnings
 
 
 def get_prompt_path(library, prompt_name):
@@ -9,8 +10,6 @@ def get_prompt_path(library, prompt_name):
 def read_file(file_path, raise_warning=True):
     if not os.path.exists(file_path):
         if raise_warning:
-            import warnings
-
             warnings.warn(f"File not found: {file_path}")
         return ""
     with open(file_path, "r", encoding="utf-8") as file:

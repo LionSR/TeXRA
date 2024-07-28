@@ -4,16 +4,15 @@ import click
 import shlex
 import subprocess
 from dotenv import load_dotenv
-from termcolor import colored
 
-from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
+from coauthor.arg_utils import comma_separated_list
 from coauthor.figure_tools import (
     extract_figure_paths,
     extract_and_compile_tikzpictures_with_labels,
     handle_auto_extract_figure,
     handle_auto_extract_tikz_figure,
 )
-from coauthor.arg_utils import comma_separated_list
+from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from coauthor.housekeeping_utils import (
     run_clean_single,
     run_pack_single,
@@ -22,8 +21,8 @@ from coauthor.housekeeping_utils import (
     run_clean_output,
     run_clean_multiple,
     run_pack_multiple,
+    run_pack_latexdiff_vc,
 )
-from coauthor.tex_tools import run_pack_latexdiff_vc
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -476,26 +475,21 @@ def pack_latexdiff_vc(input_file, commit_hash, clean):
 def tex_count(latex_file):
     stats = get_tex_count(latex_file)
     if stats is not None:
-        print(f"Statistics for {latex_file}:")
-        print(stats)
+        print(f"Statistics for {latex_file}:\n {stats}")
 
 
 @click.command()
 @click.argument("latex_file")
 def extract_figure_path(latex_file):
     figure_paths = extract_figure_paths(latex_file)
-    print("Extracted figure file paths:")
-    for figure in figure_paths:
-        print(figure)
+    print(f"Extracted figure file paths: {figure_paths}")
 
 
 @click.command()
 @click.argument("latex_file")
 def extract_tikzpictures(latex_file):
     compiled_files = extract_and_compile_tikzpictures_with_labels(latex_file)
-    print("Compiled TikZ pictures:")
-    for file in compiled_files:
-        print(file)
+    print(f"Compiled TikZ pictures: {compiled_files}")
 
 
 if __name__ == "__main__":
