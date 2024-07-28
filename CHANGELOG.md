@@ -1,5 +1,22 @@
 # Backend Changelog
 
+## [0.11.8]
+
+### Added
+- Support for multiple file operations in latexdiff and pack commands
+- New `latexdiff_vc_multiple` and `pack_latexdiff_vc_multiple` functions
+- XML-based logging format for improved structure and readability
+
+### Changed
+- Refactored imports and code organization for better modularity
+- Updated log output format to XML structure
+- Moved `compile_latex_to_pdf` function from figure_tools to tex_tools
+- Enhanced error handling and output in various utilities
+
+### Improved
+- Optimized file handling in housekeeping utilities
+- Streamlined LaTeX diff functionality for better performance
+
 ## [0.11.7]
 
 ### Added

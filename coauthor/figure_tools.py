@@ -1,10 +1,10 @@
 import re
 import os
-import subprocess
 from string import Template
 from termcolor import cprint, colored
 
 from .file_utils import read_file, write_file
+from .tex_tools import compile_latex_to_pdf
 
 
 TIKZ_TEMPLATE = Template(
@@ -100,20 +100,6 @@ def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
     write_file(filename, standalone_content)
 
     return filename
-
-
-def compile_latex_to_pdf(tex_file):
-    try:
-        output_directory = os.path.dirname(tex_file)
-        result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file], check=True, capture_output=True, text=True
-        )
-        print(f"Compiled {tex_file} successfully.")
-    except subprocess.CalledProcessError as e:
-        cprint(f"Error compiling {tex_file}", "white", "on_red")
-        print("Error message:")
-        cprint(e.stdout, "magenta")
-        cprint(e.stderr, "red")
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file):

@@ -12,7 +12,7 @@ from coauthor.figure_tools import (
     handle_auto_extract_figure,
     handle_auto_extract_tikz_figure,
 )
-from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
+from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
 from coauthor.housekeeping_utils import (
     run_clean_single,
     run_pack_single,
@@ -22,6 +22,7 @@ from coauthor.housekeeping_utils import (
     run_clean_multiple,
     run_pack_multiple,
     run_pack_latexdiff_vc,
+    run_pack_latexdiff_vc_multiple,
 )
 
 # Add the parent directory to the system path for the windows users
@@ -463,11 +464,27 @@ def latexdiff_vc(input_file, commit_hash):
 
 
 @click.command()
+@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
+@click.option("--commit_hash", required=True, help="Commit hash to compare against")
+def latexdiff_vc_multiple(input_files, commit_hash):
+    """Run latexdiff-vc on multiple input files and commit hash."""
+    run_latexdiff_vc_multiple(input_files, commit_hash)
+
+
+@click.command()
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--commit_hash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
 def pack_latexdiff_vc(input_file, commit_hash, clean):
     run_pack_latexdiff_vc(input_file, commit_hash, clean)
+
+
+@click.command()
+@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
+@click.option("--commit_hash", required=True, help="Commit hash to compare against")
+@click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
+def pack_latexdiff_vc_multiple(input_files, commit_hash, clean):
+    run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean)
 
 
 @click.command()
@@ -549,7 +566,9 @@ cli.add_command(indent_tex)
 # latexdiff
 cli.add_command(latexdiff)
 cli.add_command(latexdiff_vc)
+cli.add_command(latexdiff_vc_multiple)
 cli.add_command(pack_latexdiff_vc)
+cli.add_command(pack_latexdiff_vc_multiple)
 
 
 # tools
