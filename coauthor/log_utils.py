@@ -10,46 +10,44 @@ def log_start(args):
     # Get the directory of the output name override or input file, or use appropriate fallback
     if args.output_name_override:
         input_dir = os.path.dirname(args.output_name_override)
-    elif args.input_file:
-        input_dir = os.path.dirname(args.input_file)
-    else:
-        input_dir = os.getcwd()
-
-    # Create the Log subdirectory if it doesn't exist
-    log_dir = os.path.join(input_dir, "Log")
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Create the log file path
-    if args.output_name_override:
         base_filename = os.path.basename(args.output_name_override)
     elif args.input_file:
+        input_dir = os.path.dirname(args.input_file)
         base_filename = os.path.basename(args.input_file)
     else:
-        base_filename = "default"
+        input_dir = os.getcwd()
+        base_filename = "default.xml"
 
-    log_filename = base_filename.replace(".tex", "_log.txt")
+    base_name = os.path.splitext(base_filename)[0]
+
+    log_dir = os.path.join(input_dir, "Log")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_filename = f"{base_name}_log.xml"
     log_file = os.path.join(log_dir, log_filename)
 
     with open(log_file, "a+") as f:
-        f.write("\n--------------------------------\n")
-        f.write(f"Time: {datetime.now()}\n")
-        f.write(f"Task: {args.task}\n")
-        f.write(f"Model: {args.model}\n")
+        f.write("\n<log_entry>\n")
+        f.write(f"  <metadata>\n")
+        f.write(f"    <time>{datetime.now()}</time>\n")
+        f.write(f"    <task>{args.task}</task>\n")
+        f.write(f"    <model>{args.model}</model>\n")
 
         optional_output_fields = ["output_name_override", "input_file", "input_files", "auxiliary_files", "figure_inputs"]
 
         for field in optional_output_fields:
             value = getattr(args, field, None)
             if value:
-                f.write(f"{field}: {value}\n")
+                f.write(f"    <{field}>{value}</{field}>\n")
 
-        f.write(f"<instruction>\n{args.instruction}\n</instruction>\n")
+        f.write(f"  </metadata>\n")
+        f.write(f"  <instruction>{args.instruction}</instruction>\n")
 
     return log_file
 
 
 def log_end(log_file):
-    append_file(log_file, "--------------------------------\n")
+    append_file(log_file, "</log_entry>\n")
 
 
 def log_and_print_statistics(state, model, log_file=None):
@@ -66,14 +64,16 @@ def log_and_print_statistics(state, model, log_file=None):
 
     # Log the statistics to the log file if exists in the directory
     if os.path.exists(log_file):
-        append_file(
-            log_file,
-            f"Statistics: (Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens}, Total response time: {total_response_time:.2f} seconds, Total cost: ${cost:.2f})\n",
-        )
+        statistics_xml = f"""  <statistics
+    total_input_tokens="{total_input_tokens}"
+    total_output_tokens="{total_output_tokens}"
+    total_response_time="{total_response_time:.2f}"
+    total_cost="${cost:.2f}"
+  />
+"""
+        append_file(log_file, statistics_xml)
 
 
 def log_output_files(output_file, log_file):
-    if "reflect" in log_file:
-        append_file(log_file, f"Reflection output file: {output_file}\n")
-    else:
-        append_file(log_file, f"Output file: {output_file}\n")
+    tag = "reflection_output_file" if "reflect" in log_file else "output_file"
+    append_file(log_file, f"  <{tag}>{output_file}</{tag}>\n")

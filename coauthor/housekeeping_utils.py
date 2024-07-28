@@ -225,6 +225,11 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
         cprint("No files found to process.", "yellow")
 
 
+def run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean=False):
+    for input_file in input_files:
+        run_pack_latexdiff_vc(input_file, commit_hash, clean)
+
+
 def run_clean_build():
     excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 
@@ -301,3 +306,4 @@ def run_clean_output():
             print(f"Error deleting {file}: {e}")
 
     print("Cleanup complete.")
+    
