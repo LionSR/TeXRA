@@ -16,6 +16,7 @@ function updateFileSelect(selectId, files) {
 
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
+  const toggleIcon = document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`);
   const fileElement = document.createElement('div');
   fileElement.textContent = file;
   const removeButton = document.createElement('span');
@@ -28,17 +29,13 @@ function addFileToList(containerId, file) {
         handleEmptyOutputFiles();
       } else {
         container.style.display = 'none';
-        document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`).textContent = '▼';
-      } 
+        toggleIcon.textContent = '▼';
+        saveState();
+      }
     }
-    saveState();
   });
   fileElement.appendChild(removeButton);
   container.appendChild(fileElement);
-  
-  // Automatically toggle and display the list
-  // container.style.display = 'block';
-  // document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`).textContent = '▲';
 }
 
 function handleEmptyOutputFiles() {
@@ -54,9 +51,9 @@ function getSelectedFiles(multipleInputFilesSelectDiv) {
   return Array.from(fileElements).map(el => el.textContent.replace(' -', '') || '');
 }
 
-function updateMultipleFileSelect(selectId, files) {
+function updateMultipleFileSelect(selectId, toggleIconId, files) {
   const selectDiv = document.getElementById(selectId);
-  const toggleIcon = document.getElementById(`toggle${selectId.charAt(0).toUpperCase() + selectId.slice(1)}`);
+  const toggleIcon = document.getElementById(toggleIconId);
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter(file => !existingFiles.includes(file));
   if (newFiles.length > 0) {
@@ -270,7 +267,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Get additional input files
     const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-    const additionalInputFiles = multipleInputFilesSelectDiv.style.display === 'block' 
+    const additionalInputFiles = multipleInputFilesSelectDiv.style.display === 'block'
       ? getSelectedFiles(multipleInputFilesSelectDiv).filter(file => file !== inputFile)
       : [];
 
@@ -648,16 +645,16 @@ window.addEventListener('message', event => {
       updateFileSelect('figureFileSelect', message.files);
       break;
     case 'setMultipleInputFiles':
-      updateMultipleFileSelect('multipleInputFilesSelect', message.files);
+      updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
       break;
     case 'setMultipleSampleFiles':
-      updateMultipleFileSelect('multipleSampleFilesSelect', message.files);
+      updateMultipleFileSelect('multipleSampleFilesSelect', 'toggleMultipleSampleFiles', message.files);
       break;
     case 'setMultipleAuxFiles':
-      updateMultipleFileSelect('multipleAuxFilesSelect', message.files);
+      updateMultipleFileSelect('multipleAuxFilesSelect', 'toggleMultipleAuxFiles', message.files);
       break;
     case 'setMultipleFigures':
-      updateMultipleFileSelect('multipleFiguresSelect', message.files);
+      updateMultipleFileSelect('multipleFiguresSelect', 'toggleMultipleFigures', message.files);
       break;
     case 'setEditedFiles':
       updateFileSelect('editedFileSelect', message.files);
