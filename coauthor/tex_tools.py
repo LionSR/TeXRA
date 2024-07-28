@@ -4,6 +4,35 @@ import re
 from termcolor import colored, cprint
 
 
+def run_external_command(command, output_file=None, encoding="utf-8", capture_output=False):
+    """
+    Run an external command and handle its output.
+
+    :param command: List containing the command and its arguments
+    :param output_file: Path to the output file (if any)
+    :param encoding: Encoding to use for file operations
+    :param capture_output: Whether to capture and return the command output
+    :return: Tuple containing (success_flag, output_or_error_message)
+    """
+    print("\nRunning command:", colored(" ".join(command), "green"))
+    try:
+        if output_file:
+            with open(output_file, "w", encoding=encoding) as file:
+                subprocess.run(command, check=True, stdout=file, stderr=subprocess.PIPE, text=True)
+            print("\nCommand completed.\nOutput saved to", colored(output_file, "blue"))
+            return True, None
+        elif capture_output:
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            return True, result.stdout.strip()
+        else:
+            subprocess.run(command, check=True, stderr=subprocess.PIPE, text=True)
+            return True, None
+    except subprocess.CalledProcessError as e:
+        error_message = f"Error running command: {e}\nError output: {e.stderr}"
+        print("\n" + colored(error_message, "red"))
+        return False, error_message
+
+
 def get_tex_count(file_path):
     """
     Get full statistics for a LaTeX document using the texcount Perl script.
@@ -15,15 +44,11 @@ def get_tex_count(file_path):
         cprint(f"Error: File {file_path} does not exist.", "red")
         return None
 
-    try:
-        # Run texcount command with full statistics
-        result = subprocess.run(["texcount", "-merge", file_path], capture_output=True, text=True, check=True)
-        tex_count_output = result.stdout.strip()
-        cprint(f"Tex Count Results: {tex_count_output}", "yellow")
-        return tex_count_output
-    except subprocess.CalledProcessError as e:
-        cprint(f"Error running texcount: {e}", "red")
-        return None
+    success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
+    if success:
+        cprint(f"Tex Count Results: {output}", "yellow")
+        return output
+    return None
 
 
 def handle_tex_count(kwargs, input_file):
@@ -65,7 +90,6 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
     if model and model in input_file and model in output_file:
         diff_file_name = output_file.replace(".tex", "_diffdiff.tex")
 
-    # Run latexdiff
     latexdiff_command = [
         "latexdiff",
         "--flatten",
@@ -75,18 +99,44 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
         input_file,
         output_file,
     ]
-    print("\nRunning latexdiff command:", colored(" ".join(latexdiff_command), "green"))
 
-    try:
-        with open(diff_file_name, "w", encoding="utf-8") as diff_file:
-            subprocess.run(latexdiff_command, check=True, stdout=diff_file, stderr=subprocess.PIPE, text=True)
-        print("\nlatexdiff completed.\nOutput saved to", colored(diff_file_name, "blue"))
-    except subprocess.CalledProcessError as e:
-        print("\nError running latexdiff:", colored(f"Error running latexdiff: {e}", "red"))
-        print("\nError output:", colored(f"Error output: {e.stderr}", "red"))
+    success, _ = run_external_command(latexdiff_command, diff_file_name)
+    if not success:
         return None
 
-    # Process diff file
+    process_diff_file(diff_file_name)
+    process_tikzpicture_endings(diff_file_name)
+
+
+def run_latexdiff_vc(input_file, commit_hash):
+    if not input_file:
+        cprint("WARNING: input_file is None or empty", "yellow")
+        return None
+
+    diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
+
+    latexdiff_vc_command = [
+        "latexdiff-vc",
+        "--encoding=utf8",
+        "-c",
+        "PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*",
+        "--force",
+        "--flatten",
+        "--git",
+        "-r",
+        commit_hash,
+        input_file,
+    ]
+
+    success, _ = run_external_command(latexdiff_vc_command)
+    if not success:
+        return None
+
+    process_diff_file(diff_file_name)
+    process_tikzpicture_endings(diff_file_name)
+
+
+def process_diff_file(diff_file_name):
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
         lines = diff_file.readlines()
 
@@ -114,61 +164,7 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
             if not add_block:
                 diff_file.write(line)
 
-    cprint(f"Line breaks added to {diff_file_name}", "blue")
-
-    # Add this line at the end of the function
-    process_tikzpicture_endings(diff_file_name)
-
-
-def run_latexdiff_vc(input_file, commit_hash):
-    if not input_file:
-        cprint("WARNING: input_file is None or empty", "yellow")
-        return None
-
-    diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
-
-    # Run latexdiff-vc command
-    latexdiff_vc_command = [
-        "latexdiff-vc",
-        "--encoding=utf8",
-        "-c",
-        "PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*",
-        "--force",
-        "--flatten",
-        "--git",
-        "-r",
-        commit_hash,
-        input_file,
-    ]
-    cprint(f"Running latexdiff-vc command: {' '.join(latexdiff_vc_command)}", "green")
-
-    try:
-        subprocess.run(latexdiff_vc_command, check=True, stderr=subprocess.PIPE, text=True)
-        cprint(f"latexdiff-vc completed. Output saved to {diff_file_name}", "blue")
-    except subprocess.CalledProcessError as e:
-        cprint(f"Error running latexdiff-vc: {e}", "red")
-        cprint(f"Error output: {e.stderr}", "red")
-        return None
-
-    # Process diff file
-    with open(diff_file_name, "r", encoding="utf-8") as diff_file:
-        lines = diff_file.readlines()
-
-    with open(diff_file_name, "w", encoding="utf-8") as diff_file:
-        packages_to_add_newline = [
-            "\\usepackage{tikz}",
-            "\\usepackage{pgfplots}",
-            "\\providecommand{\\DIFaddbegin}",
-            "\\RequirePackage[normalem]{ulem}",
-            "\\usetikzlibrary",
-            "\\RequirePackage{color}",
-        ]
-        for line in lines:
-            if any(pkg in line for pkg in packages_to_add_newline):
-                diff_file.write("\n")
-            diff_file.write(line)
             if "\\RequirePackage{color}" in line:
                 diff_file.write("\n")
 
-    # Add this line at the end of the function
-    process_tikzpicture_endings(diff_file_name)
+    cprint(f"Line breaks added to {diff_file_name}", "blue")

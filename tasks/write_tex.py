@@ -93,6 +93,7 @@ def main():
                 output_file_reflect = coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
 
             if output_type == "tex":
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task, args.model)
                 coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
         coa.log_output_files(output_file_reflect, log_file)
