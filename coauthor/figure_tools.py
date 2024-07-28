@@ -143,3 +143,24 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
                 os.remove(aux_file)
 
     return compiled_files
+
+
+def handle_auto_extract_figure(kwargs, input_file):
+    if kwargs.get("auto_extract_figure"):
+        extracted_figure_paths = extract_figure_paths(input_file)
+        print("Extracting figure paths:", colored(extracted_figure_paths, "cyan"))
+        if extracted_figure_paths:
+            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
+                kwargs["figure_inputs"] = extracted_figure_paths
+            else:
+                kwargs["figure_inputs"].extend(extracted_figure_paths)
+
+
+def handle_auto_extract_tikz_figure(kwargs, input_file):
+    if kwargs.get("auto_extract_tikz_figure"):
+        extracted_tikz_figure_paths = extract_and_compile_tikzpictures_with_labels(input_file)
+        if extracted_tikz_figure_paths:
+            if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
+                kwargs["figure_inputs"] = extracted_tikz_figure_paths
+            else:
+                kwargs["figure_inputs"].extend(extracted_tikz_figure_paths)

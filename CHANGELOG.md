@@ -1,5 +1,33 @@
 # Backend Changelog
 
+## [0.11.4]
+
+### Changed
+
+- Renamed user_prefix_vars to user_vars throughout the codebase for clarity
+- Refactored prompt handling and user variable updates:
+  - Replaced get_user_prefix_vars with get_user_vars
+  - Updated user_vars_single_output and user_vars_multiple_output functions
+- Moved figure-related functions to figure_tools.py
+- Improved scratchpad functionality implementation:
+  - Added use_scratchpad and use_scratchpad_reflect flags
+  - Updated conditional logic for scratchpad handling
+- Consolidated file content formatting:
+  - Replaced format_file_content, get_auxiliary_files_content, and get_additional_input_files_content with get_xml_format_from_files
+- Updated prompt and output settings handling:
+  - Moved prefill_first and prefill_reflect to output_settings
+  - Simplified get_prompt_settings function
+- Standardized error handling for multiple output tasks
+- Refactored task-specific scripts (e.g., adapt.py, edit_lecture.py, prl_edit.py) for consistency
+
+### Removed
+
+- Removed unused functions (e.g., find_last_non_empty_line)
+
+### Fixed
+
+- Updated CLI output formatting for improved readability
+
 ## [0.11.3]
 
 - Added support for packing and cleaning multiple files
