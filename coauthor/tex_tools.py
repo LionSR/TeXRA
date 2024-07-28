@@ -136,6 +136,19 @@ def run_latexdiff_vc(input_file, commit_hash):
     process_tikzpicture_endings(diff_file_name)
 
 
+def run_latexdiff_multiple(input_files, edited_files):
+    if len(input_files) != len(edited_files):
+        raise ValueError("The number of input files must match the number of edited files.")
+    
+    for input_file, edited_file in zip(input_files, edited_files):
+        run_latexdiff(input_file, edited_file)
+
+
+def run_latexdiff_vc_multiple(input_files, commit_hash):
+    for input_file in input_files:
+        run_latexdiff_vc(input_file, commit_hash)
+
+
 def process_diff_file(diff_file_name):
     with open(diff_file_name, "r", encoding="utf-8") as diff_file:
         lines = diff_file.readlines()
@@ -168,3 +181,21 @@ def process_diff_file(diff_file_name):
                 diff_file.write("\n")
 
     cprint(f"Line breaks added to {diff_file_name}", "blue")
+
+
+def compile_latex_to_pdf(tex_file):
+    output_directory = os.path.dirname(tex_file)
+    command = ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file]
+
+    success, output = run_external_command(command, capture_output=True)
+
+    if success:
+        print(f"Compiled {tex_file} successfully.")
+    else:
+        cprint(f"Error compiling {tex_file}", "white", "on_red")
+        print("Error message:")
+        if output:
+            stdout, stderr = output.split("\n", 1)
+            cprint(stdout, "magenta")
+            cprint(stderr, "red")
+
