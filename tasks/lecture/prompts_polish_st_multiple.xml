@@ -32,20 +32,14 @@ Here are the LaTeX documents with additional LaTeX document class and commands (
 
 <documents>
 <document name="{DOCUMENT_CLS}">
-<document_content>
 {DOCUMENT_CLS_CONTENT}
-</document_content>
 </document>
 <document name="{COMMANDS}">
-<document_content>
 {COMMANDS_CONTENT}
-</document_content>
 </document>
 
 <document name="{INPUT_FILE}">
-<document_content>
 {INPUT_CONTENT}
-</document_content>
 </document>
 {ADDITIONAL_INPUT_CONTENTS}
 </documents>
@@ -83,15 +77,11 @@ Then, please output updated versions of all LaTeX documents with targeted correc
 
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
-<document_content>
 {1ST_UPDATED_LATEX_DOCUMENT_1}
-</document_content>
 </document>
 
 <document name="{OUTPUT_FILES_ORDER[1]}">
-<document_content>
 {1ST_UPDATED_LATEX_DOCUMENT_2}
-</document_content>
 </document>
 
 ... (repeat for all output files)

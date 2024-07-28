@@ -27,11 +27,8 @@ I am going to give you the latex document of a research paper draft.
 Here is the LaTeX document with additional input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
 <documents>
-<document index="1">
-<source>{INPUT_FILE}</source>
-<document_content>
+<document name="{INPUT_FILE}">
 {INPUT_CONTENT}
-</document_content>
 </document>
 {AUXILIARY_FILES}
 {ADDITIONAL_INPUT_CONTENTS}

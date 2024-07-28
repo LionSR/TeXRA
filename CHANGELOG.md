@@ -1,5 +1,24 @@
 # Backend Changelog
 
+## [0.11.7]
+
+### Added
+
+- New `run_external_command` function for improved command execution handling
+- Comparison between input and reflected output in write_tex.py
+
+### Changed
+
+- Refactored LaTeX diff-related functions to use the new `run_external_command` function
+- Extracted common diff file processing into separate `process_diff_file` function
+- Simplified XML structure for document content in prompts_polish.xml and prompts_polish_st_multiple.xml
+- Updated version to 0.11.7 in pyproject.toml
+
+### Improved
+
+- Enhanced error handling and output management in external command execution
+- Streamlined LaTeX diff functionality for better performance and maintainability
+
 ## [0.11.6]
 
 ### Added
