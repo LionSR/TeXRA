@@ -142,10 +142,7 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
     extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
 
     # Add patterns for additional XML files
-    additional_patterns = [
-        f"{base_name}_{first_task_chunk}_{model}.xml",
-        f"{base_name}_{first_task_chunk}_reflect_{model}.xml"
-    ]
+    additional_patterns = [f"{base_name}_{first_task_chunk}_{model}.xml", f"{base_name}_{first_task_chunk}_reflect_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
     now = get_folder_datetime(output_dir, file_patterns, extensions)

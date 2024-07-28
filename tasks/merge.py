@@ -10,27 +10,25 @@ def main():
     parser.add_argument("--task", type=str, default="merge", help="Task to perform.")
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
+    print(f"{colored('args:', 'blue')} {args}")
     print(colored(f"Merging {args.input_file} and {args.edited_file}...\n", "green"))
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = {
+    user_vars = {
         "INPUT_FILE": args.input_file,
         "ORIGINAL_LATEX": coa.read_file(args.input_file),
         "EDITED_LATEX": coa.read_file(args.edited_file),
     }
+    coa.update_user_vars_single_output(args, user_vars)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     log_file = coa.log_start(args)
 
-    model = model_settings["model"]
     output_type = output_settings["output_type"]
-
-    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -41,7 +39,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,

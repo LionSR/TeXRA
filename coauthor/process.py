@@ -108,7 +108,7 @@ def process_first_round(
     task,
     input_file,
     output_file,
-    user_prefix_vars,
+    user_vars,
     model_settings,
     output_settings,
     prompt_settings,
@@ -121,7 +121,7 @@ def process_first_round(
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_request = load_prompt("user_request", prompt_settings)
 
-    user_prefix = user_prefix_template.format(**user_prefix_vars)
+    user_prefix = user_prefix_template.format(**user_vars)
 
     # Handle tex count if include_tex_count is set
     if prompt_settings.get("include_tex_count"):
@@ -148,7 +148,7 @@ def process_first_round(
             if is_openai_model(model_settings["model"]):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
-        prefill = prompt_settings["prefill_first"]
+        prefill = output_settings["prefill_first"]
         use_prefill_from_input = prompt_settings["use_prefill_from_input"]
         accumulated_output = prefill
 

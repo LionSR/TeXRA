@@ -15,13 +15,13 @@ def main():
     )
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
+    print(f"{colored('args:', 'blue')} {args}")
     print(colored(f"Processing {args.input_file} with task: {args.task}...\n", "green"))
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "DOCUMENT_CLS": "lecture.cls",
             "DOCUMENT_CLS_CONTENT": coa.read_file("lecture.cls"),
@@ -30,8 +30,8 @@ def main():
         }
     )
     if args.task in ["2tex", "reflect"]:
-        user_prefix_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(args.input_file), "improved_document")
-        user_prefix_vars.update(
+        user_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(args.input_file), "improved_document")
+        user_vars.update(
             {
                 "corrected_transcription_content": coa.extract_text_from_tags(coa.read_file(args.input_file), "improved_document"),
                 "converted_tex_file": args.input_file.replace(".txt", ".tex"),
@@ -39,15 +39,18 @@ def main():
             }
         )
     elif args.task in ["transcribe", "punctuate"]:
-        user_prefix_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
+        user_vars["INPUT_CONTENT"] = coa.read_file(args.input_file)
+
+    coa.update_user_vars_single_output(args, user_vars)
 
     log_file = coa.log_start(args)
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
-    coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
+    use_scratchpad = "<scratchpad>" in output_settings["prefill_first"]
+    use_scratchpad_reflect = "<scratchpad>" in output_settings["prefill_reflect"]
 
     client = coa.get_model_client(model_settings["model"])
 
@@ -62,7 +65,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
@@ -71,7 +74,7 @@ def main():
 
     print(colored(f"Output file: {output_file}", "yellow"))
     if end_turn:
-        if prompt_settings["prefill_first"] == "<scratchpad>":
+        if use_scratchpad:
             coa.split_scratchpad_output_xml(output_file, task_settings["document_tag"])
         if output_type == "tex":
             coa.run_latexdiff(args.input_file, output_file, args.task)
@@ -97,7 +100,7 @@ def main():
         coa.log_output_files(output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
         if end_turn_reflect:
-            if prompt_settings["prefill_first"] == "<scratchpad>":
+            if use_scratchpad_reflect:
                 coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
 
             if output_type == "tex":

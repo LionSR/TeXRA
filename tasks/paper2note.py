@@ -12,13 +12,13 @@ def main():
     parser.add_argument("--task", type=str, default="paper2note", help="Task to perform, currently only 'paper2note'.", choices=["paper2note"])
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
+    print(f"{colored('args:', 'blue')} {args}")
     print(colored(f"Preparing lecture notes for {args.input_file}...\n", "green"))
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "SAMPLE_CHAPTERS": "\n".join([coa.read_file(ch) for ch in args.sample_chapters]),
             "SAMPLE_PAPER": coa.read_file(args.sample_paper),
@@ -32,7 +32,7 @@ def main():
 
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, args.task, prompt_dict)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     model = model_settings["model"]
     output_type = output_settings["output_type"]
@@ -48,7 +48,7 @@ def main():
         args.task,
         args.input_file,
         output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,

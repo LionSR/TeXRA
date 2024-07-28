@@ -14,7 +14,6 @@ from .file_utils import (
     read_file,
     write_file,
     append_file,
-    find_last_non_empty_line,
     extract_text_from_tags,
     get_prompt_path,
 )
@@ -33,12 +32,10 @@ from .log_utils import log_start, log_end, log_and_print_statistics, log_output_
 from .openai_utils import best_connection_method
 from .prompt_utils import (
     load_task_settings_and_prompts,
-    get_user_prefix_vars,
-    format_file_content,
-    get_auxiliary_files_content,
-    get_additional_input_files_content,
+    get_user_vars,
+    get_xml_format_from_files,
     load_prompt,
-    update_user_prefix_vars_single_output,
-    update_user_prefix_vars_multiple_output,
+    update_user_vars_single_output,
+    update_user_vars_multiple_output,
 )
 from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings

@@ -24,39 +24,33 @@ def main():
     )
     args = parser.parse_args()
 
-    print(colored(f"args: {args}", "blue"))
-    print(colored(f"Revising {args.input_file}...\n", "green"))
+    print(f"{colored('args:', 'blue')} {args}")
+    print(f"{colored('Revising', 'green')} {args.input_file}...\n")
 
-    task_shared = args.task.split("_")[0]
-    task_sub = f"{task_shared}_{args.task.split('_')[1]}"
+    task_prefix = args.task.split("_")[0]
 
-    user_prefix_vars = coa.get_user_prefix_vars(args)
-    user_prefix_vars.update(
+    user_vars = coa.get_user_vars(args)
+    user_vars.update(
         {
             "DOCUMENT_CLS": "lecture.cls",
             "COMMANDS": "commands_qi.tex" if "qi" in args.task else "command.tex",
         }
     )
-    user_prefix_vars.update(
+    user_vars.update(
         {
-            "DOCUMENT_CLS_CONTENT": coa.read_file(user_prefix_vars["DOCUMENT_CLS"]),
-            "COMMANDS_CONTENT": coa.read_file(user_prefix_vars["COMMANDS"]),
+            "DOCUMENT_CLS_CONTENT": coa.read_file(user_vars["DOCUMENT_CLS"]),
+            "COMMANDS_CONTENT": coa.read_file(user_vars["COMMANDS"]),
         }
     )
+    if "multiple" in args.task:
+        coa.update_user_vars_multiple_output(args, user_vars)
+    else:
+        coa.update_user_vars_single_output(args, user_vars)
 
     task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, task_settings, task_sub, prompt_dict)
-
-    print(colored(f"prompt_settings: {prompt_settings}\n", "blue"))
-    print(colored(f"output_settings: {output_settings}\n", "blue"))
-    print(colored(f"model_settings: {model_settings}\n", "blue"))
-
-    if "multiple" in args.task:
-        coa.update_user_prefix_vars_multiple_output(args, user_prefix_vars)
-    else:
-        coa.update_user_prefix_vars_single_output(args, user_prefix_vars)
+    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)
@@ -64,19 +58,20 @@ def main():
     model = model_settings["model"]
     output_type = output_settings["output_type"]
 
+    use_scratchpad = "<scratchpad>" in output_settings["prefill_first"]
+    use_scratchpad_reflect = "<scratchpad>" in output_settings["prefill_reflect"]
+
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
 
-    if prompt_settings["prefill_first"] == "<scratchpad>":
-        initial_output_file = coa.get_output_file_name(base_output_file, task_shared, model, "xml")
-    else:
-        initial_output_file = coa.get_output_file_name(base_output_file, task_shared, model, output_type)
+    file_extension = "xml" if use_scratchpad else output_type
+    initial_output_file = coa.get_output_file_name(base_output_file, task_prefix, model, file_extension)
 
     state, accumulated_output, end_turn, messages = coa.process_first_round(
         client,
         args.task,
         args.input_file,
         initial_output_file,
-        user_prefix_vars,
+        user_vars,
         model_settings=model_settings,
         output_settings=output_settings,
         prompt_settings=prompt_settings,
@@ -84,7 +79,7 @@ def main():
     )
 
     if end_turn:
-        if prompt_settings["prefill_first"] == "<scratchpad>":
+        if use_scratchpad:
             coa.ensure_correct_xml_structure(initial_output_file, task_settings["document_tag"])
             output_files = coa.split_scratchpad_output_xml(initial_output_file, task_settings["document_tag"])
 
@@ -108,8 +103,10 @@ def main():
     coa.log_and_print_statistics(state, args.model, log_file)
 
     if end_turn and args.reflect:
-        if prompt_settings["prefill_reflect"] == "<scratchpad>":
-            initial_output_file_reflect = coa.get_output_file_name(base_output_file, task_shared, model, "xml", reflect=True)
+        if use_scratchpad_reflect:
+            initial_output_file_reflect = coa.get_output_file_name(base_output_file, task_prefix, model, "xml", reflect=True)
+        else:
+            initial_output_file_reflect = coa.get_output_file_name(base_output_file, task_prefix, model, output_type, reflect=True)
         print(f"initial_output_file_reflect: {initial_output_file_reflect}")
 
         state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
@@ -124,8 +121,7 @@ def main():
             prompt_settings=prompt_settings,
         )
         if end_turn_reflect:
-            # this logic needs to be fixed for the multiple output file logic
-            if prompt_settings["prefill_reflect"] == "<scratchpad>":
+            if use_scratchpad_reflect:
                 coa.ensure_correct_xml_structure(initial_output_file_reflect, task_settings["document_tag"])
                 output_files_reflect = coa.split_scratchpad_output_xml(initial_output_file_reflect, task_settings["document_tag"])
                 print(f"output_files_reflect: {output_files_reflect}")
@@ -141,13 +137,12 @@ def main():
                     if output_type == "tex":
                         coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
                         coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
-
             else:  # Single output file by default
                 output_file_reflect = initial_output_file_reflect
                 coa.log_output_files(output_file_reflect, log_file)
                 if output_type == "tex":
                     coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
-                    coa.run_latexdiff(output_files, output_file_reflect, args.task, args.model)
+                    coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
         coa.log_output_files(initial_output_file_reflect, log_file)
         coa.log_and_print_statistics(state, args.model, log_file)
