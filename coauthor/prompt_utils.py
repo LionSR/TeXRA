@@ -1,7 +1,8 @@
 import os
-from .file_utils import read_file
 from termcolor import colored
 import xml.etree.ElementTree as ET
+
+from .file_utils import read_file
 
 
 def load_xml(file_path):
@@ -44,15 +45,6 @@ def load_task_settings_and_prompts(prompt_path, task):
     return load_task_xml(prompt_path, task)
 
 
-def get_user_vars(args):
-    user_vars = {
-        "INPUT_FILE": os.path.basename(args.input_file),
-        "INPUT_CONTENT": read_file(args.input_file),
-        "INSTRUCTION": args.instruction if args.instruction else None,
-    }
-    return user_vars
-
-
 def get_xml_format_from_file(file):
     return f'<document name="{file}">\n' f"{read_file(file)}\n" f"</document>"
 
@@ -70,10 +62,19 @@ def load_prompt(prompt_type, prompt_settings):
     return prompt
 
 
+def get_user_vars(args):
+    user_vars = {
+        "INPUT_FILE": args.input_file,
+        "INPUT_CONTENT": read_file(args.input_file),
+        "INSTRUCTION": args.instruction if args.instruction else None,
+    }
+    return user_vars
+
+
 def update_user_vars_single_output(args, user_vars):
-    user_vars["{ADDITIONAL_INPUT_CONTENTS"] = ""
+    user_vars["ADDITIONAL_INPUT_CONTENTS"] = ""
     if args.input_files:
-        user_vars["{ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(args.input_files)
+        user_vars["ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(args.input_files)
 
     user_vars["AUXILIARY_FILE"] = ""
     user_vars["AUXILIARY_CONTENT"] = ""
@@ -88,8 +89,6 @@ def update_user_vars_single_output(args, user_vars):
 
 def update_user_vars_multiple_output(args, user_vars):
     input_files = [args.input_file] + (args.input_files or [])
-    if len(input_files) < 2:
-        raise ValueError("At least two input files are required for multiple output task.")
     if not args.output_files:
         raise ValueError("Output files are required for multiple output task.")
     if len(args.output_files) > len(input_files):
@@ -97,7 +96,7 @@ def update_user_vars_multiple_output(args, user_vars):
 
     user_vars["INPUT_FILE"] = args.input_file
     user_vars["INPUT_CONTENT"] = read_file(args.input_file)
-    user_vars["{ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(input_files[1:])
+    user_vars["ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(input_files[1:])
 
     if args.auxiliary_files:
         user_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]

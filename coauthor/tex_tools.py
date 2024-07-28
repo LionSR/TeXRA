@@ -2,8 +2,6 @@ import os
 import subprocess
 import re
 from termcolor import colored, cprint
-import shutil
-from datetime import datetime
 
 
 def get_tex_count(file_path):
@@ -28,14 +26,13 @@ def get_tex_count(file_path):
         return None
 
 
-
 def handle_tex_count(kwargs, input_file):
     if kwargs.get("include_tex_count"):
         tex_count_stats = get_tex_count(input_file)
         if tex_count_stats:
             instruction = kwargs.get("instruction", "")
             kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
-            
+
 
 def process_tikzpicture_endings(file_path):
     """
@@ -175,59 +172,3 @@ def run_latexdiff_vc(input_file, commit_hash):
 
     # Add this line at the end of the function
     process_tikzpicture_endings(diff_file_name)
-
-
-def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
-    base_name = os.path.splitext(os.path.basename(input_file))[0]
-    input_dir = os.path.dirname(input_file)
-
-    if not clean:
-        now = datetime.now().strftime("%Y%m%d%H%M")
-        output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
-
-    file_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
-    delete_extensions = [
-        ".aux",
-        ".bbl",
-        ".blg",
-        ".fdb_latexmk",
-        ".fls",
-        ".log",
-        ".out",
-        ".synctex.gz",
-    ]
-
-    files_to_process = []
-    files_to_delete = []
-
-    for pattern in file_patterns:
-        for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-            file_path = os.path.join(search_dir, pattern)
-            if os.path.exists(file_path):
-                files_to_process.append(file_path)
-                for ext in delete_extensions:
-                    temp_file = os.path.splitext(file_path)[0] + ext
-                    if os.path.exists(temp_file):
-                        files_to_delete.append(temp_file)
-                break
-
-    if files_to_process:
-        if clean:
-            for file_path in files_to_process + files_to_delete:
-                os.remove(file_path)
-                cprint(f"Deleted: {file_path}", "yellow")
-            cprint("Cleanup complete.", "green")
-        else:
-            os.makedirs(output_folder, exist_ok=True)
-            for file_path in files_to_process:
-                shutil.move(file_path, output_folder)
-                cprint(f"Moved: {file_path}", "blue")
-
-            for file_path in files_to_delete:
-                os.remove(file_path)
-                cprint(f"Deleted: {file_path}", "yellow")
-
-            cprint(f"Files packed into {output_folder}", "green")
-    else:
-        cprint("No files found to process.", "yellow")
-

@@ -1,8 +1,9 @@
+import os
 from datetime import datetime
 from termcolor import colored
+
 from .model_utils import compute_api_price
 from .file_utils import append_file
-import os
 
 
 def log_start(args):
