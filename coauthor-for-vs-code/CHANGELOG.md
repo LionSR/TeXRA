@@ -1,5 +1,15 @@
 # Frontend Changelog
 
+## [0.8.0]
+
+- **Added:**
+  - Implemented "Add Opened Files" functionality for input file selection
+  - Added "Add Opened" button to the file selection interface
+  - Implemented getOpenedFiles method to retrieve currently opened LaTeX files
+- **Changed:**
+  - Updated UI to handle new button and update with opened files
+  - Bumped version to 0.8.0
+
 ## [0.7.9]
 
 - **Added:**
