@@ -497,6 +497,13 @@ document.addEventListener('DOMContentLoaded', function () {
   toggles.forEach(({ containerId, toggleId }) => {
     document.getElementById(toggleId).addEventListener('click', () => toggleMultipleFiles(containerId, toggleId));
   });
+
+  // Add this event listener with the other button event listeners
+  document.getElementById('addOpenedFilesButton').addEventListener('click', function () {
+    vscode.postMessage({
+      command: 'addOpenedFiles'
+    });
+  });
 });
 
 function toggleMultipleFiles(containerId, toggleIconId) {
@@ -733,6 +740,9 @@ window.addEventListener('message', event => {
       break;
     case 'setTheme':
       document.body.className = message.theme;
+      break;
+    case 'setOpenedFiles':
+      updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
       break;
   }
 

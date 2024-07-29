@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listEditedFiles } from './utils';
 import * as path from 'path';
+import { workspace, TextDocument } from 'vscode';
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) { }
@@ -211,6 +212,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: message.command, files: message.files });
           }
           break;
+        case 'addOpenedFiles':
+          const openedFiles = await this.getOpenedFiles();
+          webviewView.webview.postMessage({ command: 'setOpenedFiles', files: openedFiles });
+          break;
       }
     });
   }
@@ -249,5 +254,20 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       text += possible.charAt(Math.floor(Math.random() * possible.length));
     }
     return text;
+  }
+
+  private async getOpenedFiles(): Promise<string[]> {
+    const workspaceFolders = workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      return [];
+    }
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+
+    const openedDocuments = workspace.textDocuments;
+    const relevantFiles = openedDocuments
+      .filter(doc => doc.uri.scheme === 'file' && (doc.languageId === 'latex' || doc.fileName.endsWith('.tex')))
+      .map(doc => workspace.asRelativePath(doc.uri.fsPath, false));
+
+    return relevantFiles;
   }
 }
