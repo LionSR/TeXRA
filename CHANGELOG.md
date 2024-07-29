@@ -1,14 +1,30 @@
 # Backend Changelog
 
-## [0.11.9]
+## [0.12.0]
 
 ### Added
 
+- Utility functions: delete_file, move_file, and find_file
+
+### Changed
+
+- Refactored housekeeping utilities for improved efficiency and maintainability
+- Updated existing functions to use new utility functions
+- Simplified file search and deletion logic
+- Removed redundant loops and improved code readability
+
+### Improved
+
+- Enhanced code organization and reduced duplication
+- Improved overall maintainability of housekeeping utilities
+
+## [0.11.9]
+
+### Added
 - Enhanced support for multiple file operations in various tasks
 - Improved integration with frontend for output name overrides
 
 ### Changed
-
 - Further refactored code for better modularity and consistency across tasks
 - Updated XML-based logging format for improved readability and structure
 
