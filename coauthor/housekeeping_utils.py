@@ -10,6 +10,7 @@ from termcolor import cprint
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml"]
 TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
+MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
 
 
 def get_first_task_chunk(task):
@@ -51,6 +52,41 @@ def get_folder_datetime(input_dir, file_patterns, extensions):
         return datetime.now().strftime("%Y%m%d%H%M")
 
 
+def delete_file(file_path):
+    try:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            print(f"Deleted: {file_path}")
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+            print(f"Deleted directory: {file_path}")
+    except PermissionError:
+        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
+    except Exception as e:
+        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
+
+
+def move_file(source, destination):
+    shutil.move(source, destination)
+    print(f"Moved: {source}")
+
+
+def find_file(input_dir, pattern, ext=None):
+    search_dirs = [os.path.join(input_dir, "build"), input_dir]
+    if ext:
+        file_name = f"{pattern}{ext}"
+        for search_dir in search_dirs:
+            file_path = os.path.join(search_dir, file_name)
+            if os.path.exists(file_path):
+                return file_path
+    else:
+        for search_dir in search_dirs:
+            for file in os.listdir(search_dir):
+                if file.startswith(pattern):
+                    return os.path.join(search_dir, file)
+    return None
+
+
 def run_clean_single(model, input_file, reflect, task):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
@@ -85,14 +121,12 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     copied_files = []
     for pattern in file_patterns:
         for ext in PACK_EXTENSIONS:
-            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-                file_path = os.path.join(search_dir, f"{pattern}{ext}")
-                if os.path.exists(file_path):
-                    if file_path == input_file or pattern == base_name:
-                        copied_files.append(file_path)
-                    else:
-                        moved_files.append(file_path)
-                    break
+            file_path = find_file(input_dir, pattern, ext)
+            if file_path:
+                if file_path == input_file or pattern == base_name:
+                    copied_files.append(file_path)
+                else:
+                    moved_files.append(file_path)
 
     if moved_files or copied_files:
         now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
@@ -109,10 +143,9 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
 
     for pattern in file_patterns:
         for ext in TEMP_EXTENSIONS:
-            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-                file_path = os.path.join(search_dir, f"{pattern}{ext}")
-                if os.path.exists(file_path) and file_path != input_file:
-                    delete_file(file_path)
+            file_path = find_file(input_dir, pattern, ext)
+            if file_path and file_path != input_file:
+                delete_file(file_path)
 
     print(f"Packing complete for {input_file}.")
     return output_folder
@@ -161,25 +194,23 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
     input_dir = os.path.dirname(input_file)
 
     if not clean:
-        # this needs to updated to use get_folder_datetime
         now = datetime.now().strftime("%Y%m%d%H%M")
         output_folder = os.path.join(input_dir, "Diffs", f"{now}_{base_name}_{commit_hash}")
 
-    file_patterns = [f"{base_name}-diff{commit_hash}{ext}" for ext in [".tex", ".pdf"]]
+    file_patterns = [f"{base_name}-diff{commit_hash}"]
 
     files_to_process = []
     files_to_delete = []
 
     for pattern in file_patterns:
-        for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-            file_path = os.path.join(search_dir, pattern)
-            if os.path.exists(file_path):
+        for ext in [".tex", ".pdf"]:
+            file_path = find_file(input_dir, pattern, ext)
+            if file_path:
                 files_to_process.append(file_path)
-                for ext in TEMP_EXTENSIONS:
-                    temp_file = os.path.splitext(file_path)[0] + ext
+                for temp_ext in TEMP_EXTENSIONS:
+                    temp_file = os.path.splitext(file_path)[0] + temp_ext
                     if os.path.exists(temp_file):
                         files_to_delete.append(temp_file)
-                break
 
     if files_to_process:
         if clean:
@@ -226,10 +257,8 @@ def run_clean_build():
 
 
 def run_clean_output():
-    models = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
-
-    patterns = [f"*_{model}*.tex" for model in models]
-    patterns_build = [f"*/build/*_{model}*" for model in models]
+    patterns = [f"*_{model}*.tex" for model in MODELS]
+    patterns_build = [f"*/build/*_{model}*" for model in MODELS]
 
     files_to_delete = []
 
@@ -272,22 +301,3 @@ def run_indent_tex():
             delete_file(file)
 
     print("All .tex files have been indented and temporary files have been deleted.")
-
-
-def delete_file(file_path):
-    try:
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-            print(f"Deleted: {file_path}")
-        elif os.path.isdir(file_path):
-            shutil.rmtree(file_path)
-            print(f"Deleted directory: {file_path}")
-    except PermissionError:
-        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
-    except Exception as e:
-        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
-
-
-def move_file(source, destination):
-    shutil.move(source, destination)
-    print(f"Moved: {source}")
