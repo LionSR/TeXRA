@@ -19,6 +19,8 @@ When writing the proposal, follow these guidelines:
 - Maintain a professional and mathematically rigorous tone throughout the document
 - Use appropriate physics notation and terminology consistently
 - Prioritize mathematical formulations over verbose descriptions whenever possible
+- When adding citations use commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use Non-breaking space (`~') before \cite such as "~\cite{...}" when appropriate.
+- Please be reminded that you will be writing a professional latex document so you should never use bare markdown style lists.
 ]]>
 </system_prompt>
 <user_prefix>
@@ -66,7 +68,7 @@ Key requirements:
 - Avoid generic statements or "fluff". Every sentence should contribute specific, technical information.
 - Include citations for all relevant background information and techniques.
 
-Use the following latex template to structure your proposal:
+Use the following latex template to structure your proposal if not provided with a draft:
 <research_proposal_template>
 \documentclass[aps, pra, preprint, 11pt, amsmath, amssymb, notitlepage, nofootinbib]{revtex4-2}
 \usepackage[utf8]{inputenc}
