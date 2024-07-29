@@ -7,11 +7,9 @@ from termcolor import cprint
 
 # some refactoring work can be done to the functions here by creating common utility functions. MUST BE EXTREMELY careful with the subtle differences and edge cases
 
-excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
-
-pack_extensions = [".pdf", ".tex", ".txt", ".text", ".xml"]
-
-temp_extensions = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
+EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml"]
+TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
 
 
 def get_first_task_chunk(task):
@@ -61,24 +59,14 @@ def run_clean_single(model, input_file, reflect, task):
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
     file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
 
-    extensions = temp_extensions + pack_extensions
+    extensions = TEMP_EXTENSIONS + PACK_EXTENSIONS
 
     for pattern in file_patterns:
         for ext in extensions:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
                 file_path = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(file_path):
-                    try:
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                            print(f"Deleted: {file_path}")
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
-                            print(f"Deleted directory: {file_path}")
-                    except PermissionError:
-                        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
-                    except Exception as e:
-                        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
+                    delete_file(file_path)
 
     print(f"Cleanup complete for {input_file}.")
 
@@ -96,7 +84,7 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     moved_files = []
     copied_files = []
     for pattern in file_patterns:
-        for ext in pack_extensions:
+        for ext in PACK_EXTENSIONS:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
                 file_path = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(file_path):
@@ -107,13 +95,12 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
                     break
 
     if moved_files or copied_files:
-        now = get_folder_datetime(input_dir, file_patterns, pack_extensions)
+        now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
         if output_folder is None:
             output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
         os.makedirs(output_folder, exist_ok=True)
         for file_path in moved_files:
-            shutil.move(file_path, output_folder)
-            print(f"Moved: {file_path}")
+            move_file(file_path, output_folder)
         for file_path in copied_files:
             shutil.copy(file_path, output_folder)
             print(f"Copied: {file_path}")
@@ -121,12 +108,11 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
         print(f"Files packed into {output_folder}")
 
     for pattern in file_patterns:
-        for ext in temp_extensions:
+        for ext in TEMP_EXTENSIONS:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
                 file_path = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(file_path) and file_path != input_file:
-                    os.remove(file_path)
-                    print(f"Deleted: {file_path}")
+                    delete_file(file_path)
 
     print(f"Packing complete for {input_file}.")
     return output_folder
@@ -149,7 +135,7 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
     additional_patterns = [f"{base_name}_{first_task_chunk}_{model}.xml", f"{base_name}_{first_task_chunk}_reflect_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
-    now = get_folder_datetime(output_dir, file_patterns, pack_extensions)
+    now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
     common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{task}_{model}")
 
     # Ensure the output folder exists
@@ -164,8 +150,7 @@ def run_pack_multiple(model, input_files, reflect, task, output_name_override):
     for pattern in additional_patterns:
         file_path = os.path.join(output_dir, pattern)
         if os.path.exists(file_path):
-            shutil.move(file_path, common_output_folder)
-            print(f"Moved xml file: {file_path}")
+            move_file(file_path, common_output_folder)
 
     print(f"All files packed into {common_output_folder}")
     return common_output_folder
@@ -190,7 +175,7 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
             file_path = os.path.join(search_dir, pattern)
             if os.path.exists(file_path):
                 files_to_process.append(file_path)
-                for ext in temp_extensions:
+                for ext in TEMP_EXTENSIONS:
                     temp_file = os.path.splitext(file_path)[0] + ext
                     if os.path.exists(temp_file):
                         files_to_delete.append(temp_file)
@@ -199,18 +184,15 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
     if files_to_process:
         if clean:
             for file_path in files_to_process + files_to_delete:
-                os.remove(file_path)
-                cprint(f"Deleted: {file_path}", "yellow")
+                delete_file(file_path)
             cprint("Cleanup complete.", "green")
         else:  # move files to output folder
             os.makedirs(output_folder, exist_ok=True)
             for file_path in files_to_process:
-                shutil.move(file_path, output_folder)
-                cprint(f"Moved: {file_path}", "blue")
+                move_file(file_path, output_folder)
 
             for file_path in files_to_delete:
-                os.remove(file_path)
-                cprint(f"Deleted: {file_path}", "yellow")
+                delete_file(file_path)
 
             cprint(f"Files packed into {output_folder}", "green")
     else:
@@ -223,19 +205,14 @@ def run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean=False):
 
 
 def run_clean_build():
-    excluded_dirs = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+    excluded_dirs = EXCLUDED_DIRS
 
     def clean_build_dir(directory):
         build_dir = os.path.join(directory, "build")
         if os.path.isdir(build_dir):
             for item in os.listdir(build_dir):
                 file_path = os.path.join(build_dir, item)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-                    print(f"Deleted: {file_path}")
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-                    print(f"Deleted directory: {file_path}")
+                delete_file(file_path)
 
     clean_build_dir(".")
 
@@ -257,7 +234,7 @@ def run_clean_output():
     files_to_delete = []
 
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
+        dirs[:] = [d for d in dirs if d.lower() not in EXCLUDED_DIRS]
 
         for pattern in patterns:
             files_to_delete.extend(glob.glob(os.path.join(root, pattern)))
@@ -268,8 +245,7 @@ def run_clean_output():
     for file in set(files_to_delete):
         try:
             if os.path.exists(file):
-                os.remove(file)
-                print(f"Deleted: {file}")
+                delete_file(file)
             else:
                 print(f"File not found: {file}")
         except OSError as e:
@@ -282,7 +258,7 @@ def run_indent_tex():
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
 
     for root, dirs, files in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d not in excluded_dirs]
+        dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
         for file in files:
             if file.endswith(".tex"):
                 tex_file = os.path.join(root, file)
@@ -293,6 +269,25 @@ def run_indent_tex():
 
     for pattern in ["**/*.bak0", "**/indent.log"]:
         for file in glob.glob(pattern, recursive=True):
-            os.remove(file)
+            delete_file(file)
 
     print("All .tex files have been indented and temporary files have been deleted.")
+
+
+def delete_file(file_path):
+    try:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            print(f"Deleted: {file_path}")
+        elif os.path.isdir(file_path):
+            shutil.rmtree(file_path)
+            print(f"Deleted directory: {file_path}")
+    except PermissionError:
+        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
+    except Exception as e:
+        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
+
+
+def move_file(source, destination):
+    shutil.move(source, destination)
+    print(f"Moved: {source}")
