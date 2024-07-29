@@ -2,187 +2,125 @@
 
 ## [0.12.0]
 
-### Added
-
-- Utility functions: delete_file, move_file, and find_file
-
-### Changed
-
-- Refactored housekeeping utilities for improved efficiency and maintainability
-- Updated existing functions to use new utility functions
-- Simplified file search and deletion logic
-- Removed redundant loops and improved code readability
-
-### Improved
-
-- Enhanced code organization and reduced duplication
-- Improved overall maintainability of housekeeping utilities
+- **Added:**
+  - Utility functions: delete_file, move_file, and find_file
+- **Changed:**
+  - Refactored housekeeping utilities for improved efficiency and maintainability
+  - Updated existing functions to use new utility functions
+  - Simplified file search and deletion logic
+  - Removed redundant loops and improved code readability
+- **Improved:**
+  - Enhanced code organization and reduced duplication
+  - Improved overall maintainability of housekeeping utilities
 
 ## [0.11.9]
 
-### Added
-- Enhanced support for multiple file operations in various tasks
-- Improved integration with frontend for output name overrides
-
-### Changed
-- Further refactored code for better modularity and consistency across tasks
-- Updated XML-based logging format for improved readability and structure
-
-### Improved
-
-- Enhanced error handling and output formatting for multiple file operations
-- Optimized file processing for better performance with large documents
+- **Added:**
+  - Enhanced support for multiple file operations in various tasks
+  - Improved integration with frontend for output name overrides
+- **Changed:**
+  - Further refactored code for better modularity and consistency across tasks
+  - Updated XML-based logging format for improved readability and structure
+- **Improved:**
+  - Enhanced error handling and output formatting for multiple file operations
+  - Optimized file processing for better performance with large documents
 
 ## [0.11.8]
 
-### Added
-
-- Support for multiple file operations in latexdiff and pack commands
-- New `latexdiff_vc_multiple` and `pack_latexdiff_vc_multiple` functions
-- XML-based logging format for improved structure and readability
-
-### Changed
-
-- Refactored imports and code organization for better modularity
-- Updated log output format to XML structure
-- Moved `compile_latex_to_pdf` function from figure_tools to tex_tools
-- Enhanced error handling and output in various utilities
-
-### Improved
-
-- Optimized file handling in housekeeping utilities
-- Streamlined LaTeX diff functionality for better performance
+- **Added:**
+  - Support for multiple file operations in latexdiff and pack commands
+  - New `latexdiff_vc_multiple` and `pack_latexdiff_vc_multiple` functions
+  - XML-based logging format for improved structure and readability
+- **Changed:**
+  - Refactored imports and code organization for better modularity
+  - Updated log output format to XML structure
+  - Moved `compile_latex_to_pdf` function from figure_tools to tex_tools
+  - Enhanced error handling and output in various utilities
+- **Improved:**
+  - Optimized file handling in housekeeping utilities
+  - Streamlined LaTeX diff functionality for better performance
 
 ## [0.11.7]
 
-### Added
-
-- New `run_external_command` function for improved command execution handling
-- Comparison between input and reflected output in write_tex.py
-
-### Changed
-
-- Refactored LaTeX diff-related functions to use the new `run_external_command` function
-- Extracted common diff file processing into separate `process_diff_file` function
-- Simplified XML structure for document content in prompts_polish.xml and prompts_polish_st_multiple.xml
-- Updated version to 0.11.7 in pyproject.toml
-
-### Improved
-
-- Enhanced error handling and output management in external command execution
-- Streamlined LaTeX diff functionality for better performance and maintainability
+- **Added:**
+  - New `run_external_command` function for improved command execution handling
+  - Comparison between input and reflected output in write_tex.py
+- **Changed:**
+  - Refactored LaTeX diff-related functions to use the new `run_external_command` function
+  - Extracted common diff file processing into separate `process_diff_file` function
+  - Simplified XML structure for document content in prompts_polish.xml and prompts_polish_st_multiple.xml
+  - Updated version to 0.11.7 in pyproject.toml
+- **Improved:**
+  - Enhanced error handling and output management in external command execution
+  - Streamlined LaTeX diff functionality for better performance and maintainability
 
 ## [0.11.6]
 
-### Added
-
-- Support for output name overrides in various tasks
-
-### Changed
-
-- Updated `get_xml_format_from_files` to handle multiple document outputs
-- Improved handling of output file names across multiple tasks
-- Enhanced error handling and logging for file operations
-
-### Fixed
-
-- Corrected XML formatting issues in various prompt files
-- Improved handling of CDATA sections in XML prompts
-
-### Improved
-
-- Optimized file pattern handling in housekeeping operations
-- Enhanced flexibility for handling multiple documents in output processing
+- **Added:**
+  - Support for output name overrides in various tasks
+- **Changed:**
+  - Updated `get_xml_format_from_files` to handle multiple document outputs
+  - Improved handling of output file names across multiple tasks
+  - Enhanced error handling and logging for file operations
+- **Improved:**
+  - Optimized file pattern handling in housekeeping operations
+  - Enhanced flexibility for handling multiple documents in output processing
 
 ## [0.11.5]
 
-### Added
-
-- New argument for using prefill from input file
-
-### Changed
-
-- Refactored codebase to improve readability, organization, and efficiency
-- Optimized model pricing calculation in compute_api_price function
-- Updated model_mapping in openai_utils.py
-- Improved handling of user variables in prompt_utils.py
-- Created common utility functions for housekeeping tasks
-- Added function `run_pack_latexdiff_vc` for packing LaTeX diff files with version control information
-
-### Removed
-
-- Cleaned up unnecessary comments and docstrings
-
-### Fixed
-
-- Removed duplicate import statements
-- Improved code organization by moving imports to the top of files
-
-### Improved
-
-- Enhanced error handling and logging with consistent use of `cprint`
-- Optimized imports across multiple files for better organization
+- **Added:**
+  - New argument for using prefill from input file
+- **Changed:**
+  - Refactored codebase to improve readability, organization, and efficiency
+  - Optimized model pricing calculation in compute_api_price function
+  - Updated model_mapping in openai_utils.py
+  - Improved handling of user variables in prompt_utils.py
+  - Created common utility functions for housekeeping tasks
+  - Added function `run_pack_latexdiff_vc` for packing LaTeX diff files with version control information
+- **Improved:**
+  - Enhanced error handling and logging with consistent use of `cprint`
+  - Optimized imports across multiple files for better organization
 
 ## [0.11.4]
 
-### Changed
-
-- Renamed user_prefix_vars to user_vars throughout the codebase for clarity
-- Refactored prompt handling and user variable updates:
-  - Replaced get_user_prefix_vars with get_user_vars
-  - Updated user_vars_single_output and user_vars_multiple_output functions
-- Moved figure-related functions to figure_tools.py
-- Improved scratchpad functionality implementation:
-  - Added use_scratchpad and use_scratchpad_reflect flags
-  - Updated conditional logic for scratchpad handling
-- Consolidated file content formatting:
-  - Replaced format_file_content, get_auxiliary_files_content, and get_additional_input_files_content with get_xml_format_from_files
-- Updated prompt and output settings handling:
-  - Moved prefill_first and prefill_reflect to output_settings
-  - Simplified get_prompt_settings function
-- Standardized error handling for multiple output tasks
-- Refactored task-specific scripts (e.g., adapt.py, edit_lecture.py, prl_edit.py) for consistency
-
-### Removed
-
-- Removed unused functions (e.g., find_last_non_empty_line)
-
-### Fixed
-
-- Updated CLI output formatting for improved readability
+- **Added:**
+  - Scratchpad functionality implementation with use_scratchpad and use_scratchpad_reflect flags
+- **Changed:**
+  - Renamed user_prefix_vars to user_vars throughout the codebase for clarity
+  - Refactored prompt handling and user variable updates
+  - Moved figure-related functions to figure_tools.py
+  - Consolidated file content formatting
+  - Updated prompt and output settings handling
+  - Standardized error handling for multiple output tasks
+  - Refactored task-specific scripts for consistency
+- **Improved:**
+  - Enhanced CLI output formatting for improved readability
 
 ## [0.11.3]
 
-- Added support for packing and cleaning multiple files
-- Implemented pack-multiple and clean-multiple functions in housekeeping_utils.py
-- Updated CLI to support new multiple file operations
-- Refactored pack-single and clean-single functions for consistency
-- Enhanced file pattern handling and datetime generation for output folders
-- Improved error handling and logging for multiple file operations
+- **Added:**
+  - Support for packing and cleaning multiple files
+  - Implemented pack-multiple and clean-multiple functions in housekeeping_utils.py
+- **Changed:**
+  - Updated CLI to support new multiple file operations
+  - Refactored pack-single and clean-single functions for consistency
+- **Improved:**
+  - Enhanced file pattern handling and datetime generation for output folders
+  - Improved error handling and logging for multiple file operations
 
 ## [0.11.2]
 
-### Added
-
-- Support for multiple document output in XML handling
-- New `split_multiple_scratchpad_output_xml` function in output_utils.py
-- 'name' attribute for documents in XML structure
-
-### Changed
-
-- Refactored XML handling across multiple files (output_utils.py, task prompts, edit_lecture.py)
-- Updated task scripts to support multiple output files
-- Modified XML structure in task prompts to use 'name' attribute
-- Improved error handling and logging in various functions
-
-### Fixed
-
-- Plan to Update `has_end_tag` function in message_utils.py for multi-doc support
-
-### Improved
-
-- Enhanced flexibility for handling multiple documents in output processing
-- Streamlined XML processing workflow across various tasks
+- **Added:**
+  - Support for multiple document output in XML handling
+  - New `split_multiple_scratchpad_output_xml` function in output_utils.py
+  - 'name' attribute for documents in XML structure
+- **Changed:**
+  - Refactored XML handling across multiple files
+  - Updated task scripts to support multiple output files
+  - Modified XML structure in task prompts to use 'name' attribute
+- **Improved:**
+  - Enhanced flexibility for handling multiple documents in output processing
+  - Streamlined XML processing workflow across various tasks
 
 ## [0.11.1]
 
