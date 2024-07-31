@@ -675,16 +675,10 @@ window.addEventListener('message', event => {
       });
       break;
     case 'sampleFileSelected':
-      document.getElementById('sampleFileSelect').value = message.filePath;
-      break;
     case 'auxFileSelected':
-      document.getElementById('auxFileSelect').value = message.filePath;
-      break;
     case 'figureFileSelected':
-      document.getElementById('figureFileSelect').value = message.filePath;
-      break;
     case 'editedFileSelected':
-      document.getElementById('editedFileSelect').value = message.filePath;
+      document.getElementById(`${message.command.replace('Selected', 'Select')}`).value = message.filePath;
       break;
     case 'modelSelected':
       document.getElementById('modelSelect').value = message.model;
