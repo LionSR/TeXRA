@@ -204,32 +204,21 @@ document.addEventListener('DOMContentLoaded', function () {
       filePath: sampleFile
     });
   });
-  document.getElementById('selectMultipleInputFilesButton').addEventListener('click', function () {
-    const currentInputFile = document.getElementById('inputFileSelect').value;
-    vscode.postMessage({
-      command: 'selectMultipleInputFiles',
-      currentInputFile: currentInputFile
-    });
-  });
-  document.getElementById('selectMultipleSampleFilesButton').addEventListener('click', function () {
-    const currentSampleFile = document.getElementById('sampleFileSelect').value;
-    vscode.postMessage({
-      command: 'selectMultipleSampleFiles',
-      currentSampleFile: currentSampleFile
-    });
-  });
-  document.getElementById('selectMultipleAuxFilesButton').addEventListener('click', function () {
-    const currentAuxFile = document.getElementById('auxFileSelect').value;
-    vscode.postMessage({
-      command: 'selectMultipleAuxFiles',
-      currentAuxFile: currentAuxFile
-    });
-  });
-  document.getElementById('selectMultipleFiguresButton').addEventListener('click', function () {
-    const currentFigureFile = document.getElementById('figureFileSelect').value;
-    vscode.postMessage({
-      command: 'selectMultipleFigures',
-      currentFigureFile: currentFigureFile
+  const multipleFileSelectors = [
+    { id: 'InputFiles', selectId: 'inputFileSelect' },
+    { id: 'SampleFiles', selectId: 'sampleFileSelect' },
+    { id: 'AuxFiles', selectId: 'auxFileSelect' },
+    { id: 'Figures', selectId: 'figureFileSelect' }
+  ];
+
+  multipleFileSelectors.forEach(({ id, selectId }) => {
+    document.getElementById(`selectMultiple${id}Button`).addEventListener('click', function () {
+      const currentFile = document.getElementById(selectId).value;
+      vscode.postMessage({
+        command: 'selectMultipleFiles',
+        fileType: id,
+        currentFile: currentFile
+      });
     });
   });
 
