@@ -12,49 +12,49 @@ model_mapping = {
     "gpt4o-": "gpt-4o-mini-2024-07-18",
 }
 
+anthropic_models = set(model_mapping.keys()) | {
+    "claude-3-5-sonnet",
+    "claude-3-haiku",
+    "claude-3-sonnet",
+    "claude-3-opus",
+    "claude-3-sonnet-20240229",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-opus-20240229",
+    "claude-3-haiku-20240307",
+}
 
 def is_openai_model(model):
     return "gpt" in model
 
-
 def is_anthropic_model(model):
-    if model in ["sonnet+", "opus", "sonnet", "haiku"]:
-        return True
-    if model in [
-        "claude-3-5-sonnet",
-        "claude-3-haiku",
-        "claude-3-sonnet",
-        "claude-3-opus",
-        "claude-3-sonnet-20240229",
-        "claude-3-5-sonnet-20240620",
-        "claude-3-opus-20240229",
-        "claude-3-haiku-20240307",
-    ]:
-        return True
-    return False
+    return model in anthropic_models
 
 
 def get_model_client(model):
-    from openai import OpenAI
-    from anthropic import Anthropic
     import os
-
+    
     if is_openai_model(model):
-        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        from openai import OpenAI
+        return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     elif is_anthropic_model(model):
-        ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+        from anthropic import Anthropic
+        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     else:
         raise ValueError("Unsupported model type")
-    return client
 
 
 def compute_api_price(input_tokens, output_tokens, model):
-    prices = {"sonnet": (3, 15), "opus": (15, 75), "haiku": (0.25, 1.25), "gpt4t": (10, 30), "gpt4o": (5, 15), "gpt4o-": (0.15, 0.6)}
+    prices = {
+        "sonnet": (3, 15),
+        "opus": (15, 75),
+        "haiku": (0.25, 1.25),
+        "gpt4t": (10, 30),
+        "gpt4o": (5, 15),
+        "gpt4o-": (0.15, 0.6)
+    }
 
     for key, (input_rate, output_rate) in prices.items():
         if key in model:
             return (input_tokens * input_rate + output_tokens * output_rate) / 1e6
 
-    raise ValueError("Invalid model name for computing price.")
+    raise ValueError(f"Invalid model name '{model}' for computing price.")
