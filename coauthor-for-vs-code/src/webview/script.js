@@ -117,6 +117,46 @@ function toggleOutputNameOverride() {
   saveState();
 }
 
+function handleRecentCommits(message) {
+  const commitButtons = [
+    'packLatexDiffVCButton',
+    'cleanLatexDiffVCButton',
+    'latexDiffVCButton'
+  ];
+  const commitSelect = document.getElementById('commitSelect');
+  commitSelect.innerHTML = '';
+
+  if (message.isGitRepo === false) {
+    addOptionToSelect(commitSelect, '', 'Not a Git repository');
+    setElementsDisabled([commitSelect, ...commitButtons], true);
+  } else {
+    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
+    message.commits.forEach(commit => {
+      const [commitHash, ...commitMessageParts] = commit.split(': ');
+      const commitMessage = commitMessageParts.join(': ');
+      addOptionToSelect(commitSelect, commitHash, commit);
+    });
+    setElementsDisabled([commitSelect, ...commitButtons], false);
+  }
+}
+
+function addOptionToSelect(select, value, text) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
+function setElementsDisabled(elements, disabled) {
+  elements.forEach(element => {
+    if (typeof element === 'string') {
+      document.getElementById(element).disabled = disabled;
+    } else {
+      element.disabled = disabled;
+    }
+  });
+}
+
 window.onload = function () {
   const dataRequests = [
     'getTheme',
@@ -692,42 +732,3 @@ window.addEventListener('message', event => {
   // Restore previous state
   restoreState();
 });
-function handleRecentCommits(message) {
-  const commitButtons = [
-    'packLatexDiffVCButton',
-    'cleanLatexDiffVCButton',
-    'latexDiffVCButton'
-  ];
-  const commitSelect = document.getElementById('commitSelect');
-  commitSelect.innerHTML = '';
-
-  if (message.isGitRepo === false) {
-    addOptionToSelect(commitSelect, '', 'Not a Git repository');
-    setElementsDisabled([commitSelect, ...commitButtons], true);
-  } else {
-    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
-    message.commits.forEach(commit => {
-      const [commitHash, ...commitMessageParts] = commit.split(': ');
-      const commitMessage = commitMessageParts.join(': ');
-      addOptionToSelect(commitSelect, commitHash, commit);
-    });
-    setElementsDisabled([commitSelect, ...commitButtons], false);
-  }
-}
-
-function addOptionToSelect(select, value, text) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = text;
-  select.appendChild(option);
-}
-
-function setElementsDisabled(elements, disabled) {
-  elements.forEach(element => {
-    if (typeof element === 'string') {
-      document.getElementById(element).disabled = disabled;
-    } else {
-      element.disabled = disabled;
-    }
-  });
-}
