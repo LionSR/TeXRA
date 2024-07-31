@@ -53,13 +53,12 @@ def main():
         user_vars["MAIN_CONTENT"] = coa.read_file(args.main_content) if args.main_content else ""
         user_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(args.draft_main_content) if args.draft_main_content else ""
 
-    log_file = coa.log_start(args)
-
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
     client = coa.get_model_client(model_settings["model"])
+    log_file = coa.log_start(args)
 
     model = model_settings["model"]
     output_type = output_settings["output_type"]
@@ -82,7 +81,7 @@ def main():
     print(colored(f"Output file: {output_file}", "yellow"))
     if end_turn:
         if output_type == "tex":
-            coa.run_latexdiff(args.input_file, output_file)
+            coa.run_latexdiff(args.input_file, output_file, args.task, args.model)
 
     coa.log_output_files(output_file, log_file)
     coa.log_and_print_statistics(state, args.model, log_file)
@@ -107,7 +106,7 @@ def main():
 
         if end_turn_reflect:
             if output_type == "tex":
-                coa.run_latexdiff(args.input_file, output_file_reflect)
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task, args.model)
                 coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
