@@ -646,16 +646,14 @@ window.addEventListener('message', event => {
       updateFileSelect(`${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`, message.files);
       break;
     case 'setMultipleInputFiles':
-      updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
-      break;
     case 'setMultipleSampleFiles':
-      updateMultipleFileSelect('multipleSampleFilesSelect', 'toggleMultipleSampleFiles', message.files);
-      break;
     case 'setMultipleAuxFiles':
-      updateMultipleFileSelect('multipleAuxFilesSelect', 'toggleMultipleAuxFiles', message.files);
-      break;
     case 'setMultipleFigures':
-      updateMultipleFileSelect('multipleFiguresSelect', 'toggleMultipleFigures', message.files);
+      updateMultipleFileSelect(
+        `${message.command.replace('setMultiple', 'multiple').toLowerCase()}Select`,
+        `toggle${message.command.replace('set', '')}`,
+        message.files
+      );
       break;
     case 'setEditedFiles':
       updateFileSelect('editedFileSelect', message.files);
