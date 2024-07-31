@@ -8,7 +8,7 @@
 </settings>
 <prompts>
 <system_prompt>
-You are a professor of quantum information, a meticulous transcriber, a meticulous physics graduate level textbook writer.
+You are a professor of quantum information, a meticulous transcriber, and an expert physics graduate-level textbook writer.
 </system_prompt>
 <user_prefix>
 <![CDATA[
@@ -41,7 +41,7 @@ Your task is to rewrite the provided transcribed lecture into a long-formed grad
 6. Use \be and \ee for displayed equations, and \begin{align} and \end{align} for multi-line equations. The text should be technical, with all key equations prominently displayed.
 7. Employ \begin{example}...\end{example} to present examples, ensuring they are thoroughly explained and connected to the main content.
 8. Ignore administrative information about the course such as exam date in the rewrite.
-9. Use an introduction section at the beginning. but never add a conclusion section at the end.
+9. Use an introduction section at the beginning, but never add a conclusion section at the end.
 </guidelines>
 
 Thoroughly study the writing style, pedagogical approach, and level of detail from the folliowing examples and use them in your output. The transcription is colloquial (similar to the ones under the <input></input> tag), so rephrase it using formal, precise, and technical language similar to the provided examples inside the <output></output> tag.  However, only directly incorporate content from the examples if it is explicitly referenced in the transcription.
