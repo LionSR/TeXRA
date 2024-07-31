@@ -21,18 +21,17 @@ export async function listSampleFiles(): Promise<string[]> {
 
 export async function listAuxFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (workspacePath) {
-    const config = getConfig();
-    const ignoredExtensions = ensureArray(config.get<string[]>('ignoredFileExtensions'));
-    const ignoredKeywords = ensureArray(config.get<string[]>('ignoredKeywords'));
-    const additionalIgnoredAuxKeywords = ensureArray(config.get<string[]>('additionalIgnoredAuxKeywords'));
-    const ignoredDirectories = ensureArray(config.get<string[]>('ignoredDirectories'));
-    
-    const combinedIgnoredKeywords = [...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords])];
-    
-    return await getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, combinedIgnoredKeywords);
-  }
-  return [];
+  if (!workspacePath) return [];
+
+  const config = getConfig();
+  const ignoredExtensions = ensureArray(config.get<string[]>('ignoredFileExtensions'));
+  const ignoredKeywords = ensureArray(config.get<string[]>('ignoredKeywords'));
+  const additionalIgnoredAuxKeywords = ensureArray(config.get<string[]>('additionalIgnoredAuxKeywords'));
+  const ignoredDirectories = ensureArray(config.get<string[]>('ignoredDirectories'));
+  
+  const combinedIgnoredKeywords = [...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords])];
+  
+  return getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, combinedIgnoredKeywords);
 }
 
 export async function listFigureFiles(): Promise<string[]> {
