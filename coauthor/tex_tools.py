@@ -16,16 +16,21 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
     """
     print("\nRunning command:", colored(" ".join(command), "green"))
     try:
+        kwargs = {
+            "check": True,
+            "stderr": subprocess.PIPE,
+            "text": True,
+        }
         if output_file:
             with open(output_file, "w", encoding=encoding) as file:
-                subprocess.run(command, check=True, stdout=file, stderr=subprocess.PIPE, text=True)
+                subprocess.run(command, stdout=file, **kwargs)
             print("\nCommand completed.\nOutput saved to", colored(output_file, "blue"))
             return True, None
         elif capture_output:
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            result = subprocess.run(command, capture_output=True, **kwargs)
             return True, result.stdout.strip()
         else:
-            subprocess.run(command, check=True, stderr=subprocess.PIPE, text=True)
+            subprocess.run(command, **kwargs)
             return True, None
     except subprocess.CalledProcessError as e:
         error_message = f"Error running command: {e}\nError output: {e.stderr}"

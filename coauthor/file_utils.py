@@ -15,14 +15,12 @@ def read_file(file_path, raise_warning=True):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read().strip()
 
-
 def write_file(file_path, content):
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
-
 def append_file(file_path, content):
-    with open(file_path, "a+", encoding="utf-8") as file:
+    with open(file_path, "a", encoding="utf-8") as file:
         file.write(content)
 
 
