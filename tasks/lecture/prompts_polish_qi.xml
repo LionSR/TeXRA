@@ -9,7 +9,7 @@ When writing LaTeX, you must:
 - The document class is exercise.cls. Math commands defined in commands_qi.tex file should be used.
 - Use \begin{align} ... \end{align} for displayed equations. Do not use \begin{center} $...$ \end{center}
 - Use appropriate notation and terminology consistently throughout the text.
-- If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labeled items are referenced.
+- If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labeled items are referenced. Ensure consistency throughout the document.
 - You should use \ldots or \cdots rather than "\dots" nor "..." to achieve an ellipsis following the best practice of chktex.
 - Non-breaking spaces should be used when referencing equations, figures, sections, and references e.g., use "Eq.~\eqref{eq:label}"; "see Fig.~\ref{fig:label}"; "Section~\ref{sec:label}"; "see Ref.~\cite{Jarzynski1997Nonequilibrium}".
 - Use \tr instead of \text{tr} nor \textrm{tr}.
