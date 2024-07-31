@@ -676,40 +676,7 @@ window.addEventListener('message', event => {
       document.getElementById('modelSelect').value = message.model;
       break;
     case 'setRecentCommits':
-      const commitButtons = [
-        'packLatexDiffVCButton',
-        'cleanLatexDiffVCButton',
-        'latexDiffVCButton'
-      ];
-      const commitSelect = document.getElementById('commitSelect');
-      commitSelect.innerHTML = '';
-      if (message.isGitRepo === false) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'Not a Git repository';
-        commitSelect.appendChild(option);
-        commitSelect.disabled = true;
-        commitButtons.forEach(id => {
-          document.getElementById(id).disabled = true;
-        });
-      } else {
-        const emptyCommitOption = document.createElement('option');
-        emptyCommitOption.value = 'HEAD';
-        emptyCommitOption.textContent = 'HEAD';
-        commitSelect.appendChild(emptyCommitOption);
-        message.commits.forEach(commit => {
-          const option = document.createElement('option');
-          const [commitHash, ...commitMessageParts] = commit.split(': ');
-          const commitMessage = commitMessageParts.join(': '); // Rejoin in case the commit message contained ': '
-          option.value = commitHash;
-          option.textContent = commit;
-          commitSelect.appendChild(option);
-        });
-        commitSelect.disabled = false;
-        commitButtons.forEach(id => {
-          document.getElementById(id).disabled = false;
-        });
-      }
+      handleRecentCommits(message);
       break;
     case 'setCurrentFile':
       const inputFileSelect_val = document.getElementById('inputFileSelect');
@@ -735,3 +702,42 @@ window.addEventListener('message', event => {
   // Restore previous state
   restoreState();
 });
+function handleRecentCommits(message) {
+  const commitButtons = [
+    'packLatexDiffVCButton',
+    'cleanLatexDiffVCButton',
+    'latexDiffVCButton'
+  ];
+  const commitSelect = document.getElementById('commitSelect');
+  commitSelect.innerHTML = '';
+
+  if (message.isGitRepo === false) {
+    addOptionToSelect(commitSelect, '', 'Not a Git repository');
+    setElementsDisabled([commitSelect, ...commitButtons], true);
+  } else {
+    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
+    message.commits.forEach(commit => {
+      const [commitHash, ...commitMessageParts] = commit.split(': ');
+      const commitMessage = commitMessageParts.join(': ');
+      addOptionToSelect(commitSelect, commitHash, commit);
+    });
+    setElementsDisabled([commitSelect, ...commitButtons], false);
+  }
+}
+
+function addOptionToSelect(select, value, text) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
+function setElementsDisabled(elements, disabled) {
+  elements.forEach(element => {
+    if (typeof element === 'string') {
+      document.getElementById(element).disabled = disabled;
+    } else {
+      element.disabled = disabled;
+    }
+  });
+}
