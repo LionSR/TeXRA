@@ -49,27 +49,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val, outputFiles_val, outputNameOverride_val);
           break;
         case 'selectInputFile':
-          const inputFile = await vscode.commands.executeCommand<string>('coauthor.selectInputFile');
-          if (inputFile) {
-            webviewView.webview.postMessage({ command: 'inputFileSelected', filePath: inputFile });
-          }
-          break;
         case 'selectSampleFile':
-          const sampleFile = await vscode.commands.executeCommand<string>('coauthor.selectSampleFile');
-          if (sampleFile) {
-            webviewView.webview.postMessage({ command: 'sampleFileSelected', filePath: sampleFile });
-          }
-          break;
         case 'selectAuxFile':
-          const auxFile = await vscode.commands.executeCommand<string>('coauthor.selectAuxFile');
-          if (auxFile) {
-            webviewView.webview.postMessage({ command: 'auxFileSelected', filePath: auxFile });
-          }
-          break;
         case 'selectFigureFile':
-          const figureFile = await vscode.commands.executeCommand<string>('coauthor.selectFigureFile');
-          if (figureFile) {
-            webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFile });
+          const fileType = message.command.replace('select', '').toLowerCase();
+          const file = await vscode.commands.executeCommand<string>(`coauthor.${message.command}`);
+          if (file) {
+            webviewView.webview.postMessage({ command: `${fileType}Selected`, filePath: file });
           }
           break;
         case 'selectMultipleFiles':
