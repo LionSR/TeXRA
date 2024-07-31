@@ -6,11 +6,12 @@ from .model_utils import is_openai_model, is_anthropic_model
 
 
 def has_end_tag(file_content, end_tag, document_tag):
-    # let us see if the following works... (deleted "\\end{document}" for multiple document output)
+    """Check if the file content contains the end tag or document tag."""
     return end_tag in file_content or f"</{document_tag}>" in file_content
 
 
 def create_response(client, messages, model_settings, output_settings, prompt_settings):
+    """Create a response using the specified model and settings."""
     model = model_settings["model"]
     model_name = model_settings["model_name"]
     max_tokens = model_settings["max_tokens"]
@@ -19,37 +20,50 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     system_prompt = prompt_settings["system_prompt"]
 
     if is_openai_model(model):
-        response_object = client.chat.completions.create(
-            model=model_name,
-            max_tokens=max_tokens,
-            messages=messages,
-            temperature=temperature,
-            stop=end_tag,
-        )
-        print(colored(f"using openai model: {model_name}", "green"))
+        response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_anthropic_model(model):
-        extra_headers = None
-        if "claude-3-5-sonnet" in model_name.lower():
-            extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
-            max_tokens = 8192
-
-        response_object = client.messages.create(
-            model=model_name,
-            max_tokens=max_tokens,
-            messages=messages,
-            temperature=temperature,
-            stop_sequences=[end_tag] if end_tag else None,
-            system=system_prompt,
-            extra_headers=extra_headers,
-        )
-        print(colored(f"using anthropic model: {model_name}", "green"))
+        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
     else:
         raise ValueError(f"Unsupported model: {model}")
 
     return response_object
 
 
+def _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag):
+    """Create a response using OpenAI model."""
+    response_object = client.chat.completions.create(
+        model=model_name,
+        max_tokens=max_tokens,
+        messages=messages,
+        temperature=temperature,
+        stop=end_tag,
+    )
+    print(colored(f"using openai model: {model_name}", "green"))
+    return response_object
+
+
+def _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt):
+    """Create a response using Anthropic model."""
+    extra_headers = None
+    if "claude-3-5-sonnet" in model_name.lower():
+        extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
+        max_tokens = 8192
+
+    response_object = client.messages.create(
+        model=model_name,
+        max_tokens=max_tokens,
+        messages=messages,
+        temperature=temperature,
+        stop_sequences=[end_tag] if end_tag else None,
+        system=system_prompt,
+        extra_headers=extra_headers,
+    )
+    print(colored(f"using anthropic model: {model_name}", "green"))
+    return response_object
+
+
 def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs):
+    """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
     if is_openai_model(model):
@@ -64,6 +78,7 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
 
 
 def create_image_message(model, figure_inputs):
+    """Create image messages for the conversation."""
     image_contents = []
     added_figures = []
 
@@ -76,27 +91,48 @@ def create_image_message(model, figure_inputs):
             continue
 
         _, file_extension = os.path.splitext(figure_input)
-        if file_extension.lower() == ".pdf":
-            img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
-            media_type = "image/png"
-        else:
-            img_data = get_base64_encoded_image(figure_input)
-            media_type = {
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".png": "image/png",
-                ".gif": "image/gif",
-                ".webp": "image/webp",
-            }.get(file_extension.lower(), "image/jpeg")
+        img_data, media_type = _process_image_file(figure_input, file_extension, model)
 
-        if isinstance(img_data, list):
-            for i, data in enumerate(img_data):
-                image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
-            added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
-        else:
-            image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
-            added_figures.append(figure_input)
+        _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
 
+    content = _create_image_content(image_contents, model)
+
+    print(f"Using images: {colored(figure_inputs, 'green')}")
+    print(f"Successfully added figures: {colored(added_figures, 'cyan')}")
+
+    return content
+
+
+def _process_image_file(figure_input, file_extension, model):
+    """Process the image file and return the image data and media type."""
+    if file_extension.lower() == ".pdf":
+        img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
+        media_type = "image/png"
+    else:
+        img_data = get_base64_encoded_image(figure_input)
+        media_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }.get(file_extension.lower(), "image/jpeg")
+    return img_data, media_type
+
+
+def _add_image_content(image_contents, added_figures, figure_input, img_data, media_type):
+    """Add image content to the lists."""
+    if isinstance(img_data, list):
+        for i, data in enumerate(img_data):
+            image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
+        added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
+    else:
+        image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
+        added_figures.append(figure_input)
+
+
+def _create_image_content(image_contents, model):
+    """Create the image content for the message."""
     content = []
     for image in image_contents:
         content.extend(
@@ -114,36 +150,51 @@ def create_image_message(model, figure_inputs):
                 },
             ]
         )
-
-    print(f"Using images: {colored(figure_inputs, 'green')}")
-    print(f"Successfully added figures: {colored(added_figures, 'cyan')}")
-
     return content
 
 
 def extract_response_statistics(response_object, model, end_tag=None):
+    """Extract statistics from the response object."""
     if is_openai_model(model):
-        input_tokens = response_object.usage.prompt_tokens
-        output_tokens = response_object.usage.completion_tokens
-        stop_reason = response_object.choices[0].finish_reason
-        new_response = response_object.choices[0].message.content.strip()
+        return _extract_openai_statistics(response_object, end_tag)
     elif is_anthropic_model(model):
-        input_tokens = response_object.usage.input_tokens
-        output_tokens = response_object.usage.output_tokens
-        stop_reason = response_object.stop_reason
-        if output_tokens == 3:
-            cprint("WARNING: Some errors might have appeared. No output generated", "white", "on_red")
-            print(f"### DEBUG response_object: {response_object}")
-            print(f"### DEBUG response_object.content: {response_object.content}")
-            raise ValueError("No output generated")
-        if response_object.type == "error":
-            cprint("WARNING: Error from the API:", "white", "on_red")
-            print(f"### DEBUG output_tokens: {output_tokens}")
-            print(f"### DEBUG error: {response_object.error}")
-            raise ValueError("Error from the API")
-        new_response = response_object.content[0].text.strip()
+        return _extract_anthropic_statistics(response_object, end_tag)
     else:
         raise ValueError(f"Unsupported model: {model}")
+
+
+def _extract_openai_statistics(response_object, end_tag):
+    """Extract statistics from OpenAI response object."""
+    input_tokens = response_object.usage.prompt_tokens
+    output_tokens = response_object.usage.completion_tokens
+    stop_reason = response_object.choices[0].finish_reason
+    new_response = response_object.choices[0].message.content.strip()
+
+    if "stop" in stop_reason and "\\end{document}" not in new_response:
+        new_response += f"\n{end_tag}"
+
+    return new_response, input_tokens, output_tokens, stop_reason
+
+
+def _extract_anthropic_statistics(response_object, end_tag):
+    """Extract statistics from Anthropic response object."""
+    input_tokens = response_object.usage.input_tokens
+    output_tokens = response_object.usage.output_tokens
+    stop_reason = response_object.stop_reason
+
+    if output_tokens == 3:
+        cprint("WARNING: Some errors might have appeared. No output generated", "white", "on_red")
+        print(f"### DEBUG response_object: {response_object}")
+        print(f"### DEBUG response_object.content: {response_object.content}")
+        raise ValueError("No output generated")
+
+    if response_object.type == "error":
+        cprint("WARNING: Error from the API:", "white", "on_red")
+        print(f"### DEBUG output_tokens: {output_tokens}")
+        print(f"### DEBUG error: {response_object.error}")
+        raise ValueError("Error from the API")
+
+    new_response = response_object.content[0].text.strip()
 
     if "stop" in stop_reason and "\\end{document}" not in new_response:
         new_response += f"\n{end_tag}"
@@ -152,6 +203,7 @@ def extract_response_statistics(response_object, model, end_tag=None):
 
 
 def handle_openai_continuation(messages, new_response, k, end_tag):
+    """Handle continuation for OpenAI models."""
     prefill_tokens = new_response[-k:]
     user_message = (
         f"Your response got cut off, because you only have limited response space. "
@@ -164,6 +216,7 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
 
 
 def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
+    """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
     encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
     continuation_limit = state["continuation_count"] > 10
@@ -179,6 +232,7 @@ def check_stop_conditions(stop_reason, new_response, state, output_settings, mas
 
 
 def print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected):
+    """Print the flags indicating why the conversation stopped."""
     print("Printing the flags")
     print(f"end_turn: {end_turn}")
     print(f"encounter_document_tag: {'</latex_document>' in new_response}")
