@@ -246,20 +246,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  document.getElementById('emptyMultipleInputFilesButton').addEventListener('click', function () {
-    emptyMultipleFiles('multipleInputFilesSelect', 'toggleMultipleInputFiles');
-  });
+  const emptyButtons = [
+    { id: 'emptyMultipleInputFilesButton', selectId: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
+    { id: 'emptyMultipleSampleFilesButton', selectId: 'multipleSampleFilesSelect', toggleId: 'toggleMultipleSampleFiles' },
+    { id: 'emptyMultipleAuxFilesButton', selectId: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
+    { id: 'emptyMultipleFiguresButton', selectId: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' }
+  ];
 
-  document.getElementById('emptyMultipleSampleFilesButton').addEventListener('click', function () {
-    emptyMultipleFiles('multipleSampleFilesSelect', 'toggleMultipleSampleFiles');
-  });
-
-  document.getElementById('emptyMultipleAuxFilesButton').addEventListener('click', function () {
-    emptyMultipleFiles('multipleAuxFilesSelect', 'toggleMultipleAuxFiles');
-  });
-
-  document.getElementById('emptyMultipleFiguresButton').addEventListener('click', function () {
-    emptyMultipleFiles('multipleFiguresSelect', 'toggleMultipleFigures');
+  emptyButtons.forEach(({ id, selectId, toggleId }) => {
+    document.getElementById(id).addEventListener('click', () => emptyMultipleFiles(selectId, toggleId));
   });
 
   document.getElementById('emptyInstructionsButton').addEventListener('click', function () {
