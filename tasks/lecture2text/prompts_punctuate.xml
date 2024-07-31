@@ -8,7 +8,7 @@
 </settings>
 <prompts>
 <system_prompt>
-You are a professor of quantum information and a meticulous transcriber.
+You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse.
 </system_prompt>
 <user_prefix>
 <![CDATA[
