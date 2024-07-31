@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath, getRelativePath, getConfig } from './utils/commonUtils';
+import { getWorkspacePath, getRelativePath, getConfig, ensureArray } from './utils/commonUtils';
 
 export async function listInputFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
@@ -20,14 +20,13 @@ export async function listSampleFiles(): Promise<string[]> {
 }
 
 export async function listAuxFiles(): Promise<string[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const workspacePath = workspaceFolders[0].uri.fsPath;
+  const workspacePath = getWorkspacePath();
+  if (workspacePath) {
     const config = getConfig();
-    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
-    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    const additionalIgnoredAuxKeywords = config.get<string[]>('additionalIgnoredAuxKeywords') || [];
-    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const ignoredExtensions = ensureArray(config.get<string[]>('ignoredFileExtensions'));
+    const ignoredKeywords = ensureArray(config.get<string[]>('ignoredKeywords'));
+    const additionalIgnoredAuxKeywords = ensureArray(config.get<string[]>('additionalIgnoredAuxKeywords'));
+    const ignoredDirectories = ensureArray(config.get<string[]>('ignoredDirectories'));
     
     const combinedIgnoredKeywords = [...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords])];
     
