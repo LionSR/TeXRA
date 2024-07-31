@@ -640,16 +640,10 @@ window.addEventListener('message', event => {
   const message = event.data;
   switch (message.command) {
     case 'setInputFile':
-      updateFileSelect('inputFileSelect', message.files);
-      break;
     case 'setSampleFile':
-      updateFileSelect('sampleFileSelect', message.files);
-      break;
     case 'setAuxFile':
-      updateFileSelect('auxFileSelect', message.files);
-      break;
     case 'setFigureFile':
-      updateFileSelect('figureFileSelect', message.files);
+      updateFileSelect(`${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`, message.files);
       break;
     case 'setMultipleInputFiles':
       updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
