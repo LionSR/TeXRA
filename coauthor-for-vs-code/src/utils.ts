@@ -4,20 +4,23 @@ import { getWorkspacePath, getRelativePath, getConfig, ensureArray } from './uti
 
 export async function listInputFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (workspacePath) {
-    const config = getConfig();
-    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') ?? [];
-    const ignoredKeywords = config.get<string[]>('ignoredKeywords') ?? [];
-    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') ?? [];
-    const ignoredDirectories = config.get<string[]>('ignoredDirectories') ?? [];
-    return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ignoredExtensions, ignoredDirectories, ignoredKeywords, ignoredInputFiles);
-  }
-  return [];
+  if (!workspacePath) return [];
+  
+  const config = getConfig();
+  const getConfigArray = (key: string) => config.get<string[]>(key) ?? [];
+  
+  return getFilesRecursively(
+    workspacePath, 
+    workspacePath, 
+    ['.txt', '.tex'], 
+    getConfigArray('ignoredFileExtensions'),
+    getConfigArray('ignoredDirectories'),
+    getConfigArray('ignoredKeywords'),
+    getConfigArray('ignoredInputFiles')
+  );
 }
 
-export async function listSampleFiles(): Promise<string[]> {
-  return listInputFiles(); // Same logic as listInputFiles
-}
+export const listSampleFiles = listInputFiles;
 
 export async function listAuxFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
