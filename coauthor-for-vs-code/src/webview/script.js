@@ -8,12 +8,31 @@ function handleCheckboxChange(event) {
 
 function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
+  if (!select) {
+    console.error(`Element with id '${selectId}' not found`);
+    return;
+  }
   select.innerHTML = '<option value="">None</option>';
   const fragment = document.createDocumentFragment();
   files.forEach(file => {
     fragment.appendChild(new Option(file, file));
   });
   select.appendChild(fragment);
+}
+
+function safeGetElementById(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    console.warn(`Element with id '${id}' not found`);
+  }
+  return element;
+}
+
+function addEventListenerSafely(elementId, event, handler) {
+  const element = safeGetElementById(elementId);
+  if (element) {
+    element.addEventListener(event, handler);
+  }
 }
 
 function addFileToList(containerId, file) {

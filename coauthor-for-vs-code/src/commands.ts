@@ -18,22 +18,27 @@ export function registerCommands(context: vscode.ExtensionContext) {
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
         : vscode.Uri.file(workspacePath);
 
-      const fileUris = await vscode.window.showOpenDialog({
-        canSelectMany: true,
-        openLabel: 'Select Files',
-        canSelectFiles: true,
-        canSelectFolders: false,
-        defaultUri: defaultUri,
-        filters: {
-          'Text files': ['tex']
-        }
-      });
-      if (fileUris && fileUris.length > 0) {
+      try {
+        const fileUris = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          openLabel: 'Select Files',
+          canSelectFiles: true,
+          canSelectFolders: false,
+          defaultUri: defaultUri,
+          filters: {
+            'Text files': ['tex']
+          }
+        });
+
+        if (!fileUris || fileUris.length === 0) return null;
+
         const relativePaths = fileUris.map(uri => getRelativePath(uri.fsPath));
         showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
+      } catch (error) {
+        showErrorMessage(`Error selecting files: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
       }
-      return null;
     }),
     vscode.commands.registerCommand('coauthor.selectMultipleSampleFiles', async (currentSampleFile: string) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;

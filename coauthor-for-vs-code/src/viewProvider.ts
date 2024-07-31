@@ -221,30 +221,32 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
-    const htmlPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'index.html');
-    const cssPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'styles.css');
-    const jsPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'script.js');
+    try {
+      const htmlPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'index.html');
+      const cssPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'styles.css');
+      const jsPath = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', 'script.js');
 
-    let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
-    const nonce = this.getNonce();
+      const nonce = this.getNonce();
+      const styleUri = webview.asWebviewUri(cssPath);
+      const scriptUri = webview.asWebviewUri(jsPath);
 
-    const styleUri = webview.asWebviewUri(cssPath);
-    const scriptUri = webview.asWebviewUri(jsPath);
+      const config = vscode.workspace.getConfiguration('coauthor');
+      const tasks = config.get<string[]>('tasks') || [];
+      const taskOptions = tasks.map(task => `<option value="${task}">${task}</option>`).join('\n');
 
-    const config = vscode.workspace.getConfiguration('coauthor');
-    const tasks = config.get<string[]>('tasks') || [];
-    const taskOptions = tasks.map(task => `<option value="${task}">${task}</option>`).join('\n');
-
-    // Replace placeholders in HTML with actual content
-    htmlContent = htmlContent
-      .replace('${styleUri}', styleUri.toString())
-      .replace('${scriptUri}', scriptUri.toString())
-      .replace(/\${nonce}/g, nonce)
-      .replace('${taskOptions}', taskOptions)
-      .replace('${cspSource}', webview.cspSource);
-
-    return htmlContent;
+      // Replace placeholders in HTML with actual content
+      return htmlContent
+        .replace('${styleUri}', styleUri.toString())
+        .replace('${scriptUri}', scriptUri.toString())
+        .replace(/\${nonce}/g, nonce)
+        .replace('${taskOptions}', taskOptions)
+        .replace('${cspSource}', webview.cspSource);
+    } catch (error) {
+      console.error('Error generating HTML content:', error);
+      return '<html><body>Error loading content</body></html>';
+    }
   }
 
   private getNonce() {
