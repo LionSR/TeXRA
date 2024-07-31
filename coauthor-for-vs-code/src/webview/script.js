@@ -8,16 +8,9 @@ function handleCheckboxChange(event) {
 
 function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
-  if (!select) {
-    console.error(`Element with id '${selectId}' not found`);
-    return;
-  }
-  select.innerHTML = '<option value="">None</option>';
-  const fragment = document.createDocumentFragment();
-  files.forEach(file => {
-    fragment.appendChild(new Option(file, file));
-  });
-  select.appendChild(fragment);
+  if (!select) return console.error(`Element with id '${selectId}' not found`);
+  select.innerHTML = '<option value="">None</option>' + 
+    files.map(file => `<option value="${file}">${file}</option>`).join('');
 }
 
 function safeGetElementById(id) {
@@ -39,23 +32,14 @@ function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(`toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`);
   const fileElement = document.createElement('div');
-  fileElement.textContent = file;
-  const removeButton = document.createElement('span');
-  removeButton.textContent = ' -';
-  removeButton.className = 'remove-button';
-  removeButton.addEventListener('click', () => {
+  fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
+  fileElement.querySelector('.remove-button').addEventListener('click', () => {
     container.removeChild(fileElement);
     if (container.children.length === 0) {
-      if (containerId === 'outputFilesList') {
-        handleEmptyOutputFiles();
-      } else {
-        container.style.display = 'none';
-        toggleIcon.textContent = '▼';
-        saveState();
-      }
+      containerId === 'outputFilesList' ? handleEmptyOutputFiles() : 
+        (container.style.display = 'none', toggleIcon.textContent = '▼', saveState());
     }
   });
-  fileElement.appendChild(removeButton);
   container.appendChild(fileElement);
 }
 
