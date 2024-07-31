@@ -9,9 +9,11 @@ function handleCheckboxChange(event) {
 function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
   select.innerHTML = '<option value="">None</option>';
+  const fragment = document.createDocumentFragment();
   files.forEach(file => {
-    select.appendChild(new Option(file, file));
+    fragment.appendChild(new Option(file, file));
   });
+  select.appendChild(fragment);
 }
 
 function addFileToList(containerId, file) {
@@ -132,14 +134,20 @@ document.addEventListener('DOMContentLoaded', function () {
     'multipleInputFilesSelect',
     'multipleAuxFilesSelect',
     'multipleFiguresSelect',
-    'multipleSampleFilesSelect'
+    'multipleSampleFilesSelect',
+    'outputFilesList'
   ];
 
   sortableElements.forEach(id => {
-    new Sortable(document.getElementById(id), {
-      animation: 150,
-      onEnd: saveState
-    });
+    const element = document.getElementById(id);
+    if (element) {
+      new Sortable(element, {
+        animation: 150,
+        onEnd: saveState
+      });
+    } else {
+      console.warn(`Element with id '${id}' not found for Sortable initialization`);
+    }
   });
 
   document.getElementById('taskSelect').addEventListener('change', function () {
@@ -520,33 +528,33 @@ function toggleMultipleFiles(containerId, toggleIconId) {
 }
 
 function saveState() {
-  const state = {
-    modelSelect: document.getElementById('modelSelect').value,
-    taskSelect: document.getElementById('taskSelect').value,
-    inputFileSelect: document.getElementById('inputFileSelect').value,
-    sampleFileSelect: document.getElementById('sampleFileSelect').value,
-    auxFileSelect: document.getElementById('auxFileSelect').value,
-    figureFileSelect: document.getElementById('figureFileSelect').value,
-    taskInput: document.getElementById('taskInput').value,
-    reflectSelect: document.getElementById('reflectSelect').value,
-    commitSelect: document.getElementById('commitSelect').value,
-    autoExtractFigure: document.getElementById('autoExtractFigure').checked,
-    autoExtractTikzFigure: document.getElementById('autoExtractTikzFigure').checked,
-    includeTikzReflection: document.getElementById('includeTikzReflection').checked,
-    includeTexCount: document.getElementById('includeTexCount').checked,
-    multipleInputFilesSelectVisible: document.getElementById('multipleInputFilesSelect').style.display === 'block',
-    multipleSampleFilesSelectVisible: document.getElementById('multipleSampleFilesSelect').style.display === 'block',
-    multipleAuxFilesSelectVisible: document.getElementById('multipleAuxFilesSelect').style.display === 'block',
-    multipleFiguresSelectVisible: document.getElementById('multipleFiguresSelect').style.display === 'block',
-    multipleInputFilesSelect: getSelectedFiles(document.getElementById('multipleInputFilesSelect')),
-    multipleSampleFilesSelect: getSelectedFiles(document.getElementById('multipleSampleFilesSelect')),
-    multipleAuxFilesSelect: getSelectedFiles(document.getElementById('multipleAuxFilesSelect')),
-    multipleFiguresSelect: getSelectedFiles(document.getElementById('multipleFiguresSelect')),
-    outputFilesContainerVisible: document.getElementById('outputFilesContainer').style.display === 'block',
-    outputFiles: getSelectedFiles(document.getElementById('outputFilesList')),
-    outputNameOverrideVisible: document.getElementById('outputNameOverrideContainer').style.display === 'block',
-    outputNameOverride: document.getElementById('outputNameOverride').value,
-  };
+  const state = {};
+  const elementsToSave = [
+    'modelSelect', 'taskSelect', 'inputFileSelect', 'sampleFileSelect',
+    'auxFileSelect', 'figureFileSelect', 'taskInput', 'reflectSelect',
+    'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
+    'includeTikzReflection', 'includeTexCount', 'outputNameOverride'
+  ];
+
+  elementsToSave.forEach(id => {
+    const element = document.getElementById(id);
+    state[id] = element.type === 'checkbox' ? element.checked : element.value;
+  });
+
+  const multipleSelects = [
+    'multipleInputFilesSelect', 'multipleSampleFilesSelect',
+    'multipleAuxFilesSelect', 'multipleFiguresSelect'
+  ];
+
+  multipleSelects.forEach(id => {
+    state[`${id}Visible`] = document.getElementById(id).style.display === 'block';
+    state[id] = getSelectedFiles(document.getElementById(id));
+  });
+
+  state.outputFilesContainerVisible = document.getElementById('outputFilesContainer').style.display === 'block';
+  state.outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
+  state.outputNameOverrideVisible = document.getElementById('outputNameOverrideContainer').style.display === 'block';
+
   vscode.setState(state);
 }
 
