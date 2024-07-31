@@ -21,6 +21,7 @@ When writing the proposal, follow these guidelines:
 - Prioritize mathematical formulations over verbose descriptions whenever possible
 - When adding citations use commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use Non-breaking space (`~') before \cite such as "~\cite{...}" when appropriate.
 - Please be reminded that you will be writing a professional latex document so you should never use bare markdown style lists.
+- Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
 ]]>
 </system_prompt>
 <user_prefix>

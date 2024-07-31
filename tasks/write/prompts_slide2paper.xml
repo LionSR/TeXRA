@@ -21,6 +21,7 @@ When writing the paper, follow these guidelines:
 - Expand on the content from the slides, providing in-depth explanations and derivations
 - Ensure smooth transitions between sections and a logical flow of ideas
 - Follow any specific instructions provided for the paper writing task
+- Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
 ]]>
 </system_prompt>
 <user_prefix>
