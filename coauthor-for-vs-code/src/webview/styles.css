@@ -1,4 +1,5 @@
 :root {
+  /* Colors */
   --background-color: var(--vscode-sideBar-background);
   --text-color: var(--vscode-sideBar-foreground);
   --button-background: var(--vscode-button-background);
@@ -10,9 +11,19 @@
   --dropdown-background: var(--vscode-dropdown-background);
   --dropdown-foreground: var(--vscode-dropdown-foreground);
   --dropdown-border: var(--vscode-dropdown-border);
+  
+  /* Typography */
   --font-size: var(--vscode-font-size);
   --font-family: var(--vscode-font-family);
   --font-weight: var(--vscode-font-weight);
+  
+  /* Spacing */
+  --spacing-small: 5px;
+  --spacing-medium: 10px;
+  --spacing-large: 15px;
+  
+  /* Border radius */
+  --border-radius: 3px;
 }
 
 body {
@@ -25,8 +36,8 @@ body {
 
 .compact-selections {
   display: flex;
-  gap: 5px;
-  margin-bottom: 15px;
+  gap: var(--spacing-small);
+  margin-bottom: var(--spacing-large);
 }
 
 .select-group {
@@ -36,18 +47,18 @@ body {
 }
 
 .select-group label {
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   font-weight: bold;
-  margin-bottom: 2px;
+  margin-bottom: var(--spacing-small);
   text-align: center;
 }
 
 .select-group select {
   width: 100%;
-  padding: 4px;
+  padding: var(--spacing-small);
   height: 28px;
   border: 1px solid var(--input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   background-color: var(--input-background);
   color: var(--input-foreground);
 }
