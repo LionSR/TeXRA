@@ -265,29 +265,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const includeTikzReflection = document.getElementById('includeTikzReflection').checked;
     const includeTexCount = document.getElementById('includeTexCount').checked;
 
-    // Get additional input files
-    const multipleInputFilesSelectDiv = document.getElementById('multipleInputFilesSelect');
-    const additionalInputFiles = multipleInputFilesSelectDiv.style.display === 'block'
-      ? getSelectedFiles(multipleInputFilesSelectDiv).filter(file => file !== inputFile)
-      : [];
+    const getFiles = (selectId, singleFileId) => {
+      const selectDiv = document.getElementById(selectId);
+      const singleFile = document.getElementById(singleFileId).value;
+      return selectDiv.style.display === 'block'
+        ? getSelectedFiles(selectDiv)
+        : (singleFile ? [singleFile] : []);
+    };
 
-    // Get sample files
-    const multipleSampleFilesSelectDiv = document.getElementById('multipleSampleFilesSelect');
-    const sampleFiles = multipleSampleFilesSelectDiv.style.display === 'block'
-      ? getSelectedFiles(multipleSampleFilesSelectDiv)
-      : (sampleFile ? [sampleFile] : []);
-
-    // Get auxiliary files
-    const multipleAuxFilesSelectDiv = document.getElementById('multipleAuxFilesSelect');
-    const auxFiles = multipleAuxFilesSelectDiv.style.display === 'block'
-      ? getSelectedFiles(multipleAuxFilesSelectDiv)
-      : (auxFile ? [auxFile] : []);
-
-    // Get figure files
-    const multipleFiguresSelectDiv = document.getElementById('multipleFiguresSelect');
-    const figureFiles = multipleFiguresSelectDiv.style.display === 'block'
-      ? getSelectedFiles(multipleFiguresSelectDiv)
-      : (figureFile ? [figureFile] : []);
+    const additionalInputFiles = getFiles('multipleInputFilesSelect', 'inputFileSelect')
+      .filter(file => file !== inputFile);
+    const sampleFiles = getFiles('multipleSampleFilesSelect', 'sampleFileSelect');
+    const auxFiles = getFiles('multipleAuxFilesSelect', 'auxFileSelect');
+    const figureFiles = getFiles('multipleFiguresSelect', 'figureFileSelect');
 
     const outputFilesContainer = document.getElementById('outputFilesContainer');
     const outputFiles = outputFilesContainer.style.display === 'block'
