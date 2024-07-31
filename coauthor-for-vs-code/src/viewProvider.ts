@@ -72,28 +72,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'figureFileSelected', filePath: figureFile });
           }
           break;
-        case 'selectMultipleInputFiles':
-          const multipleInputFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleInputFiles', message.currentInputFile);
-          if (multipleInputFilesSelect) {
-            webviewView.webview.postMessage({ command: 'setMultipleInputFiles', files: multipleInputFilesSelect });
-          }
-          break;
-        case 'selectMultipleSampleFiles':
-          const multipleSampleFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleSampleFiles', message.currentSampleFile);
-          if (multipleSampleFilesSelect) {
-            webviewView.webview.postMessage({ command: 'setMultipleSampleFiles', files: multipleSampleFilesSelect });
-          }
-          break;
-        case 'selectMultipleAuxFiles':
-          const multipleAuxFilesSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleAuxFiles', message.currentAuxFile);
-          if (multipleAuxFilesSelect) {
-            webviewView.webview.postMessage({ command: 'setMultipleAuxFiles', files: multipleAuxFilesSelect });
-          }
-          break;
-        case 'selectMultipleFigures':
-          const multipleFiguresSelect = await vscode.commands.executeCommand<string[]>('coauthor.selectMultipleFigures', message.currentFigureFile);
-          if (multipleFiguresSelect) {
-            webviewView.webview.postMessage({ command: 'setMultipleFigures', files: multipleFiguresSelect });
+        case 'selectMultipleFiles':
+          const fileType = message.fileType;
+          const currentFile = message.currentFile;
+          const selectedFiles = await vscode.commands.executeCommand<string[]>(`coauthor.selectMultiple${fileType}`, currentFile);
+          if (selectedFiles) {
+            webviewView.webview.postMessage({ command: `setMultiple${fileType}`, files: selectedFiles });
           }
           break;
         case 'selectEditedFile':
