@@ -74,8 +74,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'selectMultipleFiles':
           const fileType = message.fileType;
-          const currentFile = message.currentFile;
-          const selectedFiles = await vscode.commands.executeCommand<string[]>(`coauthor.selectMultiple${fileType}`, currentFile);
+          const currentFileForMultiple = message.currentFile;
+          const selectedFiles = await vscode.commands.executeCommand<string[]>(`coauthor.selectMultiple${fileType}`, currentFileForMultiple);
           if (selectedFiles) {
             webviewView.webview.postMessage({ command: `setMultiple${fileType}`, files: selectedFiles });
           }
@@ -104,10 +104,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'requestEditedFile':
           if (message.inputFile || message.outputNameOverride) {
-            const baseFileName = message.outputNameOverride 
+            const baseFileNameForEdited = message.outputNameOverride 
               ? path.basename(message.outputNameOverride, path.extname(message.outputNameOverride))
               : path.basename(message.inputFile, path.extname(message.inputFile));
-            const allEditedFiles = await listEditedFiles(baseFileName);
+            const allEditedFiles = await listEditedFiles(baseFileNameForEdited);
             webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
           } else {
             vscode.window.showInformationMessage('Please select an input file or provide an output name override first.');
@@ -115,8 +115,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
-          const baseFileName = path.basename(message.filePath, path.extname(message.filePath));
-          const filteredEditedFiles = await listEditedFiles(baseFileName);
+          const baseFileNameForInput = path.basename(message.filePath, path.extname(message.filePath));
+          const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
           webviewView.webview.postMessage({ command: 'setEditedFiles', files: filteredEditedFiles });
           break;
         case 'sampleFileSelected':
@@ -174,9 +174,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFile, message.commitHash, message.clean);
           break;
         case 'getCurrentFile':
-          const currentFile = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
-          if (currentFile) {
-            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentFile });
+          const currentOpenFile = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
+          if (currentOpenFile) {
+            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile });
           } else {
             vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
           }
