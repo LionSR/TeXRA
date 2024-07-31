@@ -28,17 +28,15 @@ def main():
         }
     )
 
-    log_file = coa.log_start(args)
-
     model_settings = coa.get_model_settings(args)
     output_settings = coa.get_output_settings(args, task_settings)
     prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
 
-    model = model_settings["model"]
-    output_type = output_settings["output_type"]
-
     client = coa.get_model_client(model_settings["model"])
     log_file = coa.log_start(args)
+
+    model = model_settings["model"]
+    output_type = output_settings["output_type"]
 
     base_output_file = args.output_name_override if args.output_name_override else args.input_file
     output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
@@ -83,6 +81,7 @@ def main():
 
         if end_turn_reflect:
             if output_type == "tex":
+                coa.run_latexdiff(args.input_file, output_file_reflect, args.task, args.model)
                 coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
 
     coa.log_end(log_file)
