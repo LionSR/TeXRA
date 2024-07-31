@@ -13,7 +13,7 @@ You are a meticulous transcriber.
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully, as my work depends on the results.
+You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully, as the quality of my work depends on the results.
 
 <documents>
 <document name="example_transcript">
@@ -41,7 +41,7 @@ Improve the given noisy transcription while sticking to the original sentences a
 - Group sentences conveying the same idea or topic into well-structured, coherent paragraphs. This is crucial for clarity and readability.
 - Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
 - Correct punctuation as needed.
-- Correct grammatical mistakes.
+- Correct grammatical mistakes and ensure proper sentence structure.
 - Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
 - Fix recognition errors and mistranscriptions.
 - Transform spoken equations into LaTeX format:
