@@ -8,7 +8,7 @@ Your task is to write a research paper.
 When writing LaTeX, you must:
 - Use \begin{align} ... \end{align} for displayed equations
 - Use appropriate notation and terminology consistently throughout the text.
-- Keep the comments that starts with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in thte output.
+- Keep the comments that start with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in the output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
 - You should use \ldots or \cdots rather than "\dots" nor "..." to achieve an ellipsis following the best practice of chktex.
 - Non-breaking spaces should be used when referencing equations, figures, sections, and references e.g., use "Eq.~\eqref{eq:label}"; "see Fig.~\ref{fig:label}"; "Section~\ref{sec:label}"; "see Ref.~\cite{Jarzynski1997Nonequilibrium}".
