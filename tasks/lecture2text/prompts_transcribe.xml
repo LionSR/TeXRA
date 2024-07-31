@@ -8,7 +8,7 @@
 </settings>
 <prompts>
 <system_prompt>
-You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse.
+You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse and LaTeX.
 </system_prompt>
 <user_prefix>
 <![CDATA[
@@ -27,8 +27,8 @@ Improve the given noisy transcription while sticking to the original sentences a
 1. Be faithful to the original content.
 2. Group sentences conveying the same idea or topic into well-structured, coherent paragraphs. This is crucial for clarity and readability.
 3. Transform spoken equations into LaTeX format:
-    - For inline equations, use single dollar signs, e.g. $\sigma_x$ and $\ket{\psi}$
-    - For displayed equations, use double dollar signs, e.g. $$...$$
+    - For inline equations, use single dollar signs, e.g., $\sigma_x$ and $\ket{\psi}$
+    - For displayed equations, use double dollar signs, e.g., $$...$$
 4. Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
 5. Correct punctuation as needed.
 6. Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
