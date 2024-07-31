@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+import * as vscode from 'vscode';
+import * as path from 'path';
+
 export function getWorkspacePath(): string | undefined {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    return workspaceFolders ? workspaceFolders[0].uri.fsPath : undefined;
+    return vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 }
 
 export function getRelativePath(filePath: string): string {
@@ -11,14 +13,16 @@ export function getRelativePath(filePath: string): string {
     return workspacePath ? path.relative(workspacePath, filePath) : filePath;
 }
 
-export function showInfoMessage(message: string): void {
-    vscode.window.showInformationMessage(message);
-}
+export const showInfoMessage = vscode.window.showInformationMessage;
+export const showErrorMessage = vscode.window.showErrorMessage;
 
-export function showErrorMessage(message: string): void {
-    vscode.window.showErrorMessage(message);
-}
+export const getConfig = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coauthor');
 
-export function getConfig(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('coauthor');
+export function ensureArray<T>(value: T | T[] | null | undefined): T[] {
+    if (Array.isArray(value)) {
+        return value;
+    } else if (value !== null && value !== undefined) {
+        return [value];
+    }
+    return [];
 }

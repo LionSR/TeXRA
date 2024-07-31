@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { ensureTerminal } from './terminal';
 import { CoAuthorViewProvider } from './viewProvider';
 import * as path from 'path';
-import { getWorkspacePath, getRelativePath, showInfoMessage, showErrorMessage, getConfig } from './utils/commonUtils';
+import { getWorkspacePath, getRelativePath, showInfoMessage, showErrorMessage, getConfig, ensureArray } from './utils/commonUtils';
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -290,29 +290,16 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       let command = `coauthor ${task} --input_file="${inputFile}"`;
 
-      if (additionalInputFiles && additionalInputFiles.length > 0) {
-        command += ` --input_files="${additionalInputFiles.join(',')}"`;
-      }
-      if (auxFiles) {
-        const auxFileList = Array.isArray(auxFiles) ? auxFiles : [auxFiles];
-        if (auxFileList.length > 0) {
-          command += ` --auxiliary_files="${auxFileList.join(',')}"`;
+      const addFilesToCommand = (files: string[] | null, flag: string) => {
+        if (files && files.length > 0) {
+          command += ` ${flag}="${files.join(',')}"`;
         }
-      }
+      };
 
-      if (figureFiles) {
-        const figureFileList = Array.isArray(figureFiles) ? figureFiles : [figureFiles];
-        if (figureFileList.length > 0) {
-          command += ` --figure_inputs="${figureFileList.join(',')}"`;
-        }
-      }
-
-      if (sampleFiles) {
-        const sampleFileList = Array.isArray(sampleFiles) ? sampleFiles : [sampleFiles];
-        if (sampleFileList.length > 0) {
-          command += ` --sample_files="${sampleFileList.join(',')}"`;
-        }
-      }
+      addFilesToCommand(ensureArray(additionalInputFiles), '--input_files');
+      addFilesToCommand(ensureArray(auxFiles), '--auxiliary_files');
+      addFilesToCommand(ensureArray(figureFiles), '--figure_inputs');
+      addFilesToCommand(ensureArray(sampleFiles), '--sample_files');
 
       if (instructions) {
         const escapedInstructions = instructions
