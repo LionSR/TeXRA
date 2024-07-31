@@ -52,10 +52,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'selectSampleFile':
         case 'selectAuxFile':
         case 'selectFigureFile':
-          const fileType = message.command.replace('select', '').toLowerCase();
+          const fileType = message.command.replace('select', '');
           const file = await vscode.commands.executeCommand<string>(`coauthor.${message.command}`);
           if (file) {
-            webviewView.webview.postMessage({ command: `${fileType}Selected`, filePath: file });
+            webviewView.webview.postMessage({ command: `${fileType.charAt(0).toLowerCase() + fileType.slice(1)}Selected`, filePath: file });
           }
           break;
         case 'selectMultipleFiles':
