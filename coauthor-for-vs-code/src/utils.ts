@@ -1,19 +1,15 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-
-function getConfig() {
-  return vscode.workspace.getConfiguration('coauthor');
-}
+import { getWorkspacePath, getRelativePath, getConfig } from './utils/commonUtils';
 
 export async function listInputFiles(): Promise<string[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const workspacePath = workspaceFolders[0].uri.fsPath;
+  const workspacePath = getWorkspacePath();
+  if (workspacePath) {
     const config = getConfig();
-    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') || [];
-    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') || [];
-    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const ignoredExtensions = config.get<string[]>('ignoredFileExtensions') ?? [];
+    const ignoredKeywords = config.get<string[]>('ignoredKeywords') ?? [];
+    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') ?? [];
+    const ignoredDirectories = config.get<string[]>('ignoredDirectories') ?? [];
     return await getFilesRecursively(workspacePath, workspacePath, ['.txt', '.tex'], ignoredExtensions, ignoredDirectories, ignoredKeywords, ignoredInputFiles);
   }
   return [];
