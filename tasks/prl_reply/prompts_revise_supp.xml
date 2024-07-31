@@ -9,7 +9,7 @@
 </settings>
 <prompts>
 <system_prompt>
-Your task is to write research paper on developing a new variational method for quantum many body physics and rebuttal againsit the referrees.
+Your task is to write a research paper on developing a new variational method for quantum many-body physics and rebut the referees' comments.
 
 When writing LaTeX, you must:
 - Use \be for \begin{equation} and \ee for \end{equation}. 

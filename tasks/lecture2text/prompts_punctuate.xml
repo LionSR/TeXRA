@@ -8,7 +8,7 @@
 </settings>
 <prompts>
 <system_prompt>
-You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse.
+You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse and LaTeX.
 </system_prompt>
 <user_prefix>
 <![CDATA[
@@ -27,7 +27,7 @@ Please help me improve the readability of the following transcription generated 
 Instructions:
 1. Be faithful.
 2. Correct any punctuation errors and add appropriate punctuation where necessary. In particular, replace commas that were used arbitrarily to make the sentence long with periods. Period should be use before 'so' and 'then' etc. Do a line break after each sentence.
-3. Spoken equations must be transformed into latex equations (inline equations: dollar signs such as $\sigma_x$ and $\ket{\psi}$ or display equations $$...$$).
+3. Transform spoken equations into LaTeX equations (inline equations: single dollar signs such as $\sigma_x$ and $\ket{\psi}$; display equations: double dollar signs $$...$$).
 
 Here are some examples:
 <example1>
