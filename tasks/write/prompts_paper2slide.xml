@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <task name="paper2slide">
-<settings>
-<document_tag>beamer_presentation</document_tag>
-<end_tag>&lt;/beamer_presentation&gt;</end_tag>
-<output_type>tex</output_type>
-<prefill_first>&lt;scratchpad&gt;</prefill_first>
-</settings>
-<prompts>
-<system_prompt>
+    <settings>
+        <document_tag>beamer_presentation</document_tag>
+        <end_tag>&lt;/beamer_presentation&gt;</end_tag>
+        <output_type>tex</output_type>
+        <prefill_first>&lt;scratchpad&gt;</prefill_first>
+    </settings>
+    <prompts>
+        <system_prompt>
 <![CDATA[
 You are an expert physicist and scientific presenter. Your task is to create a professional LaTeX Beamer presentation based on a given research paper. The presentation should be tailored for a physics audience, highlighting the key points, methodology, results, and conclusions of the paper.
 
@@ -19,9 +19,10 @@ When creating the presentation:
 - Maintain a professional and scientifically rigorous tone throughout the presentation
 - Use appropriate physics notation and terminology consistently
 - Prioritize visual representations and key takeaways over verbose descriptions
+- Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name.
 ]]>
 </system_prompt>
-<user_prefix>
+        <user_prefix>
 <![CDATA[
 You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
 
@@ -51,7 +52,7 @@ Additonally, if provided, focus on the following specific instruction:
 </instruction>
 ]]>
 </user_prefix>
-<user_request>
+        <user_request>
 <![CDATA[
 Based on the research paper provided, please create a professional LaTeX Beamer presentation for a physics audience. In the scratchpad below, outline the key points and structure you plan to include in the presentation.
 
@@ -118,7 +119,7 @@ Then, please create the LaTeX Beamer presentation, incorporating the key points 
 </beamer_presentation>
 ]]>
 </user_request>
-<user_reflect>
+        <user_reflect>
 <![CDATA[
 Please review your draft LaTeX Beamer presentation critically, focusing on the following points:
 
@@ -154,5 +155,5 @@ Based on this reflection, please revise the LaTeX Beamer presentation to enhance
 Output your revised presentation within the <beamer_presentation></beamer_presentation> tags.
 ]]>
 </user_reflect>
-</prompts>
+    </prompts>
 </task>
