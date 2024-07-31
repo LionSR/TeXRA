@@ -3,16 +3,16 @@ import { exec } from 'child_process';
 import { ensureTerminal } from './terminal';
 import { CoAuthorViewProvider } from './viewProvider';
 import * as path from 'path';
+import { getWorkspacePath, getRelativePath, showInfoMessage, showErrorMessage, getConfig } from './utils/commonUtils';
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('coauthor.selectMultipleInputFiles', async (currentInputFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
 
       const defaultUri = currentInputFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
@@ -29,8 +29,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       });
       if (fileUris && fileUris.length > 0) {
-        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
-        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        const relativePaths = fileUris.map(uri => getRelativePath(uri.fsPath));
+        showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
       return null;
