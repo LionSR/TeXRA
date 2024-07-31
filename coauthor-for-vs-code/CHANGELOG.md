@@ -1,5 +1,29 @@
 # Frontend Changelog
 
+## [0.8.1] - [0.8.4]
+
+- **Added:**
+  - Implemented adaptive theming support for light and dark VS Code themes
+  - Enhanced UI consistency across different color schemes
+  - Updated file selection area to match VS Code's native dropdown styles
+- **Changed:**
+  - Refactored CSS to use VS Code theme variables for better integration
+  - Updated WebView implementation for improved performance and maintainability
+- **Improved:**
+  - Enhanced overall user experience with consistent styling
+  - Optimized state management and event handling in WebView
+- **Refactored:**
+  - Unified message passing for multiple file selection functions
+  - Consolidated logic for file selection cases in viewProvider.ts
+  - Improved conciseness in script.js for file selection and handling
+  - Reorganized CSS variables for better maintainability
+  - Enhanced error handling and variable naming in viewProvider.ts
+- **Fixed:**
+  - Resolved issues with variable redeclaration in viewProvider.ts
+  - Fixed Content Security Policy in index.html to allow loading Sortable.js from CDN
+- Aider wrote most of the codes.
+
+
 ## [0.8.0]
 
 - **Added:**
