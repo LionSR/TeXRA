@@ -289,9 +289,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('executeButton').addEventListener('click', function () {
     const task = document.getElementById('taskSelect').value;
     const inputFile = document.getElementById('inputFileSelect').value;
-    const sampleFile = document.getElementById('sampleFileSelect').value;
-    const auxFile = document.getElementById('auxFileSelect').value;
-    const figureFile = document.getElementById('figureFileSelect').value;
     const instructions = document.getElementById('taskInput').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
@@ -675,7 +672,7 @@ window.addEventListener('message', event => {
     case 'setMultipleAuxFiles':
     case 'setMultipleFigures':
       updateMultipleFileSelect(
-        `${message.command.replace('setMultiple', 'multiple').toLowerCase()}Select`,
+        `${message.command.replace('setMultiple', 'multiple')}Select`,
         `toggle${message.command.replace('set', '')}`,
         message.files
       );
