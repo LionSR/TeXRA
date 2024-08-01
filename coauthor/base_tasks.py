@@ -81,13 +81,35 @@ class ThinkWrite(BaseReflectChainTask):
 
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
-            if "<scratchpad>" in self.output_settings["prefill_first"]:
-                coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
-                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+            coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
+            output_files = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+
+            if isinstance(output_files, list):  # Multiple output files
+                self._handle_multiple_outputs(output_files)
+            else:  # Single output file
+                self._handle_single_output(output_files)
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
+
+        self._handle_reflection_diff(end_turn)
+
+    def _handle_single_output(self, output_file):
+        coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+    def _handle_multiple_outputs(self, output_files):
+        for input_file, output_file in zip(self.args.output_files, output_files):
+            coa.log_output_files(output_file, self.log_file)
+            coa.run_latexdiff(input_file, output_file, self.args.task)
+
+    def _handle_reflection_diff(self, end_turn):
+        if self.args.reflect and end_turn:
+            first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
+            reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
+            if os.path.exists(first_output) and os.path.exists(reflect_output):
+                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            else:
+                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
 
     def reflect(self, state, messages):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
