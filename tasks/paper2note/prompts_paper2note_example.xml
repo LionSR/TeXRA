@@ -8,7 +8,7 @@ You are provided with the following:
 {INPUT_CONTENT}
 </txt_content>
 
-This is the content of a text file generated from a PDF on stochastic differential equations. You need to convert this content into a LaTeX file.
+This is the content of a text file generated from a PDF on {TOPIC}. You need to convert this content into a LaTeX file.
 
 You are also provided with a sample LaTeX file in the desired style:
 <sample_tex>
