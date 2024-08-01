@@ -23,8 +23,10 @@ anthropic_models = set(model_mapping.keys()) | {
     "claude-3-haiku-20240307",
 }
 
+
 def is_openai_model(model):
     return "gpt" in model
+
 
 def is_anthropic_model(model):
     return model in anthropic_models
@@ -32,26 +34,21 @@ def is_anthropic_model(model):
 
 def get_model_client(model):
     import os
-    
+
     if is_openai_model(model):
         from openai import OpenAI
+
         return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     elif is_anthropic_model(model):
         from anthropic import Anthropic
+
         return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     else:
         raise ValueError("Unsupported model type")
 
 
 def compute_api_price(input_tokens, output_tokens, model):
-    prices = {
-        "sonnet": (3, 15),
-        "opus": (15, 75),
-        "haiku": (0.25, 1.25),
-        "gpt4t": (10, 30),
-        "gpt4o": (5, 15),
-        "gpt4o-": (0.15, 0.6)
-    }
+    prices = {"sonnet": (3, 15), "opus": (15, 75), "haiku": (0.25, 1.25), "gpt4t": (10, 30), "gpt4o": (5, 15), "gpt4o-": (0.15, 0.6)}
 
     for key, (input_rate, output_rate) in prices.items():
         if key in model:
