@@ -181,9 +181,7 @@ def process_first_round(
     return state, accumulated_output, end_turn, messages
 
 
-def process_reflection_round(
-    client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None
-):
+def process_reflection_round(client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
     use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
