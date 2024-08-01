@@ -95,7 +95,7 @@ class BaseReflectChainTask(ABC):
 class ThinkWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = "xml" if self.use_scratchpad else self.output_settings["output_type"]
+        file_extension = "xml"
         return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
     def handle_output(self, state, end_turn, output_file):
