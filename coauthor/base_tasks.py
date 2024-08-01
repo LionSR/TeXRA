@@ -49,6 +49,7 @@ class ThinkWrite:
         )
 
         self.handle_output(state, end_turn, initial_output_file)
+        return state, messages
 
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
@@ -62,8 +63,9 @@ class ThinkWrite:
 
     def run(self):
         self.setup()
-        self.process()
+        state, messages = self.process()
         coa.log_end(self.log_file)
+        return state, messages
 
 
 class DirectWrite(ThinkWrite):
