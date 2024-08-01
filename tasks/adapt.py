@@ -15,6 +15,7 @@ class Adapt(DirectWrite):
                 "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
             }
         )
+        return user_vars
         if self.args.task == "adapt":
             user_vars["NEW_LECTURE_NOTES"] = coa.read_file(self.args.input_file)
         return user_vars
