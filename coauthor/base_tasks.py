@@ -121,5 +121,4 @@ class DirectWrite(BaseTask):
         pass
 
 
-class ThinkWriteAndReflect(ThinkWrite):
-    pass  # This class is now redundant as reflection is handled in the BaseTask
+# Remove the ThinkWriteAndReflect class as it's now redundant
