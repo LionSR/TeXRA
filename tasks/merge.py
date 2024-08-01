@@ -1,11 +1,11 @@
-from coauthor.base_tasks import ThinkWrite
+from coauthor.base_tasks import DirectWrite
 import coauthor as coa
 from termcolor import colored
 
 prompt_path = coa.get_prompt_path(coa, "merge")
 
 
-class Merge(ThinkWrite):
+class Merge(DirectWrite):
     def get_user_vars(self):
         user_vars = {
             "INPUT_FILE": self.args.input_file,
@@ -15,21 +15,10 @@ class Merge(ThinkWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    def process(self):
-        output_file = coa.get_output_file_name_merge(self.args.input_file, self.args.edited_file)
+    def get_output_file(self):
+        return coa.get_output_file_name_merge(self.args.input_file, self.args.edited_file)
 
-        state, accumulated_output, end_turn, messages = coa.process_first_round(
-            self.client,
-            self.args.task,
-            self.args.input_file,
-            output_file,
-            self.user_vars,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-            figure_inputs=self.args.figure_inputs,
-        )
-
+    def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.run_latexdiff(self.args.input_file, output_file, self.args.task, self.args.model)
 

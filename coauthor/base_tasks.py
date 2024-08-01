@@ -66,13 +66,34 @@ class ThinkWrite:
         coa.log_end(self.log_file)
 
 
+class DirectWrite(ThinkWrite):
+    def process(self):
+        output_file = self.get_output_file()
+        state, accumulated_output, end_turn, messages = coa.process_first_round(
+            self.client,
+            self.args.task,
+            self.args.input_file,
+            output_file,
+            self.user_vars,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+            figure_inputs=self.args.figure_inputs,
+        )
+        self.handle_output(state, end_turn, output_file)
+        return state, messages
+
+    def get_output_file(self):
+        raise NotImplementedError("Subclasses must implement get_output_file method")
+
+
 class ThinkWriteAndReflect(ThinkWrite):
     def process(self):
-        super().process()
+        state, messages = super().process()
         if self.args.reflect:
-            self.reflect()
+            self.reflect(state, messages)
 
-    def reflect(self):
+    def reflect(self, state, messages):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
         file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
@@ -83,8 +104,8 @@ class ThinkWriteAndReflect(ThinkWrite):
             self.args.task,
             self.args.input_file,
             reflect_output_file,
-            None,  # state
-            None,  # messages
+            state,
+            messages,
             model_settings=self.model_settings,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,

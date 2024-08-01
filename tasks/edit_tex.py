@@ -32,6 +32,12 @@ class EditTex(ThinkWriteAndReflect):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
 
+        # Add latexdiff comparison between first output and reflected output
+        if self.args.reflect and end_turn:
+            first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
+            reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
+            coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+
 
 def main():
     parser = coa.get_common_argparser()
