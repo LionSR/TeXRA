@@ -140,12 +140,10 @@ def _create_image_content(image_contents, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
