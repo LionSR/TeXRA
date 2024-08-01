@@ -5,6 +5,7 @@ import difflib
 import xml.etree.ElementTree as ET
 
 from .file_utils import read_file, write_file
+from .base_tasks import get_output_file_name
 
 
 
