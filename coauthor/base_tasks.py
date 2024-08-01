@@ -216,12 +216,21 @@ class ThinkWrite(BaseReflectChainTask):
         if self.output_settings["output_type"] == "tex":
             reflect_output_file = self.get_output_file_reflect()
             if os.path.exists(reflect_output_file):
-                reflect_output_files = split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
-                for first_output, reflect_output in zip(self.first_round_output_files, reflect_output_files):
-                    if os.path.exists(first_output) and os.path.exists(reflect_output):
-                        run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+                if self.args.output_files:
+                    reflect_output_files = split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
+                    for first_output, reflect_output in zip(self.first_round_output_files, reflect_output_files):
+                        if os.path.exists(first_output) and os.path.exists(reflect_output):
+                            run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+                        else:
+                            print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                else:
+                    reflect_output = split_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
+                    if os.path.exists(self.first_round_output_files[0]) and os.path.exists(reflect_output):
+                        run_latexdiff(self.first_round_output_files[0], reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
                     else:
-                        print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                        print(
+                            f"Warning: Could not generate latexdiff for reflection. Files not found: {self.first_round_output_files[0]} or {reflect_output}"
+                        )
             else:
                 print(f"Warning: Could not generate latexdiff for reflection. Reflection output file not found: {reflect_output_file}")
 
