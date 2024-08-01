@@ -51,13 +51,13 @@ class BaseReflectChainTask(ABC):
         print(f"{colored('args:', 'blue')} {self.args}")
         print(colored(f"Processing {self.args.input_file}...\n", "green"))
 
-        self.task_settings, self.prompt_dict = coa.load_task_settings_and_prompts(self.prompt_path, self.args.task)
+        self.task_settings, self.prompt_dict = load_task_settings_and_prompts(self.prompt_path, self.args.task)
         self.user_vars = self.get_user_vars()
-        self.model_settings = coa.get_model_settings(self.args)
-        self.output_settings = coa.get_output_settings(self.args, self.task_settings)
-        self.prompt_settings = coa.get_prompt_settings(self.args, self.prompt_path, self.prompt_dict)
-        self.client = coa.get_model_client(self.model_settings["model"])
-        self.log_file = coa.log_start(self.args)
+        self.model_settings = get_model_settings(self.args)
+        self.output_settings = get_output_settings(self.args, self.task_settings)
+        self.prompt_settings = get_prompt_settings(self.args, self.prompt_path, self.prompt_dict)
+        self.client = get_model_client(self.model_settings["model"])
+        self.log_file = log_start(self.args)
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
         self.output_file = self.get_output_file()
         self.reflect_output_file = self.get_output_file_reflect()
@@ -80,20 +80,20 @@ class BaseReflectChainTask(ABC):
 
     def _handle_single_output(self, output_file):
         if self.output_settings["output_type"] == "tex":
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+            run_latexdiff(self.args.input_file, output_file, self.args.task)
 
     def _handle_multiple_outputs(self, output_files):
         for input_file, output_file in zip(self.args.output_files, output_files):
-            coa.log_output_files(output_file, self.log_file)
+            log_output_files(output_file, self.log_file)
             if self.output_settings["output_type"] == "tex":
-                coa.run_latexdiff(input_file, output_file, self.args.task)
+                run_latexdiff(input_file, output_file, self.args.task)
 
     @abstractmethod
     def _handle_reflection_diff(self, end_turn):
         pass
 
     def process(self):
-        state, accumulated_output, end_turn, messages = coa.process_first_round(
+        state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
             self.args.input_file,
             self.output_file,
@@ -115,11 +115,11 @@ class BaseReflectChainTask(ABC):
                 self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
             )
             print(f"Extracting TikZ figures from {generated_output_file}")
-            extracted_tikz_figures = coa.extract_and_compile_tikzpictures_with_labels(generated_output_file)
+            extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
             if extracted_tikz_figures:
                 reflection_figure_inputs.extend(extracted_tikz_figures)
 
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+        state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
             self.args.input_file,
             self.reflect_output_file,
@@ -139,7 +139,7 @@ class BaseReflectChainTask(ABC):
         state, messages = self.process()
         if self.args.reflect:
             state, messages = self.reflect(state, messages)
-        coa.log_end(self.log_file)
+        log_end(self.log_file)
         return state, messages
 
 
@@ -169,17 +169,17 @@ class ThinkWrite(BaseReflectChainTask):
 
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         if end_turn:
-            coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
+            ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
 
             if self.args.output_files:  # Multiple output files
-                output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+                output_files = split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
                 if is_reflection_complete:
                     self.reflect_round_output_files = output_files
                 else:
                     self.first_round_output_files = output_files
             else:  # Single output file
-                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+                output_file = split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_single_output(output_file)
                 if is_reflection_complete:
                     self.reflect_round_output_files = [output_file]
@@ -189,17 +189,17 @@ class ThinkWrite(BaseReflectChainTask):
             if is_reflection_complete:
                 self._handle_reflection_diff(end_turn)
 
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+        log_output_files(output_file, self.log_file)
+        log_and_print_statistics(state, self.args.model, self.log_file)
 
     def _handle_reflection_diff(self, end_turn):
         if self.output_settings["output_type"] == "tex":
             reflect_output_file = self.get_output_file_reflect()
             if os.path.exists(reflect_output_file):
-                reflect_output_files = coa.split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
+                reflect_output_files = split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
                 for first_output, reflect_output in zip(self.first_round_output_files, reflect_output_files):
                     if os.path.exists(first_output) and os.path.exists(reflect_output):
-                        coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+                        run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
                     else:
                         print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
             else:
@@ -227,7 +227,7 @@ class DirectWrite(BaseReflectChainTask):
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         if end_turn:
             if self.args.output_files:  # Multiple output files
-                output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+                output_files = split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
             else:  # Single output file
                 self._handle_single_output(output_file)
@@ -235,14 +235,14 @@ class DirectWrite(BaseReflectChainTask):
             if is_reflection_complete:
                 self._handle_reflection_diff(end_turn)
 
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+        log_output_files(output_file, self.log_file)
+        log_and_print_statistics(state, self.args.model, self.log_file)
 
     def _handle_reflection_diff(self, end_turn):
         if self.output_settings["output_type"] == "tex":
             first_output = self.get_output_file()
             reflect_output = self.get_output_file_reflect()
             if os.path.exists(first_output) and os.path.exists(reflect_output):
-                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+                run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
             else:
                 print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
