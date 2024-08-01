@@ -105,7 +105,6 @@ class ThinkWrite(BaseReflectChainTask):
     def process(self):
         state, accumulated_output, end_turn, messages = coa.process_first_round(
             self.client,
-            self.args.task,
             self.args.input_file,
             self.output_file,
             self.user_vars,
@@ -177,7 +176,6 @@ class ThinkWrite(BaseReflectChainTask):
 
         state, accumulated_output, end_turn, messages = coa.process_reflection_round(
             self.client,
-            self.args.task,
             self.args.input_file,
             self.reflect_output_file,
             state,
