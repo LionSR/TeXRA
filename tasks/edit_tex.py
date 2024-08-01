@@ -1,3 +1,4 @@
+import os
 from coauthor.base_tasks import ThinkWriteAndReflect
 import coauthor as coa
 
