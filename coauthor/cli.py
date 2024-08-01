@@ -104,6 +104,7 @@ def execute_task(script, task, model, input_file, **kwargs):
 
 @click.group()
 def cli():
+    """Main CLI group for coauthor commands."""
     pass
 
 
