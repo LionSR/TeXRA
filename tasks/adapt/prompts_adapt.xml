@@ -37,8 +37,8 @@ Here are your existing lecture notes with consistent notation and style with add
 {EXISTING_LECTURE_NOTES}
 </document>
 
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+<document name="new_lecture_notes">
+{NEW_LECTURE_NOTES}
 </document>
 </documents>
 ]]>
