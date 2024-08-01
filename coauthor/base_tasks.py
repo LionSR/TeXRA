@@ -87,12 +87,12 @@ class ThinkWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = "xml" if self.use_scratchpad else self.output_settings["output_type"]
-        return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
     def get_reflect_output_file(self):
         if self.args.reflect:
             base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            return coa.get_output_file_name(
+            return get_output_file_name(
                 base_output_file,
                 self.args.task,
                 self.model_settings["model"],
@@ -161,7 +161,7 @@ class ThinkWrite(BaseReflectChainTask):
 
         # Extract TikZ pictures if include_tikz_reflection is set
         if self.prompt_settings.get("include_tikz_reflection"):
-            generated_output_file = coa.get_output_file_name(
+            generated_output_file = get_output_file_name(
                 self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
             )
             print(f"Extracting TikZ figures from {generated_output_file}")
@@ -188,12 +188,12 @@ class ThinkWrite(BaseReflectChainTask):
 class DirectWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
+        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
 
     def get_reflect_output_file(self):
         if self.args.reflect:
             base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            return coa.get_output_file_name(
+            return get_output_file_name(
                 base_output_file,
                 self.args.task,
                 self.model_settings["model"],
