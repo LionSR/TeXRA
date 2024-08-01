@@ -14,13 +14,22 @@ class Paper2Note(DirectWrite):
                 "COMMANDS_CONTENT": coa.read_file("command.tex"),
             }
         )
+        if self.args.example_paper and self.args.example_lecture_note:
+            user_vars.update(
+                {
+                    "EXAMPLE_PAPER": coa.read_file(self.args.example_paper),
+                    "EXAMPLE_LECTURE_NOTE": coa.read_file(self.args.example_lecture_note),
+                }
+            )
         return user_vars
 
 
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--sample_chapters", type=str, nargs="+", help="Paths to the sample chapter TeX files.")
-    parser.add_argument("--task", type=str, default="paper2note", help="Task to perform, currently only 'paper2note'.", choices=["paper2note"])
+    parser.add_argument("--example_paper", type=str, help="Path to an example research paper.")
+    parser.add_argument("--example_lecture_note", type=str, help="Path to an example lecture note corresponding to the example paper.")
+    parser.add_argument("--task", type=str, default="paper2note", help="Task to perform, either 'paper2note' or 'paper2note_example'.", choices=["paper2note", "paper2note_example"])
     args = parser.parse_args()
 
     paper2note = Paper2Note(args, prompt_path)
