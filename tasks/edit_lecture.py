@@ -1,4 +1,3 @@
-import os
 from coauthor.base_tasks import ThinkWrite
 import coauthor as coa
 
@@ -25,28 +24,6 @@ class EditLecture(ThinkWrite):
         else:
             coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
-
-    def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
-        super().handle_output(state, end_turn, output_file, is_reflection_complete)
-
-        if end_turn and self.output_settings["output_type"] == "tex":
-            if self.args.output_files:  # Multiple output files
-                for input_file, output_file in zip(self.args.output_files, self.first_round_output_files):
-                    coa.run_latexdiff(input_file, output_file, self.args.task)
-            else:  # Single output file
-                coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
-
-    def _handle_reflection_diff(self, end_turn):
-        super()._handle_reflection_diff(end_turn)
-        if self.output_settings["output_type"] == "tex":
-            if self.args.output_files:  # Multiple output files
-                for first_output, reflect_output in zip(self.first_round_output_files, self.reflect_round_output_files):
-                    coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
-            else:  # Single output file
-                first_output = self.get_output_file()
-                reflect_output = self.get_output_file_reflect()
-                if os.path.exists(first_output) and os.path.exists(reflect_output):
-                    coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
 
 
 def main():
