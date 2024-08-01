@@ -112,10 +112,11 @@ def cli():
 @shared_arguments
 def correct_tex(model, input_file, **kwargs):
     task = "correct"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
+
     execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
@@ -123,10 +124,10 @@ def correct_tex(model, input_file, **kwargs):
 @shared_arguments
 def polish_tex(model, input_file, **kwargs):
     task = "polish"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
@@ -134,10 +135,10 @@ def polish_tex(model, input_file, **kwargs):
 @shared_arguments
 def draw_tex(model, input_file, **kwargs):
     task = "draw"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_tex", task, model, input_file, **kwargs)
 
 
@@ -157,10 +158,10 @@ def correct_st(model, input_file, **kwargs):
 @shared_arguments
 def polish_st(model, input_file, **kwargs):
     task = "polish_st"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
@@ -168,10 +169,10 @@ def polish_st(model, input_file, **kwargs):
 @shared_arguments
 def polish_qi(model, input_file, **kwargs):
     task = "polish_qi"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
@@ -179,10 +180,10 @@ def polish_qi(model, input_file, **kwargs):
 @shared_arguments
 def draw_st(model, input_file, **kwargs):
     task = "draw_st"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
@@ -190,10 +191,10 @@ def draw_st(model, input_file, **kwargs):
 @shared_arguments
 def draw_qi(model, input_file, **kwargs):
     task = "draw_qi"
-    if kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
     if kwargs.get("output_files"):
         task = f"{task}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        task = f"{task}_with_auxiliary"
     execute_task("edit_lecture", task, model, input_file, **kwargs)
 
 
