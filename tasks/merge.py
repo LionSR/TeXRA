@@ -19,13 +19,8 @@ class Merge(DirectWrite):
         return coa.get_output_file_name_merge(self.args.input_file, self.args.edited_file)
 
     def handle_output(self, state, end_turn, output_file):
-        if end_turn and self.output_settings["output_type"] == "tex":
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task, self.args.model)
-
+        super().handle_output(state, end_turn, output_file)
         print(colored(f"Output file: {output_file}", "yellow"))
-
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
 
 
 def main():
