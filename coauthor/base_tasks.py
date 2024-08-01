@@ -63,10 +63,6 @@ class BaseReflectChainTask(ABC):
         pass
 
     @abstractmethod
-    def reflect(self, state, messages):
-        pass
-
-    @abstractmethod
     def get_output_file(self):
         pass
 
@@ -82,6 +78,33 @@ class BaseReflectChainTask(ABC):
                 coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
             else:
                 print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+
+    def reflect(self, state, messages):
+        reflection_figure_inputs = []
+
+        if self.prompt_settings.get("include_tikz_reflection"):
+            generated_output_file = get_output_file_name(
+                self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
+            )
+            print(f"Extracting TikZ figures from {generated_output_file}")
+            extracted_tikz_figures = coa.extract_and_compile_tikzpictures_with_labels(generated_output_file)
+            if extracted_tikz_figures:
+                reflection_figure_inputs.extend(extracted_tikz_figures)
+
+        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+            self.client,
+            self.args.input_file,
+            self.reflect_output_file,
+            state,
+            messages,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+            figure_inputs=reflection_figure_inputs,
+        )
+
+        self.handle_output(state, end_turn, self.reflect_output_file)
+        return state, messages
 
     def run(self):
         self.setup()
@@ -121,33 +144,6 @@ class ThinkWrite(BaseReflectChainTask):
             coa.log_output_files(output_file, self.log_file)
             coa.run_latexdiff(input_file, output_file, self.args.task)
 
-    def reflect(self, state, messages):
-        reflection_figure_inputs = []
-
-        if self.prompt_settings.get("include_tikz_reflection"):
-            generated_output_file = get_output_file_name(
-                self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
-            )
-            print(f"Extracting TikZ figures from {generated_output_file}")
-            extracted_tikz_figures = coa.extract_and_compile_tikzpictures_with_labels(generated_output_file)
-            if extracted_tikz_figures:
-                reflection_figure_inputs.extend(extracted_tikz_figures)
-
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
-            self.client,
-            self.args.input_file,
-            self.reflect_output_file,
-            state,
-            messages,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-            figure_inputs=reflection_figure_inputs,
-        )
-
-        self.handle_output(state, end_turn, self.reflect_output_file)
-        return state, messages
-
 
 class DirectWrite(BaseReflectChainTask):
     def process(self):
@@ -172,21 +168,6 @@ class DirectWrite(BaseReflectChainTask):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
-
-    def reflect(self, state, messages):
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
-            self.client,
-            self.args.input_file,
-            self.reflect_output_file,
-            state,
-            messages,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-        )
-
-        self.handle_output(state, end_turn, self.reflect_output_file)
-        return state, messages
 
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
