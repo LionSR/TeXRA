@@ -189,9 +189,18 @@ class DirectWrite(BaseReflectChainTask):
 
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+            if self.args.output_files:  # Multiple output files
+                output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+                self._handle_multiple_outputs(output_files)
+            else:  # Single output file
+                coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
+
+    def _handle_multiple_outputs(self, output_files):
+        for input_file, output_file in zip(self.args.output_files, output_files):
+            coa.log_output_files(output_file, self.log_file)
+            coa.run_latexdiff(input_file, output_file, self.args.task)
 
