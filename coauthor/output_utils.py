@@ -5,7 +5,17 @@ import difflib
 import xml.etree.ElementTree as ET
 
 from .file_utils import read_file, write_file
-from .base_tasks import get_output_file_name
+
+
+def get_output_file_name(input_file, task, model, output_type, reflect=False):
+    file_name, _ = os.path.splitext(input_file)
+    first_task_chunk = task.split("_")[0]
+    output_type = output_type.strip(".")
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    if reflect:
+        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
+    print(f"Output file: {colored(output_file, 'cyan')}")
+    return output_file
 
 
 def check_for_massive_repetition(last_response, new_response):
