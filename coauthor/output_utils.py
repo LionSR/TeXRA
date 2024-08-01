@@ -8,8 +8,6 @@ from .file_utils import read_file, write_file
 from .base_tasks import get_output_file_name
 
 
-
-
 def check_for_massive_repetition(last_response, new_response):
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
