@@ -1,5 +1,6 @@
 from coauthor.base_tasks import ThinkWrite
 import coauthor as coa
+from termcolor import colored
 
 prompt_path = coa.get_prompt_path(coa, "merge")
 
