@@ -138,10 +138,8 @@ class ThinkWrite(BaseReflectChainTask):
                 self._generate_reflection_diff(self.args.input_file, None)
 
     def _generate_reflection_diff(self, input_file, output_file):
-        first_output = coa.get_output_file_name(input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
-        reflect_output = coa.get_output_file_name(
-            input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True
-        )
+        first_output = self.get_output_file()
+        reflect_output = self.get_reflect_output_file()
         if os.path.exists(first_output) and os.path.exists(reflect_output):
             coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
         else:
