@@ -16,17 +16,7 @@ class WriteTex(ThinkWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    def handle_output(self, state, end_turn, output_file):
-        if end_turn:
-            if "<scratchpad>" in self.output_settings["prefill_first"]:
-                coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
-                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
-
-            if self.output_settings["output_type"] == "tex":
-                coa.run_latexdiff(self.args.input_file, output_file, self.args.task, self.args.model)
-
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+    # The handle_output method is inherited from ThinkWrite
 
 
 def main():
