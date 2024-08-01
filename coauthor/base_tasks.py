@@ -4,17 +4,19 @@ from termcolor import colored
 import coauthor as coa
 
 
+def get_output_file_name(input_file, task, model, output_type, reflect=False):
+    file_name, _ = os.path.splitext(input_file)
+    first_task_chunk = task.split("_")[0]
+    output_type = output_type.strip(".")
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    if reflect:
+        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
+    print(f"Output file: {colored(output_file, 'cyan')}")
+    return output_file
+
+
 class BaseReflectChainTask(ABC):
-    @staticmethod
-    def get_output_file_name(input_file, task, model, output_type, reflect=False):
-        file_name, _ = os.path.splitext(input_file)
-        first_task_chunk = task.split("_")[0]
-        output_type = output_type.strip(".")
-        output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
-        if reflect:
-            output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
-        print(f"Output file: {colored(output_file, 'cyan')}")
-        return output_file
+
     """
     Abstract base class for reflect chain tasks.
     Provides a common structure for tasks that involve reflection and processing.
@@ -98,7 +100,7 @@ class BaseReflectChainTask(ABC):
         reflection_figure_inputs = []
 
         if self.prompt_settings.get("include_tikz_reflection"):
-            generated_output_file = self.get_output_file_name(
+            generated_output_file = get_output_file_name(
                 self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
             )
             print(f"Extracting TikZ figures from {generated_output_file}")
@@ -138,13 +140,13 @@ class ThinkWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = "xml"
-        return self.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
     def get_output_file_reflect(self):
         if self.args.reflect:
             base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
             file_extension = "xml"
-            return self.get_output_file_name(
+            return get_output_file_name(
                 base_output_file,
                 self.args.task,
                 self.model_settings["model"],
@@ -190,12 +192,12 @@ class DirectWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
-        return self.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
     def get_output_file_reflect(self):
         if self.args.reflect:
             base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            return self.get_output_file_name(
+            return get_output_file_name(
                 base_output_file,
                 self.args.task,
                 self.model_settings["model"],
