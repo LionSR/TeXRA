@@ -198,17 +198,6 @@ def process_reflection_round(
         if tex_count_stats:
             user_message = f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n{user_message}\n"
 
-    # Extract TikZ pictures if include_tikz_reflection is set
-    if prompt_settings.get("include_tikz_reflection"):
-        generated_output_file = get_output_file_name(input_file, task, model, output_settings["output_type"], reflect=False)
-        print(f"Extracting TikZ figures from {generated_output_file}")
-        extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
-        if extracted_tikz_figures:
-            if figure_inputs is None:
-                figure_inputs = extracted_tikz_figures
-            else:
-                figure_inputs.extend(extracted_tikz_figures)
-
     # Ensure all figure_inputs are strings
     if figure_inputs:
         figure_inputs = [str(fig) for fig in figure_inputs]
