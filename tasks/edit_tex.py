@@ -1,10 +1,18 @@
-from coauthor.base_tasks import ThinkWrite
+from coauthor.base_tasks import ThinkWrite, DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "article")
 
 
-class EditTex(ThinkWrite):
+class EditTex:
+    def __new__(cls, args, prompt_path):
+        if args.task.startswith("correct"):
+            return EditTexDirect(args, prompt_path)
+        else:
+            return EditTexThink(args, prompt_path)
+
+
+class EditTexBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
         if "multiple" in self.args.task:
@@ -13,12 +21,13 @@ class EditTex(ThinkWrite):
             coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    def run(self):
-        self.setup()
-        state, messages = self.process()
-        if self.args.reflect:
-            state, messages = self.reflect(state, messages)
-        coa.log_end(self.log_file)
+
+class EditTexThink(EditTexBase, ThinkWrite):
+    pass
+
+
+class EditTexDirect(EditTexBase, DirectWrite):
+    pass
 
 
 def main():
