@@ -2,6 +2,18 @@ import os
 from abc import ABC, abstractmethod
 from termcolor import colored
 import coauthor as coa
+import os
+
+
+def get_output_file_name(input_file, task, model, output_type, reflect=False):
+    file_name, _ = os.path.splitext(input_file)
+    first_task_chunk = task.split("_")[0]
+    output_type = output_type.strip(".")
+    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    if reflect:
+        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
+    print(f"Output file: {colored(output_file, 'cyan')}")
+    return output_file
 
 
 class BaseReflectChainTask(ABC):

@@ -1,8 +1,34 @@
 from coauthor.base_tasks import DirectWrite
 import coauthor as coa
 from termcolor import colored
+import os
 
 prompt_path = coa.get_prompt_path(coa, "merge")
+
+
+def get_output_file_name_merge(input_file, edited_file):
+    input_dir = os.path.dirname(input_file)
+    input_base, _ = os.path.splitext(os.path.basename(input_file))
+    edited_base, _ = os.path.splitext(os.path.basename(edited_file))
+
+    parts = edited_base.split("_")
+    edited_base_override = parts[0]
+    task = parts[1]  # Assuming the task is always the second part
+
+    base = input_base
+    if input_base != edited_base_override:
+        base = edited_base_override
+
+    if "reflect" in parts:
+        model = parts[-1]
+        output = f"{base}_{task}_reflect_full_{model}.tex"
+    else:
+        model = parts[-1]
+        output = f"{base}_{task}_full_{model}.tex"
+
+    output = os.path.join(input_dir, output)
+    print(f"Merge output file: {colored(output, 'cyan')}")
+    return output
 
 
 class Merge(DirectWrite):
