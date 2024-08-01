@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from termcolor import colored
 import coauthor as coa
