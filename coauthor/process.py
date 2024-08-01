@@ -113,20 +113,17 @@ def process_first_round(
     figure_inputs=None,
     state=None,
     messages=None,
+    tex_count_stats="",
 ):
     model = model_settings["model"]
-    system_prompt = load_prompt("system_prompt", prompt_settings)
+    system_prompt = load_prompt("system", prompt_settings)
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_request = load_prompt("user_request", prompt_settings)
 
     user_prefix = user_prefix_template.format(**user_vars)
 
-    # Handle tex count if include_tex_count is set
-    # this logic at some point needs to be handled outside of it
-    if prompt_settings.get("include_tex_count"):
-        tex_count_stats = get_tex_count(input_file)
-        if tex_count_stats:
-            user_prefix += f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
+    # Add tex count stats if provided
+    user_prefix += tex_count_stats
 
     output_type = output_settings.get("output_type", "txt")
 
@@ -176,12 +173,13 @@ def process_first_round(
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    print(f"\n\nProcessed {colored(input_file, 'green')} and saved as {colored(output_file, 'green')}")
 
     return state, accumulated_output, end_turn, messages
 
 
-def process_reflection_round(client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None):
+def process_reflection_round(
+    client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None, tex_count_stats=""
+):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
     use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
@@ -189,11 +187,8 @@ def process_reflection_round(client, input_file, output_file, state, messages, m
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_message = f"{user_request_reflect}\n"
 
-    # Handle tex count if include_tex_count is set
-    if prompt_settings.get("include_tex_count"):
-        tex_count_stats = get_tex_count(input_file)
-        if tex_count_stats:
-            user_message = f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n{user_message}\n"
+    # Add tex count stats if provided
+    user_message = f"{tex_count_stats}{user_message}"
 
     # Ensure all figure_inputs are strings
     if figure_inputs:
@@ -253,6 +248,5 @@ def process_reflection_round(client, input_file, output_file, state, messages, m
         output_settings=output_settings,
         prompt_settings=prompt_settings,
     )
-    print(f"\n\nProcessed {colored(input_file, 'green')} and saved as {colored(output_file, 'green')}")
 
     return state, accumulated_output, end_turn, messages
