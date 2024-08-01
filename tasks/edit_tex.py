@@ -21,19 +21,26 @@ class EditTex(ThinkWrite):
                 output_files = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
 
                 if isinstance(output_files, list):  # Multiple output files
-                    for input_file, output_file in zip(self.args.output_files, output_files):
-                        coa.log_output_files(output_file, self.log_file)
-                        coa.run_latexdiff(input_file, output_file, self.args.task)
+                    self._handle_multiple_outputs(output_files)
                 else:  # Single output file
-                    output_file = output_files
-                    coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+                    self._handle_single_output(output_files)
             else:
-                coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+                self._handle_single_output(output_file)
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
 
-        # Add latexdiff comparison between first output and reflected output
+        self._handle_reflection_diff(end_turn)
+
+    def _handle_single_output(self, output_file):
+        coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+    def _handle_multiple_outputs(self, output_files):
+        for input_file, output_file in zip(self.args.output_files, output_files):
+            coa.log_output_files(output_file, self.log_file)
+            coa.run_latexdiff(input_file, output_file, self.args.task)
+
+    def _handle_reflection_diff(self, end_turn):
         if self.args.reflect and end_turn:
             first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
             reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
