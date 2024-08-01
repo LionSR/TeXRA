@@ -31,7 +31,7 @@ def write_to_output_file(file_exists, best_connector, new_response, output_file)
         append_file(output_file, best_connector + new_response)
 
 
-def initialize_state(state, accumulated_output):
+def initialize_state(state: dict | None, accumulated_output):
     if state is None:
         state = {
             "continuation_count": 0,
