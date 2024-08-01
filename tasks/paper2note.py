@@ -21,20 +21,6 @@ class Paper2Note(DirectWrite):
                     "EXAMPLE_LECTURE_NOTE": coa.read_file(self.args.example_lecture_note),
                 }
             )
-        if self.args.example_paper and self.args.example_lecture_note:
-            user_vars.update(
-                {
-                    "EXAMPLE_PAPER": coa.read_file(self.args.example_paper),
-                    "EXAMPLE_LECTURE_NOTE": coa.read_file(self.args.example_lecture_note),
-                }
-            )
-        if self.args.example_paper and self.args.example_lecture_note:
-            user_vars.update(
-                {
-                    "EXAMPLE_PAPER": coa.read_file(self.args.example_paper),
-                    "EXAMPLE_LECTURE_NOTE": coa.read_file(self.args.example_lecture_note),
-                }
-            )
         return user_vars
 
 

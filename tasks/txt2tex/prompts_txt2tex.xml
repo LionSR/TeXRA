@@ -37,11 +37,11 @@ You are provided with the following text content:
 {INPUT_CONTENT}
 </txt_content>
 
-This content is related to your working book on stochastic differential equations. Your task is to generate a new LaTeX file based on this content, following the provided guidelines.
+This content is related to your working book on {TOPIC}. Your task is to generate a new LaTeX file based on this content, following the provided guidelines.
 
 You are also provided with a sample LaTeX file in the desired style:
 <sample_tex>
-{EXISTING_LECTURE_NOTES}
+{SAMPLE_TEX}
 </sample_tex>
 
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
