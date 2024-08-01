@@ -4,14 +4,6 @@ import coauthor as coa
 prompt_path = coa.get_prompt_path(coa, "article")
 
 
-class EditTex:
-    def __new__(cls, args, prompt_path):
-        if args.task.startswith("correct"):
-            return EditTexDirect(args, prompt_path)
-        else:
-            return EditTexThink(args, prompt_path)
-
-
 class EditTexBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
@@ -50,7 +42,10 @@ def main():
     )
     args = parser.parse_args()
 
-    edit_tex = EditTex(args, prompt_path)
+    if args.task.startswith("correct"):
+        edit_tex = EditTexDirect(args, prompt_path)
+    else:
+        edit_tex = EditTexThink(args, prompt_path)
     edit_tex.run()
 
 

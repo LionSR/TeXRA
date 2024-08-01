@@ -4,14 +4,6 @@ import coauthor as coa
 prompt_path = coa.get_prompt_path(coa, "lecture")
 
 
-class EditLecture:
-    def __new__(cls, args, prompt_path):
-        if args.task.startswith("correct"):
-            return EditLectureDirect(args, prompt_path)
-        else:
-            return EditLectureThink(args, prompt_path)
-
-
 class EditLectureBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
@@ -62,7 +54,10 @@ def main():
     )
     args = parser.parse_args()
 
-    edit_lecture = EditLecture(args, prompt_path)
+    if args.task.startswith("correct"):
+        edit_lecture = EditLectureDirect(args, prompt_path)
+    else:
+        edit_lecture = EditLectureThink(args, prompt_path)
     edit_lecture.run()
 
 
