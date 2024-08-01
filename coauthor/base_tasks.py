@@ -54,57 +54,25 @@ class BaseReflectChainTask(ABC):
     def get_user_vars(self):
         pass
 
+    @abstractmethod
     def process(self):
-        state, accumulated_output, end_turn, messages = coa.process_first_round(
-            self.client,
-            self.args.input_file,
-            self.output_file,
-            self.user_vars,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-            figure_inputs=self.args.figure_inputs,
-        )
+        pass
 
-        self.handle_output(state, end_turn, self.output_file)
-        return state, messages
-
+    @abstractmethod
     def handle_output(self, state, end_turn, output_file):
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
-        self._handle_reflection_diff(end_turn)
+        pass
 
+    @abstractmethod
     def reflect(self, state, messages):
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
-            self.client,
-            self.args.input_file,
-            self.reflect_output_file,
-            state,
-            messages,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-        )
+        pass
 
-        self.handle_output(state, end_turn, self.reflect_output_file)
-        return state, messages
-
+    @abstractmethod
     def get_output_file(self):
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = self.output_settings["output_type"]
-        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+        pass
 
+    @abstractmethod
     def get_reflect_output_file(self):
-        if self.args.reflect:
-            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            return get_output_file_name(
-                base_output_file,
-                self.args.task,
-                self.model_settings["model"],
-                self.output_settings["output_type"],
-                reflect=True,
-            )
-        return None
+        pass
 
     def _handle_reflection_diff(self, end_turn):
         if self.args.reflect and end_turn:
@@ -141,7 +109,9 @@ class ThinkWrite(BaseReflectChainTask):
                 output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_single_output(output_file)
 
-        super().handle_output(state, end_turn, output_file)
+        coa.log_output_files(output_file, self.log_file)
+        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+        self._handle_reflection_diff(end_turn)
 
     def _handle_single_output(self, output_file):
         coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
@@ -180,8 +150,57 @@ class ThinkWrite(BaseReflectChainTask):
 
 
 class DirectWrite(BaseReflectChainTask):
+    def process(self):
+        state, accumulated_output, end_turn, messages = coa.process_first_round(
+            self.client,
+            self.args.input_file,
+            self.output_file,
+            self.user_vars,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+            figure_inputs=self.args.figure_inputs,
+        )
+
+        self.handle_output(state, end_turn, self.output_file)
+        return state, messages
+
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
 
-        super().handle_output(state, end_turn, output_file)
+        coa.log_output_files(output_file, self.log_file)
+        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+        self._handle_reflection_diff(end_turn)
+
+    def reflect(self, state, messages):
+        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+            self.client,
+            self.args.input_file,
+            self.reflect_output_file,
+            state,
+            messages,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+        )
+
+        self.handle_output(state, end_turn, self.reflect_output_file)
+        return state, messages
+
+    def get_output_file(self):
+        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        file_extension = self.output_settings["output_type"]
+        return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+
+    def get_reflect_output_file(self):
+        if self.args.reflect:
+            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+            return get_output_file_name(
+                base_output_file,
+                self.args.task,
+                self.model_settings["model"],
+                self.output_settings["output_type"],
+                reflect=True,
+            )
+        return None
