@@ -34,6 +34,7 @@ class BaseReflectChainTask(ABC):
         self.prompt_settings = coa.get_prompt_settings(self.args, self.prompt_path, self.prompt_dict)
         self.client = coa.get_model_client(self.model_settings["model"])
         self.log_file = coa.log_start(self.args)
+        self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
         self.output_file = self.get_output_file()
         self.reflect_output_file = self.get_reflect_output_file()
 
@@ -80,8 +81,7 @@ class BaseReflectChainTask(ABC):
 class ThinkWrite(BaseReflectChainTask):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
-        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
+        file_extension = "xml" if self.use_scratchpad else self.output_settings["output_type"]
         return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
     def process(self):
