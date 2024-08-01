@@ -1,5 +1,5 @@
 import os
-from coauthor.base_tasks import ThinkWriteAndReflect
+from coauthor.base_tasks import ThinkWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "article")
