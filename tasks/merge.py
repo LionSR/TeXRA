@@ -48,7 +48,7 @@ class Merge(DirectWrite):
         return user_vars
 
     def get_output_file(self):
-        return self.output_file
+        return get_output_file_name_merge(self.args.input_file, self.args.edited_file)
 
     def handle_output(self, state, end_turn, output_file):
         super().handle_output(state, end_turn, output_file)
