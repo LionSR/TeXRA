@@ -32,17 +32,23 @@ def get_output_file_name_merge(input_file, edited_file):
 
 
 class Merge(DirectWrite):
+    def __init__(self, args, prompt_path):
+        super().__init__(args, prompt_path)
+        self.input_file = args.input_file
+        self.edited_file = args.edited_file
+        self.output_file = get_output_file_name_merge(self.input_file, self.edited_file)
+
     def get_user_vars(self):
         user_vars = {
-            "INPUT_FILE": self.args.input_file,
-            "ORIGINAL_LATEX": coa.read_file(self.args.input_file),
-            "EDITED_LATEX": coa.read_file(self.args.edited_file),
+            "INPUT_FILE": self.input_file,
+            "ORIGINAL_LATEX": coa.read_file(self.input_file),
+            "EDITED_LATEX": coa.read_file(self.edited_file),
         }
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
     def get_output_file(self):
-        return coa.get_output_file_name_merge(self.args.input_file, self.args.edited_file)
+        return self.output_file
 
     def handle_output(self, state, end_turn, output_file):
         super().handle_output(state, end_turn, output_file)
