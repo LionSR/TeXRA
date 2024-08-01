@@ -16,7 +16,6 @@ def get_output_file_name(input_file, task, model, output_type, reflect=False):
 
 
 class BaseReflectChainTask(ABC):
-
     """
     Abstract base class for reflect chain tasks.
     Provides a common structure for tasks that involve reflection and processing.
