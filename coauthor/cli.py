@@ -80,6 +80,7 @@ def execute_task(script, task, model, input_file, **kwargs):
     if "figure_inputs" in kwargs and isinstance(kwargs["figure_inputs"], str):
         kwargs["figure_inputs"] = kwargs["figure_inputs"].split(",")
 
+    # this logic needs to be changed for multiple file output
     handle_auto_extract_figure(kwargs, input_file)
     handle_auto_extract_tikz_figure(kwargs, input_file)
 
