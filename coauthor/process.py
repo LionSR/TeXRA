@@ -104,7 +104,6 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
 def process_first_round(
     client,
-    task,
     input_file,
     output_file,
     user_vars,
@@ -183,7 +182,7 @@ def process_first_round(
 
 
 def process_reflection_round(
-    client, task, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None
+    client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
