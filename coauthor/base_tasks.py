@@ -114,3 +114,24 @@ class ThinkWriteAndReflect(ThinkWrite):
 
         self.handle_output(state, end_turn, reflect_output_file)
         return state, messages
+
+    def reflect(self, state, messages):
+        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
+        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
+        reflect_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension, reflect=True)
+
+        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+            self.client,
+            self.args.task,
+            self.args.input_file,
+            reflect_output_file,
+            state,
+            messages,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+        )
+
+        self.handle_output(state, end_turn, reflect_output_file)
+        return state, messages
