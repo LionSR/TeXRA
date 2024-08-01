@@ -103,7 +103,7 @@ class BaseReflectChainTask(ABC):
         reflection_figure_inputs = []
 
         if self.prompt_settings.get("include_tikz_reflection"):
-            generated_output_file = get_output_file_name(
+            generated_output_file = self.get_output_file_name(
                 self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
             )
             print(f"Extracting TikZ figures from {generated_output_file}")
