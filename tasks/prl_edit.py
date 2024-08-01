@@ -7,19 +7,25 @@ prompt_path = coa.get_prompt_path(coa, "prl_edit")
 class PRLEdit(DirectWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
-        user_vars.update({
-            "PREAMBLE_CONTENT": coa.read_file(self.args.preamble_file),
-        })
+        user_vars.update(
+            {
+                "PREAMBLE_CONTENT": coa.read_file(self.args.preamble_file),
+            }
+        )
         if self.args.task == "correct_prl":
-            user_vars.update({
-                "SUPP_FILE": self.args.supp_file,
-                "SUPP_CONTENT": coa.read_file(self.args.supp_file),
-            })
+            user_vars.update(
+                {
+                    "SUPP_FILE": self.args.supp_file,
+                    "SUPP_CONTENT": coa.read_file(self.args.supp_file),
+                }
+            )
         elif self.args.task == "correct_supp_prl":
-            user_vars.update({
-                "MAIN_FILE": self.args.auxiliary_files,
-                "MAIN_CONTENT": coa.read_file(self.args.auxiliary_files),
-            })
+            user_vars.update(
+                {
+                    "MAIN_FILE": self.args.auxiliary_files,
+                    "MAIN_CONTENT": coa.read_file(self.args.auxiliary_files),
+                }
+            )
         return user_vars
 
 
