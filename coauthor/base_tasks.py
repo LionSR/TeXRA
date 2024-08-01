@@ -168,6 +168,14 @@ class ThinkWrite(BaseReflectChainTask):
             coa.log_output_files(output_file, self.log_file)
             coa.run_latexdiff(input_file, output_file, self.args.task)
 
+    def _handle_single_output(self, output_file):
+        coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+    def _handle_multiple_outputs(self, output_files):
+        for input_file, output_file in zip(self.args.output_files, output_files):
+            coa.log_output_files(output_file, self.log_file)
+            coa.run_latexdiff(input_file, output_file, self.args.task)
+
 
 class DirectWrite(BaseReflectChainTask):
     def get_output_file(self):
