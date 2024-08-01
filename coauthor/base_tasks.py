@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 from termcolor import colored
 import coauthor as coa
 
 
-class ThinkWrite:
+class BaseTask(ABC):
     def __init__(self, args, prompt_path):
         self.args = args
         self.prompt_path = prompt_path
@@ -27,9 +28,55 @@ class ThinkWrite:
         self.client = coa.get_model_client(self.model_settings["model"])
         self.log_file = coa.log_start(self.args)
 
+    @abstractmethod
     def get_user_vars(self):
-        raise NotImplementedError("Subclasses must implement get_user_vars method")
+        pass
 
+    @abstractmethod
+    def process(self):
+        pass
+
+    def handle_output(self, state, end_turn, output_file):
+        if end_turn and self.output_settings["output_type"] == "tex":
+            if "<scratchpad>" in self.output_settings["prefill_first"]:
+                coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
+                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+        coa.log_output_files(output_file, self.log_file)
+        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+
+    def run(self):
+        self.setup()
+        state, messages = self.process()
+        if self.args.reflect:
+            state, messages = self.reflect(state, messages)
+        coa.log_end(self.log_file)
+        return state, messages
+
+    def reflect(self, state, messages):
+        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
+        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
+        reflect_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension, reflect=True)
+
+        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+            self.client,
+            self.args.task,
+            self.args.input_file,
+            reflect_output_file,
+            state,
+            messages,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+        )
+
+        self.handle_output(state, end_turn, reflect_output_file)
+        return state, messages
+
+
+class ThinkWrite(BaseTask):
     def process(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
@@ -51,24 +98,8 @@ class ThinkWrite:
         self.handle_output(state, end_turn, initial_output_file)
         return state, messages
 
-    def handle_output(self, state, end_turn, output_file):
-        if end_turn and self.output_settings["output_type"] == "tex":
-            if "<scratchpad>" in self.output_settings["prefill_first"]:
-                coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
-                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
 
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
-
-    def run(self):
-        self.setup()
-        state, messages = self.process()
-        coa.log_end(self.log_file)
-        return state, messages
-
-
-class DirectWrite(ThinkWrite):
+class DirectWrite(BaseTask):
     def process(self):
         output_file = self.get_output_file()
         state, accumulated_output, end_turn, messages = coa.process_first_round(
@@ -85,55 +116,10 @@ class DirectWrite(ThinkWrite):
         self.handle_output(state, end_turn, output_file)
         return state, messages
 
+    @abstractmethod
     def get_output_file(self):
-        raise NotImplementedError("Subclasses must implement get_output_file method")
+        pass
 
 
 class ThinkWriteAndReflect(ThinkWrite):
-    def process(self):
-        state, messages = super().process()
-        if self.args.reflect:
-            state, messages = self.reflect(state, messages)
-        return state, messages
-
-    def reflect(self, state, messages):
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
-        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
-        reflect_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension, reflect=True)
-
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
-            self.client,
-            self.args.task,
-            self.args.input_file,
-            reflect_output_file,
-            state,
-            messages,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-        )
-
-        self.handle_output(state, end_turn, reflect_output_file)
-        return state, messages
-
-    def reflect(self, state, messages):
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
-        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
-        reflect_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension, reflect=True)
-
-        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
-            self.client,
-            self.args.task,
-            self.args.input_file,
-            reflect_output_file,
-            state,
-            messages,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-        )
-
-        self.handle_output(state, end_turn, reflect_output_file)
-        return state, messages
+    pass  # This class is now redundant as reflection is handled in the BaseTask
