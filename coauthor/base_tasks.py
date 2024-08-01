@@ -163,25 +163,26 @@ class ThinkWrite(BaseReflectChainTask):
             if self.args.output_files:  # Multiple output files
                 output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
-                if self.args.reflect:
+                if is_reflection_complete:
                     self.reflect_round_output_files = output_files
                 else:
                     self.first_round_output_files = output_files
             else:  # Single output file
                 output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_single_output(output_file)
-                if self.args.reflect:
+                if is_reflection_complete:
                     self.reflect_round_output_files = [output_file]
                 else:
                     self.first_round_output_files = [output_file]
 
+            if is_reflection_complete:
+                self._handle_reflection_diff(end_turn)
+
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
-        if is_reflection_complete:
-            self._handle_reflection_diff(end_turn)
 
     def _handle_reflection_diff(self, end_turn):
-        if self.args.reflect and end_turn and self.output_settings["output_type"] == "tex":
+        if self.output_settings["output_type"] == "tex":
             reflect_output_file = self.get_output_file_reflect()
             if os.path.exists(reflect_output_file):
                 reflect_output_files = coa.split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
@@ -220,13 +221,14 @@ class DirectWrite(BaseReflectChainTask):
             else:  # Single output file
                 self._handle_single_output(output_file)
 
+            if is_reflection_complete:
+                self._handle_reflection_diff(end_turn)
+
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
-        if is_reflection_complete:
-            self._handle_reflection_diff(end_turn)
 
     def _handle_reflection_diff(self, end_turn):
-        if self.args.reflect and end_turn and self.output_settings["output_type"] == "tex":
+        if self.output_settings["output_type"] == "tex":
             first_output = self.get_output_file()
             reflect_output = self.get_output_file_reflect()
             if os.path.exists(first_output) and os.path.exists(reflect_output):
