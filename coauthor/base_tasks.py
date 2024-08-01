@@ -48,14 +48,10 @@ class BaseReflectChainTask(ABC):
         self.log_file = coa.log_start(self.args)
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
         self.output_file = self.get_output_file()
-        self.reflect_output_file = self.get_reflect_output_file()
+        self.reflect_output_file = self.get_output_file_reflect()
 
     @abstractmethod
     def get_user_vars(self):
-        pass
-
-    @abstractmethod
-    def process(self):
         pass
 
     @abstractmethod
@@ -67,13 +63,13 @@ class BaseReflectChainTask(ABC):
         pass
 
     @abstractmethod
-    def get_reflect_output_file(self):
+    def get_output_file_reflect(self):
         pass
 
     def _handle_reflection_diff(self, end_turn):
         if self.args.reflect and end_turn:
             first_output = self.get_output_file()
-            reflect_output = self.get_reflect_output_file()
+            reflect_output = self.get_output_file_reflect()
             if os.path.exists(first_output) and os.path.exists(reflect_output):
                 coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
             else:
@@ -136,6 +132,19 @@ class ThinkWrite(BaseReflectChainTask):
         file_extension = "xml"
         return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
+    def get_output_file_reflect(self):
+        if self.args.reflect:
+            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+            file_extension = "xml"
+            return get_output_file_name(
+                base_output_file,
+                self.args.task,
+                self.model_settings["model"],
+                file_extension,
+                reflect=True,
+            )
+        return None
+
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
@@ -161,20 +170,12 @@ class ThinkWrite(BaseReflectChainTask):
 
 
 class DirectWrite(BaseReflectChainTask):
-    def handle_output(self, state, end_turn, output_file):
-        if end_turn and self.output_settings["output_type"] == "tex":
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
-
-        coa.log_output_files(output_file, self.log_file)
-        coa.log_and_print_statistics(state, self.args.model, self.log_file)
-        self._handle_reflection_diff(end_turn)
-
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
         return get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
-    def get_reflect_output_file(self):
+    def get_output_file_reflect(self):
         if self.args.reflect:
             base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
             return get_output_file_name(
@@ -185,3 +186,12 @@ class DirectWrite(BaseReflectChainTask):
                 reflect=True,
             )
         return None
+
+    def handle_output(self, state, end_turn, output_file):
+        if end_turn and self.output_settings["output_type"] == "tex":
+            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+        coa.log_output_files(output_file, self.log_file)
+        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+        self._handle_reflection_diff(end_turn)
+
