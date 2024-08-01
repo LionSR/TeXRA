@@ -75,14 +75,9 @@ class BaseReflectChainTask(ABC):
             if self.output_settings["output_type"] == "tex":
                 coa.run_latexdiff(input_file, output_file, self.args.task)
 
+    @abstractmethod
     def _handle_reflection_diff(self, end_turn):
-        if self.args.reflect and end_turn:
-            first_output = self.get_output_file()
-            reflect_output = self.get_output_file_reflect()
-            if os.path.exists(first_output) and os.path.exists(reflect_output):
-                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
-            else:
-                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+        pass
 
     def process(self):
         state, accumulated_output, end_turn, messages = coa.process_first_round(
@@ -136,6 +131,10 @@ class BaseReflectChainTask(ABC):
 
 
 class ThinkWrite(BaseReflectChainTask):
+    def __init__(self, args, prompt_path):
+        super().__init__(args, prompt_path)
+        self.first_round_output_files = []
+
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = "xml"
@@ -161,13 +160,30 @@ class ThinkWrite(BaseReflectChainTask):
             if self.args.output_files:  # Multiple output files
                 output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
+                if not self.args.reflect:
+                    self.first_round_output_files = output_files
             else:  # Single output file
                 output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_single_output(output_file)
+                if not self.args.reflect:
+                    self.first_round_output_files = [output_file]
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
+
+    def _handle_reflection_diff(self, end_turn):
+        if self.args.reflect and end_turn and self.output_settings["output_type"] == "tex":
+            reflect_output_file = self.get_output_file_reflect()
+            if os.path.exists(reflect_output_file):
+                reflect_output_files = coa.split_multiple_scratchpad_output_xml(reflect_output_file, self.task_settings["document_tag"])
+                for first_output, reflect_output in zip(self.first_round_output_files, reflect_output_files):
+                    if os.path.exists(first_output) and os.path.exists(reflect_output):
+                        coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+                    else:
+                        print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+            else:
+                print(f"Warning: Could not generate latexdiff for reflection. Reflection output file not found: {reflect_output_file}")
 
 
 class DirectWrite(BaseReflectChainTask):
@@ -199,3 +215,12 @@ class DirectWrite(BaseReflectChainTask):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
+
+    def _handle_reflection_diff(self, end_turn):
+        if self.args.reflect and end_turn and self.output_settings["output_type"] == "tex":
+            first_output = self.get_output_file()
+            reflect_output = self.get_output_file_reflect()
+            if os.path.exists(first_output) and os.path.exists(reflect_output):
+                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            else:
+                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
