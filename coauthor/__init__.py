@@ -24,7 +24,6 @@ from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from .output_utils import (
     check_for_massive_repetition,
     get_output_file_name,
-    get_output_file_name_merge,
     ensure_correct_xml_structure,
     split_scratchpad_output_xml,
 )
