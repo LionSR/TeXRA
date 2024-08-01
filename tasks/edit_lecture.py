@@ -1,10 +1,18 @@
-from coauthor.base_tasks import ThinkWrite
+from coauthor.base_tasks import ThinkWrite, DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "lecture")
 
 
-class EditLecture(ThinkWrite):
+class EditLecture:
+    def __new__(cls, args, prompt_path):
+        if args.task.startswith("correct"):
+            return EditLectureDirect(args, prompt_path)
+        else:
+            return EditLectureThink(args, prompt_path)
+
+
+class EditLectureBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
         user_vars.update(
@@ -24,6 +32,14 @@ class EditLecture(ThinkWrite):
         else:
             coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
+
+
+class EditLectureThink(EditLectureBase, ThinkWrite):
+    pass
+
+
+class EditLectureDirect(EditLectureBase, DirectWrite):
+    pass
 
 
 def main():
