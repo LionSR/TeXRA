@@ -29,7 +29,13 @@ def main():
     parser.add_argument("--sample_chapters", type=str, nargs="+", help="Paths to the sample chapter TeX files.")
     parser.add_argument("--example_paper", type=str, help="Path to an example research paper.")
     parser.add_argument("--example_lecture_note", type=str, help="Path to an example lecture note corresponding to the example paper.")
-    parser.add_argument("--task", type=str, default="paper2note", help="Task to perform, either 'paper2note' or 'paper2note_example'.", choices=["paper2note", "paper2note_example"])
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="paper2note",
+        help="Task to perform, either 'paper2note' or 'paper2note_example'.",
+        choices=["paper2note", "paper2note_example"],
+    )
     args = parser.parse_args()
 
     paper2note = Paper2Note(args, prompt_path)
