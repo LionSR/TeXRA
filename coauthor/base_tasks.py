@@ -136,6 +136,7 @@ class ThinkWrite(BaseReflectChainTask):
     def __init__(self, args, prompt_path):
         super().__init__(args, prompt_path)
         self.first_round_output_files = []
+        self.reflect_round_output_files = []
 
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
@@ -162,12 +163,16 @@ class ThinkWrite(BaseReflectChainTask):
             if self.args.output_files:  # Multiple output files
                 output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
-                if not self.args.reflect:
+                if self.args.reflect:
+                    self.reflect_round_output_files = output_files
+                else:
                     self.first_round_output_files = output_files
             else:  # Single output file
                 output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_single_output(output_file)
-                if not self.args.reflect:
+                if self.args.reflect:
+                    self.reflect_round_output_files = [output_file]
+                else:
                     self.first_round_output_files = [output_file]
 
         coa.log_output_files(output_file, self.log_file)
