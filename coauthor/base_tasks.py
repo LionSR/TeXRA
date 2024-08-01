@@ -91,7 +91,15 @@ class BaseReflectChainTask(ABC):
     def _handle_reflection_diff(self, end_turn):
         pass
 
+    def get_tex_count_stats(self, input_file):
+        if self.prompt_settings.get("include_tex_count"):
+            tex_count_stats = get_tex_count(input_file)
+            if tex_count_stats:
+                return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
+        return ""
+
     def process(self):
+        tex_count_stats = self.get_tex_count_stats(self.args.input_file)
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
             self.args.input_file,
@@ -101,9 +109,15 @@ class BaseReflectChainTask(ABC):
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=self.args.figure_inputs,
+            tex_count_stats=tex_count_stats,
         )
 
         self.handle_output(state, end_turn, self.output_file, is_reflection_complete=False)
+
+        print(
+            f"\n\nProcessed {colored(self.args.input_file, 'green')} and/or {colored(self.args.input_files, 'green')} and saved as {colored(self.output_file, 'green')}"
+        )
+
         return state, messages
 
     def reflect(self, state, messages):
@@ -118,6 +132,7 @@ class BaseReflectChainTask(ABC):
             if extracted_tikz_figures:
                 reflection_figure_inputs.extend(extracted_tikz_figures)
 
+        tex_count_stats = self.get_tex_count_stats(self.args.input_file)
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
             self.args.input_file,
@@ -128,9 +143,15 @@ class BaseReflectChainTask(ABC):
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=reflection_figure_inputs,
+            tex_count_stats=tex_count_stats,
         )
 
         self.handle_output(state, end_turn, self.reflect_output_file, is_reflection_complete=True)
+
+        print(
+            f"\n\nProcessed {colored(self.args.input_file, 'green')} and/or {colored(self.args.input_files, 'green')} and saved as {colored(self.reflect_output_file, 'green')}"
+        )
+
         return state, messages
 
     def run(self):

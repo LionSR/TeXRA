@@ -28,7 +28,7 @@ def main():
         "--task",
         type=str,
         default="correct",
-            choices=[
+        choices=[
             "correct",
             "polish",
             "draw",
