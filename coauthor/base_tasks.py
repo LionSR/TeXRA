@@ -91,7 +91,8 @@ class ThinkWriteAndReflect(ThinkWrite):
     def process(self):
         state, messages = super().process()
         if self.args.reflect:
-            self.reflect(state, messages)
+            state, messages = self.reflect(state, messages)
+        return state, messages
 
     def reflect(self, state, messages):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
@@ -112,3 +113,4 @@ class ThinkWriteAndReflect(ThinkWrite):
         )
 
         self.handle_output(state, end_turn, reflect_output_file)
+        return state, messages
