@@ -59,16 +59,9 @@ class BaseReflectChainTask(ABC):
     def get_output_file(self):
         pass
 
+    @abstractmethod
     def get_reflect_output_file(self):
-        if self.args.reflect:
-            return coa.get_output_file_name(
-                self.args.output_name_override or self.args.input_file,
-                self.args.task,
-                self.model_settings["model"],
-                self.output_settings["output_type"],
-                reflect=True,
-            )
-        return None
+        pass
 
     def run(self):
         self.setup()
@@ -84,6 +77,18 @@ class ThinkWrite(BaseReflectChainTask):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = "xml" if self.use_scratchpad else self.output_settings["output_type"]
         return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+
+    def get_reflect_output_file(self):
+        if self.args.reflect:
+            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+            return coa.get_output_file_name(
+                base_output_file,
+                self.args.task,
+                self.model_settings["model"],
+                self.output_settings["output_type"],
+                reflect=True,
+            )
+        return None
 
     def process(self):
         state, accumulated_output, end_turn, messages = coa.process_first_round(
@@ -160,6 +165,22 @@ class ThinkWrite(BaseReflectChainTask):
 
 
 class DirectWrite(BaseReflectChainTask):
+    def get_output_file(self):
+        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
+
+    def get_reflect_output_file(self):
+        if self.args.reflect:
+            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+            return coa.get_output_file_name(
+                base_output_file,
+                self.args.task,
+                self.model_settings["model"],
+                self.output_settings["output_type"],
+                reflect=True,
+            )
+        return None
+
     def process(self):
         state, accumulated_output, end_turn, messages = coa.process_first_round(
             self.client,
