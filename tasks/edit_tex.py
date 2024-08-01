@@ -45,6 +45,8 @@ class EditTex(ThinkWriteAndReflect):
     def run(self):
         self.setup()
         state, messages = self.process()
+        if self.args.reflect:
+            state, messages = self.reflect(state, messages)
         coa.log_end(self.log_file)
 
 
