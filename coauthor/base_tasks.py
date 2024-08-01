@@ -162,6 +162,17 @@ class DirectWrite(BaseReflectChainTask):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
 
+        self._handle_reflection_diff(end_turn)
+
+    def _handle_reflection_diff(self, end_turn):
+        if self.args.reflect and end_turn:
+            first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
+            reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
+            if os.path.exists(first_output) and os.path.exists(reflect_output):
+                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            else:
+                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+
     def reflect(self, state, messages):
         reflect_output_file = coa.get_output_file_name(self.get_output_file(), self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
 
