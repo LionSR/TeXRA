@@ -20,6 +20,8 @@ class BaseReflectChainTask(ABC):
         self.prompt_settings = None
         self.client = None
         self.log_file = None
+        self.output_file = None
+        self.reflect_output_file = None
 
     def setup(self):
         print(f"{colored('args:', 'blue')} {self.args}")
@@ -32,6 +34,8 @@ class BaseReflectChainTask(ABC):
         self.prompt_settings = coa.get_prompt_settings(self.args, self.prompt_path, self.prompt_dict)
         self.client = coa.get_model_client(self.model_settings["model"])
         self.log_file = coa.log_start(self.args)
+        self.output_file = self.get_output_file()
+        self.reflect_output_file = self.get_reflect_output_file()
 
     @abstractmethod
     def get_user_vars(self):
@@ -49,6 +53,21 @@ class BaseReflectChainTask(ABC):
     def reflect(self, state, messages):
         pass
 
+    @abstractmethod
+    def get_output_file(self):
+        pass
+
+    def get_reflect_output_file(self):
+        if self.args.reflect:
+            return coa.get_output_file_name(
+                self.args.output_name_override or self.args.input_file,
+                self.args.task,
+                self.model_settings["model"],
+                self.output_settings["output_type"],
+                reflect=True
+            )
+        return None
+
     def run(self):
         self.setup()
         state, messages = self.process()
@@ -59,17 +78,18 @@ class BaseReflectChainTask(ABC):
 
 
 class ThinkWrite(BaseReflectChainTask):
-    def process(self):
+    def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
         file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
-        initial_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+        return coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
 
+    def process(self):
         state, accumulated_output, end_turn, messages = coa.process_first_round(
             self.client,
             self.args.task,
             self.args.input_file,
-            initial_output_file,
+            self.output_file,
             self.user_vars,
             model_settings=self.model_settings,
             output_settings=self.output_settings,
@@ -77,7 +97,7 @@ class ThinkWrite(BaseReflectChainTask):
             figure_inputs=self.args.figure_inputs,
         )
 
-        self.handle_output(state, end_turn, initial_output_file)
+        self.handle_output(state, end_turn, self.output_file)
         return state, messages
 
     def handle_output(self, state, end_turn, output_file):
@@ -120,16 +140,11 @@ class ThinkWrite(BaseReflectChainTask):
             print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
 
     def reflect(self, state, messages):
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_reflect"]
-        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
-        reflect_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension, reflect=True)
-
         state, accumulated_output, end_turn, messages = coa.process_reflection_round(
             self.client,
             self.args.task,
             self.args.input_file,
-            reflect_output_file,
+            self.reflect_output_file,
             state,
             messages,
             model_settings=self.model_settings,
@@ -137,30 +152,25 @@ class ThinkWrite(BaseReflectChainTask):
             prompt_settings=self.prompt_settings,
         )
 
-        self.handle_output(state, end_turn, reflect_output_file)
+        self.handle_output(state, end_turn, self.reflect_output_file)
         return state, messages
 
 
 class DirectWrite(BaseReflectChainTask):
     def process(self):
-        output_file = self.get_output_file()
         state, accumulated_output, end_turn, messages = coa.process_first_round(
             self.client,
             self.args.task,
             self.args.input_file,
-            output_file,
+            self.output_file,
             self.user_vars,
             model_settings=self.model_settings,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=self.args.figure_inputs,
         )
-        self.handle_output(state, end_turn, output_file)
+        self.handle_output(state, end_turn, self.output_file)
         return state, messages
-
-    @abstractmethod
-    def get_output_file(self):
-        pass
 
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
@@ -173,21 +183,17 @@ class DirectWrite(BaseReflectChainTask):
 
     def _handle_reflection_diff(self, end_turn):
         if self.args.reflect and end_turn:
-            first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
-            reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
-            if os.path.exists(first_output) and os.path.exists(reflect_output):
-                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            if os.path.exists(self.output_file) and os.path.exists(self.reflect_output_file):
+                coa.run_latexdiff(self.output_file, self.reflect_output_file, f"{self.args.task}_reflect_diff", self.args.model)
             else:
-                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {self.output_file} or {self.reflect_output_file}")
 
     def reflect(self, state, messages):
-        reflect_output_file = coa.get_output_file_name(self.get_output_file(), self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
-
         state, accumulated_output, end_turn, messages = coa.process_reflection_round(
             self.client,
             self.args.task,
             self.args.input_file,
-            reflect_output_file,
+            self.reflect_output_file,
             state,
             messages,
             model_settings=self.model_settings,
@@ -195,7 +201,7 @@ class DirectWrite(BaseReflectChainTask):
             prompt_settings=self.prompt_settings,
         )
 
-        self.handle_output(state, end_turn, reflect_output_file)
+        self.handle_output(state, end_turn, self.reflect_output_file)
         return state, messages
 
 # The ThinkWriteAndReflect class has been removed as it's now redundant
