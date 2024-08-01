@@ -2,7 +2,6 @@ import os
 from abc import ABC, abstractmethod
 from termcolor import colored
 import coauthor as coa
-import os
 
 
 def get_output_file_name(input_file, task, model, output_type, reflect=False):
@@ -120,7 +119,7 @@ class ThinkWrite(BaseReflectChainTask):
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
-            
+
             if self.args.output_files:  # Multiple output files
                 output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
@@ -163,11 +162,7 @@ class ThinkWrite(BaseReflectChainTask):
         # Extract TikZ pictures if include_tikz_reflection is set
         if self.prompt_settings.get("include_tikz_reflection"):
             generated_output_file = coa.get_output_file_name(
-                self.args.input_file,
-                self.args.task,
-                self.model_settings["model"],
-                self.output_settings["output_type"],
-                reflect=False
+                self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
             )
             print(f"Extracting TikZ figures from {generated_output_file}")
             extracted_tikz_figures = coa.extract_and_compile_tikzpictures_with_labels(generated_output_file)
@@ -183,7 +178,7 @@ class ThinkWrite(BaseReflectChainTask):
             model_settings=self.model_settings,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
-            figure_inputs=reflection_figure_inputs
+            figure_inputs=reflection_figure_inputs,
         )
 
         self.handle_output(state, end_turn, self.reflect_output_file)
