@@ -66,6 +66,16 @@ class BaseReflectChainTask(ABC):
     def get_output_file_reflect(self):
         pass
 
+    def _handle_single_output(self, output_file):
+        if self.output_settings["output_type"] == "tex":
+            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
+
+    def _handle_multiple_outputs(self, output_files):
+        for input_file, output_file in zip(self.args.output_files, output_files):
+            coa.log_output_files(output_file, self.log_file)
+            if self.output_settings["output_type"] == "tex":
+                coa.run_latexdiff(input_file, output_file, self.args.task)
+
     def _handle_reflection_diff(self, end_turn):
         if self.args.reflect and end_turn:
             first_output = self.get_output_file()
@@ -146,7 +156,7 @@ class ThinkWrite(BaseReflectChainTask):
         return None
 
     def handle_output(self, state, end_turn, output_file):
-        if end_turn and self.output_settings["output_type"] == "tex":
+        if end_turn:
             coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
 
             if self.args.output_files:  # Multiple output files
@@ -159,22 +169,6 @@ class ThinkWrite(BaseReflectChainTask):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
-
-    def _handle_single_output(self, output_file):
-        coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
-
-    def _handle_multiple_outputs(self, output_files):
-        for input_file, output_file in zip(self.args.output_files, output_files):
-            coa.log_output_files(output_file, self.log_file)
-            coa.run_latexdiff(input_file, output_file, self.args.task)
-
-    def _handle_single_output(self, output_file):
-        coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
-
-    def _handle_multiple_outputs(self, output_files):
-        for input_file, output_file in zip(self.args.output_files, output_files):
-            coa.log_output_files(output_file, self.log_file)
-            coa.run_latexdiff(input_file, output_file, self.args.task)
 
 
 class DirectWrite(BaseReflectChainTask):
@@ -206,14 +200,3 @@ class DirectWrite(BaseReflectChainTask):
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
         self._handle_reflection_diff(end_turn)
-
-    def _handle_single_output(self, output_file):
-        if self.output_settings["output_type"] == "tex":
-            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
-
-    def _handle_multiple_outputs(self, output_files):
-        for input_file, output_file in zip(self.args.output_files, output_files):
-            coa.log_output_files(output_file, self.log_file)
-            if self.output_settings["output_type"] == "tex":
-                coa.run_latexdiff(input_file, output_file, self.args.task)
-
