@@ -3,7 +3,7 @@ from termcolor import colored
 import coauthor as coa
 
 
-class BaseTask(ABC):
+class BaseReflectChainTask(ABC):
     def __init__(self, args, prompt_path):
         self.args = args
         self.prompt_path = prompt_path
@@ -36,6 +36,45 @@ class BaseTask(ABC):
     def process(self):
         pass
 
+    @abstractmethod
+    def handle_output(self, state, end_turn, output_file):
+        pass
+
+    @abstractmethod
+    def reflect(self, state, messages):
+        pass
+
+    def run(self):
+        self.setup()
+        state, messages = self.process()
+        if self.args.reflect:
+            state, messages = self.reflect(state, messages)
+        coa.log_end(self.log_file)
+        return state, messages
+
+
+class ThinkWrite(BaseReflectChainTask):
+    def process(self):
+        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
+        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
+        initial_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
+
+        state, accumulated_output, end_turn, messages = coa.process_first_round(
+            self.client,
+            self.args.task,
+            self.args.input_file,
+            initial_output_file,
+            self.user_vars,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+            figure_inputs=self.args.figure_inputs,
+        )
+
+        self.handle_output(state, end_turn, initial_output_file)
+        return state, messages
+
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             if "<scratchpad>" in self.output_settings["prefill_first"]:
@@ -45,14 +84,6 @@ class BaseTask(ABC):
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
-
-    def run(self):
-        self.setup()
-        state, messages = self.process()
-        if self.args.reflect:
-            state, messages = self.reflect(state, messages)
-        coa.log_end(self.log_file)
-        return state, messages
 
     def reflect(self, state, messages):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
@@ -76,30 +107,7 @@ class BaseTask(ABC):
         return state, messages
 
 
-class ThinkWrite(BaseTask):
-    def process(self):
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
-        file_extension = "xml" if use_scratchpad else self.output_settings["output_type"]
-        initial_output_file = coa.get_output_file_name(base_output_file, self.args.task, self.model_settings["model"], file_extension)
-
-        state, accumulated_output, end_turn, messages = coa.process_first_round(
-            self.client,
-            self.args.task,
-            self.args.input_file,
-            initial_output_file,
-            self.user_vars,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-            figure_inputs=self.args.figure_inputs,
-        )
-
-        self.handle_output(state, end_turn, initial_output_file)
-        return state, messages
-
-
-class DirectWrite(BaseTask):
+class DirectWrite(BaseReflectChainTask):
     def process(self):
         output_file = self.get_output_file()
         state, accumulated_output, end_turn, messages = coa.process_first_round(
@@ -120,5 +128,29 @@ class DirectWrite(BaseTask):
     def get_output_file(self):
         pass
 
+    def handle_output(self, state, end_turn, output_file):
+        if end_turn and self.output_settings["output_type"] == "tex":
+            coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
 
-# Remove the ThinkWriteAndReflect class as it's now redundant
+        coa.log_output_files(output_file, self.log_file)
+        coa.log_and_print_statistics(state, self.args.model, self.log_file)
+
+    def reflect(self, state, messages):
+        reflect_output_file = coa.get_output_file_name(self.get_output_file(), self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
+
+        state, accumulated_output, end_turn, messages = coa.process_reflection_round(
+            self.client,
+            self.args.task,
+            self.args.input_file,
+            reflect_output_file,
+            state,
+            messages,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+        )
+
+        self.handle_output(state, end_turn, reflect_output_file)
+        return state, messages
+
+# The ThinkWriteAndReflect class has been removed as it's now redundant
