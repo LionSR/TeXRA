@@ -1,7 +1,20 @@
-from termcolor import colored
+from coauthor.base_tasks import DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "adapt")
+
+
+class Adapt(DirectWrite):
+    def get_user_vars(self):
+        user_vars = coa.get_user_vars(self.args)
+        user_vars.update(
+            {
+                "EXISTING_LECTURE_NOTES": coa.read_file(self.args.sample_tex),
+                "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
+                "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
+            }
+        )
+        return user_vars
 
 
 def main():
@@ -12,84 +25,8 @@ def main():
     parser.add_argument("--task", type=str, default="adapt", choices=["adapt"], help="Mode of operation, either 'adapt'.")
     args = parser.parse_args()
 
-    print(f"{colored('args:', 'blue')} {args}")
-    print(f"{colored('Revising', 'green')} {args.input_file}...\n")
-
-    task_settings, prompt_dict = coa.load_task_settings_and_prompts(prompt_path, args.task)
-
-    user_vars = coa.get_user_vars(args)
-    user_vars.update(
-        {
-            "EXISTING_LECTURE_NOTES": coa.read_file(args.sample_tex),
-            "DOCUMENT_CLS_CONTENT": coa.read_file(args.document_cls),
-            "COMMANDS_CONTENT": coa.read_file(args.commands_file),
-        }
-    )
-    coa.update_user_vars_single_output(args, user_vars)
-
-    log_file = coa.log_start(args)
-
-    model_settings = coa.get_model_settings(args)
-    output_settings = coa.get_output_settings(args, task_settings)
-    prompt_settings = coa.get_prompt_settings(args, prompt_path, prompt_dict)
-
-    client = coa.get_model_client(model_settings["model"])
-
-    model = model_settings["model"]
-    output_type = output_settings["output_type"]
-
-    base_output_file = args.output_name_override if args.output_name_override else args.input_file
-    output_file = coa.get_output_file_name(base_output_file, args.task, model, output_type)
-
-    use_scratchpad = "<scratchpad>" in output_settings["prefill_first"]
-    use_scratchpad_reflect = "<scratchpad>" in output_settings["prefill_reflect"]
-
-    state, accumulated_output, end_turn, messages = coa.process_first_round(
-        client,
-        args.task,
-        args.input_file,
-        output_file,
-        user_vars,
-        model_settings=model_settings,
-        output_settings=output_settings,
-        prompt_settings=prompt_settings,
-        figure_inputs=args.figure_inputs,
-    )
-
-    print(colored(f"Output file: {output_file}", "yellow"))
-    if end_turn:
-        if use_scratchpad:
-            coa.split_scratchpad_output_xml(output_file, task_settings["document_tag"])
-        if output_type == "tex":
-            coa.run_latexdiff(args.input_file, output_file, args.task)
-
-    coa.log_output_files(output_file, log_file)
-    coa.log_and_print_statistics(state, args.model, log_file)
-
-    if end_turn and args.reflect:
-        output_file_reflect = coa.get_output_file_name(base_output_file, args.task, model, output_type, reflect=True)
-
-        state, accumulated_output_reflect, end_turn_reflect, messages = coa.process_reflection_round(
-            client,
-            args.task,
-            args.input_file,
-            output_file_reflect,
-            state,
-            messages,
-            model_settings=model_settings,
-            output_settings=output_settings,
-            prompt_settings=prompt_settings,
-        )
-        coa.log_output_files(output_file_reflect, log_file)
-        coa.log_and_print_statistics(state, args.model, log_file)
-        if end_turn_reflect:
-            if use_scratchpad_reflect:
-                coa.split_scratchpad_output_xml(output_file_reflect, task_settings["document_tag"])
-            if output_type == "tex":
-                coa.run_latexdiff(args.input_file, output_file_reflect, args.task)
-                coa.run_latexdiff(output_file, output_file_reflect, args.task, args.model)
-
-    coa.log_end(log_file)
+    adapt = Adapt(args, prompt_path)
+    adapt.run()
 
 
 if __name__ == "__main__":
