@@ -17,7 +17,6 @@ from .message_utils import (
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition
 from .tex_tools import get_tex_count
-from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .prompt_utils import load_prompt
 
 
@@ -124,6 +123,7 @@ def process_first_round(
     user_prefix = user_prefix_template.format(**user_vars)
 
     # Handle tex count if include_tex_count is set
+    # this logic at some point needs to be handled outside of it
     if prompt_settings.get("include_tex_count"):
         tex_count_stats = get_tex_count(input_file)
         if tex_count_stats:
