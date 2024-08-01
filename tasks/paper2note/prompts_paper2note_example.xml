@@ -3,40 +3,33 @@
 <prompts>
 <user_prefix>
 <![CDATA[
-You are provided with the following:
-<txt_content>
-{INPUT_CONTENT}
-</txt_content>
+I am going to give you a research paper. You are about to convert it into a lecture note, so please read the document carefully.
 
-This is the content of a text file generated from a PDF on {TOPIC}. You need to convert this content into a LaTeX file.
+Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
-You are also provided with a sample LaTeX file in the desired style:
-<sample_tex>
-{SAMPLE_TEX}
-</sample_tex>
-
-Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
-
-The document class and custom commands for the LaTeX file are as follows:
-<document_class>
+<documents>
+<document name="{DOCUMENT_CLS}">
 {DOCUMENT_CLS_CONTENT}
-</document_class>
+</document>
 
-<command>
+<document name="{COMMANDS}">
 {COMMANDS_CONTENT}
-</command>
+</document>
 
-Additionally, here's an example of a research paper and its corresponding lecture note:
+<document name="{INPUT_FILE}">
+{INPUT_CONTENT}
+</document>
 
-<example_paper>
+<document name="EXAMPLE_PAPER">
 {EXAMPLE_PAPER}
-</example_paper>
+</document>
 
-<example_lecture_note>
+<document name="EXAMPLE_LECTURE_NOTE">
 {EXAMPLE_LECTURE_NOTE}
-</example_lecture_note>
+</document>
+</documents>
 
-Use this example to guide your conversion from the research paper to lecture notes format.
+Please carefully read through the entire research paper above and ensure you fully understand all the details.
 ]]>
 </user_prefix>
 </prompts>
