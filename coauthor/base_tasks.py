@@ -109,12 +109,13 @@ class ThinkWrite(BaseReflectChainTask):
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.ensure_correct_xml_structure(output_file, self.task_settings["document_tag"])
-            output_files = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
-
-            if isinstance(output_files, list):  # Multiple output files
+            
+            if self.args.output_files:  # Multiple output files
+                output_files = coa.split_multiple_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
             else:  # Single output file
-                self._handle_single_output(output_files)
+                output_file = coa.split_scratchpad_output_xml(output_file, self.task_settings["document_tag"])
+                self._handle_single_output(output_file)
 
         coa.log_output_files(output_file, self.log_file)
         coa.log_and_print_statistics(state, self.args.model, self.log_file)
