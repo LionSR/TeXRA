@@ -9,6 +9,7 @@ class BaseReflectChainTask(ABC):
     Abstract base class for reflect chain tasks.
     Provides a common structure for tasks that involve reflection and processing.
     """
+
     def __init__(self, args, prompt_path):
         self.args = args
         self.prompt_path = prompt_path
@@ -65,7 +66,7 @@ class BaseReflectChainTask(ABC):
                 self.args.task,
                 self.model_settings["model"],
                 self.output_settings["output_type"],
-                reflect=True
+                reflect=True,
             )
         return None
 
@@ -133,7 +134,9 @@ class ThinkWrite(BaseReflectChainTask):
 
     def _generate_reflection_diff(self, input_file, output_file):
         first_output = coa.get_output_file_name(input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
-        reflect_output = coa.get_output_file_name(input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
+        reflect_output = coa.get_output_file_name(
+            input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True
+        )
         if os.path.exists(first_output) and os.path.exists(reflect_output):
             coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
         else:
@@ -203,5 +206,3 @@ class DirectWrite(BaseReflectChainTask):
 
         self.handle_output(state, end_turn, self.reflect_output_file)
         return state, messages
-
-# The ThinkWriteAndReflect class has been removed as it's now redundant
