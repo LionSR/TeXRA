@@ -5,7 +5,7 @@ import coauthor as coa
 prompt_path = coa.get_prompt_path(coa, "article")
 
 
-class EditTex(ThinkWriteAndReflect):
+class EditTex(ThinkWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
         if "multiple" in self.args.task:

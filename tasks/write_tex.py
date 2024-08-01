@@ -4,7 +4,7 @@ import coauthor as coa
 prompt_path = coa.get_prompt_path(coa, "write")
 
 
-class WriteTex(ThinkWriteAndReflect):
+class WriteTex(ThinkWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars(self.args)
 
