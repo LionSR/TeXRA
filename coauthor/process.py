@@ -16,7 +16,6 @@ from .message_utils import (
 )
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition
-from .tex_tools import get_tex_count
 from .prompt_utils import load_prompt
 
 
