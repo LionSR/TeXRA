@@ -7,40 +7,6 @@ import xml.etree.ElementTree as ET
 from .file_utils import read_file, write_file
 
 
-def get_output_file_name(input_file, task, model, output_type, reflect=False):
-    file_name, _ = os.path.splitext(input_file)
-    first_task_chunk = task.split("_")[0]
-    output_type = output_type.strip(".")
-    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
-    if reflect:
-        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
-    print(f"Output file: {colored(output_file, 'cyan')}")
-    return output_file
-
-
-def get_output_file_name_merge(input_file, edited_file):
-    input_dir = os.path.dirname(input_file)
-    input_base, _ = os.path.splitext(os.path.basename(input_file))
-    edited_base, _ = os.path.splitext(os.path.basename(edited_file))
-
-    parts = edited_base.split("_")
-    edited_base_override = parts[0]
-    task = parts[1]  # Assuming the task is always the second part
-
-    base = input_base
-    if input_base != edited_base_override:
-        base = edited_base_override
-
-    if "reflect" in parts:
-        model = parts[-1]
-        output = f"{base}_{task}_reflect_full_{model}.tex"
-    else:
-        model = parts[-1]
-        output = f"{base}_{task}_full_{model}.tex"
-
-    output = os.path.join(input_dir, output)
-    print(f"Merge output file: {colored(output, 'cyan')}")
-    return output
 
 
 def check_for_massive_repetition(last_response, new_response):
