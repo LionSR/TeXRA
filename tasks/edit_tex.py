@@ -27,7 +27,17 @@ def main():
         "--task",
         type=str,
         default="correct",
-        choices=["correct", "polish", "draw", "polish_long", "draw_long", "polish_multiple"],
+            choices=[
+            "correct",
+            "polish",
+            "draw",
+            "polish_multiple",
+            "polish_with_auxiliary",
+            "correct_multiple",
+            "correct_with_auxiliary",
+            "draw_multiple",
+            "draw_with_auxiliary",
+        ],
     )
     args = parser.parse_args()
 
