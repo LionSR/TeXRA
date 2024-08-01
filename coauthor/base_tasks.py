@@ -79,6 +79,21 @@ class BaseReflectChainTask(ABC):
             else:
                 print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
 
+    def process(self):
+        state, accumulated_output, end_turn, messages = coa.process_first_round(
+            self.client,
+            self.args.input_file,
+            self.output_file,
+            self.user_vars,
+            model_settings=self.model_settings,
+            output_settings=self.output_settings,
+            prompt_settings=self.prompt_settings,
+            figure_inputs=self.args.figure_inputs,
+        )
+
+        self.handle_output(state, end_turn, self.output_file)
+        return state, messages
+
     def reflect(self, state, messages):
         reflection_figure_inputs = []
 
@@ -146,21 +161,6 @@ class ThinkWrite(BaseReflectChainTask):
 
 
 class DirectWrite(BaseReflectChainTask):
-    def process(self):
-        state, accumulated_output, end_turn, messages = coa.process_first_round(
-            self.client,
-            self.args.input_file,
-            self.output_file,
-            self.user_vars,
-            model_settings=self.model_settings,
-            output_settings=self.output_settings,
-            prompt_settings=self.prompt_settings,
-            figure_inputs=self.args.figure_inputs,
-        )
-
-        self.handle_output(state, end_turn, self.output_file)
-        return state, messages
-
     def handle_output(self, state, end_turn, output_file):
         if end_turn and self.output_settings["output_type"] == "tex":
             coa.run_latexdiff(self.args.input_file, output_file, self.args.task)
