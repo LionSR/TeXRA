@@ -36,7 +36,15 @@ class EditTex(ThinkWriteAndReflect):
         if self.args.reflect and end_turn:
             first_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"])
             reflect_output = coa.get_output_file_name(self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=True)
-            coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            if os.path.exists(first_output) and os.path.exists(reflect_output):
+                coa.run_latexdiff(first_output, reflect_output, f"{self.args.task}_reflect_diff", self.args.model)
+            else:
+                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+
+    def run(self):
+        self.setup()
+        state, messages = self.process()
+        coa.log_end(self.log_file)
 
 
 def main():
