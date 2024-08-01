@@ -28,7 +28,7 @@ class EditLecture(ThinkWrite):
 
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         super().handle_output(state, end_turn, output_file, is_reflection_complete)
-        
+
         if end_turn and self.output_settings["output_type"] == "tex":
             if self.args.output_files:  # Multiple output files
                 for input_file, output_file in zip(self.args.output_files, self.first_round_output_files):
