@@ -23,9 +23,11 @@ from .message_utils import (
 from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from .output_utils import (
     check_for_massive_repetition,
-    get_output_file_name,
     ensure_correct_xml_structure,
     split_scratchpad_output_xml,
+    split_multiple_scratchpad_output_xml,
+    add_cdata_to_tags,
+    add_cdata_to_tags_multiple,
 )
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
