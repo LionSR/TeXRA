@@ -4,6 +4,10 @@ import coauthor as coa
 
 
 class BaseReflectChainTask(ABC):
+    """
+    Abstract base class for reflect chain tasks.
+    Provides a common structure for tasks that involve reflection and processing.
+    """
     def __init__(self, args, prompt_path):
         self.args = args
         self.prompt_path = prompt_path
