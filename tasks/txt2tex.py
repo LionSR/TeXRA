@@ -9,9 +9,9 @@ class Txt2Tex(DirectWrite):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "SAMPLE_TEX": coa.read_file(self.args.sample_tex) if self.args.sample_tex else "",
-                "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls) if self.args.document_cls else "",
-                "COMMANDS_CONTENT": coa.read_file(self.args.commands_file) if self.args.commands_file else "",
+                "SAMPLE_TEX": coa.read_file(self.args.sample_tex),
+                "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
+                "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
             }
         )
         return user_vars
