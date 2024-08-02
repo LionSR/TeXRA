@@ -91,9 +91,11 @@ class BaseReflectChainTask(ABC):
     def _handle_reflection_diff(self, end_turn):
         pass
 
-    def _get_tex_count_stats(self, input_file):
+    def _get_tex_count_stats(self, input_files):
         if self.prompt_settings.get("include_tex_count"):
-            tex_count_stats = get_tex_count(input_file)
+            if isinstance(input_files, str):
+                input_files = [input_files]
+            tex_count_stats = get_tex_count(input_files)
             if tex_count_stats:
                 return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
         return ""
@@ -110,7 +112,8 @@ class BaseReflectChainTask(ABC):
         return None
 
     def process(self):
-        tex_count_stats = self._get_tex_count_stats(self.args.input_file)
+        input_files = [self.args.input_file] + (self.args.input_files or [])
+        tex_count_stats = self._get_tex_count_stats(input_files)
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
@@ -127,7 +130,7 @@ class BaseReflectChainTask(ABC):
         self.handle_output(state, end_turn, self.output_file, is_reflection_complete=False)
 
         print(
-            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} and/or additional input files {colored(self.args.input_files, 'green')}. The output was saved as {colored(self.output_file, 'green')}"
+            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.output_file, 'green')}"
         )
 
         return state, messages
@@ -135,16 +138,23 @@ class BaseReflectChainTask(ABC):
     def reflect(self, state, messages):
         reflection_figure_inputs = []
 
-        # this logic needs to be adapted in case of multiple file outputs
-        # we might also want to filter the figure tags
         if self.prompt_settings.get("include_tikz_reflection"):
-            generated_output_file = get_output_file_name(
-                self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
-            )
-            print(f"Extracting TikZ figures from {generated_output_file}")
-            extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
-            if extracted_tikz_figures:
-                reflection_figure_inputs.extend(extracted_tikz_figures)
+            if self.args.output_files:
+                # Handle multiple output files
+                for output_file in self.args.output_files:
+                    print(f"Extracting TikZ figures from {output_file}")
+                    extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
+                    if extracted_tikz_figures:
+                        reflection_figure_inputs.extend(extracted_tikz_figures)
+            else:
+                # Handle single output file
+                generated_output_file = get_output_file_name(
+                    self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
+                )
+                print(f"Extracting TikZ figures from {generated_output_file}")
+                extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
+                if extracted_tikz_figures:
+                    reflection_figure_inputs.extend(extracted_tikz_figures)
 
         tex_count_stats = self._get_tex_count_stats(self.args.input_file)
         first_k_tex_document = self._get_first_k_tex_document()

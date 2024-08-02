@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src ${cspSource} https:;">
+    content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src ${cspSource} https:; font-src https://cdnjs.cloudflare.com;">
   <title>CoAuthor Panel</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="${styleUri}">
   <script nonce="${nonce}" src="${scriptUri}"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
@@ -15,13 +16,13 @@
   <div class="content-wrapper">
     <div class="compact-selections">
       <div class="select-group">
-        <label for="taskSelect">Task:</label>
+        <label for="taskSelect"><i class="fas fa-tasks"></i> Task:</label>
         <select id="taskSelect">
           ${taskOptions}
         </select>
       </div>
       <div class="select-group">
-        <label for="modelSelect">Model:</label>
+        <label for="modelSelect"><i class="fas fa-robot"></i> Model:</label>
         <select id="modelSelect">
           <option value="sonnet+">Sonnet+</option>
           <option value="opus">Opus</option>
@@ -33,7 +34,7 @@
         </select>
       </div>
       <div class="select-group">
-        <label for="reflectSelect">Reflect:</label>
+        <label for="reflectSelect"><i class="fas fa-sync-alt"></i> Reflect:</label>
         <select id="reflectSelect">
           <option value="True">True</option>
           <option value="False">False</option>
@@ -45,12 +46,12 @@
       <div class="file-select">
         <div class="file-select-header">
           <span id="toggleMultipleInputFiles" class="toggle-icon">▼</span>
-          <label for="inputFileSelect">Select Input File:</label>
+          <label for="inputFileSelect"><i class="fas fa-file-alt"></i> Select Input File:</label>
           <div class="file-select-buttons">
-            <button id="currentFileButton" class="small-button">Current</button>
-            <button id="addOpenedFilesButton" class="small-button">Add Opened</button>
-            <button id="emptyMultipleInputFilesButton" class="small-button">Empty</button>
-            <button id="selectMultipleInputFilesButton" class="small-button">Add</button>
+            <button id="currentFileButton" class="small-button"><i class="fas fa-file-code"></i> Current</button>
+            <button id="addOpenedFilesButton" class="small-button"><i class="fas fa-folder-open"></i> Add Opened</button>
+            <button id="emptyMultipleInputFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleInputFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
           </div>
         </div>
         <select id="inputFileSelect">
@@ -61,10 +62,10 @@
       <div class="file-select">
         <div class="file-select-header">
           <span id="toggleMultipleSampleFiles" class="toggle-icon">▼</span>
-          <label for="sampleFileSelect">Select Reference File:</label>
+          <label for="sampleFileSelect"><i class="fas fa-file-alt"></i> Select Reference File:</label>
           <div class="file-select-buttons">
-            <button id="emptyMultipleSampleFilesButton" class="small-button">Empty</button>
-            <button id="selectMultipleSampleFilesButton" class="small-button">Add</button>
+            <button id="emptyMultipleSampleFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleSampleFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
           </div>
         </div>
         <select id="sampleFileSelect">
@@ -75,10 +76,10 @@
       <div class="file-select">
         <div class="file-select-header">
           <span id="toggleMultipleAuxFiles" class="toggle-icon">▼</span>
-          <label for="auxFileSelect">Select Auxiliary File:</label>
+          <label for="auxFileSelect"><i class="fas fa-file-alt"></i> Select Auxiliary File:</label>
           <div class="file-select-buttons">
-            <button id="emptyMultipleAuxFilesButton" class="small-button">Empty</button>
-            <button id="selectMultipleAuxFilesButton" class="small-button">Add</button>
+            <button id="emptyMultipleAuxFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleAuxFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
           </div>
         </div>
         <select id="auxFileSelect">
@@ -89,10 +90,10 @@
       <div class="file-select">
         <div class="file-select-header">
           <span id="toggleMultipleFigures" class="toggle-icon">▼</span>
-          <label for="figureFileSelect">Select Figure File:</label>
+          <label for="figureFileSelect"><i class="fas fa-file-alt"></i> Select Figure File:</label>
           <div class="file-select-buttons">
-            <button id="emptyMultipleFiguresButton" class="small-button">Empty</button>
-            <button id="selectMultipleFiguresButton" class="small-button">Add</button>
+            <button id="emptyMultipleFiguresButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleFiguresButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
           </div>
         </div>
         <select id="figureFileSelect">
@@ -124,54 +125,54 @@
     <p>
     <div class="instruction-box">
       <div class="instruction-header">
-        <label for="taskInput">Specific Instructions:</label>
-        <button id="emptyInstructionsButton" class="small-button">Empty</button>
+        <label for="taskInput"><i class="fas fa-pencil-alt"></i> Specific Instructions:</label>
+        <button id="emptyInstructionsButton" class="small-button"><i class="fas fa-eraser"></i> Empty</button>
       </div>
       <textarea id="taskInput"
         placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."></textarea>
     </div>
     <div class="tool-use-execute">
       <div class="checkbox-grid">
-        <label><input type="checkbox" id="autoExtractFigure"> Auto-extract Figs</label>
-        <label><input type="checkbox" id="autoExtractTikzFigure"> Auto-extract TikZ Figs</label>
-        <label><input type="checkbox" id="includeTikzReflection"> Include TikZ Reflection</label>
-        <label><input type="checkbox" id="includeTexCount"> Include Tex Count</label>
+        <label><input type="checkbox" id="autoExtractFigure"> <i class="fas fa-image"></i> Auto-extract Figs</label>
+        <label><input type="checkbox" id="autoExtractTikzFigure"> <i class="fas fa-draw-polygon"></i> Auto-extract TikZ Figs</label>
+        <label><input type="checkbox" id="includeTikzReflection"> <i class="fas fa-sync-alt"></i> Include TikZ Reflection</label>
+        <label><input type="checkbox" id="includeTexCount"> <i class="fas fa-calculator"></i> Include Tex Count</label>
       </div>
       <div class="execute-column">
-        <button id="executeButton">Execute</button>
+        <button id="executeButton"><i class="fas fa-play"></i> Execute</button>
       </div>
     </div>
     </p>
     <div class="section">
-      <h5 class="section-header">Housekeeping</h5>
+      <h5 class="section-header"><i class="fas fa-broom"></i> Housekeeping</h5>
       <div class="button-group">
         <label>For the Selected Task and Files:</label>
         <div class="button-container">
-          <button id="packSingleButton" class="small-button">Pack</button>
-          <button id="cleanSingleButton" class="small-button">Clean</button>
-          <button id="packMultipleButton" class="small-button">Pack(Multiple)</button>
-          <button id="cleanMultipleButton" class="small-button">Clean(Multiple)</button>
+          <button id="packSingleButton" class="small-button"><i class="fas fa-box"></i> Pack</button>
+          <button id="cleanSingleButton" class="small-button"><i class="fas fa-trash-alt"></i> Clean</button>
+          <button id="packMultipleButton" class="small-button"><i class="fas fa-boxes"></i> Pack(Multiple)</button>
+          <button id="cleanMultipleButton" class="small-button"><i class="fas fa-dumpster"></i> Clean(Multiple)</button>
         </div>
       </div>
       <div class="button-group">
         <label>For All the Files:</label>
         <div class="button-container">
-          <button id="indentTexButton" class="small-button">Indent TeX</button>
-          <button id="cleanOutputButton" class="small-button">Clean Output</button>
-          <button id="cleanBuildButton" class="small-button">Clean Build</button>
+          <button id="indentTexButton" class="small-button"><i class="fas fa-indent"></i> Indent TeX</button>
+          <button id="cleanOutputButton" class="small-button"><i class="fas fa-broom"></i> Clean Output</button>
+          <button id="cleanBuildButton" class="small-button"><i class="fas fa-recycle"></i> Clean Build</button>
         </div>
       </div>
     </div>
 
     <div class="section">
-      <h5 class="section-header">Smart Diffs</h5>
+      <h5 class="section-header"><i class="fas fa-code-branch"></i> Smart Diffs</h5>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="editedFileSelect">Select Edited File:</label>
+          <label for="editedFileSelect"><i class="fas fa-file-edit"></i> Select Edited File:</label>
           <div class="file-select-buttons">
-            <button id="currentEditedFileButton" class="small-button">Current</button>
-            <button id="mergeButton" class="small-button">Merge</button>
-            <button id="latexDiffButton" class="small-button">latexdiff</button>
+            <button id="currentEditedFileButton" class="small-button"><i class="fas fa-file-code"></i> Current</button>
+            <button id="mergeButton" class="small-button"><i class="fas fa-code-merge"></i> Merge</button>
+            <button id="latexDiffButton" class="small-button"><i class="fas fa-file-diff"></i> latexdiff</button>
           </div>
         </div>
         <select id="editedFileSelect">
@@ -180,12 +181,12 @@
       </div>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="commitSelect">Select Commit:</label>
+          <label for="commitSelect"><i class="fas fa-code-commit"></i> Select Commit:</label>
           <div class="file-select-buttons">
-            <button id="refreshCommitsButton" class="small-button">Refresh</button>
-            <button id="packLatexDiffVCButton" class="small-button">Pack</button>
-            <button id="cleanLatexDiffVCButton" class="small-button">Clean</button>
-            <button id="latexDiffVCButton" class="small-button">latexdiff-vc</button>
+            <button id="refreshCommitsButton" class="small-button"><i class="fas fa-sync"></i> Refresh</button>
+            <button id="packLatexDiffVCButton" class="small-button"><i class="fas fa-box"></i> Pack</button>
+            <button id="cleanLatexDiffVCButton" class="small-button"><i class="fas fa-trash-alt"></i> Clean</button>
+            <button id="latexDiffVCButton" class="small-button"><i class="fas fa-file-diff"></i> latexdiff-vc</button>
           </div>
         </div>
         <select id="commitSelect">
