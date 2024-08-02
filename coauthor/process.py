@@ -103,7 +103,6 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
 def process_first_round(
     client,
-    input_file,
     output_file,
     user_vars,
     model_settings,
@@ -113,6 +112,7 @@ def process_first_round(
     state=None,
     messages=None,
     tex_count_stats="",
+    first_k_tex_document=None,
 ):
     model = model_settings["model"]
     system_prompt = load_prompt("system", prompt_settings)
@@ -147,8 +147,7 @@ def process_first_round(
         use_prefill_from_input = prompt_settings["use_prefill_from_input"]
         accumulated_output = prefill
 
-        if output_type == "tex" and use_prefill_from_input:
-            first_k_tex_document = read_file(input_file)[: output_settings["k"]]
+        if output_type == "tex" and use_prefill_from_input and first_k_tex_document:
             prefill += first_k_tex_document
             if is_anthropic_model(model):
                 accumulated_output = first_k_tex_document
@@ -177,7 +176,7 @@ def process_first_round(
 
 
 def process_reflection_round(
-    client, input_file, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None, tex_count_stats=""
+    client, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None, tex_count_stats="", first_k_tex_document=None
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
@@ -218,8 +217,7 @@ def process_reflection_round(
     else:
         prefill = output_settings["prefill_reflect"]
 
-        if output_settings["document_tag"] == "tex" and use_prefill_from_input:
-            first_k_tex_document = read_file(input_file)[: output_settings["k"]]
+        if output_settings["document_tag"] == "tex" and use_prefill_from_input and first_k_tex_document:
             accumulated_output = first_k_tex_document
         else:
             accumulated_output = prefill
