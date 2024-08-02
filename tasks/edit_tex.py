@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "article")
 
 class EditTexBase:
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         if "multiple" in self.args.task:
             coa.update_user_vars_multiple_output(self.args, user_vars)
         else:
