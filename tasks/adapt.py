@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "adapt")
 
 class Adapt(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
                 "EXISTING_LECTURE_NOTES": coa.read_file(self.args.existing_lecture_notes),
