@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "txt2tex")
 
 class Txt2Tex(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
                 "SAMPLE_TEX": coa.read_file(self.args.sample_tex) if self.args.sample_tex else "",
