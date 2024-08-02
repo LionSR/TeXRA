@@ -19,7 +19,7 @@ class Txt2Tex(DirectWrite):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--existing_lecture_notes", type=str, help="Path to existing lecture notes in the desired style.")
+    parser.add_argument("--sample_tex", type=str, help="Path to the sample tex file in the desired style.")
     parser.add_argument("--document_cls", type=str, help="Path to the document class file.")
     parser.add_argument("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
     parser.add_argument("--task", type=str, default="txt2tex", choices=["txt2tex"], help="Task to perform, currently only 'txt2tex'.")
