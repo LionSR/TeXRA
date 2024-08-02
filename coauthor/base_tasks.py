@@ -115,7 +115,7 @@ class BaseReflectChainTask(ABC):
         self.handle_output(state, end_turn, self.output_file, is_reflection_complete=False)
 
         print(
-            f"\n\nProcessed {colored(self.args.input_file, 'green')} and/or {colored(self.args.input_files, 'green')} and saved as {colored(self.output_file, 'green')}"
+            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} and/or additional input files {colored(self.args.input_files, 'green')}. The output was saved as {colored(self.output_file, 'green')}"
         )
 
         return state, messages
@@ -123,6 +123,8 @@ class BaseReflectChainTask(ABC):
     def reflect(self, state, messages):
         reflection_figure_inputs = []
 
+        # this logic needs to be adapted in case of multiple file outputs
+        # we might also want to filter the figure tags
         if self.prompt_settings.get("include_tikz_reflection"):
             generated_output_file = get_output_file_name(
                 self.args.input_file, self.args.task, self.model_settings["model"], self.output_settings["output_type"], reflect=False
@@ -149,7 +151,7 @@ class BaseReflectChainTask(ABC):
         self.handle_output(state, end_turn, self.reflect_output_file, is_reflection_complete=True)
 
         print(
-            f"\n\nProcessed {colored(self.args.input_file, 'green')} and/or {colored(self.args.input_files, 'green')} and saved as {colored(self.reflect_output_file, 'green')}"
+            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} and/or additional input files {colored(self.args.input_files, 'green')}. The reflection output was saved as {colored(self.reflect_output_file, 'green')}"
         )
 
         return state, messages
