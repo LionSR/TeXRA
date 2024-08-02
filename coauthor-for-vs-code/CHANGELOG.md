@@ -1,5 +1,17 @@
 # Frontend Changelog
 
+## [0.8.5]
+
+- **Added:**
+  - Integrated Font Awesome icons throughout the UI for improved visual cues
+  - Updated Content Security Policy to allow loading of Font Awesome stylesheet
+- **Changed:**
+  - Enhanced visual consistency by adding icons to buttons, labels, and section headers
+  - Adjusted CSS for better icon integration and styling
+- **Improved:**
+  - Overall user interface aesthetics and intuitiveness with icon additions
+  - Code refactorings for better maintainability and readability using aider
+
 ## [0.8.1] - [0.8.4]
 
 - **Added:**
