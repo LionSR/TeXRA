@@ -9,21 +9,21 @@ class PRLEdit(DirectWrite):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "PREAMBLE_CONTENT": coa.read_file(self.args.preamble_file),
+                "PREAMBLE_CONTENT": coa.read_file(self.args.preamble),
             }
         )
-        if self.args.task == "correct_prl":
+        if self.args.task == "correct_main":
             user_vars.update(
                 {
                     "SUPP_FILE": self.args.supp_file,
                     "SUPP_CONTENT": coa.read_file(self.args.supp_file),
                 }
             )
-        elif self.args.task == "correct_supp_prl":
+        elif self.args.task == "correct_supp":
             user_vars.update(
                 {
-                    "MAIN_FILE": self.args.auxiliary_files,
-                    "MAIN_CONTENT": coa.read_file(self.args.auxiliary_files),
+                    "MAIN_FILE": self.args.main_file,
+                    "MAIN_CONTENT": coa.read_file(self.args.main_file),
                 }
             )
         return user_vars
@@ -31,15 +31,15 @@ class PRLEdit(DirectWrite):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--preamble_file", default="preamble.tex", type=str, help="Path to the preamble TeX file.")
-    parser.add_argument("--auxiliary_files", type=str, help="Path to the auxiliary TeX file to be processed.")
+    parser.add_argument("--preamble", default="preamble.tex", type=str, help="Path to the preamble TeX file.")
+    parser.add_argument("--main_file", type=str, help="Path to the main TeX file to be processed.")
     parser.add_argument("--supp_file", type=str, default="supp.tex", help="Path to the supplementary TeX file to be processed.")
     parser.add_argument(
         "--task",
         type=str,
-        default="correct_prl",
-        help="Mode of operation, either 'correct_prl', 'correct_supp_prl'.",
-        choices=["correct_prl", "correct_supp_prl"],
+        default="correct_main",
+        help="Mode of operation, either 'correct_main' or 'correct_supp'.",
+        choices=["correct_main", "correct_supp"],
     )
     args = parser.parse_args()
 
