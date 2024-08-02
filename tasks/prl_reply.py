@@ -11,26 +11,26 @@ class PRLReplyBase:
             {
                 "PREAMBLE_CONTENT": coa.read_file(self.args.preamble),
                 "MAIN_CONTENT": coa.read_file(self.args.input_file),
-                "SUPP_CONTENT": coa.read_file(self.args.supp_file) if self.args.supp_file else "",
-                "INSTRUCTION": coa.read_file(self.args.instruction) if self.args.instruction else "",
-                "COVER_LETTER": coa.read_file(self.args.cover_letter) if self.args.cover_letter else "",
-                "EDITOR_DECISION_LETTER": coa.read_file(self.args.editor_letter) if self.args.editor_letter else "",
-                "REFEREE_REPORT_A": coa.read_file(self.args.report_a) if self.args.report_a else "",
-                "REFEREE_REPORT_B": coa.read_file(self.args.report_b) if self.args.report_b else "",
-                "EXAMPLE_REPLY_LETTER": coa.read_file(self.args.example_reply_letter) if self.args.example_reply_letter else "",
+                "SUPP_CONTENT": coa.read_file(self.args.supp_file),
+                "INSTRUCTION": coa.read_file(self.args.instruction),
+                "COVER_LETTER": coa.read_file(self.args.cover_letter),
+                "EDITOR_DECISION_LETTER": coa.read_file(self.args.editor_letter),
+                "REFEREE_REPORT_A": coa.read_file(self.args.report_a),
+                "REFEREE_REPORT_B": coa.read_file(self.args.report_b),
+                "EXAMPLE_REPLY_LETTER": coa.read_file(self.args.example_reply_letter),
             }
         )
 
         if "revise" in self.args.task or "polish" in self.args.task:
-            user_vars["DRAFT_REPLY_LETTER"] = coa.read_file(self.args.draft_reply_letter) if self.args.draft_reply_letter else ""
+            user_vars["DRAFT_REPLY_LETTER"] = coa.read_file(self.args.draft_reply_letter)
 
         if "polish" in self.args.task:
-            user_vars["MAIN_CONTENT"] = coa.read_file(self.args.main_content) if self.args.main_content else ""
+            user_vars["MAIN_CONTENT"] = coa.read_file(self.args.main_content)
 
         if self.args.task == "revise_supp":
             user_vars["SUPP_CONTENT"] = coa.read_file(self.args.input_file)
-            user_vars["MAIN_CONTENT"] = coa.read_file(self.args.main_content) if self.args.main_content else ""
-            user_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(self.args.draft_main_content) if self.args.draft_main_content else ""
+            user_vars["MAIN_CONTENT"] = coa.read_file(self.args.main_content)
+            user_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(self.args.draft_main_content)
 
         return user_vars
 
