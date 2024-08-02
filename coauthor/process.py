@@ -189,10 +189,6 @@ def process_reflection_round(
     # Add tex count stats if provided
     user_message = f"{tex_count_stats}{user_message}"
 
-    # Ensure all figure_inputs are strings
-    if figure_inputs:
-        figure_inputs = [str(fig) for fig in figure_inputs]
-
     # Create a new message for the reflection round
     reflection_message = {"role": "user", "content": []}
 

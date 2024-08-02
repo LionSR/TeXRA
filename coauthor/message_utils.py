@@ -85,6 +85,8 @@ def create_image_message(model, figure_inputs):
     if not isinstance(figure_inputs, list):
         figure_inputs = [figure_inputs]
 
+    figure_inputs = [str(fig) for fig in figure_inputs]
+
     for figure_input in figure_inputs:
         if not os.path.exists(figure_input):
             cprint(f"WARNING: File {figure_input} does not exist. Skipping.", "white", "on_red")
