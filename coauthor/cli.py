@@ -82,7 +82,8 @@ def execute_task(script, task, model, input_file, **kwargs):
 
     # this logic needs to be changed for multiple file output
     handle_auto_extract_figure(kwargs, input_file)
-    handle_auto_extract_tikz_figure(kwargs, input_file)
+    all_input_files = [input_file] + (kwargs.get("input_files") or [])
+    handle_auto_extract_tikz_figure(kwargs, all_input_files)
 
     for key, value in kwargs.items():
         if value is not None:
