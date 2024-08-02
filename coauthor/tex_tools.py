@@ -38,27 +38,40 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
         return False, error_message
 
 
-def get_tex_count(file_path):
+def get_tex_count(file_paths):
     """
-    Get full statistics for a LaTeX document using the texcount Perl script.
+    Get full statistics for LaTeX documents using the texcount Perl script.
 
-    :param file_path: Path to the LaTeX file
-    :return: String containing full texcount output, or None if an error occurred
+    :param file_paths: List of paths to LaTeX files
+    :return: String containing full texcount output for all files, or None if an error occurred
     """
-    if not os.path.exists(file_path):
-        cprint(f"Error: File {file_path} does not exist.", "red")
-        return None
+    if not isinstance(file_paths, list):
+        file_paths = [file_paths]
 
-    success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
-    if success:
-        cprint(f"Tex Count Results: {output}", "yellow")
-        return output
+    all_outputs = []
+    for file_path in file_paths:
+        if not os.path.exists(file_path):
+            cprint(f"Error: File {file_path} does not exist.", "red")
+            continue
+
+        success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
+        if success:
+            all_outputs.append(f"Tex Count Results for {file_path}:\n{output}")
+        else:
+            cprint(f"Error getting tex count for {file_path}", "red")
+
+    if all_outputs:
+        combined_output = "\n\n".join(all_outputs)
+        cprint(f"Combined Tex Count Results:\n{combined_output}", "yellow")
+        return combined_output
     return None
 
 
-def handle_tex_count(kwargs, input_file):
+def handle_tex_count(kwargs, input_files):
     if kwargs.get("include_tex_count"):
-        tex_count_stats = get_tex_count(input_file)
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        tex_count_stats = get_tex_count(input_files)
         if tex_count_stats:
             instruction = kwargs.get("instruction", "")
             kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
