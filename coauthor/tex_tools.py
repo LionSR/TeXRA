@@ -129,6 +129,14 @@ def run_latexdiff_vc(input_file, commit_hash):
         cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
+    # Check if the input file contains \begin{document} and \end{document}
+    with open(input_file, 'r') as f:
+        input_content = f.read()
+
+    if '\\begin{document}' not in input_content or '\\end{document}' not in input_content:
+        cprint("WARNING: Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.", "yellow")
+        return None
+
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
 
     latexdiff_vc_command = [
