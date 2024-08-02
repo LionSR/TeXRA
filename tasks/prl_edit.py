@@ -10,37 +10,21 @@ class PRLEdit(DirectWrite):
         user_vars.update(
             {
                 "PREAMBLE_CONTENT": coa.read_file(self.args.preamble),
+                "MAIN_FILE": self.args.main_file,
+                "MAIN_CONTENT": coa.read_file(self.args.main_file),
+                "SUPP_FILE": self.args.supp_file,
+                "SUPP_CONTENT": coa.read_file(self.args.supp_file),
             }
         )
-        if self.args.task == "correct_main":
-            user_vars.update(
-                {
-                    "SUPP_FILE": self.args.supp_file,
-                    "SUPP_CONTENT": coa.read_file(self.args.supp_file),
-                }
-            )
-        elif self.args.task == "correct_supp":
-            user_vars.update(
-                {
-                    "MAIN_FILE": self.args.main_file,
-                    "MAIN_CONTENT": coa.read_file(self.args.main_file),
-                }
-            )
         return user_vars
 
 
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--preamble", default="preamble.tex", type=str, help="Path to the preamble TeX file.")
-    parser.add_argument("--main_file", type=str, help="Path to the main TeX file to be processed.")
-    parser.add_argument("--supp_file", type=str, default="supp.tex", help="Path to the supplementary TeX file to be processed.")
-    parser.add_argument(
-        "--task",
-        type=str,
-        default="correct_main",
-        help="Mode of operation, either 'correct_main' or 'correct_supp'.",
-        choices=["correct_main", "correct_supp"],
-    )
+    parser.add_argument("--main_file", type=str, required=True, help="Path to the main TeX file to be processed.")
+    parser.add_argument("--supp_file", type=str, required=True, help="Path to the supplementary TeX file to be processed.")
+    parser.add_argument("--task", type=str, default="correct_prl", help="Mode of operation, 'correct_prl' for both main and supplementary materials.")
     args = parser.parse_args()
 
     prl_edit = PRLEdit(args, prompt_path)
