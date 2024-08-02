@@ -1,7 +1,7 @@
 from coauthor.base_tasks import DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "prl_edit")
+prompt_path = coa.get_prompt_path(coa, "prl")
 
 
 class PRLEdit(DirectWrite):
