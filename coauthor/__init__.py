@@ -34,7 +34,7 @@ from .log_utils import log_start, log_end, log_and_print_statistics, log_output_
 from .openai_utils import best_connection_method
 from .prompt_utils import (
     load_task_settings_and_prompts,
-    get_user_vars,
+    get_user_vars_basic,
     get_xml_format_from_files,
     load_prompt,
     update_user_vars_single_output,
