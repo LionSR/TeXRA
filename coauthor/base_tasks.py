@@ -91,7 +91,7 @@ class BaseReflectChainTask(ABC):
     def _handle_reflection_diff(self, end_turn):
         pass
 
-    def get_tex_count_stats(self, input_file):
+    def _get_tex_count_stats(self, input_file):
         if self.prompt_settings.get("include_tex_count"):
             tex_count_stats = get_tex_count(input_file)
             if tex_count_stats:
@@ -110,7 +110,7 @@ class BaseReflectChainTask(ABC):
         return None
 
     def process(self):
-        tex_count_stats = self.get_tex_count_stats(self.args.input_file)
+        tex_count_stats = self._get_tex_count_stats(self.args.input_file)
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
@@ -146,7 +146,7 @@ class BaseReflectChainTask(ABC):
             if extracted_tikz_figures:
                 reflection_figure_inputs.extend(extracted_tikz_figures)
 
-        tex_count_stats = self.get_tex_count_stats(self.args.input_file)
+        tex_count_stats = self._get_tex_count_stats(self.args.input_file)
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
