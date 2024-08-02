@@ -1,10 +1,10 @@
-from coauthor.base_tasks import DirectWrite
+from coauthor.base_tasks import ThinkWrite, DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "prl_reply")
 
 
-class PRLReply(DirectWrite):
+class PRLReplyBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
@@ -35,6 +35,14 @@ class PRLReply(DirectWrite):
         return user_vars
 
 
+class PRLReplyThink(PRLReplyBase, ThinkWrite):
+    pass
+
+
+class PRLReplyDirect(PRLReplyBase, DirectWrite):
+    pass
+
+
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--main_content", type=str, help="Path to the main content TeX file to be included in the response.", default=None)
@@ -53,7 +61,10 @@ def main():
     parser.add_argument("--draft_main_content", type=str, help="Path to the draft main content file.")
     args = parser.parse_args()
 
-    prl_reply = PRLReply(args, prompt_path)
+    if args.task == "reply_letter":
+        prl_reply = PRLReplyThink(args, prompt_path)
+    else:
+        prl_reply = PRLReplyDirect(args, prompt_path)
     prl_reply.run()
 
 
