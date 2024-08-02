@@ -26,7 +26,7 @@ You will be editing a noisy academic discussion transcript that has been transcr
 {TRANSCRIPT}
 </document>
 <document name="context">
-{CONTEXT}
+{INSTRUCTION}
 </document>
 </documents>
 
