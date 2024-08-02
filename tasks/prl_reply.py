@@ -1,7 +1,7 @@
 from coauthor.base_tasks import ThinkWrite, DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "prl_reply")
+prompt_path = coa.get_prompt_path(coa, "prl")
 
 
 class PRLReplyBase:
