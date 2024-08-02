@@ -8,7 +8,11 @@ def get_prompt_path(library, prompt_name):
 
 
 def read_file(file_path, raise_warning=True):
-    if not os.path.exists(file_path):
+    if file_path is None:
+        if raise_warning:
+            warnings.warn(f"File not provided: {file_path}")
+        return ""
+    elif not os.path.exists(file_path):
         if raise_warning:
             warnings.warn(f"File not found: {file_path}")
         return ""
