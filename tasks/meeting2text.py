@@ -10,9 +10,8 @@ class Meeting2Text(DirectWrite):
         user_vars.update(
             {
                 "TRANSCRIPT": coa.read_file(self.args.input_file),
-                "CONTEXT": coa.read_file(self.args.context_file),
-                "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript) if self.args.example_transcript else "",
-                "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript) if self.args.example_edited_transcript else "",
+                "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript),
+                "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
             }
         )
         return user_vars
@@ -20,7 +19,6 @@ class Meeting2Text(DirectWrite):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--context_file", type=str, required=True, help="Path to the file containing the context for the discussion transcript.")
     parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
     parser.add_argument("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
     parser.add_argument("--task", type=str, default="transcribe", help="Task to perform, currently only 'transcribe'.", choices=["transcribe"])

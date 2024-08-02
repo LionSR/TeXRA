@@ -12,6 +12,7 @@ class Txt2Tex(DirectWrite):
                 "SAMPLE_TEX": coa.read_file(self.args.sample_tex),
                 "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
                 "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
+                "TOPIC": self.args.topic,
             }
         )
         return user_vars
@@ -23,6 +24,7 @@ def main():
     parser.add_argument("--document_cls", type=str, help="Path to the document class file.")
     parser.add_argument("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
     parser.add_argument("--task", type=str, default="txt2tex", choices=["txt2tex"], help="Task to perform, currently only 'txt2tex'.")
+    parser.add_argument("--topic", type=str, default="Experimental Quantum Computing", help="Topic of the document.")
     args = parser.parse_args()
 
     txt2tex = Txt2Tex(args, prompt_path)

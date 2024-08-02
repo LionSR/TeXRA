@@ -201,16 +201,14 @@ def draw_qi(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--context_file", type=str, required=True, help="Path to the file containing the context for the discussion transcript.")
 @click.option("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
 @click.option("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
-def meeting2text(model, input_file, context_file, example_transcript=None, example_edited_transcript=None, task="transcribe", **kwargs):
+def meeting2text(model, input_file, example_transcript=None, example_edited_transcript=None, task="transcribe", **kwargs):
     execute_task(
         "meeting2text",
         task,
         model,
         input_file,
-        context_file=context_file,
         example_transcript=example_transcript,
         example_edited_transcript=example_edited_transcript,
         **kwargs,
