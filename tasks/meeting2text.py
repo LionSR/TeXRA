@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "meeting2text")
 
 class Meeting2Text(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
                 "TRANSCRIPT": coa.read_file(self.args.input_file),

@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "prl_reply")
 
 class PRLReply(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
                 "PREAMBLE_CONTENT": coa.read_file(self.args.preamble),
