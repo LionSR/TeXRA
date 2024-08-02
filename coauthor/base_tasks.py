@@ -98,11 +98,22 @@ class BaseReflectChainTask(ABC):
                 return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
         return ""
 
+    def _get_first_k_tex_document(self):
+        k = self.output_settings.get("k", 1000)
+        if self.output_settings["output_type"] == "tex" and self.prompt_settings["use_prefill_from_input"]:
+            try:
+                with open(self.args.input_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    return content[:k].strip()  # Return only the first k characters, stripped
+            except IOError as e:
+                print(f"Error reading file {self.args.input_file}: {e}")
+        return None
+
     def process(self):
         tex_count_stats = self.get_tex_count_stats(self.args.input_file)
+        first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
-            self.args.input_file,
             self.output_file,
             self.user_vars,
             model_settings=self.model_settings,
@@ -110,6 +121,7 @@ class BaseReflectChainTask(ABC):
             prompt_settings=self.prompt_settings,
             figure_inputs=self.args.figure_inputs,
             tex_count_stats=tex_count_stats,
+            first_k_tex_document=first_k_tex_document,
         )
 
         self.handle_output(state, end_turn, self.output_file, is_reflection_complete=False)
@@ -135,9 +147,9 @@ class BaseReflectChainTask(ABC):
                 reflection_figure_inputs.extend(extracted_tikz_figures)
 
         tex_count_stats = self.get_tex_count_stats(self.args.input_file)
+        first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
-            self.args.input_file,
             self.reflect_output_file,
             state,
             messages,
@@ -146,6 +158,7 @@ class BaseReflectChainTask(ABC):
             prompt_settings=self.prompt_settings,
             figure_inputs=reflection_figure_inputs,
             tex_count_stats=tex_count_stats,
+            first_k_tex_document=first_k_tex_document,
         )
 
         self.handle_output(state, end_turn, self.reflect_output_file, is_reflection_complete=True)
