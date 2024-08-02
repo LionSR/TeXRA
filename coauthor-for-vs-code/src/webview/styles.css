@@ -304,3 +304,35 @@ body {
   user-select: none;
   margin-left: 5px;
 }
+
+.fas {
+  margin-right: 5px;
+}
+
+h5 .fas {
+  font-size: 0.9em;
+  color: var(--vscode-textLink-foreground);
+}
+
+button .fas {
+  font-size: 0.9em;
+}
+
+.checkbox-grid .fas {
+  font-size: 0.9em;
+  color: var(--vscode-checkbox-foreground);
+}
+
+.file-select-header label .fas,
+.instruction-header label .fas {
+  margin-right: 5px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.small-button .fas {
+  margin-right: 3px;
+}
+
+#executeButton .fas {
+  margin-right: 5px;
+}
