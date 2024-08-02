@@ -6,7 +6,7 @@ prompt_path = coa.get_prompt_path(coa, "paper2note")
 
 class Paper2Note(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars(self.args)
+        user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
                 "SAMPLE_TEX": "\n".join([coa.read_file(ch) for ch in self.args.sample_chapters]),

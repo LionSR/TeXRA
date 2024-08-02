@@ -62,7 +62,8 @@ def load_prompt(prompt_type, prompt_settings):
     return prompt
 
 
-def get_user_vars(args):
+# in the future split the following into a different file (maybe share with base_tasks or a standalone file to be shared with different chains)
+def get_user_vars_basic(args):
     user_vars = {
         "INPUT_FILE": args.input_file,
         "INPUT_CONTENT": read_file(args.input_file),
