@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<task name="correct_supp_prl">
+<task name="correct_supp">
 <settings>
 <document_tag>latex_document</document_tag>
 <output_type>tex</output_type>
