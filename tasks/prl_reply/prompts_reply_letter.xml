@@ -72,13 +72,12 @@ After your planning, draft a reply letter that includes the following:
 
 Write the full reply letter in the following format:
 
-<reply_letter>
-<cover_letter>
+<latex_documents>
+<document name="cover_letter.tex">
 Your 1-page cover letter to the editor here.
-</cover_letter>
+</document>
 
-Responses to Referee A:
-<point_by_point_reply_a>
+<document name="point_by_point_reply_a.tex">
 <referee_comment>
 First comment from the referee A here. Potentially it is a summary of our work.
 </referee_comment>
@@ -94,23 +93,20 @@ Your rebuttal to the second comment here.
 </author_response>
 
 (Continue this pattern for each comment from the referee.)
+</document>
 
-</point_by_point_reply_a>
-
-Responses to Referee B:
-<point_by_point_reply_b>
+<document name="point_by_point_reply_b.tex">
 ...
-</point_by_point_reply_b>
+</document>
 
-<list_of_major_changes>
+<document name="list_of_major_changes.tex">
 List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
-</list_of_major_changes>
+</document>
 
-</reply_letter>
-
-<revised_paper>
+<document name="revised_paper.tex">
 Full text of your revised paper here.
-</revised_paper>
+</document>
+</latex_documents>
 
 Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the reply letter in the the <reply_letter></reply_letter> tag.
 ]]>
