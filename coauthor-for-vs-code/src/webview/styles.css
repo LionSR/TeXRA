@@ -58,7 +58,7 @@ body {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 100%;
+  top: 100%;
   padding: 2px 5px;
   background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
@@ -67,6 +67,7 @@ body {
   border: 1px solid var(--vscode-input-border);
   border-radius: 3px;
   pointer-events: none;
+  z-index: 1000;
 }
 
 .select-group select {
