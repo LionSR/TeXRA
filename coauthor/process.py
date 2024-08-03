@@ -176,7 +176,16 @@ def process_first_round(
 
 
 def process_reflection_round(
-    client, output_file, state, messages, model_settings, output_settings, prompt_settings, figure_inputs=None, tex_count_stats="", first_k_tex_document=None
+    client,
+    output_file,
+    state,
+    messages,
+    model_settings,
+    output_settings,
+    prompt_settings,
+    figure_inputs=None,
+    tex_count_stats="",
+    first_k_tex_document=None,
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]

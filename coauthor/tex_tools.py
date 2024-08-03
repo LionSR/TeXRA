@@ -105,13 +105,17 @@ def run_latexdiff(input_file, output_file, task=None, model=None):
         return None
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    with open(input_file, 'r') as f:
+    with open(input_file, "r") as f:
         input_content = f.read()
-    with open(output_file, 'r') as f:
+    with open(output_file, "r") as f:
         output_content = f.read()
 
-    if '\\begin{document}' not in input_content or '\\end{document}' not in input_content or \
-       '\\begin{document}' not in output_content or '\\end{document}' not in output_content:
+    if (
+        "\\begin{document}" not in input_content
+        or "\\end{document}" not in input_content
+        or "\\begin{document}" not in output_content
+        or "\\end{document}" not in output_content
+    ):
         cprint("WARNING: One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.", "yellow")
         return None
 
@@ -143,10 +147,10 @@ def run_latexdiff_vc(input_file, commit_hash):
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
-    with open(input_file, 'r') as f:
+    with open(input_file, "r") as f:
         input_content = f.read()
 
-    if '\\begin{document}' not in input_content or '\\end{document}' not in input_content:
+    if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
         cprint("WARNING: Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.", "yellow")
         return None
 
