@@ -147,19 +147,25 @@ body {
 }
 
 .multiple-files-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-top: 5px;
 }
 
+.multiple-files-content {
+  width: 80%;
+}
+
 .multiple-files-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 5px;
 }
 
 .multiple-files-buttons {
   display: flex;
+  flex-direction: column;
   gap: 5px;
+  width: 18%;
 }
 
 .multiple-files-list {
@@ -177,6 +183,11 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.small-button {
+  width: 100%;
+  padding: 2px 4px;
 }
 
 .remove-button {
