@@ -547,7 +547,16 @@ def revise_nsf_grant(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def text2tex(model, input_file, **kwargs):
-    execute_task("meeting2text", "text2tex", model, input_file, **kwargs)
+    task_sub = "text2tex"
+    if ".tex" in input_file:
+        task_sub = "text2tex_draft"
+    execute_task("meeting2text", task_sub, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def text2tex_draft(model, input_file, **kwargs):
+    execute_task("meeting2text", "text2tex_draft", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":
@@ -569,6 +578,7 @@ cli.add_command(draw_qi)
 # meeting2text.py
 cli.add_command(meeting2text)
 cli.add_command(text2tex)
+cli.add_command(text2tex_draft)
 
 # txt2tex.py
 cli.add_command(txt2tex)
