@@ -49,6 +49,10 @@
             <button id="currentFileButton" class="small-button"><i class="fas fa-file-code"></i> Current</button>
             <button id="addOpenedFilesButton" class="small-button"><i class="fas fa-folder-open"></i> Add Opened</button>
             <span id="toggleMultipleInputFiles" class="toggle-icon">▼</span>
+            <div class="action-buttons">
+              <button id="emptyMultipleInputFilesButton" class="small-button"><i class="fas fa-trash-alt"></i></button>
+              <button id="selectMultipleInputFilesButton" class="small-button"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
         </div>
         <select id="inputFileSelect">
@@ -59,16 +63,16 @@
             <div id="multipleInputFilesSelect" class="multiple-files-list"></div>
           </div>
         </div>
-        <div class="multiple-files-buttons" style="display: none;">
-          <button id="emptyMultipleInputFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-          <button id="selectMultipleInputFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
-        </div>
       </div>
       <div class="file-select">
         <div class="file-select-header">
           <label for="sampleFileSelect"><i class="fas fa-file-alt"></i> Select Reference File:</label>
           <div class="file-select-buttons">
             <span id="toggleMultipleSampleFiles" class="toggle-icon">▼</span>
+            <div class="action-buttons">
+              <button id="emptyMultipleSampleFilesButton" class="small-button"><i class="fas fa-trash-alt"></i></button>
+              <button id="selectMultipleSampleFilesButton" class="small-button"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
         </div>
         <select id="sampleFileSelect">
@@ -78,10 +82,6 @@
           <div class="multiple-files-content">
             <div id="multipleSampleFilesSelect" class="multiple-files-list"></div>
           </div>
-          <div class="multiple-files-buttons">
-            <button id="emptyMultipleSampleFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-            <button id="selectMultipleSampleFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
-          </div>
         </div>
       </div>
       <div class="file-select">
@@ -89,6 +89,10 @@
           <label for="auxFileSelect"><i class="fas fa-file-alt"></i> Select Auxiliary File:</label>
           <div class="file-select-buttons">
             <span id="toggleMultipleAuxFiles" class="toggle-icon">▼</span>
+            <div class="action-buttons">
+              <button id="emptyMultipleAuxFilesButton" class="small-button"><i class="fas fa-trash-alt"></i></button>
+              <button id="selectMultipleAuxFilesButton" class="small-button"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
         </div>
         <select id="auxFileSelect">
@@ -98,10 +102,6 @@
           <div class="multiple-files-content">
             <div id="multipleAuxFilesSelect" class="multiple-files-list"></div>
           </div>
-          <div class="multiple-files-buttons">
-            <button id="emptyMultipleAuxFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-            <button id="selectMultipleAuxFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
-          </div>
         </div>
       </div>
       <div class="file-select">
@@ -109,6 +109,10 @@
           <label for="figureFileSelect"><i class="fas fa-file-alt"></i> Select Figure File:</label>
           <div class="file-select-buttons">
             <span id="toggleMultipleFigures" class="toggle-icon">▼</span>
+            <div class="action-buttons">
+              <button id="emptyMultipleFiguresButton" class="small-button"><i class="fas fa-trash-alt"></i></button>
+              <button id="selectMultipleFiguresButton" class="small-button"><i class="fas fa-plus"></i></button>
+            </div>
           </div>
         </div>
         <select id="figureFileSelect">
@@ -117,10 +121,6 @@
         <div id="multipleFiguresContainer" class="multiple-files-container" style="display: none;">
           <div class="multiple-files-content">
             <div id="multipleFiguresSelect" class="multiple-files-list"></div>
-          </div>
-          <div class="multiple-files-buttons">
-            <button id="emptyMultipleFiguresButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-            <button id="selectMultipleFiguresButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
           </div>
         </div>
       </div>
