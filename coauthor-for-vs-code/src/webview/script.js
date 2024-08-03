@@ -412,13 +412,11 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverrideContainer').style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
-      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value.trim();
     vscode.postMessage({
       command: 'requestEditedFile',
       inputFile: inputFile,
-      outputNameOverride: outputNameOverride
+      outputNameOverride: outputNameOverride || null
     });
   });
   document.getElementById('mergeButton').addEventListener('click', function () {
