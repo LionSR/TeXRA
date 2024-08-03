@@ -146,8 +146,23 @@ body {
   font-size: var(--vscode-font-size);
 }
 
-.multiple-files-list {
+.multiple-files-container {
   margin-top: 5px;
+}
+
+.multiple-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.multiple-files-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.multiple-files-list {
   background-color: var(--dropdown-background);
   border: 1px solid var(--dropdown-border);
   border-radius: 3px;
