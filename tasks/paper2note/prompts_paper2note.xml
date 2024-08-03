@@ -68,7 +68,7 @@ Please output the full LaTeX source for the lecture notes, enclosed in the <lect
 </user_request>
 <user_reflect>
 <![CDATA[
-Your output lecture notes adapted from the research paper are too generic and not specific enough, with some parts of the paper missing from the notes
+Your output lecture notes adapted from the research paper are too generic, not specific and not mathematical enough, with some parts of the paper missing from the notes
 
 After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
 <instruction>
