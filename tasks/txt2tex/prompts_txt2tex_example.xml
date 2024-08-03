@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<task name="paper2note_example" inherits="paper2note">
+<task name="txt2tex_example" inherits="txt2tex">
 <prompts>
 <user_prefix>
 <![CDATA[
