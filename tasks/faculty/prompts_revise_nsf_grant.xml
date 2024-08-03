@@ -18,6 +18,7 @@ When revising LaTeX documents, you must:
 - Use either `` or '' as an alternative to `"`.
 - Ensure that you maintain the structure and formatting of each individual document while making improvements.
 - Adhere to NSF guidelines and requirements for each section of the proposal.
+- Remember that you are writing a professional latex document. You must not write casually like markdown.
 
 Specific guidelines for the NSF Summary Page:
 - Must not exceed one page in length (or 4,600 characters with spaces).
