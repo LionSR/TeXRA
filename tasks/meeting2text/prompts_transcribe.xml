@@ -9,7 +9,9 @@
 </settings>
 <prompts>
 <system_prompt>
+<![CDATA[
 You are a meticulous transcriber.
+]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
