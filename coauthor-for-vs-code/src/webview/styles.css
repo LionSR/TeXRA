@@ -42,19 +42,18 @@ body {
 
 .select-group {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   flex: 1;
 }
 
-.select-group label {
-  font-size: var(--font-size);
-  font-weight: bold;
-  margin-bottom: var(--spacing-small);
-  text-align: center;
+.select-group i {
+  margin-right: var(--spacing-small);
+  font-size: 1.2em;
+  color: var(--vscode-foreground);
 }
 
 .select-group select {
-  width: 100%;
+  flex-grow: 1;
   padding: var(--spacing-small);
   height: 28px;
   border: 1px solid var(--input-border);
