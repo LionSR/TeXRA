@@ -10,11 +10,16 @@
 <system_prompt>
 <![CDATA[
 You are a professor of physics and an meticulous transcriber in converting academic discussions into formal LaTeX document, maintaining the scientific rigor and clarity of the original conversation.
+
+When writing LaTeX, you must:
+- Use \begin{align} ... \end{align} for displayed equations
+- Use appropriate notation and terminology consistently throughout the text.
+- Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
 ]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a formal and meticulous LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
+I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a long, self-contained, formal, and meticulous LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
 
 
 Here is the transcription {INPUT_FILE}:
@@ -31,7 +36,7 @@ if provided.
 </user_prefix>
 <user_request>
 <![CDATA[
-Your task is to translate the provided academic discussion transcript into a self-contained, formal, and meticulous .tex latex document, closely following these guidelines:
+Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex latex document, closely following these guidelines:
 <guidelines>
 1. The translation should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
 2. Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
@@ -82,16 +87,9 @@ Output the LaTeX document inside the <latex_document></latex_document> tags.
 </user_request>
 <user_reflect>
 <![CDATA[
-Your output is too simplest and omitting many specifics and mathematics. You must increase the level of detail from low (3/10) to high (9/10), particularly by adding back any missing equations or mathematical details from the transcription. 
-Please thoroughly review the LaTeX version and comparing it to the original transcription, ensure that the LaTeX document:
-<requirements>
-- Faithfully represents the content, structure, and detail of the original academic discussion.
-- Increases the level of formality and technical detail, particularly by adding back the missing equations or mathematical concepts from the transcription.
-- Formalizes the content to match the .tex LaTeX document's formal language and style. You should never make a markdown style list in a latex document.
-- Removes any inconsistencies, invented information, or hallucinations. Strictly adheres to the content presented in the original discussion without fabrication.
-</requirements>
+Your output is too simplest and omitting many specifics and mathematics. Please thoroughly review the LaTeX version and comparing it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missing equations or mathematical details from the transcription. 
 
-Please output the revised LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all relevant equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan
+Please output the revised LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all the missing equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan
 <scratchpad>
 1. [Specific improvement 1]
     - Rationale: [explanation]
