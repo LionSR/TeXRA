@@ -12,7 +12,7 @@ export async function listInputFiles(): Promise<string[]> {
   return getFilesRecursively(
     workspacePath, 
     workspacePath, 
-    ['.txt', '.tex'], 
+    ['.txt', '.tex', '.md'], 
     getConfigArray('ignoredFileExtensions'),
     getConfigArray('ignoredDirectories'),
     getConfigArray('ignoredKeywords'),
@@ -34,7 +34,7 @@ export async function listAuxFiles(): Promise<string[]> {
   
   const combinedIgnoredKeywords = [...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords])];
   
-  return getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls'], ignoredExtensions, ignoredDirectories, combinedIgnoredKeywords);
+  return getFilesInDirectory(workspacePath, ['.txt', '.tex', '.cls', '.md'], ignoredExtensions, ignoredDirectories, combinedIgnoredKeywords);
 }
 
 export async function listFigureFiles(): Promise<string[]> {
