@@ -61,6 +61,7 @@
             "adapt-tex",
             "write-tex",
             "meeting2text",
+            "text2tex",
             "paper2note",
             "paper2cover",
             "paper2slide",
