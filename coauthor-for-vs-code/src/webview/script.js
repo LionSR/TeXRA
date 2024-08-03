@@ -315,10 +315,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const outputFiles = outputFilesContainer.style.display === 'block'
       ? getSelectedFiles(document.getElementById('outputFilesList'))
       : null;
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
-      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value.trim();
 
     vscode.postMessage({
       command: 'execute',
@@ -336,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
       includeTikzReflection: includeTikzReflection,
       includeTexCount: includeTexCount,
       outputFiles: outputFiles,
-      outputNameOverride: outputNameOverride,
+      outputNameOverride: outputNameOverride || null,
     });
   });
   document.getElementById('packSingleButton').addEventListener('click', function () {
