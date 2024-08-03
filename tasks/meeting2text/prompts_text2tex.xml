@@ -9,12 +9,13 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-You are a professor of physics and an expert in converting academic discussions into formal LaTeX document, maintaining the scientific rigor and clarity of the original conversation.
+You are a professor of physics and an meticulous transcriber in converting academic discussions into formal LaTeX document, maintaining the scientific rigor and clarity of the original conversation.
 ]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
 I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a formal and meticulous LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
+
 
 Here is the transcription {INPUT_FILE}:
 <document>
@@ -25,45 +26,50 @@ For context, the discussion is about:
 <context>
 {CONTEXT}
 </context>
+if provided.
 ]]>
 </user_prefix>
 <user_request>
 <![CDATA[
-Your task is to rewrite the provided academic discussion transcript into a self-contained, formal, and meticulous .tex latex document, closely following these guidelines:
+Your task is to translate the provided academic discussion transcript into a self-contained, formal, and meticulous .tex latex document, closely following these guidelines:
 <guidelines>
-1. The rewrite should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
+1. The translation should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
 2. Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
 3. Use appropriate LaTeX commands to typeset mathematical equations and expressions.
 4. Use  \begin{align} and \end{align} for dispalyed multi-line equations. The note should be highly mathematical and technical. Use as many equations as possible.
 5. Convert the conversational style of the transcript into formal, precise, and technical language appropriate.
 6. If visual inputs are provided (such as images of the whiteboard), include them coherently in the LaTeX document. Use the images to help scribing equations and figures.
-7. I repeat, the output document should be faithful to the original discussion. IT IS NOT A SUMMARY. IT IS A METICULOUS REWRITE OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.
+7. I repeat, the output document should be faithful to the original discussion. IT IS NOT A SUMMARY. IT IS A METICULOUS TRANSLATION OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.
 </guidelines>
 
 Organize the LaTeX document using this template:
 <latex_template>
-\documentclass{article}
-\usepackage{amsmath,amssymb,amsthm}
-
-\title{[Insert appropriate title]}
-\author{Based on a discussion between [list participants]}
-\date{[Insert date of discussion]}
+\documentclass[aps,pra,preprint,11pt,amsmath,amssymb,notitlepage,nofootinbib]{revtex4-2}
+\usepackage{color,amsthm,amsmath,amssymb,amsxtra,amsfonts,dsfont,graphicx,bm,bbold}
+\usepackage[colorlinks,colorlinks,citecolor=blue,linkcolor=magenta,urlcolor=blue]{hyperref}
+\usepackage{cleveref}
+\usepackage{braket}
 
 \begin{document}
 
+\title{[Insert appropriate title]}
+\author{[list participants]}
+\date{[Insert date of discussion]}
 \maketitle
 
-[Directly go into the discussion content]
+[DIRECTLY GO INTO THE DISCUSSION CONTENT WITHOUT ANY INTRODUCTION]
 
 Then we obtain...
 \begin{align}
     % the equation
 \end{align}
-where $X$ is the variable and $Y$ is the variable. [use the align environment without line breaks]
+where $X$ is the variable and $Y$ is the variable. [YOU MUST USE the align and other equation environments without line breaks before and after the equation]
 
 [Insert content here]
 
 [more to cover all the topics in the discussion]
+
+[DO NOT ADD AN CONCLUSION SECTION]
 
 \bibliographystyle{plain}
 \bibliography{library}
@@ -71,7 +77,7 @@ where $X$ is the variable and $Y$ is the variable. [use the align environment wi
 \end{document}
 </latex_template>
 
-Output the LaTeX document inside the <latex_document></latex_document> tags.
+Output the LaTeX document inside the <latex_document></latex_document> tags. 
 ]]>
 </user_request>
 <user_reflect>
@@ -79,15 +85,27 @@ Output the LaTeX document inside the <latex_document></latex_document> tags.
 Your output is too simplest and omitting many specifics and mathematics. You must increase the level of detail from low (3/10) to high (9/10), particularly by adding back any missing equations or mathematical details from the transcription. 
 Please thoroughly review the LaTeX version and comparing it to the original transcription, ensure that the LaTeX document:
 <requirements>
-- Faithfully represents the content, structure, and detail of the original academic discussion with a logical flow of ideas.
-- Increases the level of formality and technical detail, particularly by elaborating on any equations or mathematical concepts from the transcription.
-- Formalizes the content to match the LaTeX document's formal language and style.
+- Faithfully represents the content, structure, and detail of the original academic discussion.
+- Increases the level of formality and technical detail, particularly by adding back the missing equations or mathematical concepts from the transcription.
+- Formalizes the content to match the .tex LaTeX document's formal language and style. You should never make a markdown style list in a latex document.
 - Removes any inconsistencies, invented information, or hallucinations. Strictly adheres to the content presented in the original discussion without fabrication.
-- Properly uses LaTeX environments and commands for definitions, theorems, proofs, and equations.
-- Includes an informative introduction and conclusion that accurately reflect the discussion's content.
 </requirements>
 
-Please output the revised LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a specific emphasis on presenting the content as a formal document.
+Please output the revised LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all relevant equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan
+<scratchpad>
+1. [Specific improvement 1]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+2. [Specific improvement 2]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+3. [Specific improvement 3]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+
+... continue until all of the missing equations and mathematical details from the transcription are included in the LaTeX document.
+</scratchpad>
+and output the LaTeX document inside the <latex_document></latex_document> tags. 
 ]]>
 </user_reflect>
 </prompts>
