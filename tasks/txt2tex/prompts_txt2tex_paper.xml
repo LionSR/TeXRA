@@ -16,6 +16,7 @@ When writing LaTeX, you must:
 - Aim for publication-ready LaTeX code that is easy for others to read and compile
 - Preserve the original structure and content of the research paper, including abstract, introduction, methods, results, discussion, and conclusion sections
 - Include proper citations using \cite{} commands where appropriate
+- Remember that you are writing a professional latex document. You must not write casually like markdown.
 ]]>
 </system_prompt>
 

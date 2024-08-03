@@ -117,8 +117,19 @@ body {
 
 .file-select-buttons {
   display: flex;
+  align-items: center;
   gap: 5px;
   margin-left: auto;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.toggle-icon {
+  cursor: pointer;
+  user-select: none;
 }
 
 .small-button {
@@ -154,7 +165,7 @@ body {
 }
 
 .multiple-files-content {
-  width: 80%;
+  width: 100%;
 }
 
 .multiple-files-header {
