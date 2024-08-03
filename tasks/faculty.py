@@ -38,8 +38,12 @@ class ReviseNSFGrant(ThinkWrite):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--task", type=str, default="statement_teaching", 
-                        choices=["statement_teaching", "statement_diversity", "statement_research", "revise_nsf_grant"])
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="statement_teaching",
+        choices=["statement_teaching", "statement_diversity", "statement_research", "revise_nsf_grant"],
+    )
     parser.add_argument("--original_file", type=str, help="Path to the original application document file")
     args = parser.parse_args()
 
@@ -47,7 +51,7 @@ def main():
         revise_document = ReviseApplicationDocument(args, prompt_path)
     elif args.task == "revise_nsf_grant":
         revise_document = ReviseNSFGrant(args, prompt_path)
-    
+
     revise_document.run()
 
 
