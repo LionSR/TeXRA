@@ -54,15 +54,17 @@
         <select id="inputFileSelect">
           <option value="">None</option>
         </select>
-        <div id="multipleInputFilesContainer" style="display: none;">
-          <div class="multiple-files-header">
-            <span>Additional Input Files:</span>
-            <div class="multiple-files-buttons">
-              <button id="emptyMultipleInputFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-              <button id="selectMultipleInputFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+        <div id="multipleInputFilesContainer" class="multiple-files-container" style="display: none;">
+          <div class="multiple-files-content">
+            <div class="multiple-files-header">
+              <span>Additional Input Files:</span>
             </div>
+            <div id="multipleInputFilesSelect" class="multiple-files-list"></div>
           </div>
-          <div id="multipleInputFilesSelect" class="multiple-files-list"></div>
+          <div class="multiple-files-buttons">
+            <button id="emptyMultipleInputFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleInputFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+          </div>
         </div>
       </div>
       <div class="file-select">
@@ -75,15 +77,17 @@
         <select id="sampleFileSelect">
           <option value="">None</option>
         </select>
-        <div id="multipleSampleFilesContainer" style="display: none;">
-          <div class="multiple-files-header">
-            <span>Additional Reference Files:</span>
-            <div class="multiple-files-buttons">
-              <button id="emptyMultipleSampleFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
-              <button id="selectMultipleSampleFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+        <div id="multipleSampleFilesContainer" class="multiple-files-container" style="display: none;">
+          <div class="multiple-files-content">
+            <div class="multiple-files-header">
+              <span>Additional Reference Files:</span>
             </div>
+            <div id="multipleSampleFilesSelect" class="multiple-files-list"></div>
           </div>
-          <div id="multipleSampleFilesSelect" class="multiple-files-list"></div>
+          <div class="multiple-files-buttons">
+            <button id="emptyMultipleSampleFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleSampleFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+          </div>
         </div>
       </div>
       <div class="file-select">
@@ -98,7 +102,18 @@
         <select id="auxFileSelect">
           <option value="">None</option>
         </select>
-        <div id="multipleAuxFilesSelect" class="multiple-files-list" style="display: none;"></div>
+        <div id="multipleAuxFilesContainer" class="multiple-files-container" style="display: none;">
+          <div class="multiple-files-content">
+            <div class="multiple-files-header">
+              <span>Additional Auxiliary Files:</span>
+            </div>
+            <div id="multipleAuxFilesSelect" class="multiple-files-list"></div>
+          </div>
+          <div class="multiple-files-buttons">
+            <button id="emptyMultipleAuxFilesButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleAuxFilesButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+          </div>
+        </div>
       </div>
       <div class="file-select">
         <div class="file-select-header">
@@ -112,7 +127,18 @@
         <select id="figureFileSelect">
           <option value="">None</option>
         </select>
-        <div id="multipleFiguresSelect" class="multiple-files-list" style="display: none;"></div>
+        <div id="multipleFiguresContainer" class="multiple-files-container" style="display: none;">
+          <div class="multiple-files-content">
+            <div class="multiple-files-header">
+              <span>Additional Figure Files:</span>
+            </div>
+            <div id="multipleFiguresSelect" class="multiple-files-list"></div>
+          </div>
+          <div class="multiple-files-buttons">
+            <button id="emptyMultipleFiguresButton" class="small-button"><i class="fas fa-trash-alt"></i> Empty</button>
+            <button id="selectMultipleFiguresButton" class="small-button"><i class="fas fa-plus"></i> Add</button>
+          </div>
+        </div>
       </div>
       <div class="file-select">
         <div class="file-select-header">
