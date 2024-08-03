@@ -511,6 +511,13 @@ def extract_tikzpictures(latex_file):
     print(f"Compiled TikZ pictures: {compiled_files}")
 
 
+@click.command()
+@shared_arguments
+@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
+def statement(model, input_file, document_type, **kwargs):
+    execute_task("faculty", "app", model, input_file, document_type=document_type, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -583,6 +590,9 @@ cli.add_command(paper2cover)
 cli.add_command(write_proposal)
 cli.add_command(slide2paper)
 cli.add_command(paper2slide)
+
+# faculty.py
+cli.add_command(statement)
 
 
 if __name__ == "__main__":

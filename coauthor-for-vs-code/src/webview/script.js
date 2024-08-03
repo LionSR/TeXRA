@@ -105,13 +105,13 @@ function toggleOutputFiles() {
 }
 
 function toggleOutputNameOverride() {
-  const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+  const outputNameOverride = document.getElementById('outputNameOverride');
   const toggleIcon = document.getElementById('toggleOutputNameOverride');
-  if (outputNameOverrideContainer.style.display === 'none') {
-    outputNameOverrideContainer.style.display = 'block';
+  if (outputNameOverride.style.display === 'none') {
+    outputNameOverride.style.display = 'inline-block';
     toggleIcon.textContent = '▲';
   } else {
-    outputNameOverrideContainer.style.display = 'none';
+    outputNameOverride.style.display = 'none';
     toggleIcon.textContent = '▼';
   }
   saveState();

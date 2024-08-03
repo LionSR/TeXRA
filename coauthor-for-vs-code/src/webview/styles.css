@@ -554,44 +554,32 @@ button .fas {
 
 .execute-row {
   display: flex;
-  align-items: stretch;
-  gap: 10px;
-  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
 }
 
 .output-name-override-container {
-  flex: 1;
   display: flex;
+  align-items: center;
+  flex-grow: 1;
+  margin-right: 10px;
+}
+
+#toggleOutputNameOverride {
+  cursor: pointer;
+  margin-right: 5px;
 }
 
 #outputNameOverride {
-  width: 100%;
-  padding: 6px 12px;
+  flex-grow: 1;
+  padding: 4px;
   border: 1px solid var(--input-border);
   border-radius: 3px;
   background-color: var(--input-background);
   color: var(--input-foreground);
-  font-size: var(--vscode-font-size);
 }
 
 #executeButton {
-  padding: 6px 12px;
-  font-size: calc(var(--vscode-font-size) * 1.15);
-  background-color: #007acc;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#executeButton:hover {
-  background-color: #005999;
-}
-
-#executeButton .fas {
-  margin-right: 5px;
 }
