@@ -515,7 +515,18 @@ def extract_tikzpictures(latex_file):
 @shared_arguments
 @click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
 def statement(model, input_file, document_type, **kwargs):
-    execute_task("faculty", "app", model, input_file, document_type=document_type, **kwargs)
+    if "teaching" in input_file.lower():
+        task_type = "teaching"
+    elif "diversity" in input_file.lower():
+        task_type = "diversity"
+    elif "research" in input_file.lower():
+        task_type = "research"
+    else:
+        raise ValueError("Document type not recognized")
+
+    print(f"Task type: {task_type}")
+
+    execute_task("faculty", f"statement_{task_type}", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":

@@ -104,7 +104,7 @@ class BaseReflectChainTask(ABC):
         k = self.output_settings.get("k", 1000)
         if self.output_settings["output_type"] == "tex" and self.prompt_settings["use_prefill_from_input"]:
             try:
-                with open(self.args.input_file, 'r', encoding='utf-8') as f:
+                with open(self.args.input_file, "r", encoding="utf-8") as f:
                     content = f.read()
                     return content[:k].strip()  # Return only the first k characters, stripped
             except IOError as e:
@@ -129,9 +129,7 @@ class BaseReflectChainTask(ABC):
 
         self.handle_output(state, end_turn, self.output_file, is_reflection_complete=False)
 
-        print(
-            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.output_file, 'green')}"
-        )
+        print(f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.output_file, 'green')}")
 
         return state, messages
 
