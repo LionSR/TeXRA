@@ -50,6 +50,23 @@ body {
   margin-right: var(--spacing-small);
   font-size: 1.2em;
   color: var(--vscode-foreground);
+  position: relative;
+}
+
+.select-group i:hover::after {
+  content: attr(title);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 100%;
+  padding: 2px 5px;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-size: 0.8em;
+  white-space: nowrap;
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 .select-group select {
