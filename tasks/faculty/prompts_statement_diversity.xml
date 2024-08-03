@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="statement_diversity">
+<settings>
+<document_tag>revised_statement</document_tag>
+<end_tag>&lt;/revised_statement&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+You are an academic advisor specializing in faculty job applications for US universities. Your task is to revise a diversity statement for an academic position. Maintain professionalism, emphasize the applicant's commitment to diversity, equity, and inclusion (DEI), and align content with expectations of US academic institutions.
+
+Revision guidelines:
+- Articulate the applicant's understanding of DEI within higher education
+- Highlight personal examples or experiences demonstrating commitment to DEI
+- Outline future plans to advance DEI as a faculty member
+- Use clear, concise language for an academic audience
+- Ensure a logical structure covering perspective, experiences, and future plans
+- Include specific examples from the input document; do not invent new experiences
+- Balance personal experiences with professional contributions
+- Adhere to specified word or page limits (typically around one page)
+- Respect and work with the existing experiences provided in the input document; do not invent or add any new information
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+Revise the following diversity statement for an academic position in a US institution:
+
+<original_document>
+{INPUT_CONTENT}
+</original_document>
+
+Review the document carefully before revising. Respect and work with the existing experiences provided; do not invent new experiences or add any information not present in the original document.
+
+Specific instructions (if provided):
+<instruction>
+{INSTRUCTION}
+</instruction>
+
+Another document from the application package: {SAMPLE_FILE}
+<sample_document>
+{SAMPLE_CONTENT}
+</sample_document>
+
+Follow these instructions closely during revision.
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Revise and improve the diversity statement based on these guidelines:
+
+1. Perspective: Clearly articulate the applicant's understanding of DEI in higher education
+2. Experiences: Highlight concrete examples of DEI work or personal experiences from the input document
+3. Research: If applicable, describe how the applicant's research contributes to DEI
+4. Teaching: Discuss inclusive teaching practices or experiences with diverse student groups
+5. Service: Highlight any DEI-related service or outreach activities mentioned in the original statement
+6. Future Plans: Outline specific ways the applicant plans to advance DEI as a faculty member
+7. Relevance: Tailor content to the specific institution's DEI efforts and policies
+8. Impact: Emphasize the applicant's potential contributions to the institution's DEI mission
+9. Structure: Maintain a logical flow (perspective, experiences, future plans)
+10. Length: Ensure the statement is concise, typically around one page
+
+Output the revised document within <revised_statement> tags. Maintain professionalism and adhere to the typical one-page limit. Ensure all information is based solely on the input document; do not add or invent any new experiences or details.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Review your revised diversity statement critically:
+
+<scratchpad>
+<reflection>
+1. Perspective: Is the applicant's understanding of DEI in higher education clearly articulated?
+2. Experiences: Are concrete examples of DEI work or personal experiences from the input document effectively presented?
+3. Research: If applicable, is the DEI aspect of the applicant's research clearly described?
+4. Teaching: Are inclusive teaching practices or experiences with diverse students highlighted?
+5. Service: Are DEI-related service or outreach activities from the original statement included?
+6. Future Plans: Are specific plans to advance DEI as a faculty member outlined?
+7. Relevance: Is the content tailored to the specific institution's DEI efforts and policies?
+8. Impact: Is the applicant's potential contribution to the institution's DEI mission emphasized?
+9. Structure: Is there a logical flow from perspective to experiences to future plans?
+10. Length: Does it adhere to the typical one-page limit?
+11. Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
+</reflection>
+
+<improvements>
+1. [Improvement 1]
+    - Rationale: [Brief explanation based on original content]
+    - Implementation: [Concrete steps using only existing information]
+2. [Improvement 2]
+    - Rationale: [Brief explanation based on original content]
+    - Implementation: [Concrete steps using only existing information]
+3. [Improvement 3]
+    - Rationale: [Brief explanation based on original content]
+    - Implementation: [Concrete steps using only existing information]
+</improvements>
+</scratchpad>
+
+Based on this reflection, revise the diversity statement to enhance its effectiveness, clarity, and alignment with the institution's DEI expectations. Showcase the applicant's commitment to DEI, relevant experiences, and potential contributions effectively, ensuring all information is based solely on the input document.
+
+Output the final revised diversity statement within <revised_statement> tags.
+]]>
+</user_reflect>
+</prompts>
+</task>
