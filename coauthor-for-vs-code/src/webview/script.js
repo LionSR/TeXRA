@@ -339,10 +339,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
-      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
     vscode.postMessage({
       command: 'packSingle',
       inputFile: inputFile,
@@ -357,10 +354,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
-      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
     vscode.postMessage({
       command: 'cleanSingle',
       inputFile: inputFile,
