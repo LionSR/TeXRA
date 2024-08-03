@@ -80,9 +80,18 @@ def execute_task(script, task, model, input_file, **kwargs):
     if "figure_inputs" in kwargs and isinstance(kwargs["figure_inputs"], str):
         kwargs["figure_inputs"] = kwargs["figure_inputs"].split(",")
 
-    # this logic needs to be changed for multiple file output
+    # Handle auto-extraction of figures
     handle_auto_extract_figure(kwargs, input_file)
-    all_input_files = [input_file] + (kwargs.get("input_files") or [])
+
+    # Prepare all input files
+    all_input_files = [input_file]
+    if kwargs.get("input_files"):
+        if isinstance(kwargs["input_files"], str):
+            all_input_files.extend(kwargs["input_files"].split(","))
+        elif isinstance(kwargs["input_files"], list):
+            all_input_files.extend(kwargs["input_files"])
+
+    # Handle auto-extraction of TikZ figures
     handle_auto_extract_tikz_figure(kwargs, all_input_files)
 
     for key, value in kwargs.items():
@@ -529,6 +538,12 @@ def statement(model, input_file, document_type, **kwargs):
     execute_task("faculty", f"statement_{task_type}", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def revise_nsf_grant(model, input_file, **kwargs):
+    execute_task("faculty", "revise_nsf_grant", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -604,6 +619,7 @@ cli.add_command(paper2slide)
 
 # faculty.py
 cli.add_command(statement)
+cli.add_command(revise_nsf_grant)
 
 
 if __name__ == "__main__":

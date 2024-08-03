@@ -17,13 +17,37 @@ class ReviseApplicationDocument(ThinkWrite):
     # The handle_output method is inherited from ThinkWrite
 
 
+class ReviseNSFGrant(ThinkWrite):
+    def get_user_vars(self):
+        user_vars = coa.get_user_vars_basic(self.args)
+
+        if self.args.input_files:
+            user_vars["ADDITIONAL_INPUT_CONTENTS"] = coa.get_xml_format_from_files(self.args.input_files)
+
+        if self.args.auxiliary_files:
+            user_vars["AUXILIARY_FILE_CONTENTS"] = coa.get_xml_format_from_files(self.args.auxiliary_files)
+
+        if self.args.output_files:
+            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.args.output_files)
+
+        coa.update_user_vars_single_output(self.args, user_vars)
+        return user_vars
+
+    # The handle_output method is inherited from ThinkWrite
+
+
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--task", type=str, choices=["statement_teaching", "statement_diversity", "statement_research"])
+    parser.add_argument("--task", type=str, default="statement_teaching", 
+                        choices=["statement_teaching", "statement_diversity", "statement_research", "revise_nsf_grant"])
     parser.add_argument("--original_file", type=str, help="Path to the original application document file")
     args = parser.parse_args()
 
-    revise_document = ReviseApplicationDocument(args, prompt_path)
+    if args.task in ["statement_teaching", "statement_diversity", "statement_research"]:
+        revise_document = ReviseApplicationDocument(args, prompt_path)
+    elif args.task == "revise_nsf_grant":
+        revise_document = ReviseNSFGrant(args, prompt_path)
+    
     revise_document.run()
 
 
