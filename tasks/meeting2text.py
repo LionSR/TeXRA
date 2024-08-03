@@ -24,7 +24,6 @@ class Meeting2Text(DirectWrite):
                     "WHISPER_INPUT_CONTENT": coa.read_file(self.args.input_file),
                     "OTTER_INPUT_FILE": self.args.sample_files[0],
                     "OTTER_INPUT_CONTENT": coa.read_file(self.args.sample_files[0]),
-                    
                 }
             )
 
@@ -44,6 +43,18 @@ class Text2Tex(ThinkWrite):
         return user_vars
 
 
+class Text2TexDraft(Text2Tex):
+    def get_user_vars(self):
+        user_vars = super().get_user_vars()
+        user_vars.update(
+            {
+                "DRAFT_CONTENT": coa.read_file(self.args.input_file),
+                "TRANSCRIPT_CONTENT": coa.read_file(self.args.sample_files[0]) if self.args.sample_files else None,
+            }
+        )
+        return user_vars
+
+
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
@@ -52,8 +63,8 @@ def main():
         "--task",
         type=str,
         default="transcribe",
-        help="Task to perform: 'transcribe', 'transcribe_dual', or 'text2tex'.",
-        choices=["transcribe", "transcribe_dual", "text2tex"],
+        help="Task to perform: 'transcribe', 'transcribe_dual', 'text2tex', or 'text2tex_draft'.",
+        choices=["transcribe", "transcribe_dual", "text2tex", "text2tex_draft"],
     )
     args = parser.parse_args()
 
@@ -63,6 +74,9 @@ def main():
     if args.task == "text2tex":
         text2tex = Text2Tex(args, prompt_path)
         text2tex.run()
+    elif args.task == "text2tex_draft":
+        text2tex_draft = Text2TexDraft(args, prompt_path)
+        text2tex_draft.run()
     else:
         meeting2text = Meeting2Text(args, prompt_path)
         meeting2text.run()
