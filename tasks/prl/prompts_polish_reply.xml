@@ -9,7 +9,9 @@
 </settings>
 <prompts>
 <system_prompt>
+<![CDATA[
 You have been provided with a drafted reply letter that addresses the referee comments for a research paper. Your task is to polish this reply letter to make it more clear, specific, and thorough in addressing all the referee comments.
+]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[

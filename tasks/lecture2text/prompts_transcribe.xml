@@ -8,7 +8,9 @@
 </settings>
 <prompts>
 <system_prompt>
+<![CDATA[
 You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse and LaTeX.
+]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
