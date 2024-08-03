@@ -454,9 +454,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
+    const outputNameOverride = document.getElementById('outputNameOverride');
+    const outputNameOverrideValue = outputNameOverride.style.display !== 'none'
+      ? outputNameOverride.value
       : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
 
@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function () {
       task: task,
       reflect: reflect,
       model: model,
-      outputNameOverride: outputNameOverride,
+      outputNameOverride: outputNameOverrideValue,
       outputFiles: outputFiles
     });
   });
@@ -478,9 +478,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const task = document.getElementById('taskSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
-    const outputNameOverride = outputNameOverrideContainer.style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
+    const outputNameOverride = document.getElementById('outputNameOverride');
+    const outputNameOverrideValue = outputNameOverride.style.display !== 'none'
+      ? outputNameOverride.value
       : null;
     const outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
 
@@ -491,7 +491,7 @@ document.addEventListener('DOMContentLoaded', function () {
       task: task,
       reflect: reflect,
       model: model,
-      outputNameOverride: outputNameOverride,
+      outputNameOverride: outputNameOverrideValue,
       outputFiles: outputFiles
     });
   });
@@ -554,7 +554,7 @@ function saveState() {
 
   state.outputFilesContainerVisible = document.getElementById('outputFilesContainer').style.display === 'block';
   state.outputFiles = getSelectedFiles(document.getElementById('outputFilesList'));
-  state.outputNameOverrideVisible = document.getElementById('outputNameOverrideContainer').style.display === 'block';
+  state.outputNameOverrideVisible = document.getElementById('outputNameOverride').style.display !== 'none';
 
   vscode.setState(state);
 }
@@ -624,14 +624,14 @@ function restoreState() {
       toggleIcon.textContent = '▼';
     }
 
-    const outputNameOverrideContainer = document.getElementById('outputNameOverrideContainer');
+    const outputNameOverride = document.getElementById('outputNameOverride');
     const toggleOutputNameOverride = document.getElementById('toggleOutputNameOverride');
     if (previousState.outputNameOverrideVisible) {
-      outputNameOverrideContainer.style.display = 'block';
+      outputNameOverride.style.display = 'inline-block';
       toggleOutputNameOverride.textContent = '▲';
-      document.getElementById('outputNameOverride').value = previousState.outputNameOverride || '';
+      outputNameOverride.value = previousState.outputNameOverride || '';
     } else {
-      outputNameOverrideContainer.style.display = 'none';
+      outputNameOverride.style.display = 'none';
       toggleOutputNameOverride.textContent = '▼';
     }
   }
