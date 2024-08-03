@@ -544,6 +544,12 @@ def revise_nsf_grant(model, input_file, **kwargs):
     execute_task("faculty", "revise_nsf_grant", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def text2tex(model, input_file, **kwargs):
+    execute_task("meeting2text", "text2tex", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -562,6 +568,7 @@ cli.add_command(draw_qi)
 
 # meeting2text.py
 cli.add_command(meeting2text)
+cli.add_command(text2tex)
 
 # txt2tex.py
 cli.add_command(txt2tex)

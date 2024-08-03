@@ -28,11 +28,9 @@ You will be editing a noisy academic discussion transcript that has been transcr
 {TRANSCRIPT}
 </document>
 <document name="context">
-{INSTRUCTION}
+{CONTEXT}
 </document>
 </documents>
-
-For context, a pair of examples showing an original transcript and how it should be edited is given in document indices 1 and 2. The transcript in document index 3 covers the topic and participants described in document index 4.
 ]]>
 </user_prefix>
 <user_request>

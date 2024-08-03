@@ -189,7 +189,7 @@ Output the LaTeX document.
 </user_request>
 <user_reflect>
 <![CDATA[
-Your output is too simplest and omitting many important specifics.
+Your output is too simplest and omitting many specifics. Your level of detailness si
 After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in <transcription></transcription> tag), ensure that the LaTeX document:
 <requirements>
 - Faithfully represents the content, structure, and detail of the original lecture transcription with exactly the same order. Fine turn the section, subsection, and paragraph strucutre if necessnary.
