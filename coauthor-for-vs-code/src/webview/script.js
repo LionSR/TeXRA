@@ -212,9 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('inputFileSelect').addEventListener('change', function () {
     const inputFile = this.value;
-    const outputNameOverride = document.getElementById('outputNameOverrideContainer').style.display === 'block'
-      ? document.getElementById('outputNameOverride').value
-      : null;
+    const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
     vscode.postMessage({
       command: 'inputFileSelected',
       filePath: inputFile,
