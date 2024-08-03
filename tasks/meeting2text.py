@@ -14,6 +14,18 @@ class Meeting2Text(DirectWrite):
                 "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
             }
         )
+
+        # Add support for dual transcription
+        if self.args.task == "transcribe_dual":
+            user_vars.update(
+                {
+                    "WHISPER_INPUT_FILE": self.args.input_file,
+                    "WHISPER_INPUT_CONTENT": coa.read_file(self.args.input_file),
+                    "OTTER_INPUT_FILE": self.args.sample_files[0],
+                    "OTTER_INPUT_CONTENT": coa.read_file(self.args.sample_files[0]),
+                }
+            )
+
         return user_vars
 
 
@@ -21,8 +33,14 @@ def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
     parser.add_argument("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
-    parser.add_argument("--task", type=str, default="transcribe", help="Task to perform, currently only 'transcribe'.", choices=["transcribe"])
+    parser.add_argument(
+        "--task", type=str, default="transcribe", help="Task to perform: 'transcribe' or 'transcribe_dual'.", choices=["transcribe", "transcribe_dual"]
+    )
     args = parser.parse_args()
+
+    
+    if args.task == "transcribe_dual" and args.sample_files is None:
+        parser.error("The transcribe_dual task requires --sample_files to be specified.")
 
     meeting2text = Meeting2Text(args, prompt_path)
     meeting2text.run()

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task name="transcribe_dual" inherits="transcribe">
+<settings>
+<document_tag>improved_document</document_tag>
+<end_tag>&lt;/improved_document&gt;</end_tag>
+<output_type>txt</output_type>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+You are a professor of quantum information and a meticulous transcriber with expertise in academic discourse, LaTeX, and synergizing multiple transcription sources to create highly accurate lecture transcripts.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+I am going to give you two transcriptions of a lecture from a graduate quantum information course. The first transcription is from Whisper, which is highly accurate but lacks speaker identification. The second is from Otter.ai, which is less accurate but includes speaker identification. Your task is to synergize these transcriptions to create a super accurate version with correct speaker identification.
+
+Here is the Whisper transcription {WHISPER_INPUT_FILE}:
+<whisper_document>
+{WHISPER_INPUT_CONTENT}
+</whisper_document>
+
+Here is the Otter.ai transcription {OTTER_INPUT_FILE}:
+<otter_document>
+{OTTER_INPUT_CONTENT}
+</otter_document>
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Create a highly accurate transcription by synergizing the Whisper and Otter.ai transcripts while following these instructions:
+<instruction>
+1. Use the Whisper transcript as the primary source for content accuracy.
+2. Incorporate speaker identification from the Otter.ai transcript.
+3. When there are discrepancies, prefer the Whisper version unless the Otter.ai version makes more contextual sense.
+4. Group sentences conveying the same idea or topic into well-structured, coherent paragraphs.
+5. Transform spoken equations into LaTeX format:
+    - For inline equations, use single dollar signs, e.g., $\sigma_x$ and $\ket{\psi}$
+    - For displayed equations, use double dollar signs, e.g., $$...$$
+6. Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
+7. Correct punctuation as needed.
+8. Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
+9. Ensure grammatical correctness.
+10. Fix any remaining recognition errors or mistranscriptions.
+</instruction>
+
+Output the improved version of the document inside the <improved_document></improved_document> tag.
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Your output needs to be refined to ensure it represents the best possible synergy of the two transcriptions. After reviewing the improved document, make sure that the transcription:
+<requirements>
+- Accurately combines the content from both transcriptions, prioritizing the Whisper transcript for accuracy and the Otter.ai transcript for speaker identification.
+- Enhances readability by organizing the content into coherent paragraphs that group related ideas or topics.
+- Correctly identifies speakers throughout the document.
+- Converts all spoken equations into LaTeX format correctly, ensuring that inline and displayed equations are formatted appropriately.
+- Adjusts sentence lengths to improve readability, breaking down overly long sentences into shorter, more manageable ones.
+- Corrects all punctuation, grammatical errors, and recognition mistakes to produce a polished and professional document.
+- Removes all filler words and phrases that do not contribute to the meaning or flow of the text.
+- Maintains the original order of information and does not add or omit any significant details.
+- Resolves any discrepancies between the two transcripts in a way that best preserves the intended meaning and flow of the lecture.
+</requirements>
+
+Please revise the document to meet these requirements, ensuring it is a faithful, clear, and grammatically correct representation of the lecture, leveraging the strengths of both transcription sources.
+]]>
+</user_reflect>
+</prompts>
+</task>
