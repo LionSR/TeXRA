@@ -45,17 +45,19 @@
     <div class="file-selection-group">
       <div class="file-select">
         <div class="file-select-header">
-          <label for="inputFileSelect"><i class="fas fa-file-alt"></i> Select Input File:</label>
+          <div class="file-select-label-group">
+            <label for="inputFileSelect"><i class="fas fa-file-alt"></i> Select Input File:</label>
+          </div>
           <div class="file-select-actions">
             <button id="currentInputFileButton" class="action-button" title="Set current file as input"><i
-                class="fas fa-file-code"></i></button>
+              class="fas fa-file-code"></i></button>
             <span id="toggleMultipleInputFiles" class="toggle-icon" title="More">▼</span>
             <button id="addOpenedFilesButton" class="icon-button" title="Add opened files as input"><i
-                class="fas fa-folder-open"></i></button>
-            <button id="emptyMultipleInputFilesButton" class="icon-button" title="Empty"><i
-                class="fas fa-trash-alt"></i></button>
-            <button id="selectMultipleInputFilesButton" class="icon-button" title="Add"><i
-                class="fas fa-plus"></i></button>
+              class="fas fa-folder-open"></i></button>
+          <button id="emptyMultipleInputFilesButton" class="icon-button" title="Empty"><i
+              class="fas fa-trash-alt"></i></button>
+          <button id="selectMultipleInputFilesButton" class="icon-button" title="Add"><i
+              class="fas fa-plus"></i></button>
           </div>
         </div>
         <select id="inputFileSelect">
@@ -117,7 +119,9 @@
       </div>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="figureFileSelect"><i class="fas fa-file-alt"></i> Select Figure File:</label>
+          <div class="file-select-label-group">
+            <label for="figureFileSelect"><i class="fas fa-file-alt"></i> Select Figure File:</label>
+          </div>
           <div class="file-select-actions">
             <button id="currentFigureFileButton" class="action-button" title="Set current file as figure"><i
                 class="fas fa-file-code"></i></button>
@@ -183,7 +187,8 @@
         <button id="packSingleButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
         <button id="cleanSingleButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
         <button id="packMultipleButton" class="icon-button" title="Pack(Multiple)"><i class="fas fa-boxes"></i></button>
-        <button id="cleanMultipleButton" class="icon-button" title="Clean(Multiple)"><i class="fas fa-dumpster"></i></button>
+        <button id="cleanMultipleButton" class="icon-button" title="Clean(Multiple)"><i
+            class="fas fa-dumpster"></i></button>
       </div>
       <div class="button-group">
         <span>For All the Files:</span>
@@ -197,11 +202,15 @@
       <h6 class="section-header"><i class="fas fa-code-branch"></i> Smart Diffs</h6>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="editedFileSelect"><i class="fas fa-file-edit"></i> Select Edited File:</label>
+          <div class="file-select-label-group">
+            <label for="editedFileSelect"><i class="fas fa-file-edit"></i> Select Edited File:</label>
+            <button id="currentEditedFileButton" class="action-button" title="Set current file as edited"><i
+                class="fas fa-file-code"></i></button>
+          </div>
           <div class="file-select-actions">
-            <button id="currentEditedFileButton" class="icon-button" title="Current"><i class="fas fa-file-code"></i></button>
-            <button id="mergeButton" class="icon-button" title="Merge"><i class="fas fa-code-merge"></i></button>
-            <button id="latexDiffButton" class="icon-button" title="latexdiff"><i class="fas fa-file-diff"></i></button>
+            <button id="mergeButton" class="icon-button" title="Merge"><i class="fas fa-code-merge"></i>Merge</button>
+            <button id="latexDiffButton" class="icon-button" title="latexdiff the edited file with the current file"><i
+                class="fas fa-file-diff"></i>latexdiff</button>
           </div>
         </div>
         <select id="editedFileSelect">
@@ -210,12 +219,15 @@
       </div>
       <div class="file-select">
         <div class="file-select-header">
-          <label for="commitSelect"><i class="fas fa-code-commit"></i> Select Commit:</label>
-          <div class="file-select-actions">
+          <div class="file-select-label-group">
+            <label for="commitSelect"><i class="fas fa-code-commit"></i> Select Commit:</label>
             <button id="refreshCommitsButton" class="icon-button" title="Refresh"><i class="fas fa-sync"></i></button>
             <button id="packLatexDiffVCButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
-            <button id="cleanLatexDiffVCButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
-            <button id="latexDiffVCButton" class="icon-button" title="latexdiff-vc"><i class="fas fa-file-diff"></i></button>
+            <button id="cleanLatexDiffVCButton" class="icon-button" title="Clean"><i
+                class="fas fa-trash-alt"></i></button>
+          </div>
+          <div class="file-select-actions">
+            <button id="latexDiffVCButton" class="icon-button" title="latexdiff-vc with another git commit"><i class="fas fa-file-diff"></i>latexdiff-vc</button>
           </div>
         </div>
         <select id="commitSelect">
