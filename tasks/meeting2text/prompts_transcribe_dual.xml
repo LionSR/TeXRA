@@ -8,7 +8,7 @@ You are a professor of physics and a meticulous transcriber with expertise in ac
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you two transcriptions of an academic discussion. Both were transcribed using voice-to-text software and contains out of context inaccuracies.
+I am going to give you two transcriptions of an academic discussion. Both were transcribed using voice-to-text software and contain out of context inaccuracies.
 The first transcription is from Whisper, which is more accurate but lacks speaker identification. The second is from Otter.ai, which is less accurate but includes speaker identification.
 Your task is to synergize these transcriptions to create a super accurate version with correct speaker identification.
 

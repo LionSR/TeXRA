@@ -23,8 +23,8 @@ Revision guidelines:
 - Adhere to specified word or page limits (typically around three A4 pages)
 - Use LaTeX formatting for mathematical expressions and citations if necessary
 - Respect and work with the existing experiences provided in the input document; do not invent or add any new information
-- Use the "show not tell" technique.
-- Do not add enumerating lists.
+- Use the "show, don't tell" technique
+- Do not add enumerating lists
 ]]>
 </system_prompt>
 <user_prefix>
@@ -80,7 +80,7 @@ Review your revised teaching statement critically:
 9. Structure: Is there a logical flow from philosophy to experiences to future plans?
 10. Length: Does it adhere to the typical three-page limit?
 11. Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
-12. Fluff: In the revised version, are there any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems." that can be condensed using the "show not tell" technique?
+12. Fluff: In the revised version, are there any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems" that can be condensed using the "show, don't tell" technique?
 </reflection>
 
 <improvements>
