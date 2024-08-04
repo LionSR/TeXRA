@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<task name="transcribe_dual" inherits="transcribe">
+<task name="transcribe_dual">
+<settings>
+<document_tag>edited_transcript</document_tag>
+<end_tag>&lt;/edited_transcript&gt;</end_tag>
+<output_type>md</output_type>
+<prefill_first>Here is the faithfully and correctly edited transcript:
+&lt;edited_transcript&gt;</prefill_first>
+</settings>
 <prompts>
 <system_prompt>
 <![CDATA[
@@ -9,18 +16,19 @@ You are a professor of physics and a meticulous transcriber with expertise in ac
 <user_prefix>
 <![CDATA[
 I am going to give you two transcriptions of an academic discussion. Both were transcribed using voice-to-text software and contain out of context inaccuracies.
-The first transcription is from Whisper, which is more accurate but lacks speaker identification. The second is from Otter.ai, which is less accurate but includes speaker identification.
+The first transcription is from Otter.ai, which is less accurate but includes speaker identification.
+The second transcription is from Whisper, which is more accurate but lacks speaker identification. 
 Your task is to synergize these transcriptions to create a super accurate version with correct speaker identification.
-
-Here is the Whisper transcription {WHISPER_INPUT_FILE}:
-<whisper_document>
-{WHISPER_INPUT_CONTENT}
-</whisper_document>
 
 Here is the Otter.ai transcription {OTTER_INPUT_FILE}:
 <otter_document>
 {OTTER_INPUT_CONTENT}
 </otter_document>
+
+Here is the Whisper transcription {WHISPER_INPUT_FILE}:
+<whisper_document>
+{WHISPER_INPUT_CONTENT}
+</whisper_document>
 
 For context, the discussion is
 <context>
