@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -176,14 +176,25 @@
         "coauthor.defaultMergeModel": {
           "type": "string",
           "default": "sonnet+",
-          "enum": ["opus", "sonnet+", "sonnet", "haiku", "gpt4t", "gpt4o", "gpt4o-"],
+          "enum": [
+            "opus",
+            "sonnet+",
+            "sonnet",
+            "haiku",
+            "gpt4t",
+            "gpt4o",
+            "gpt4o-"
+          ],
           "description": "Default model to use for CoAuthor operations",
           "scope": "resource"
         },
         "coauthor.defaultMergeReflect": {
           "type": "string",
           "default": "False",
-          "enum": ["True", "False"],
+          "enum": [
+            "True",
+            "False"
+          ],
           "description": "Default reflect setting for CoAuthor operations",
           "scope": "resource"
         },
