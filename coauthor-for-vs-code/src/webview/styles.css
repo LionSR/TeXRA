@@ -128,7 +128,7 @@ body {
 
 .action-button, .icon-button {
   padding: 4px 8px;
-  font-size: calc(var(--vscode-font-size));
+  font-size: calc(var(--vscode-font-size) * 0.9);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 1px solid var(--input-border);
