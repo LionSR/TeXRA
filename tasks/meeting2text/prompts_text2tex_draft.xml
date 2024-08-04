@@ -8,7 +8,7 @@ You are a professor of physics and a meticulous transcriber in converting academ
 When writing LaTeX, you must:
 - Use \begin{align} ... \end{align} for displayed equations
 - Use appropriate notation and terminology consistently throughout the text.
-- Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
+- Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
 ]]>
 </system_prompt>
 <user_prefix>
@@ -24,6 +24,13 @@ Here is the .md transcription:
 <transcript>
 {TRANSCRIPT_CONTENT}
 </transcript>
+
+If there are instructions provided below, please follow them and expand them in the scratchpad.
+<instructions>
+{INSTRUCTION}
+</instructions>
+
+
 ]]>
 </user_prefix>
 <user_request>
@@ -42,7 +49,7 @@ Your primary task is to improve the provided draft LaTeX document by adding miss
 10. Condense flowery words and phrases.
 </guidelines>
 
-If there are provided visual inputs such as th photos of the whiteboard, please use them to help scribing equations and figures. If there were some schematic diagrams which are also mentioned in the transcription, please use tikz to draw them.
+If there are provided visual inputs such as the photos of the whiteboard, please use them to help scribing equations and figures. If there were some schematic diagrams which are also mentioned in the transcription, please use tikz to draw them.
 
 Before improving the LaTeX document, please think in <scratchpad> about your plan:
 <scratchpad>
@@ -55,6 +62,10 @@ Before improving the LaTeX document, please think in <scratchpad> about your pla
 3. [Missing explanation or elaboration]
     - Location in transcription: [reference]
     - Proposed addition to LaTeX: [outline of addition]
+4. [Changes in accordance with the instructions]
+    - Rationale: [explanation]
+    - Proposed addition to LaTeX: [outline of addition]
+
 
 ... continue until all major missing elements have been identified.
 </scratchpad>
@@ -64,7 +75,7 @@ Now, output the improved LaTeX document with the added content inside the <latex
 </user_request>
 <user_reflect>
 <![CDATA[
-Review your output to ensure it effectively incorporates the missing content and equations from the transcription. Check that the improved LaTeX document:
+Review your output to ensure it effectively incorporates all the missing content and equations from the transcription. Check that the improved LaTeX document:
 <requirements>
 - Includes all relevant equations from the transcription that were missing in the original draft.
 - Adds explanations and elaborations on concepts that were present in the transcription but absent in the draft.
