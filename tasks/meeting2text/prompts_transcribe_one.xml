@@ -72,7 +72,7 @@ Do not include the original transcript or the example transcripts in your respon
 </user_request>
 <user_reflect>
 <![CDATA[
-You missed some parts of discussion and still contains some errors and typos. Your output needs to be improved to ensure it adheres more closely to the original transcription while enhancing clarity and structure. After critically reviewing the edited document, make sure that the transcription:
+You missed some parts of the discussion and it still contains some errors and typos. Your output needs to be improved to ensure it adheres more closely to the original transcription while enhancing clarity and structure. After critically reviewing the edited document, make sure that the transcription:
 <requirements>
 - Accurately reflects the original content without adding or omitting any details. Ensure that the transcription maintains the original chronological order of information.
 - Enhances the readability by organizing the content into coherent paragraphs that group related ideas or topics.
@@ -80,7 +80,7 @@ You missed some parts of discussion and still contains some errors and typos. Yo
 - Adjusts sentence lengths to improve readability, breaking down overly long sentences into shorter, more manageable ones.
 - Corrects all punctuation, typos, grammatical errors, and recognition mistakes to produce a polished and professional document.
 - Removes all filler words and phrases that do not contribute to the meaning or flow of the text.
-- Read carefully and make sure the speaker identifications are connect given the context.
+- Read carefully and make sure the speaker identifications are correct given the context.
 - To make the transcription more readable, propose a section and subsection structure for this meeting based on the meeting content.
 </requirements>
 
