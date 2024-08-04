@@ -38,15 +38,13 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document name="{DOCUMENT_CLS}">
 {DOCUMENT_CLS_CONTENT}
 </document>
-
 <document name="{COMMANDS}">
 {COMMANDS_CONTENT}
 </document>
-
+{ADDITIONAL_INPUT_CONTENTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{ADDITIONAL_INPUT_CONTENTS}
 </documents>
 ]]>
 </user_prefix>

@@ -12,7 +12,7 @@
 When writing LaTeX, you must:
 - Use \begin{align} ... \end{align} for displayed equations.
 - Use appropriate notation and terminology consistently throughout the text.
-- Use non-breaking spaces when referencing equations, figures, sections, and references e.g., use "Eq.~\eqref{eq:label}"; "see Fig.~\ref{fig:label}"; "Section~\ref{sec:label}"; "see Ref.~\cite{Jarzynski1997Nonequilibrium}".
+- Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
 - Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"odinger'' over "Schrodinger".
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - Keep comments that start with % in the document.
@@ -30,15 +30,14 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document name="{DOCUMENT_CLS}">
 {DOCUMENT_CLS_CONTENT}
 </document>
-
 <document name="{COMMANDS}">
 {COMMANDS_CONTENT}
 </document>
-
+{ADDITIONAL_INPUT_CONTENTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-{ADDITIONAL_INPUT_CONTENTS}
+
 </documents>
 
 Please carefully read through the entire chapter and ensure you fully understand all the details.
