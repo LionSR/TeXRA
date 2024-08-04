@@ -128,7 +128,7 @@ body {
 
 .action-button, .icon-button {
   padding: 4px 8px;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: calc(var(--vscode-font-size));
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 1px solid var(--input-border);
@@ -169,7 +169,7 @@ body {
 
 .icon-button {
   padding: 4px;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: calc(var(--vscode-font-size));
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 1px solid var(--input-border);
@@ -198,11 +198,6 @@ body {
   margin-bottom: 5px;
 }
 
-.button-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
 
 .action-button {
   padding: 4px 8px;
