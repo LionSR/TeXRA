@@ -94,7 +94,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'requestEditedFile':
           if (message.inputFile || message.outputNameOverride) {
-            const baseFileNameForEdited = message.outputNameOverride 
+            const baseFileNameForEdited = message.outputNameOverride
               ? path.basename(message.outputNameOverride, path.extname(message.outputNameOverride))
               : path.basename(message.inputFile, path.extname(message.inputFile));
             const allEditedFiles = await listEditedFiles(baseFileNameForEdited);
@@ -164,9 +164,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFile, message.commitHash, message.clean);
           break;
         case 'getCurrentFile':
+          const fileType = message.fileType || 'input';
           const currentOpenFile = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
           if (currentOpenFile) {
-            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile });
+            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile, fileType: fileType });
           } else {
             vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
           }
