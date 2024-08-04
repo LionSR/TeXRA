@@ -63,8 +63,8 @@ def main():
         "--task",
         type=str,
         default="transcribe",
-        help="Task to perform: 'transcribe', 'transcribe_dual', 'text2tex', or 'text2tex_draft'.",
-        choices=["transcribe", "transcribe_dual", "text2tex", "text2tex_draft"],
+        help="Task to perform: 'transcribe_one', 'transcribe_dual', 'text2tex', or 'text2tex_draft'.",
+        choices=["transcribe_one", "transcribe_dual", "text2tex", "text2tex_draft"],
     )
     args = parser.parse_args()
 
