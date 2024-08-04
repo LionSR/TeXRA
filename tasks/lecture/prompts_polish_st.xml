@@ -11,7 +11,7 @@ When writing LaTeX, you must:
 - Use \begin{align} ... \end{align} for displayed equations.
 - Use \de for \delta.
 - Preserve comments starting with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in thte output.
-- Use non-breaking spaces when referencing equations, figures, sections, and references (e.g., "Eq.~\eqref{eqn:label}", "Fig.~\ref{fig:label}", "Section~\ref{sec:label}", "Ref.~\cite{Jarzynski1997Nonequilibrium}").
+- Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
 - For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
 - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the author name paper name.
 ]]>
