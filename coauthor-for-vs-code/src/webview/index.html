@@ -177,36 +177,31 @@
     </div>
     </p>
     <div class="section">
-      <h5 class="section-header"><i class="fas fa-broom"></i> Housekeeping</h5>
+      <h6 class="section-header"><i class="fas fa-broom"></i> Housekeeping</h6>
       <div class="button-group">
-        <label>For the Selected Task and Files:</label>
-        <div class="button-container">
-          <button id="packSingleButton" class="action-button"><i class="fas fa-box"></i> Pack</button>
-          <button id="cleanSingleButton" class="action-button"><i class="fas fa-trash-alt"></i> Clean</button>
-          <button id="packMultipleButton" class="action-button"><i class="fas fa-boxes"></i> Pack(Multiple)</button>
-          <button id="cleanMultipleButton" class="action-button"><i class="fas fa-dumpster"></i>
-            Clean(Multiple)</button>
-        </div>
+        <span>For the Selected Task and Files:</span>
+        <button id="packSingleButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
+        <button id="cleanSingleButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
+        <button id="packMultipleButton" class="icon-button" title="Pack(Multiple)"><i class="fas fa-boxes"></i></button>
+        <button id="cleanMultipleButton" class="icon-button" title="Clean(Multiple)"><i class="fas fa-dumpster"></i></button>
       </div>
       <div class="button-group">
-        <label>For All the Files:</label>
-        <div class="button-container">
-          <button id="indentTexButton" class="action-button"><i class="fas fa-indent"></i> Indent TeX</button>
-          <button id="cleanOutputButton" class="action-button"><i class="fas fa-broom"></i> Clean Output</button>
-          <button id="cleanBuildButton" class="action-button"><i class="fas fa-recycle"></i> Clean Build</button>
-        </div>
+        <span>For All the Files:</span>
+        <button id="indentTexButton" class="icon-button" title="Indent TeX"><i class="fas fa-indent"></i></button>
+        <button id="cleanOutputButton" class="icon-button" title="Clean Output"><i class="fas fa-broom"></i></button>
+        <button id="cleanBuildButton" class="icon-button" title="Clean Build"><i class="fas fa-recycle"></i></button>
       </div>
     </div>
 
     <div class="section">
-      <h5 class="section-header"><i class="fas fa-code-branch"></i> Smart Diffs</h5>
+      <h6 class="section-header"><i class="fas fa-code-branch"></i> Smart Diffs</h6>
       <div class="file-select">
         <div class="file-select-header">
           <label for="editedFileSelect"><i class="fas fa-file-edit"></i> Select Edited File:</label>
           <div class="file-select-actions">
-            <button id="currentEditedFileButton" class="action-button"><i class="fas fa-file-code"></i> Current</button>
-            <button id="mergeButton" class="action-button"><i class="fas fa-code-merge"></i> Merge</button>
-            <button id="latexDiffButton" class="action-button"><i class="fas fa-file-diff"></i> latexdiff</button>
+            <button id="currentEditedFileButton" class="icon-button" title="Current"><i class="fas fa-file-code"></i></button>
+            <button id="mergeButton" class="icon-button" title="Merge"><i class="fas fa-code-merge"></i></button>
+            <button id="latexDiffButton" class="icon-button" title="latexdiff"><i class="fas fa-file-diff"></i></button>
           </div>
         </div>
         <select id="editedFileSelect">
@@ -217,10 +212,10 @@
         <div class="file-select-header">
           <label for="commitSelect"><i class="fas fa-code-commit"></i> Select Commit:</label>
           <div class="file-select-actions">
-            <button id="refreshCommitsButton" class="action-button"><i class="fas fa-sync"></i> Refresh</button>
-            <button id="packLatexDiffVCButton" class="action-button"><i class="fas fa-box"></i> Pack</button>
-            <button id="cleanLatexDiffVCButton" class="action-button"><i class="fas fa-trash-alt"></i> Clean</button>
-            <button id="latexDiffVCButton" class="action-button"><i class="fas fa-file-diff"></i> latexdiff-vc</button>
+            <button id="refreshCommitsButton" class="icon-button" title="Refresh"><i class="fas fa-sync"></i></button>
+            <button id="packLatexDiffVCButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
+            <button id="cleanLatexDiffVCButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
+            <button id="latexDiffVCButton" class="icon-button" title="latexdiff-vc"><i class="fas fa-file-diff"></i></button>
           </div>
         </div>
         <select id="commitSelect">
