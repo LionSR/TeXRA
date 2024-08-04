@@ -9,7 +9,7 @@ function handleCheckboxChange(event) {
 function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
   if (!select) return console.error(`Element with id '${selectId}' not found`);
-  select.innerHTML = '<option value="">None</option>' + 
+  select.innerHTML = '<option value="">None</option>' +
     files.map(file => `<option value="${file}">${file}</option>`).join('');
 }
 
@@ -36,7 +36,7 @@ function addFileToList(containerId, file) {
   fileElement.querySelector('.remove-button').addEventListener('click', () => {
     container.removeChild(fileElement);
     if (container.children.length === 0) {
-      containerId === 'outputFilesList' ? handleEmptyOutputFiles() : 
+      containerId === 'outputFilesList' ? handleEmptyOutputFiles() :
         (container.style.display = 'none', toggleIcon.textContent = '▼', saveState());
     }
   });
@@ -274,8 +274,7 @@ document.addEventListener('DOMContentLoaded', function () {
     'cleanOutputButton': 'cleanOutput',
     'cleanBuildButton': 'cleanBuild',
     'indentTexButton': 'indentTex',
-    'refreshCommitsButton': 'refreshCommits',
-    'currentFileButton': 'getCurrentFile'
+    'refreshCommitsButton': 'refreshCommits'
   };
 
   Object.entries(buttonCommands).forEach(([id, command]) => {
@@ -513,6 +512,14 @@ document.addEventListener('DOMContentLoaded', function () {
       command: 'addOpenedFiles'
     });
   });
+
+
+  // Add event listeners for current file buttons
+  ['Input', 'Sample', 'Aux', 'Figure'].forEach(type => {
+    document.getElementById(`current${type}FileButton`).addEventListener('click', () => {
+      vscode.postMessage({ command: 'getCurrentFile', fileType: type.toLowerCase() });
+    });
+  });
 });
 
 function toggleMultipleFiles(containerId, toggleIconId) {
@@ -688,16 +695,15 @@ window.addEventListener('message', event => {
       handleRecentCommits(message);
       break;
     case 'setCurrentFile':
-      const inputFileSelect_val = document.getElementById('inputFileSelect');
-      const options = Array.from(inputFileSelect_val.options);
+      const fileSelect = document.getElementById(`${message.fileType}FileSelect`);
+      const options = Array.from(fileSelect.options);
       const matchingOption = options.find(option => option.value === message.filePath);
       if (matchingOption) {
-        inputFileSelect_val.value = message.filePath;
+        fileSelect.value = message.filePath;
         // Trigger change event to update related fields
-        inputFileSelect_val.dispatchEvent(new Event('change'));
+        fileSelect.dispatchEvent(new Event('change'));
       } else {
-        // Print the name of the current file,
-        vscode.window.showInformationMessage('The current file is not in the input file list: ' + message.filePath);
+        vscode.window.showInformationMessage(`The current file is not in the ${message.fileType} file list: ${message.filePath}`);
       }
       break;
     case 'setTheme':
