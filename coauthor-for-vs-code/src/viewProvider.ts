@@ -77,8 +77,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'requestInputFile':
-          const inputFiles = await listInputFiles();
-          webviewView.webview.postMessage({ command: 'setInputFile', files: inputFiles });
+          const refreshedInputFiles = await vscode.commands.executeCommand('coauthor.refreshInputFiles');
+          webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedInputFiles });
           break;
         case 'requestSampleFile':
           const sampleFiles = await listSampleFiles();
