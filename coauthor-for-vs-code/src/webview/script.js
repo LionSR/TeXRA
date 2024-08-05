@@ -170,6 +170,9 @@ window.onload = function () {
   dataRequests.forEach(request => {
     vscode.postMessage({ command: request });
   });
+
+  // Hide empty multiple file select boxes on initial load
+  hideEmptyMultipleFileSelects();
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -525,14 +528,33 @@ document.addEventListener('DOMContentLoaded', function () {
 function toggleMultipleFiles(containerId, toggleIconId) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(toggleIconId);
-  if (container.style.display === 'none') {
-    container.style.display = 'block';
-    toggleIcon.textContent = '▲';
-  } else {
-    container.style.display = 'none';
-    toggleIcon.textContent = '▼';
-  }
+  const isVisible = container.style.display !== 'none';
+  setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
   saveState();
+}
+
+function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
+  const container = document.getElementById(containerId);
+  const toggleIcon = document.getElementById(toggleId);
+  container.style.display = isVisible ? 'block' : 'none';
+  toggleIcon.textContent = isVisible ? '▲' : '▼';
+}
+
+function hideEmptyMultipleFileSelects() {
+  const multipleSelections = [
+    'multipleInputFilesSelect',
+    'multipleSampleFilesSelect',
+    'multipleAuxFilesSelect',
+    'multipleFiguresSelect'
+  ];
+
+  multipleSelections.forEach(id => {
+    const selectDiv = document.getElementById(id);
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    if (selectDiv.children.length === 0) {
+      setMultipleFileSelectVisibility(id, toggleId, false);
+    }
+  });
 }
 
 function saveState() {
@@ -608,11 +630,9 @@ function restoreState() {
         previousState[id].forEach(file => {
           addFileToList(id, file);
         });
-        selectDiv.style.display = previousState[`${id}Visible`] ? 'block' : 'none';
-        toggleIcon.textContent = previousState[`${id}Visible`] ? '▲' : '▼';
+        setMultipleFileSelectVisibility(id, toggleId, previousState[`${id}Visible`]);
       } else {
-        selectDiv.style.display = 'none';
-        toggleIcon.textContent = '▼';
+        setMultipleFileSelectVisibility(id, toggleId, false);
       }
     });
 
@@ -642,6 +662,9 @@ function restoreState() {
       toggleOutputNameOverride.textContent = '▼';
     }
   }
+
+  // Hide empty multiple file select boxes
+  hideEmptyMultipleFileSelects();
 }
 
 function emptyMultipleFiles(containerId, toggleId) {
@@ -717,3 +740,4 @@ window.addEventListener('message', event => {
   // Restore previous state
   restoreState();
 });
+
