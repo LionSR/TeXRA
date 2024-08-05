@@ -360,6 +360,7 @@ window.addEventListener('message', event => {
       break;
     case 'setOpenedFiles':
       updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
+      // sus
       break;
   }
 
