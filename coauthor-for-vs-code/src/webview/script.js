@@ -171,9 +171,201 @@ window.onload = function () {
     vscode.postMessage({ command: request });
   });
 
-  // Hide empty multiple file select boxes on initial load
-  hideEmptyMultipleFileSelects();
+  // Set default state for new folders
+  setDefaultState();
 };
+
+function setDefaultState() {
+  // Hide output name override by default
+  const outputNameOverride = document.getElementById('outputNameOverride');
+  const toggleOutputNameOverride = document.getElementById('toggleOutputNameOverride');
+  outputNameOverride.style.display = 'none';
+  toggleOutputNameOverride.textContent = '▼';
+
+  // Hide multiple file output by default
+  const outputFilesContainer = document.getElementById('outputFilesContainer');
+  const toggleOutputFiles = document.getElementById('toggleOutputFiles');
+  outputFilesContainer.style.display = 'none';
+  toggleOutputFiles.textContent = '▼';
+
+  // Clear any existing output files
+  document.getElementById('outputFilesList').innerHTML = '';
+
+  // Hide all multiple file select containers
+  const multipleSelections = [
+    'multipleInputFilesSelect',
+    'multipleSampleFilesSelect',
+    'multipleAuxFilesSelect',
+    'multipleFiguresSelect'
+  ];
+
+  multipleSelections.forEach(id => {
+    const selectDiv = document.getElementById(id);
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    const toggleIcon = document.getElementById(toggleId);
+    selectDiv.innerHTML = '';
+    setMultipleFileSelectVisibility(id, toggleId, false);
+  });
+
+  // Save this default state
+  saveState();
+}
+
+function restoreState() {
+  const previousState = vscode.getState();
+  if (previousState) {
+    const defaultValues = {
+      taskSelect: 'correct-tex',
+      reflectSelect: 'True',
+      commitSelect: 'HEAD'
+    };
+
+    const valueElements = [
+      'modelSelect', 'taskSelect', 'inputFileSelect', 'auxFileSelect',
+      'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
+      'taskInput', 'reflectSelect', 'commitSelect', 'outputNameOverride'
+    ];
+
+    valueElements.forEach(id => {
+      document.getElementById(id).value = previousState[id] || defaultValues[id] || '';
+    });
+
+    const checkboxElements = [
+      'autoExtractFigure', 'autoExtractTikzFigure',
+      'includeTikzReflection', 'includeTexCount'
+    ];
+    checkboxElements.forEach(id => {
+      document.getElementById(id).checked = previousState[id] || false;
+    });
+
+    const multipleSelections = [
+      { id: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
+      { id: 'multipleSampleFilesSelect', toggleId: 'toggleMultipleSampleFiles' },
+      { id: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
+      { id: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' }
+    ];
+
+    multipleSelections.forEach(({ id, toggleId }) => {
+      const selectDiv = document.getElementById(id);
+      const toggleIcon = document.getElementById(toggleId);
+      selectDiv.innerHTML = '';
+      if (previousState[id] && previousState[id].length > 0) {
+        previousState[id].forEach(file => {
+          addFileToList(id, file);
+        });
+        setMultipleFileSelectVisibility(id, toggleId, previousState[`${id}Visible`]);
+      } else {
+        setMultipleFileSelectVisibility(id, toggleId, false);
+      }
+    });
+
+    const outputFilesContainer = document.getElementById('outputFilesContainer');
+    const toggleIcon = document.getElementById('toggleOutputFiles');
+    if (previousState.outputFilesContainerVisible && previousState.outputFiles && previousState.outputFiles.length > 0) {
+      outputFilesContainer.style.display = 'block';
+      toggleIcon.textContent = '▲';
+      const outputFilesList = document.getElementById('outputFilesList');
+      outputFilesList.innerHTML = '';
+      previousState.outputFiles.forEach(file => {
+        addFileToList('outputFilesList', file);
+      });
+    } else {
+      outputFilesContainer.style.display = 'none';
+      toggleIcon.textContent = '▼';
+    }
+
+    const outputNameOverride = document.getElementById('outputNameOverride');
+    const toggleOutputNameOverride = document.getElementById('toggleOutputNameOverride');
+    if (previousState.outputNameOverrideVisible) {
+      outputNameOverride.style.display = 'inline-block';
+      toggleOutputNameOverride.textContent = '▲';
+      outputNameOverride.value = previousState.outputNameOverride || '';
+    } else {
+      outputNameOverride.style.display = 'none';
+      toggleOutputNameOverride.textContent = '▼';
+    }
+  } else {
+    // If there's no previous state, set to default
+    setDefaultState();
+  }
+
+  // Hide empty multiple file select boxes
+  hideEmptyMultipleFileSelects();
+}
+
+function emptyMultipleFiles(containerId, toggleId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  container.style.display = 'none';
+  document.getElementById(toggleId).textContent = '▼';
+  saveState();
+}
+
+window.addEventListener('message', event => {
+  const message = event.data;
+  switch (message.command) {
+    case 'setInputFile':
+    case 'setSampleFile':
+    case 'setAuxFile':
+    case 'setFigureFile':
+      updateFileSelect(`${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`, message.files);
+      break;
+    case 'setMultipleInputFiles':
+    case 'setMultipleSampleFiles':
+    case 'setMultipleAuxFiles':
+    case 'setMultipleFigures':
+      updateMultipleFileSelect(
+        `${message.command.replace('setMultiple', 'multiple')}Select`,
+        `toggle${message.command.replace('set', '')}`,
+        message.files
+      );
+      break;
+    case 'setEditedFiles':
+      updateFileSelect('editedFileSelect', message.files);
+      break;
+    case 'inputFileSelected':
+      document.getElementById('inputFileSelect').value = message.filePath;
+      vscode.postMessage({
+        command: 'requestEditedFile',
+        inputFile: message.filePath,
+        outputNameOverride: message.outputNameOverride
+      });
+      break;
+    case 'sampleFileSelected':
+    case 'auxFileSelected':
+    case 'figureFileSelected':
+    case 'editedFileSelected':
+      document.getElementById(`${message.command.replace('Selected', 'Select')}`).value = message.filePath;
+      break;
+    case 'modelSelected':
+      document.getElementById('modelSelect').value = message.model;
+      break;
+    case 'setRecentCommits':
+      handleRecentCommits(message);
+      break;
+    case 'setCurrentFile':
+      const fileSelect = document.getElementById(`${message.fileType}FileSelect`);
+      const options = Array.from(fileSelect.options);
+      const matchingOption = options.find(option => option.value === message.filePath);
+      if (matchingOption) {
+        fileSelect.value = message.filePath;
+        // Trigger change event to update related fields
+        fileSelect.dispatchEvent(new Event('change'));
+      } else {
+        vscode.window.showInformationMessage(`The current file is not in the ${message.fileType} file list: ${message.filePath}`);
+      }
+      break;
+    case 'setTheme':
+      document.body.className = message.theme;
+      break;
+    case 'setOpenedFiles':
+      updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
+      break;
+  }
+
+  // Restore previous state
+  restoreState();
+});
 
 document.addEventListener('DOMContentLoaded', function () {
   const sortableElements = [
@@ -587,157 +779,4 @@ function saveState() {
 
   vscode.setState(state);
 }
-
-function restoreState() {
-  const previousState = vscode.getState();
-  if (previousState) {
-    const defaultValues = {
-      taskSelect: 'correct-tex',
-      reflectSelect: 'True',
-      commitSelect: 'HEAD'
-    };
-
-    const valueElements = [
-      'modelSelect', 'taskSelect', 'inputFileSelect', 'auxFileSelect',
-      'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
-      'taskInput', 'reflectSelect', 'commitSelect', 'outputNameOverride'
-    ];
-
-    valueElements.forEach(id => {
-      document.getElementById(id).value = previousState[id] || defaultValues[id] || '';
-    });
-
-    const checkboxElements = [
-      'autoExtractFigure', 'autoExtractTikzFigure',
-      'includeTikzReflection', 'includeTexCount'
-    ];
-    checkboxElements.forEach(id => {
-      document.getElementById(id).checked = previousState[id] || false;
-    });
-
-    const multipleSelections = [
-      { id: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
-      { id: 'multipleSampleFilesSelect', toggleId: 'toggleMultipleSampleFiles' },
-      { id: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
-      { id: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' }
-    ];
-
-    multipleSelections.forEach(({ id, toggleId }) => {
-      const selectDiv = document.getElementById(id);
-      const toggleIcon = document.getElementById(toggleId);
-      selectDiv.innerHTML = '';
-      if (previousState[id] && previousState[id].length > 0) {
-        previousState[id].forEach(file => {
-          addFileToList(id, file);
-        });
-        setMultipleFileSelectVisibility(id, toggleId, previousState[`${id}Visible`]);
-      } else {
-        setMultipleFileSelectVisibility(id, toggleId, false);
-      }
-    });
-
-    const outputFilesContainer = document.getElementById('outputFilesContainer');
-    const toggleIcon = document.getElementById('toggleOutputFiles');
-    if (previousState.outputFilesContainerVisible && previousState.outputFiles && previousState.outputFiles.length > 0) {
-      outputFilesContainer.style.display = 'block';
-      toggleIcon.textContent = '▲';
-      const outputFilesList = document.getElementById('outputFilesList');
-      outputFilesList.innerHTML = '';
-      previousState.outputFiles.forEach(file => {
-        addFileToList('outputFilesList', file);
-      });
-    } else {
-      outputFilesContainer.style.display = 'none';
-      toggleIcon.textContent = '▼';
-    }
-
-    const outputNameOverride = document.getElementById('outputNameOverride');
-    const toggleOutputNameOverride = document.getElementById('toggleOutputNameOverride');
-    if (previousState.outputNameOverrideVisible) {
-      outputNameOverride.style.display = 'inline-block';
-      toggleOutputNameOverride.textContent = '▲';
-      outputNameOverride.value = previousState.outputNameOverride || '';
-    } else {
-      outputNameOverride.style.display = 'none';
-      toggleOutputNameOverride.textContent = '▼';
-    }
-  }
-
-  // Hide empty multiple file select boxes
-  hideEmptyMultipleFileSelects();
-}
-
-function emptyMultipleFiles(containerId, toggleId) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
-  container.style.display = 'none';
-  document.getElementById(toggleId).textContent = '▼';
-  saveState();
-}
-
-window.addEventListener('message', event => {
-  const message = event.data;
-  switch (message.command) {
-    case 'setInputFile':
-    case 'setSampleFile':
-    case 'setAuxFile':
-    case 'setFigureFile':
-      updateFileSelect(`${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`, message.files);
-      break;
-    case 'setMultipleInputFiles':
-    case 'setMultipleSampleFiles':
-    case 'setMultipleAuxFiles':
-    case 'setMultipleFigures':
-      updateMultipleFileSelect(
-        `${message.command.replace('setMultiple', 'multiple')}Select`,
-        `toggle${message.command.replace('set', '')}`,
-        message.files
-      );
-      break;
-    case 'setEditedFiles':
-      updateFileSelect('editedFileSelect', message.files);
-      break;
-    case 'inputFileSelected':
-      document.getElementById('inputFileSelect').value = message.filePath;
-      vscode.postMessage({
-        command: 'requestEditedFile',
-        inputFile: message.filePath,
-        outputNameOverride: message.outputNameOverride
-      });
-      break;
-    case 'sampleFileSelected':
-    case 'auxFileSelected':
-    case 'figureFileSelected':
-    case 'editedFileSelected':
-      document.getElementById(`${message.command.replace('Selected', 'Select')}`).value = message.filePath;
-      break;
-    case 'modelSelected':
-      document.getElementById('modelSelect').value = message.model;
-      break;
-    case 'setRecentCommits':
-      handleRecentCommits(message);
-      break;
-    case 'setCurrentFile':
-      const fileSelect = document.getElementById(`${message.fileType}FileSelect`);
-      const options = Array.from(fileSelect.options);
-      const matchingOption = options.find(option => option.value === message.filePath);
-      if (matchingOption) {
-        fileSelect.value = message.filePath;
-        // Trigger change event to update related fields
-        fileSelect.dispatchEvent(new Event('change'));
-      } else {
-        vscode.window.showInformationMessage(`The current file is not in the ${message.fileType} file list: ${message.filePath}`);
-      }
-      break;
-    case 'setTheme':
-      document.body.className = message.theme;
-      break;
-    case 'setOpenedFiles':
-      updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
-      break;
-  }
-
-  // Restore previous state
-  restoreState();
-});
 
