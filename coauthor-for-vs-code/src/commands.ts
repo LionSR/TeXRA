@@ -4,6 +4,7 @@ import { ensureTerminal } from './terminal';
 import { CoAuthorViewProvider } from './viewProvider';
 import * as path from 'path';
 import { getWorkspacePath, getRelativePath, showInfoMessage, showErrorMessage, getConfig, ensureArray } from './utils/commonUtils';
+import { listInputFiles } from './utils';
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -467,6 +468,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
       let inputFilesWithOverride = outputNameOverride ? [outputNameOverride, ...outputFiles] : outputFiles;
       let command = `coauthor clean-multiple --input_files="${inputFilesWithOverride.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
       terminal.sendText(command);
+    }),
+    vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
+      const inputFiles = await listInputFiles();
+      return inputFiles;
     }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
