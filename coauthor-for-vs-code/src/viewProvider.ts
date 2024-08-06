@@ -103,6 +103,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             vscode.window.showInformationMessage('Please select an input file or provide an output name override first.');
           }
           break;
+        case 'refreshAllFiles':
+          const refreshedInputFiles = await listInputFiles();
+          const refreshedSampleFiles = await listSampleFiles();
+          const refreshedAuxFiles = await listAuxFiles();
+          const refreshedFigureFiles = await listFigureFiles();
+          webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedInputFiles });
+          webviewView.webview.postMessage({ command: 'setSampleFile', files: refreshedSampleFiles });
+          webviewView.webview.postMessage({ command: 'setAuxFile', files: refreshedAuxFiles });
+          webviewView.webview.postMessage({ command: 'setFigureFile', files: refreshedFigureFiles });
+          break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
           const baseFileNameForInput = path.basename(message.filePath, path.extname(message.filePath));

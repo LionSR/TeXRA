@@ -479,6 +479,10 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  document.getElementById('refreshAllFilesButton').addEventListener('click', function() {
+    vscode.postMessage({ command: 'refreshAllFiles' });
+  });
+
   document.getElementById('executeButton').addEventListener('click', function () {
     const task = document.getElementById('taskSelect').value;
     const inputFile = document.getElementById('inputFileSelect').value;
