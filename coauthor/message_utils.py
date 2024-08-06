@@ -95,7 +95,10 @@ def create_image_message(model, figure_inputs):
         _, file_extension = os.path.splitext(figure_input)
         img_data, media_type = _process_image_file(figure_input, file_extension, model)
 
-        _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
+        if img_data is not None:
+            _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
+        else:
+            cprint(f"WARNING: Failed to process {figure_input}. Skipping.", "white", "on_red")
 
     content = _create_image_content(image_contents, model)
 
