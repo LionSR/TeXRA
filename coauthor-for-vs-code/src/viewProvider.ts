@@ -77,20 +77,28 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'requestInputFile':
-          const refreshedInputFiles = await vscode.commands.executeCommand('coauthor.refreshInputFiles');
-          webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedInputFiles });
+          {
+            const refreshedInputFiles = await vscode.commands.executeCommand('coauthor.refreshInputFiles');
+            webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedInputFiles });
+          }
           break;
         case 'requestSampleFile':
-          const sampleFiles = await listSampleFiles();
-          webviewView.webview.postMessage({ command: 'setSampleFile', files: sampleFiles });
+          {
+            const sampleFiles = await listSampleFiles();
+            webviewView.webview.postMessage({ command: 'setSampleFile', files: sampleFiles });
+          }
           break;
         case 'requestAuxFile':
-          const auxFiles = await listAuxFiles();
-          webviewView.webview.postMessage({ command: 'setAuxFile', files: auxFiles });
+          {
+            const auxFiles = await listAuxFiles();
+            webviewView.webview.postMessage({ command: 'setAuxFile', files: auxFiles });
+          }
           break;
         case 'requestFigureFile':
-          const figureFiles = await listFigureFiles();
-          webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
+          {
+            const figureFiles = await listFigureFiles();
+            webviewView.webview.postMessage({ command: 'setFigureFile', files: figureFiles });
+          }
           break;
         case 'requestEditedFile':
           if (message.inputFile || message.outputNameOverride) {
@@ -104,14 +112,18 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'refreshAllFiles':
-          const refreshedInputFiles = await listInputFiles();
-          const refreshedSampleFiles = await listSampleFiles();
-          const refreshedAuxFiles = await listAuxFiles();
-          const refreshedFigureFiles = await listFigureFiles();
-          webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedInputFiles });
-          webviewView.webview.postMessage({ command: 'setSampleFile', files: refreshedSampleFiles });
-          webviewView.webview.postMessage({ command: 'setAuxFile', files: refreshedAuxFiles });
-          webviewView.webview.postMessage({ command: 'setFigureFile', files: refreshedFigureFiles });
+          {
+            const refreshedFiles = {
+              input: await listInputFiles(),
+              sample: await listSampleFiles(),
+              aux: await listAuxFiles(),
+              figure: await listFigureFiles()
+            };
+            webviewView.webview.postMessage({ command: 'setInputFile', files: refreshedFiles.input });
+            webviewView.webview.postMessage({ command: 'setSampleFile', files: refreshedFiles.sample });
+            webviewView.webview.postMessage({ command: 'setAuxFile', files: refreshedFiles.aux });
+            webviewView.webview.postMessage({ command: 'setFigureFile', files: refreshedFiles.figure });
+          }
           break;
         case 'inputFileSelected':
           vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
