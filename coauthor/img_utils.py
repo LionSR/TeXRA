@@ -88,15 +88,19 @@ def process_pdf_input(pdf_path, is_openai=False, **kwargs):
         **kwargs: Additional arguments to pass to the conversion functions.
 
     Returns:
-        Union[str, List[str]]: Base64 encoded PNG image(s).
+        Union[str, List[str], None]: Base64 encoded PNG image(s) or None if the file is empty or non-existent.
     """
-    # Open the PDF file to check the number of pages
-    doc = fitz.open(pdf_path)
-    page_count = doc.page_count
-    doc.close()
+    try:
+        # Open the PDF file to check the number of pages
+        doc = fitz.open(pdf_path)
+        page_count = doc.page_count
+        doc.close()
 
-    if page_count == 1:
-        return single_page_pdf_to_png(pdf_path, **kwargs)
-    else:
-        max_pages = kwargs.get("max_pages", 20 if not is_openai else float("inf"))
-        return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)
+        if page_count == 1:
+            return single_page_pdf_to_png(pdf_path, **kwargs)
+        else:
+            max_pages = kwargs.get("max_pages", 20 if not is_openai else float("inf"))
+            return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)
+    except (fitz.FileDataError, fitz.EmptyFileError):
+        print(f"Warning: The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")
+        return None
