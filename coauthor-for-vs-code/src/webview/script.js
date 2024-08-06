@@ -389,6 +389,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
+  // Add event listeners for the new empty buttons
+  ['Input', 'Sample', 'Aux', 'Figure'].forEach(type => {
+    document.getElementById(`empty${type}FileButton`).addEventListener('click', () => {
+      document.getElementById(`${type.toLowerCase()}FileSelect`).value = '';
+      saveState();
+    });
+  });
+
   document.getElementById('taskSelect').addEventListener('change', function () {
     const selectedTask = this.value;
     if (selectedTask.startsWith('correct')) {
