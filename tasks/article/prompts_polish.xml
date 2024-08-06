@@ -22,7 +22,7 @@ When writing LaTeX, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you the latex document of a research paper draft.
+I am going to give you the latex document of a research paper draft.  Read the document carefully before proceeding.
 
 Here is the LaTeX document with additional input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
@@ -39,7 +39,7 @@ Your task is to enhance this paper focusing solely on the following specific ins
 <instruction>
 {INSTRUCTION}
 </instruction>
-For example, in the instruction, if I ask you to revise section A, you do not need to revise section B.
+Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 ]]>
 </user_prefix>
 <user_request>
@@ -89,7 +89,7 @@ Let's critically reflect on the changes made according to the given instructions
 </idea>
 </scratchpad>
 
-Then, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+Then, output a further enhanced version of the LaTeX document, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
 ]]>
 </user_reflect>
 </prompts>
