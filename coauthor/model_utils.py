@@ -7,13 +7,12 @@ model_mapping = {
     "opus": "claude-3-opus-20240229",
     "sonnet": "claude-3-sonnet-20240229",
     "haiku": "claude-3-haiku-20240307",
-    # "gpt4o": "gpt-4o-2024-05-13",
     "gpt4o": "gpt-4o-2024-08-06",
     "gpt4t": "gpt-4-turbo-2024-04-09",
     "gpt4o-": "gpt-4o-mini-2024-07-18",
 }
 
-anthropic_models = set(model_mapping.keys()) | {
+anthropic_models = {
     "claude-3-5-sonnet",
     "claude-3-haiku",
     "claude-3-sonnet",
@@ -22,6 +21,16 @@ anthropic_models = set(model_mapping.keys()) | {
     "claude-3-5-sonnet-20240620",
     "claude-3-opus-20240229",
     "claude-3-haiku-20240307",
+    "sonnet+",
+    "opus",
+    "sonnet",
+    "haiku",
+}
+
+openai_models = {
+    "gpt4o",
+    "gpt4t",
+    "gpt4o-",
 }
 
 
