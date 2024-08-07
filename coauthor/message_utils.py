@@ -212,14 +212,14 @@ def _extract_anthropic_statistics(response_object, end_tag):
 def handle_openai_continuation(messages, new_response, k, end_tag):
     """Handle continuation for OpenAI models."""
     prefill_tokens = new_response[-k:]
-    user_message = (
+    user_message_continuation = (
         f"Your response got cut off, because you only have limited response space. "
         f"Please continue writing from where you left off until the very end, "
-        f"marked by {end_tag}. Avoid repetition and begin your response with:"
+        f"marked by {end_tag}. Avoid repetition, do not start over and begin your response with:"
     )
-    print("User message:", colored(user_message, "magenta"))
+    print("User message:", colored(user_message_continuation, "magenta"))
     print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-    messages.append({"role": "user", "content": user_message + prefill_tokens})
+    messages.append({"role": "user", "content": user_message_continuation + prefill_tokens})
 
 
 def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):

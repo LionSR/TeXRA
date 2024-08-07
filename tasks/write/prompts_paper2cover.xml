@@ -52,7 +52,7 @@ Based on the research paper provided, please write a compelling cover letter for
 3. [Key point 3 to highlight in the cover letter]
 4. [Explanation of why the paper is suitable for the chosen Physical Review journal]
 </scratchpad>
-Then, please write the cover letter, incorporating the key points outlined above. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research. Use the following format:
+Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research. Use the following format:
 
 <cover_letter>
 {COVER_LETTER_CONTENT}
@@ -85,7 +85,7 @@ Let's critically reflect on the cover letter we've written. Consider these point
 </improvements>
 </scratchpad>
 
-Then, please output an improved version of the cover letter, incorporating the reflections and improvements discussed above. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. Use the following format:
+Then, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. Use the following format:
 
 <cover_letter>
 {IMPROVED_COVER_LETTER_CONTENT}
