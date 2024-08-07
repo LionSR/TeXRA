@@ -11,7 +11,7 @@
 <![CDATA[
 You are an expert physicist and scientific writer. Your task is to revise and improve both the main text and supplementary materials of a research paper submitted to Physical Review Letters. Ensure that your revisions maintain scientific accuracy, improve clarity, and adhere to the journal's style guidelines.
 
-When writing LaTeX, you must:
+When writing a professional *.tex LaTeX document, you must:
 - Use appropriate notation and terminology consistently throughout both documents.
 - Maintain the comments that start with % in the documents.
 - Ensure proper referencing between the main text and supplementary materials.
@@ -42,7 +42,7 @@ Please carefully read through both the main text and supplementary materials, en
 Your task is to enhance both documents, focusing on improving clarity, consistency, and adherence to Physical Review Letters guidelines. Pay special attention to:
 1. Consistency in notation and terminology between the main text and supplementary materials.
 2. Proper cross-referencing between the two documents.
-3. Clarity and conciseness of explanations in both documents.
+3. Clarity and condensation of explanations in both documents.
 4. Adherence to PRL style and formatting guidelines.
 ]]>
 </user_prefix>
