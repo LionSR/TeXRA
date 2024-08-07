@@ -9,7 +9,7 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-When writing LaTeX, you must:
+When writing a professional *.tex LaTeX document, you must:
 - Use \begin{align} ... \end{align} for displayed equations.
 - Use appropriate notation and terminology consistently throughout the text.
 - Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
@@ -50,7 +50,7 @@ Important: Focus solely on the given instruction. If asked to revise section A, 
 </user_prefix>
 <user_request>
 <![CDATA[
-First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the improvements):
+First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the revisions):
 
 <scratchpad>
 1. [Specific improvement 1 addressing the instruction]
@@ -64,7 +64,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Then, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
+Then, following your plan in the scratchpad, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -72,9 +72,8 @@ Then, output an updated version of the LaTeX document with targeted enhancements
 </user_request>
 <user_reflect>
 <![CDATA[
-Now it is time to be brutally honest with yourself.
-Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below:
-
+Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
+Let's critically reflect like a harsh professor on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
 <scratchpad>
 <reflection>
 1. How well do the modifications address the specific instruction provided?
@@ -97,11 +96,12 @@ Let's critically reflect on the changes made according to the given instructions
 3. [Additional improvement 3]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
+...
 </idea>
 </scratchpad>
 
-Then, following your plan in the scratchpad, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag.
-Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, following your plan in the above scratchpad, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag.
+Remember to stay laser-focused on the specific instruction provided or the additional plan in the above scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the above scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>
 </prompts>
