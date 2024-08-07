@@ -13,7 +13,7 @@
 <![CDATA[
 You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve LaTeX research paper(s) focusing solely on addressing the given instructions.
 
-When writing LaTeX, you must:
+When writing a professional *.tex LaTeX document, you must:
 - follow the best practices that will result in zero warning when checking by chktex.
 - Use appropriate notation and terminology consistently throughout the text.
 - Keep the comments that starts with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in the output.
@@ -42,7 +42,7 @@ Your task is to enhance the paper(s) focusing solely on the following specific i
 {INSTRUCTION}
 </instruction>
 
-In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper(s) that are directly relevant to the instruction above. Do not consider any other aspects of the paper(s). Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate detailed action plan(s) so that a graduate student can also perform the improvements. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document(s).
+In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper(s) that are directly relevant to the instruction above. Do not consider any other aspects of the paper(s). Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate detailed action plan(s) so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document(s).
 <scratchpad>
 1. [Specific improvement 1 addressing the instruction]
 - Rationale: [explanation]
@@ -90,6 +90,7 @@ Now that you have made initial improvements to the paper(s), please reflect on y
 3. [Additional improvement 3]
 - Rationale: [Brief explanation]
 - Implementation: [Concrete steps]
+...
 </idea>
 </scratchpad>
 
