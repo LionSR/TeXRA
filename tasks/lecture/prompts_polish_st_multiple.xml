@@ -26,7 +26,7 @@ When writing a professional *.tex LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given multiple LaTeX documents representing chapters of the textbook "Stochastic Thermodynamics in the World of Machine Learning" to revise. Read all documents carefully before proceeding.
+You will be given multiple LaTeX documents representing chapters of the textbook "Stochastic Thermodynamics in the World of Machine Learning" that your student wrote. Read all documents carefully before proceeding to revise them.
 
 Here are the LaTeX documents with additional LaTeX document class and commands (where the math commands you should use are defined):
 
@@ -72,7 +72,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Then, following your plan in the scratchpad, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided and the additional plan in the scratchpad. Refrain from making any changes that are not directly related to the instruction and the additional plan in the scratchpad. Use the following format:
 
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
