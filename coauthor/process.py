@@ -66,6 +66,11 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
+        # for claude 3.5, the model sometimes adds a double line break before andafter an equation
+        new_response = new_response.replace("\n\n\\begin{align}", "\n\\begin{align}")
+        new_response = new_response.replace("\\end{align}\n\n", "\\end{align}\n")
+        # also replace double line breaks with a single line break in the message
+        
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens
         if state["continuation_count"] == 0:
@@ -126,7 +131,7 @@ def process_first_round(
     messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 
     accumulated_output = None
-    if os.path.exists(output_file):
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 5:
         file_content = read_file(output_file)
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the first prospect output file. Skipping continuation.")
@@ -157,7 +162,7 @@ def process_first_round(
             cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
             messages.append({"role": "assistant", "content": prefill})
         elif is_openai_model(model):
-            openai_prefill = f"Start your response with\n{prefill}"
+            openai_prefill = f'Start your response with \n"{prefill}"'
             cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
 

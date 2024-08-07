@@ -214,12 +214,11 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
     prefill_tokens = new_response[-k:]
     user_message_continuation = (
         f"Your response got cut off, because you only have limited response space. "
-        f"Please continue writing from where you left off until the very end, "
-        f"marked by {end_tag}. Avoid repetition, do not start over, and begin your response with:"
+        f"Continue writing exactly from where you left off until the very end, "
+        f'marked by {end_tag}. Avoid repeat yourself and avoid starting over. Start your response at the next token after: "{prefill_tokens}"'
     )
     print("User message:", colored(user_message_continuation, "magenta"))
-    print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")
-    messages.append({"role": "user", "content": user_message_continuation + prefill_tokens})
+    messages.append({"role": "user", "content": user_message_continuation})
 
 
 def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
