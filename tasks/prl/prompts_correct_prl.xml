@@ -70,7 +70,7 @@ In the scratchpad below, brainstorm concrete ways to improve both the main text 
    - Implementation steps:
 </scratchpad>
 
-Now, please output updated versions of both the main text and supplementary materials, implementing the improvements you've outlined. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of both the main text and supplementary materials, implementing the improvements you've outlined. Use the following format:
 
 <latex_documents>
 <document name="{MAIN_FILE}">
@@ -95,17 +95,17 @@ Reflection on previous changes:
 4. [Identification of any areas that may need further improvement]
 
 Additional improvements:
-1. [Additional refinement 1]
+1. [Additional improvement 1]
    - Affected document(s): [Main text / Supplementary materials / Both]
    - Rationale:
    - Implementation steps:
 
-2. [Additional refinement 2]
+2. [Additional improvement 2]
    - Affected document(s): [Main text / Supplementary materials / Both]
    - Rationale:
    - Implementation steps:
 
-3. [Additional refinement 3]
+3. [Additional improvement 3]
    - Affected document(s): [Main text / Supplementary materials / Both]
    - Rationale:
    - Implementation steps:
