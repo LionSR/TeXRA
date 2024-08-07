@@ -215,7 +215,7 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
     user_message_continuation = (
         f"Your response got cut off, because you only have limited response space. "
         f"Please continue writing from where you left off until the very end, "
-        f"marked by {end_tag}. Avoid repetition, do not start over and begin your response with:"
+        f"marked by {end_tag}. Avoid repetition, do not start over, and begin your response with:"
     )
     print("User message:", colored(user_message_continuation, "magenta"))
     print(f"### Prefill tokens: {colored(prefill_tokens, 'yellow')}")

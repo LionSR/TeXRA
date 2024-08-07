@@ -11,7 +11,7 @@
 <![CDATA[
 Your task is to write a research paper.
 
-When writing LaTeX, you must:
+When writing a professional *.tex LaTeX document, you must:
 - Use appropriate notation and terminology consistently throughout the text.
 - Keep the comments that starts with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in thte output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
