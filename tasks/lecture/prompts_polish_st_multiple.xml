@@ -72,7 +72,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Then, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
@@ -99,15 +99,15 @@ Reflection on previous changes:
 3. [Identification of any areas that may need further improvement]
 
 Additional improvements:
-1. [Additional refinement 1]
+1. [Additional improvement 1]
     - Affected chapters: [List of chapters]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-2. [Additional refinement 2]
+2. [Additional improvement 2]
     - Affected chapters: [List of chapters]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-3. [Additional refinement 3]
+3. [Additional improvement 3]
     - Affected chapters: [List of chapters]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
@@ -123,7 +123,7 @@ Consider these points:
 8. Are there any proof or mathematical reasonings that can be expanded using more equations?
 </scratchpad>
 
-Now, output further enhanced and complete versions of all LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, output further enhanced and complete versions of all LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 
 Ensure that the output documents are in the following order: {OUTPUT_FILES_ORDER}
 ]]>

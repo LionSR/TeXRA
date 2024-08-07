@@ -405,6 +405,7 @@ document.addEventListener('DOMContentLoaded', function () {
     } else {
       // Refresh the figure file options
       vscode.postMessage({ command: 'requestFigureFile' });
+      document.getElementById('reflectSelect').value = 'True';
     }
     saveState();
   });

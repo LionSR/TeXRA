@@ -57,7 +57,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Then, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, following your brainstorming in the scratchpad, please output an updated version of the LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -77,13 +77,13 @@ Let's critically reflect on the changes made according to the given instructions
 7. In the added parts, are there any fluffy like "XXX provides crucial insights into the structure and behavior of these systems." that can be densed using the "show not tell" technique?
 </reflection>
 <idea>
-1. [Additional refinement 1]
+1. [Additional improvement 1]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-2. [Additional refinement 2]
+2. [Additional improvement 2]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-3. [Additional refinement 3]
+3. [Additional improvement 3]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
 </idea>

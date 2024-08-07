@@ -64,7 +64,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Now, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
+Then, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided. Do not make changes unrelated to the instruction. Use the following format for your output:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -72,6 +72,7 @@ Now, output an updated version of the LaTeX document with targeted enhancements 
 </user_request>
 <user_reflect>
 <![CDATA[
+Now it is time to be brutally honest with yourself.
 Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below:
 
 <scratchpad>
@@ -87,19 +88,20 @@ Let's critically reflect on the changes made according to the given instructions
 </reflection>
 
 <idea>
-1. [Additional refinement 1]
+1. [Additional improvement 1]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-2. [Additional refinement 2]
+2. [Additional improvement 2]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
-3. [Additional refinement 3]
+3. [Additional improvement 3]
     - Rationale: [Brief explanation]
     - Implementation: [Concrete steps]
 </idea>
 </scratchpad>
 
-Now, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, following your plan in the scratchpad, output a further enhanced and complete version of the LaTeX document in the <latex_document> tag.
+Remember to stay laser-focused on the specific instruction provided. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>
 </prompts>
