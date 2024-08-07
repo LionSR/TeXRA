@@ -80,11 +80,12 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
+    # Replace "\end{document>" with "\end{document}" for sonnet 3.5 and gpt-4o/4t
     output_content = output_content.replace("\\end{document>", "\\end{document}")
     output_content = output_content.replace("\\end{figure>", "\\end{figure}")
     output_content = output_content.replace("\\end{tikzpicture>", "\\end{tikzpicture}")
     output_content = output_content.replace("\\end{scope>", "\\end{scope}")
+    output_content = output_content.replace("\\end{latex_document>", "</latex_document>\n")
     output_content = output_content.replace("\\end\n", "\\end{document}\n")
 
     # Add CDATA sections to specified tags

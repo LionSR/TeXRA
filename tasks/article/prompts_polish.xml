@@ -65,14 +65,16 @@ Then, following your plan in the scratchpad, please output an updated version of
 </user_request>
 <user_reflect>
 <![CDATA[
+Let's critically reflect on the changes made according to the given instructions. 
 Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
-Let's critically reflect on the changes made according to the given instructions. Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document.
+
+Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.
 <scratchpad>
 <reflection>
 1. How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
 2. Are the enhancements clear, condensed, and effective in improving the quality of the latex document? If not, how could they be further refined?
 3. Do the changes maintain the overall structure and coherence of the original latex document? If not, what adjustments could be made to ensure a smooth flow?
-4. Have the added parts been coherently and logically incorporated into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
+4. Have the added parts been coherently and logically incorporated, rather than just appended, into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
 5. Are there any super important information or details from the original version that are now missing in the new version?
 6. Are there any notations or quantities used before being defined?
 7. In the added parts, are there any fluffy like "XXX provides crucial insights into the structure and behavior of these systems." that can be densed using the "show not tell" technique?
