@@ -82,6 +82,10 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
     output_content = output_content.replace("\\end{document>", "\\end{document}")
+    output_content = output_content.replace("\\end{figure>", "\\end{figure}")
+    output_content = output_content.replace("\\end{tikzpicture>", "\\end{tikzpicture}")
+    output_content = output_content.replace("\\end{scope>", "\\end{scope}")
+    output_content = output_content.replace("\\end\n", "\\end{document}\n")
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [document_tag, thinking_tag]
