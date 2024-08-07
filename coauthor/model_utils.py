@@ -7,7 +7,8 @@ model_mapping = {
     "opus": "claude-3-opus-20240229",
     "sonnet": "claude-3-sonnet-20240229",
     "haiku": "claude-3-haiku-20240307",
-    "gpt4o": "gpt-4o-2024-05-13",
+    # "gpt4o": "gpt-4o-2024-05-13",
+    "gpt4o": "gpt-4o-2024-08-06",
     "gpt4t": "gpt-4-turbo-2024-04-09",
     "gpt4o-": "gpt-4o-mini-2024-07-18",
 }
@@ -48,7 +49,7 @@ def get_model_client(model):
 
 
 def compute_api_price(input_tokens, output_tokens, model):
-    prices = {"sonnet": (3, 15), "opus": (15, 75), "haiku": (0.25, 1.25), "gpt4t": (10, 30), "gpt4o": (5, 15), "gpt4o-": (0.15, 0.6)}
+    prices = {"sonnet": (3, 15), "opus": (15, 75), "haiku": (0.25, 1.25), "gpt4t": (10, 30), "gpt4o": (2.5, 10), "gpt4o-": (0.15, 0.6)}
 
     for key, (input_rate, output_rate) in prices.items():
         if key in model:
