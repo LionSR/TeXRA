@@ -45,7 +45,7 @@ In the scratchpad below, brainstorm concrete ways to create or significantly imp
 3. [Specific figure creation/improvement idea 3 that directly addresses the instruction]
 </scratchpad>
 
-Then, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
+Then, following your plan in the scratchpad, please output an updated version of the LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -65,9 +65,9 @@ Let's take a moment to critically reflect on the changes made:
 
 Please carefully consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change.
 <scratchpad>
-1. [Additional refinement 1]
-2. [Additional refinement 2]
-3. [Additional refinement 3]
+1. [Additional improvement 1]
+2. [Additional improvement 2]
+3. [Additional improvement 3]
 </scratchpad>
 
 Then, please output a further enhanced version of the LaTeX document, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided and create figures that are correct, aesthetically pleasing, informative, and condensed, in the style of a professional research paper. If I ask you to revise figure 1 only, do not create a figure 2.

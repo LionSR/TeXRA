@@ -1,6 +1,6 @@
 import os
 import time
-from termcolor import colored
+from termcolor import colored, cprint
 
 from .file_utils import read_file, write_file, append_file
 from .model_utils import is_openai_model, is_anthropic_model
@@ -117,12 +117,9 @@ def process_first_round(
     model = model_settings["model"]
     system_prompt = load_prompt("system", prompt_settings)
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
-    user_request = load_prompt("user_request", prompt_settings)
-
     user_prefix = user_prefix_template.format(**user_vars)
-
-    # Add tex count stats if provided
     user_prefix += tex_count_stats
+    user_request = load_prompt("user_request", prompt_settings)
 
     output_type = output_settings.get("output_type", "txt")
 
@@ -155,7 +152,14 @@ def process_first_round(
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex\n"})
 
-        messages.append({"role": "assistant", "content": prefill})
+        if is_anthropic_model(model):
+            cprint(f"model: {model}", "white", "on_blue")
+            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
+            messages.append({"role": "assistant", "content": prefill})
+        elif is_openai_model(model):
+            openai_prefill = f"Start your response with\n{prefill}"
+            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
+            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
             write_file(output_file, prefill + "\n")
@@ -223,17 +227,26 @@ def process_reflection_round(
             print(colored("### The reflection output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
             messages.append({"role": "assistant", "content": file_content})
+            print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
+            if is_openai_model(model):
+                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
+
     else:
         prefill = output_settings["prefill_reflect"]
 
+        accumulated_output = prefill
         if output_settings["document_tag"] == "tex" and use_prefill_from_input and first_k_tex_document:
             accumulated_output = first_k_tex_document
-        else:
-            accumulated_output = prefill
-            messages.append({"role": "assistant", "content": prefill})
-            print(f"prefill: {colored(prefill, 'yellow')}")
 
-        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
+        if is_anthropic_model(model):
+            messages.append({"role": "assistant", "content": prefill})
+            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
+        elif is_openai_model(model):
+            openai_prefill = f"Start your response with\n{prefill}"
+            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
+            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
+
+        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
             write_file(output_file, prefill)
 
     state = initialize_state(state, accumulated_output)

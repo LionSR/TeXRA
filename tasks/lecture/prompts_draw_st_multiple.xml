@@ -107,7 +107,7 @@ Your detailed analysis of the existing figures or the provided image inputs acro
 </idea>
 </scratchpad>
 
-Now, implement these improvements by outputting updated versions of all LaTeX documents. Ensure that:
+Then, following your plan in the scratchpad, implement these improvements by outputting updated versions of all LaTeX documents. Ensure that:
 1. New or modified figures directly address the given instruction.
 2. Figures are well-integrated into the main text of each chapter with appropriate references.
 3. TikZ code for each figure is clear, efficient, and well-commented.
@@ -167,7 +167,7 @@ Your detailed analysis of the existing figures across all chapters and how they 
 </idea>
 </scratchpad>
 
-Now, implement these improvements by outputting further enhanced and complete versions of all LaTeX documents. Ensure that your changes:
+Then, following your plan in the scratchpad, implement these improvements by outputting further enhanced and complete versions of all LaTeX documents. Ensure that your changes:
 1. Address all points raised in the reflection and idea.
 2. Maintain focus on the original instruction.
 3. Result in figures that are correct, aesthetically pleasing, informative, and condensed across all chapters.

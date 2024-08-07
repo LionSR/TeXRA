@@ -70,7 +70,7 @@ Before improving the LaTeX document, please think in <scratchpad> about your pla
 ... continue until all major missing elements have been identified.
 </scratchpad>
 
-Now, output the improved LaTeX document with the added content inside the <latex_document></latex_document> tags. 
+Then, output the improved LaTeX document with the added content inside the <latex_document></latex_document> tags. 
 ]]>
 </user_request>
 <user_reflect>
