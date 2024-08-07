@@ -12,7 +12,7 @@ def get_model_settings(args):
         "max_tokens": 4096,
         "temperature": 0,
     }
-    if "gpt-4o-mini" in model_name:
+    if "gpt-4o-mini" in model_name or "gpt-4o-2024-08-06" in model_name:
         model_settings["max_tokens"] = 16384
     elif "claude-3-5-sonnet" in model_name:
         model_settings["max_tokens"] = 8192
