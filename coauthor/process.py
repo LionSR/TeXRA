@@ -70,7 +70,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         new_response = new_response.replace("\n\n\\begin{align}", "\n\\begin{align}")
         new_response = new_response.replace("\\end{align}\n\n", "\\end{align}\n")
         # also replace double line breaks with a single line break in the message
-        
+
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens
         if state["continuation_count"] == 0:
