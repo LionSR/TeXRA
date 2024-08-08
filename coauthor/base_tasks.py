@@ -66,7 +66,7 @@ class BaseReflectChainTask(ABC):
         pass
 
     @abstractmethod
-    def handle_output(self, state, end_turn, output_file):
+    def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         pass
 
     @abstractmethod

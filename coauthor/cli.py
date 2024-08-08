@@ -546,6 +546,12 @@ def revise_nsf_grant(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def revise_marie_curie(model, input_file, **kwargs):
+    execute_task("faculty", "revise_marie_curie", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def text2tex(model, input_file, **kwargs):
     task_sub = "text2tex"
     if ".tex" in input_file:
@@ -631,6 +637,7 @@ cli.add_command(paper2slide)
 # faculty.py
 cli.add_command(statement)
 cli.add_command(revise_nsf_grant)
+cli.add_command(revise_marie_curie)
 
 
 if __name__ == "__main__":
