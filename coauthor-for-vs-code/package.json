@@ -25,23 +25,26 @@
         "coauthor.includedInputDirectories": {
           "type": "array",
           "default": [
-            "PapersEx"
+            "Discrete-Time/PapersEx"
           ],
-          "description": "Directories to consider as the root for input files"
+          "description": "Directories to consider as the root for input files",
+          "scope": "resource"
         },
         "coauthor.includedSampleDirectories": {
           "type": "array",
           "default": [
-            "PapersEx"
+            "Discrete-Time/PapersEx"
           ],
-          "description": "Directories to consider as the root for sample files"
+          "description": "Directories to consider as the root for sample files",
+          "scope": "resource"
         },
         "coauthor.includedAuxDirectories": {
           "type": "array",
           "default": [
-            "PapersEx"
+            "Discrete-Time/PapersEx"
           ],
-          "description": "Directories to consider as the root for auxiliary files"
+          "description": "Directories to consider as the root for auxiliary files",
+          "scope": "resource"
         },
         "coauthor.includedFigureDirectories": {
           "type": "array",
