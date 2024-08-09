@@ -51,8 +51,8 @@ function handleEmptyOutputFiles() {
   saveState();
 }
 
-function getSelectedFiles(multipleInputFilesSelectDiv) {
-  const fileElements = multipleInputFilesSelectDiv.getElementsByTagName('div');
+function getSelectedFiles(multipleFilesSelectDiv) {
+  const fileElements = multipleFilesSelectDiv.getElementsByTagName('div');
   return Array.from(fileElements).map(el => el.textContent.replace(' -', '') || '');
 }
 
@@ -360,6 +360,9 @@ window.addEventListener('message', event => {
       break;
     case 'setOpenedFiles':
       updateMultipleFileSelect('multipleInputFilesSelect', 'toggleMultipleInputFiles', message.files);
+      updateMultipleFileSelect('multipleSampleFilesSelect', 'toggleMultipleSampleFiles', message.files);
+      updateMultipleFileSelect('multipleAuxFilesSelect', 'toggleMultipleAuxFiles', message.files);
+      updateMultipleFileSelect('multipleFiguresSelect', 'toggleMultipleFigures', message.files);
       // sus
       break;
   }
