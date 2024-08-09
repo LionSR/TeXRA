@@ -19,6 +19,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
         : vscode.Uri.file(workspacePath);
 
+      const config = getConfig();
+      const includedInputDirectories = config.get<string[]>('includedInputDirectories') || [];
+
       try {
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
@@ -33,7 +36,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
         if (!fileUris || fileUris.length === 0) return null;
 
-        const relativePaths = fileUris.map(uri => getRelativePath(uri.fsPath));
+        const relativePaths = fileUris.map(uri => {
+          const relativePath = getRelativePath(uri.fsPath);
+          const pathParts = relativePath.split(path.sep);
+          const startIndex = pathParts.findIndex(part => includedInputDirectories.includes(part));
+          return startIndex !== -1 ? pathParts.slice(startIndex).join(path.sep) : relativePath;
+        });
+
         showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
       } catch (error) {
@@ -42,16 +51,18 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
     }),
     vscode.commands.registerCommand('coauthor.selectMultipleSampleFiles', async (currentSampleFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
 
       const defaultUri = currentSampleFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentSampleFile)))
         : vscode.Uri.file(workspacePath);
+
+      const config = getConfig();
+      const includedSampleDirectories = config.get<string[]>('includedSampleDirectories') || [];
 
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
@@ -63,52 +74,69 @@ export function registerCommands(context: vscode.ExtensionContext) {
           'Text files': ['tex', 'txt']
         }
       });
+
       if (fileUris && fileUris.length > 0) {
-        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
-        vscode.window.showInformationMessage(`Selected sample files: ${relativePaths.join(', ')}`);
+        const relativePaths = fileUris.map(uri => {
+          const relativePath = getRelativePath(uri.fsPath);
+          const pathParts = relativePath.split(path.sep);
+          const startIndex = pathParts.findIndex(part => includedSampleDirectories.includes(part));
+          return startIndex !== -1 ? pathParts.slice(startIndex).join(path.sep) : relativePath;
+        });
+        showInfoMessage(`Selected sample files: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
       return null;
     }),
     vscode.commands.registerCommand('coauthor.selectMultipleAuxFiles', async (currentAuxFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      const defaultUri = currentAuxFile
+        ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentAuxFile)))
+        : vscode.Uri.file(workspacePath);
+
+      const config = getConfig();
+      const includedAuxDirectories = config.get<string[]>('includedAuxDirectories') || [];
 
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
         openLabel: 'Select Auxiliary Files',
         canSelectFiles: true,
         canSelectFolders: false,
+        defaultUri: defaultUri,
         filters: {
           'Text files': ['txt', 'tex', 'cls']
         }
       });
+
       if (fileUris && fileUris.length > 0) {
-        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
-        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        const relativePaths = fileUris.map(uri => {
+          const relativePath = getRelativePath(uri.fsPath);
+          const pathParts = relativePath.split(path.sep);
+          const startIndex = pathParts.findIndex(part => includedAuxDirectories.includes(part));
+          return startIndex !== -1 ? pathParts.slice(startIndex).join(path.sep) : relativePath;
+        });
+        showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
       return null;
     }),
     vscode.commands.registerCommand('coauthor.selectMultipleFigures', async (currentFigureFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
-
-      // Get the configuration
-      const config = vscode.workspace.getConfiguration('coauthor');
-      const includedFigureDirectories = config.get<string[]>('includedFigureDirectories') || ['FiguresEx'];
 
       const defaultUri = currentFigureFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
         : vscode.Uri.file(workspacePath);
+
+      const config = getConfig();
+      const includedFigureDirectories = config.get<string[]>('includedFigureDirectories') || ['FiguresEx'];
 
       const fileUris = await vscode.window.showOpenDialog({
         canSelectMany: true,
@@ -123,19 +151,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       if (fileUris && fileUris.length > 0) {
         const relativePaths = fileUris.map(uri => {
-          const relativePath = path.relative(workspacePath, uri.fsPath);
+          const relativePath = getRelativePath(uri.fsPath);
           const pathParts = relativePath.split(path.sep);
-
           const startIndex = pathParts.findIndex(part => includedFigureDirectories.includes(part));
-
-          if (startIndex !== -1) {
-            return pathParts.slice(startIndex).join(path.sep);
-          }
-
-          return relativePath;
+          return startIndex !== -1 ? pathParts.slice(startIndex).join(path.sep) : relativePath;
         });
-
-        vscode.window.showInformationMessage(`Selected files: ${relativePaths.join(', ')}`);
+        showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
       return null;
@@ -192,8 +213,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const baseName = editedFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}_diff.tex`;
       const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
+      const workspacePath = getWorkspacePath();
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
       terminal.sendText(`coauthor latexdiff --input_file="${inputFile}" --edited_file="${editedFile}"`);
@@ -226,8 +246,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const baseName = inputFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}-diff${commitHash}.tex`;
       const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      const workspacePath = workspaceFolders ? workspaceFolders[0].uri.fsPath : '';
+      const workspacePath = getWorkspacePath();
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
       terminal.sendText(`coauthor latexdiff-vc --input_file="${inputFile}" --commit_hash=${commitHash}`);
@@ -254,9 +273,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
     vscode.commands.registerCommand('coauthor.isGitRepository', async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (workspaceFolders) {
-        const workspacePath = workspaceFolders[0].uri.fsPath;
+      const workspacePath = getWorkspacePath();
+      if (workspacePath) {
         return new Promise<boolean>((resolve) => {
           exec('git rev-parse --is-inside-work-tree', { cwd: workspacePath }, (error) => {
             resolve(!error);
@@ -271,10 +289,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
         return null; // Return null if it's not a Git repository
       }
 
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (workspaceFolders) {
-        const workspacePath = workspaceFolders[0].uri.fsPath;
-        const config = vscode.workspace.getConfiguration('coauthor');
+      const workspacePath = getWorkspacePath();
+      if (workspacePath) {
+        const config = getConfig();
         const numberOfCommits = config.get('numberOfCommitsToShow', 20);
         return new Promise<string[]>((resolve, reject) => {
           exec(`git log -n ${numberOfCommits} --pretty=format:"%h: %s (%cr)"`, { cwd: workspacePath }, (error, stdout, stderr) => {
@@ -345,12 +362,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal_new.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.selectInputFile', async (currentInputFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
 
       const defaultUri = currentInputFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
@@ -367,19 +383,18 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       });
       if (fileUri && fileUri[0]) {
-        const relativePath = path.relative(workspacePath, fileUri[0].fsPath);
-        vscode.window.showInformationMessage(`Selected file: ${relativePath}`);
+        const relativePath = getRelativePath(fileUri[0].fsPath);
+        showInfoMessage(`Selected file: ${relativePath}`);
         return relativePath;
       }
       return null;
     }),
     vscode.commands.registerCommand('coauthor.selectMultipleSampleFile', async (currentSampleFile: string) => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        vscode.window.showErrorMessage('No workspace folder open');
+      const workspacePath = getWorkspacePath();
+      if (!workspacePath) {
+        showErrorMessage('No workspace folder open');
         return null;
       }
-      const workspacePath = workspaceFolders[0].uri.fsPath;
 
       const defaultUri = currentSampleFile
         ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentSampleFile)))
@@ -396,8 +411,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       });
       if (fileUris && fileUris.length > 0) {
-        const relativePaths = fileUris.map(uri => path.relative(workspacePath, uri.fsPath));
-        vscode.window.showInformationMessage(`Selected sample file: ${relativePaths.join(', ')}`);
+        const relativePaths = fileUris.map(uri => getRelativePath(uri.fsPath));
+        showInfoMessage(`Selected sample file: ${relativePaths.join(', ')}`);
         return relativePaths;
       }
       return null;
@@ -413,8 +428,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       });
       if (fileUri && fileUri[0]) {
-        vscode.window.showInformationMessage(`Selected figure file: ${fileUri[0].fsPath}`);
-        return fileUri[0].fsPath;
+        const relativePath = getRelativePath(fileUri[0].fsPath);
+        showInfoMessage(`Selected figure file: ${relativePath}`);
+        return relativePath;
       }
       return null;
     }),
@@ -426,28 +442,24 @@ export function registerCommands(context: vscode.ExtensionContext) {
         canSelectFolders: false
       });
       if (fileUri && fileUri[0]) {
-        vscode.window.showInformationMessage(`Selected edited file: ${fileUri[0].fsPath}`);
-        return fileUri[0].fsPath;
+        const relativePath = getRelativePath(fileUri[0].fsPath);
+        showInfoMessage(`Selected edited file: ${relativePath}`);
+        return relativePath;
       }
       return null;
     }),
     vscode.commands.registerCommand('coauthor.getCurrentFile', async () => {
       const currentFile = vscode.window.activeTextEditor?.document;
       if (currentFile && currentFile.uri.scheme === 'file') {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders) {
-          const workspacePath = workspaceFolders[0].uri.fsPath;
-          const relativePath = path.relative(workspacePath, currentFile.uri.fsPath);
-          return relativePath;
-        }
+        return getRelativePath(currentFile.uri.fsPath);
       }
       return null;
     }),
     vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      const model = vscode.workspace.getConfiguration('coauthor').get('defaultMergeModel', 'sonnet+');
-      const reflect = vscode.workspace.getConfiguration('coauthor').get('defaultMergeReflect', 'False');
+      const model = getConfig().get('defaultMergeModel', 'sonnet+');
+      const reflect = getConfig().get('defaultMergeReflect', 'False');
       terminal.sendText(`coauthor merge --input_file="${inputFile}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
     }),
     vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], task: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
