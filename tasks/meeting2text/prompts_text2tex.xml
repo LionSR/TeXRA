@@ -26,7 +26,6 @@ Here is the transcription {INPUT_FILE}:
 <document>
 {INPUT_CONTENT}
 </document>
-
 For context, the discussion is about:
 <context>
 {CONTEXT}

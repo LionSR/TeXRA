@@ -76,7 +76,6 @@ Then, following your plan in the scratchpad, please output updated versions of b
 <document name="{MAIN_FILE}">
 {REVISED_MAIN_CONTENT}
 </document>
-
 <document name="{SUPP_FILE}">
 {REVISED_SUPP_CONTENT}
 </document>
@@ -117,7 +116,6 @@ Based on this reflection, please output further enhanced versions of both the ma
 <document name="{MAIN_FILE}">
 {FINAL_REVISED_MAIN_CONTENT}
 </document>
-
 <document name="{SUPP_FILE}">
 {FINAL_REVISED_SUPP_CONTENT}
 </document>
