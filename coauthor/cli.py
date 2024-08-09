@@ -235,13 +235,11 @@ def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file
 
 @click.command()
 @shared_arguments
-@click.argument("sample_chapters")
-@click.argument("sample_paper", required=False, default=None)
-@click.argument("sample_note", required=False, default=None)
-def paper2note(model, input_file, sample_chapters, sample_paper=None, sample_note=None, **kwargs):
-    execute_task(
-        "paper2note", "paper2note", model, input_file, sample_chapters=sample_chapters, sample_paper=sample_paper, sample_note=sample_note, **kwargs
-    )
+@click.option("--sample_chapters", type=str, help="Path to a sample LaTeX file in the desired style.")
+@click.option("--sample_paper", type=str, help="Path to a sample LaTeX file in the desired style.")
+@click.option("--sample_note", type=str, help="Path to a sample LaTeX file in the desired style.")
+def paper2note(model, input_file, **kwargs):
+    execute_task("paper2note", "paper2note", model, input_file, **kwargs)
 
 
 @click.command()
