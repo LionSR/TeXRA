@@ -120,13 +120,10 @@ Please provide the complete LaTeX documents with your improvements in the follow
 <document name="{OUTPUT_FILES_ORDER[0]}">
 {1ST_UPDATED_LATEX_DOCUMENT_1}
 </document>
-
 <document name="{OUTPUT_FILES_ORDER[1]}">
 {1ST_UPDATED_LATEX_DOCUMENT_2}
 </document>
-
 ... (repeat for all output files)
-
 </latex_documents>
 ]]>
 </user_request>
@@ -180,13 +177,10 @@ Please provide the complete LaTeX documents with your improvements in the follow
 <document name="{OUTPUT_FILES_ORDER[0]}">
 {2ND_UPDATED_LATEX_DOCUMENT_1}
 </document>
-
 <document name="{OUTPUT_FILES_ORDER[1]}">
 {2ND_UPDATED_LATEX_DOCUMENT_2}
 </document>
-
 ... (repeat for all output files)
-
 </latex_documents>
 
 Ensure that the output documents are in the following order: {OUTPUT_FILES_ORDER}
