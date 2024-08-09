@@ -44,6 +44,11 @@ Your task is to enhance both documents, focusing on improving clarity, consisten
 2. Proper cross-referencing between the two documents.
 3. Clarity and condensation of explanations in both documents.
 4. Adherence to PRL style and formatting guidelines.
+
+if provided, focus on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
 ]]>
 </user_prefix>
 <user_request>
