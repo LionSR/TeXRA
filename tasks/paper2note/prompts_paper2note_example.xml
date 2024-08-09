@@ -11,19 +11,15 @@ Here is the LaTeX document with additional LaTeX document class and commands (wh
 <document name="{DOCUMENT_CLS}">
 {DOCUMENT_CLS_CONTENT}
 </document>
-
 <document name="{COMMANDS}">
 {COMMANDS_CONTENT}
 </document>
-
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-
 <document name="EXAMPLE_PAPER">
 {EXAMPLE_PAPER}
 </document>
-
 <document name="EXAMPLE_LECTURE_NOTE">
 {EXAMPLE_LECTURE_NOTE}
 </document>

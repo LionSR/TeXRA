@@ -42,7 +42,6 @@ If a specific instruction has been provided, it is enclosed in the following tag
 <instruction>
 {INSTRUCTION}
 </instruction>
-
 If an instruction is provided, make sure to follow it closely while drafting your proposal.
 ]]>
 </user_prefix>
