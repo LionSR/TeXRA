@@ -21,33 +21,37 @@ When writing a professional *.tex LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You are provided with the following:
-<txt_content>
-{INPUT_CONTENT}
-</txt_content>
+You are provided with the paper {INPUT_FILE} and the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
-This is the content of a text file generated from a PDF on stochastic differential equations. You need to convert this content into a LaTeX file.
-
-You are also provided with a sample LaTeX file in the desired style:
-<sample_tex>
-{SAMPLE_TEX}
-</sample_tex>
-
-Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
-
-The document class and custom commands for the LaTeX file are as follows:
+Here are the the document class and custom commands for the LaTeX file are as follows:
 <document_class>
 {DOCUMENT_CLS_CONTENT}
 </document_class>
-
 <command>
 {COMMANDS_CONTENT}
 </command>
+You are also provided with a sample LaTeX file in the desired style:
+<reference_document>
+{REFERENCE_CONTENT}
+</reference_document>
+
+Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
+
+Here is the research paper:
+<research_paper>
+{INPUT_CONTENT}
+</research_paper>
+
+If a specific instruction has been provided, it is enclosed in the following tags:
+<instruction>
+{INSTRUCTION}
+</instruction>
+If an instruction is provided, make sure to follow it closely while drafting your proposal.
 ]]>
 </user_prefix>
 <user_request>
 <![CDATA[
-Please carefully read the provided research paper {INPUT_FILE} and adapt it into a condensed lecture note with derivations. 
+Please carefully read the provided research paper and adapt it into a condensed lecture note with detailed derivations.
 
 In your adaptation, focus on the following:
 <requirements>
@@ -68,7 +72,7 @@ Please output the full LaTeX source for the lecture notes, enclosed in the <lect
 </user_request>
 <user_reflect>
 <![CDATA[
-Your output lecture notes adapted from the research paper are too generic, not specific and not mathematical enough, with some parts of the paper missing from the notes
+Your output lecture notes adapted from the research paper are too generic, not specific and not mathematical enough, with some parts of the paper missing from the notes.
 
 After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
 <instruction>
