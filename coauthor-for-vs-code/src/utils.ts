@@ -71,16 +71,23 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
 
 export async function getFilesInDirectory(dir: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = []): Promise<string[]> {
   const dirEntries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
-  return dirEntries
-    .filter(([name, type]) =>
-      type === vscode.FileType.File &&
+  const files = await Promise.all(dirEntries.map(async ([name, type]) => {
+    const fullPath = path.join(dir, name);
+    const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+    const isSymbolicLink = (stat.type & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
+
+    if ((type === vscode.FileType.File || isSymbolicLink) &&
       !name.startsWith('.') &&
       (includeExtensions.length === 0 || includeExtensions.some(ext => name.endsWith(ext))) &&
       !excludeExtensions.some(ext => name.endsWith(ext)) &&
       !excludeKeywords.some(keyword => name.includes(keyword)) &&
       !excludeDirectories.includes(path.dirname(name))
-    )
-    .map(([name]) => name);
+    ) {
+      return name;
+    }
+    return null;
+  }));
+  return files.filter((file): file is string => file !== null);
 }
 
 export async function getFilesRecursively(dir: string, root: string, includeExtensions: string[] = [], excludeExtensions: string[] = [], excludeDirectories: string[] = [], excludeKeywords: string[] = [], excludeFiles: string[] = []): Promise<string[]> {
