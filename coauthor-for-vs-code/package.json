@@ -22,6 +22,27 @@
       "type": "object",
       "title": "CoAuthor",
       "properties": {
+        "coauthor.includedInputDirectories": {
+          "type": "array",
+          "default": [
+            "PapersEx"
+          ],
+          "description": "Directories to consider as the root for input files"
+        },
+        "coauthor.includedSampleDirectories": {
+          "type": "array",
+          "default": [
+            "PapersEx"
+          ],
+          "description": "Directories to consider as the root for sample files"
+        },
+        "coauthor.includedAuxDirectories": {
+          "type": "array",
+          "default": [
+            "PapersEx"
+          ],
+          "description": "Directories to consider as the root for auxiliary files"
+        },
         "coauthor.includedFigureDirectories": {
           "type": "array",
           "items": {

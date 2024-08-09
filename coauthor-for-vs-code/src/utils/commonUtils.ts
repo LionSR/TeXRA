@@ -13,7 +13,9 @@ export function getRelativePath(filePath: string): string {
 export const showInfoMessage = vscode.window.showInformationMessage;
 export const showErrorMessage = vscode.window.showErrorMessage;
 
-export const getConfig = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coauthor');
+export function getConfig(section?: string): vscode.WorkspaceConfiguration {
+    return section ? vscode.workspace.getConfiguration(section) : vscode.workspace.getConfiguration('coauthor');
+}
 
 export function ensureArray<T>(value: T | T[] | null | undefined): T[] {
     if (Array.isArray(value)) {
