@@ -255,14 +255,14 @@ def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_fi
 @click.command()
 @shared_arguments
 def correct_prl(model, input_file, **kwargs):
-    execute_task("edit_prl", "correct_prl", model, input_file, **kwargs)
+    execute_task("prl_edit", "correct_prl", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
 def correct_supp_prl(model, input_file, **kwargs):
-    execute_task("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
+    execute_task("prl_edit", "correct_supp_prl", model, input_file, **kwargs)
 
 
 @click.command()
@@ -558,6 +558,27 @@ def text2tex(model, input_file, **kwargs):
     execute_task("meeting2text", task_sub, model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def revise_prl(model, input_file, **kwargs):
+    _, _, prompt_dir = get_common_env(model)
+    execute_task(
+        "prl_reply",
+        "revise_prl",
+        model,
+        input_file,
+        supp_file="supp.tex",
+        cover_letter="replies/cover_letter.txt",
+        # instruction="replies/instruction.txt",
+        editor_letter="replies/editor_letter.txt",
+        report_a="replies/report_a.txt",
+        report_b="replies/report_b.txt",
+        example_reply_letter="replies/reply_to_referees.tex",
+        draft_reply_letter="replies/reply_to_referees.tex",
+        **kwargs,
+    )
+
+
 if __name__ == "__main__":
     cli()
 
@@ -636,6 +657,9 @@ cli.add_command(paper2slide)
 cli.add_command(statement)
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
+
+# prl_reply.py
+cli.add_command(revise_prl)
 
 
 if __name__ == "__main__":
