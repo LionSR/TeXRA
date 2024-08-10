@@ -485,6 +485,22 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const inputFiles = await listInputFiles();
       return inputFiles;
     }),
+    vscode.commands.registerCommand('coauthor.selectBaseFile', async () => {
+      const baseFile = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Select Base File',
+        filters: {
+          'Text files': ['tex', 'txt', 'md']
+        }
+      });
+      if (baseFile && baseFile[0]) {
+        return getRelativePath(baseFile[0].fsPath);
+      }
+      return null;
+    }),
+    vscode.commands.registerCommand('coauthor.refreshBaseFiles', async () => {
+      return await listInputFiles();
+    }),
     vscode.window.registerWebviewViewProvider('coauthor.chatView', new CoAuthorViewProvider(context))
   );
 }
