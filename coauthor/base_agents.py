@@ -218,29 +218,27 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
     def _handle_reflection_diff(self, end_turn):
         if self.output_settings["output_type"] == "tex":
-            first_output_file = self.get_output_file(round=0)
-            reflect_output_file = self.get_output_file(round=1)
-            if os.path.exists(first_output_file) and os.path.exists(reflect_output_file):
-                if self.args.output_files:
-                    first_output_files = split_multiple_scratchpad_output_xml(first_output_file, self.agent_settings["document_tag"])
-                    reflect_output_files = split_multiple_scratchpad_output_xml(reflect_output_file, self.agent_settings["document_tag"])
-                    for first_output, reflect_output in zip(first_output_files, reflect_output_files):
-                        if os.path.exists(first_output) and os.path.exists(reflect_output):
-                            run_latexdiff(first_output, reflect_output, f"{self.args.agent}_reflect_diff", self.args.model)
-                        else:
-                            print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
-                else:
-                    first_output = split_scratchpad_output_xml(first_output_file, self.agent_settings["document_tag"])
-                    reflect_output = split_scratchpad_output_xml(reflect_output_file, self.agent_settings["document_tag"])
+            if self.args.output_files:
+                for first_output, reflect_output in zip(self.first_round_output_files, self.reflect_round_output_files):
                     if os.path.exists(first_output) and os.path.exists(reflect_output):
-                        run_latexdiff(first_output, reflect_output, f"{self.args.agent}_reflect_diff", self.args.model)
+                        run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
                     else:
                         print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
             else:
-                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output_file} or {reflect_output_file}")
+                first_output = self.first_round_output_files[0] if self.first_round_output_files else None
+                reflect_output = self.reflect_round_output_files[0] if self.reflect_round_output_files else None
+                if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
+                    run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
+                else:
+                    print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
 
 
 class DirectWrite(BaseReflectChainAgent):
+    def __init__(self, args, agent_path):
+        super().__init__(args, agent_path)
+        self.first_round_output_files = []
+        self.reflect_round_output_files = []
+
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
@@ -251,8 +249,17 @@ class DirectWrite(BaseReflectChainAgent):
             if self.args.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
+                if is_reflection_complete:
+                    self.reflect_round_output_files = output_files
+                else:
+                    self.first_round_output_files = output_files
             else:  # Single output file
-                self._handle_single_output(output_file)
+                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                self._handle_single_output(processed_output_file)
+                if is_reflection_complete:
+                    self.reflect_round_output_files = [processed_output_file]
+                else:
+                    self.first_round_output_files = [processed_output_file]
 
             if is_reflection_complete:
                 self._handle_reflection_diff(end_turn)
@@ -262,9 +269,16 @@ class DirectWrite(BaseReflectChainAgent):
 
     def _handle_reflection_diff(self, end_turn):
         if self.output_settings["output_type"] == "tex":
-            first_output = self.get_output_file(round=0)
-            reflect_output = self.get_output_file(round=1)
-            if os.path.exists(first_output) and os.path.exists(reflect_output):
-                run_latexdiff(first_output, reflect_output, f"{self.args.agent}_reflect_diff", self.args.model)
+            if self.args.output_files:
+                for first_output, reflect_output in zip(self.first_round_output_files, self.reflect_round_output_files):
+                    if os.path.exists(first_output) and os.path.exists(reflect_output):
+                        run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
+                    else:
+                        print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
             else:
-                print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                first_output = self.first_round_output_files[0] if self.first_round_output_files else None
+                reflect_output = self.reflect_round_output_files[0] if self.reflect_round_output_files else None
+                if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
+                    run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
+                else:
+                    print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
