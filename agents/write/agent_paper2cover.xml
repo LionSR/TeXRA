@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="paper2cover">
 <settings>
-<document_tag>cover_letter</document_tag>
-<end_tag>&lt;/cover_letter&gt;</end_tag>
-<output_type>tex</output_type>
-<prefill_first>&lt;scratchpad&gt;</prefill_first>
+    <document_tag>cover_letter</document_tag>
+    <end_tag>&lt;/cover_letter&gt;</end_tag>
+    <output_type>tex</output_type>
+    <prefill_first>&lt;scratchpad&gt;</prefill_first>
 </settings>
 <prompts>
 <system_prompt>

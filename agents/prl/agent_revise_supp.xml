@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="revise_supp">
 <settings>
-<document_tag>latex_document</document_tag>
-<end_tag>&lt;/revise_supp&gt;</end_tag>
-<output_type>tex</output_type>
-<prefill_first>Now output the revised supplementary material.
+    <document_tag>latex_document</document_tag>
+    <end_tag>&lt;/revise_supp&gt;</end_tag>
+    <output_type>tex</output_type>
+    <prefill_first>Now output the revised supplementary material.
 &lt;revise_supp&gt;</prefill_first>
 </settings>
 <prompts>

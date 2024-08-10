@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="draw">
 <settings>
-<document_tag>latex_document</document_tag>
-<end_tag>&lt;/latex_document&gt;</end_tag>
-<output_type>tex</output_type>
-<prefill_first>&lt;scratchpad&gt;</prefill_first>
+    <document_tag>latex_document</document_tag>
+    <end_tag>&lt;/latex_document&gt;</end_tag>
+    <output_type>tex</output_type>
+    <prefill_first>&lt;scratchpad&gt;</prefill_first>
 </settings>
 <prompts>
 <system_prompt>

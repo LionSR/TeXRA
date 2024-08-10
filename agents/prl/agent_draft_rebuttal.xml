@@ -83,11 +83,10 @@ Write the full reply letter in the following format:
 <rebuttal_letter>
 <document name="replies/reply_to_editor.tex">
 \documentclass[a4paper,12pt]{article}
-
 \input{../preamble}
 \usepackage[a4paper,margin=2.5cm]{geometry}
-
 \setlength{\parindent}{0em}
+
 \begin{document}
 
 Dear Dr.~{EDITOR_NAME},
