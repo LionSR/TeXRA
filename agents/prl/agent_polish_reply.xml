@@ -28,7 +28,7 @@ You will be polishing a draft of a reply letter to referee reports for a paper s
 {SUPP_CONTENT}
 </document>
 <document name="Editor Decision Letter">
-{EDITOR_DECISION_LETTER}
+{EDITOR_LETTER}
 </document>
 <document name="Referee Report A">
 {REFEREE_REPORT_A}
@@ -120,7 +120,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 <requirements>
 - Increases the level of details from high (8/10) to very high (9/10), with specific references to the changes in the new version of the paper.
 - Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical argument. 
-- The style and tone of the reply letter should be similar to the provided example (under <example_reply_letter>).
+- The style and tone of the reply letter should be similar to the provided example (under <example_rebuttal_letter>).
 </requirements>
 
 Please output the revised cover letter (under <cover_letter>) and the revised response letter (under <point_by_point_reply_a> and <point_by_point_reply_b>) that meets the above requirements.

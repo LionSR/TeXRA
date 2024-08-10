@@ -31,7 +31,7 @@ You will be drafting a reply letter to referee reports for a paper submitted to 
 {SUPP_CONTENT}
 </document>
 <document name="Editor Decision Letter">
-{EDITOR_DECISION_LETTER}
+{EDITOR_LETTER}
 </document>
 <document name="Referee Report A">
 {REFEREE_REPORT_A}

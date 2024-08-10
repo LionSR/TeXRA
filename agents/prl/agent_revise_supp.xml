@@ -32,7 +32,7 @@ are the inputs you will need:
 {SUPP_CONTENT}
 </document>
 <document name="Editor Decision Letter">
-{EDITOR_DECISION_LETTER}
+{EDITOR_LETTER}
 </document>
 <document name="Referee Report A">
 {REFEREE_REPORT_A}
