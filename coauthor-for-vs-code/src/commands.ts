@@ -466,7 +466,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const terminal = ensureTerminal();
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
-      let command = `coauthor pack-multiple --input_files="${outputFiles.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
       if (outputNameOverride) {
         command += ` --output_name_override="${outputNameOverride}"`;
       }
@@ -478,7 +478,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
       let inputFilesWithOverride = outputNameOverride ? [outputNameOverride, ...outputFiles] : outputFiles;
-      let command = `coauthor clean-multiple --input_files="${inputFilesWithOverride.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --task=${task} --reflect=${reflect} --model=${model}`;
       terminal.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
