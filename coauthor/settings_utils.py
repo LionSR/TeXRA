@@ -38,11 +38,11 @@ def get_output_settings(args, agent_settings):
     return output_settings
 
 
-def get_prompt_settings(args, prompt_path, prompt_dict):
-    print("prompt_path:", colored(f"{prompt_path}", "yellow"))
+def get_prompt_settings(args, agent_path, prompt_dict):
+    print("agent_path:", colored(f"{agent_path}", "yellow"))
 
     prompt_settings = {
-        "prompt_path": prompt_path,
+        "agent_path": agent_path,
         "system_prompt": prompt_dict.get("system_prompt", ""),
         "user_prefix_prompt": prompt_dict.get("user_prefix", ""),
         "user_request_prompt": prompt_dict.get("user_request", ""),
