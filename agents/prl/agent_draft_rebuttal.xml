@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<agent name="draft_rebuttal">
+<agent name="rebuttal_draft">
 <settings>
 <document_tag>rebuttal_letter</document_tag>
 <end_tag>&lt;/rebuttal_letter&gt;</end_tag>
 <output_type>xml</output_type>
-<prefill_first>&lt;rebuttal_letter&gt;
-&lt;cover_letter&gt;</prefill_first>
+<prefill_first>&lt;rebuttal_letter&gt;</prefill_first>
 </settings>
 <prompts>
 <system_prompt>
@@ -81,9 +80,7 @@ After your planning, draft a reply letter that includes the following:
 Write the full reply letter in the following format:
 
 <rebuttal_letter>
-<document name="cover_letter.tex">
-%!TEX output_directory=../build
-%!TEX copy_output_on_build=true
+<document name="replies/reply_to_editor.tex">
 \documentclass[a4paper,12pt]{article}
 
 \input{../preamble}
@@ -105,9 +102,7 @@ Yours sincerely,
 
 \end{document}
 </document>
-<document name="reply_to_referees.tex">
-%!TEX output_directory=../build
-%!TEX copy_output_on_build=true
+<document name="replies/reply_to_referees.tex">
 \documentclass[a4paper,12pt]{article}
 
 \usepackage[a4paper,margin=2.5cm]{geometry}
@@ -127,48 +122,38 @@ Yours sincerely,
 \begin{document}
 
 \subsection*{Response to Referee A}
-<referee_report_a>
 \begin{referee}{A}
-<referee_comment>
 First comment from the referee A here. Potentially it is a summary of our work.
-</referee_comment>
 \end{referee}
 
 \begin{response}
-<author_response>
-Your rebuttal to the first comment here.
-</author_response>
+Your response to the first comment here.
 \end{response}
 
 \begin{referee}{A}
-<referee_comment>
-Second comment from the referee A here. 
-</referee_comment>
+Second comment from referee A here.
 \end{referee}
 
 \begin{response}
-<author_response>
-Your rebuttal to the second comment here.
-</author_response>
+Your response to the second comment here.
 \end{response}
 
-(Continue this pattern for each comment from the referee.)
-</referee_report_a>
+(Continue this pattern for each comment from referee A)
 
 \subsection*{Response to Referee B}
-<referee_report_b>
-<!-- Similar structure as referee_report_a -->
-</referee_report_b>
+
+(Similar structure as for referee A)
 
 \end{document}
 </document>
-<document name="list_of_major_changes.tex">
+
+<document name="replies/list_of_major_changes.tex">
 List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
 </document>
 
 </rebuttal_letter>
 
-Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the reply letter in the <reply_letter></reply_letter> tag.
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the reply letter in the format specified above.
 ]]>
 </user_request>
 <user_reflect>

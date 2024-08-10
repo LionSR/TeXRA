@@ -591,15 +591,9 @@ def revise_prl(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
-def draft_rebuttal_prl(model, input_file, **kwargs):
+def rebuttal_draft_prl(model, input_file, **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_agent(
-        "rebuttal_prl",
-        "draft_rebuttal",
-        model,
-        input_file,
-        **kwargs
-    )
+    execute_agent("rebuttal_prl", "rebuttal_draft", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":
@@ -639,7 +633,7 @@ cli.add_command(correct_prl)
 cli.add_command(polish_prl)
 
 # reply_prl.py
-cli.add_command(draft_rebuttal_prl)
+cli.add_command(rebuttal_draft_prl)
 cli.add_command(reply_letter_prl)
 cli.add_command(revise_main_prl)
 cli.add_command(revise_supp_prl)
@@ -685,8 +679,8 @@ cli.add_command(revise_marie_curie)
 # reply_prl.py
 cli.add_command(revise_prl)
 
-# draft_rebuttal_prl.py
-cli.add_command(draft_rebuttal_prl)
+# rebuttal_draft_prl.py
+cli.add_command(rebuttal_draft_prl)
 
 
 if __name__ == "__main__":
