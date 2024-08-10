@@ -67,6 +67,10 @@ function updateMultipleFileSelect(selectId, toggleIconId, files) {
     });
     selectDiv.style.display = 'block';
     toggleIcon.textContent = '▲';
+    const containerDiv = selectDiv.closest('.file-select');
+    if (containerDiv) {
+      containerDiv.style.display = 'block';
+    }
     vscode.postMessage({ command: 'showInformationMessage', text: `Added ${newFiles.length} file(s) to ${selectId}` });
   }
   saveState();
@@ -319,6 +323,9 @@ window.addEventListener('message', event => {
         `toggle${message.command.replace('set', '')}`,
         message.files
       );
+      break;
+    case 'setMultipleOutputFiles':
+      updateMultipleFileSelect('outputFilesList', 'toggleOutputFiles', message.files);
       break;
     case 'setEditedFiles':
       updateFileSelect('editedFileSelect', message.files);
@@ -731,6 +738,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById(`current${type}FileButton`).addEventListener('click', () => {
       vscode.postMessage({ command: 'getCurrentFile', fileType: type.toLowerCase() });
     });
+  });
+
+  document.getElementById('selectMultipleOutputFilesButton').addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    vscode.postMessage({
+      command: 'selectMultipleFiles',
+      fileType: 'OutputFiles',
+      currentFile: inputFile
+    });
+  });
+
+  document.getElementById('emptyOutputFilesButton').addEventListener('click', function () {
+    emptyMultipleFiles('outputFilesList', 'toggleOutputFiles');
   });
 });
 
