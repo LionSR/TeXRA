@@ -19,12 +19,12 @@ def get_output_file_name_merge(input_file, edited_file):
     if input_base != edited_base_override:
         base = edited_base_override
 
-    if "reflect" in parts:
+    if "r1" in parts:
         model = parts[-1]
-        output = f"{base}_{agent}_reflect_full_{model}.tex"
+        output = f"{base}_{agent}_r1_full_{model}.tex"
     else:
         model = parts[-1]
-        output = f"{base}_{agent}_full_{model}.tex"
+        output = f"{base}_{agent}_r0_full_{model}.tex"
 
     output = os.path.join(input_dir, output)
     print(f"Merge output file: {colored(output, 'cyan')}")
