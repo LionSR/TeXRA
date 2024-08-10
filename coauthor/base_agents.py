@@ -58,8 +58,8 @@ class BaseReflectChainAgent(ABC):
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
-        self.output_file = self.get_output_file()
-        self.reflect_output_file = self.get_output_file_reflect()
+        self.output_file = self.get_output_file(round=0)
+        self.reflect_output_file = self.get_output_file(round=1)
 
     @abstractmethod
     def get_user_vars(self):
@@ -70,11 +70,7 @@ class BaseReflectChainAgent(ABC):
         pass
 
     @abstractmethod
-    def get_output_file(self):
-        pass
-
-    @abstractmethod
-    def get_output_file_reflect(self):
+    def get_output_file(self, round=0):
         pass
 
     def _handle_single_output(self, output_file):
@@ -192,23 +188,10 @@ class ThinkAndWrite(BaseReflectChainAgent):
         self.first_round_output_files = []
         self.reflect_round_output_files = []
 
-    def get_output_file(self):
+    def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = "xml"
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension)
-
-    def get_output_file_reflect(self):
-        if self.args.reflect:
-            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            file_extension = "xml"
-            return get_output_file_name(
-                base_output_file,
-                self.args.agent,
-                self.model_settings["model"],
-                file_extension,
-                reflect=True,
-            )
-        return None
+        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round=round)
 
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         if end_turn:
@@ -259,22 +242,10 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
 
 class DirectWrite(BaseReflectChainAgent):
-    def get_output_file(self):
+    def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension)
-
-    def get_output_file_reflect(self):
-        if self.args.reflect:
-            base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-            return get_output_file_name(
-                base_output_file,
-                self.args.agent,
-                self.model_settings["model"],
-                self.output_settings["output_type"],
-                reflect=True,
-            )
-        return None
+        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round=round)
 
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
         if end_turn:
