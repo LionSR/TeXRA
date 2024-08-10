@@ -1,4 +1,4 @@
-from coauthor.base_tasks import DirectWrite, ThinkWrite
+from coauthor.base_tasks import DirectWrite, ThinkAndWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "meeting2text")
@@ -31,7 +31,7 @@ class Meeting2Text(DirectWrite):
         return user_vars
 
 
-class Text2Tex(ThinkWrite):
+class Text2Tex(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(

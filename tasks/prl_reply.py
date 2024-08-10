@@ -1,4 +1,4 @@
-from coauthor.base_tasks import ThinkWrite, DirectWrite
+from coauthor.base_tasks import ThinkAndWrite, DirectWrite
 import coauthor as coa
 import os
 
@@ -41,7 +41,7 @@ class PRLReplyBase:
         return user_vars
 
 
-class PRLReplyThink(PRLReplyBase, ThinkWrite):
+class PRLReplyThink(PRLReplyBase, ThinkAndWrite):
     pass
 
 
@@ -54,7 +54,11 @@ def main():
     parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
     parser.add_argument("--supp_file", type=str, help="Path to the supplementary TeX file.")
     parser.add_argument(
-        "--task", type=str, default="reply_letter", help="Mode of operation.", choices=["reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"]
+        "--task",
+        type=str,
+        default="reply_letter",
+        help="Mode of operation.",
+        choices=["reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
     )
     parser.add_argument("--cover_letter", type=str, required=True, help="Path to the cover letter file.")
     parser.add_argument("--editor_letter", type=str, required=True, help="Path to the editor decision letter file.")
