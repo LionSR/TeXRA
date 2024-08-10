@@ -19,11 +19,11 @@ I am going to give you a transcribed txt from a lecture of a graduate quantum in
 Here is the transcription {INPUT_FILE} with additional LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{DOCUMENT_CLS}">
+<document name="{DOCUMENT_CLS_FILE}">
 {DOCUMENT_CLS_CONTENT}
 </document>
-<document name="{COMMANDS}">
-{COMMANDS_CONTENT}
+<document name="{COMMAND_FILE}">
+{COMMAND_CONTENT}
 </document>
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}

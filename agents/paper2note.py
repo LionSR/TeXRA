@@ -11,7 +11,7 @@ class Paper2Note(DirectWrite):
             {
                 "SAMPLE_TEX": "\n".join([coa.read_file(ch) for ch in self.args.sample_chapters]) if self.args.sample_chapters else None,
                 "DOCUMENT_CLS_CONTENT": coa.read_file("lecture.cls"),
-                "COMMANDS_CONTENT": coa.read_file("command.tex"),
+                "COMMAND_CONTENT": coa.read_file("command.tex"),
             }
         )
         user_vars.update(

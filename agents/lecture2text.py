@@ -9,10 +9,10 @@ class Lecture2Text(DirectWrite):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "DOCUMENT_CLS": "lecture.cls",
+                "DOCUMENT_CLS_FILE": "lecture.cls",
                 "DOCUMENT_CLS_CONTENT": coa.read_file("lecture.cls"),
-                "COMMANDS": "commands_qi.tex",
-                "COMMANDS_CONTENT": coa.read_file("commands_qi.tex"),
+                "COMMAND_FILE": "commands_qi.tex",
+                "COMMAND_CONTENT": coa.read_file("commands_qi.tex"),
             }
         )
         if self.args.agent in ["2tex", "reflect"]:

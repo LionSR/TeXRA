@@ -42,7 +42,7 @@ The document class and custom commands for the LaTeX file are as follows:
 </document_class>
 
 <command>
-{COMMANDS_CONTENT}
+{COMMAND_CONTENT}
 </command>
 ]]>
 </user_prefix>

@@ -9,14 +9,14 @@ class EditLectureBase:
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "DOCUMENT_CLS": "lecture.cls",
-                "COMMANDS": "commands_qi.tex" if "qi" in self.args.agent else "command.tex",
+                "DOCUMENT_CLS_FILE": "lecture.cls",
+                "COMMAND_FILE": "commands_qi.tex" if "qi" in self.args.agent else "command.tex",
             }
         )
         user_vars.update(
             {
-                "DOCUMENT_CLS_CONTENT": coa.read_file(user_vars["DOCUMENT_CLS"]),
-                "COMMANDS_CONTENT": coa.read_file(user_vars["COMMANDS"]),
+                "DOCUMENT_CLS_CONTENT": coa.read_file(user_vars["DOCUMENT_CLS_FILE"]),
+                "COMMAND_CONTENT": coa.read_file(user_vars["COMMAND_FILE"]),
             }
         )
         if "multiple" in self.args.agent:
