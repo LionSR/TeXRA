@@ -364,7 +364,6 @@ def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kw
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--edited_file", required=True, help="Path to the edited file")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 def merge(model, input_file, edited_file, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -423,8 +422,8 @@ def indent_tex():
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
-def clean_single(model, input_file, reflect, agent):
-    run_clean_single(model, input_file, reflect, agent)
+def clean_single(model, input_file, agent):
+    run_clean_single(model, input_file, agent)
 
 
 @click.command()
@@ -433,8 +432,8 @@ def clean_single(model, input_file, reflect, agent):
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_single(model, input_file, reflect, agent, output_name_override):
-    run_pack_single(model, input_file, reflect, agent, output_name_override)
+def pack_single(model, input_file, agent, output_name_override):
+    run_pack_single(model, input_file, agent, output_name_override)
 
 
 @click.command()
