@@ -1,7 +1,7 @@
 from coauthor.base_agents import DirectWrite, ThinkAndWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "meeting2text")
+agent_path = coa.get_agent_path(coa, "meeting2text")
 
 
 class Meeting2Text(DirectWrite):
@@ -73,13 +73,13 @@ def main():
         parser.error("The transcribe_dual agent requires --sample_files to be specified.")
 
     if args.agent == "text2tex":
-        text2tex = Text2Tex(args, prompt_path)
+        text2tex = Text2Tex(args, agent_path)
         text2tex.run()
     elif args.agent == "text2tex_draft":
-        text2tex_draft = Text2TexDraft(args, prompt_path)
+        text2tex_draft = Text2TexDraft(args, agent_path)
         text2tex_draft.run()
     else:
-        meeting2text = Meeting2Text(args, prompt_path)
+        meeting2text = Meeting2Text(args, agent_path)
         meeting2text.run()
 
 

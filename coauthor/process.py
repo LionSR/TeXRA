@@ -126,7 +126,7 @@ def process_first_round(
     user_prefix += tex_count_stats
     user_request = load_prompt("user_request", prompt_settings)
 
-    output_type = output_settings.get("output_type", "txt")
+    output_type = output_settings.get("output_type", "xml")
 
     messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 

@@ -40,7 +40,7 @@ Improve the given noisy transcription while sticking to the original sentences a
 
 Here are some input output examples for segements:
 <examples>
-<example1>
+<example id=1>
 <input>
 Okay, so let's get started.
 So, one question for all of you.
@@ -69,9 +69,9 @@ I think all the lectures will be taking place on Friday morning. The reason why 
 
 Okay, so the third thing that I wanted to mention is that we are almost there, meaning that I started giving you the fundamentals and now we have a couple of lectures, two and a half. After that, you will have all the knowledge that you need in order to use quantum information. Therefore, starting from next week, you'll be able to look at applications and more advanced concepts. For the moment, we have covered multiple properties, traits, techniques, and so on. But starting next week, I think that we will be ready to start with the most interesting content.
 </output>
-</example1>
+</example>
 
-<example2>
+<example id=2>
 <input>
 Now, play another game.
 I have two density operators, row 1 and row 2.
@@ -87,9 +87,9 @@ It's probably the first one times row 1 plus the probability that I have the sec
 It's $\frac{1}{2} \rho_1 + \frac{1}{2} \rho_2$. The probability of the first one times $\rho_1$ plus the probability that I have the second one times $\rho_2$. 
 
 </output>
-</example2>
+</example>
 
-<example3>
+<example id=3>
 <input>
 So imagine that now I want to compute, I don't know anything about density operators, and I want to compute what happens if I measure an observable, and I mentioned many times, and at the end, I compute the expectation value is operator, we can do very simple, the reduce the district's potential valuable would be in the meeting to have an infinite number of measurements will be the sum of the probability that I have this date side five times the expectation value, if I had that state.
 To use conditional probabilities in the language of statistical probability, that the probability that I had some outcome, we've also developed some sort of probability, the probability that I have some outcome probability, the target outcome why I'm using Nordic analysis, we've got to make it simpler to use the geneticists then I would say that is the probability that they have to stay on here sorry, times the probability that I get the outcome I if I have the state cited for this scenario, is the probability that quality of obtaining x is the sum of the quality pertaining next you have one you have one sample or one that I'm using here.
@@ -127,7 +127,7 @@ where $\rho = \sum_j P(\psi_j) \ket{\psi_j}\bra{\psi_j}$ is exactly the density 
 
 So, in other words, you could have just taken the classical probabilities and the measurement postulate and computed everything using the laws of probability theory. And at the end, what you get is the same result as if you had first computed the density operator and then used the formula $\langle O \rangle = \tr(\rho O)$.
 </output>
-</example3>
+</example>
 </examples>
 
 Output the improved version of the document inside the <improved_document></improved_document> tag.

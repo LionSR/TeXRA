@@ -1,7 +1,7 @@
 from coauthor.base_agents import DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "paper2note")
+agent_path = coa.get_agent_path(coa, "paper2note")
 
 
 class Paper2Note(DirectWrite):
@@ -37,7 +37,7 @@ def main():
     )
     args = parser.parse_args()
 
-    paper2note = Paper2Note(args, prompt_path)
+    paper2note = Paper2Note(args, agent_path)
     paper2note.run()
 
 

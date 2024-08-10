@@ -255,14 +255,14 @@ def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_fi
 @click.command()
 @shared_arguments
 def correct_prl(model, input_file, **kwargs):
-    execute_agent("prl_edit", "correct_prl", model, input_file, **kwargs)
+    execute_agent("edit_prl", "correct_prl", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
 def correct_supp_prl(model, input_file, **kwargs):
-    execute_agent("prl_edit", "correct_supp_prl", model, input_file, **kwargs)
+    execute_agent("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
 
 
 @click.command()
@@ -271,7 +271,7 @@ def correct_supp_prl(model, input_file, **kwargs):
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "prl_reply",
+        "reply_prl",
         "reply_letter",
         model,
         input_file,
@@ -281,7 +281,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
+        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
         **kwargs,
     )
 
@@ -293,7 +293,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
 def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "prl_reply",
+        "reply_prl",
         "revise_main",
         model,
         input_file,
@@ -304,7 +304,7 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
+        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
         **kwargs,
     )
 
@@ -318,7 +318,7 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "prl_reply",
+        "reply_prl",
         "revise_supp",
         model,
         input_file,
@@ -331,7 +331,7 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
+        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
         **kwargs,
     )
 
@@ -340,10 +340,10 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 @shared_arguments
 @click.argument("main_content")
 @click.argument("supp_file", required=False, default="supp.tex")
-def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", **kwargs):
+def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "prl_reply",
+        "reply_prl",
         "polish_reply",
         model,
         input_file,
@@ -355,7 +355,7 @@ def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", **kw
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/prl_reply/example_reply_letter.txt",
+        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
         **kwargs,
     )
 
@@ -522,32 +522,35 @@ def extract_tikzpictures(latex_file):
 
 @click.command()
 @shared_arguments
-@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
+@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity"]), help="Type of document being revised")
 def statement(model, input_file, document_type, **kwargs):
-    if "teaching" in input_file.lower():
-        agent_sub = "teaching"
-    elif "diversity" in input_file.lower():
-        agent_sub = "diversity"
-    elif "research" in input_file.lower():
-        agent_sub = "research"
+    if document_type is None:
+        if "teaching" in input_file.lower():
+            agent_sub = "teaching"
+        elif "diversity" in input_file.lower():
+            agent_sub = "diversity"
+        elif "research" in input_file.lower():
+            agent_sub = "research"
+        else:
+            raise ValueError("Document type not recognized")
     else:
-        raise ValueError("Document type not recognized")
+        agent_sub = document_type
 
-    print(f"Agent: {agent_sub}")
+    print(f"Agent: statement_{agent_sub}")
 
-    execute_agent("faculty", f"statement_{agent_sub}", model, input_file, **kwargs)
+    execute_agent("application", f"statement_{agent_sub}", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_nsf_grant(model, input_file, **kwargs):
-    execute_agent("faculty", "revise_nsf_grant", model, input_file, **kwargs)
+    execute_agent("grant", "revise_nsf_grant", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_marie_curie(model, input_file, **kwargs):
-    execute_agent("faculty", "revise_marie_curie", model, input_file, **kwargs)
+    execute_agent("grant", "revise_marie_curie", model, input_file, **kwargs)
 
 
 @click.command()
@@ -565,7 +568,7 @@ def text2tex(model, input_file, **kwargs):
 def revise_prl(model, input_file, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "prl_reply",
+        "reply_prl",
         "revise_prl",
         model,
         input_file,
@@ -613,15 +616,15 @@ cli.add_command(adapt)
 # merge
 cli.add_command(merge)
 
-# prl_edit.py
+# edit_prl.py
 cli.add_command(correct_prl)
 cli.add_command(correct_supp_prl)
 
-# prl_reply.py
+# reply_prl.py
 cli.add_command(reply_letter_prl)
 cli.add_command(revise_main_prl)
 cli.add_command(revise_supp_prl)
-cli.add_command(polish_prl_reply)
+cli.add_command(polish_reply_prl)
 
 # clean up
 cli.add_command(clean_output)
@@ -655,12 +658,14 @@ cli.add_command(write_proposal)
 cli.add_command(slide2paper)
 cli.add_command(paper2slide)
 
-# faculty.py
+# application.py
 cli.add_command(statement)
+
+# grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
 
-# prl_reply.py
+# reply_prl.py
 cli.add_command(revise_prl)
 
 

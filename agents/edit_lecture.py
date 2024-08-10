@@ -1,7 +1,7 @@
 from coauthor.base_agents import ThinkAndWrite, DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "lecture")
+agent_path = coa.get_agent_path(coa, "lecture")
 
 
 class EditLectureBase:
@@ -55,9 +55,9 @@ def main():
     args = parser.parse_args()
 
     if args.agent.startswith("correct"):
-        edit_lecture = EditLectureDirect(args, prompt_path)
+        edit_lecture = EditLectureDirect(args, agent_path)
     else:
-        edit_lecture = EditLectureThink(args, prompt_path)
+        edit_lecture = EditLectureThink(args, agent_path)
     edit_lecture.run()
 
 

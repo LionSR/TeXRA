@@ -1,7 +1,7 @@
 from coauthor.base_agents import DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "adapt")
+agent_path = coa.get_agent_path(coa, "adapt")
 
 
 class Adapt(DirectWrite):
@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--agent", type=str, default="adapt", choices=["adapt"], help="Mode of operation, either 'adapt'.")
     args = parser.parse_args()
 
-    adapt = Adapt(args, prompt_path)
+    adapt = Adapt(args, agent_path)
     adapt.run()
 
 

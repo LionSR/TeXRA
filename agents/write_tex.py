@@ -1,7 +1,7 @@
 from coauthor.base_agents import ThinkAndWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "write")
+agent_path = coa.get_agent_path(coa, "write")
 
 
 class WriteTex(ThinkAndWrite):
@@ -16,15 +16,13 @@ class WriteTex(ThinkAndWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    # The handle_output method is inherited from ThinkAndWrite
-
 
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--agent", type=str, default="paper2cover", choices=["paper2cover", "proposal", "slide2paper", "paper2slide"])
     args = parser.parse_args()
 
-    write_tex = WriteTex(args, prompt_path)
+    write_tex = WriteTex(args, agent_path)
     write_tex.run()
 
 

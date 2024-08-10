@@ -3,7 +3,7 @@ import coauthor as coa
 from termcolor import colored
 import os
 
-prompt_path = coa.get_prompt_path(coa, "merge")
+agent_path = coa.get_agent_path(coa, "merge")
 
 
 def get_output_file_name_merge(input_file, edited_file):
@@ -32,8 +32,8 @@ def get_output_file_name_merge(input_file, edited_file):
 
 
 class Merge(DirectWrite):
-    def __init__(self, args, prompt_path):
-        super().__init__(args, prompt_path)
+    def __init__(self, args, agent_path):
+        super().__init__(args, agent_path)
         self.input_file = args.input_file
         self.edited_file = args.edited_file
         self.output_file = get_output_file_name_merge(self.input_file, self.edited_file)
@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--agent", type=str, default="merge", help="Agent to choose.")
     args = parser.parse_args()
 
-    merge = Merge(args, prompt_path)
+    merge = Merge(args, agent_path)
     merge.run()
 
 
