@@ -2,6 +2,7 @@ from coauthor.base_agents import DirectWrite
 import coauthor as coa
 from termcolor import colored
 import os
+import re
 
 agent_path = coa.get_agent_path(coa, "merge")
 
