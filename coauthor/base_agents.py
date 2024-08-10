@@ -219,18 +219,23 @@ class ThinkAndWrite(BaseReflectChainAgent):
     def _handle_reflection_diff(self, end_turn):
         if self.output_settings["output_type"] == "tex":
             if self.args.output_files:
-                for first_output, reflect_output in zip(self.first_round_output_files, self.reflect_round_output_files):
-                    if os.path.exists(first_output) and os.path.exists(reflect_output):
-                        run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
+                for input_file, first_output, reflect_output in zip(self.args.input_files, self.first_round_output_files, self.reflect_round_output_files):
+                    if os.path.exists(input_file) and os.path.exists(first_output) and os.path.exists(reflect_output):
+                        run_latexdiff(input_file, first_output, self.args.agent, self.args.model)
+                        run_latexdiff(input_file, reflect_output, self.args.agent, self.args.model)
+                        run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model, suffix="_diffdiff")
                     else:
-                        print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                        print(f"Warning: Could not generate latexdiff for reflection. Files not found: {input_file}, {first_output}, or {reflect_output}")
             else:
+                input_file = self.args.input_file
                 first_output = self.first_round_output_files[0] if self.first_round_output_files else None
                 reflect_output = self.reflect_round_output_files[0] if self.reflect_round_output_files else None
-                if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
-                    run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model)
+                if input_file and first_output and reflect_output and os.path.exists(input_file) and os.path.exists(first_output) and os.path.exists(reflect_output):
+                    run_latexdiff(input_file, first_output, self.args.agent, self.args.model)
+                    run_latexdiff(input_file, reflect_output, self.args.agent, self.args.model)
+                    run_latexdiff(first_output, reflect_output, self.args.agent, self.args.model, suffix="_diffdiff")
                 else:
-                    print(f"Warning: Could not generate latexdiff for reflection. Files not found: {first_output} or {reflect_output}")
+                    print(f"Warning: Could not generate latexdiff for reflection. Files not found: {input_file}, {first_output}, or {reflect_output}")
 
 
 class DirectWrite(BaseReflectChainAgent):
