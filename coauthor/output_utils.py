@@ -170,11 +170,11 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                     model = output_parts[-1].split(".")[0]
 
                     # Determine if this is a reflection output
-                    is_reflect = "reflect" in output_file
+                    round = 1 if "reflect" in output_file else 0
 
                     # Generate the output file name
                     base_name, extension = os.path.splitext(source)
-                    tex_file = get_output_file_name(base_name, agent, model, extension, reflect=is_reflect)
+                    tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
 
                     # Write the content to the file
                     write_file(tex_file, content_text)
