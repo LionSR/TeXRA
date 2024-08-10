@@ -631,13 +631,16 @@ cli.add_command(merge)
 # edit_prl.py
 cli.add_command(correct_prl)
 cli.add_command(polish_prl)
+cli.add_command(revise_prl)
 
 # reply_prl.py
 cli.add_command(draft_rebuttal_prl)
-cli.add_command(reply_letter_prl)
-cli.add_command(revise_main_prl)
-cli.add_command(revise_supp_prl)
-cli.add_command(polish_reply_prl)
+
+
+# cli.add_command(reply_letter_prl)
+# cli.add_command(revise_main_prl)
+# cli.add_command(revise_supp_prl)
+# cli.add_command(polish_reply_prl)
 
 # clean up
 cli.add_command(clean_output)
@@ -671,16 +674,13 @@ cli.add_command(write_proposal)
 cli.add_command(slide2paper)
 cli.add_command(paper2slide)
 
-# faculty.py
+# application.py
 cli.add_command(statement)
+
+# grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
 
-# reply_prl.py
-cli.add_command(revise_prl)
-
-# draft_rebuttal_prl.py
-cli.add_command(draft_rebuttal_prl)
 
 
 if __name__ == "__main__":

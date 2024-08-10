@@ -169,6 +169,7 @@ window.onload = function () {
     'requestAuxFile',
     'requestFigureFile',
     'requestRecentCommits',
+    'requestBaseFile'
   ];
 
   dataRequests.forEach(request => {
@@ -332,11 +333,6 @@ window.addEventListener('message', event => {
       break;
     case 'inputFileSelected':
       document.getElementById('inputFileSelect').value = message.filePath;
-      vscode.postMessage({
-        command: 'requestEditedFile',
-        inputFile: message.filePath,
-        outputNameOverride: message.outputNameOverride
-      });
       break;
     case 'sampleFileSelected':
     case 'auxFileSelected':
@@ -371,6 +367,10 @@ window.addEventListener('message', event => {
       updateMultipleFileSelect('multipleAuxFilesSelect', 'toggleMultipleAuxFiles', message.files);
       updateMultipleFileSelect('multipleFiguresSelect', 'toggleMultipleFigures', message.files);
       // sus
+      break;
+    case 'setBaseFile':
+      updateFileSelect('baseFileSelect', message.files);
+      updateEditedFileSelect(document.getElementById('baseFileSelect').value);
       break;
   }
 
@@ -621,12 +621,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
-    const inputFile = document.getElementById('inputFileSelect').value;
-    const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
+    const baseFile = document.getElementById('baseFileSelect').value;
     vscode.postMessage({
-      command: 'requestEditedFile',
-      inputFile: inputFile,
-      outputNameOverride: outputNameOverride
+      command: 'getCurrentFile',
+      fileType: 'edited',
+      baseFile: baseFile
     });
   });
   document.getElementById('mergeButton').addEventListener('click', function () {
@@ -752,6 +751,28 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('emptyOutputFilesButton').addEventListener('click', function () {
     emptyMultipleFiles('outputFilesList', 'toggleOutputFiles');
   });
+
+  // Add event listener for base file select
+  document.getElementById('baseFileSelect').addEventListener('change', function () {
+    const baseFile = this.value;
+    vscode.postMessage({
+      command: 'requestEditedFile',
+      baseFile: baseFile
+    });
+    updateEditedFileSelect(baseFile);
+  });
+
+  // Add function to update edited file select when base file changes
+  function updateEditedFileSelect(baseFile) {
+    if (baseFile) {
+      vscode.postMessage({
+        command: 'requestEditedFile',
+        baseFile: baseFile
+      });
+    } else {
+      updateFileSelect('editedFileSelect', []);
+    }
+  }
 });
 
 function toggleMultipleFiles(containerId, toggleIconId) {

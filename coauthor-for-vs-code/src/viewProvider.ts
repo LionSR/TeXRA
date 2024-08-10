@@ -109,8 +109,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'requestEditedFile':
-          if (message.inputFile) {
-            const baseFileNameForEdited = path.basename(message.inputFile, path.extname(message.inputFile));
+          if (message.baseFile) {
+            const baseFileNameForEdited = path.basename(message.baseFile, path.extname(message.baseFile));
             const allEditedFiles = await listEditedFiles(baseFileNameForEdited);
             console.log('Sending edited files:', allEditedFiles);
             webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
@@ -130,6 +130,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({ command: 'setSampleFile', files: refreshedFiles.sample });
             webviewView.webview.postMessage({ command: 'setAuxFile', files: refreshedFiles.aux });
             webviewView.webview.postMessage({ command: 'setFigureFile', files: refreshedFiles.figure });
+            await this.updateBaseFileSelect(webviewView);
           }
           break;
         case 'inputFileSelected':
@@ -196,7 +197,22 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const fileType = message.fileType || 'input';
           const currentOpenFile = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
           if (currentOpenFile) {
-            webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile, fileType: fileType });
+            if (fileType === 'edited') {
+              const baseFile = message.baseFile;
+              if (baseFile) {
+                const baseFileName = path.basename(baseFile, path.extname(baseFile));
+                const currentFileName = path.basename(currentOpenFile, path.extname(currentOpenFile));
+                if (currentFileName.startsWith(baseFileName) && currentFileName !== baseFileName) {
+                  webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile, fileType: fileType });
+                } else {
+                  vscode.window.showInformationMessage('The current file is not a valid edited version of the base file.');
+                }
+              } else {
+                vscode.window.showInformationMessage('Please select a base file first.');
+              }
+            } else {
+              webviewView.webview.postMessage({ command: 'setCurrentFile', filePath: currentOpenFile, fileType: fileType });
+            }
           } else {
             vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
           }
@@ -220,8 +236,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const openedFiles = await this.getOpenedFiles();
           webviewView.webview.postMessage({ command: 'setOpenedFiles', files: openedFiles });
           break;
+        case 'requestBaseFile':
+          {
+            const baseFiles = await listInputFiles();
+            webviewView.webview.postMessage({ command: 'setBaseFile', files: baseFiles });
+          }
+          break;
       }
     });
+
+    webviewView.webview.postMessage({ command: 'requestBaseFile' });
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
@@ -309,5 +333,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage(`Error selecting output files: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
+  }
+
+  private async updateBaseFileSelect(webviewView: vscode.WebviewView) {
+    const baseFiles = await listInputFiles();
+    webviewView.webview.postMessage({ command: 'setBaseFile', files: baseFiles });
   }
 }
