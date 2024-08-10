@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="transcribe">
 <settings>
-<document_tag>edited_transcript</document_tag>
-<end_tag>&lt;/edited_transcript&gt;</end_tag>
-<output_type>md</output_type>
-<prefill_first>Here is the faithfully and correctly edited transcript:
+    <document_tag>edited_transcript</document_tag>
+    <end_tag>&lt;/edited_transcript&gt;</end_tag>
+    <output_type>md</output_type>
+    <prefill_first>Here is the faithfully and correctly edited transcript:
 &lt;edited_transcript&gt;</prefill_first>
 </settings>
 <prompts>

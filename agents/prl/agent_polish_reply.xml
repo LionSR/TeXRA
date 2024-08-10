@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="polish_reply">
 <settings>
-<document_tag>latex_document</document_tag>
-<end_tag>&lt;/reply_letter&gt;</end_tag>
-<output_type>txt</output_type>
-<prefill_first>Now output the polished reply letter.
-&lt;reply_letter&gt;</prefill_first>
+    <document_tag>latex_document</document_tag>
+    <end_tag>&lt;/reply_letter&gt;</end_tag>
+    <output_type>txt</output_type>
+    <prefill_first>Now output the polished reply letter.
+        &lt;reply_letter&gt;</prefill_first>
 </settings>
 <prompts>
 <system_prompt>
