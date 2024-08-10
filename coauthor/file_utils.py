@@ -3,7 +3,7 @@ import re
 import warnings
 
 
-def get_prompt_path(library, prompt_name):
+def get_agent_path(library, prompt_name):
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
 
 
