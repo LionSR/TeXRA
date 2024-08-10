@@ -110,9 +110,7 @@ Yours sincerely,
 
 <document name="replies/reply_to_referees.tex">
 \documentclass[a4paper,12pt]{article}
-
 \usepackage[a4paper,margin=2.5cm]{geometry}
-
 \input{../preamble}
 
 \newenvironment{referee}[1]
@@ -182,10 +180,10 @@ Your response to the second comment here.
 </document>
 
 <document name="{INPUT_FILE}">
-(Full text of your revised paper here.)
+(Insert the full text of your revised paper here.)
 </document>
 <document name="supp.tex">
-(Full text of your revised supplementary materials here.)
+(Insert the full text of your revised supplementary materials here.)
 </document>
 
 </rebuttal_letter>
