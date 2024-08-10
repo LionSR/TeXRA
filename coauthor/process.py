@@ -208,6 +208,8 @@ def process_reflection_round(
     # Add tex count stats if provided
     user_message = f"{tex_count_stats}{user_message}"
 
+    output_type = output_settings.get("output_type", "xml")
+
     # Create a new message for the reflection round
     reflection_message = {"role": "user", "content": []}
 
@@ -255,6 +257,8 @@ def process_reflection_round(
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
             write_file(output_file, prefill)
+        elif output_type == "xml" and is_anthropic_model(model):
+            write_file(output_file, prefill + "\n")
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output
