@@ -7,11 +7,11 @@ import xml.etree.ElementTree as ET
 from .file_utils import read_file, write_file
 
 
-def get_output_file_name(input_file, task, model, output_type, reflect=False):
+def get_output_file_name(input_file, agent, model, output_type, reflect=False):
     file_name, _ = os.path.splitext(input_file)
-    first_task_chunk = task.split("_")[0]
+    agent_first_name_chunk = agent.split("_")[0]
     output_type = output_type.strip(".")
-    output_file = f"{file_name}_{first_task_chunk}_{model}.{output_type}"
+    output_file = f"{file_name}_{agent_first_name_chunk}_{model}.{output_type}"
     if reflect:
         output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
     print(f"Output file: {colored(output_file, 'cyan')}")
@@ -166,9 +166,9 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                 if source is not None and content is not None:
                     content_text = content.strip()
 
-                    # Extract task and model from the output file name
+                    # Extract agent name and model from the output file name
                     output_parts = os.path.basename(output_file).split("_")
-                    task = output_parts[1]
+                    agent = output_parts[1]
                     model = output_parts[-1].split(".")[0]
 
                     # Determine if this is a reflection output
@@ -176,7 +176,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
 
                     # Generate the output file name
                     base_name, extension = os.path.splitext(source)
-                    tex_file = get_output_file_name(base_name, task, model, extension, reflect=is_reflect)
+                    tex_file = get_output_file_name(base_name, agent, model, extension, reflect=is_reflect)
 
                     # Write the content to the file
                     write_file(tex_file, content_text)

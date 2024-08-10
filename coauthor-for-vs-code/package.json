@@ -73,7 +73,7 @@
           "description": "File extensions to include when listing figure files",
           "scope": "resource"
         },
-        "coauthor.tasks": {
+        "coauthor.agents": {
           "type": "array",
           "items": {
             "type": "string"
@@ -93,7 +93,7 @@
             "write-proposal",
             "txt2tex"
           ],
-          "description": "List of available tasks",
+          "description": "List of available agents",
           "scope": "resource"
         },
         "coauthor.ignoredFileExtensions": {
@@ -285,7 +285,7 @@
       },
       {
         "command": "coauthor.execute",
-        "title": "Execute Task"
+        "title": "Execute Agent"
       },
       {
         "command": "coauthor.merge",

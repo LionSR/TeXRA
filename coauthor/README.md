@@ -4,7 +4,7 @@ This is the backend component of the CoAuthor project, a Python package containi
 
 ## Detailed Features
 
-- AI-assisted text processing and generation for various tasks
+- AI-assisted text processing and generation for various agents
 - LaTeX document processing, including diff functionality
 - Automatic figure and TikZ extraction
 - Multiple file support for complex projects
@@ -67,7 +67,7 @@ This will ensure that the files and patterns listed in `.gitignore.sample` are i
 
 ### CLI Commands
 
-CoAuthor provides various CLI commands for different tasks. Here are some examples:
+CoAuthor provides various CLI commands for different agents. Here are some examples:
 
 - `coauthor correct-tex`: Correct LaTeX documents
 - `coauthor polish-tex`: Polish LaTeX documents
@@ -113,41 +113,41 @@ CoAuthor backend can be seamlessly integrated with the CoAuthor VS Code extensio
 - Use a git client (e.g., Tower, GitHub Desktop) to track diffs in your git-tracked paper/lecture note folders.
 - Install a full, complete, and local TeX Live distribution to use latexdiff, latexindent, and latexdiff-vc.
 
-## Tasks and Prompts
+## agents and Prompts
 
-CoAuthor's tasks are defined in the `tasks` directory. Each task typically has its own Python script and associated prompt files. Here's how the structure works:
+CoAuthor's agents are defined in the `agents` directory. Each Agent typically has its own Python script and associated prompt files. Here's how the structure works:
 
-### Task Structure
+### Agent Structure
 
-- Each task is usually defined in a separate Python file in the `tasks` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
-- These Python files define the main logic for each task, including argument parsing, file handling, and interaction with the AI model.
-- Associated prompt files (e.g., system prompts, user prompts) are stored in XML format in subdirectories within the `tasks` directory, named after the task (e.g., `tasks/article`, `tasks/lecture`). These XML files contain the prompts that guide the AI model in generating outputs for the task.
+- Each Agent is usually defined in a separate Python file in the `agents` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
+- These Python files define the main logic for each Agent, including argument parsing, file handling, and interaction with the AI model.
+- Associated prompt files (e.g., system prompts, user prompts) are stored in XML format in subdirectories within the `agents` directory, named after the Agent (e.g., `agents/article`, `agents/lecture`). These XML files contain the prompts that guide the AI model in generating outputs for the Agent.
 
-### Adding New Tasks
+### Adding New agents
 
-To add a new task:
+To add a new Agent:
 
-1. Create a new Python file in the `tasks` directory (e.g., `new_task.py`).
-2. Define the task logic, following the structure of existing tasks.
-3. Create a new subdirectory in `tasks` for your task's prompt files (e.g., `tasks/new_task`).
+1. Create a new Python file in the `agents` directory (e.g., `new_agent.py`).
+2. Define the Agent logic, following the structure of existing agents.
+3. Create a new subdirectory in `agents` for your Agent's prompt files (e.g., `agents/new_agent`).
 4. Add necessary prompt files in XML format (e.g., `prompts.xml`).
-5. Update the CLI interface in `coauthor/cli.py` to include your new task.
+5. Update the CLI interface in `coauthor/cli.py` to include your new Agent.
 
 ### Modifying Prompts
 
 To modify existing prompts:
 
-1. Navigate to the appropriate subdirectory in `tasks` (e.g., `tasks/article` for article-related tasks).
+1. Navigate to the appropriate subdirectory in `agents` (e.g., `agents/article` for article-related agents).
 2. Edit the relevant XML prompt files (e.g., `prompts.xml`).
-3. Your changes will be automatically picked up by the task scripts when they load the prompts.
+3. Your changes will be automatically picked up by the Agent scripts when they load the prompts.
 
-Remember to follow the existing XML structure and conventions when adding new tasks or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
+Remember to follow the existing XML structure and conventions when adding new agents or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
 
 ### Prompt Inheritance
 
-CoAuthor supports a hierarchical structure for prompts, allowing child prompts to inherit from parent prompts. This feature promotes code reuse and makes it easier to create specialized versions of existing tasks. Here's how it works:
+CoAuthor supports a hierarchical structure for prompts, allowing child prompts to inherit from parent prompts. This feature promotes code reuse and makes it easier to create specialized versions of existing agents. Here's how it works:
 
-1. In the child XML file, use the `inherits` attribute in the `<task>` tag to specify the parent task.
+1. In the child XML file, use the `inherits` attribute in the `<Agent>` tag to specify the parent Agent.
 2. The child prompt will inherit all settings and prompts from the parent.
 3. You can override or add to the inherited content in the child prompt file.
 
@@ -156,7 +156,7 @@ For example, let's look at how `prompts_polish_with_auxiliary.xml` inherits from
 Parent prompt (`prompts_polish.xml`):
 
 ```xml
-<task name="polish">
+<agent name="polish">
   <settings>
     <!-- Parent settings -->
   </settings>
@@ -170,13 +170,13 @@ Parent prompt (`prompts_polish.xml`):
     </user_prefix>
     ...
   </prompts>
-</task>
+</agent>
 ```
 
 Child prompt (`prompts_polish_physics.xml`):
 
 ```xml
-<task name="polish_physicist" inherits="polish">
+<agent name="polish_physicist" inherits="polish">
   <settings>
     <!-- Child settings -->
   </settings>
@@ -186,25 +186,25 @@ Child prompt (`prompts_polish_physics.xml`):
       You are a physicist.
     </system_prompt>
   </prompts>
-</task>
+</agent>
 ```
 
-In this example, `prompts_polish_with_auxiliary.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of tasks while reusing most of the existing prompt structure.
+In this example, `prompts_polish_with_auxiliary.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of agents while reusing most of the existing prompt structure.
 
-## Task Execution Logic
+## Agent Execution Logic
 
-CoAuthor's task execution follows a sophisticated process inspired by advanced AI reasoning techniques such as Chain of Thought (CoT) and Reasoning and Acting (ReAct). This approach allows for more nuanced, multi-step problem solving and self-correction.
+CoAuthor's Agent execution follows a sophisticated process inspired by advanced AI reasoning techniques such as Chain of Thought (CoT) and Reasoning and Acting (ReAct). This approach allows for more nuanced, multi-step problem solving and self-correction.
 
 ### Basic Execution Flow
 
 1. **Input Processing**: The program reads the input file and any additional files specified (e.g., auxiliary files, figure inputs).
 
-2. **Initial Generation**: Based on the task type and input, the AI model generates an initial output. This output is saved as the first version of the result.
+2. **Initial Generation**: Based on the Agent type and input, the AI model generates an initial output. This output is saved as the first version of the result.
 
 3. **Continuation Handling**: If the initial generation is incomplete (e.g., due to token limits), the program automatically continues the generation in chunks. Each chunk is appended to the output file, ensuring a cohesive final result.
 
 4. **Output Files**: Several files are generated during this process:
-   - Main output file (e.g., `input_file_task_model.tex`)
+   - Main output file (e.g., `input_file_agent_model.tex`)
    - Log file (e.g., `input_file_log.txt`) containing execution details and statistics
 
 ### Reflection Mechanism
@@ -216,7 +216,7 @@ If the `--reflect` option is enabled, CoAuthor implements a self-reflection step
 2. **Refinement**: Based on these reflections, the model produces a refined version of the output.
 
 3. **Additional Output Files**:
-   - Reflection output file (e.g., `input_file_task_reflect_model.tex`)
+   - Reflection output file (e.g., `input_file_agent_reflect_model.tex`)
    - Updated log file with reflection statistics
 
 This reflection process embodies the principle of Chain of Thought, allowing the AI to explicitly reason about its own output and make improvements.
@@ -225,7 +225,7 @@ This reflection process embodies the principle of Chain of Thought, allowing the
 
 To facilitate easy comparison between versions, CoAuthor automatically generates LaTeX diff files:
 
-1. **Initial Diff**: A diff between the original input and the first output is generated (e.g., `input_file_task_model_diff.tex`).
+1. **Initial Diff**: A diff between the original input and the first output is generated (e.g., `input_file_agent_model_diff.tex`).
 
 2. **Reflection Diff**: If reflection is enabled, additional diffs are created:
    - Between the original input and the reflected output
@@ -243,7 +243,7 @@ The multi-stage execution process in CoAuthor, including the reflection mechanis
 
 3. **Iterative Refinement**: The continuation handling and reflection processes implement a form of iterative refinement, allowing the AI to build upon and improve its initial outputs.
 
-This design allows CoAuthor to produce more thoughtful, accurate, and refined outputs, especially for complex tasks like academic writing and LaTeX document processing.
+This design allows CoAuthor to produce more thoughtful, accurate, and refined outputs, especially for complex agents like academic writing and LaTeX document processing.
 
 ## Advanced Features
 
@@ -278,7 +278,7 @@ coauthor tex-count your_file.tex
 
 This command will output statistics like word count, number of headers, number of floats, etc.
 
-## Task-Specific Features
+## Agent-Specific Features
 
 ### Meeting Transcription (meeting2text)
 
@@ -306,9 +306,9 @@ Convert presentation slides into a research paper format:
 coauthor slide2paper --input_file draft.tex --figure_inputs slides.pdf
 ```
 
-This task takes slide images or a PDF of a presentation (specified by `--figure_inputs`) and generates a comprehensive LaTeX research paper. The `--input_file` can be an existing draft of the paper or an empty file. It expands on key points from the slides, incorporating additional details, explanations, and mathematical formulations. The output is a well-structured, publication-ready LaTeX document.
+This Agent takes slide images or a PDF of a presentation (specified by `--figure_inputs`) and generates a comprehensive LaTeX research paper. The `--input_file` can be an existing draft of the paper or an empty file. It expands on key points from the slides, incorporating additional details, explanations, and mathematical formulations. The output is a well-structured, publication-ready LaTeX document.
 
-Additional specific instructions for this task can be found in the `prompts_slide2paper.xml` file in the appropriate task directory.
+Additional specific instructions for this Agent can be found in the `prompts_slide2paper.xml` file in the appropriate Agent directory.
 
 ### Paper to Slide Conversion (paper2slide)
 
@@ -318,9 +318,9 @@ Convert research paper into a LaTeX Beamer presentation:
 coauthor paper2slide --input_file paper.tex
 ```
 
-This task takes a LaTeX research paper as input and creates a professional LaTeX Beamer presentation. It condenses the paper's content into a series of slides, focusing on key points, methodology, results, and conclusions. The output is a LaTeX Beamer document ready for academic presentations.
+This Agent takes a LaTeX research paper as input and creates a professional LaTeX Beamer presentation. It condenses the paper's content into a series of slides, focusing on key points, methodology, results, and conclusions. The output is a LaTeX Beamer document ready for academic presentations.
 
-Additional specific instructions for this task can be found in the `prompts_paper2slide.xml` file in the appropriate task directory.
+Additional specific instructions for this Agent can be found in the `prompts_paper2slide.xml` file in the appropriate Agent directory.
 
 ## Version Control Integration
 
@@ -335,7 +335,7 @@ CoAuthor provides utilities for cleaning up and packing your work:
 
 - `coauthor clean-output`: Cleans up output files.
 - `coauthor clean-build`: Cleans up build directories.
-- `coauthor pack-single input.tex --task polish --model opus`: Packs the output files for a specific task into a versioned folder.
+- `coauthor pack-single input.tex --agent polish --model opus`: Packs the output files for a specific Agent into a versioned folder.
 
 ## Environment Variables
 
@@ -354,20 +354,20 @@ These can be set in your `.env` file or your system's environment variables.
 The main logic for CoAuthor is distributed across several Python files:
 
 - `coauthor/cli.py`: Defines the command-line interface
-- `coauthor/process.py`: Contains the core logic for processing tasks
+- `coauthor/process.py`: Contains the core logic for processing agents
 - `coauthor/model_utils.py`: Utilities for interacting with AI models
 - `coauthor/file_utils.py`: File handling utilities
 - `coauthor/tex_tools.py`: LaTeX-specific utilities
 
-Task-specific logic is contained in individual files in the `tasks/` directory, such as `tasks/edit_tex.py`, `tasks/prl_reply.py`, etc.
+Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/edit_tex.py`, `agents/prl_reply.py`, etc.
 
 ## Extending CoAuthor
 
-To add a new task to CoAuthor:
+To add a new Agent to CoAuthor:
 
-1. Create a new Python file in the `tasks/` directory
-2. Define your task logic, following the pattern in existing task files
-3. Add necessary prompt files in XML format in a subdirectory of `tasks/`
+1. Create a new Python file in the `agents/` directory
+2. Define your Agent logic, following the pattern in existing Agent files
+3. Add necessary prompt files in XML format in a subdirectory of `agents/`
 
 ## Known Issues
 
