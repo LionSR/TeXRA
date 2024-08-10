@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent name="revise_prl">
+<settings>
+<document_tag>latex_documents</document_tag>
+<end_tag>&lt;/latex_documents&gt;</end_tag>
+<output_type>tex</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+Your task is to revise a research paper on developing a new variational method for quantum many-body physics and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
+
+When writing a professional *.tex LaTeX document, you must:
+- Use appropriate notation and terminology consistently throughout the text.
+- Ensure that you maintain the structure and formatting of each individual document while making improvements.
+- Keep the comments that start with % in the documents.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+You will be revising a paper submitted to Physical Review Letters based on referee reports. Here are the inputs you will need:
+
+<documents>
+<document name="Cover Letter">
+{COVER_LETTER}
+</document>
+<document name="{INPUT_FILE}">
+{INPUT_CONTENT}
+</document>
+<document name="{SUPP_FILE}">
+{SUPP_CONTENT}
+</document>
+<document name="Editor Decision Letter">
+{EDITOR_DECISION_LETTER}
+</document>
+<document name="Referee Report A">
+{REFEREE_REPORT_A}
+</document>
+<document name="Referee Report B">
+{REFEREE_REPORT_B}
+</document>
+<document name="Example Reply Letter">
+{EXAMPLE_REPLY_LETTER}
+</document>
+<document name="Instruction">
+{INSTRUCTION}
+</document>
+<document name="Draft Reply Letter">
+{DRAFT_REPLY_LETTER}
+</document>
+</documents>
+
+Explanation of documents:
+1. Cover Letter: The original letter submitted with the paper, explaining its significance and suitability for the journal.
+2. Main Paper: The full text of the submitted research paper, containing the core content and findings.
+3. Supplementary Material: Additional details, data, or explanations to support the main paper.
+4. Editor Decision Letter: The letter from the journal editor, typically containing their initial decision and a summary of the referee reports.
+5. Referee Report A: The detailed feedback and critique from the first referee.
+6. Referee Report B: The detailed feedback and critique from the second referee.
+7. Example Reply Letter: A sample response letter to guide the structure and tone of your reply.
+8. Instruction: Specific guidelines or requirements for drafting the reply letter.
+9. Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
+
+You will be revising all of the following documents:
+OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+In the scratchpad below, brainstorm concrete ways to revise the paper(s) based on the referee reports and the draft reply letter. Consider both the main paper and the supplementary material. Be as specific as possible about what changes need to be made in which sections of which document.
+
+<scratchpad>
+1. [Specific revision 1]
+    - Affected document(s): [Main paper / Supplementary material / Both]
+    - Section(s) to revise: [List of sections]
+    - Proposed changes: [Detailed description]
+    - Rationale: [Explanation based on referee comments or reply letter]
+2. [Specific revision 2]
+    - Affected document(s): [Main paper / Supplementary material / Both]
+    - Section(s) to revise: [List of sections]
+    - Proposed changes: [Detailed description]
+    - Rationale: [Explanation based on referee comments or reply letter]
+3. [Specific revision 3]
+    - Affected document(s): [Main paper / Supplementary material / Both]
+    - Section(s) to revise: [List of sections]
+    - Proposed changes: [Detailed description]
+    - Rationale: [Explanation based on referee comments or reply letter]
+</scratchpad>
+
+Then, output further enhanced and complete versions of all the LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay focused on addressing the referees' comments and concerns while maintaining the quality and coherence of all documents.
+
+Use the following format for the output:
+<latex_documents>
+<document name="{OUTPUT_FILES_ORDER[0]}">
+{1ST_UPDATED_LATEX_DOCUMENT_1}
+</document>
+<document name="{OUTPUT_FILES_ORDER[1]}">
+{1ST_UPDATED_LATEX_DOCUMENT_2}
+</document>
+... (repeat for all output files)
+</latex_documents>
+]]>
+</user_request>
+</prompts>
+</agent>

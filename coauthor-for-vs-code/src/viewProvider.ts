@@ -30,7 +30,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.indentTex');
           break;
         case 'execute':
-          const task_val = message.task;
+          const agent_val = message.agent;
           const model_val = message.model;
           const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
@@ -47,7 +47,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const outputNameOverride_val = message.outputNameOverride;
 
           if (inputFile_val || outputNameOverride_val) {
-            vscode.commands.executeCommand('coauthor.execute', task_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val, outputFiles_val, outputNameOverride_val);
+            vscode.commands.executeCommand('coauthor.execute', agent_val, inputFile_val, auxFiles_val, instructions_val, reflect_val, model_val, figureFiles_val, additionalInputFiles_val, sampleFiles_val, autoExtractFigure_val, autoExtractTikzFigure_val, includeTikzReflection_val, includeTexCount_val, outputFiles_val, outputNameOverride_val);
           } else {
             vscode.window.showErrorMessage('Please select an input file or provide an output name override.');
           }
@@ -147,16 +147,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'cleanSingle':
-          vscode.commands.executeCommand('coauthor.cleanSingle', message.inputFile, message.task, message.reflect, message.model, message.outputNameOverride);
+          vscode.commands.executeCommand('coauthor.cleanSingle', message.inputFile, message.agent, message.reflect, message.model, message.outputNameOverride);
           break;
         case 'packSingle':
-          vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.task, message.reflect, message.model, message.outputNameOverride);
+          vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.agent, message.reflect, message.model, message.outputNameOverride);
           break;
         case 'packMultiple':
-          vscode.commands.executeCommand('coauthor.packMultiple', message.inputFile, message.additionalInputFiles, message.task, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          vscode.commands.executeCommand('coauthor.packMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
           break;
         case 'cleanMultiple':
-          vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.task, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
           break;
         case 'latexDiff':
           vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.editedFile);
@@ -230,15 +230,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       const scriptUri = webview.asWebviewUri(jsPath);
 
       const config = vscode.workspace.getConfiguration('coauthor');
-      const tasks = config.get<string[]>('tasks') || [];
-      const taskOptions = tasks.map(task => `<option value="${task}">${task}</option>`).join('\n');
+      const agents = config.get<string[]>('agents') || [];
+      const agentOptions = agents.map(agent => `<option value="${agent}">${agent}</option>`).join('\n');
 
       // Replace placeholders in HTML with actual content
       return htmlContent
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
         .replace(/\${nonce}/g, nonce)
-        .replace('${taskOptions}', taskOptions)
+        .replace('${agentOptions}', agentOptions)
         .replace('${cspSource}', webview.cspSource);
     } catch (error) {
       console.error('Error generating HTML content:', error);

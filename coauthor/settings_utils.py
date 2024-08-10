@@ -20,16 +20,16 @@ def get_model_settings(args):
     return model_settings
 
 
-def get_output_settings(args, task_settings):
+def get_output_settings(args, agent_settings):
     output_settings = {
         "k": 200,
-        "document_tag": task_settings.get("document_tag"),
-        "output_type": task_settings.get("output_type", "txt"),
-        "end_tag": task_settings.get("end_tag", "\\end{document}"),
-        "prefill_first": task_settings.get("prefill_first"),
+        "document_tag": agent_settings.get("document_tag"),
+        "output_type": agent_settings.get("output_type", "txt"),
+        "end_tag": agent_settings.get("end_tag", "\\end{document}"),
+        "prefill_first": agent_settings.get("prefill_first"),
     }
 
-    prefill_reflect = task_settings.get("prefill_reflect")
+    prefill_reflect = agent_settings.get("prefill_reflect")
     if prefill_reflect and prefill_reflect != "":
         output_settings["prefill_reflect"] = prefill_reflect
     else:

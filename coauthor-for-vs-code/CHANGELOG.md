@@ -68,7 +68,7 @@
   - Updated message handling to support new backend features
 - **Improved:**
   - Optimized state management for complex file operations
-  - Enhanced error handling and user feedback for multi-file tasks
+  - Enhanced error handling and user feedback for multi-file agents
 
 ## [0.7.7]
 
@@ -112,17 +112,17 @@
 
 ## [0.7.4]
 
-- Added support for new paper2slide task in UI
-- Updated task selection to include paper2slide option
-- Improved file handling for LaTeX inputs in write_tex tasks
-- Enhanced WebView to accommodate new task options
+- Added support for new paper2slide agent in UI
+- Updated agent selection to include paper2slide option
+- Improved file handling for LaTeX inputs in write_tex agents
+- Enhanced WebView to accommodate new agent options
 - Updated error handling and user feedback for new features
 - Various UI improvements and bug fixes
 
 ## [0.7.3]
 
-- Added support for new slide2paper task in UI
-- Updated task selection to include slide2paper option
+- Added support for new slide2paper agent in UI
+- Updated agent selection to include slide2paper option
 - Improved file handling for PDF inputs
 - Enhanced output name override functionality in UI
 - Refactored WebView code for better maintainability
@@ -236,9 +236,9 @@
 
 ## [0.6.0]
 
-- Added support for new write-cover and write-proposal tasks
-- Updated package.json to include new tasks in VS Code extension
-- Enhanced UI to accommodate new writing tasks
+- Added support for new write-cover and write-proposal agents
+- Updated package.json to include new agents in VS Code extension
+- Enhanced UI to accommodate new writing agents
 - Improved file handling for sample/reference files in the extension
 
 ## [0.5.9]
@@ -261,9 +261,9 @@
 
 ## [0.5.6]
 
-- Implemented customizable tasks feature in VS Code settings
-- Updated README with instructions for task customization
-- Refactor task selection in WebView to use customizable tasks
+- Implemented customizable agents feature in VS Code settings
+- Updated README with instructions for agent customization
+- Refactor agent selection in WebView to use customizable agents
 - Bump version to 0.5.6
 - Update package.json with new categories and publisher name
 - Various minor improvements and bug fixes
@@ -272,7 +272,7 @@
 
 - Added support for sample file selection in the UI
 - Implemented backend functionality for handling sample files
-- Updated task options to include "Adapt" for both TeX and ST
+- Updated agent options to include "Adapt" for both TeX and ST
 - Improved file handling and diff operations
 - Enhanced UI with better descriptions and layout
 - Fixed issues with multiple file selection
@@ -318,10 +318,10 @@
 
 - Significantly improved UI layout and design for better user experience
 - Redesigned file selection interface with support for multiple file selection
-- Added compact selections for task, model, and reflect options
+- Added compact selections for agent, model, and reflect options
 - Enhanced styling of buttons, selectors, and input areas
 - Reorganized housekeeping and LaTeXDiff sections for improved clarity
-- Increased initial height of task input textarea
+- Increased initial height of agent input textarea
 - Various minor UI improvements and optimizations
 
 ## [0.4.6]
@@ -354,7 +354,7 @@
 - Added auto-extract figure option in VS Code extension
 - Implemented automatic figure path extraction from LaTeX files
 - Improved polish functionality with refined prompts and better figure handling
-- Enhanced reflection process for polishing task
+- Enhanced reflection process for polishing agent
 - Various minor improvements and bug fixes
 
 ## [0.4.2]
@@ -403,7 +403,7 @@
 
 ## [0.3.6]
 
-- Set figure file to "None" and reflect to "False" when a task starting with "Correct" is selected.
+- Set figure file to "None" and reflect to "False" when a agent starting with "Correct" is selected.
 
 ## [0.3.5]
 
@@ -412,7 +412,7 @@
 
 ## [0.3.4]
 
-- Added draw-tex and draw-st tasks in the backend and the UI.
+- Added draw-tex and draw-st agents in the backend and the UI.
 
 ## [0.3.3]
 
