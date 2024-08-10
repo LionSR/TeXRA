@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { listInputFiles, listSampleFiles, listAuxFiles, listFigureFiles, listEditedFiles } from './utils';
 import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
+import { getWorkspacePath, getRelativePath } from './utils/commonUtils';
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) { }
@@ -64,8 +65,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'selectMultipleFiles':
           const multipleFileType = message.fileType;
-          const currentFileForMultiple = message.currentFile;
-          const selectedFiles = await vscode.commands.executeCommand<string[]>(`coauthor.selectMultiple${multipleFileType}`, currentFileForMultiple);
+          let selectedFiles: string[] | null = null;
+
+          if (multipleFileType === 'OutputFiles') {
+            selectedFiles = await this.selectMultipleOutputFiles(message.currentFile);
+          } else {
+            const currentFileForMultiple = message.currentFile;
+            selectedFiles = await vscode.commands.executeCommand<string[]>(`coauthor.selectMultiple${multipleFileType}`, currentFileForMultiple);
+          }
+
           if (selectedFiles) {
             webviewView.webview.postMessage({ command: `setMultiple${multipleFileType}`, files: selectedFiles });
           }
@@ -268,5 +276,39 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       .map(doc => workspace.asRelativePath(doc.uri.fsPath, false));
 
     return relevantFiles;
+  }
+
+  private async selectMultipleOutputFiles(currentInputFile: string): Promise<string[] | null> {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      vscode.window.showErrorMessage('No workspace folder open');
+      return null;
+    }
+
+    const defaultUri = currentInputFile
+      ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
+      : vscode.Uri.file(workspacePath);
+
+    try {
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: 'Select Output Files',
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: defaultUri,
+        filters: {
+          'Text files': ['tex', 'txt', 'md']
+        }
+      });
+
+      if (!fileUris || fileUris.length === 0) return null;
+
+      const relativePaths = fileUris.map(uri => getRelativePath(uri.fsPath));
+      vscode.window.showInformationMessage(`Selected output files: ${relativePaths.join(', ')}`);
+      return relativePaths;
+    } catch (error) {
+      vscode.window.showErrorMessage(`Error selecting output files: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 }
