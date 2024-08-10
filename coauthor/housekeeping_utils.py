@@ -21,17 +21,14 @@ def get_agent_first_name_chunk(agent):
 
 
 def get_file_patterns(base, model, agent):
-    patterns = [
-        f"{base}_{agent}_r0_{model}",
-        f"{base}_{agent}_r0_{model}_diff",
-        f"{base}_{agent}_r0_full_{model}",
-        f"{base}_{agent}_r0_full_{model}_diff",
-        f"{base}_{agent}_r1_{model}",
-        f"{base}_{agent}_r1_{model}_diff",
-        f"{base}_{agent}_r1_{model}_diffdiff",
-        f"{base}_{agent}_r1_full_{model}",
-        f"{base}_{agent}_r1_full_{model}_diff",
-    ]
+    patterns = []
+    for round in range(10):  # Assuming a maximum of 10 rounds
+        patterns.extend([
+            f"{base}_{agent}_r{round}_{model}",
+            f"{base}_{agent}_r{round}_{model}_diff",
+            f"{base}_{agent}_r{round}_full_{model}",
+            f"{base}_{agent}_r{round}_full_{model}_diff",
+        ])
     return patterns
 
 
