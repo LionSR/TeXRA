@@ -277,7 +277,7 @@ def correct_supp_prl(model, input_file, **kwargs):
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "reply_prl",
+        "rebuttal_prl",
         "reply_letter",
         model,
         input_file,
@@ -287,7 +287,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
+        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -299,7 +299,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
 def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "reply_prl",
+        "rebuttal_prl",
         "revise_main",
         model,
         input_file,
@@ -310,7 +310,7 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
+        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -324,7 +324,7 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "reply_prl",
+        "rebuttal_prl",
         "revise_supp",
         model,
         input_file,
@@ -337,7 +337,7 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
+        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -349,7 +349,7 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "reply_prl",
+        "rebuttal_prl",
         "polish_reply",
         model,
         input_file,
@@ -361,7 +361,7 @@ def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kw
         editor_letter="rebuttal/editor_letter.txt",
         report_a="rebuttal/report_a.txt",
         report_b="rebuttal/report_b.txt",
-        example_reply_letter=f"{prompt_dir}/reply_prl/example_reply_letter.txt",
+        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -572,7 +572,7 @@ def text2tex(model, input_file, **kwargs):
 def revise_prl(model, input_file, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
-        "reply_prl",
+        "rebuttal_prl",
         "revise_prl",
         model,
         input_file,
@@ -582,9 +582,23 @@ def revise_prl(model, input_file, **kwargs):
         editor_letter="replies/editor_letter.txt",
         report_a="replies/report_a.txt",
         report_b="replies/report_b.txt",
-        example_reply_letter="replies/reply_to_referees.tex",
+        example_rebuttal_letter="replies/reply_to_referees.tex",
         draft_reply_letter="replies/reply_to_referees.tex",
         **kwargs,
+    )
+
+
+@click.command()
+@shared_arguments
+@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
+def draft_rebuttal_prl(model, input_file, **kwargs):
+    _, _, prompt_dir = get_common_env(model)
+    execute_agent(
+        "rebuttal_prl",
+        "draft_rebuttal",
+        model,
+        input_file,
+        **kwargs
     )
 
 
@@ -625,6 +639,7 @@ cli.add_command(correct_prl)
 cli.add_command(polish_prl)
 
 # reply_prl.py
+cli.add_command(draft_rebuttal_prl)
 cli.add_command(reply_letter_prl)
 cli.add_command(revise_main_prl)
 cli.add_command(revise_supp_prl)
@@ -669,6 +684,9 @@ cli.add_command(revise_marie_curie)
 
 # reply_prl.py
 cli.add_command(revise_prl)
+
+# draft_rebuttal_prl.py
+cli.add_command(draft_rebuttal_prl)
 
 
 if __name__ == "__main__":

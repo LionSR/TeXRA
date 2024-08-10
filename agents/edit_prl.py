@@ -53,9 +53,6 @@ def main():
         edit_prl = EditPRLThink(args, agent_path)
     edit_prl.run()
 
-    print(f"First round output files: {edit_prl.first_round_output_files}")
-    print(f"Reflect round output files: {edit_prl.reflect_round_output_files}")
-
 
 if __name__ == "__main__":
     main()
