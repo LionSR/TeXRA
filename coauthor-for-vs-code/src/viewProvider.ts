@@ -109,14 +109,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'requestEditedFile':
-          if (message.inputFile || message.outputNameOverride) {
-            const baseFileNameForEdited = message.outputNameOverride
-              ? path.basename(message.outputNameOverride, path.extname(message.outputNameOverride))
-              : path.basename(message.inputFile, path.extname(message.inputFile));
+          if (message.inputFile) {
+            const baseFileNameForEdited = path.basename(message.inputFile, path.extname(message.inputFile));
             const allEditedFiles = await listEditedFiles(baseFileNameForEdited);
+            console.log('Sending edited files:', allEditedFiles);
             webviewView.webview.postMessage({ command: 'setEditedFiles', files: allEditedFiles });
           } else {
-            vscode.window.showInformationMessage('Please select an input file or provide an output name override first.');
+            webviewView.webview.postMessage({ command: 'setEditedFiles', files: [] });
           }
           break;
         case 'refreshAllFiles':

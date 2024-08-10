@@ -241,7 +241,8 @@ def print_stop_flags(end_turn, new_response, state, output_settings, massive_rep
     """Print the flags indicating why the conversation stopped."""
     print("Printing the flags")
     print(f"end_turn: {end_turn}")
-    print(f"encounter_document_tag: {'</latex_document>' in new_response}")
+    document_tag = output_settings['document_tag']
+    print(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
     print(f"continuation_limit: {state['continuation_count'] > 10}")
     print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
     print(f"massive_repetition_detected: {massive_repetition_detected}")
