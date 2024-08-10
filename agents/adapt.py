@@ -12,7 +12,7 @@ class Adapt(DirectWrite):
                 "EXISTING_LECTURE_NOTES": coa.read_file(self.args.existing_lecture_notes),
                 "NEW_LECTURE_NOTES": coa.read_file(self.args.input_file),
                 "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
-                "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
+                "COMMAND_CONTENT": coa.read_file(self.args.commands_file),
             }
         )
         return user_vars
