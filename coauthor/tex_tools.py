@@ -95,7 +95,7 @@ def process_tikzpicture_endings(file_path):
     cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
 
 
-def run_latexdiff(input_file, output_file, agent=None, model=None, suffix="_diff"):
+def run_latexdiff(input_file, output_file, agent=None, suffix="_diff"):
     if not input_file:
         cprint("WARNING: input_file is None or empty", "yellow")
         return None
@@ -116,6 +116,7 @@ def run_latexdiff(input_file, output_file, agent=None, model=None, suffix="_diff
         or "\\end{document}" not in output_content
     ):
         cprint("WARNING: One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.", "yellow")
+        cprint(f"Input file: {input_file}, Output file: {output_file}", "yellow")
         return None
 
     diff_file_name = output_file.replace(".tex", f"{suffix}.tex")

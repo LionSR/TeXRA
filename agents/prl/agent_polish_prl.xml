@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent name="polish">
+<settings>
+<document_tag>latex_documents</document_tag>
+<end_tag>&lt;/latex_documents&gt;</end_tag>
+<output_type>xml</output_type>
+<prefill_first>&lt;scratchpad&gt;</prefill_first>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve both the main text and supplementary materials of a research paper to be submitted to Physical Review Letters. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
+
+When polishing a professional *.tex LaTeX document, you must:
+- Use appropriate notation and terminology consistently throughout both documents.
+- Maintain the comments that start with % in the documents.
+- Ensure proper referencing between the main text and supplementary materials.
+- Follow best practices for LaTeX writing, including proper use of environments, equations, and citations.
+- Preserve the overall structure of both documents while making improvements.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+I am going to give you the main text and supplementary materials of a research paper to polish. Please read both documents carefully.
+
+Here are the LaTeX documents:
+
+<documents>
+<document name="{PREAMBLE_FILE}">
+{PREAMBLE_CONTENT}
+</document>
+<document name="{MAIN_FILE}">
+{MAIN_CONTENT}
+</document>
+<document name="{SUPP_FILE}">
+{SUPP_CONTENT}
+</document>
+</documents>
+
+Please carefully read through both the main text and supplementary materials, ensuring you fully understand all the details and the relationship between the two documents.
+
+Your task is to enhance both documents, focusing on improving clarity, consistency, and adherence to Physical Review Letters guidelines. Pay special attention to:
+1. Consistency in notation and terminology between the main text and supplementary materials.
+2. Proper cross-referencing between the two documents.
+3. Clarity and condensation of explanations in both documents.
+4. Adherence to PRL style and formatting guidelines.
+
+Focus on the following specific instruction:
+<instruction>
+{INSTRUCTION}
+</instruction>
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+In the scratchpad below, brainstorm concrete ways to improve both the main text and supplementary materials. Consider how changes in one document might affect the other. Be specific about what to change in which section of each document and why.
+
+<scratchpad>
+1. [Specific Improvement 1]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Section(s) to modify:
+   - Rationale:
+   - Implementation steps:
+
+2. [Specific Improvement 2]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Section(s) to modify:
+   - Rationale:
+   - Implementation steps:
+
+3. [Specific Improvement 3]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Section(s) to modify:
+   - Rationale:
+   - Implementation steps:
+</scratchpad>
+
+Then, following your plan in the scratchpad, please output updated versions of both the main text and supplementary materials, implementing the improvements you've outlined. Use the following format:
+
+<latex_documents>
+<document name="{MAIN_FILE}">
+{REVISED_MAIN_CONTENT}
+</document>
+<document name="{SUPP_FILE}">
+{REVISED_SUPP_CONTENT}
+</document>
+</latex_documents>
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Now that you have made initial improvements to both the main text and supplementary materials, please reflect on your changes and consider any additional improvements that could further enhance the quality of both documents.
+
+<scratchpad>
+Reflection on previous changes:
+1. [Summary of major changes made to the main text]
+2. [Summary of major changes made to the supplementary materials]
+3. [Evaluation of the effectiveness of these changes]
+4. [Identification of any areas that may need further improvement]
+
+Additional improvements:
+1. [Additional improvement 1]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Rationale:
+   - Implementation steps:
+
+2. [Additional improvement 2]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Rationale:
+   - Implementation steps:
+
+3. [Additional improvement 3]
+   - Affected document(s): [Main text / Supplementary materials / Both]
+   - Rationale:
+   - Implementation steps:
+</scratchpad>
+
+Based on this reflection, please output further enhanced versions of both the main text and supplementary materials. Ensure that your revisions maintain consistency between the two documents and adhere to Physical Review Letters guidelines.
+
+<latex_documents>
+<document name="{MAIN_FILE}">
+{FINAL_REVISED_MAIN_CONTENT}
+</document>
+<document name="{SUPP_FILE}">
+{FINAL_REVISED_SUPP_CONTENT}
+</document>
+</latex_documents>
+]]>
+</user_reflect>
+</prompts>
+</agent>
