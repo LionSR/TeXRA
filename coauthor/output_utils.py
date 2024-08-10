@@ -170,7 +170,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                     model = output_parts[-1].split(".")[0]
 
                     # Determine if this is a reflection output
-                    round = 1 if "reflect" in output_file else 0
+                    round = 1 if "r1" in output_file else 0
 
                     # Generate the output file name
                     base_name, extension = os.path.splitext(source)
