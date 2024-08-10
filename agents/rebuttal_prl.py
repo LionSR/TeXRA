@@ -12,7 +12,7 @@ class ReplyPRLBase:
         super().setup()
 
         if not self.args.output_files:
-            self.args.output_files = ["reply_to_editor.tex", "reply_to_referees.tex", "list_of_major_changes.tex"]
+            self.args.output_files = ["replies/reply_to_editor.tex", "replies/reply_to_referees.tex", "replies/list_of_major_changes.tex"]
 
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
@@ -69,11 +69,11 @@ class ReplyPRLBase:
         return user_vars
 
 
-class ReplyPRLThink(ReplyPRLBase, ThinkAndWrite):
+class ReplyPRLDirect(ReplyPRLBase, DirectWrite):
     pass
 
 
-class ReplyPRLDirect(ReplyPRLBase, DirectWrite):
+class ReplyPRLThink(ReplyPRLBase, ThinkAndWrite):
     pass
 
 
@@ -84,7 +84,7 @@ def main():
         type=str,
         default="reply_letter",
         help="Mode of operation.",
-        choices=["rebuttal_draft", "reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
+        choices=["draft_rebuttal", "reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
     )
     parser.add_argument("--preamble_file", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
     parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
@@ -100,7 +100,7 @@ def main():
     parser.add_argument("--instruction_file", type=str, default="replies/instruction.txt", help="Path to the instruction file.")
     args = parser.parse_args()
 
-    if args.agent in ["reply_letter", "rebuttal_draft"]:
+    if args.agent in ["reply_letter", "draft_rebuttal"]:
         reply_prl = ReplyPRLThink(args, agent_path)
     else:
         reply_prl = ReplyPRLDirect(args, agent_path)

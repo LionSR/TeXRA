@@ -58,7 +58,7 @@ Dong-Ling Deng
 
 \subsection*{Response to Referee A}
 
-I thank the referee for his/her careful reading of my manuscript and appreciate his/her valuable suggestions/comments, which have helped me to improve the paper significantly. I take these suggestions/comments very seriously and have done a substantial amount of new calculations accordingly. Based on his/her reports, I have also improved the presentation of the manuscript and clarified some important points. Now, the paper is notably strengthened and I believe it is suitable for PRL. The detailed response to the referee's comments is provided below.
+I thank the referee for his/her careful reading of my manuscript and appreciate his/her valuable suggestions/comments, which have helped me to improve the paper significantly. I take these suggestions/comments very seriously and have done a substantial amount of new calculations accordingly. Based on his/her reports, I have also improved the presentation of the manuscript and clarified some important points. Now, the paper is notably strengthened and I believe it is suitable for PRL. The detailed response to the referee's comments is provided below.\\
 
 \begin{referee}{A}
 The manuscript by Deng examines Bell state inequalities employing a restricted Boltzmann machine to perform the calculations. The main argument for importance of this work is that it provides a novel methodology to calculate the nonlocality via violations of the Bell inequalities which is universally applicable and accurate. For me to support this for publication, I not only need to agree with that statement but also to the statement that calculating nonlocality in this fashion is actually useful. At this stage, the manuscript does not yet meet this goal. I hope under revision it will.
@@ -163,12 +163,14 @@ In summary, I thank the referee for his/her valuable suggestions/comments.  Foll
 \end{document}
 </document>
 <document name="replies/list_of_major_changes.tex">
-(1) A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material. 
-(2) The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space. 
-(3) Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material. 
-(4) Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments. 
-(5) Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated. 
-(6) Other minor changes throughout the whole manuscript.
+\begin{enumerate}
+\item A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material. 
+\item The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space. 
+\item Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material. 
+\item Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments. 
+\item Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated. 
+\item Other minor changes throughout the whole manuscript.
+\end{enumerate}
 </document>
 
 </rebuttal_letter>
