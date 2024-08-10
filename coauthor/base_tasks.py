@@ -26,10 +26,10 @@ def get_output_file_name(input_file, task, model, output_type, reflect=False):
     return output_file
 
 
-class BaseReflectChainTask(ABC):
+class BaseReflectChainAgent(ABC):
     """
-    Abstract base class for reflect chain tasks.
-    Provides a common structure for tasks that involve reflection and processing.
+    Abstract base class for reflect chain agents.
+    Provides a common structure for agents that involve reflection and processing.
     """
 
     def __init__(self, args, prompt_path):
@@ -186,7 +186,7 @@ class BaseReflectChainTask(ABC):
         return state, messages
 
 
-class ThinkWrite(BaseReflectChainTask):
+class ThinkAndWrite(BaseReflectChainAgent):
     def __init__(self, args, prompt_path):
         super().__init__(args, prompt_path)
         self.first_round_output_files = []
@@ -258,7 +258,7 @@ class ThinkWrite(BaseReflectChainTask):
                 print(f"Warning: Could not generate latexdiff for reflection. Reflection output file not found: {reflect_output_file}")
 
 
-class DirectWrite(BaseReflectChainTask):
+class DirectWrite(BaseReflectChainAgent):
     def get_output_file(self):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]

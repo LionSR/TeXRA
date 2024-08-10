@@ -1,4 +1,4 @@
-from coauthor.base_tasks import ThinkWrite, DirectWrite
+from coauthor.base_tasks import ThinkAndWrite, DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "article")
@@ -14,7 +14,7 @@ class EditTexBase:
         return user_vars
 
 
-class EditTexThink(EditTexBase, ThinkWrite):
+class EditTexThink(EditTexBase, ThinkAndWrite):
     pass
 
 
