@@ -27,10 +27,10 @@ def get_file_patterns(base, model, agent, num_rounds=2):
             [
                 f"{base}_{agent}_r{round}_{model}",
                 f"{base}_{agent}_r{round}_{model}_diff",
-                f"{base}_{agent}_r{round}_{model}_diffr{round-1}",
+                f"{base}_{agent}_r{round}_{model}_diffr{round}r{round-1}",
                 f"{base}_{agent}_r{round}_full_{model}",
                 f"{base}_{agent}_r{round}_full_{model}_diff",
-                f"{base}_{agent}_r{round}_full_{model}_diffr{round-1}",
+                f"{base}_{agent}_r{round}_full_{model}_diffr{round}r{round-1}",
                 f"{base}_{agent}_r{round}_{model}_thinking",
             ]
         )
