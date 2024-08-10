@@ -1,6 +1,5 @@
 import coauthor as coa
 import os
-from termcolor import cprint
 
 from coauthor.base_agents import ThinkAndWrite, DirectWrite
 
