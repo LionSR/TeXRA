@@ -151,7 +151,30 @@ Your response to the second comment here.
 </document>
 
 <document name="replies/list_of_major_changes.tex">
-List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
+\documentclass[a4paper,12pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\input{../preamble}
+
+\begin{document}
+
+\section*{List of Major Changes}
+
+\begin{enumerate}
+    \item First major change
+    \item Second major change
+    \item Third major change
+    % Add more items as needed
+\end{enumerate}
+
+% Minor improvements can be grouped into one item
+\item[*] Various minor improvements to the presentation of the paper, including:
+\begin{itemize}
+    \item First minor improvement
+    \item Second minor improvement
+    % Add more minor improvements as needed
+\end{itemize}
+
+\end{document}
 </document>
 </rebuttal_letter>
 
