@@ -15,13 +15,11 @@ from .prompt_utils import load_agent_settings_and_prompts
 from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings
 
 
-def get_output_file_name(input_file, agent, model, output_type, reflect=False):
+def get_output_file_name(input_file, agent, model, output_type, round):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
     output_type = output_type.strip(".")
-    output_file = f"{file_name}_{agent_first_name_chunk}_{model}.{output_type}"
-    if reflect:
-        output_file = output_file.replace(f"_{model}", f"_reflect_{model}")
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -143,7 +141,7 @@ class BaseReflectChainAgent(ABC):
             else:
                 # Handle single output file
                 generated_output_file = get_output_file_name(
-                    self.args.input_file, self.args.agent, self.model_settings["model"], self.output_settings["output_type"], reflect=False
+                    self.args.input_file, self.args.agent, self.model_settings["model"], self.output_settings["output_type"], round=0
                 )
                 print(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)

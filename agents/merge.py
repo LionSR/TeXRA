@@ -20,7 +20,7 @@ def get_output_file_name_merge(input_file, edited_file):
     if input_base != edited_base_override:
         base = edited_base_override
 
-    round_match = re.search(r'_r(\d+)_', edited_base)
+    round_match = re.search(r"_r(\d+)_", edited_base)
     round = int(round_match.group(1)) if round_match else 0
     model = parts[-1]
     output = f"{base}_{agent}_r{round}_full_{model}.tex"
