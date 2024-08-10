@@ -190,7 +190,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = "xml"
+        file_extension = self.output_settings["output_type"]
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round)
 
     def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
