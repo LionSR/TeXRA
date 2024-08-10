@@ -260,6 +260,12 @@ def correct_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def polish_prl(model, input_file, **kwargs):
+    execute_agent("edit_prl", "polish_prl", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 @click.option("--auxiliary_files", default=None)
 def correct_supp_prl(model, input_file, **kwargs):
     execute_agent("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
@@ -450,11 +456,10 @@ def clean_multiple(model, input_file, input_files, reflect, agent):
 @click.option("--model", required=False, default="opus", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_multiple(model, input_file, input_files, reflect, agent, output_name_override):
-    run_pack_multiple(model, input_file, input_files, reflect, agent, output_name_override)
+def pack_multiple(model, input_file, input_files, agent, output_name_override):
+    run_pack_multiple(model, input_file, input_files, agent, output_name_override)
 
 
 @click.command()
@@ -617,7 +622,7 @@ cli.add_command(merge)
 
 # edit_prl.py
 cli.add_command(correct_prl)
-cli.add_command(correct_supp_prl)
+cli.add_command(polish_prl)
 
 # reply_prl.py
 cli.add_command(reply_letter_prl)

@@ -20,15 +20,17 @@ def get_agent_first_name_chunk(agent):
         return agent.split("_")[0] if "_" in agent else agent.split("-")[0]
 
 
-def get_file_patterns(base, model, agent, max_rounds=10):
+def get_file_patterns(base, model, agent, num_rounds=2):
     patterns = []
-    for round in range(max_rounds):
+    for round in range(num_rounds):
         patterns.extend(
             [
                 f"{base}_{agent}_r{round}_{model}",
                 f"{base}_{agent}_r{round}_{model}_diff",
+                f"{base}_{agent}_r{round}_{model}_diffr{round-1}",
                 f"{base}_{agent}_r{round}_full_{model}",
                 f"{base}_{agent}_r{round}_full_{model}_diff",
+                f"{base}_{agent}_r{round}_full_{model}_diffr{round-1}",
                 f"{base}_{agent}_r{round}_{model}_thinking",
             ]
         )
@@ -169,10 +171,7 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
     file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
 
     # Add patterns for additional XML files
-    additional_patterns = [
-        f"{base_name}_{agent_first_name_chunk}_r0_{model}.xml",
-        f"{base_name}_{agent_first_name_chunk}_r1_{model}.xml"
-    ]
+    additional_patterns = [f"{base_name}_{agent_first_name_chunk}_r0_{model}.xml", f"{base_name}_{agent_first_name_chunk}_r1_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
     now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
