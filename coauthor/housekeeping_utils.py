@@ -20,18 +20,18 @@ def get_agent_first_name_chunk(agent):
         return agent.split("_")[0] if "_" in agent else agent.split("-")[0]
 
 
-def get_file_patterns(base, model, agent, reflect):
-    patterns = [f"{base}_{agent}_{model}", f"{base}_{agent}_{model}_diff", f"{base}_{agent}_full_{model}", f"{base}_{agent}_full_{model}_diff"]
-    if reflect and reflect != "False":
-        patterns.extend(
-            [
-                f"{base}_{agent}_reflect_{model}",
-                f"{base}_{agent}_reflect_{model}_diff",
-                f"{base}_{agent}_reflect_{model}_diffdiff",
-                f"{base}_{agent}_reflect_full_{model}",
-                f"{base}_{agent}_reflect_full_{model}_diff",
-            ]
-        )
+def get_file_patterns(base, model, agent):
+    patterns = [
+        f"{base}_{agent}_r0_{model}",
+        f"{base}_{agent}_r0_{model}_diff",
+        f"{base}_{agent}_r0_full_{model}",
+        f"{base}_{agent}_r0_full_{model}_diff",
+        f"{base}_{agent}_r1_{model}",
+        f"{base}_{agent}_r1_{model}_diff",
+        f"{base}_{agent}_r1_{model}_diffdiff",
+        f"{base}_{agent}_r1_full_{model}",
+        f"{base}_{agent}_r1_full_{model}_diff",
+    ]
     return patterns
 
 
@@ -87,13 +87,13 @@ def find_file(input_dir, pattern, ext=None):
     return None
 
 
-def run_clean_single(model, input_file, reflect, agent):
+def run_clean_single(model, input_file, agent):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
     agent_first_name_chunk = get_agent_first_name_chunk(agent)
-    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk, reflect)
-    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_reflect_{model}_thinking"])
+    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
+    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_r0_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_r1_{model}_thinking"])
 
     extensions = TEMP_EXTENSIONS + PACK_EXTENSIONS
 
@@ -107,14 +107,14 @@ def run_clean_single(model, input_file, reflect, agent):
     print(f"Cleanup complete for {input_file}.")
 
 
-def run_pack_single(model, input_file, reflect, agent, output_folder=None):
+def run_pack_single(model, input_file, agent, output_folder=None):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
     agent_first_name_chunk = get_agent_first_name_chunk(agent)
 
-    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk, reflect)
-    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_reflect_{model}_thinking"])
+    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
+    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_r0_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_r1_{model}_thinking"])
     file_patterns.append(base_name)
 
     moved_files = []
