@@ -164,7 +164,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, agent: string, reflect: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      let command = `coauthor pack-single --agent=${agent} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor pack-single --agent=${agent} --model=${model}`;
       if (outputNameOverride) {
         command += ` --input_file="${outputNameOverride}"`;
       }
@@ -466,7 +466,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const terminal = ensureTerminal();
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
-      let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent} --model=${model}`;
       if (outputNameOverride) {
         command += ` --output_name_override="${outputNameOverride}"`;
       }

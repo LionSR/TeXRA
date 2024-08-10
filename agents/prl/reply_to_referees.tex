@@ -1,0 +1,173 @@
+%!TEX output_directory=../build
+%!TEX copy_output_on_build=true
+\documentclass[a4paper,12pt]{article}
+
+\usepackage[a4paper,margin=2.5cm]{geometry}
+
+\input{../preamble}
+
+\newenvironment{referee}[1]
+{\noindent {\bf Referee #1}}
+{\vspace{1em}}
+
+\newenvironment{response}
+{\noindent \color{blue!40!black}{\bf Response}}
+{\vspace{1em}}
+
+\bibliographystyle{ieeetr}
+
+\begin{document}
+
+\subsection*{Response to Referee A}
+\begin{referee}{A}
+	The authors propose the variational method for the thermal states defined by tensor and neural networks.
+	It is based on the modified free energy with Renyi entropy, which can be efficiently estimated from Monte Carlo samplings.
+	This approach allows us to represent thermal states without an effective imaginary time evolution from high to low temperatures.
+
+	The authors examine the performance of the wider class of a variational ansatz of thermal states compared to the previous study [68] in which MPS representation was checked.
+	They found that MPS performs well for the one-dimensional quantum Ising model as the bond dimension increases.
+	However, RBM does not perform well.
+	For the two-dimensional case, Snakelike SBS ansatz's results improve with increasing the number of strings and the bond dimension, and it is slightly better than MPS, but RBM again does not.
+	The computational complexity of the snakelike SBS is scalable.
+	Therefore, the snakelike SBS, which includes MPS, may be suitable for the variational ansatz of the thermal states for one and two-dimensional quantum cases.
+
+	Estimating the thermal states of quantum many-body systems is a difficult problem.
+	In [68], a new approach using modified free energy has been proposed.
+	The authors examined this approach using a wider class of variational ansatz with tensor and neural networks.
+	Their results showed that this approach could be more innovative.
+	However, it has yet to be.
+	In addition, the test examples are limited to the quantum Ising models.
+	Therefore, I do not recommend the publication of this manuscript in Physical Review Letters.
+\end{referee}
+
+\begin{response}
+	We wish to thank the Referee for carefully reading the manuscript.
+	We believe that the purpose of this work is to open new avenues for the numerical exploration of the properties of thermal states of many-body systems methods.
+	The numerical results are meant to validate and benchmark the method, rather than provide novel physical insights.
+	We would also thank them for their detailed feedback and answer to all points below.
+\end{response}
+
+\begin{referee}{A}
+	In the following, I summarize unclear points from this manuscript:\\
+	(1) The concept of MPDO only appears in the caption of Fig.~1.
+	It might be better to introduce it in the main text.
+	In addition, the following sentence is also written only in the caption: ``All the ansatz used in this work are defined and depicted by their purification.''
+\end{referee}
+
+\begin{response}
+	[1-2 sentences in main text]
+\end{response}
+
+\begin{referee}{A}
+	(2) What is the definition of $E$ in Eq.~(3a)?
+\end{referee}
+
+\begin{response}
+	We thank the Referee for pointing this out.
+
+		[add definition in main text]
+\end{response}
+
+\begin{referee}{A}
+	(3) Is the definition of $X_i(s)$ correct in the third paragraph of the left column on Page 3?
+	In addition, understanding the matrix product state representation through the current description takes much work.
+\end{referee}
+
+\begin{response}
+	[add 1-2 sentences to clarify]
+\end{response}
+
+\begin{referee}{A}
+	(4) In Fig.~2(b) and (c)'s caption, $N = 10 \times 10 \rightarrow N = 100$ because the system is one-dimensional.
+	What are the MPO results representing the Gibbs ensemble?
+\end{referee}
+
+\begin{response}
+	We thank the Referee for spotting this inconsistency.
+	The corresponding caption has been updated.
+\end{response}
+
+\begin{referee}{A}
+	(5) I need clarification about the description in Fig.~3's caption for the parameter setting of $h_x$.
+\end{referee}
+
+\begin{response}
+	The corresponding caption was indeed unclear, it has been updated.
+\end{response}
+
+\begin{referee}{A}
+	(6) The more additional description is needed for the two-dimensional case.
+	Does the $N=16$ mean the square lattice of $4 \times 4$ with an open boundary?
+	What type of strings are used?
+\end{referee}
+
+\begin{response}
+	[Discuss size] \\
+	Regarding the string types used in SnakeSBS, we employ strings that snake horizontally and vertically across the lattice, as illustrated in Fig. S4 of the Supplemental Material.
+	There are four possible strings in total, denoted as SnakeSBS($n_s=2$) for one horizontal and one vertical string, and SnakeSBS($n_s=4$) for all four strings.
+		[add comment in text?]
+\end{response}
+
+\subsection*{Response to Referee B}
+\begin{referee}{B}
+	The article explores an approach to simulate quantum many-body thermal states via a variational procedure minimizing the free energy.
+	To make it numerically tractable, it follows the approach of Ref.~[68] by some of the same authors, replacing the von Neuman entropy term in the free energy with the 2-Renyie entropy.
+	The article explores a range of variational analyses including matrix
+	product states (already explored to some extent in [68]), entangled plaquette states, string-bond states, restricted Boltzmann machine, etc., where the gradient calculations for optimization follow from Monte Carlo sampling.
+	The bulk of the presented results focuses on the convergence (or the lack of systematic convergence in some cases) of those ansatzes to the 2-Raneyi ensemble for a minimal example of a paradigmatic Ising model in a transverse field.
+
+	The article is well-written overall and well-motivated.
+	The main text is a little dense.
+	However, the appendix offers a pedagogical discussion of the technical aspects of the approach, making an entire work sufficiently self-contained.
+
+	While I appreciate the technical aspects of the work, I don't believe it contains material that would warrant publication in the Physical Review Letter.
+	The presented results do not look promising enough to make me believe that the approach would have a significant impact of the kind specified in the PRL acceptance criteria.
+	However, the article is explorying an interesting approach and I would recommend its publication in a more specialistic journal, such as Physical Review B, after a small extension of the presented data -- see further comments below.
+\end{referee}
+
+\begin{response}
+	We wish to thank the Referee for carefully reading the manuscript.
+	As mentioned above, the purpose of this work is to open new avenues for the numerical exploration of the properties of thermal states of many-body systems methods.
+	It has already been acknowledged in several follow-up works (arXiv:2402.07605, arXiv:2404.04005, arXiv:2405.02158) and a recent review paper (arXiv:2402.09402).
+	The specific points raised are addressed below.
+\end{response}
+
+\begin{referee}{B}
+	The Ising model studied by the authors (in a small one-dimensional example where it can be checked against exact diagonalization, as well as in a small 10 by 10 two-dimensional example) is widely believed to be easy to simulate.
+	As such, anything but a stellar performance for an Ising model is a prerequisite to consider using a new numerical approach to more challenging problems.
+	However, the presented data do not hint at a stellar performance.
+
+	On one hand, there is an issue of uncontrollable approximation replacing von Neuman entropy with the 2-Renyie entropy (independent from the convergence issues of a particular ansatz to the 2-Renyie ensemble).
+	The authors make a bold statement that those two ensembles converge in some limits.
+	However, there is little evidence quantifying this error -- in a function of inverse temperature beta, and not other quantities that can hide this aspect; as done by the authors in the main text.
+	By the way, it is sometimes not clear to me what the authors consider as ``exact'', i.e., when ``exact'' refers to modified distribution, and when to the thermal one.
+	This aspect should be made more clear in figure captions.
+\end{referee}
+
+\begin{response}
+	[explain convergence, expand main text]
+\end{response}
+
+\begin{referee}{B}
+	Moreover, the data for a two-dimensional example show only high-temperature results, truncating beta at around 0.6 in Fig.~7 -- with a visual deviation of the expectation values from the exact ones around $\beta=0.6$.
+	It is hard to judge to what extent this deviation is a result of 2-Renyie approximation or the lack of convergence of variational ansatz.
+	The two-dimensional Ising model has a phase transition at around $\beta_c=0.8$ for $h_x = 2.5$ (in the thermodynamic limit).
+	As such, the authors omit the most interesting and likely the most challenging feature of the phase diagram of the two-dimensional Ising model -- and it only makes me think why?
+	I believe that including the data for larger beta (also for other observables) is necessary for the reader to be able to judge the performance of the approach.
+\end{referee}
+
+\begin{response}
+	[update figure]
+\end{response}
+
+\begin{referee}{B}
+	Finally, a small question.
+	The authors motivate the necessity of developing the approach by mentioning Hubbard's model.
+	How challenging technically would it be to include fermionic statistics in a SnakeMPS ansatz -- that the authors consider as the best performing one -- where various MPS-s would have to match a convention on a global fermionic order in the lattice?
+\end{referee}
+
+\begin{response}
+	[add comment of fermionic TNs]
+\end{response}
+
+\end{document}

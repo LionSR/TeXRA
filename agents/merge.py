@@ -49,9 +49,9 @@ class Merge(DirectWrite):
     def get_output_file(self):
         return get_output_file_name_merge(self.args.input_file, self.args.edited_file)
 
-    def handle_output(self, state, end_turn, output_file, is_reflection_complete=False):
+    def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
-            super().handle_output(state, end_turn, output_file, is_reflection_complete)
+            super().handle_output(state, end_turn, output_file, round)
             print(colored(f"Output file: {output_file}", "yellow"))
 
 

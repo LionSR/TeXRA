@@ -32,7 +32,7 @@ You will be revising a paper submitted to Physical Review Letters based on refer
 {SUPP_CONTENT}
 </document>
 <document name="Editor Decision Letter">
-{EDITOR_DECISION_LETTER}
+{EDITOR_LETTER}
 </document>
 <document name="Referee Report A">
 {REFEREE_REPORT_A}
