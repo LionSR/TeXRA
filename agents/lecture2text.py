@@ -1,7 +1,7 @@
 from coauthor.base_agents import DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "lecture2text")
+agent_path = coa.get_agent_path(coa, "lecture2text")
 
 
 class Lecture2Text(DirectWrite):
@@ -40,7 +40,7 @@ def main():
     )
     args = parser.parse_args()
 
-    lecture2text = Lecture2Text(args, prompt_path)
+    lecture2text = Lecture2Text(args, agent_path)
     lecture2text.run()
 
 

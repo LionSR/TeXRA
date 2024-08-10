@@ -21,7 +21,6 @@ When writing a professional *.tex LaTeX document, you must:
 <![CDATA[
 I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a long, self-contained, formal, and meticulous LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
 
-
 Here is the transcription {INPUT_FILE}:
 <document>
 {INPUT_CONTENT}

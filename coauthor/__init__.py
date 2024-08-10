@@ -5,7 +5,7 @@ from .file_utils import (
     write_file,
     append_file,
     extract_text_from_tags,
-    get_prompt_path,
+    get_agent_agent_path,
 )
 from .process import process_first_round, process_reflection_round
 from .model_utils import is_openai_model, is_anthropic_model, compute_api_price, get_model_client

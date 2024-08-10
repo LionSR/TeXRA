@@ -29,8 +29,6 @@ If there are instructions provided below, please follow them and expand them in 
 <instructions>
 {INSTRUCTION}
 </instructions>
-
-
 ]]>
 </user_prefix>
 <user_request>
@@ -65,7 +63,6 @@ Before improving the LaTeX document, please think in <scratchpad> about your pla
 4. [Changes in accordance with the instructions]
     - Rationale: [explanation]
     - Proposed addition to LaTeX: [outline of addition]
-
 
 ... continue until all major missing elements have been identified.
 </scratchpad>
