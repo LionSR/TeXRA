@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<agent name="rebuttal_draft">
+<agent name="replies/draft_rebuttal">
 <settings>
-<document_tag>rebuttal_letter</document_tag>
-<end_tag>&lt;/rebuttal_letter&gt;</end_tag>
-<output_type>xml</output_type>
-<prefill_first>&lt;rebuttal_letter&gt;</prefill_first>
+    <document_tag>rebuttal_letter</document_tag>
+    <end_tag>&lt;/rebuttal_letter&gt;</end_tag>
+    <output_type>xml</output_type>
+    <prefill_first>&lt;rebuttal_letter&gt;</prefill_first>
 </settings>
 <prompts>
 <system_prompt>
@@ -27,28 +27,28 @@ When drafting the rebuttal and revising the paper, you must:
 You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
 <documents>
-<document name="Cover Letter">
+<document name="replies/Cover Letter">
 {COVER_LETTER}
 </document>
-<document name="{INPUT_FILE}">
+<document name="replies/{INPUT_FILE}">
 {MAIN_CONTENT}
 </document>
-<document name="Appendix">
+<document name="replies/Appendix">
 {SUPP_CONTENT}
 </document>
-<document name="Editor Decision Letter">
+<document name="replies/Editor Decision Letter">
 {EDITOR_LETTER}
 </document>
-<document name="Referee Report A">
+<document name="replies/Referee Report A">
 {REFEREE_REPORT_A}
 </document>
-<document name="Referee Report B">
+<document name="replies/Referee Report B">
 {REFEREE_REPORT_B}
 </document>
-<document name="Example Reply Letter">
+<document name="replies/Example Reply Letter">
 {EXAMPLE_REPLY_LETTER}
 </document>
-<document name="Instructions">
+<document name="replies/Instructions">
 {INSTRUCTION}
 </document>
 </documents>
@@ -69,13 +69,14 @@ Explanation of documents:
 Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the <scratchpad></scratchpad> tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
 
 After your planning, draft a reply letter that includes the following:
-1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <cover_letter></cover_letter> tag.
-2. A point-by-point response to the referee comments. To do this:
-- Split each referee report in the <referee_report_a></referee_report_a> or <referee_report_b></referee_report_b> tag into individual segments. Copy each exact comment as a verbatim segment within the <referee_comment></referee_comment> tag.
-- Similar to the provided example, all the referee's comments (summary, recommendations, criticisms, questions) need to be covered and addressed in the <point_by_point_reply_a></point_by_point_reply_a> or <point_by_point_reply_b></point_by_point_reply_b> tag. For recommendations by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what has been changed in the paper, similar to the provided example.
-- Write your rebuttal to each comment inside the <author_response></author_response> tag immediately after each <referee_comment></referee_comment>. Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use a "Show, not tell" approach - be specific about what has been changed in the paper, similar to the provided example.
-3. At the end of each reply to the referees, write a concluding paragraph to further persuade the referee. At the end of the reply letter, write a list of major changes you made to the paper.
-4. A revised version of the paper that addresses the referee comments and implements all the proposed changes mentioned in the reply letter. Include the full text of the revised paper inside the <revised_paper></revised_paper> tag.
+1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
+2. A point-by-point response to the referee comments. Write this inside the <document name="replies/reply_to_referees.tex"></document> tag. To do this:
+    - Split each referee report into separate comments. Copy each exact comment as a verbatim segment inside the \begin{referee}{A} (or B) and \end{referee} environment.
+    - Similar to the provided example, all the referee's comments (summary, recommendations, criticisms, questions) need to be covered and addressed in the reply letter. For recommendations by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what has been changed in the paper, similar to the provided example.
+    - Write your response to each comment using the \begin{response} and \end{response} environment immediately after each \begin{referee}{A} (or B) and \end{referee} environment.
+    - Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use a "Show, not tell" approach - be specific about what has been changed in the paper, similar to the provided example.
+3. At the end of each reply to the referees, write a concluding paragraph to further persuade the referee.
+4. A list of major changes you made to the paper. Write this inside the <document name="replies/list_of_major_changes.tex"></document> tag. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
 
 Write the full reply letter in the following format:
 
@@ -102,6 +103,7 @@ Yours sincerely,
 
 \end{document}
 </document>
+
 <document name="replies/reply_to_referees.tex">
 \documentclass[a4paper,12pt]{article}
 
@@ -122,6 +124,7 @@ Yours sincerely,
 \begin{document}
 
 \subsection*{Response to Referee A}
+
 \begin{referee}{A}
 First comment from the referee A here. Potentially it is a summary of our work.
 \end{referee}
@@ -150,7 +153,6 @@ Your response to the second comment here.
 <document name="replies/list_of_major_changes.tex">
 List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
 </document>
-
 </rebuttal_letter>
 
 Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the reply letter in the format specified above.
@@ -163,10 +165,10 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 <requirements>
 - Increases the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
 - Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical arguments. 
-- The style and tone of the reply letter should be similar to the provided example (under <example_rebuttal_letter>).
+- The style and tone of the reply letter should be similar to the provided example (under <document name="replies/example_rebuttal_letter">).
 </requirements>
 
-Please output the revised cover letter (under <cover_letter>) and the revised response letter (under <point_by_point_reply_a> and <point_by_point_reply_b>) that meets the above requirements.
+Please output the revised letter to the editor (under <document name="replies/reply_to_editor.tex">) and the revised response letter (under <document name="replies/reply_to_referees.tex">) that meets the above requirements.
 ]]>
 </user_reflect>
 </prompts>

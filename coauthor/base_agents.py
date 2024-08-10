@@ -103,11 +103,11 @@ class BaseReflectChainAgent(ABC):
                 print(f"Error reading file {self.args.input_file}: {e}")
         return None
 
-        def _run_latexdiff_for_round(self, input_file, output_file, round):
-            if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
-                run_latexdiff(input_file, output_file, self.args.agent, suffix="_diff")
-            else:
-                print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {input_file} or {output_file}")
+    def _run_latexdiff_for_round(self, input_file, output_file, round):
+        if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
+            run_latexdiff(input_file, output_file, self.args.agent, suffix="_diff")
+        else:
+            print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {input_file} or {output_file}")
 
     def _run_latexdiff_between_rounds(self, first_output, second_round):
         if first_output and second_round and os.path.exists(first_output) and os.path.exists(second_round):
