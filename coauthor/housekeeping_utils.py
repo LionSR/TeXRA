@@ -184,7 +184,7 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
     # Pack input files
     for input_file in input_files:
         print(f"\nPacking {input_file} into {common_output_folder}")
-        run_pack_single(model, input_file, reflect, agent, output_folder=common_output_folder)
+        run_pack_single(model, input_file, agent, output_folder=common_output_folder)
 
     # Pack additional XML files
     for pattern in additional_patterns:
