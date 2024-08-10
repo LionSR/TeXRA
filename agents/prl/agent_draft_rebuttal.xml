@@ -20,6 +20,10 @@ When drafting the rebuttal and revising the paper, you must:
 - Use LaTeX formatting appropriately for all scientific notation and equations.
 - Tailor your responses to the specific field and context of the research paper.
 - Demonstrate a deep understanding of the research topic and its broader implications in the field.
+
+When writing professional *.tex LaTeX documents, you must:
+- Use professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β. Use $J_1$ instead of J1. Use $\approx$ instead of ≈.
+- Only use enumerate and itemize environments for lists. 
 ]]>
 </system_prompt>
 <user_prefix>
@@ -66,7 +70,7 @@ Explanation of documents:
 </user_prefix>
 <user_request>
 <![CDATA[
-Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the <scratchpad></scratchpad> tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure.
+Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the <scratchpad></scratchpad> tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure. 
 
 After your planning, draft a reply letter that includes the following:
 1. A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
@@ -77,6 +81,7 @@ After your planning, draft a reply letter that includes the following:
     - Be respectful and diplomatic, but firm in your responses. Follow the principles from the book "They Say, I Say" in crafting your rebuttals. Use a "Show, not tell" approach - be specific about what has been changed in the paper, similar to the provided example.
 3. At the end of each reply to the referees, write a concluding paragraph to further persuade the referee.
 4. A list of major changes you made to the paper. Write this inside the <document name="replies/list_of_major_changes.tex"></document> tag. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
+5. A revised version of the paper that addresses the referee comments and implements all the proposed changes mentioned in the reply letter. Include the main paper and the supplementary materials.
 
 Write the full reply letter in the following format:
 
@@ -147,8 +152,8 @@ Your response to the second comment here.
 (Similar structure as for referee A)
 
 \end{document}
-</document>
 
+</document>
 <document name="replies/list_of_major_changes.tex">
 \documentclass[a4paper,12pt]{article}
 \usepackage[a4paper,margin=2.5cm]{geometry}
@@ -163,21 +168,29 @@ Your response to the second comment here.
     \item Second major change
     \item Third major change
     % Add more items as needed
-\end{enumerate}
 
-% Minor improvements can be grouped into one item
-\item[*] Various minor improvements to the presentation of the paper, including:
-\begin{itemize}
-    \item First minor improvement
-    \item Second minor improvement
-    % Add more minor improvements as needed
-\end{itemize}
+    % Minor improvements can be grouped into one item
+    \item[*] Various minor improvements to the presentation of the paper, including:
+    \begin{itemize}
+        \item First minor improvement
+        \item Second minor improvement
+        % Add more minor improvements as needed
+    \end{itemize}
+\end{enumerate}
 
 \end{document}
 </document>
+
+<document name="{INPUT_FILE}">
+(Full text of your revised paper here.)
+</document>
+<document name="supp.tex">
+(Full text of your revised supplementary materials here.)
+</document>
+
 </rebuttal_letter>
 
-Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the reply letter in the format specified above.
+Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to drafting the rebuttal letter in the format specified above.
 ]]>
 </user_request>
 <user_reflect>
@@ -190,7 +203,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 - The style and tone of the reply letter should be similar to the provided example (under <document name="replies/example_rebuttal_letter">).
 </requirements>
 
-Please output the revised letter to the editor (under <document name="replies/reply_to_editor.tex">) and the revised response letter (under <document name="replies/reply_to_referees.tex">) that meets the above requirements.
+Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to output the revised letter to the editor (under <document name="replies/reply_to_editor.tex">) and the revised response letter (under <document name="replies/reply_to_referees.tex">), the revised main paper (under <document name="{INPUT_FILE}">) and the revised supplementary materials (under <document name="supp.tex">) that meets the above requirements.
 ]]>
 </user_reflect>
 </prompts>

@@ -34,7 +34,7 @@ def check_for_massive_repetition(last_response, new_response):
 def ensure_correct_xml_structure(file_path, document_tag):
     with open(file_path, "r+", encoding="utf-8") as file:
         content = file.read()
-        if content.startswith("<scratchpad>"):
+        if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
             if not content.endswith(f"</{document_tag}>"):
                 if "</{document_tag}>" not in content:
                     content += f"\n</{document_tag}>"

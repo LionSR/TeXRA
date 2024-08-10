@@ -173,4 +173,6 @@ In summary, I thank the referee for his/her valuable suggestions/comments.  Foll
 \end{enumerate}
 </document>
 
+<!- the revised paper and the revised supplementary materials are not included here in this example, but are included in the final submission ->
+
 </rebuttal_letter>
