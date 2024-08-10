@@ -75,5 +75,7 @@ def log_and_print_statistics(state, model, log_file=None):
 
 
 def log_output_files(output_file, log_file):
-    tag = "reflection_output_file" if "_r1_" in output_file else "output_file"
+    round_match = re.search(r'_r(\d+)_', output_file)
+    round = int(round_match.group(1)) if round_match else 0
+    tag = "reflection_output_file" if round > 0 else "output_file"
     append_file(log_file, f"  <{tag}>{output_file}</{tag}>\n")
