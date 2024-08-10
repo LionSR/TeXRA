@@ -154,9 +154,11 @@ class BaseReflectChainAgent(ABC):
             first_k_tex_document=first_k_tex_document,
         )
 
-        self.handle_output(state, end_turn, self.output_file, round=0)
+        self.handle_output(state, end_turn, self.first_output_file, round=0)
 
-        print(f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.output_file, 'green')}")
+        print(
+            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.first_output_file, 'green')}"
+        )
 
         return state, messages
 
