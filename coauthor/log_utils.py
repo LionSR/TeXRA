@@ -75,5 +75,5 @@ def log_and_print_statistics(state, model, log_file=None):
 
 
 def log_output_files(output_file, log_file):
-    tag = "reflection_output_file" if "reflect" in log_file else "output_file"
+    tag = "reflection_output_file" if "_r1_" in output_file else "output_file"
     append_file(log_file, f"  <{tag}>{output_file}</{tag}>\n")
