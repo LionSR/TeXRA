@@ -12,7 +12,6 @@
 Your task is to revise a research paper on developing a new variational method for quantum many-body physics and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
 
 When writing a professional *.tex LaTeX document, you must:
-- Use \be for \begin{equation} and \ee for \end{equation}. 
 - Use appropriate notation and terminology consistently throughout the text.
 - Ensure that you maintain the structure and formatting of each individual document while making improvements.
 - Keep the comments that start with % in the documents.
@@ -64,7 +63,7 @@ Explanation of documents:
 9. Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
 
 You will be revising all of the following documents:
-{OUTPUT_FILES_ORDER}
+OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>
 </user_prefix>
 <user_request>

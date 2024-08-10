@@ -1,10 +1,10 @@
-from coauthor.base_tasks import ThinkWrite
+from coauthor.base_tasks import ThinkAndWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "faculty")
 
 
-class ReviseApplicationDocument(ThinkWrite):
+class ReviseApplicationDocument(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
 
@@ -14,10 +14,10 @@ class ReviseApplicationDocument(ThinkWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    # The handle_output method is inherited from ThinkWrite
+    # The handle_output method is inherited from ThinkAndWrite
 
 
-class ReviseGrant(ThinkWrite):
+class ReviseGrant(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
 
@@ -35,7 +35,7 @@ class ReviseGrant(ThinkWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    # The handle_output method is inherited from ThinkWrite
+    # The handle_output method is inherited from ThinkAndWrite
 
 
 def main():
