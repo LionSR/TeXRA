@@ -1,14 +1,22 @@
-from coauthor.base_agents import ThinkAndWrite, DirectWrite
 import coauthor as coa
 import os
+from termcolor import cprint
+
+from coauthor.base_agents import ThinkAndWrite, DirectWrite
 
 agent_path = coa.get_agent_path(coa, "prl")
 
 
 class ReplyPRLBase:
+    def setup(self):
+        super().setup()
+
+        if not self.args.output_files:
+            self.args.output_files = ["reply_to_editor.tex", "reply_to_referees.tex", "list_of_major_changes.tex"]
+
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
-        
+
         # Ensure all file paths are provided before reading
         required_files = [
             "preamble",
@@ -19,7 +27,7 @@ class ReplyPRLBase:
             "report_a",
             "report_b",
             "example_rebuttal_letter",
-            "instruction",
+            "instruction_file",
         ]
         for file_arg in required_files:
             file_path = getattr(self.args, file_arg, None)
@@ -40,7 +48,7 @@ class ReplyPRLBase:
                     user_vars["REFEREE_REPORT_B"] = content
                 elif file_arg == "example_rebuttal_letter":
                     user_vars["EXAMPLE_REPLY_LETTER"] = content
-                elif file_arg == "instruction":
+                elif file_arg == "instruction_file":
                     user_vars["INSTRUCTION"] = content
                 else:
                     user_vars[file_arg.upper() + "_CONTENT"] = content
@@ -55,6 +63,8 @@ class ReplyPRLBase:
 
         if self.args.agent == "revise_supp" and self.args.draft_main_content:
             user_vars["DRAFT_MAIN_CONTENT"] = coa.read_file(self.args.draft_main_content)
+
+        user_vars["OUTPUT_FILES"] = self.args.output_files
 
         return user_vars
 
@@ -74,7 +84,7 @@ def main():
         type=str,
         default="reply_letter",
         help="Mode of operation.",
-        choices=["draft_rebuttal", "reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
+        choices=["rebuttal_draft", "reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
     )
     parser.add_argument("--preamble_file", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
     parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
@@ -84,14 +94,17 @@ def main():
     parser.add_argument("--editor_letter", type=str, default="replies/editor_letter.txt", help="Path to the editor decision letter file.")
     parser.add_argument("--report_a", type=str, default="replies/report_a.txt", help="Path to the first referee report file.")
     parser.add_argument("--report_b", type=str, default="replies/report_b.txt", help="Path to the second referee report file.")
-    parser.add_argument("--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file.")
+    parser.add_argument(
+        "--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
+    )
     parser.add_argument("--instruction_file", type=str, default="replies/instruction.txt", help="Path to the instruction file.")
     args = parser.parse_args()
 
-    if args.agent in ["reply_letter", "draft_rebuttal"]:
+    if args.agent in ["reply_letter", "rebuttal_draft"]:
         reply_prl = ReplyPRLThink(args, agent_path)
     else:
         reply_prl = ReplyPRLDirect(args, agent_path)
+
     reply_prl.run()
 
 
