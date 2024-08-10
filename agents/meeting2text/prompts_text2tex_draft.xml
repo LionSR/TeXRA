@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent name="text2tex_draft" inherits="text2tex">
+<prompts>
+<system_prompt>
+<![CDATA[
+You are a professor of physics and a meticulous transcriber in converting academic discussions into formal LaTeX documents, maintaining the scientific rigor and clarity of the original conversation while improving upon existing drafts. Your primary focus is on identifying and adding missing content and equations from the transcription to the draft LaTeX document.
+
+When writing a professional *.tex LaTeX document, you must:
+- Use \begin{align} ... \end{align} for displayed equations
+- Use appropriate notation and terminology consistently throughout the text.
+- Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+I am going to give you a draft LaTeX document and a transcribed text from an academic discussion. Your main task is to identify missing content and equations in the draft and add them based on the transcription. Read both documents extremely carefully.
+
+Here is the draft .tex LaTeX document {INPUT_FILE}:
+<draft_document>
+{DRAFT_CONTENT}
+</draft_document>
+
+Here is the .md transcription:
+<transcript>
+{TRANSCRIPT_CONTENT}
+</transcript>
+
+If there are instructions provided below, please follow them and expand them in the scratchpad.
+<instructions>
+{INSTRUCTION}
+</instructions>
+
+
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+Your primary task is to improve the provided draft LaTeX document by adding missing content and equations from the transcription. Follow these guidelines:
+<guidelines>
+1. Carefully compare the draft and the transcription to identify missing information, concepts, and equations.
+2. Add any missing equations from the transcription to the LaTeX document, using \begin{align} and \end{align} for multi-line equations.
+3. Incorporate any missing explanations or elaborations on concepts found in the transcription.
+4. Ensure that every mathematical concept mentioned in the transcription is represented in the LaTeX document.
+5. Maintain the overall structure of the existing LaTeX document, inserting new content where it fits logically.
+6. Convert any conversational explanations from the transcription into formal, precise, and technical language appropriate for a LaTeX document.
+7. If visual inputs are mentioned in the transcription but missing from the draft, add descriptions or placeholders for these in the LaTeX document.
+8. Focus on adding content rather than extensively rewriting existing sections.
+9. Maintain consistency in notation and terminology throughout the document.
+10. Condense flowery words and phrases.
+</guidelines>
+
+If there are provided visual inputs such as the photos of the whiteboard, please use them to help scribing equations and figures. If there were some schematic diagrams which are also mentioned in the transcription, please use tikz to draw them.
+
+Before improving the LaTeX document, please think in <scratchpad> about your plan:
+<scratchpad>
+1. [Missing equation or concept 1]
+    - Location in transcription: [reference]
+    - Proposed addition to LaTeX: [outline of addition]
+2. [Missing equation or concept 2]
+    - Location in transcription: [reference]
+    - Proposed addition to LaTeX: [outline of addition]
+3. [Missing explanation or elaboration]
+    - Location in transcription: [reference]
+    - Proposed addition to LaTeX: [outline of addition]
+4. [Changes in accordance with the instructions]
+    - Rationale: [explanation]
+    - Proposed addition to LaTeX: [outline of addition]
+
+
+... continue until all major missing elements have been identified.
+</scratchpad>
+
+Then, output the improved LaTeX document with the added content inside the <latex_document></latex_document> tags. 
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Review your output to ensure it effectively incorporates all the missing content and equations from the transcription. Check that the improved LaTeX document:
+<requirements>
+- Includes all relevant equations from the transcription that were missing in the original draft.
+- Adds explanations and elaborations on concepts that were present in the transcription but absent in the draft.
+- Maintains the overall structure and formatting of the original draft LaTeX document while seamlessly integrating new content.
+- Uses \begin{align} and \end{align} for all newly added multi-line equations.
+- Formalizes any conversational content from the transcription to match the LaTeX document's formal language and style.
+- Maintains consistency in notation and terminology throughout the document, including in newly added sections.
+- Does not remove or significantly alter existing content from the draft unless it directly conflicts with the transcription.
+- Preserves the logical flow of ideas while incorporating new content.
+</requirements>
+
+Please review your additions and make any necessary adjustments. Think in <scratchpad> about any further improvements:
+<scratchpad>
+1. [Specific addition or modification 1]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+2. [Specific addition or modification 2]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+3. [Specific addition or modification 3]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+
+... continue until all necessary improvements have been addressed.
+</scratchpad>
+
+Output the final improved LaTeX document inside the <latex_document></latex_document> tags. 
+]]>
+</user_reflect>
+</prompts>
+</agent>

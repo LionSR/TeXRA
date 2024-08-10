@@ -35,7 +35,7 @@ def get_common_env(model):
     if model is None:
         model = os.getenv("MODEL", "sonnet+")
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/tasks")
+    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/agents")
     return model, script_dir, prompt_dir
 
 
@@ -66,12 +66,12 @@ def shared_arguments(func):
     return func
 
 
-def execute_task(script, task, model, input_file, **kwargs):
+def execute_agent(script, agent, model, input_file, **kwargs):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
-        f"{script_dir}/tasks/{script}.py",
-        f"--task={task}",
+        f"{script_dir}/agents/{script}.py",
+        f"--agent={agent}",
         f"--model={model}",
         f"--input_file={input_file}",
     ]
@@ -121,101 +121,101 @@ def cli():
 @click.command()
 @shared_arguments
 def correct_tex(model, input_file, **kwargs):
-    task = "correct"
+    agent = "correct"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
+        agent = f"{agent}_with_auxiliary"
 
-    execute_task("edit_tex", task, model, input_file, **kwargs)
+    execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_tex(model, input_file, **kwargs):
-    task = "polish"
+    agent = "polish"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_tex", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_tex(model, input_file, **kwargs):
-    task = "draw"
+    agent = "draw"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_tex", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def correct_qi(model, input_file, **kwargs):
-    execute_task("edit_lecture", "correct_qi", model, input_file, **kwargs)
+    execute_agent("edit_lecture", "correct_qi", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def correct_st(model, input_file, **kwargs):
-    execute_task("edit_lecture", "correct_st", model, input_file, **kwargs)
+    execute_agent("edit_lecture", "correct_st", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_st(model, input_file, **kwargs):
-    task = "polish_st"
+    agent = "polish_st"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_lecture", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_qi(model, input_file, **kwargs):
-    task = "polish_qi"
+    agent = "polish_qi"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_lecture", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_st(model, input_file, **kwargs):
-    task = "draw_st"
+    agent = "draw_st"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_lecture", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_qi(model, input_file, **kwargs):
-    task = "draw_qi"
+    agent = "draw_qi"
     if kwargs.get("output_files"):
-        task = f"{task}_multiple"
+        agent = f"{agent}_multiple"
     elif kwargs.get("auxiliary_files"):
-        task = f"{task}_with_auxiliary"
-    execute_task("edit_lecture", task, model, input_file, **kwargs)
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.option("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
 @click.option("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
-def meeting2text(model, input_file, example_transcript=None, example_edited_transcript=None, task="transcribe_dual", **kwargs):
-    execute_task(
+def meeting2text(model, input_file, example_transcript=None, example_edited_transcript=None, agent="transcribe_dual", **kwargs):
+    execute_agent(
         "meeting2text",
-        task,
+        agent,
         model,
         input_file,
         example_transcript=example_transcript,
@@ -229,8 +229,8 @@ def meeting2text(model, input_file, example_transcript=None, example_edited_tran
 @click.option("--sample_tex", type=str, help="Path to a sample LaTeX file in the desired style.")
 @click.option("--document_cls", type=str, help="Path to the document class file.")
 @click.option("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
-def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file=None, task="txt2tex", **kwargs):
-    execute_task("txt2tex", task, model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
+def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file=None, agent="txt2tex", **kwargs):
+    execute_agent("txt2tex", agent, model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
 
 
 @click.command()
@@ -239,7 +239,7 @@ def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file
 @click.option("--sample_paper", type=str, help="Path to a sample LaTeX file in the desired style.")
 @click.option("--sample_note", type=str, help="Path to a sample LaTeX file in the desired style.")
 def paper2note(model, input_file, **kwargs):
-    execute_task("paper2note", "paper2note", model, input_file, **kwargs)
+    execute_agent("paper2note", "paper2note", model, input_file, **kwargs)
 
 
 @click.command()
@@ -249,20 +249,20 @@ def paper2note(model, input_file, **kwargs):
 @click.argument("commands_file", required=False, default="command.tex")
 @click.option("--instruction", required=False, default=None, help="Instruction for processing")
 def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex", **kwargs):
-    execute_task("adapt", "adapt", model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
+    execute_agent("adapt", "adapt", model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def correct_prl(model, input_file, **kwargs):
-    execute_task("prl_edit", "correct_prl", model, input_file, **kwargs)
+    execute_agent("prl_edit", "correct_prl", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 @click.option("--auxiliary_files", default=None)
 def correct_supp_prl(model, input_file, **kwargs):
-    execute_task("prl_edit", "correct_supp_prl", model, input_file, **kwargs)
+    execute_agent("prl_edit", "correct_supp_prl", model, input_file, **kwargs)
 
 
 @click.command()
@@ -270,7 +270,7 @@ def correct_supp_prl(model, input_file, **kwargs):
 @click.argument("supp_file", required=False, default="supp.tex")
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_task(
+    execute_agent(
         "prl_reply",
         "reply_letter",
         model,
@@ -292,7 +292,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
 @click.argument("draft_reply_letter")
 def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_task(
+    execute_agent(
         "prl_reply",
         "revise_main",
         model,
@@ -317,7 +317,7 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 @click.argument("supp_file", required=False, default="supp.tex")
 def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_task(
+    execute_agent(
         "prl_reply",
         "revise_supp",
         model,
@@ -342,7 +342,7 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 @click.argument("supp_file", required=False, default="supp.tex")
 def polish_prl_reply(model, input_file, main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_task(
+    execute_agent(
         "prl_reply",
         "polish_reply",
         model,
@@ -369,7 +369,7 @@ def merge(model, input_file, edited_file, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
         "python",
-        f"{script_dir}/tasks/merge.py",
+        f"{script_dir}/agents/merge.py",
         f"--input_file={input_file}",
         f"--edited_file={edited_file}",
         f"--model={model}",
@@ -382,25 +382,25 @@ def merge(model, input_file, edited_file, reflect):
 @click.command()
 @shared_arguments
 def paper2cover(model, input_file, **kwargs):
-    execute_task("write_tex", "paper2cover", model, input_file, **kwargs)
+    execute_agent("write_tex", "paper2cover", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def write_proposal(model, input_file, **kwargs):
-    execute_task("write_tex", "proposal", model, input_file, **kwargs)
+    execute_agent("write_tex", "proposal", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def slide2paper(model, input_file, **kwargs):
-    execute_task("write_tex", "slide2paper", model, input_file, **kwargs)
+    execute_agent("write_tex", "slide2paper", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def paper2slide(model, input_file, **kwargs):
-    execute_task("write_tex", "paper2slide", model, input_file, **kwargs)
+    execute_agent("write_tex", "paper2slide", model, input_file, **kwargs)
 
 
 @click.command()
@@ -422,19 +422,19 @@ def indent_tex():
 @click.option("--model", required=False, default="opus", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-@click.option("--task", required=True, help="Task to perform")
-def clean_single(model, input_file, reflect, task):
-    run_clean_single(model, input_file, reflect, task)
+@click.option("--agent", required=True, help="Agent to choose")
+def clean_single(model, input_file, reflect, agent):
+    run_clean_single(model, input_file, reflect, agent)
 
 
 @click.command()
 @click.option("--model", required=False, default="opus", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-@click.option("--task", required=True, help="Task to perform")
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_single(model, input_file, reflect, task, output_name_override):
-    run_pack_single(model, input_file, reflect, task, output_name_override)
+def pack_single(model, input_file, reflect, agent, output_name_override):
+    run_pack_single(model, input_file, reflect, agent, output_name_override)
 
 
 @click.command()
@@ -442,9 +442,9 @@ def pack_single(model, input_file, reflect, task, output_name_override):
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-@click.option("--task", required=True, help="Task to perform")
-def clean_multiple(model, input_file, input_files, reflect, task):
-    run_clean_multiple(model, input_file, input_files, reflect, task)
+@click.option("--agent", required=True, help="Agent to choose")
+def clean_multiple(model, input_file, input_files, reflect, agent):
+    run_clean_multiple(model, input_file, input_files, reflect, agent)
 
 
 @click.command()
@@ -452,10 +452,10 @@ def clean_multiple(model, input_file, input_files, reflect, task):
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
-@click.option("--task", required=True, help="Task to perform")
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_multiple(model, input_file, input_files, reflect, task, output_name_override):
-    run_pack_multiple(model, input_file, input_files, reflect, task, output_name_override)
+def pack_multiple(model, input_file, input_files, reflect, agent, output_name_override):
+    run_pack_multiple(model, input_file, input_files, reflect, agent, output_name_override)
 
 
 @click.command()
@@ -525,46 +525,46 @@ def extract_tikzpictures(latex_file):
 @click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
 def statement(model, input_file, document_type, **kwargs):
     if "teaching" in input_file.lower():
-        task_type = "teaching"
+        agent_sub = "teaching"
     elif "diversity" in input_file.lower():
-        task_type = "diversity"
+        agent_sub = "diversity"
     elif "research" in input_file.lower():
-        task_type = "research"
+        agent_sub = "research"
     else:
         raise ValueError("Document type not recognized")
 
-    print(f"Task type: {task_type}")
+    print(f"Agent: {agent_sub}")
 
-    execute_task("faculty", f"statement_{task_type}", model, input_file, **kwargs)
+    execute_agent("faculty", f"statement_{agent_sub}", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_nsf_grant(model, input_file, **kwargs):
-    execute_task("faculty", "revise_nsf_grant", model, input_file, **kwargs)
+    execute_agent("faculty", "revise_nsf_grant", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_marie_curie(model, input_file, **kwargs):
-    execute_task("faculty", "revise_marie_curie", model, input_file, **kwargs)
+    execute_agent("faculty", "revise_marie_curie", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def text2tex(model, input_file, **kwargs):
-    task_sub = "text2tex"
+    agent_sub = "text2tex"
     if ".tex" in input_file:
-        task_sub = "text2tex_draft"
-    print(f"Task sub: {task_sub}")
-    execute_task("meeting2text", task_sub, model, input_file, **kwargs)
+        agent_sub = "text2tex_draft"
+    print(f"Agent sub: {agent_sub}")
+    execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_prl(model, input_file, **kwargs):
     _, _, prompt_dir = get_common_env(model)
-    execute_task(
+    execute_agent(
         "prl_reply",
         "revise_prl",
         model,
