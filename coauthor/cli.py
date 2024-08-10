@@ -244,10 +244,10 @@ def paper2note(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.argument("sample_tex")
-@click.argument("document_cls", required=False, default="lecture.cls")
-@click.argument("commands_file", required=False, default="command.tex")
-@click.option("--instruction", required=False, default=None, help="Instruction for processing")
+@click.option("--sample_tex", type=str, help="Path to a sample LaTeX file in the desired style.")
+@click.option("--document_cls", type=str, default="lecture.cls", help="Path to the document class file.")
+@click.option("--commands_file", type=str, default="command.tex", help="Path to the file containing custom LaTeX commands.")
+@click.option("--instruction", type=str, default=None, help="Instruction for processing")
 def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex", **kwargs):
     execute_agent("adapt", "adapt", model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
 
@@ -267,7 +267,7 @@ def correct_supp_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.argument("supp_file", required=False, default="supp.tex")
+@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
@@ -288,8 +288,8 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
 
 @click.command()
 @shared_arguments
-@click.argument("supp_file", required=False, default="supp.tex")
-@click.argument("draft_reply_letter")
+@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
+@click.option("--draft_reply_letter", type=str, help="Path to the draft reply letter.")
 def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
@@ -311,10 +311,10 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 
 @click.command()
 @shared_arguments
-@click.argument("main_content")
-@click.argument("draft_reply_letter")
-@click.argument("draft_main_content")
-@click.argument("supp_file", required=False, default="supp.tex")
+@click.option("--main_content", type=str, help="Path to the main content file.")
+@click.option("--draft_reply_letter", type=str, help="Path to the draft reply letter.")
+@click.option("--draft_main_content", type=str, help="Path to the draft main content file.")
+@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
@@ -338,8 +338,8 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 
 @click.command()
 @shared_arguments
-@click.argument("main_content")
-@click.argument("supp_file", required=False, default="supp.tex")
+@click.option("--main_content", type=str, help="Path to the main content file.")
+@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kwargs):
     _, _, prompt_dir = get_common_env(model)
     execute_agent(
@@ -522,7 +522,7 @@ def extract_tikzpictures(latex_file):
 
 @click.command()
 @shared_arguments
-@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity"]), help="Type of document being revised")
+@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
 def statement(model, input_file, document_type, **kwargs):
     if document_type is None:
         if "teaching" in input_file.lower():
@@ -658,10 +658,8 @@ cli.add_command(write_proposal)
 cli.add_command(slide2paper)
 cli.add_command(paper2slide)
 
-# application.py
+# faculty.py
 cli.add_command(statement)
-
-# grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
 
