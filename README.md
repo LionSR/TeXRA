@@ -91,9 +91,9 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 
 Although GPT models are supported, we recommend using sonnet+ or opus for the best experience.
 
-## Available Tasks
+## Available Agentic Tasks
 
-CoAuthor supports a variety of tasks, including but not limited to:
+CoAuthor supports a variety of agentic tasks, including but not limited to:
 
 - `correct-tex`: Fix typos and minor errors in LaTeX documents
 - `polish-tex`: Improve the writing style and clarity of LaTeX documents
@@ -107,13 +107,13 @@ CoAuthor supports a variety of tasks, including but not limited to:
 - `slide2paper`: Convert presentation slides into a research paper format
 - `paper2slide`: Convert research paper into a latex beamer presentation slides
 
-For a full list of tasks and their descriptions, refer to the backend and frontend READMEs.
+For a full list of agentic tasks and their descriptions, refer to the backend and frontend READMEs.
 
 ## Customization
 
 CoAuthor offers various customization options:
 
-- Modify available tasks in VS Code settings
+- Modify available agentic tasks in VS Code settings
 - Adjust included directories and file types
 - Fine-tune prompts for specific tasks (see backend documentation)
 - Configure model parameters like temperature and max tokens
