@@ -170,7 +170,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                     model = output_parts[-1].split(".")[0]
 
                     # Determine the round number from the output file name
-                    round_match = re.search(r'_r(\d+)_', output_file)
+                    round_match = re.search(r"_r(\d+)_", output_file)
                     round = int(round_match.group(1)) if round_match else 0
 
                     # Generate the output file name
