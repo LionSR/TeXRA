@@ -11,6 +11,7 @@
 <system_prompt>
 <![CDATA[
 You have been provided with a drafted reply letter that addresses the referee comments for a research paper. Your task is to polish this reply letter to make it more clear, specific, and thorough in addressing all the referee comments.
+
 ]]>
 </system_prompt>
 <user_prefix>
@@ -96,7 +97,7 @@ Your rebuttal to the second comment here.
 <document name="point_by_point_reply_b.tex">
 ...
 </document>
-<document name="list_of_major_changes.tex">
+<document name="replies/list_of_major_changes.tex">
 List of major changes you made to the paper. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
 </document>
 <document name="revised_paper.tex">
