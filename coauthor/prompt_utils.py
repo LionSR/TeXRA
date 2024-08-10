@@ -22,7 +22,7 @@ def merge_dicts(base, override):
 
 def load_agent_settings_and_prompts(agent_path, agent):
     def load_agent_xml(agent_path, agent_name):
-        agent_prompt_file = f"{agent_path}/prompts_{agent_name}.xml"
+        agent_prompt_file = f"{agent_path}/agent_{agent_name}.xml"
         if not os.path.exists(agent_prompt_file):
             raise FileNotFoundError(f"Task prompt file not found: {agent_prompt_file}")
 
