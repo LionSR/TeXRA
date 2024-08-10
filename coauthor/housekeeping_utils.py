@@ -170,8 +170,8 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
 
     # Add patterns for additional XML files
     additional_patterns = [
-        f"{base_name}_{agent_first_name_chunk}_{model}.xml",
-        f"{base_name}_{agent_first_name_chunk}_reflect_{model}.xml"
+        f"{base_name}_{agent_first_name_chunk}_r0_{model}.xml",
+        f"{base_name}_{agent_first_name_chunk}_r1_{model}.xml"
     ]
     file_patterns.extend(additional_patterns)
 
