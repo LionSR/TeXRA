@@ -205,6 +205,9 @@ def process_diff_file(diff_file_name):
         ]
         document_started = False
         for line in lines:
+            if line.startswith("%!TEX root") or line.startswith("% !TEX root") or line.startswith("%! TEX root"):
+                continue
+
             if any(pkg in line for pkg in packages_to_add_newline):
                 diff_file.write("\n")
 

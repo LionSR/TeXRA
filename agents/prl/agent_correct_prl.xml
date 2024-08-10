@@ -3,7 +3,7 @@
 <settings>
 <document_tag>latex_documents</document_tag>
 <end_tag>&lt;/latex_documents&gt;</end_tag>
-<output_type>tex</output_type>
+<output_type>xml</output_type>
 <prefill_first>&lt;scratchpad&gt;</prefill_first>
 </settings>
 <prompts>
