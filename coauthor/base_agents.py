@@ -1,6 +1,6 @@
 import os
+from termcolor import colored, cprint
 from abc import ABC, abstractmethod
-from termcolor import colored
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
 from .model_utils import get_model_client
@@ -81,10 +81,6 @@ class BaseReflectChainAgent(ABC):
             if self.output_settings["output_type"] == "tex":
                 run_latexdiff(input_file, output_file, self.args.agent)
 
-    @abstractmethod
-    def _handle_reflection_diff(self, end_turn):
-        pass
-
     def _get_tex_count_stats(self, input_files):
         if self.prompt_settings.get("include_tex_count"):
             if isinstance(input_files, str):
@@ -162,7 +158,6 @@ class BaseReflectChainAgent(ABC):
             tex_count_stats=tex_count_stats,
             first_k_tex_document=first_k_tex_document,
         )
-
         self.handle_output(state, end_turn, self.reflect_output_file, is_reflection_complete=True)
 
         print(
@@ -178,6 +173,43 @@ class BaseReflectChainAgent(ABC):
             state, messages = self.reflect(state, messages)
         log_end(self.log_file)
         return state, messages
+
+    def _run_latexdiff_for_round(self, input_file, output_file, round):
+        if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
+            run_latexdiff(input_file, output_file, self.args.agent, suffix="_diff")
+        else:
+            print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {input_file} or {output_file}")
+
+    def _run_latexdiff_between_rounds(self, first_output, reflect_output):
+        if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
+            run_latexdiff(first_output, reflect_output, self.args.agent, suffix="_diffr1r0")
+        else:
+            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {reflect_output}")
+
+    def _handle_latexdiff(self, is_reflection_complete):
+        cprint(f"Handling latexdiff for {self.args.agent}", "blue", "on_white")
+        input_files = [self.args.input_file] + (self.args.input_files or [])
+
+        if self.args.output_files:
+            input_files = self.args.output_files
+
+        print(f"input_files: {input_files}")
+        print(f"first_round_output_files: {self.first_round_output_files}")
+        print(f"reflect_round_output_files: {self.reflect_round_output_files}")
+
+        for i, (input_file, first_output) in enumerate(zip(input_files, self.first_round_output_files)):
+            # Compare original input with first round output
+            self._run_latexdiff_for_round(input_file, first_output, 0)
+
+        if is_reflection_complete:
+            for i, (input_file, first_output, reflect_output) in enumerate(
+                zip(input_files, self.first_round_output_files, self.reflect_round_output_files)
+            ):
+                # Compare original input with reflection round output
+                self._run_latexdiff_for_round(input_file, reflect_output, 1)
+
+                # Compare first round output with reflection round output
+                self._run_latexdiff_between_rounds(first_output, reflect_output)
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
@@ -215,35 +247,6 @@ class ThinkAndWrite(BaseReflectChainAgent):
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.args.model, self.log_file)
 
-    def _run_latexdiff_for_round(self, input_file, output_file, round_number):
-        if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
-            run_latexdiff(input_file, output_file, self.args.agent, suffix=f"_r{round_number}")
-        else:
-            print(f"Warning: Could not generate latexdiff for round {round_number}. Files not found: {input_file} or {output_file}")
-
-    def _run_latexdiff_between_rounds(self, first_output, reflect_output):
-        if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
-            run_latexdiff(first_output, reflect_output, self.args.agent, suffix="_diffdiff")
-        else:
-            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {reflect_output}")
-
-    def _handle_latexdiff(self, is_reflection_complete):
-        print(f"Handling latexdiff for {self.args.agent}")
-        if self.args.output_files:
-            for input_file, first_output, reflect_output in zip(self.args.input_files, self.first_round_output_files, self.reflect_round_output_files):
-                self._run_latexdiff_for_round(input_file, first_output, 0)
-                if is_reflection_complete:
-                    self._run_latexdiff_for_round(input_file, reflect_output, 1)
-                    self._run_latexdiff_between_rounds(first_output, reflect_output)
-        else:
-            input_file = self.args.input_file
-            first_output = self.first_round_output_files[0] if self.first_round_output_files else None
-            reflect_output = self.reflect_round_output_files[0] if self.reflect_round_output_files else None
-            self._run_latexdiff_for_round(input_file, first_output, 0)
-            if is_reflection_complete:
-                self._run_latexdiff_for_round(input_file, reflect_output, 1)
-                self._run_latexdiff_between_rounds(first_output, reflect_output)
-
 
 class DirectWrite(BaseReflectChainAgent):
     def __init__(self, args, agent_path):
@@ -273,37 +276,7 @@ class DirectWrite(BaseReflectChainAgent):
                 else:
                     self.first_round_output_files = [processed_output_file]
 
-            if is_reflection_complete:
-                self._handle_reflection_diff(end_turn)
+            self._handle_latexdiff(is_reflection_complete)
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.args.model, self.log_file)
-
-    def _run_latexdiff_for_round(self, input_file, output_file, round_number):
-        if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
-            run_latexdiff(input_file, output_file, self.args.agent, suffix=f"_r{round_number}")
-        else:
-            print(f"Warning: Could not generate latexdiff for round {round_number}. Files not found: {input_file} or {output_file}")
-
-    def _run_latexdiff_between_rounds(self, first_output, reflect_output):
-        if first_output and reflect_output and os.path.exists(first_output) and os.path.exists(reflect_output):
-            run_latexdiff(first_output, reflect_output, self.args.agent, suffix="_diffdiff")
-        else:
-            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {reflect_output}")
-
-    def _handle_latexdiff(self, is_reflection_complete):
-        print(f"Handling latexdiff for {self.args.agent}")
-        if self.args.output_files:
-            for input_file, first_output, reflect_output in zip(self.args.input_files, self.first_round_output_files, self.reflect_round_output_files):
-                self._run_latexdiff_for_round(input_file, first_output, 0)
-                if is_reflection_complete:
-                    self._run_latexdiff_for_round(input_file, reflect_output, 1)
-                    self._run_latexdiff_between_rounds(first_output, reflect_output)
-        else:
-            input_file = self.args.input_file
-            first_output = self.first_round_output_files[0] if self.first_round_output_files else None
-            reflect_output = self.reflect_round_output_files[0] if self.reflect_round_output_files else None
-            self._run_latexdiff_for_round(input_file, first_output, 0)
-            if is_reflection_complete:
-                self._run_latexdiff_for_round(input_file, reflect_output, 1)
-                self._run_latexdiff_between_rounds(first_output, reflect_output)

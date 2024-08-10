@@ -24,24 +24,36 @@
       "properties": {
         "coauthor.includedInputDirectories": {
           "type": "array",
+          "items": {
+            "type": "string"
+          },
           "default": [
-            "Discrete-Time/PapersEx"
+            "Discrete-Time",
+            "PapersEx"
           ],
           "description": "Directories to consider as the root for input files",
           "scope": "resource"
         },
         "coauthor.includedSampleDirectories": {
           "type": "array",
+          "items": {
+            "type": "string"
+          },
           "default": [
-            "Discrete-Time/PapersEx"
+            "Discrete-Time",
+            "PapersEx"
           ],
           "description": "Directories to consider as the root for sample files",
           "scope": "resource"
         },
         "coauthor.includedAuxDirectories": {
           "type": "array",
+          "items": {
+            "type": "string"
+          },
           "default": [
-            "Discrete-Time/PapersEx"
+            "Discrete-Time",
+            "PapersEx"
           ],
           "description": "Directories to consider as the root for auxiliary files",
           "scope": "resource"
