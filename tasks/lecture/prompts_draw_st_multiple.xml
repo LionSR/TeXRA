@@ -79,7 +79,7 @@ Please use your expertise in physics, machine learning, LaTeX, and TikZ to creat
 
 Prepare to analyze, brainstorm, and implement improvements to the figures in these chapters, keeping the specific instruction as your sole focus.
 
-The output files should be in the following order: {OUTPUT_FILES_ORDER}
+The output files should be in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>
 </user_prefix>
 <user_request>
@@ -183,7 +183,7 @@ Please provide the complete LaTeX documents with your improvements in the follow
 ... (repeat for all output files)
 </latex_documents>
 
-Ensure that the output documents are in the following order: {OUTPUT_FILES_ORDER}
+Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>
 </user_reflect>
 </prompts>

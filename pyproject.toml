@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coauthor"
-version = "0.12.2"
+version = "0.12.3"
 authors = [
   { name="Sirui Lu", email="14889516+LionSR@users.noreply.github.com" },
 ]
@@ -28,6 +28,7 @@ dependencies = [
     "termcolor",
     "python-dotenv",
     "pillow",
+    "jinja2",
 ]
 
 [project.urls]

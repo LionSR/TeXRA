@@ -13,7 +13,6 @@
 Your task is to write a research paper on developing a new variational method for quantum many-body physics and rebut the referees' comments.
 
 When writing a professional *.tex LaTeX document, you must:
-- Use \be for \begin{equation} and \ee for \end{equation}. 
 - Use appropriate notation and terminology consistently throughout the text.
 ]]>
 </system_prompt>

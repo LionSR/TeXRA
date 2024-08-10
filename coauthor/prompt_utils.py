@@ -22,11 +22,11 @@ def merge_dicts(base, override):
 
 def load_task_settings_and_prompts(prompt_path, task):
     def load_task_xml(prompt_path, task_name):
-        task_file = f"{prompt_path}/prompts_{task_name}.xml"
-        if not os.path.exists(task_file):
-            raise FileNotFoundError(f"Task file not found: {task_file}")
+        task_prompt_file = f"{prompt_path}/prompts_{task_name}.xml"
+        if not os.path.exists(task_prompt_file):
+            raise FileNotFoundError(f"Task prompt file not found: {task_prompt_file}")
 
-        root = load_xml(task_file)
+        root = load_xml(task_prompt_file)
         parent = root.get("inherits")
 
         if parent:

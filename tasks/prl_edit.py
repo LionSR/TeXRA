@@ -1,10 +1,10 @@
-from coauthor.base_tasks import ThinkWrite
+from coauthor.base_tasks import ThinkAndWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "prl")
 
 
-class PRLEdit(ThinkWrite):
+class PRLEdit(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(

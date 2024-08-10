@@ -1,4 +1,4 @@
-from coauthor.base_tasks import ThinkWrite, DirectWrite
+from coauthor.base_tasks import ThinkAndWrite, DirectWrite
 import coauthor as coa
 
 prompt_path = coa.get_prompt_path(coa, "lecture")
@@ -26,7 +26,7 @@ class EditLectureBase:
         return user_vars
 
 
-class EditLectureThink(EditLectureBase, ThinkWrite):
+class EditLectureThink(EditLectureBase, ThinkAndWrite):
     pass
 
 
