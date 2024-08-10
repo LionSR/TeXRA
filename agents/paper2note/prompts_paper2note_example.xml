@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent name="paper2note_example" inherits="paper2note">
+<prompts>
+<user_prefix>
+<![CDATA[
+I am going to give you a research paper. You are about to convert it into a lecture note, so please read the document carefully.
+
+Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
+
+<documents>
+<document name="{DOCUMENT_CLS}">
+{DOCUMENT_CLS_CONTENT}
+</document>
+<document name="{COMMANDS}">
+{COMMANDS_CONTENT}
+</document>
+<document name="{INPUT_FILE}">
+{INPUT_CONTENT}
+</document>
+<document name="EXAMPLE_PAPER">
+{EXAMPLE_PAPER}
+</document>
+<document name="EXAMPLE_LECTURE_NOTE">
+{EXAMPLE_LECTURE_NOTE}
+</document>
+</documents>
+
+Please carefully read through the entire research paper above and ensure you fully understand all the details.
+]]>
+</user_prefix>
+</prompts>
+</agent>

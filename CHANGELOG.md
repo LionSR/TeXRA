@@ -16,10 +16,10 @@
 ## [0.11.9]
 
 - **Added:**
-  - Enhanced support for multiple file operations in various tasks
+  - Enhanced support for multiple file operations in various agents
   - Improved integration with frontend for output name overrides
 - **Changed:**
-  - Further refactored code for better modularity and consistency across tasks
+  - Further refactored code for better modularity and consistency across agents
   - Updated XML-based logging format for improved readability and structure
 - **Improved:**
   - Enhanced error handling and output formatting for multiple file operations
@@ -57,10 +57,10 @@
 ## [0.11.6]
 
 - **Added:**
-  - Support for output name overrides in various tasks
+  - Support for output name overrides in various agents
 - **Changed:**
   - Updated `get_xml_format_from_files` to handle multiple document outputs
-  - Improved handling of output file names across multiple tasks
+  - Improved handling of output file names across multiple agents
   - Enhanced error handling and logging for file operations
 - **Improved:**
   - Optimized file pattern handling in housekeeping operations
@@ -75,7 +75,7 @@
   - Optimized model pricing calculation in compute_api_price function
   - Updated model_mapping in openai_utils.py
   - Improved handling of user variables in prompt_utils.py
-  - Created common utility functions for housekeeping tasks
+  - Created common utility functions for housekeeping agents
   - Added function `run_pack_latexdiff_vc` for packing LaTeX diff files with version control information
 - **Improved:**
   - Enhanced error handling and logging with consistent use of `cprint`
@@ -91,8 +91,8 @@
   - Moved figure-related functions to figure_tools.py
   - Consolidated file content formatting
   - Updated prompt and output settings handling
-  - Standardized error handling for multiple output tasks
-  - Refactored task-specific scripts for consistency
+  - Standardized error handling for multiple output agents
+  - Refactored agent-specific scripts for consistency
 - **Improved:**
   - Enhanced CLI output formatting for improved readability
 
@@ -116,11 +116,11 @@
   - 'name' attribute for documents in XML structure
 - **Changed:**
   - Refactored XML handling across multiple files
-  - Updated task scripts to support multiple output files
-  - Modified XML structure in task prompts to use 'name' attribute
+  - Updated agent scripts to support multiple output files
+  - Modified XML structure in agent prompts to use 'name' attribute
 - **Improved:**
   - Enhanced flexibility for handling multiple documents in output processing
-  - Streamlined XML processing workflow across various tasks
+  - Streamlined XML processing workflow across various agents
 
 ## [0.11.1]
 
@@ -139,23 +139,23 @@
 
 ## [0.11.0]
 
-- Pivoted from txt prompts to XML prompts across all tasks
+- Pivoted from txt prompts to XML prompts across all agents
 - Refactored prompt handling functions to support XML parsing and inheritance
 - Updated CLI commands for improved flexibility with auxiliary and multiple files
 - Enhanced image processing and message creation to align with XML prompt structure
 - Implemented massive repetition detection and XML structure validation in output utils
 - Updated settings and utilities to handle XML prompts efficiently
-- Adjusted task-specific scripts (edit_lecture, edit_tex, etc.) for XML prompt compatibility
+- Adjusted agent-specific scripts (edit_lecture, edit_tex, etc.) for XML prompt compatibility
 - Streamlined system and user prompts, removing redundant instructions
-- Added support for single/multiple outputs in various tasks
+- Added support for single/multiple outputs in various agents
 - Improved handling of reflection rounds and latexdiff integration
 - Various code optimizations, bug fixes, and minor improvements throughout the codebase
 
 ## [0.10.9]
 
-- Transitioned from text-based prompts to XML-formatted prompts across all tasks
-- Implemented new function `load_task_settings_and_prompts` in prompt_utils.py for loading XML prompts
-- Refactored task files to use XML prompt loading:
+- Transitioned from text-based prompts to XML-formatted prompts across all agents
+- Implemented new function `load_agent_settings_and_prompts` in prompt_utils.py for loading XML prompts
+- Refactored agent files to use XML prompt loading:
   - lecture2text.py
   - meeting2text.py
   - merge.py
@@ -164,7 +164,7 @@
   - prl_reply.py
   - txt2tex.py
 - Removed obsolete text-based prompt files
-- Updated task processing logic to handle XML-formatted prompts
+- Updated agent processing logic to handle XML-formatted prompts
 - Improved error handling and input validation for XML prompt loading
 - Enhanced modularity and maintainability of prompt handling system
 
@@ -173,7 +173,7 @@
 - Transitioned from .text to .xml for intermediate output and scratchpad content
 - Updated edit_lecture.py, edit_tex.py, and write_tex.py to use .xml extension for scratchpad output
 - Modified housekeeping_utils.py to include .xml in file extensions for cleaning and packing operations
-- Refactored file handling in task files to support .xml output for scratchpad content
+- Refactored file handling in agent files to support .xml output for scratchpad content
 - Removed unused test files related to XML parsing
 - Added newline after prefill_first content in process.py for improved output formatting
 
@@ -205,31 +205,31 @@
 
 ## [0.10.5]
 
-- Refactored user prefix templates for various tasks (write-proposal, slide2paper, paper2slide)
+- Refactored user prefix templates for various agents (write-proposal, slide2paper, paper2slide)
 - Updated CLI commands to use consistent input file options
 - Enhanced LaTeX Beamer presentation template with improved structure and packages
-- Improved file handling and error messages in multiple tasks
-- Added slide2paper and paper2slide task descriptions to README
+- Improved file handling and error messages in multiple agents
+- Added slide2paper and paper2slide agent descriptions to README
 - Updated pyproject.toml to version 0.10.5
 - Various minor improvements and bug fixes
 
 ## [0.10.4]
 
-- Implemented new paper2slide task for converting research papers to LaTeX Beamer presentations
+- Implemented new paper2slide agent for converting research papers to LaTeX Beamer presentations
 - Refactored write_tex.py to support paper2slide and improve modularity
 - Updated CLI to include paper2slide option
-- Improved file handling and task processing for write_tex tasks
-- Enhanced error handling and input validation for new task
-- Updated user prefix templates to support paper2slide task
+- Improved file handling and agent processing for write_tex agents
+- Enhanced error handling and input validation for new agent
+- Updated user prefix templates to support paper2slide agent
 - Various minor code improvements and optimizations
 
 ## [0.10.3]
 
-- Added new slide2paper task for converting slides to research papers
+- Added new slide2paper agent for converting slides to research papers
 - Implemented multi-page PDF processing functionality
 - Enhanced process_pdf_input function to handle both single and multi-page PDFs
 - Improved file handling with output name override in various functions
-- Updated CLI to support new slide2paper task
+- Updated CLI to support new slide2paper agent
 - Refactored code for better modularity and error handling
 - Enhanced image message creation for different model types
 - Various minor code improvements and optimizations
@@ -238,10 +238,10 @@
 
 - Implemented prototype for multi-file output processing
 - Added new 'polish_multiple_tex' command in CLI
-- Created 'polish_multiple' task settings in edit_tex.py
+- Created 'polish_multiple' agent settings in edit_tex.py
 - Implemented 'handle_multiple_input' function for processing multiple input files
 - Fixed end_tag detection issue in split_scratchpad_output
-- Updated main function in edit_tex.py to support 'polish_multiple' task
+- Updated main function in edit_tex.py to support 'polish_multiple' agent
 - Enhanced error handling for multi-file input validation
 
 ## [0.10.1]
@@ -249,9 +249,9 @@
 - Added `ensure_correct_xml_structure` function to fix XML structure issues
 - Implemented `split_scratchpad_output_xml` for improved XML parsing of scratchpad output
 - Updated `edit_lecture.py`, `edit_tex.py`, and `write_tex.py` to use new XML handling functions
-- Refactored file processing in task files to support initial .text output for scratchpad content
+- Refactored file processing in agent files to support initial .text output for scratchpad content
 - Added support for .text extension in `clean_single` and `pack_single` functions
-- Improved error handling and file processing across multiple tasks
+- Improved error handling and file processing across multiple agents
 - Various minor code improvements and optimizations
 
 ## [0.10.0]
@@ -311,21 +311,21 @@
 
 ## [0.9.3]
 
-- Added new write-cover and write-proposal tasks
-- Implemented write_tex.py for handling new writing tasks
+- Added new write-cover and write-proposal agents
+- Implemented write_tex.py for handling new writing agents
 - Fixed bug in scratchpad output handling in output_utils.py
-- Enhanced task handling with get_first_task_chunk function in cli.py
-- Updated CLI to support new writing tasks
+- Enhanced agent handling with get_agent_first_name_chunk function in cli.py
+- Updated CLI to support new writing agents
 - Improved file handling for sample/reference files
 - Refactored code for better modularity and consistency
-- Added new user prefix templates for cover letter and proposal tasks
-- Updated package.json to include new tasks in VS Code extension
+- Added new user prefix templates for cover letter and proposal agents
+- Updated package.json to include new agents in VS Code extension
 
 ## [0.9.2]
 
 - Refactored `process_first_round` function to return fewer values
 - Moved system prompt loading to `get_prompt_settings` for better organization
-- Updated all task files to use the new `process_first_round` function signature
+- Updated all agent files to use the new `process_first_round` function signature
 - Improved handling of scratchpad content in `split_scratchpad_output`
 - Minor code improvements and optimizations
 
@@ -333,9 +333,9 @@
 
 - Added `log_end` function to properly close log files
 - Implemented figure input support in reflection rounds
-- Improved error handling and file processing across multiple tasks
+- Improved error handling and file processing across multiple agents
 - Enhanced modularity and organization of the codebase
-- Updated all task files to use new logging utilities and figure input handling (a bug fix!)
+- Updated all agent files to use new logging utilities and figure input handling (a bug fix!)
 - Improved consistency in logging and error handling
 - Various minor code improvements and optimizations
 
@@ -344,7 +344,7 @@
 - Refactored latexdiff functionality for improved performance and reliability
 - Introduced new `split_scratchpad_output` function to handle scratchpad content separately
 - Updated latexdiff and latexdiff-vc commands with improved options, including UTF-8 encoding support
-- Implemented scratchpad splitting in various task files (adapt.py, edit_lecture.py, edit_tex.py, lecture2text.py, merge.py)
+- Implemented scratchpad splitting in various agent files (adapt.py, edit_lecture.py, edit_tex.py, lecture2text.py, merge.py)
 - Fixed an issue with "\end{document}" tag handling in scratchpad output
 - Improved error handling and logging in latexdiff-related functions
 - Various minor code improvements and optimizations
@@ -356,7 +356,7 @@
 - Refactored latexdiff functionality for improved performance and reliability
 - Introduced new `split_scratchpad_output` function to handle scratchpad content separately
 - Updated latexdiff and latexdiff-vc commands with improved options, including UTF-8 encoding support
-- Implemented scratchpad splitting in various task files (adapt.py, edit_lecture.py, edit_tex.py, lecture2text.py, merge.py)
+- Implemented scratchpad splitting in various agent files (adapt.py, edit_lecture.py, edit_tex.py, lecture2text.py, merge.py)
 - Fixed an issue with "\end{document}" tag handling in scratchpad output
 - Improved error handling and logging in latexdiff-related functions
 - Various minor code improvements and optimizations
@@ -365,8 +365,8 @@
 
 - Refactored TikZ figure extraction process for improved file handling and compatibility
 - Updated user prefix templates for better consistency and XML formatting
-- Enhanced latexdiff functionality to include task-specific differentiation (a fix)
-- Simplified imports in various task files using 'import coauthor as coa'
+- Enhanced latexdiff functionality to include agent-specific differentiation (a fix)
+- Simplified imports in various agent files using 'import coauthor as coa'
 - Improved file path handling in figure extraction and compilation
 - Fixed XML formatting issues in user prefix templates
 - Various minor code improvements and bug fixes
@@ -388,9 +388,9 @@
 ## [0.8.5]
 
 - Refactored codebase for improved modularity and efficiency
-- Simplified imports using 'import coauthor as coa' across all task files
+- Simplified imports using 'import coauthor as coa' across all agent files
 - Removed redundant code and consolidated shared functionality
-- Updated all task files to use new module structure
+- Updated all agent files to use new module structure
 - Improved error handling and logging
 - Enhanced code readability and maintainability
 - Updated reflection prompts to emphasize critical review
@@ -417,7 +417,7 @@
 - Simplified CLI command implementations using shared arguments and kwargs
 - Updated log_utils.py to format instruction logging
 - Enhanced image message creation for different model types
-- Updated user prefix for merge task
+- Updated user prefix for merge agent
 
 ## [0.8.1]
 
@@ -465,7 +465,7 @@
 - Refactored settings and prompt handling for improved modularity and consistency
 - Introduced centralized functions in settings_utils.py for model, output, and prompt settings
 - Renamed 'first_prefill' to 'prefill_first' across all files for clarity
-- Updated all task files to use new settings and prompt utilities
+- Updated all agent files to use new settings and prompt utilities
 - Improved error handling and removed redundant code
 - Enhanced code readability and maintainability
 
@@ -475,7 +475,7 @@
 - Split functionality into separate modules (tex_tools, figure_tools, etc.)
 - Renamed process_file_with_llm to process_first_round for clarity
 - Moved common utilities to dedicated files (arg_utils, prompt_utils)
-- Updated imports across all tasks to use new module structure
+- Updated imports across all agents to use new module structure
 - Standardized function naming and parameter passing
 - Removed redundant code and consolidated shared functionality
 - Improved consistency in logging and error handling
@@ -486,7 +486,7 @@
 - Split functionality into separate modules (tex_tools, figure_tools, etc.)
 - Renamed process_file_with_llm to process_first_round for clarity
 - Moved common utilities to dedicated files (arg_utils, prompt_utils)
-- Updated imports across all tasks to use new module structure
+- Updated imports across all agents to use new module structure
 - Standardized function naming and parameter passing
 - Removed redundant code and consolidated shared functionality
 - Improved consistency in logging and error handling

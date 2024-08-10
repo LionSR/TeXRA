@@ -326,7 +326,7 @@ body {
   font-size: var(--vscode-font-size);
 }
 
-#taskInput {
+#agentSelect {
   width: 100%;
   min-height: 150px;
   max-height: 400px;

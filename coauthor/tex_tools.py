@@ -95,12 +95,12 @@ def process_tikzpicture_endings(file_path):
     cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
 
 
-def run_latexdiff(input_file, output_file, task=None, model=None):
+def run_latexdiff(input_file, output_file, agent=None, model=None):
     if not input_file:
         cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
-    if task is not None and "draw" in task:
+    if agent is not None and "draw" in agent:
         return None
 
     # Check if both input and output files contain \begin{document} and \end{document}

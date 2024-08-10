@@ -7,7 +7,7 @@ See [PHILOSOPHY.md](PHILOSOPHY.md).
 ## UI Improvements
 
 - Enhanced file selection interface with improved multiple file selection and management
-- Streamlined task execution process with clearer options and feedback
+- Streamlined agent execution process with clearer options and feedback
 - Improved error handling and user notifications for a smoother experience
 - The CoAuthor extension now automatically adapts to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience across different environments.
 
@@ -19,11 +19,11 @@ Note: The multiple file output functionality is currently implemented in the fro
 
 ### 1. CoAuthor Backend
 
-A robust Python package that serves as the engine for AI-assisted text processing and generation. It interfaces with LLMs like OpenAI's GPT and Anthropic's Claude to perform a variety of academic writing tasks.
+A robust Python package that serves as the engine for AI-assisted text processing and generation. It interfaces with LLMs like OpenAI's GPT and Anthropic's Claude to perform a variety of academic writing agents.
 
 Key features:
 
-- Multiple task support: correct, polish, draw, adapt, and more
+- Multiple agent support: correct, polish, draw, adapt, and more
 - LaTeX document processing
 - Automatic figure and TikZ extraction
 - Version control integration (latexdiff functionality)
@@ -38,7 +38,7 @@ A user-friendly Visual Studio Code extension that provides an intuitive interfac
 Key features:
 
 - Easy file selection for input, auxiliary, and figure files
-- Task and model selection
+- agent and model selection
 - Execution of CoAuthor commands directly from VS Code
 - LaTeX diff visualization
 - Housekeeping operations (clean output, clean build, indent TeX)
@@ -82,18 +82,18 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 
 1. Open a LaTeX or text file in VS Code
 2. Access the CoAuthor sidebar (look for the scholarly duck icon in the Activity Bar)
-3. Select your desired task (e.g., polish, correct, draw)
+3. Select your desired agent (e.g., polish, correct, draw)
 4. Choose your input file(s) and any additional options
 5. (Optional) Select auxiliary files or figures
 6. Choose your preferred AI model
-7. Click "Execute" to run the AI-assisted task
+7. Click "Execute" to run the AI-assisted agent
 8. Review the output in the newly created file
 
 Although GPT models are supported, we recommend using sonnet+ or opus for the best experience.
 
-## Available Agentic Tasks
+## Available Agentic agents
 
-CoAuthor supports a variety of agentic tasks, including but not limited to:
+CoAuthor supports a variety of agentic agents, including but not limited to:
 
 - `correct-tex`: Fix typos and minor errors in LaTeX documents
 - `polish-tex`: Improve the writing style and clarity of LaTeX documents
@@ -107,15 +107,15 @@ CoAuthor supports a variety of agentic tasks, including but not limited to:
 - `slide2paper`: Convert presentation slides into a research paper format
 - `paper2slide`: Convert research paper into a latex beamer presentation slides
 
-For a full list of agentic tasks and their descriptions, refer to the backend and frontend READMEs.
+For a full list of agentic agents and their descriptions, refer to the backend and frontend READMEs.
 
 ## Customization
 
 CoAuthor offers various customization options:
 
-- Modify available agentic tasks in VS Code settings
+- Modify available agentic agents in VS Code settings
 - Adjust included directories and file types
-- Fine-tune prompts for specific tasks (see backend documentation)
+- Fine-tune prompts for specific agents (see backend documentation)
 - Configure model parameters like temperature and max tokens
 
 ## Advanced Features

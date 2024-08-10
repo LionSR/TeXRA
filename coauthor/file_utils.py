@@ -4,7 +4,7 @@ import warnings
 
 
 def get_prompt_path(library, prompt_name):
-    return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "tasks", prompt_name)
+    return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
 
 
 def read_file(file_path, raise_warning=True):

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<task name="polish">
+<agent name="polish">
 <settings document_tag="latex_document" end_tag="\end{document}" output_type="tex" prefill_first="scratchpad">
 </settings>
 <prompts>
@@ -87,4 +87,4 @@ Then, output further enhanced and complete version{plural} of {the_all} LaTeX do
 {output_order_instruction}
 </user_reflect>
 </prompts>
-</task>
+</agent>
