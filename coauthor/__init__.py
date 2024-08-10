@@ -33,7 +33,7 @@ from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .openai_utils import best_connection_method
 from .prompt_utils import (
-    load_task_settings_and_prompts,
+    load_agent_settings_and_prompts,
     get_user_vars_basic,
     get_xml_format_from_files,
     load_prompt,

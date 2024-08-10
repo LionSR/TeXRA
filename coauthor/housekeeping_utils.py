@@ -13,23 +13,23 @@ TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log
 MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
 
 
-def get_first_task_chunk(task):
-    if task.startswith("write-"):
-        return task.split("-")[1]
+def get_agent_first_name_chunk(agent):
+    if agent.startswith("write-"):
+        return agent.split("-")[1]
     else:
-        return task.split("_")[0] if "_" in task else task.split("-")[0]
+        return agent.split("_")[0] if "_" in agent else agent.split("-")[0]
 
 
-def get_file_patterns(base, model, task, reflect):
-    patterns = [f"{base}_{task}_{model}", f"{base}_{task}_{model}_diff", f"{base}_{task}_full_{model}", f"{base}_{task}_full_{model}_diff"]
+def get_file_patterns(base, model, agent, reflect):
+    patterns = [f"{base}_{agent}_{model}", f"{base}_{agent}_{model}_diff", f"{base}_{agent}_full_{model}", f"{base}_{agent}_full_{model}_diff"]
     if reflect and reflect != "False":
         patterns.extend(
             [
-                f"{base}_{task}_reflect_{model}",
-                f"{base}_{task}_reflect_{model}_diff",
-                f"{base}_{task}_reflect_{model}_diffdiff",
-                f"{base}_{task}_reflect_full_{model}",
-                f"{base}_{task}_reflect_full_{model}_diff",
+                f"{base}_{agent}_reflect_{model}",
+                f"{base}_{agent}_reflect_{model}_diff",
+                f"{base}_{agent}_reflect_{model}_diffdiff",
+                f"{base}_{agent}_reflect_full_{model}",
+                f"{base}_{agent}_reflect_full_{model}_diff",
             ]
         )
     return patterns
@@ -87,13 +87,13 @@ def find_file(input_dir, pattern, ext=None):
     return None
 
 
-def run_clean_single(model, input_file, reflect, task):
+def run_clean_single(model, input_file, reflect, agent):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
-    first_task_chunk = get_first_task_chunk(task)
-    file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
-    file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
+    agent_first_name_chunk = get_agent_first_name_chunk(agent)
+    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk, reflect)
+    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_reflect_{model}_thinking"])
 
     extensions = TEMP_EXTENSIONS + PACK_EXTENSIONS
 
@@ -107,14 +107,14 @@ def run_clean_single(model, input_file, reflect, task):
     print(f"Cleanup complete for {input_file}.")
 
 
-def run_pack_single(model, input_file, reflect, task, output_folder=None):
+def run_pack_single(model, input_file, reflect, agent, output_folder=None):
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
-    first_task_chunk = get_first_task_chunk(task)
+    agent_first_name_chunk = get_agent_first_name_chunk(agent)
 
-    file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
-    file_patterns.extend([f"{base_name}_{first_task_chunk}_{model}_thinking", f"{base_name}_{first_task_chunk}_reflect_{model}_thinking"])
+    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk, reflect)
+    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_reflect_{model}_thinking"])
     file_patterns.append(base_name)
 
     moved_files = []
@@ -131,7 +131,7 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     if moved_files or copied_files:
         now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
         if output_folder is None:
-            output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{task}_{model}")
+            output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{agent}_{model}")
         os.makedirs(output_folder, exist_ok=True)
         for file_path in moved_files:
             move_file(file_path, output_folder)
@@ -151,14 +151,14 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     return output_folder
 
 
-def run_clean_multiple(model, input_file, input_files, reflect, task):
-    run_clean_single(model, input_file, reflect, task)
+def run_clean_multiple(model, input_file, input_files, reflect, agent):
+    run_clean_single(model, input_file, reflect, agent)
     for f in input_files:
-        run_clean_single(model, f, reflect, task)
+        run_clean_single(model, f, reflect, agent)
     print("\nCleanup complete for multiple files.")
 
 
-def run_pack_multiple(model, input_file, input_files, reflect, task, output_name_override):
+def run_pack_multiple(model, input_file, input_files, reflect, agent, output_name_override):
     if output_name_override:
         base_name = os.path.splitext(os.path.basename(output_name_override))[0]
         output_dir = os.path.dirname(output_name_override)
@@ -166,15 +166,15 @@ def run_pack_multiple(model, input_file, input_files, reflect, task, output_name
         base_name = os.path.splitext(os.path.basename(input_file))[0]
         output_dir = os.path.dirname(input_file)
 
-    first_task_chunk = get_first_task_chunk(task)
-    file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)
+    agent_first_name_chunk = get_agent_first_name_chunk(agent)
+    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk, reflect)
 
     # Add patterns for additional XML files
-    additional_patterns = [f"{base_name}_{first_task_chunk}_{model}.xml", f"{base_name}_{first_task_chunk}_reflect_{model}.xml"]
+    additional_patterns = [f"{base_name}_{agent_first_name_chunk}_{model}.xml", f"{base_name}_{agent_first_name_chunk}_reflect_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
     now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
-    common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{task}_{model}")
+    common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{agent}_{model}")
 
     # Ensure the output folder exists
     os.makedirs(common_output_folder, exist_ok=True)
@@ -182,7 +182,7 @@ def run_pack_multiple(model, input_file, input_files, reflect, task, output_name
     # Pack input files
     for input_file in input_files:
         print(f"\nPacking {input_file} into {common_output_folder}")
-        run_pack_single(model, input_file, reflect, task, output_folder=common_output_folder)
+        run_pack_single(model, input_file, reflect, agent, output_folder=common_output_folder)
 
     # Pack additional XML files
     for pattern in additional_patterns:

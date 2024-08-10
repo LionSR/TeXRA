@@ -16,9 +16,9 @@
   <div class="content-wrapper">
     <div class="compact-selections">
       <div class="select-group">
-        <i class="fas fa-tasks" title="Task"></i>
-        <select id="taskSelect">
-          ${taskOptions}
+        <i class="fas fa-agents" title="Agent"></i>
+        <select id="agentSelect">
+          ${agentOptions}
         </select>
       </div>
       <div class="select-group">
@@ -161,10 +161,10 @@
     <p>
     <div class="instruction-box">
       <div class="instruction-header">
-        <label for="taskInput"><i class="fas fa-pencil-alt"></i> Specific Instructions:</label>
+        <label for="agentSelect"><i class="fas fa-pencil-alt"></i> Specific Instructions:</label>
         <button id="emptyInstructionsButton" class="icon-button" title="Empty"><i class="fas fa-eraser"></i></button>
       </div>
-      <textarea id="taskInput"
+      <textarea id="agentSelect"
         placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."></textarea>
     </div>
     <div class="tool-use-execute">
@@ -188,7 +188,7 @@
     <div class="section">
       <h6 class="section-header"><i class="fas fa-broom"></i> Housekeeping</h6>
       <div class="button-group">
-        <span>For the Selected Task and Files:</span>
+        <span>For the Selected Agent and Files:</span>
         <button id="packSingleButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
         <button id="cleanSingleButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
         <button id="packMultipleButton" class="icon-button" title="Pack(Multiple)"><i class="fas fa-boxes"></i></button>

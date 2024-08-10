@@ -215,15 +215,15 @@ function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
     const defaultValues = {
-      taskSelect: 'correct-tex',
+      agentSelect: 'correct-tex',
       reflectSelect: 'True',
       commitSelect: 'HEAD'
     };
 
     const valueElements = [
-      'modelSelect', 'taskSelect', 'inputFileSelect', 'auxFileSelect',
+      'modelSelect', 'agentSelect', 'inputFileSelect', 'auxFileSelect',
       'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
-      'taskInput', 'reflectSelect', 'commitSelect', 'outputNameOverride'
+      'agentSelect', 'reflectSelect', 'commitSelect', 'outputNameOverride'
     ];
 
     valueElements.forEach(id => {
@@ -400,9 +400,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  document.getElementById('taskSelect').addEventListener('change', function () {
-    const selectedTask = this.value;
-    if (selectedTask.startsWith('correct')) {
+  document.getElementById('agentSelect').addEventListener('change', function () {
+    const selectedAgent = this.value;
+    if (selectedAgent.startsWith('correct')) {
       document.getElementById('figureFileSelect').value = '';
       document.getElementById('reflectSelect').value = 'False';
     } else {
@@ -464,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('emptyInstructionsButton').addEventListener('click', function () {
-    document.getElementById('taskInput').value = '';
+    document.getElementById('agentSelect').value = '';
     saveState();
   });
 
@@ -496,9 +496,9 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('executeButton').addEventListener('click', function () {
-    const task = document.getElementById('taskSelect').value;
+    const agent = document.getElementById('agentSelect').value;
     const inputFile = document.getElementById('inputFileSelect').value;
-    const instructions = document.getElementById('taskInput').value;
+    const instructions = document.getElementById('agentSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const autoExtractFigure = document.getElementById('autoExtractFigure').checked;
@@ -528,7 +528,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     vscode.postMessage({
       command: 'execute',
-      task: task,
+      agent: agent,
       inputFile: inputFile,
       additionalInputFiles: additionalInputFiles,
       sampleFiles: sampleFiles,
@@ -547,14 +547,14 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('packSingleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
-    const task = document.getElementById('taskSelect').value;
+    const agent = document.getElementById('agentSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
     vscode.postMessage({
       command: 'packSingle',
       inputFile: inputFile,
-      task: task,
+      agent: agent,
       reflect: reflect,
       model: model,
       outputNameOverride: outputNameOverride
@@ -562,14 +562,14 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('cleanSingleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
-    const task = document.getElementById('taskSelect').value;
+    const agent = document.getElementById('agentSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
     vscode.postMessage({
       command: 'cleanSingle',
       inputFile: inputFile,
-      task: task,
+      agent: agent,
       reflect: reflect,
       model: model,
       outputNameOverride: outputNameOverride
@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Save state on input changes
   const elementsToWatch = [
-    'modelSelect', 'taskSelect', 'inputFileSelect', 'sampleFileSelect',
+    'modelSelect', 'agentSelect', 'inputFileSelect', 'sampleFileSelect',
     'auxFileSelect', 'figureFileSelect', 'reflectSelect',
     'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
     'includeTikzReflection', 'includeTexCount'
@@ -644,8 +644,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById(id).addEventListener('change', saveState);
   });
 
-  // Special case for taskInput as it uses 'input' event
-  document.getElementById('taskInput').addEventListener('input', saveState);
+  // Special case for agentSelect as it uses 'input' event
+  document.getElementById('agentSelect').addEventListener('input', saveState);
 
   document.getElementById('toggleOutputFiles').addEventListener('click', toggleOutputFiles);
 
@@ -662,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('packMultipleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const additionalInputFiles = getSelectedFiles(document.getElementById('multipleInputFilesSelect'));
-    const task = document.getElementById('taskSelect').value;
+    const agent = document.getElementById('agentSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride');
@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
       command: 'packMultiple',
       inputFile: inputFile,
       additionalInputFiles: additionalInputFiles,
-      task: task,
+      agent: agent,
       reflect: reflect,
       model: model,
       outputNameOverride: outputNameOverrideValue,
@@ -686,7 +686,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('cleanMultipleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const additionalInputFiles = getSelectedFiles(document.getElementById('multipleInputFilesSelect'));
-    const task = document.getElementById('taskSelect').value;
+    const agent = document.getElementById('agentSelect').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride');
@@ -699,7 +699,7 @@ document.addEventListener('DOMContentLoaded', function () {
       command: 'cleanMultiple',
       inputFile: inputFile,
       additionalInputFiles: additionalInputFiles,
-      task: task,
+      agent: agent,
       reflect: reflect,
       model: model,
       outputNameOverride: outputNameOverrideValue,
@@ -769,8 +769,8 @@ function hideEmptyMultipleFileSelects() {
 function saveState() {
   const state = {};
   const elementsToSave = [
-    'modelSelect', 'taskSelect', 'inputFileSelect', 'sampleFileSelect',
-    'auxFileSelect', 'figureFileSelect', 'taskInput', 'reflectSelect',
+    'modelSelect', 'agentSelect', 'inputFileSelect', 'sampleFileSelect',
+    'auxFileSelect', 'figureFileSelect', 'agentSelect', 'reflectSelect',
     'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
     'includeTikzReflection', 'includeTexCount', 'outputNameOverride'
   ];

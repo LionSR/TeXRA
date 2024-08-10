@@ -5,7 +5,7 @@ This is the frontend component of the CoAuthor project, a Visual Studio Code ext
 ## Features
 
 - File selection for input, auxiliary, and figure files
-- Task and model selection
+- agent and model selection
 - Execution of CoAuthor commands directly from VS Code
 - LaTeX diff visualization
 - Housekeeping operations (clean output, clean build, indent TeX)
@@ -71,9 +71,9 @@ CoAuthor frontend provides several commands that can be accessed via the command
 
 CoAuthor supports multiple file inputs for various file types:
 
-1. **Input Files**: You can select multiple input files for tasks that require it.
-2. **Sample Files**: For tasks that use reference or sample files.
-3. **Auxiliary Files**: Additional files needed for the task.
+1. **Input Files**: You can select multiple input files for agents that require it.
+2. **Sample Files**: For agents that use reference or sample files.
+3. **Auxiliary Files**: Additional files needed for the agent.
 4. **Figure Files**: Image files to be included in the document.
 
 For each file type, you can:
@@ -88,7 +88,7 @@ This flexible file selection system allows you to easily manage complex projects
 
 The "Specific Instructions" text area allows you to provide detailed instructions for the AI model. These instructions are not just passed along verbatim; instead, they are carefully analyzed and expanded upon by the model. The AI will:
 
-1. Interpret your instructions in the context of the selected task
+1. Interpret your instructions in the context of the selected agent
 2. Break down complex instructions into manageable steps
 3. Apply relevant domain knowledge to enhance the execution of your instructions
 4. Generate a detailed plan of action before making any changes to your document
@@ -99,27 +99,27 @@ This process ensures that your instructions are carried out thoroughly and intel
 
 The CoAuthor sidebar provides several buttons and controls for easy interaction:
 
-1. **Task Selection**: Choose the specific task you want to perform (e.g., correct-tex, polish-tex, draw-tex).
-2. **Model Selection**: Select the AI model to use for the task (e.g., Sonnet+, Opus, GPT-4).
-3. **Reflect**: Toggle whether the AI should perform a reflection step after the initial task.
-4. **Execute**: Run the selected task with the chosen settings and files.
+1. **agent Selection**: Choose the specific agent you want to perform (e.g., correct-tex, polish-tex, draw-tex).
+2. **Model Selection**: Select the AI model to use for the agent (e.g., Sonnet+, Opus, GPT-4).
+3. **Reflect**: Toggle whether the AI should perform a reflection step after the initial agent.
+4. **Execute**: Run the selected agent with the chosen settings and files.
 5. **Current**: Quickly select the currently open file as the input file.
 6. **Empty**: Clear the current selection for multiple files.
 7. **Multiple**: Open a file picker to select multiple files.
 
-### Customizing Tasks
+### Customizing agents
 
-You can customize the list of available tasks in your VS Code settings:
+You can customize the list of available agents in your VS Code settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`).
 2. Search for "CoAuthor" in the settings search bar.
-3. Look for the "Coauthor: Tasks" setting.
-4. Edit the task list to add, remove, or modify tasks.
+3. Look for the "Coauthor: agents" setting.
+4. Edit the agent list to add, remove, or modify agents.
 
-Example custom task list:
+Example custom agent list:
 
 ```json
-"coauthor.tasks": [
+"coauthor.agents": [
   "correct-tex",
   "polish-tex",
   "draw-tex",
@@ -152,22 +152,22 @@ The CoAuthor VS Code extension provides a user-friendly interface for performing
 
 ### Clean Single
 
-The "Clean Single" operation removes output files associated with a specific input file, task, and model. It handles both normal output and intelligent merge output.
+The "Clean Single" operation removes output files associated with a specific input file, agent, and model. It handles both normal output and intelligent merge output.
 
 To use this feature:
 
 1. Select your input file in the CoAuthor sidebar
-2. Choose the task and model
+2. Choose the agent and model
 3. Click the "Clean" button in the "Housekeeping" section
 
 ### Pack Single
 
-The "Pack Single" operation collects output files associated with a specific input file, task, and model, and moves them to a versioned folder. It also handles both normal output and intelligent merge output.
+The "Pack Single" operation collects output files associated with a specific input file, agent, and model, and moves them to a versioned folder. It also handles both normal output and intelligent merge output.
 
 To use this feature:
 
 1. Select your input file in the CoAuthor sidebar
-2. Choose the task and model
+2. Choose the agent and model
 3. Click the "Pack" button in the "Housekeeping" section
 
 ### Clean Output Files

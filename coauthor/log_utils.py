@@ -30,7 +30,7 @@ def log_start(args):
         f.write("\n<log_entry>\n")
         f.write("  <metadata>\n")
         f.write(f"    <time>{datetime.now()}</time>\n")
-        f.write(f"    <task>{args.task}</task>\n")
+        f.write(f"    <agent>{args.agent}</agent>\n")
         f.write(f"    <model>{args.model}</model>\n")
 
         optional_output_fields = ["output_name_override", "input_file", "input_files", "auxiliary_files", "figure_inputs"]
