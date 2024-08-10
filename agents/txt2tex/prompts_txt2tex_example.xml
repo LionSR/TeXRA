@@ -23,7 +23,7 @@ The document class and custom commands for the LaTeX file are as follows:
 </document_class>
 
 <command>
-{COMMANDS_CONTENT}
+{COMMAND_CONTENT}
 </command>
 
 Additionally, here's an example of a research paper and its corresponding lecture note:

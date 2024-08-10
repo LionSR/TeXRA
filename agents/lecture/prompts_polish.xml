@@ -27,11 +27,11 @@ You will be given a LaTeX document of a draft textbook chapter that your student
 Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{DOCUMENT_CLS}">
+<document name="{DOCUMENT_CLS_FILE}">
 {DOCUMENT_CLS_CONTENT}
 </document>
-<document name="{COMMANDS}">
-{COMMANDS_CONTENT}
+<document name="{COMMAND_FILE}">
+{COMMAND_CONTENT}
 </document>
 {ADDITIONAL_INPUT_CONTENTS}
 <document name="{INPUT_FILE}">

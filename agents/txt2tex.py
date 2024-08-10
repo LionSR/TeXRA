@@ -11,7 +11,7 @@ class Txt2Tex(DirectWrite):
             {
                 "SAMPLE_TEX": coa.read_file(self.args.sample_tex),
                 "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
-                "COMMANDS_CONTENT": coa.read_file(self.args.commands_file),
+                "COMMAND_CONTENT": coa.read_file(self.args.commands_file),
                 "TOPIC": self.args.topic,
             }
         )
