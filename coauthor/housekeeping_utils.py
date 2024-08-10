@@ -151,15 +151,20 @@ def run_pack_single(model, input_file, reflect, task, output_folder=None):
     return output_folder
 
 
-def run_clean_multiple(model, input_files, reflect, task):
-    for input_file in input_files:
-        run_clean_single(model, input_file, reflect, task)
+def run_clean_multiple(model, input_file, input_files, reflect, task):
+    run_clean_single(model, input_file, reflect, task)
+    for f in input_files:
+        run_clean_single(model, f, reflect, task)
     print("\nCleanup complete for multiple files.")
 
 
-def run_pack_multiple(model, input_files, reflect, task, output_name_override):
-    base_name = os.path.splitext(os.path.basename(output_name_override))[0]
-    output_dir = os.path.dirname(output_name_override)
+def run_pack_multiple(model, input_file, input_files, reflect, task, output_name_override):
+    if output_name_override:
+        base_name = os.path.splitext(os.path.basename(output_name_override))[0]
+        output_dir = os.path.dirname(output_name_override)
+    elif input_file:
+        base_name = os.path.splitext(os.path.basename(input_file))[0]
+        output_dir = os.path.dirname(input_file)
 
     first_task_chunk = get_first_task_chunk(task)
     file_patterns = get_file_patterns(base_name, model, first_task_chunk, reflect)

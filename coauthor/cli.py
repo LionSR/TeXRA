@@ -439,21 +439,23 @@ def pack_single(model, input_file, reflect, task, output_name_override):
 
 @click.command()
 @click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
-def clean_multiple(model, input_files, reflect, task):
-    run_clean_multiple(model, input_files, reflect, task)
+def clean_multiple(model, input_file, input_files, reflect, task):
+    run_clean_multiple(model, input_file, input_files, reflect, task)
 
 
 @click.command()
 @click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--task", required=True, help="Task to perform")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_multiple(model, input_files, reflect, task, output_name_override):
-    run_pack_multiple(model, input_files, reflect, task, output_name_override)
+def pack_multiple(model, input_file, input_files, reflect, task, output_name_override):
+    run_pack_multiple(model, input_file, input_files, reflect, task, output_name_override)
 
 
 @click.command()
