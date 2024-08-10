@@ -32,9 +32,9 @@ class BaseReflectChainAgent(ABC):
     Provides a common structure for agents that involve reflection and processing.
     """
 
-    def __init__(self, args, prompt_path):
+    def __init__(self, args, agent_path):
         self.args = args
-        self.prompt_path = prompt_path
+        self.agent_path = agent_path
         self.agent_settings = None
         self.prompt_dict = None
         self.user_vars = None
@@ -50,11 +50,11 @@ class BaseReflectChainAgent(ABC):
         print(f"{colored('args:', 'blue')} {self.args}")
         print(colored(f"Processing {self.args.input_file}...\n", "green"))
 
-        self.agent_settings, self.prompt_dict = load_agent_settings_and_prompts(self.prompt_path, self.args.agent)
+        self.agent_settings, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
         self.user_vars = self.get_user_vars()
         self.model_settings = get_model_settings(self.args)
         self.output_settings = get_output_settings(self.args, self.agent_settings)
-        self.prompt_settings = get_prompt_settings(self.args, self.prompt_path, self.prompt_dict)
+        self.prompt_settings = get_prompt_settings(self.args, self.agent_path, self.prompt_dict)
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
@@ -187,8 +187,8 @@ class BaseReflectChainAgent(ABC):
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
-    def __init__(self, args, prompt_path):
-        super().__init__(args, prompt_path)
+    def __init__(self, args, agent_path):
+        super().__init__(args, agent_path)
         self.first_round_output_files = []
         self.reflect_round_output_files = []
 

@@ -359,7 +359,7 @@ The main logic for CoAuthor is distributed across several Python files:
 - `coauthor/file_utils.py`: File handling utilities
 - `coauthor/tex_tools.py`: LaTeX-specific utilities
 
-Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/edit_tex.py`, `agents/prl_reply.py`, etc.
+Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/edit_tex.py`, `agents/reply_prl.py`, etc.
 
 ## Extending CoAuthor
 

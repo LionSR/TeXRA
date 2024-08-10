@@ -160,8 +160,8 @@
   - meeting2text.py
   - merge.py
   - paper2note.py
-  - prl_edit.py
-  - prl_reply.py
+  - edit_prl.py
+  - reply_prl.py
   - txt2tex.py
 - Removed obsolete text-based prompt files
 - Updated agent processing logic to handle XML-formatted prompts
@@ -506,7 +506,7 @@
 
 - Fix the broken backend
 - Created new `edit_utils.py` for shared edit functionality
-- Refactored `adapt.py`, `lecture2text.py`, `meeting2text.py`, `merge.py`, `paper2note.py`, `prl_edit.py`, `prl_reply.py`, and `txt2tex.py` to use shared utilities
+- Refactored `adapt.py`, `lecture2text.py`, `meeting2text.py`, `merge.py`, `paper2note.py`, `edit_prl.py`, `reply_prl.py`, and `txt2tex.py` to use shared utilities
 - Updated `model_utils.py` for improved image handling
 - Enhanced error handling and input validation across multiple scripts
 - Improved code readability and maintainability

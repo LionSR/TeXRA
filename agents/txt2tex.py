@@ -1,7 +1,7 @@
 from coauthor.base_agents import DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "txt2tex")
+agent_path = coa.get_agent_path(coa, "txt2tex")
 
 
 class Txt2Tex(DirectWrite):
@@ -27,7 +27,7 @@ def main():
     parser.add_argument("--topic", type=str, default="Experimental Quantum Computing", help="Topic of the document.")
     args = parser.parse_args()
 
-    txt2tex = Txt2Tex(args, prompt_path)
+    txt2tex = Txt2Tex(args, agent_path)
     txt2tex.run()
 
 

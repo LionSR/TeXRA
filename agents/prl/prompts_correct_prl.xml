@@ -26,7 +26,7 @@ You will be given the main text and supplementary materials of a research paper 
 Here are the LaTeX documents:
 
 <documents>
-<document name="preamble.tex">
+<document name="{PREAMBLE_FILE}">
 {PREAMBLE_CONTENT}
 </document>
 <document name="{MAIN_FILE}">

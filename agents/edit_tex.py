@@ -1,7 +1,7 @@
 from coauthor.base_agents import ThinkAndWrite, DirectWrite
 import coauthor as coa
 
-prompt_path = coa.get_prompt_path(coa, "article")
+agent_path = coa.get_agent_path(coa, "article")
 
 
 class EditTexBase:
@@ -43,9 +43,9 @@ def main():
     args = parser.parse_args()
 
     if args.agent.startswith("correct"):
-        edit_tex = EditTexDirect(args, prompt_path)
+        edit_tex = EditTexDirect(args, agent_path)
     else:
-        edit_tex = EditTexThink(args, prompt_path)
+        edit_tex = EditTexThink(args, agent_path)
     edit_tex.run()
 
 

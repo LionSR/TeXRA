@@ -20,9 +20,9 @@ def merge_dicts(base, override):
     return result
 
 
-def load_agent_settings_and_prompts(prompt_path, agent):
-    def load_agent_xml(prompt_path, agent_name):
-        agent_prompt_file = f"{prompt_path}/prompts_{agent_name}.xml"
+def load_agent_settings_and_prompts(agent_path, agent):
+    def load_agent_xml(agent_path, agent_name):
+        agent_prompt_file = f"{agent_path}/prompts_{agent_name}.xml"
         if not os.path.exists(agent_prompt_file):
             raise FileNotFoundError(f"Task prompt file not found: {agent_prompt_file}")
 
@@ -30,7 +30,7 @@ def load_agent_settings_and_prompts(prompt_path, agent):
         parent = root.get("inherits")
 
         if parent:
-            parent_settings, parent_prompts = load_agent_xml(prompt_path, parent)
+            parent_settings, parent_prompts = load_agent_xml(agent_path, parent)
             agent_settings = {child.tag: child.text for child in root.find("settings") or []}
             agent_prompts = {child.tag: child.text.strip() for child in root.find("prompts") or []}
 
@@ -42,7 +42,7 @@ def load_agent_settings_and_prompts(prompt_path, agent):
 
         return settings, prompts
 
-    return load_agent_xml(prompt_path, agent)
+    return load_agent_xml(agent_path, agent)
 
 
 def get_xml_format_from_file(file):

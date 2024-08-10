@@ -2,10 +2,10 @@ from coauthor.base_agents import ThinkAndWrite, DirectWrite
 import coauthor as coa
 import os
 
-prompt_path = coa.get_prompt_path(coa, "prl")
+agent_path = coa.get_agent_path(coa, "prl")
 
 
-class PRLReplyBase:
+class ReplyPRLBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
         # Ensure all file paths are provided before reading
@@ -41,11 +41,11 @@ class PRLReplyBase:
         return user_vars
 
 
-class PRLReplyThink(PRLReplyBase, ThinkAndWrite):
+class ReplyPRLThink(ReplyPRLBase, ThinkAndWrite):
     pass
 
 
-class PRLReplyDirect(PRLReplyBase, DirectWrite):
+class ReplyPRLDirect(ReplyPRLBase, DirectWrite):
     pass
 
 
@@ -64,17 +64,17 @@ def main():
     parser.add_argument("--editor_letter", type=str, required=True, help="Path to the editor decision letter file.")
     parser.add_argument("--report_a", type=str, required=True, help="Path to the first referee report file.")
     parser.add_argument("--report_b", type=str, required=True, help="Path to the second referee report file.")
-    parser.add_argument("--preamble", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
+    parser.add_argument("--preamble_file", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
     parser.add_argument("--example_reply_letter", type=str, default="rebuttal_example/reply_letter.txt", help="Path to an example reply letter file.")
     parser.add_argument("--draft_reply_letter", type=str, help="Path to the draft reply letter file.")
     parser.add_argument("--draft_main_content", type=str, help="Path to the draft main content file, if applicable.")
     args = parser.parse_args()
 
     if args.agent == "reply_letter":
-        prl_reply = PRLReplyThink(args, prompt_path)
+        reply_prl = ReplyPRLThink(args, agent_path)
     else:
-        prl_reply = PRLReplyDirect(args, prompt_path)
-    prl_reply.run()
+        reply_prl = ReplyPRLDirect(args, agent_path)
+    reply_prl.run()
 
 
 if __name__ == "__main__":
