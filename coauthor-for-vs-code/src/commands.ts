@@ -458,12 +458,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, editedFile: string) => {
+    vscode.commands.registerCommand('coauthor.merge', async (inputFile: string, baseFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
       const model = getConfig().get('defaultMergeModel', 'sonnet+');
       const reflect = getConfig().get('defaultMergeReflect', 'False');
-      terminal.sendText(`coauthor merge --input_file="${inputFile}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
+      const fileToUse = baseFile || inputFile;
+      terminal.sendText(`coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
     }),
     vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
       const terminal = ensureTerminal();
