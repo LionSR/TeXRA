@@ -5,7 +5,7 @@
     <end_tag>&lt;/improved_document&gt;</end_tag>
     <output_type>txt</output_type>
     <prefills>
-        <prefill>&lt/improved_document&gt;</prefill>
+        <prefill>&lt;/improved_document&gt;</prefill>
     </prefills>
 </settings>
 <prompts>

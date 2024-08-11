@@ -1,4 +1,4 @@
-from coauthor.base_agents import DirectWrite, ThinkAndWrite
+from coauthor.agent_reflect import DirectWrite, ThinkAndWrite
 import coauthor as coa
 
 agent_path = coa.get_agent_path(coa, "meeting2text")
