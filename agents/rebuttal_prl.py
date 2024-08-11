@@ -124,6 +124,8 @@ def main():
             args.reply_to_referees = f
         elif "list_of_major_changes" in f:
             args.list_of_major_changes = f
+        elif "instruction" in f:
+            args.instruction_file = f
 
     if args.agent in ["reply_letter", "draft_rebuttal", "revise_rebuttal"]:
         reply_prl = ReplyPRLThink(args, agent_path)
