@@ -26,14 +26,18 @@ def get_output_settings(args, agent_settings):
         "document_tag": agent_settings.get("document_tag"),
         "output_type": agent_settings.get("output_type", "txt"),
         "end_tag": agent_settings.get("end_tag", "\\end{document}"),
-        "prefill_first": agent_settings.get("prefill_first"),
+        "prefills": agent_settings.get("prefills", []),
     }
 
-    prefill_second = agent_settings.get("prefill_second")
-    if prefill_second and prefill_second != "":
-        output_settings["prefill_second"] = prefill_second
-    else:
-        output_settings["prefill_second"] = output_settings["prefill_first"]
+    # For backward compatibility
+    if not output_settings["prefills"]:
+        prefill_first = agent_settings.get("prefill_first")
+        prefill_second = agent_settings.get("prefill_second")
+        
+        if prefill_first:
+            output_settings["prefills"].append(prefill_first)
+        if prefill_second and prefill_second != prefill_first:
+            output_settings["prefills"].append(prefill_second)
 
     return output_settings
 
