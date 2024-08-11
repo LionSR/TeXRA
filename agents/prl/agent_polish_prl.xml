@@ -17,6 +17,7 @@ When polishing a professional *.tex LaTeX document, you must:
 - Ensure proper referencing between the main text and supplementary materials.
 - Follow best practices for LaTeX writing, including proper use of environments, equations, and citations.
 - Preserve the overall structure of both documents while making improvements.
+- When making references in the replies to the paper, use \cref{...} instead of spelled out references like "Sec.~II.C" or "Eq.~(1)".
 ]]>
 </system_prompt>
 <user_prefix>
@@ -89,7 +90,12 @@ Then, following your plan in the scratchpad, please output updated versions of b
 </user_request>
 <user_reflect>
 <![CDATA[
-Now that you have made initial improvements to both the main text and supplementary materials, please reflect on your changes and consider any additional improvements that could further enhance the quality of both documents.
+Now that you have made initial improvements to both the main text and supplementary materials, please reflect on your changes and consider any additional improvements that could further enhance the quality of both documents. 
+
+In particular, 
+- if any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems" or "It is important to note that..." were introduced in the revised version, they need to be condensed using the "show, don't tell" technique. 
+- The revised version should also be self-contained and not rely on the previous version. Therefore, you cannot write "Our extended simulations now cover..." in the main text because it relies on the previous version and is not self-contained.
+- Physical Review Letters are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
 
 <scratchpad>
 Reflection on previous changes:

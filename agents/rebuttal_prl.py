@@ -106,7 +106,7 @@ def main():
     parser.add_argument(
         "--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
     )
-    parser.add_argument("--instruction_file", type=str, default="replies/instruction_prb.txt", help="Path to the instruction file.")
+    parser.add_argument("--instruction_file", type=str, default="replies/instruction_prl.txt", help="Path to the instruction file.")
 
     # New arguments for revise_rebuttal
     parser.add_argument("--reply_to_editor", type=str, default="replies/reply_to_editor.tex", help="Path to the current reply to editor file.")
