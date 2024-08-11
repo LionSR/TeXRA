@@ -50,8 +50,8 @@ You will be drafting a reply letter to referee reports for a paper submitted to 
 <document name="{REFEREE_REPORT_B_FILE}">
 {REFEREE_REPORT_B}
 </document>
-<document name="{EXAMPLE_REPLY_LETTER_FILE}">
-{EXAMPLE_REPLY_LETTER}
+<document name="{EXAMPLE_REBUTTAL_LETTER_FILE}">
+{EXAMPLE_REBUTTAL_LETTER}
 </document>
 <document name="{INSTRUCTION_FILE}">
 {INSTRUCTION}
