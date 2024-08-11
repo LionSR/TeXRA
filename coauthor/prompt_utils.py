@@ -38,7 +38,7 @@ def load_agent_settings_and_prompts(agent_path, agent):
             prefills_elem = root.find("settings/prefills")
             if prefills_elem is not None:
                 agent_settings["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
-            
+
             settings = merge_dicts(parent_settings, agent_settings)
             prompts = merge_dicts(parent_prompts, agent_prompts)
         else:
@@ -72,7 +72,7 @@ def load_prompt(prompt_type, prompt_settings):
     return prompt
 
 
-# in the future split the following into a different file (maybe share with base_agents or a standalone file to be shared with different chains)
+# in the future split the following into a different file (maybe share with agent_reflect or a standalone file to be shared with different chains)
 def get_user_vars_basic(args):
     user_vars = {
         "INPUT_FILE": args.input_file,
