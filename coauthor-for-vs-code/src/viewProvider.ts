@@ -167,10 +167,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
           break;
         case 'latexDiff':
-          vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.editedFile);
+          vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.baseFile, message.editedFile);
           break;
         case 'latexDiffVC':
-          vscode.commands.executeCommand('coauthor.latexDiffVC', message.inputFile, message.commitHash);
+          vscode.commands.executeCommand('coauthor.latexDiffVC', message.inputFile, message.baseFile, message.commitHash);
           break;
         case 'requestRecentCommits':
           const isGitRepo = await vscode.commands.executeCommand<boolean>('coauthor.isGitRepository');
@@ -191,7 +191,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'packLatexDiffVC':
-          vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFile, message.commitHash, message.clean);
+          vscode.commands.executeCommand('coauthor.packLatexDiffVC', message.inputFile, message.baseFile, message.commitHash, message.clean);
           break;
         case 'getCurrentFile':
           const fileType = message.fileType || 'input';
