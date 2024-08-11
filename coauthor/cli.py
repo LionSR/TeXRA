@@ -596,6 +596,13 @@ def draft_rebuttal_prl(model, input_file, **kwargs):
     execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def revise_rebuttal_prl(model, input_file, **kwargs):
+    _, _, prompt_dir = get_common_env(model)
+    execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -635,6 +642,7 @@ cli.add_command(revise_prl)
 
 # reply_prl.py
 cli.add_command(draft_rebuttal_prl)
+cli.add_command(revise_rebuttal_prl)
 
 
 # cli.add_command(reply_letter_prl)
@@ -680,7 +688,6 @@ cli.add_command(statement)
 # grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
-
 
 
 if __name__ == "__main__":

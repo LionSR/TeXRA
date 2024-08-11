@@ -23,6 +23,7 @@ When drafting the rebuttal and revising the paper, you must:
 
 When writing professional *.tex LaTeX documents, you must:
 - Use professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β. Use $J_1$ instead of J1. Use $\approx$ instead of ≈.
+- For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
 - Only use enumerate and itemize environments for lists. 
 ]]>
 </system_prompt>
@@ -31,28 +32,28 @@ When writing professional *.tex LaTeX documents, you must:
 You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
 <documents>
-<document name="replies/Cover Letter">
+<document name="{COVER_LETTER_FILE}">
 {COVER_LETTER}
 </document>
-<document name="replies/{INPUT_FILE}">
+<document name="{INPUT_FILE}">
 {MAIN_CONTENT}
 </document>
-<document name="replies/Appendix">
+<document name="{SUPP_FILE}">
 {SUPP_CONTENT}
 </document>
-<document name="replies/Editor Decision Letter">
+<document name="{EDITOR_LETTER_FILE}">
 {EDITOR_LETTER}
 </document>
-<document name="replies/Referee Report A">
+<document name="{REFEREE_REPORT_A_FILE}">
 {REFEREE_REPORT_A}
 </document>
-<document name="replies/Referee Report B">
+<document name="{REFEREE_REPORT_B_FILE}">
 {REFEREE_REPORT_B}
 </document>
-<document name="replies/Example Reply Letter">
+<document name="{EXAMPLE_REPLY_LETTER_FILE}">
 {EXAMPLE_REPLY_LETTER}
 </document>
-<document name="replies/Instructions">
+<document name="{INSTRUCTION_FILE}">
 {INSTRUCTION}
 </document>
 </documents>
@@ -86,7 +87,7 @@ After your planning, draft a reply letter that includes the following:
 Write the full reply letter in the following format:
 
 <rebuttal_letter>
-<document name="replies/reply_to_editor.tex">
+<document name="{REPLY_TO_EDITOR_FILE}">
 \documentclass[a4paper,12pt]{article}
 \input{../preamble}
 \usepackage[a4paper,margin=2.5cm]{geometry}
@@ -152,7 +153,7 @@ Your response to the second comment here.
 \end{document}
 
 </document>
-<document name="replies/list_of_major_changes.tex">
+<document name="{LIST_OF_MAJOR_CHANGES_FILE}">
 \documentclass[a4paper,12pt]{article}
 \usepackage[a4paper,margin=2.5cm]{geometry}
 \input{../preamble}
@@ -182,7 +183,7 @@ Your response to the second comment here.
 <document name="{INPUT_FILE}">
 (Insert the full text of your revised paper here.)
 </document>
-<document name="supp.tex">
+<document name="{SUPP_FILE}">
 (Insert the full text of your revised supplementary materials here.)
 </document>
 
@@ -201,7 +202,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 - The style and tone of the reply letter should be similar to the provided example (under <document name="replies/example_rebuttal_letter">).
 </requirements>
 
-Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to output the revised letter to the editor (under <document name="replies/reply_to_editor.tex">) and the revised response letter (under <document name="replies/reply_to_referees.tex">), the revised main paper (under <document name="{INPUT_FILE}">) and the revised supplementary materials (under <document name="supp.tex">) that meets the above requirements.
+Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to output the revised letter to the editor (under <document name="{REPLY_TO_EDITOR_FILE}">) and the revised response letter (under <document name="{REPLY_TO_REFEREES_FILE}">), the revised main paper (under <document name="{INPUT_FILE}">) and the revised supplementary materials (under <document name="{SUPP_FILE}">) that meets the above requirements.
 ]]>
 </user_reflect>
 </prompts>

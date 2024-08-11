@@ -145,12 +145,10 @@ def _create_image_content(image_contents, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
@@ -241,7 +239,7 @@ def print_stop_flags(end_turn, new_response, state, output_settings, massive_rep
     """Print the flags indicating why the conversation stopped."""
     print("Printing the flags")
     print(f"end_turn: {end_turn}")
-    document_tag = output_settings['document_tag']
+    document_tag = output_settings["document_tag"]
     print(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
     print(f"continuation_limit: {state['continuation_count'] > 10}")
     print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
