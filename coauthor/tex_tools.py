@@ -54,6 +54,7 @@ def get_tex_count(file_paths):
             continue
 
         # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
+        # here one needs a switch for -merge
         success, output = run_external_command(["texcount", file_path], capture_output=True)
         if success:
             all_outputs.append(f"Tex Count Results for {file_path}:\n{output}")

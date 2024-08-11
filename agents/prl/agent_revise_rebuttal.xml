@@ -4,7 +4,8 @@
     <document_tag>rebuttal_letter</document_tag>
     <end_tag>&lt;/rebuttal_letter&gt;</end_tag>
     <output_type>xml</output_type>
-    <prefill_first>&lt;rebuttal_letter&gt;</prefill_first>
+    <prefill_first>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill_first>
+    <prefill_second>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill_second>
 </settings>
 <prompts>
 <system_prompt>
@@ -98,6 +99,9 @@ After your planning, revise the rebuttal package to include the following improv
 Write the revised rebuttal package in the following format:
 
 <rebuttal_letter>
+<scratchpad>
+your detailed plan here
+</scratchpad>
 <document name="{REPLY_TO_EDITOR_FILE}">
 (Insert the revised letter to the editor here, maintaining the LaTeX structure)
 </document>
