@@ -11,21 +11,20 @@
 Dear Dr.~Garisto,
 \vspace{3em}
 
-Thank you very much for sending out my manuscript (LK15932/Deng) for review. I appreciate the referee's time on reviewing the manuscript and his/her useful suggestions/comments, which have led me to carry out a substantial amount of new calculations and helped me to significantly improve the manuscript. Now, the current manuscript is much stronger and better than the one originally submitted to PRL. 
+Thank you very much for sending out my manuscript (LK15932/Deng) for review. I appreciate the referee's time on reviewing the manuscript and his/her useful suggestions/comments, which have led me to carry out a substantial amount of new calculations and helped me to significantly improve the manuscript. Now, the current manuscript is much stronger and better than the one originally submitted to PRL.\\
 
-In his/her report, the referee A states (quote here) "My overall recommendation is to reconsider after revision". He/she has two major concerns: (1) the original manuscript did not properly demonstrate the universal applicability of the introduced RBM approach to nonlocality detections; (2) the difference between the RBM approach and the conventional DMRG approach is not clear. I take these concerns very seriously and have made the following notable efforts to address them (see my response to the referee and the updated manuscript for details): 
-
+In his/her report, the referee A states (quote here) ``My overall recommendation is to reconsider after revision''. He/she has two major concerns: (1) the original manuscript did not properly demonstrate the universal applicability of the introduced RBM approach to nonlocality detections; (2) the difference between the RBM approach and the conventional DMRG approach is not clear. I take these concerns very seriously and have made the following notable efforts to address them (see my response to the referee and the updated manuscript for details):
 \begin{enumerate}
 \item I carried out explicit new calculations for a 2D example with a system size beyond the state-of-the-art capability of DMRG calculations.
-\item for the example of "All-to-all two-body correlators" with random measurement angles, I carried out new calculations for system sizes as large as N=60, which is inaccessible to the conventional methods (e.g., exact diagonalization).
+\item for the example of ``All-to-all two-body correlators'' with random measurement angles, I carried out new calculations for system sizes as large as N=60, which is inaccessible to the conventional methods (e.g., exact diagonalization).
 \item I improved the presentation and emphasized the crucial differences between the RBM and DMRG approaches. 
 \end{enumerate}
 
-With these new results, I believe that I have established without any doubt the universal applicability and exceptional power of our RBM method in detecting Bell nonlocality in quantum many-body systems. I have also carefully addressed all other minor comments raised by the referee A and have made substantial changes to the manuscript accordingly. 
+With these new results, I believe that I have established without any doubt the universal applicability and exceptional power of our RBM method in detecting Bell nonlocality in quantum many-body systems. I have also carefully addressed all other minor comments raised by the referee A and have made substantial changes to the manuscript accordingly.\\
 
-I stress that the interdisciplinary field of machine learning applications in quantum physics, although still very much in its infancy, has recently attracted tremendous interest across different communities. This work, which bridges machine learning and quantum many-body nonlocality for the first time, is a timely important breakthrough contribution to this fledgling field. After it was posted on arXiv, many scientists from different communities (e.g., quantum information, condensed matter physics, and quantum machine learning, etc.) have discussed with me (through emails or face-to-face conversations) about this work and possible follow-up ideas. They all think that this work is interesting, novel, inspiring, and of singular importance.  With this further improved manuscript, I believe that all the issues raised by the referee have been satisfactorily addressed and expect that it will attract even more attentions across communities. Therefore, I would like to resubmit the manuscript to PRL for your consideration. 
+I stress that the interdisciplinary field of machine learning applications in quantum physics, although still very much in its infancy, has recently attracted tremendous interest across different communities. This work, which bridges machine learning and quantum many-body nonlocality for the first time, is a timely important breakthrough contribution to this fledgling field. After it was posted on arXiv, many scientists from different communities (e.g., quantum information, condensed matter physics, and quantum machine learning, etc.) have discussed with me (through emails or face-to-face conversations) about this work and possible follow-up ideas. They all think that this work is interesting, novel, inspiring, and of singular importance.  With this further improved manuscript, I believe that all the issues raised by the referee have been satisfactorily addressed and expect that it will attract even more attentions across communities. Therefore, I would like to resubmit the manuscript to PRL for your consideration.\\
 
-A detailed response to the referee A and a summary of the major revisions have been appended in the following. I have marked out the major changes in red color, so that the editor and the referee can identify them easily.
+A detailed response to the referee A and a summary of the major revisions have been appended in the following. I have marked out the major changes in red color, so that the editor and the referee can identify them easily.\\
 
 Thank you.
 
@@ -39,11 +38,8 @@ Dong-Ling Deng
 </document>
 <document name="replies/reply_to_referees.tex">
 \documentclass[a4paper,12pt]{article}
-
 \usepackage[a4paper,margin=2.5cm]{geometry}
-
 \input{../preamble}
-
 \newenvironment{referee}[1]
 {\noindent {\bf Referee #1}}
 {\vspace{1em}}
@@ -115,7 +111,7 @@ In the revised manuscript, I have added a new 2D example to clearly show that th
 \end{referee}
 
 \begin{response}
-I appreciate this insightful suggestion. In the revised manuscript, I followed this suggestion and added "Alternatively, one can think about the problem in another way: for a fixed measurement setting, the corresponding Bell operator reduces to an effective Hamiltonian and finding out the maximal Bell violation is then reduced to finding out the ground state energy of this Hamiltonian, which can be done with RBM-based reinforcement learning." to make it more accessible to the general audience.
+I appreciate this insightful suggestion. In the revised manuscript, I followed this suggestion and added `Alternatively, one can think about the problem in another way: for a fixed measurement setting, the corresponding Bell operator reduces to an effective Hamiltonian and finding out the maximal Bell violation is then reduced to finding out the ground state energy of this Hamiltonian, which can be done with RBM-based reinforcement learning.'' to make it more accessible to the general audience.
 \end{response}
 
 \begin{referee}{A}
@@ -123,7 +119,7 @@ I appreciate this insightful suggestion. In the revised manuscript, I followed t
 \end{referee}
 
 \begin{response}
-I thank the referee for this helpful suggestion. In this resubmitted version, I have made this clear by adding into the main text the following two sentences: "It is worthwhile to clarify that the RBM state defined above is a variational state, with \Phi_M\left(\Xi,\Omega\right) specifying the complex coefficient for each component. The actual quantum state should be understood as |\left.\Psi\left(\Omega\right)\right\rangle=\sum_{\Xi}{\Phi_M\left(\Xi,\Omega\right)}|\left.\Xi\right\rangle (up to an irrelevant normalization constant).
+I thank the referee for this helpful suggestion. In this resubmitted version, I have made this clear by adding into the main text the following two sentences: ``It is worthwhile to clarify that the RBM state defined above is a variational state, with \Phi_M\left(\Xi,\Omega\right) specifying the complex coefficient for each component. The actual quantum state should be understood as |\left.\Psi\left(\Omega\right)\right\rangle=\sum_{\Xi}{\Phi_M\left(\Xi,\Omega\right)}|\left.\Xi\right\rangle (up to an irrelevant normalization constant).''
 \end{response}
 
 \begin{referee}{A}

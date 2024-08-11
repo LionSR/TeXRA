@@ -71,6 +71,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         new_response = new_response.replace("\\end{align}\n\n", "\\end{align}\n")
         new_response = new_response.replace("\n\n\\begin{equation}", "\n\\begin{equation}")
         new_response = new_response.replace("\\end{equation}\n\n", "\\end{equation}\n")
+        new_response = new_response.replace("\\end{document}}\n\n\\<document name=", "\\end{document}}\n</document>\n\\<document name=")
         # also replace double line breaks with a single line break in the message
 
         state["total_input_tokens"] += input_tokens
