@@ -4,8 +4,11 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/revise_supp&gt;</end_tag>
     <output_type>tex</output_type>
-    <prefill_first>Now output the revised supplementary material.
-&lt;revise_supp&gt;</prefill_first>
+    <prefills>
+        <prefill>Now output the revised supplementary material.&lt;revise_supp&gt;</prefill>
+        <prefill>Now output the revised supplementary material.
+            &lt;revise_supp&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

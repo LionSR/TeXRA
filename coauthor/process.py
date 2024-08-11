@@ -121,6 +121,7 @@ def process_first_round(
     messages=None,
     tex_count_stats="",
     first_k_tex_document=None,
+    round=0,
 ):
     model = model_settings["model"]
     system_prompt = load_prompt("system", prompt_settings)
@@ -148,7 +149,7 @@ def process_first_round(
             if is_openai_model(model_settings["model"]):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
-        prefill = output_settings["prefill_first"]
+        prefill = output_settings["prefills"][0] if output_settings["prefills"] else ""
         use_prefill_from_input = prompt_settings["use_prefill_from_input"]
         accumulated_output = prefill
 
@@ -200,6 +201,7 @@ def process_reflection_round(
     figure_inputs=None,
     tex_count_stats="",
     first_k_tex_document=None,
+    round=1,
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
@@ -244,7 +246,7 @@ def process_reflection_round(
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
 
     else:
-        prefill = output_settings["prefill_second"]
+        prefill = output_settings["prefills"][1] if len(output_settings["prefills"]) > 1 else output_settings["prefills"][0]
 
         accumulated_output = prefill
         if output_settings["document_tag"] == "tex" and use_prefill_from_input and first_k_tex_document:

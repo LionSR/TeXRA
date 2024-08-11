@@ -34,11 +34,21 @@ def load_agent_settings_and_prompts(agent_path, agent):
             agent_settings = {child.tag: child.text for child in root.find("settings") or []}
             agent_prompts = {child.tag: child.text.strip() for child in root.find("prompts") or []}
 
+            # Handle prefills
+            prefills_elem = root.find("settings/prefills")
+            if prefills_elem is not None:
+                agent_settings["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
+            
             settings = merge_dicts(parent_settings, agent_settings)
             prompts = merge_dicts(parent_prompts, agent_prompts)
         else:
             settings = {child.tag: child.text for child in root.find("settings")}
             prompts = {child.tag: child.text.strip() for child in root.find("prompts")}
+
+            # Handle prefills
+            prefills_elem = root.find("settings/prefills")
+            if prefills_elem is not None:
+                settings["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
 
         return settings, prompts
 

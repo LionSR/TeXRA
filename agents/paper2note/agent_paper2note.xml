@@ -4,7 +4,10 @@
     <document_tag>lecture_note</document_tag>
     <end_tag>&lt;/lecture_note&gt;</end_tag>
     <output_type>tex</output_type>
-    <prefill_first>Here is the output lecture note &lt;lecture_note&gt;.\n\\documentclass{lecture}\n\\input{command}\n\\course</prefill_first>
+    <prefills>
+        <prefill>Here is the output lecture note &lt;lecture_note&gt;.\n\\documentclass{lecture}\n\\input{command}\n\\course</prefill>
+        <prefill>Here is the output lecture note &lt;lecture_note&gt;.\n\\documentclass{lecture}\n\\input{command}\n\\course</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
