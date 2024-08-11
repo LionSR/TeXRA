@@ -30,7 +30,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           canSelectFolders: false,
           defaultUri: defaultUri,
           filters: {
-            'Text files': ['tex']
+            'Text files': ['tex', 'txt']
           }
         });
 
