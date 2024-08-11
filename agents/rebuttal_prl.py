@@ -1,7 +1,7 @@
 import coauthor as coa
 import os
 
-from coauthor.base_agents import ThinkAndWrite, DirectWrite
+from coauthor.agent_reflect import ThinkAndWrite, DirectWrite
 
 agent_path = coa.get_agent_path(coa, "prl")
 

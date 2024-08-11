@@ -1,4 +1,4 @@
-from coauthor.base_agents import DirectWrite
+from coauthor.agent_reflect import DirectWrite
 import coauthor as coa
 from termcolor import colored
 import os
