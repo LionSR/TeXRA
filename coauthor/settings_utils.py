@@ -33,7 +33,7 @@ def get_output_settings(args, agent_settings):
     if not output_settings["prefills"]:
         prefill_first = agent_settings.get("prefill_first")
         prefill_second = agent_settings.get("prefill_second")
-        
+
         if prefill_first:
             output_settings["prefills"].append(prefill_first)
         if prefill_second and prefill_second != prefill_first:

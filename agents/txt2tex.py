@@ -1,4 +1,4 @@
-from coauthor.base_agents import DirectWrite
+from coauthor.agent_reflect import DirectWrite
 import coauthor as coa
 
 agent_path = coa.get_agent_path(coa, "txt2tex")

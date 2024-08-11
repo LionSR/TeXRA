@@ -1,4 +1,4 @@
-from coauthor.base_agents import ThinkAndWrite, DirectWrite
+from coauthor.agent_reflect import ThinkAndWrite, DirectWrite
 import coauthor as coa
 
 agent_path = coa.get_agent_path(coa, "article")
