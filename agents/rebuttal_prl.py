@@ -117,6 +117,14 @@ def main():
 
     args = parser.parse_args()
 
+    for f in args.input_files:
+        if "reply_to_editor" in f:
+            args.reply_to_editor = f
+        elif "reply_to_referees" in f:
+            args.reply_to_referees = f
+        elif "list_of_major_changes" in f:
+            args.list_of_major_changes = f
+
     if args.agent in ["reply_letter", "draft_rebuttal", "revise_rebuttal"]:
         reply_prl = ReplyPRLThink(args, agent_path)
     else:
