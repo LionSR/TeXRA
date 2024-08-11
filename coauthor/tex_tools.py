@@ -53,7 +53,8 @@ def get_tex_count(file_paths):
             cprint(f"Error: File {file_path} does not exist.", "red")
             continue
 
-        success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
+        # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
+        success, output = run_external_command(["texcount", file_path], capture_output=True)
         if success:
             all_outputs.append(f"Tex Count Results for {file_path}:\n{output}")
         else:
