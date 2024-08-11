@@ -69,6 +69,8 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         # for claude 3.5, the model sometimes adds a double line break before andafter an equation
         new_response = new_response.replace("\n\n\\begin{align}", "\n\\begin{align}")
         new_response = new_response.replace("\\end{align}\n\n", "\\end{align}\n")
+        new_response = new_response.replace("\n\n\\begin{equation}", "\n\\begin{equation}")
+        new_response = new_response.replace("\\end{equation}\n\n", "\\end{equation}\n")
         # also replace double line breaks with a single line break in the message
 
         state["total_input_tokens"] += input_tokens
