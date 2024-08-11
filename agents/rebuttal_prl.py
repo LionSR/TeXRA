@@ -23,8 +23,8 @@ class ReplyPRLBase:
             "supp_file",
             "cover_letter",
             "editor_letter",
-            "report_a",
-            "report_b",
+            "referee_report_a",
+            "referee_report_b",
             "example_rebuttal_letter",
             "instruction_file",
         ]
@@ -44,12 +44,12 @@ class ReplyPRLBase:
                     user_vars["COVER_LETTER"] = content
                 elif file_arg == "editor_letter":
                     user_vars["EDITOR_LETTER"] = content
-                elif file_arg == "report_a":
+                elif file_arg == "referee_report_a":
                     user_vars["REFEREE_REPORT_A"] = content
-                elif file_arg == "report_b":
+                elif file_arg == "referee_report_b":
                     user_vars["REFEREE_REPORT_B"] = content
                 elif file_arg == "example_rebuttal_letter":
-                    user_vars["EXAMPLE_REPLY_LETTER"] = content
+                    user_vars["EXAMPLE_REBUTTAL_LETTER"] = content
                 elif file_arg == "instruction_file":
                     user_vars["INSTRUCTION"] = content
                 else:
@@ -58,10 +58,13 @@ class ReplyPRLBase:
         # Handle specific agent-related file reads
         if "revise" in self.args.agent or "polish" in self.args.agent:
             if self.args.reply_to_editor:
+                user_vars["REPLY_TO_EDITOR_FILE"] = self.args.reply_to_editor
                 user_vars["REPLY_TO_EDITOR"] = coa.read_file(self.args.reply_to_editor)
             if self.args.reply_to_referees:
+                user_vars["REPLY_TO_REFEREES_FILE"] = self.args.reply_to_referees
                 user_vars["REPLY_TO_REFEREES"] = coa.read_file(self.args.reply_to_referees)
             if self.args.list_of_major_changes:
+                user_vars["LIST_OF_MAJOR_CHANGES_FILE"] = self.args.list_of_major_changes
                 user_vars["LIST_OF_MAJOR_CHANGES"] = coa.read_file(self.args.list_of_major_changes)
 
         if "polish" in self.args.agent and self.args.main_content:
@@ -98,12 +101,12 @@ def main():
 
     parser.add_argument("--cover_letter", type=str, default="replies/cover_letter.txt", help="Path to the cover letter file.")
     parser.add_argument("--editor_letter", type=str, default="replies/editor_letter.txt", help="Path to the editor decision letter file.")
-    parser.add_argument("--report_a", type=str, default="replies/report_a.txt", help="Path to the first referee report file.")
-    parser.add_argument("--report_b", type=str, default="replies/report_b.txt", help="Path to the second referee report file.")
+    parser.add_argument("--referee_report_a", type=str, default="replies/report_a.txt", help="Path to the first referee report file.")
+    parser.add_argument("--referee_report_b", type=str, default="replies/report_b.txt", help="Path to the second referee report file.")
     parser.add_argument(
         "--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
     )
-    parser.add_argument("--instruction_file", type=str, default="replies/instruction.txt", help="Path to the instruction file.")
+    parser.add_argument("--instruction_file", type=str, default="replies/instruction_prb.txt", help="Path to the instruction file.")
 
     # New arguments for revise_rebuttal
     parser.add_argument("--reply_to_editor", type=str, default="replies/reply_to_editor.tex", help="Path to the current reply to editor file.")
