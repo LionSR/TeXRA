@@ -134,6 +134,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
 
     # Replace "\end{document>" with "\end{document}" for sonnet 3.5
     output_content = output_content.replace("\\end{document>", "\\end{document}")
+    output_content = output_content.replace("\\end{response}", "\\end{response}")
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [thinking_tag, "document"]

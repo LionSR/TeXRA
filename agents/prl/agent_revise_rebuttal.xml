@@ -22,10 +22,11 @@ When revising the rebuttal package, you must:
 - Deepen the demonstration of understanding of the research topic and its broader implications in the field of physics.
 
 When revising professional *.tex LaTeX documents, you must:
-- Enhance the use of professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β, $J_1$ over J1, and $\approx$ over ≈.
+- Enhance the use of professional LaTeX commands and environments for all scientific notation and equations. Use $\beta$, $J_1$, and $\approx$ instead of their unicode version
 - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
 - Ensure proper use of enumerate and itemize environments for lists.
 - Improve overall LaTeX structure and formatting for better readability and professionalism.
+- When making references in the replies to the paper, use \cref{...} instead of spelled out references like "Sec.~II.C" or "Eq.~(1)".
 ]]>
 </system_prompt>
 <user_prefix>
@@ -136,6 +137,10 @@ After thoroughly and critically reviewing the original rebuttal package, the ref
 - Improves the style and tone to more closely match the provided example, while maintaining a high level of professionalism and expertise in physics.
 - Enhances the clarity and persuasiveness of the arguments presented in both the letter to the editor and the responses to referees.
 - Provides a more detailed and well-structured list of major changes, clearly linking each change to specific referee comments or overall improvement of the paper.
+- if any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems" or "It is important to note that..." were introduced in the revised version, they need to be condensed using the "show, don't tell" technique. 
+- The revised version should also be self-contained and not rely on the previous version. Therefore, you cannot write "Our extended simulations now cover..." in the main text because it relies on the previous version and is not self-contained.
+- Physical Review Letters are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
+- PRL has a very strict policy on the word count of the main paper. Make sure the word count of the main paper (excluding the appendix/SM) is not more than roughly 3500 words. Your added text needs to be very condensed and to the point. Otherwise you would need to condense the other parts of the paper.
 </requirements>
 
 Start with laying down your revised plan in the <scratchpad></scratchpad> tag. Then proceed to output the significantly improved letter to the editor, response letter to referees, list of major changes, revised main paper, and revised supplementary materials that meet the above requirements.

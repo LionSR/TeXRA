@@ -23,7 +23,7 @@ Revision guidelines:
 - Adhere to specified word or page limits (typically around three A4 pages)
 - Use LaTeX formatting for mathematical expressions and citations if necessary
 - Respect and work with the existing experiences provided in the input document; do not invent or add any new information
-- Use the "show, don't tell" technique
+- Use the ``show, don't tell'' technique
 - Do not add enumerating lists
 ]]>
 </system_prompt>
