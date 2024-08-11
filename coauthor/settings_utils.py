@@ -29,11 +29,11 @@ def get_output_settings(args, agent_settings):
         "prefill_first": agent_settings.get("prefill_first"),
     }
 
-    prefill_reflect = agent_settings.get("prefill_reflect")
-    if prefill_reflect and prefill_reflect != "":
-        output_settings["prefill_reflect"] = prefill_reflect
+    prefill_second = agent_settings.get("prefill_second")
+    if prefill_second and prefill_second != "":
+        output_settings["prefill_second"] = prefill_second
     else:
-        output_settings["prefill_reflect"] = output_settings["prefill_first"]
+        output_settings["prefill_second"] = output_settings["prefill_first"]
 
     return output_settings
 

@@ -244,7 +244,7 @@ def process_reflection_round(
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
 
     else:
-        prefill = output_settings["prefill_reflect"]
+        prefill = output_settings["prefill_second"]
 
         accumulated_output = prefill
         if output_settings["document_tag"] == "tex" and use_prefill_from_input and first_k_tex_document:
