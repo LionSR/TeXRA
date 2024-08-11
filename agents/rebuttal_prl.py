@@ -31,7 +31,10 @@ class ReplyPRLBase:
         for file_arg in required_files:
             file_path = getattr(self.args, file_arg, None)
             if file_path and os.path.exists(file_path):
-                user_vars[file_arg.upper() + "_FILE"] = file_path
+                if "file" not in file_arg:
+                    user_vars[file_arg.upper() + "_FILE"] = file_path
+                else:
+                    user_vars[file_arg.upper()] = file_path
                 content = coa.read_file(file_path)
                 if file_arg == "input_file":
                     user_vars["MAIN_CONTENT"] = content
@@ -54,8 +57,12 @@ class ReplyPRLBase:
 
         # Handle specific agent-related file reads
         if "revise" in self.args.agent or "polish" in self.args.agent:
-            if self.args.draft_reply_letter:
-                user_vars["DRAFT_REPLY_LETTER"] = coa.read_file(self.args.draft_reply_letter)
+            if self.args.reply_to_editor:
+                user_vars["REPLY_TO_EDITOR"] = coa.read_file(self.args.reply_to_editor)
+            if self.args.reply_to_referees:
+                user_vars["REPLY_TO_REFEREES"] = coa.read_file(self.args.reply_to_referees)
+            if self.args.list_of_major_changes:
+                user_vars["LIST_OF_MAJOR_CHANGES"] = coa.read_file(self.args.list_of_major_changes)
 
         if "polish" in self.args.agent and self.args.main_content:
             user_vars["MAIN_CONTENT"] = coa.read_file(self.args.main_content)
@@ -83,7 +90,7 @@ def main():
         type=str,
         default="reply_letter",
         help="Mode of operation.",
-        choices=["draft_rebuttal", "reply_letter", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
+        choices=["draft_rebuttal", "reply_letter", "revise_rebuttal", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
     )
     parser.add_argument("--preamble_file", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
     parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
@@ -97,9 +104,17 @@ def main():
         "--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
     )
     parser.add_argument("--instruction_file", type=str, default="replies/instruction.txt", help="Path to the instruction file.")
+
+    # New arguments for revise_rebuttal
+    parser.add_argument("--reply_to_editor", type=str, default="replies/reply_to_editor.tex", help="Path to the current reply to editor file.")
+    parser.add_argument("--reply_to_referees", type=str, default="replies/reply_to_referees.tex", help="Path to the current reply to referees file.")
+    parser.add_argument(
+        "--list_of_major_changes", type=str, default="replies/list_of_major_changes.tex", help="Path to the current list of major changes file."
+    )
+
     args = parser.parse_args()
 
-    if args.agent in ["reply_letter", "draft_rebuttal"]:
+    if args.agent in ["reply_letter", "draft_rebuttal", "revise_rebuttal"]:
         reply_prl = ReplyPRLThink(args, agent_path)
     else:
         reply_prl = ReplyPRLDirect(args, agent_path)

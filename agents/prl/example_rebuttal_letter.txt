@@ -58,7 +58,9 @@ Dong-Ling Deng
 
 \subsection*{Response to Referee A}
 
-I thank the referee for his/her careful reading of my manuscript and appreciate his/her valuable suggestions/comments, which have helped me to improve the paper significantly. I take these suggestions/comments very seriously and have done a substantial amount of new calculations accordingly. Based on his/her reports, I have also improved the presentation of the manuscript and clarified some important points. Now, the paper is notably strengthened and I believe it is suitable for PRL. The detailed response to the referee's comments is provided below.\\
+I thank the referee for his/her careful reading of my manuscript and appreciate his/her valuable suggestions/comments, which have helped me to improve the paper significantly. I take these suggestions/comments very seriously and have done a substantial amount of new calculations accordingly. Based on his/her reports, I have also improved the presentation of the manuscript and clarified some important points. Now, the paper is notably strengthened and I believe it is suitable for PRL. \\
+
+The detailed response to the referee's comments is provided below.\\
 
 \begin{referee}{A}
 The manuscript by Deng examines Bell state inequalities employing a restricted Boltzmann machine to perform the calculations. The main argument for importance of this work is that it provides a novel methodology to calculate the nonlocality via violations of the Bell inequalities which is universally applicable and accurate. For me to support this for publication, I not only need to agree with that statement but also to the statement that calculating nonlocality in this fashion is actually useful. At this stage, the manuscript does not yet meet this goal. I hope under revision it will.
@@ -157,6 +159,7 @@ Yes, the referee is correct. The RBM used here also has just one hidden layer, s
 \begin{response}
 Yes, the exact results are obtained from exact diagonalization. I have clarified this point in the revised SI. 
 \end{response}
+
 
 In summary, I thank the referee for his/her valuable suggestions/comments.  Following these comments and suggestions, I have done substantial additional calculations and added a completely new 2D example to demonstrate the unparalleled power of our RBM approach in detecting Bell nonlocality. In addition, I have clarified all the confusing points and improved the presentation. I hope this significantly enhanced manuscript will satisfy the referee and convince him/her to recommend publication of this work in PRL. 
 
