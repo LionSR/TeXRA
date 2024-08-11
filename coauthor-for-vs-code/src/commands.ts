@@ -173,11 +173,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       terminal.sendText(command);
     }),
-    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFile: string, commitHash: string, clean: boolean = false) => {
+    vscode.commands.registerCommand('coauthor.packLatexDiffVC', async (inputFile: string, baseFile: string, commitHash: string, clean: boolean = false) => {
       const terminal = ensureTerminal();
       terminal.show();
       const cleanFlag = clean ? '--clean' : '';
-      terminal.sendText(`coauthor pack-latexdiff-vc --input_file="${inputFile}" --commit_hash=${commitHash} ${cleanFlag}`);
+      const fileToUse = baseFile || inputFile;
+      terminal.sendText(`coauthor pack-latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash} ${cleanFlag}`);
     }),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
       const terminal = ensureTerminal();
@@ -206,7 +207,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       terminal.sendText(command);
     }),
-    vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, editedFile: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, baseFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
       const editedFileName = editedFile.split('/').pop();
@@ -216,7 +217,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const workspacePath = getWorkspacePath();
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      terminal.sendText(`coauthor latexdiff --input_file="${inputFile}" --edited_file="${editedFile}"`);
+      const fileToUse = baseFile || inputFile;
+      terminal.sendText(`coauthor latexdiff --input_file="${fileToUse}" --edited_file="${editedFile}"`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {
@@ -239,7 +241,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       }, 2000); // Adjust delay as needed based on expected command execution time
     }),
-    vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFile: string, commitHash: string) => {
+    vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFile: string, baseFile: string, commitHash: string) => {
       const terminal = ensureTerminal();
       terminal.show();
       const inputFileName = inputFile.split('/').pop();
@@ -248,8 +250,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
       const workspacePath = getWorkspacePath();
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
-
-      terminal.sendText(`coauthor latexdiff-vc --input_file="${inputFile}" --commit_hash=${commitHash}`);
+      
+      const fileToUse = baseFile || inputFile;
+      terminal.sendText(`coauthor latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash}`);
 
       // Wait for the command to execute and the file to be generated
       setTimeout(async () => {

@@ -32,6 +32,7 @@ def check_for_massive_repetition(last_response, new_response):
 
 
 def ensure_correct_xml_structure(file_path, document_tag):
+    cprint(f"Ensuring correct XML structure: {file_path}", "white", "on_green")
     with open(file_path, "r+", encoding="utf-8") as file:
         content = file.read()
         if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
@@ -42,6 +43,11 @@ def ensure_correct_xml_structure(file_path, document_tag):
                     # Move the closing tag to the end
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
                     content += f"\n</{document_tag}>"
+
+            find_str = "\\end{document}\n\n<document name"
+            replace_str = "\\end{document}\n</document>\n\n<document name"
+            content = content.replace(find_str, replace_str)
+
             file.seek(0)
             file.write(content)
             file.truncate()
@@ -78,13 +84,21 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5 and gpt-4o/4t
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
-    output_content = output_content.replace("\\end{figure>", "\\end{figure}")
-    output_content = output_content.replace("\\end{tikzpicture>", "\\end{tikzpicture}")
-    output_content = output_content.replace("\\end{scope>", "\\end{scope}")
-    output_content = output_content.replace("\\end{latex_document>", "</latex_document>\n")
-    output_content = output_content.replace("\\end\n", "\\end{document}\n")
+    # Define a dictionary of replacements for better maintainability
+    replacements = {
+        "\\end{document>": "\\end{document}",
+        "\\end{figure>": "\\end{figure}",
+        "\\end{tikzpicture>": "\\end{tikzpicture}",
+        "\\end{scope>": "\\end{scope}",
+        "\\end{latex_document>": "</latex_document>\n",
+        "\\end\n": "\\end{document}\n",
+        "ansätze": 'ans"atze',
+        "Rényi": "R'enyi",
+    }
+
+    # Apply all replacements in a single loop
+    for old, new in replacements.items():
+        output_content = output_content.replace(old, new)
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [document_tag, thinking_tag]
