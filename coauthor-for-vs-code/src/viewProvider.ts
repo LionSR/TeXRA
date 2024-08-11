@@ -218,7 +218,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'merge':
-          vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.editedFile);
+          vscode.commands.executeCommand('coauthor.merge', message.inputFile, message.baseFile, message.editedFile);
           break;
         case 'getTheme':
           const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
