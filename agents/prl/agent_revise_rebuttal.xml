@@ -67,16 +67,16 @@ You will be revising a rebuttal package for a paper submitted to Physical Review
 </documents>
 
 Explanation of documents:
-1. Reply to Editor: The current version of the letter to the editor.
-2. Reply to Referees: The current point-by-point response to referee comments.
-3. List of Major Changes: The current list of significant changes made to the paper.
-4. Main Paper: The current revised version of the main paper, identified by {INPUT_FILE}.
-5. Supplementary Materials: The current revised version of the supplementary information.
-6. Editor Decision Letter: The full text of the editor's decision and comments.
-7. Referee Report A: The full text of the first referee's report.
-8. Referee Report B: The full text of the second referee's report.
-9. Example Reply Letter: A sample reply letter for reference.
-10. Instructions: Guidelines on how to revise the reply letter.
+(1) Reply to Editor: The current version of the letter to the editor.
+(2) Reply to Referees: The current point-by-point response to referee comments.
+(3) List of Major Changes: The current list of significant changes made to the paper.
+(4) Main Paper: The current revised version of the main paper, identified by {INPUT_FILE}.
+(5) Supplementary Materials: The current revised version of the supplementary information.
+(6) Editor Decision Letter: The full text of the editor's decision and comments.
+(7) Referee Report A: The full text of the first referee's report.
+(8) Referee Report B: The full text of the second referee's report.
+(9) Example Reply Letter: A sample reply letter for reference.
+(10) Instructions: Guidelines on how to revise the reply letter.
 ]]>
 </user_prefix>
 <user_request>
@@ -85,19 +85,15 @@ Please carefully review all the provided documents, including the current rebutt
 
 After your planning, revise the rebuttal package to include the following improvements:
 
-1. An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
-
-2. An improved point-by-point response to the referee comments. Write this inside the <document name="{REPLY_TO_REFEREES_FILE}"></document> tag. To do this:
+(1) An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
+(2) An improved point-by-point response to the referee comments. Write this inside the <document name="{REPLY_TO_REFEREES_FILE}"></document> tag. To do this:
     - Ensure all referee comments are accurately represented in the \begin{referee}{A} (or B) and \end{referee} environments.
     - Enhance each response in the \begin{response} and \end{response} environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
     - Improve the tone to be more respectful and diplomatic while maintaining firmness in your responses.
     - Strengthen the use of "They Say, I Say" principles and the "Show, not tell" approach in your rebuttals.
-
-3. Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
-
-4. An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{LIST_OF_MAJOR_CHANGES_FILE}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
-
-5. Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
+(3) Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
+(4) An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{LIST_OF_MAJOR_CHANGES_FILE}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
+(5) Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
 
 Write the revised rebuttal package in the following format:
 
@@ -115,11 +111,11 @@ Write the revised rebuttal package in the following format:
 </document>
 
 <document name="{INPUT_FILE}">
-(Insert the further revised text of the main paper here)
+(Insert the further revised text of the main paper here. Present the full text.)
 </document>
 
 <document name="{SUPP_FILE}">
-(Insert the further revised text of the supplementary materials here)
+(Insert the further revised text of the supplementary materials here. You only need to insert the parts that have changed.)
 </document>
 
 </rebuttal_letter>

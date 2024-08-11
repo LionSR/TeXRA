@@ -3,7 +3,7 @@
 \documentclass[a4paper,12pt]{article}
 
 \input{../preamble}
-\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{fullpage}
 
 \setlength{\parindent}{0em}
 \begin{document}
@@ -38,14 +38,14 @@ Dong-Ling Deng
 </document>
 <document name="replies/reply_to_referees.tex">
 \documentclass[a4paper,12pt]{article}
-\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{fullpage}
 \input{../preamble}
 \newenvironment{referee}[1]
-{\noindent {\bf Referee #1}}
+{\noindent {\bf Referee #1:}}
 {\vspace{1em}}
 
 \newenvironment{response}
-{\noindent \color{blue!40!black}{\bf Response}}
+{\noindent \color{blue!40!black}{\bf Response:}}
 {\vspace{1em}}
 
 \bibliographystyle{ieeetr}
@@ -119,7 +119,10 @@ I appreciate this insightful suggestion. In the revised manuscript, I followed t
 \end{referee}
 
 \begin{response}
-I thank the referee for this helpful suggestion. In this resubmitted version, I have made this clear by adding into the main text the following two sentences: ``It is worthwhile to clarify that the RBM state defined above is a variational state, with \Phi_M\left(\Xi,\Omega\right) specifying the complex coefficient for each component. The actual quantum state should be understood as |\left.\Psi\left(\Omega\right)\right\rangle=\sum_{\Xi}{\Phi_M\left(\Xi,\Omega\right)}|\left.\Xi\right\rangle (up to an irrelevant normalization constant).''
+I thank the referee for this helpful suggestion. In this resubmitted version, I have made this clear by adding into the main text the following two sentences:
+\begin{quote}
+    It is worthwhile to clarify that the RBM state defined above is a variational state, with \Phi_M\left(\Xi,\Omega\right) specifying the complex coefficient for each component. The actual quantum state should be understood as |\left.\Psi\left(\Omega\right)\right\rangle=\sum_{\Xi}{\Phi_M\left(\Xi,\Omega\right)}|\left.\Xi\right\rangle (up to an irrelevant normalization constant).
+\end{quote}
 \end{response}
 
 \begin{referee}{A}
@@ -163,12 +166,12 @@ In summary, I thank the referee for his/her valuable suggestions/comments.  Foll
 </document>
 <document name="replies/list_of_major_changes.tex">
 \begin{enumerate}
-\item A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material. 
-\item The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space. 
-\item Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material. 
-\item Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments. 
-\item Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated. 
-\item Other minor changes throughout the whole manuscript.
+    \item A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material. 
+    \item The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space. 
+    \item Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material. 
+    \item Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments. 
+    \item Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated. 
+    \item Other minor changes throughout the whole manuscript.
 \end{enumerate}
 </document>
 
