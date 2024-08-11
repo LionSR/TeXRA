@@ -199,13 +199,12 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 <requirements>
 - Increases the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
 - Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical arguments. 
-- The style and tone of the reply letter should be similar to the provided example (under <document name="replies/example_rebuttal_letter">).
+- The style and tone of the reply letter should be similar to the provided example (under <document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">).
 - In the revised version, are there any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems" that can be condensed using the "show, don't tell" technique?
 - PRL has a very strict policy on the word count of the main paper. Make sure the word count of the main paper (excluding the appendix) is not more than roughly 3500 words. Your added text needs to be very condensed and to the point. Otherwise you would need to condense the other parts of the paper.
 </requirements>
 
 Start with laying down your plan in the <scratchpad></scratchpad> tag. Then proceed to output the revised letter to the editor (under <document name="{REPLY_TO_EDITOR_FILE}">) and the revised response letter (under <document name="{REPLY_TO_REFEREES_FILE}">), the revised main paper (under <document name="{INPUT_FILE}">) and the revised supplementary materials (under <document name="{SUPP_FILE}">) that meets the above requirements.
-
 ]]>
 </user_reflect>
 </prompts>

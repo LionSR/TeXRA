@@ -227,8 +227,8 @@ function restoreState() {
 
     const valueElements = [
       'modelSelect', 'agentSelect', 'inputFileSelect', 'auxFileSelect',
-      'figureFileSelect', 'sampleFileSelect', 'editedFileSelect',
-      'agentSelect', 'reflectSelect', 'commitSelect', 'outputNameOverride'
+      'figureFileSelect', 'sampleFileSelect', 'editedFileSelect', 'baseFileSelect',
+      'instructionInput', 'reflectSelect', 'commitSelect', 'outputNameOverride'
     ];
 
     valueElements.forEach(id => {
@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('emptyInstructionsButton').addEventListener('click', function () {
-    document.getElementById('agentSelect').value = '';
+    document.getElementById('instructionInput').value = '';
     saveState();
   });
 
@@ -498,14 +498,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  document.getElementById('refreshAllFilesButton').addEventListener('click', function() {
+  document.getElementById('refreshAllFilesButton').addEventListener('click', function () {
     vscode.postMessage({ command: 'refreshAllFiles' });
   });
 
   document.getElementById('executeButton').addEventListener('click', function () {
     const agent = document.getElementById('agentSelect').value;
     const inputFile = document.getElementById('inputFileSelect').value;
-    const instructions = document.getElementById('agentSelect').value;
+    const instructions = document.getElementById('instructionInput').value;
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const autoExtractFigure = document.getElementById('autoExtractFigure').checked;
@@ -584,40 +584,56 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('latexDiffButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
+    const baseFile = document.getElementById('baseFileSelect').value;
     const editedFile = document.getElementById('editedFileSelect').value;
     vscode.postMessage({
       command: 'latexDiff',
       inputFile: inputFile,
+      baseFile: baseFile,
       editedFile: editedFile
     });
   });
   document.getElementById('latexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
+    const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
     vscode.postMessage({
       command: 'latexDiffVC',
       inputFile: inputFile,
+      baseFile: baseFile,
       commitHash: commitHash
     });
   });
   document.getElementById('packLatexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
+    const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
     vscode.postMessage({
       command: 'packLatexDiffVC',
       inputFile: inputFile,
+      baseFile: baseFile,
       commitHash: commitHash,
       clean: false
     });
   });
   document.getElementById('cleanLatexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
+    const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
     vscode.postMessage({
-      command: 'packLatexDiffVC',
+      command: 'cleanLatexDiffVC',
       inputFile: inputFile,
+      baseFile: baseFile,
       commitHash: commitHash,
       clean: true
+    });
+  });
+  document.getElementById('currentBaseFileButton').addEventListener('click', function () {
+    const baseFile = document.getElementById('baseFileSelect').value;
+    vscode.postMessage({
+      command: 'getCurrentFile',
+      fileType: 'base',
+      baseFile: baseFile
     });
   });
   document.getElementById('currentEditedFileButton').addEventListener('click', function () {
@@ -643,15 +659,15 @@ document.addEventListener('DOMContentLoaded', function () {
     'modelSelect', 'agentSelect', 'inputFileSelect', 'sampleFileSelect',
     'auxFileSelect', 'figureFileSelect', 'reflectSelect',
     'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
-    'includeTikzReflection', 'includeTexCount'
+    'includeTikzReflection', 'includeTexCount', 'baseFileSelect', 'editedFileSelect', "outputNameOverride"
   ];
 
   elementsToWatch.forEach(id => {
     document.getElementById(id).addEventListener('change', saveState);
   });
 
-  // Special case for agentSelect as it uses 'input' event
-  document.getElementById('agentSelect').addEventListener('input', saveState);
+  // Special case for instructionInput as it uses 'input' event
+  document.getElementById('instructionInput').addEventListener('input', saveState);
 
   document.getElementById('toggleOutputFiles').addEventListener('click', toggleOutputFiles);
 
@@ -777,8 +793,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function toggleMultipleFiles(containerId, toggleIconId) {
   const container = document.getElementById(containerId);
-  const toggleIcon = document.getElementById(toggleIconId);
-  const isVisible = container.style.display !== 'none';
+  const isVisible = container.style.display !== 'none'
   setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
   saveState();
 }
@@ -811,9 +826,10 @@ function saveState() {
   const state = {};
   const elementsToSave = [
     'modelSelect', 'agentSelect', 'inputFileSelect', 'sampleFileSelect',
-    'auxFileSelect', 'figureFileSelect', 'agentSelect', 'reflectSelect',
+    'auxFileSelect', 'figureFileSelect', 'reflectSelect',
     'commitSelect', 'autoExtractFigure', 'autoExtractTikzFigure',
-    'includeTikzReflection', 'includeTexCount', 'outputNameOverride'
+    'includeTikzReflection', 'includeTexCount', 'outputNameOverride',
+    'baseFileSelect', "editedFileSelect", "instructionInput"
   ];
 
   elementsToSave.forEach(id => {
