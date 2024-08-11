@@ -4,7 +4,9 @@
     <document_tag>full_edited_latex</document_tag>
     <end_tag>&lt;/full_edited_latex&gt;</end_tag>
     <output_type>tex</output_type>
-    <prefill_first>&lt;full_edited_latex&gt;</prefill_first>
+    <prefills>
+        <prefill>&lt;full_edited_latex&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

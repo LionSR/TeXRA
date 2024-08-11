@@ -4,7 +4,10 @@
     <document_tag>nsf_grant_documents</document_tag>
     <end_tag>&lt;/nsf_grant_documents&gt;</end_tag>
     <output_type>tex</output_type>
-    <prefill_first>&lt;scratchpad&gt;</prefill_first>
+	<prefills>
+		<prefill>&lt;scratchpad&gt;</prefill>
+		<prefill>&lt;scratchpad&gt;</prefill>
+	</prefills>
 </settings>
 <prompts>
 <system_prompt>

@@ -4,7 +4,10 @@
     <document_tag>latex_documents</document_tag>
     <end_tag>&lt;/latex_documents&gt;</end_tag>
     <output_type>xml</output_type>
-    <prefill_first>Here are the revised latex documents. &lt;latex_documents&gt;</prefill_first>
+    <prefills>
+        <prefill>Here are the revised latex documents. &lt;latex_documents&gt;</prefill>
+        <prefill>&lt;/latex_documents&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
