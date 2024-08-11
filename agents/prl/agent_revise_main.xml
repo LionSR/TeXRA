@@ -4,8 +4,10 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/revised_main&gt;</end_tag>
     <output_type>tex</output_type>
-    <prefill_first>Now output the revised main paper.
-&lt;revised_main&gt;</prefill_first>
+    <prefills>
+        <prefill>Now output the revised main paper.
+&lt;revised_main&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

@@ -41,10 +41,8 @@ class BaseReflectChainAgent(ABC):
         self.prompt_settings = None
         self.client = None
         self.log_file = None
-        self.first_output_file = None
-        self.second_output_file = None
-        self.first_output_files = []
-        self.second_output_files = []
+        self.output_file = {0: None, 1: None}
+        self.output_files = {0: [], 1: []}
 
     def setup(self):
         print(f"{colored('args:', 'blue')} {self.args}")
@@ -57,9 +55,9 @@ class BaseReflectChainAgent(ABC):
         self.prompt_settings = get_prompt_settings(self.args, self.agent_path, self.prompt_dict)
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
-        self.use_scratchpad = "<scratchpad>" in self.output_settings["prefill_first"]
-        self.first_output_file = self.get_output_file(round=0)
-        self.second_output_file = self.get_output_file(round=1)
+        self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
+        self.output_file[0] = self.get_output_file(round=0)
+        self.output_file[1] = self.get_output_file(round=1)
 
     @abstractmethod
     def get_user_vars(self):
@@ -123,15 +121,15 @@ class BaseReflectChainAgent(ABC):
             input_files = self.args.output_files
 
         print(f"input_files: {input_files}")
-        print(f"first_output_files: {self.first_output_files}")
-        print(f"second_output_files: {self.second_output_files}")
+        print(f"#1 output_files : {self.output_files[0]}")
+        print(f"#2 output_files : {self.output_files[1]}")
 
-        for i, (input_file, first_output) in enumerate(zip(input_files, self.first_output_files)):
+        for i, (input_file, first_output) in enumerate(zip(input_files, self.output_files[0])):
             # Compare original input with first round output
             self._run_latexdiff_for_round(input_file, first_output, 0)
 
         if round >= 1:
-            for i, (input_file, first_output, second_round) in enumerate(zip(input_files, self.first_output_files, self.second_output_files)):
+            for i, (input_file, first_output, second_round) in enumerate(zip(input_files, self.output_files[0], self.output_files[1])):
                 # Compare original input with reflection round output
                 self._run_latexdiff_for_round(input_file, second_round, round)
 
@@ -144,7 +142,7 @@ class BaseReflectChainAgent(ABC):
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
-            self.first_output_file,
+            self.output_file[0],
             self.user_vars,
             model_settings=self.model_settings,
             output_settings=self.output_settings,
@@ -154,10 +152,11 @@ class BaseReflectChainAgent(ABC):
             first_k_tex_document=first_k_tex_document,
         )
 
-        self.handle_output(state, end_turn, self.first_output_file, round=0)
+        self.handle_output(state, end_turn, self.output_file[0], round=0)
 
         print(
-            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. The output was saved as {colored(self.first_output_file, 'green')}"
+            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. "
+            f"The output was saved as {colored(self.output_file[0], 'green')}"
         )
 
         return state, messages
@@ -187,7 +186,7 @@ class BaseReflectChainAgent(ABC):
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
-            self.second_output_file,
+            self.output_file[1],  # Use the singular version
             state,
             messages,
             model_settings=self.model_settings,
@@ -197,10 +196,12 @@ class BaseReflectChainAgent(ABC):
             tex_count_stats=tex_count_stats,
             first_k_tex_document=first_k_tex_document,
         )
-        self.handle_output(state, end_turn, self.second_output_file, round=1)
+        self.handle_output(state, end_turn, self.output_file[1], round=1)
 
         print(
-            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} and/or additional input files {colored(self.args.input_files, 'green')}. The reflection output was saved as {colored(self.second_output_file, 'green')}"
+            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} "
+            f"and/or additional input files {colored(self.args.input_files, 'green')}. "
+            f"The reflection output was saved as {colored(self.output_file[1], 'green')}"
         )
 
         return state, messages
@@ -230,17 +231,13 @@ class ThinkAndWrite(BaseReflectChainAgent):
             if self.args.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
-                if round >= 1:
-                    self.second_output_files = output_files
-                else:
-                    self.first_output_files = output_files
+                self.output_files[round] = output_files
+                self.output_file[round] = output_files[0]  # Set the first file as the singular output
             else:  # Single output file
-                output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
-                self._handle_single_output(output_file)
-                if round >= 1:
-                    self.second_output_files = [output_file]
-                else:
-                    self.first_output_files = [output_file]
+                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                self._handle_single_output(processed_output_file)
+                self.output_file[round] = processed_output_file
+                self.output_files[round] = [processed_output_file]
 
             self._handle_latexdiff(round)
 
@@ -262,17 +259,12 @@ class DirectWrite(BaseReflectChainAgent):
             if self.args.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
-                if round >= 1:
-                    self.second_output_files = output_files
-                else:
-                    self.first_output_files = output_files
+                self.output_files[round] = output_files
             else:  # Single output file
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_single_output(processed_output_file)
-                if round >= 1:
-                    self.second_output_files = [processed_output_file]
-                else:
-                    self.first_output_files = [processed_output_file]
+                self.output_file[round] = processed_output_file
+                self.output_files[round] = [processed_output_file]
 
             self._handle_latexdiff(round)
 

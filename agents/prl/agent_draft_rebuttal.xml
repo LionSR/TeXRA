@@ -4,8 +4,10 @@
     <document_tag>rebuttal_letter</document_tag>
     <end_tag>&lt;/rebuttal_letter&gt;</end_tag>
     <output_type>xml</output_type>
-    <prefill_first>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill_first>
-    <prefill_second>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill_second>
+    <prefills>
+        <prefill>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
