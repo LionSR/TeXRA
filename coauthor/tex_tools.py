@@ -14,7 +14,7 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
     :param capture_output: Whether to capture and return the command output
     :return: Tuple containing (success_flag, output_or_error_message)
     """
-    print("\nRunning command:", colored(" ".join(command), "green"))
+    print("Running command:", colored(" ".join(command), "green"))
     try:
         kwargs = {
             "check": True,
@@ -51,6 +51,10 @@ def get_tex_count(file_paths):
     for file_path in file_paths:
         if not os.path.exists(file_path):
             cprint(f"Error: File {file_path} does not exist.", "red")
+            continue
+
+        if ".tex" not in file_path:
+            cprint(f"Error: File {file_path} is not a LaTeX file. Skipping.", "yellow")
             continue
 
         # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
