@@ -112,27 +112,27 @@ class BaseReflectChainAgent(ABC):
         else:
             print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {input_file} or {output_file}")
 
-    def _run_latexdiff_between_rounds(self, first_output, second_round):
-        if first_output and second_round and os.path.exists(first_output) and os.path.exists(second_round):
-            run_latexdiff(first_output, second_round, self.args.agent, suffix="_diffr1r0")
+    def _run_latexdiff_between_rounds(self, first_output, second_output):
+        if first_output and second_output and os.path.exists(first_output) and os.path.exists(second_output):
+            run_latexdiff(first_output, second_output, self.args.agent, suffix="_diffr1r0")
         else:
-            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {second_round}")
+            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {second_output}")
 
     def _handle_latexdiff(self, round):
-        cprint(f"Handling latexdiff for {self.args.agent}", "blue", "on_white")
+        cprint(f"Handling latexdiff for {self.args.agent} in round {round}", "blue", "on_white")
 
         print(f"base_files: {self.base_files}")
-        print(f"#1 output_files : {self.output_files[0]}")
-        print(f"#2 output_files : {self.output_files[1]}")
+        print(f"#{round} output_files : {self.output_files[round]}")
 
-        for r in range(round):
-            for i, (base_file, first_output) in enumerate(zip(self.base_files, self.output_files[r])):
-                # Compare original input with round r output
-                self._run_latexdiff_for_round(base_file, first_output, r)
-
-                # Compare round r-1 output with round r output
-                if r > 0:
-                    self._run_latexdiff_between_rounds(self.output_files[r - 1][i], first_output)
+        for i, (base_file, first_output) in enumerate(zip(self.base_files, self.output_files[round])):
+            # Compare original input with round r output
+            self._run_latexdiff_for_round(base_file, first_output, round)
+        
+        for r in range(1, round + 1):
+            cprint(f"Comparing round {r-1} with round {r}", "blue", "on_white")    
+            # Compare round r-1 output with round r output
+            for i, (base_file, output_file) in enumerate(zip(self.output_files[r - 1], self.output_files[r])):
+                self._run_latexdiff_between_rounds(base_file, output_file)
 
     def _replace_input_commands(self, base_files, output_files):
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
