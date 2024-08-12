@@ -213,11 +213,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const editedFileName = editedFile.split('/').pop();
       const baseName = editedFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}_diff.tex`;
-      const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
+
+      const fileToUse = baseFile || inputFile;
+      const inputSubdirectory = fileToUse.substring(0, fileToUse.lastIndexOf('/'));
       const workspacePath = getWorkspacePath();
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
 
-      const fileToUse = baseFile || inputFile;
       terminal.sendText(`coauthor latexdiff --input_file="${fileToUse}" --edited_file="${editedFile}"`);
 
       // Wait for the command to execute and the file to be generated
@@ -244,14 +245,16 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.latexDiffVC', async (inputFile: string, baseFile: string, commitHash: string) => {
       const terminal = ensureTerminal();
       terminal.show();
+
+      const fileToUse = baseFile || inputFile;
+      const inputSubdirectory = fileToUse.substring(0, fileToUse.lastIndexOf('/'));
+
       const inputFileName = inputFile.split('/').pop();
       const baseName = inputFileName?.split('.').slice(0, -1).join('.');
       const diffFileName = `${baseName}-diff${commitHash}.tex`;
-      const inputSubdirectory = inputFile.substring(0, inputFile.lastIndexOf('/'));
       const workspacePath = getWorkspacePath();
+
       const fullPath = vscode.Uri.file(`${workspacePath}/${inputSubdirectory}/${diffFileName}`);
-      
-      const fileToUse = baseFile || inputFile;
       terminal.sendText(`coauthor latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash}`);
 
       // Wait for the command to execute and the file to be generated
