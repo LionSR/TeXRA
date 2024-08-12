@@ -210,8 +210,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('coauthor.latexDiff', (inputFile: string, baseFile: string, editedFile: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      const editedFileName = editedFile.split('/').pop();
-      const baseName = editedFileName?.split('.').slice(0, -1).join('.');
+      const editedFileName = path.basename(editedFile);
+      const baseName = path.parse(editedFileName).name;
       const diffFileName = `${baseName}_diff.tex`;
 
       const fileToUse = baseFile || inputFile;
@@ -249,8 +249,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const fileToUse = baseFile || inputFile;
       const inputSubdirectory = fileToUse.substring(0, fileToUse.lastIndexOf('/'));
 
-      const inputFileName = inputFile.split('/').pop();
-      const baseName = inputFileName?.split('.').slice(0, -1).join('.');
+      const inputFileName = path.basename(inputFile);
+      const baseName = path.parse(inputFileName).name;
       const diffFileName = `${baseName}-diff${commitHash}.tex`;
       const workspacePath = getWorkspacePath();
 
