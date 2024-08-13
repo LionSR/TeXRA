@@ -42,7 +42,7 @@ def get_common_env(model):
 def shared_arguments(func):
     options = [
         click.option("--input_file", required=True, help="Path to the input file"),
-        click.option("--model", required=False, default="opus", help="Model to use"),
+        click.option("--model", required=False, default="sonnet+", help="Model to use"),
         click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
         click.option("--input_files", default=None, help="Path to the multiple input files"),
@@ -424,7 +424,7 @@ def indent_tex():
 
 
 @click.command()
-@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
@@ -433,7 +433,7 @@ def clean_single(model, input_file, agent):
 
 
 @click.command()
-@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
@@ -443,17 +443,16 @@ def pack_single(model, input_file, agent, output_name_override):
 
 
 @click.command()
-@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
-def clean_multiple(model, input_file, input_files, reflect, agent):
-    run_clean_multiple(model, input_file, input_files, reflect, agent)
+def clean_multiple(model, input_file, input_files, agent):
+    run_clean_multiple(model, input_file, input_files, agent)
 
 
 @click.command()
-@click.option("--model", required=False, default="opus", help="Model to use")
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
 @click.option("--agent", required=True, help="Agent to choose")
