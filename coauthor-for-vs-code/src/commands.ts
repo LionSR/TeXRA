@@ -485,7 +485,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
       let inputFilesWithOverride = outputNameOverride ? [outputNameOverride, ...outputFiles] : outputFiles;
-      let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=${agent} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=${agent} --model=${model}`;
       terminal.sendText(command);
     }),
     vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
