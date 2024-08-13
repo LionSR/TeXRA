@@ -10,7 +10,7 @@ from termcolor import cprint
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
 TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
-MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-"]
+MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
 
 
 def get_agent_first_name_chunk(agent):
@@ -152,10 +152,10 @@ def run_pack_single(model, input_file, agent, output_folder=None):
     return output_folder
 
 
-def run_clean_multiple(model, input_file, input_files, reflect, agent):
-    run_clean_single(model, input_file, reflect, agent)
+def run_clean_multiple(model, input_file, input_files, agent):
+    run_clean_single(model, input_file, agent)
     for f in input_files:
-        run_clean_single(model, f, reflect, agent)
+        run_clean_single(model, f, agent)
     print("\nCleanup complete for multiple files.")
 
 
