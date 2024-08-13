@@ -98,6 +98,7 @@ After your planning, revise the rebuttal package to include the following improv
 (4) An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{LIST_OF_MAJOR_CHANGES_FILE}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
 (5) Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
 
+The whole rebuttal package should be written in LaTeX format, coherent with each other and the original paper.
 Write the revised rebuttal package in the following format:
 
 <rebuttal_letter>
@@ -145,7 +146,7 @@ After thoroughly and critically reviewing the original rebuttal package, the ref
 - PRL has a very strict policy on the word count of the main paper. Make sure the word count of the main paper (excluding the appendix/SM) is not more than roughly 3500 words. Your added text needs to be very condensed and to the point. Otherwise you would need to condense the other parts of the paper.
 </requirements>
 
-Start with laying down your revised plan in the <scratchpad></scratchpad> tag. Then proceed to output the significantly improved letter to the editor, response letter to referees, list of major changes, revised main paper, and revised supplementary materials that meet the above requirements.
+Start with laying down your detailed revised plan in the <scratchpad></scratchpad> tag. Then proceed to output the significantly improved letter to the editor, response letter to referees, list of major changes, revised main paper, and revised supplementary materials that meet the above requirements.
 ]]>
 </user_reflect>
 </prompts>
