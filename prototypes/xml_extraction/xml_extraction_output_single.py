@@ -20,7 +20,7 @@ thinking_filename = f"{base_name}_thinking.xml"
 latex_filename = f"{base_name}.tex"
 
 # Read the XML file
-with open(input_xml, "r") as file:
+with open(input_xml) as file:
     xml_data = file.read()
 
 # Add CDATA sections to specified tags

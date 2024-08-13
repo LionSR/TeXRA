@@ -87,7 +87,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Read the structured text from the file
-    with open(args.input_file, "r") as file:
+    with open(args.input_file) as file:
         text = file.read()
 
     # Create a new Word document

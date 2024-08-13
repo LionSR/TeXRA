@@ -8,7 +8,7 @@ def extract_figure_paths(latex_file_path):
     figure_pattern = re.compile(r"\\includegraphics(?:\[.*?\])?\{(.+?)\}")
 
     try:
-        with open(latex_file_path, "r", encoding="utf-8") as file:
+        with open(latex_file_path, encoding="utf-8") as file:
             content = file.read()
 
         # Find all matches in the content

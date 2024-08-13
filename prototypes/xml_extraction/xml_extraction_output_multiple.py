@@ -18,7 +18,7 @@ input_xml = "output_multiple.xml"
 thinking_filename = os.path.splitext(input_xml)[0] + "_thinking.xml"
 
 # Read the XML file
-with open(input_xml, "r") as file:
+with open(input_xml) as file:
     xml_data = file.read()
 
 # Add CDATA sections to specified tags
