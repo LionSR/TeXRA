@@ -20,7 +20,7 @@ When polishing a professional *.tex LaTeX document, you must:
 - Ensure proper referencing between the main text and supplementary materials.
 - Follow best practices for LaTeX writing, including proper use of environments, equations, and citations.
 - Preserve the overall structure of both documents while making improvements.
-- When making references in the replies to the paper, use \cref{...} instead of spelled out references like "Sec.~II.C" or "Eq.~(1)".
+- When making references in the replies to the paper, use \cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
 ]]>
 </system_prompt>
 <user_prefix>
