@@ -99,10 +99,10 @@ class BaseReflectChainAgent(ABC):
         k = self.output_settings.get("k", 1000)
         if self.output_settings["output_type"] == "tex" and self.prompt_settings["use_prefill_from_input"]:
             try:
-                with open(self.args.input_file, "r", encoding="utf-8") as f:
+                with open(self.args.input_file, encoding="utf-8") as f:
                     content = f.read()
                     return content[:k].strip()  # Return only the first k characters, stripped
-            except IOError as e:
+            except OSError as e:
                 print(f"Error reading file {self.args.input_file}: {e}")
         return None
 
@@ -138,7 +138,7 @@ class BaseReflectChainAgent(ABC):
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
 
         for output_file in output_files:
-            with open(output_file, "r") as f:
+            with open(output_file) as f:
                 content = f.read()
 
             def replace_input(match):
