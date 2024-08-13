@@ -4,14 +4,24 @@ from .model_utils import model_mapping
 
 
 def get_model_settings(args):
-    model = args.model.lower()
+    model = args.model
     model_name = model_mapping[model]
+
+    max_tokens_mapping = {
+        "openai/gpt-4o:extended": 64000,
+        # "google/gemini-pro-1.5-exp": 32768,
+        "google/gemini-pro-1.5": 32768,
+        "google/gemini-flash-1.5": 32768,
+        "meta-llama/llama-3-1b-8192": 131072,
+    }
+
     model_settings = {
         "model": model,
         "model_name": model_name,
-        "max_tokens": 4096,
+        "max_tokens": max_tokens_mapping.get(model_name, 4096),
         "temperature": 0,
     }
+
     if "gpt-4o-mini" in model_name or "gpt-4o-2024-08-06" in model_name:
         model_settings["max_tokens"] = 16384
     elif "claude-3-5-sonnet" in model_name:
