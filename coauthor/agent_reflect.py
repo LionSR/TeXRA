@@ -127,9 +127,9 @@ class BaseReflectChainAgent(ABC):
         for i, (base_file, first_output) in enumerate(zip(self.base_files, self.output_files[round])):
             # Compare original input with round r output
             self._run_latexdiff_for_round(base_file, first_output, round)
-        
+
         for r in range(1, round + 1):
-            cprint(f"Comparing round {r-1} with round {r}", "blue", "on_white")    
+            cprint(f"Comparing round {r-1} with round {r}", "blue", "on_white")
             # Compare round r-1 output with round r output
             for i, (base_file, output_file) in enumerate(zip(self.output_files[r - 1], self.output_files[r])):
                 self._run_latexdiff_between_rounds(base_file, output_file)
