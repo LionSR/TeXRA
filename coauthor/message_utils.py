@@ -2,7 +2,7 @@ import os
 from termcolor import colored, cprint
 
 from .img_utils import get_base64_encoded_image, process_pdf_input
-from .model_utils import is_openai_model, is_anthropic_model
+from .model_utils import is_openai_model, is_anthropic_model, is_openrouter_model
 
 
 def has_end_tag(file_content, end_tag, document_tag):
@@ -18,8 +18,9 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     temperature = model_settings["temperature"]
     end_tag = output_settings["end_tag"]
     system_prompt = prompt_settings["system_prompt"]
-
-    if is_openai_model(model):
+    if is_openrouter_model(model):
+        response_object = _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag)
+    elif is_openai_model(model):
         response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_anthropic_model(model):
         response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
@@ -42,12 +43,27 @@ def _create_openai_response(client, model_name, max_tokens, messages, temperatur
     return response_object
 
 
+def _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag):
+    """Create a response using OpenRouter model."""
+    response_object = client.chat.completions.create(
+        extra_headers={
+            "X-Title": "CoA",
+        },
+        model=model_name,
+        max_tokens=max_tokens,
+        messages=messages,
+        temperature=temperature,
+        stop=end_tag,
+    )
+    print(colored(f"using openrouter model: {model_name}", "green"))
+    return response_object
+
+
 def _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt):
     """Create a response using Anthropic model."""
     extra_headers = None
     if "claude-3-5-sonnet" in model_name.lower():
         extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
-        max_tokens = 8192
 
     response_object = client.messages.create(
         model=model_name,
@@ -145,12 +161,10 @@ def _create_image_content(image_contents, model):
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url"
-                    if is_openai_model(model)
-                    else "source": {
-                        "url"
-                        if is_openai_model(model)
-                        else "type": (f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"),
+                    "image_url" if is_openai_model(model) else "source": {
+                        "url" if is_openai_model(model) else "type": (
+                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        ),
                         "media_type": image["media_type"],
                         "data": image["data"],
                     },
@@ -162,7 +176,9 @@ def _create_image_content(image_contents, model):
 
 def extract_response_statistics(response_object, model, end_tag=None):
     """Extract statistics from the response object."""
-    if is_openai_model(model):
+    if is_openrouter_model(model):
+        return _extract_openai_statistics(response_object, end_tag)
+    elif is_openai_model(model):
         return _extract_openai_statistics(response_object, end_tag)
     elif is_anthropic_model(model):
         return _extract_anthropic_statistics(response_object, end_tag)
