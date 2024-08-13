@@ -12,13 +12,13 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-Your task is to revise a research paper on developing a new variational method for quantum many-body physics and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
+Your task is to revise a research paper submitted to Physical Review Letters and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
 
 When writing a professional *.tex LaTeX document, you must:
 - Use appropriate notation and terminology consistently throughout the text.
 - Ensure that you maintain the structure and formatting of each individual document while making improvements.
 - Keep the comments that start with % in the documents.
-- When making references in the replies to the paper, use \cref{...} instead of spelled out references like "Sec.~II.C" or "Eq.~(1)".
+- When making references in the replies to the paper, use \cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
 ]]>
 </system_prompt>
 <user_prefix>
