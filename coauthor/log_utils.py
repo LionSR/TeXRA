@@ -61,7 +61,7 @@ def log_and_print_statistics(state, model, log_file=None):
     print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
     print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
     print("Total response time : {} seconds".format(colored(total_response_time, "green")))
-    print("Total cost          : ${}".format(colored("{:.2f}".format(cost), "yellow")))
+    print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
 
     # Log the statistics to the log file if exists in the directory
     if os.path.exists(log_file):
