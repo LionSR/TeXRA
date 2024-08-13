@@ -190,6 +190,7 @@ class BaseReflectChainAgent(ABC):
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
+                tex_count_stats = self._get_tex_count_stats(self.args.output_files)
             else:
                 # Handle single output file
                 generated_output_file = get_output_file_name(
@@ -200,7 +201,8 @@ class BaseReflectChainAgent(ABC):
                 if extracted_tikz_figures:
                     reflection_figure_inputs.extend(extracted_tikz_figures)
 
-        tex_count_stats = self._get_tex_count_stats(self.args.input_file)
+                tex_count_stats = self._get_tex_count_stats(generated_output_file)
+
         first_k_tex_document = self._get_first_k_tex_document()
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
