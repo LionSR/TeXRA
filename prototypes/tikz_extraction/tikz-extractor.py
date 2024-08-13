@@ -18,7 +18,7 @@ $tikzpicture
 
 
 def extract_tikzpictures_with_labels(latex_file):
-    with open(latex_file, "r") as file:
+    with open(latex_file) as file:
         content = file.read()
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments

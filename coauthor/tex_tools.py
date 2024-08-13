@@ -88,7 +88,7 @@ def process_tikzpicture_endings(file_path):
 
     :param file_path: Path to the LaTeX diff file
     """
-    with open(file_path, "r", encoding="utf-8") as file:
+    with open(file_path, encoding="utf-8") as file:
         content = file.read()
 
     pattern = re.compile(r"(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}")
@@ -110,9 +110,9 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff"):
         return None
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    with open(input_file, "r") as f:
+    with open(input_file) as f:
         input_content = f.read()
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         output_content = f.read()
 
     if (
@@ -151,7 +151,7 @@ def run_latexdiff_vc(input_file, commit_hash):
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
-    with open(input_file, "r") as f:
+    with open(input_file) as f:
         input_content = f.read()
 
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
@@ -195,7 +195,7 @@ def run_latexdiff_vc_multiple(input_files, commit_hash):
 
 
 def process_diff_file(diff_file_name):
-    with open(diff_file_name, "r", encoding="utf-8") as diff_file:
+    with open(diff_file_name, encoding="utf-8") as diff_file:
         lines = diff_file.readlines()
 
     with open(diff_file_name, "w", encoding="utf-8") as diff_file:

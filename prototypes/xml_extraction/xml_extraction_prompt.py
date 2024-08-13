@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from termcolor import cprint
 
-with open("polish_prompt2.xml", "r") as file:
+with open("polish_prompt2.xml") as file:
     xml_data = file.read()
 
 # Parse the XML data

@@ -5,7 +5,7 @@ import os
 
 def main(input_file, append_mode=False):
     # Read the prefill content for the assistant from the prefill file
-    with open(input_file, "r") as file:
+    with open(input_file) as file:
         prefill_first = file.read().strip()
 
     # output_file = "test_prefill_output.txt"

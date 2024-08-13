@@ -1,4 +1,4 @@
-with open("1.xml", "r") as file:
+with open("1.xml") as file:
     content = file.read()
 
 print("Original content:")
