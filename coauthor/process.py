@@ -170,10 +170,11 @@ def process_first_round(
             cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
 
-        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
-            write_file(output_file, prefill + "\n")
-        elif output_type == "xml" and is_anthropic_model(model):
-            write_file(output_file, prefill + "\n")
+        if is_anthropic_model(model):
+            if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
+                write_file(output_file, prefill + "\n")
+            elif output_type == "xml":
+                write_file(output_file, prefill + "\n")
 
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
