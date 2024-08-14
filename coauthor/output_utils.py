@@ -92,7 +92,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
         "\\end{scope>": "\\end{scope}",
         "\\end{latex_document>": "</latex_document>\n",
         "\\end\n": "\\end{document}\n",
-        "ansätze": 'ans"atze',
+        "ansätze": 'ans\"atze',
         "Rényi": "R'enyi",
     }
 
