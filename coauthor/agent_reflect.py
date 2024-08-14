@@ -16,11 +16,19 @@ from .settings_utils import get_model_settings, get_output_settings, get_prompt_
 import re
 
 
-def get_output_file_name(input_file, agent, model, output_type, round):
+def get_output_file_name(input_file, agent, model, output_type, round, edited_file=None):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
     output_type = output_type.strip(".")
-    output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_type}"
+
+    if edited_file:
+        # Extract the round number from the edited file
+        edited_round = int(re.search(r"_r(\d+)_", edited_file).group(1))
+        new_round = edited_round + round + 1
+    else:
+        new_round = round
+
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -48,6 +56,7 @@ class BaseReflectChainAgent(ABC):
             self.base_files = self.args.output_files
         else:
             self.base_files = [self.args.input_file]
+        self.edited_file = args.edited_file if hasattr(args, "edited_file") else None
 
     def setup(self):
         print(f"{colored('args:', 'blue')} {self.args}")
@@ -114,7 +123,10 @@ class BaseReflectChainAgent(ABC):
 
     def _run_latexdiff_between_rounds(self, first_output, second_output):
         if first_output and second_output and os.path.exists(first_output) and os.path.exists(second_output):
-            run_latexdiff(first_output, second_output, self.args.agent, suffix="_diffr1r0")
+            first_round = re.search(r"_r(\d+)_", first_output).group(1)
+            second_round = re.search(r"_r(\d+)_", second_output).group(1)
+            diff_suffix = f"_diffr{second_round}r{first_round}"
+            run_latexdiff(first_output, second_output, self.args.agent, suffix=diff_suffix)
         else:
             print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {second_output}")
 
@@ -183,21 +195,24 @@ class BaseReflectChainAgent(ABC):
         reflection_figure_inputs = []
         if self.args.output_files:
             tex_count_stats = self._get_tex_count_stats(self.args.output_files)
-        else:
-            tex_count_stats = self._get_tex_count_stats(self.args.input_file)
-        if self.prompt_settings.get("include_tikz_reflection"):
-            if self.args.output_files:
+            if self.prompt_settings.get("include_tikz_reflection"):
                 # Handle multiple output files
                 for output_file in self.args.output_files:
                     print(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
-            else:
-                # Handle single output file
-                generated_output_file = get_output_file_name(
-                    self.args.input_file, self.args.agent, self.model_settings["model"], self.output_settings["output_type"], round=0
-                )
+        else:
+            generated_output_file = get_output_file_name(
+                self.args.input_file,
+                self.args.agent,
+                self.model_settings["model"],
+                self.output_settings["output_type"],
+                round=0,
+                edited_file=self.edited_file,
+            )
+            tex_count_stats = self._get_tex_count_stats(generated_output_file)
+            if self.prompt_settings.get("include_tikz_reflection"):
                 print(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
@@ -242,7 +257,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round)
+        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
@@ -274,7 +289,7 @@ class DirectWrite(BaseReflectChainAgent):
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_type"]
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round=round)
+        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:

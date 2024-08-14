@@ -161,7 +161,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       }
       return null;
     }),
-    vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, agent: string, reflect: string, model: string, outputNameOverride: string) => {
+    vscode.commands.registerCommand('coauthor.packSingle', (inputFile: string, agent: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
       let command = `coauthor pack-single --agent=${agent} --model=${model}`;
@@ -195,10 +195,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
       terminal.show();
       terminal.sendText("coauthor indent-tex");
     }),
-    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, agent: string, reflect: string, model: string, outputNameOverride: string) => {
+    vscode.commands.registerCommand('coauthor.cleanSingle', (inputFile: string, agent: string, model: string, outputNameOverride: string) => {
       const terminal = ensureTerminal();
       terminal.show();
-      let command = `coauthor clean-single --agent=${agent} --reflect=${reflect} --model=${model}`;
+      let command = `coauthor clean-single --agent=${agent} --model=${model}`;
       if (outputNameOverride) {
         command += ` --input_file="${outputNameOverride}"`;
       }
@@ -469,7 +469,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const fileToUse = baseFile || inputFile;
       terminal.sendText(`coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
     }),
-    vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
+    vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
       const terminal = ensureTerminal();
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
@@ -480,7 +480,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       terminal.sendText(command);
     }),
-    vscode.commands.registerCommand('coauthor.cleanMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, reflect: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
+    vscode.commands.registerCommand('coauthor.cleanMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
       const terminal = ensureTerminal();
       terminal.show();
       const allInputFiles = [inputFile, ...additionalInputFiles];
