@@ -155,16 +155,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'cleanSingle':
-          vscode.commands.executeCommand('coauthor.cleanSingle', message.inputFile, message.agent, message.reflect, message.model, message.outputNameOverride);
+          vscode.commands.executeCommand('coauthor.cleanSingle', message.inputFile, message.agent, message.model, message.outputNameOverride);
           break;
         case 'packSingle':
-          vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.agent, message.reflect, message.model, message.outputNameOverride);
+          vscode.commands.executeCommand('coauthor.packSingle', message.inputFile, message.agent, message.model, message.outputNameOverride);
           break;
         case 'packMultiple':
-          vscode.commands.executeCommand('coauthor.packMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          vscode.commands.executeCommand('coauthor.packMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.model, message.outputNameOverride, message.outputFiles);
           break;
         case 'cleanMultiple':
-          vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.reflect, message.model, message.outputNameOverride, message.outputFiles);
+          vscode.commands.executeCommand('coauthor.cleanMultiple', message.inputFile, message.additionalInputFiles, message.agent, message.model, message.outputNameOverride, message.outputFiles);
           break;
         case 'latexDiff':
           vscode.commands.executeCommand('coauthor.latexDiff', message.inputFile, message.baseFile, message.editedFile);
