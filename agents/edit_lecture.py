@@ -19,6 +19,21 @@ class EditLectureBase:
                 "COMMAND_CONTENT": coa.read_file(user_vars["COMMAND_FILE"]),
             }
         )
+        if hasattr(self.args, "edit_file") and self.args.edit_file:
+            user_vars["EDITED_CONTENT"] = coa.read_file(self.args.edit_file)
+            user_vars[
+                "EDITED_CONTENT_SECTION"
+            ] = f"""
+If you are iterating on a previous version, here is the content of the previously edited file:
+
+<previous_edit>
+{user_vars["EDITED_CONTENT"]}
+</previous_edit>
+
+Please analyze both the original input and this previous edit, focusing on further improvements and refinements.
+"""
+        else:
+            user_vars["EDITED_CONTENT_SECTION"] = ""
         if "multiple" in self.args.agent:
             coa.update_user_vars_multiple_output(self.args, user_vars)
         else:
