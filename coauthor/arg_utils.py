@@ -52,6 +52,11 @@ def get_common_argparser():
     )
     parser.add_argument("--output_files", type=comma_separated_list, default=None, help="Paths to the output files")
     parser.add_argument("--output_name_override", type=str, default=None, help="Override base output name")
+    parser.add_argument(
+        "--edited_file",
+        type=str,
+        help="Path to the file that are already edited. Multiple files can be specified.",
+    )
     parser.add_argument("--instruction", type=str, default=None, help="The specific instruction or the hints to be followed.")
     parser.add_argument("--use_prefill_from_input", action="store_true", help="Use the prefill from the input file")
     parser.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
