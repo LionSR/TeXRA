@@ -54,6 +54,7 @@ def shared_arguments(func):
             default=None,
             help="Path to the figure input file(s). Multiple files can be specified as a comma-separated list.",
         ),
+        click.option("--edited_file", default=None, help="Path to the file that are already edited"),
         click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file"),
         click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file"),
         click.option("--include_tikz_reflection", is_flag=True, help="Include TikZ reflection in the output"),
@@ -426,7 +427,6 @@ def indent_tex():
 @click.command()
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
 def clean_single(model, input_file, agent):
     run_clean_single(model, input_file, agent)
@@ -435,7 +435,6 @@ def clean_single(model, input_file, agent):
 @click.command()
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--reflect", required=False, default=None, help="Reflect on the changes")
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
 def pack_single(model, input_file, agent, output_name_override):
