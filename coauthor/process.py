@@ -129,7 +129,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
     return state, accumulated_output, end_turn
 
 
-def initialize_output_and_messages(
+def initialize_output_and_prefill(
     output_file,
     output_settings,
     prompt_settings,
@@ -208,7 +208,7 @@ def process_first_round(
     prefill = output_settings["prefills"][round] if output_settings["prefills"] else ""
     accumulated_output = prefill
 
-    accumulated_output, end_turn, messages = initialize_output_and_messages(
+    accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         output_settings,
         prompt_settings,
@@ -280,7 +280,7 @@ def process_reflection_round(
     prefill = output_settings["prefills"][round] if len(output_settings["prefills"]) > 1 else output_settings["prefills"][0]
 
     accumulated_output = prefill
-    accumulated_output, end_turn, messages = initialize_output_and_messages(
+    accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         output_settings,
         prompt_settings,
