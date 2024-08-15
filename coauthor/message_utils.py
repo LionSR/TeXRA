@@ -63,7 +63,7 @@ def _create_anthropic_response(client, model_name, max_tokens, messages, tempera
     """Create a response using Anthropic model."""
     extra_headers = None
     if "claude-3-5-sonnet" in model_name.lower():
-        extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
+        extra_headers = {"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15,prompt-caching-2024-07-31"}
 
     response_object = client.messages.create(
         model=model_name,
@@ -78,7 +78,7 @@ def _create_anthropic_response(client, model_name, max_tokens, messages, tempera
     return response_object
 
 
-def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs):
+def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs, use_prompt_caching=False):
     """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
@@ -90,6 +90,9 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
         messages[-1]["content"].extend(image_content)
 
     messages[-1]["content"].append({"type": "text", "text": user_request})
+    if use_prompt_caching:
+        messages[-1]["content"].append({"cache_control": {"type": "ephemeral"}})
+
     return messages
 
 

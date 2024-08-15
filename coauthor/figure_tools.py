@@ -60,7 +60,6 @@ def extract_figure_paths(latex_file_path):
                     if os.path.exists(norm_path):
                         rel_path = os.path.relpath(norm_path, start=latex_dir)
                         figure_paths.append(rel_path)
-                        # print(f"Found figure: {rel_path}")
                         break
 
     except FileNotFoundError:

@@ -3,7 +3,7 @@ from termcolor import colored, cprint
 from abc import ABC, abstractmethod
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
-from .model_utils import get_model_client
+from .model_utils import get_model_client, get_model_settings
 from .tex_tools import run_latexdiff, get_tex_count
 from .output_utils import (
     ensure_correct_xml_structure,
@@ -12,7 +12,7 @@ from .output_utils import (
 )
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts
-from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings
+from .settings_utils import get_output_settings, get_prompt_settings
 import re
 
 
@@ -57,6 +57,7 @@ class BaseReflectChainAgent(ABC):
         else:
             self.base_files = [self.args.input_file]
         self.edited_file = args.edited_file if hasattr(args, "edited_file") else None
+        self.use_prompt_caching = self.args.use_prompt_caching if hasattr(self.args, "use_prompt_caching") else False
 
     def setup(self):
         print(f"{colored('args:', 'blue')} {self.args}")
