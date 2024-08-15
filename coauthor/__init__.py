@@ -9,7 +9,7 @@ from .file_utils import (
     get_agent_path,
 )
 from .process import process_first_round, process_reflection_round
-from .model_utils import is_openai_model, is_anthropic_model, is_openrouter_model, compute_api_price, get_model_client
+from .model_utils import is_openai_model, is_anthropic_model, is_openrouter_model, compute_api_price, get_model_client, get_model_settings
 from .message_utils import (
     create_response,
     extract_response_statistics,
@@ -41,4 +41,4 @@ from .prompt_utils import (
     update_user_vars_single_output,
     update_user_vars_multiple_output,
 )
-from .settings_utils import get_model_settings, get_output_settings, get_prompt_settings
+from .settings_utils import get_output_settings, get_prompt_settings
