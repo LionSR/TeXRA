@@ -5,7 +5,8 @@ import subprocess
 from datetime import datetime
 from termcolor import cprint
 
-# some refactoring work can be done to the functions here by creating common utility functions. MUST BE EXTREMELY careful with the subtle differences and edge cases
+# Some refactoring work can be done to the functions here by creating common utility functions.
+# MUST BE EXTREMELY careful with the subtle differences and edge cases
 
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]

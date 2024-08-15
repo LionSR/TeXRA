@@ -51,16 +51,25 @@ def log_end(log_file):
     append_file(log_file, "</log_entry>\n")
 
 
-def log_and_print_statistics(state, model, log_file=None):
+def log_and_print_statistics(state, model, log_file=None, prompt_caching=False):
     total_input_tokens = state.get("total_input_tokens", 0)
     total_output_tokens = state.get("total_output_tokens", 0)
     total_response_time = state.get("total_response_time", 0)
-    cost = compute_api_price(total_input_tokens, total_output_tokens, model)
 
     # Print the statistics to the command line
     print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
     print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
     print("Total response time : {} seconds".format(colored(total_response_time, "green")))
+
+    if prompt_caching:
+        total_input_tokens_cached = state.get("total_input_tokens_cached", 0)
+        total_output_tokens_cached = state.get("total_output_tokens_cached", 0)
+        cost = compute_api_price(model, total_input_tokens, total_output_tokens, total_input_tokens_cached, total_output_tokens_cached)
+        print(f"Total input tokens (cached): {total_input_tokens_cached}")
+        print(f"Total output tokens (cached): {total_output_tokens_cached}")
+    else:
+        cost = compute_api_price(model, total_input_tokens, total_output_tokens)
+
     print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
 
     # Log the statistics to the log file if exists in the directory

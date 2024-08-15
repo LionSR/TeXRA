@@ -82,7 +82,32 @@ def get_model_client(model):
         raise ValueError("Unsupported model type")
 
 
-def compute_api_price(input_tokens, output_tokens, model):
+def get_model_settings(args):
+    model = args.model
+    model_name = model_mapping[model]
+
+    max_tokens_mapping = {
+        "openai/gpt-4o:extended": 64000,
+        # "google/gemini-pro-1.5-exp": 32768,
+        "google/gemini-pro-1.5": 32768,
+        "google/gemini-flash-1.5": 32768,
+        "meta-llama/llama-3-1b-8192": 131072,
+        "claude-3-5-sonnet-20240620": 8192,
+        "gpt-4o-mini-2024-07-18": 16384,
+        "gpt-4o-2024-08-06": 16384,
+    }
+
+    model_settings = {
+        "model": model,
+        "model_name": model_name,
+        "max_tokens": max_tokens_mapping.get(model_name, 4096),
+        "temperature": 0,
+    }
+
+    return model_settings
+
+
+def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_tokens=None, cache_creation_output_tokens=None):
     prices = {
         "sonnet": (3, 15),
         "opus": (15, 75),
@@ -96,8 +121,18 @@ def compute_api_price(input_tokens, output_tokens, model):
         "llama3+OR": (3, 3),
     }
 
+    prompt_caching_prices = {model: tuple(rate * 0.1 for rate in rates) for model, rates in prices.items() if model in ["sonnet", "haiku"]}
+
+    total_price = 0
+
     for key, (input_rate, output_rate) in prices.items():
         if key in model:
-            return (input_tokens * input_rate + output_tokens * output_rate) / 1e6
+            total_price = (input_tokens * input_rate + output_tokens * output_rate) / 1e6
+            if cache_creation_input_tokens and cache_creation_output_tokens:
+                total_price += (
+                    cache_creation_input_tokens * prompt_caching_prices[model][0] + cache_creation_output_tokens * prompt_caching_prices[model][1]
+                ) / 1e6
+
+            return total_price
 
     raise ValueError(f"Invalid model name '{model}' for computing price.")
