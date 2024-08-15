@@ -40,10 +40,33 @@ def initialize_state(state: dict | None, accumulated_output):
             "first_input_tokens": 0,
         }
     else:
-        for key in ["continuation_count", "total_input_tokens", "total_output_tokens", "total_response_time", "last_response", "first_input_tokens"]:
+        for key in [
+            "continuation_count",
+            "total_input_tokens",
+            "total_output_tokens",
+            "total_response_time",
+            "last_response",
+            "first_input_tokens",
+            "total_cached_input_tokens",
+            "total_cached_output_tokens",
+        ]:
             if key not in state:
                 state[key] = 0 if key != "last_response" else accumulated_output
     return state
+
+
+def clean_response(new_response: str) -> str:
+    # For Claude 3.5/GPT models, remove extra line breaks around equations and document tags
+    replacements = {
+        "\n\n\\begin{align}": "\n\\begin{align}",
+        "\\end{align}\n\n": "\\end{align}\n",
+        "\n\n\\begin{equation}": "\n\\begin{equation}",
+        "\\end{equation}\n\n": "\\end{equation}\n",
+        "\\end{document}}\n\n\\<document name=": "\\end{document}}\n</document>\n\\<document name=",
+    }
+    for old, new in replacements.items():
+        new_response = new_response.replace(old, new)
+    return new_response
 
 
 def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
@@ -66,13 +89,10 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
-        # for claude 3.5, the model sometimes adds a double line break before andafter an equation
-        new_response = new_response.replace("\n\n\\begin{align}", "\n\\begin{align}")
-        new_response = new_response.replace("\\end{align}\n\n", "\\end{align}\n")
-        new_response = new_response.replace("\n\n\\begin{equation}", "\n\\begin{equation}")
-        new_response = new_response.replace("\\end{equation}\n\n", "\\end{equation}\n")
-        new_response = new_response.replace("\\end{document}}\n\n\\<document name=", "\\end{document}}\n</document>\n\\<document name=")
-        # also replace double line breaks with a single line break in the message
+        new_response = clean_response(new_response)
+
+        # Replace double line breaks with single line breaks
+        # new_response = re.sub(r'\n{3,}', '\n\n', new_response)
 
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens
@@ -109,6 +129,57 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
     return state, accumulated_output, end_turn
 
 
+def initialize_output_and_messages(
+    output_file,
+    output_settings,
+    prompt_settings,
+    messages,
+    model,
+    prefill,
+    accumulated_output,
+    is_anthropic_model,
+    is_openai_model,
+    first_k_tex_document=None,
+):
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 5:
+        file_content = read_file(output_file)
+        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
+            print("### end_tag detected in the output file. Skipping continuation.")
+            messages.append({"role": "assistant", "content": file_content})
+            return None, True, messages
+        else:
+            print(colored("### The output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
+            accumulated_output = file_content
+            messages.append({"role": "assistant", "content": file_content})
+            print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
+            if is_openai_model:
+                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
+    else:
+        use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
+        if output_settings.get("output_type") == "tex" and use_prefill_from_input and first_k_tex_document:
+            prefill += first_k_tex_document
+            if is_anthropic_model(model):
+                accumulated_output = first_k_tex_document
+            elif is_openai_model(model):
+                accumulated_output = ""
+                messages.append({"role": "assistant", "content": "```latex\n"})
+
+        if is_anthropic_model:
+            messages.append({"role": "assistant", "content": prefill})
+            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
+        elif is_openai_model:
+            openai_prefill = f"Start your response with\n{prefill}"
+            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
+            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
+
+        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model:
+            write_file(output_file, prefill)
+        elif output_settings.get("output_type") == "xml" and is_anthropic_model:
+            write_file(output_file, prefill + "\n")
+
+    return accumulated_output, False, messages
+
+
 def process_first_round(
     client,
     output_file,
@@ -128,53 +199,30 @@ def process_first_round(
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_prefix = user_prefix_template.format(**user_vars)
     user_prefix += tex_count_stats
-    user_request = load_prompt("user_request", prompt_settings)
 
-    output_type = output_settings.get("output_type", "xml")
+    user_request = load_prompt("user_request", prompt_settings)
 
     messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
 
     accumulated_output = None
-    if os.path.exists(output_file) and os.path.getsize(output_file) > 5:
-        file_content = read_file(output_file)
-        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
-            print("### end_tag detected in the first prospect output file. Skipping continuation.")
-            messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, messages
-        else:
-            print(colored("### The first prospect output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
-            accumulated_output = file_content
-            messages.append({"role": "assistant", "content": file_content})
-            print(f"Using existing file content as prefill: {colored(output_file, 'green')}")
-            if is_openai_model(model_settings["model"]):
-                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
-    else:
-        prefill = output_settings["prefills"][0] if output_settings["prefills"] else ""
-        use_prefill_from_input = prompt_settings["use_prefill_from_input"]
-        accumulated_output = prefill
+    prefill = output_settings["prefills"][round] if output_settings["prefills"] else ""
+    accumulated_output = prefill
 
-        if output_type == "tex" and use_prefill_from_input and first_k_tex_document:
-            prefill += first_k_tex_document
-            if is_anthropic_model(model):
-                accumulated_output = first_k_tex_document
-            elif is_openai_model(model):
-                accumulated_output = ""
-                messages.append({"role": "assistant", "content": "```latex\n"})
+    accumulated_output, end_turn, messages = initialize_output_and_messages(
+        output_file,
+        output_settings,
+        prompt_settings,
+        messages,
+        model,
+        prefill,
+        accumulated_output,
+        is_anthropic_model(model),
+        is_openai_model(model),
+        first_k_tex_document,
+    )
 
-        if is_anthropic_model(model):
-            cprint(f"model: {model}", "white", "on_blue")
-            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
-            messages.append({"role": "assistant", "content": prefill})
-        elif is_openai_model(model):
-            openai_prefill = f'Start your response with \n"{prefill}"'
-            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
-            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
-
-        if is_anthropic_model(model):
-            if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
-                write_file(output_file, prefill + "\n")
-            elif output_type == "xml":
-                write_file(output_file, prefill + "\n")
+    if end_turn:
+        return initialize_state(state, None), accumulated_output, end_turn, messages
 
     state = initialize_state(state, accumulated_output)
     state, accumulated_output, end_turn = process_response_cycle(
@@ -206,15 +254,12 @@ def process_reflection_round(
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
-    use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided
     user_message = f"{tex_count_stats}{user_message}"
-
-    output_type = output_settings.get("output_type", "xml")
 
     # Create a new message for the reflection round
     reflection_message = {"role": "user", "content": []}
@@ -232,39 +277,24 @@ def process_reflection_round(
     messages.append(reflection_message)
 
     accumulated_output = None
-    if os.path.exists(output_file):
-        file_content = read_file(output_file)
-        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
-            print("### end_tag detected in the reflection output file. Skipping continuation.")
-            messages.append({"role": "assistant", "content": file_content})
-            return initialize_state(state, None), accumulated_output, True, messages
-        else:
-            print(colored("### The reflection output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
-            accumulated_output = file_content
-            messages.append({"role": "assistant", "content": file_content})
-            print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
-            if is_openai_model(model):
-                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
+    prefill = output_settings["prefills"][round] if len(output_settings["prefills"]) > 1 else output_settings["prefills"][0]
 
-    else:
-        prefill = output_settings["prefills"][1] if len(output_settings["prefills"]) > 1 else output_settings["prefills"][0]
+    accumulated_output = prefill
+    accumulated_output, end_turn, messages = initialize_output_and_messages(
+        output_file,
+        output_settings,
+        prompt_settings,
+        messages,
+        model,
+        prefill,
+        accumulated_output,
+        is_anthropic_model(model),
+        is_openai_model(model),
+        first_k_tex_document,
+    )
 
-        accumulated_output = prefill
-        if output_settings["document_tag"] == "tex" and use_prefill_from_input and first_k_tex_document:
-            accumulated_output = first_k_tex_document
-
-        if is_anthropic_model(model):
-            messages.append({"role": "assistant", "content": prefill})
-            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
-        elif is_openai_model(model):
-            openai_prefill = f"Start your response with\n{prefill}"
-            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
-            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
-
-        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model(model):
-            write_file(output_file, prefill)
-        elif output_type == "xml" and is_anthropic_model(model):
-            write_file(output_file, prefill + "\n")
+    if end_turn:
+        return initialize_state(state, None), accumulated_output, end_turn, messages
 
     state = initialize_state(state, accumulated_output)
     state["last_response"] = accumulated_output
