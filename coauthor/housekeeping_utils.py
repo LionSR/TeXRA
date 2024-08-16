@@ -21,7 +21,7 @@ def get_agent_first_name_chunk(agent):
         return agent.split("_")[0] if "_" in agent else agent.split("-")[0]
 
 
-def get_file_patterns(base, model, agent, num_rounds=2):
+def get_file_patterns(base, model, agent, num_rounds=4):
     patterns = []
     for round in range(num_rounds):
         patterns.extend(
