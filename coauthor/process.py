@@ -125,7 +125,9 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
                 if prompt_settings.get("use_prompt_caching", False):
                     # messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                     if isinstance(messages[-1]["content"], list):
-                        messages[-1]["content"][-1].pop("cache_control")
+                        if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
+                            if "cache_control" in messages[-1]["content"][-2]:
+                                messages[-1]["content"][-2].pop("cache_control")
                         messages[-1]["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
                     else:
                         messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
@@ -307,6 +309,9 @@ def process_reflection_round(
         reflection_message["content"].append({"type": "text", "text": user_message})
 
     # Append the reflection message to the messages list
+    if prompt_settings.get("use_prompt_caching", False):
+        if isinstance(messages[-1]["content"], list) and len(messages[-1]["content"]) >= 2:
+            messages[-1]["content"][-2].pop("cache_control")
     messages.append(reflection_message)
 
     accumulated_output = None
