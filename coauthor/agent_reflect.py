@@ -1,4 +1,5 @@
 import os
+import re
 from termcolor import colored, cprint
 from abc import ABC, abstractmethod
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
@@ -13,7 +14,6 @@ from .output_utils import (
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts
 from .settings_utils import get_output_settings, get_prompt_settings
-import re
 
 
 def get_output_file_name(input_file, agent, model, output_type, round, edited_file=None):
@@ -31,6 +31,23 @@ def get_output_file_name(input_file, agent, model, output_type, round, edited_fi
     output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
+
+
+def run_latexdiff_for_round(base_file, output_file, agent, round):
+    if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
+        run_latexdiff(base_file, output_file, agent, suffix="_diff")
+    else:
+        print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
+
+
+def run_latexdiff_between_rounds(output_file1, output_file2, agent):
+    if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
+        first_round = re.search(r"_r(\d+)_", output_file1).group(1)
+        second_round = re.search(r"_r(\d+)_", output_file2).group(1)
+        diff_suffix = f"_diffr{second_round}r{first_round}"
+        run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
+    else:
+        print(f"Warning: Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
 
 
 class BaseReflectChainAgent(ABC):
@@ -73,6 +90,8 @@ class BaseReflectChainAgent(ABC):
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
         self.output_file[0] = self.get_output_file(round=0)
         self.output_file[1] = self.get_output_file(round=1)
+        self.tex_count_stats = None
+        self.first_k_tex_document = None
 
     @abstractmethod
     def get_user_vars(self):
@@ -97,39 +116,23 @@ class BaseReflectChainAgent(ABC):
                 run_latexdiff(input_file, output_file, self.args.agent)
 
     def _get_tex_count_stats(self, input_files):
-        if self.prompt_settings.get("include_tex_count"):
-            if isinstance(input_files, str):
-                input_files = [input_files]
-            tex_count_stats = get_tex_count(input_files)
-            if tex_count_stats:
-                return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
-        return ""
+        if isinstance(input_files, str):
+            input_files = [input_files]
+        tex_count_stats = get_tex_count(input_files)
+        if tex_count_stats:
+            return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
+        else:
+            return None
 
-    def _get_first_k_tex_document(self):
+    def _get_first_k_from_document(self):
         k = self.output_settings.get("k", 1000)
-        if self.output_settings["output_type"] == "tex" and self.prompt_settings["use_prefill_from_input"]:
-            try:
-                with open(self.args.input_file, encoding="utf-8") as f:
-                    content = f.read()
-                    return content[:k].strip()  # Return only the first k characters, stripped
-            except OSError as e:
-                print(f"Error reading file {self.args.input_file}: {e}")
-        return None
-
-    def _run_latexdiff_for_round(self, input_file, output_file, round):
-        if input_file and output_file and os.path.exists(input_file) and os.path.exists(output_file):
-            run_latexdiff(input_file, output_file, self.args.agent, suffix="_diff")
-        else:
-            print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {input_file} or {output_file}")
-
-    def _run_latexdiff_between_rounds(self, first_output, second_output):
-        if first_output and second_output and os.path.exists(first_output) and os.path.exists(second_output):
-            first_round = re.search(r"_r(\d+)_", first_output).group(1)
-            second_round = re.search(r"_r(\d+)_", second_output).group(1)
-            diff_suffix = f"_diffr{second_round}r{first_round}"
-            run_latexdiff(first_output, second_output, self.args.agent, suffix=diff_suffix)
-        else:
-            print(f"Warning: Could not generate latexdiff between rounds. Files not found: {first_output} or {second_output}")
+        try:
+            with open(self.args.input_file, encoding="utf-8") as f:
+                content = f.read()
+                return content[:k].strip()  # Return only the first k characters, stripped
+        except OSError as e:
+            print(f"Error reading file {self.args.input_file}: {e}")
+            return None
 
     def _handle_latexdiff(self, round):
         cprint(f"Handling latexdiff for {self.args.agent} in round {round}", "blue", "on_white")
@@ -137,15 +140,12 @@ class BaseReflectChainAgent(ABC):
         print(f"base_files: {self.base_files}")
         print(f"#{round} output_files : {self.output_files[round]}")
 
-        for i, (base_file, first_output) in enumerate(zip(self.base_files, self.output_files[round])):
-            # Compare original input with round r output
-            self._run_latexdiff_for_round(base_file, first_output, round)
+        for base_file, output_file in zip(self.base_files, self.output_files[round]):
+            run_latexdiff_for_round(base_file, output_file, self.args.agent, round)
 
         for r in range(1, round + 1):
-            cprint(f"Comparing round {r-1} with round {r}", "blue", "on_white")
-            # Compare round r-1 output with round r output
-            for i, (base_file, output_file) in enumerate(zip(self.output_files[r - 1], self.output_files[r])):
-                self._run_latexdiff_between_rounds(base_file, output_file)
+            for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
+                run_latexdiff_between_rounds(output_file1, output_file2, self.args.agent)
 
     def _replace_input_commands(self, base_files, output_files):
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
@@ -169,8 +169,10 @@ class BaseReflectChainAgent(ABC):
 
     def process(self):
         input_files = [self.args.input_file] + (self.args.input_files or [])
-        tex_count_stats = self._get_tex_count_stats(input_files)
-        first_k_tex_document = self._get_first_k_tex_document()
+        if self.prompt_settings.get("include_tex_count"):
+            self.tex_count_stats = self._get_tex_count_stats(input_files)
+        if self.prompt_settings.get("use_prefill_from_input"):
+            self.first_k_tex_document = self._get_first_k_from_document()
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
             self.output_file[0],
@@ -179,8 +181,8 @@ class BaseReflectChainAgent(ABC):
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=self.args.figure_inputs,
-            tex_count_stats=tex_count_stats,
-            first_k_tex_document=first_k_tex_document,
+            tex_count_stats=self.tex_count_stats,
+            first_k_tex_document=self.first_k_tex_document,
         )
 
         self.handle_output(state, end_turn, self.output_file[0], round=0)
@@ -195,7 +197,8 @@ class BaseReflectChainAgent(ABC):
     def reflect(self, state, messages):
         reflection_figure_inputs = []
         if self.args.output_files:
-            tex_count_stats = self._get_tex_count_stats(self.args.output_files)
+            if self.prompt_settings.get("include_tex_count"):
+                self.tex_count_stats = self._get_tex_count_stats(self.args.output_files)
             if self.prompt_settings.get("include_tikz_reflection"):
                 # Handle multiple output files
                 for output_file in self.args.output_files:
@@ -212,25 +215,27 @@ class BaseReflectChainAgent(ABC):
                 round=0,
                 edited_file=self.edited_file,
             )
-            tex_count_stats = self._get_tex_count_stats(generated_output_file)
+            self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
             if self.prompt_settings.get("include_tikz_reflection"):
                 print(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
                     reflection_figure_inputs.extend(extracted_tikz_figures)
 
-        first_k_tex_document = self._get_first_k_tex_document()
+        if self.prompt_settings.get("use_prefill_from_input"):
+            self.first_k_tex_document = self._get_first_k_from_document()
+
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
-            self.output_file[1],  # Use the singular version
+            self.output_file[1],
             state,
             messages,
             model_settings=self.model_settings,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=reflection_figure_inputs,
-            tex_count_stats=tex_count_stats,
-            first_k_tex_document=first_k_tex_document,
+            tex_count_stats=self.tex_count_stats,
+            first_k_tex_document=self.first_k_tex_document,
         )
         self.handle_output(state, end_turn, self.output_file[1], round=1)
 
@@ -257,24 +262,26 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = self.output_settings["output_type"]
+        if self.use_scratchpad:
+            file_extension = "xml"
+        else:
+            file_extension = self.output_settings["output_type"]
+
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
             ensure_correct_xml_structure(output_file, self.agent_settings["document_tag"])
 
-            if self.args.output_files:  # Multiple output files
+            if self.args.output_files:
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
-                self.output_file[round] = output_files[0]  # Set the first file as the singular output
 
                 self._replace_input_commands(self.base_files, output_files)
-            else:  # Single output file
+            else:
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
                 self._handle_single_output(processed_output_file)
-                self.output_file[round] = processed_output_file
                 self.output_files[round] = [processed_output_file]
 
             self._handle_latexdiff(round)
