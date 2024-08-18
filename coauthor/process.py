@@ -310,8 +310,11 @@ def process_reflection_round(
 
     # Append the reflection message to the messages list
     if prompt_settings.get("use_prompt_caching", False):
-        if isinstance(messages[-1]["content"], list) and len(messages[-1]["content"]) >= 2:
-            messages[-1]["content"][-2].pop("cache_control")
+        if isinstance(messages[-1]["content"], list):
+            if len(messages[-1]["content"]) == 1:
+                messages[0]["content"][-1].pop("cache_control")
+            elif len(messages[-1]["content"]) >= 2:
+                messages[-1]["content"][-2].pop("cache_control")
     messages.append(reflection_message)
 
     accumulated_output = None
