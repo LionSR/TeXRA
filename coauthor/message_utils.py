@@ -89,9 +89,10 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
         image_content = create_image_message(model, figure_inputs)
         messages[-1]["content"].extend(image_content)
 
-    messages[-1]["content"].append({"type": "text", "text": user_request})
     if use_prompt_caching:
-        messages[-1]["content"].append({"cache_control": {"type": "ephemeral"}})
+        messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
+    else:
+        messages[-1]["content"].append({"type": "text", "text": user_request})
 
     return messages
 
@@ -266,5 +267,4 @@ def print_stop_flags(end_turn, new_response, state, output_settings, massive_rep
     print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
     print(f"massive_repetition_detected: {massive_repetition_detected}")
     print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
-    print(f"### The last {output_settings['k']} characters of the previous response are:")
     print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))
