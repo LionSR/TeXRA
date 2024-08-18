@@ -38,5 +38,7 @@ def get_prompt_settings(args, agent_path, prompt_dict):
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
         "include_tikz_reflection": args.include_tikz_reflection,
     }
+    if "sonnet+" in args.model or "haiku" in args.model:
+        prompt_settings["use_prompt_caching"] = True
 
     return prompt_settings

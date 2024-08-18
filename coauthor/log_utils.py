@@ -59,17 +59,21 @@ def log_and_print_statistics(state, model, log_file=None, prompt_caching=False):
     # Print the statistics to the command line
     print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
     print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
-    print("Total response time : {} seconds".format(colored(total_response_time, "green")))
 
     if prompt_caching:
-        total_input_tokens_cached = state.get("total_input_tokens_cached", 0)
-        total_output_tokens_cached = state.get("total_output_tokens_cached", 0)
-        cost = compute_api_price(model, total_input_tokens, total_output_tokens, total_input_tokens_cached, total_output_tokens_cached)
-        print(f"Total input tokens (cached): {total_input_tokens_cached}")
-        print(f"Total output tokens (cached): {total_output_tokens_cached}")
+        total_cache_read_input_tokens = state.get("total_cache_read_input_tokens", 0)
+        total_cache_creation_input_tokens = state.get("total_cache_creation_input_tokens", 0)
+        print(f"Total input tokens (cache read): {total_cache_read_input_tokens}")
+        print(f"Total input tokens (cache create): {total_cache_creation_input_tokens}")
+
+        total_input_tokens_all = total_cache_creation_input_tokens + total_cache_read_input_tokens
+        percentage_cached = (total_cache_read_input_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
+        print(f"Percentage cached: {percentage_cached}%")
+        cost = compute_api_price(model, total_input_tokens, total_output_tokens, total_cache_creation_input_tokens, total_cache_read_input_tokens)
     else:
         cost = compute_api_price(model, total_input_tokens, total_output_tokens)
 
+    print("Total response time : {} seconds".format(colored(total_response_time, "green")))
     print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
 
     # Log the statistics to the log file if exists in the directory
