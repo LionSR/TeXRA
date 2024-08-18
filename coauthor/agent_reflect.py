@@ -74,7 +74,6 @@ class BaseReflectChainAgent(ABC):
         else:
             self.base_files = [self.args.input_file]
         self.edited_file = args.edited_file if hasattr(args, "edited_file") else None
-        self.use_prompt_caching = self.args.use_prompt_caching if hasattr(self.args, "use_prompt_caching") else False
 
     def setup(self):
         print(f"{colored('args:', 'blue')} {self.args}")
@@ -87,6 +86,9 @@ class BaseReflectChainAgent(ABC):
         self.prompt_settings = get_prompt_settings(self.args, self.agent_path, self.prompt_dict)
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
+
+        self.use_prompt_caching = self.prompt_settings.get("use_prompt_caching", False)
+
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
         self.output_file[0] = self.get_output_file(round=0)
         self.output_file[1] = self.get_output_file(round=1)
@@ -192,7 +194,7 @@ class BaseReflectChainAgent(ABC):
             f"The output was saved as {colored(self.output_file[0], 'green')}"
         )
 
-        return state, messages
+        return state, messages, end_turn
 
     def reflect(self, state, messages):
         reflection_figure_inputs = []
@@ -215,7 +217,8 @@ class BaseReflectChainAgent(ABC):
                 round=0,
                 edited_file=self.edited_file,
             )
-            self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
+            if self.prompt_settings.get("include_tex_count"):
+                self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
             if self.prompt_settings.get("include_tikz_reflection"):
                 print(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
@@ -245,13 +248,13 @@ class BaseReflectChainAgent(ABC):
             f"The reflection output was saved as {colored(self.output_file[1], 'green')}"
         )
 
-        return state, messages
+        return state, messages, end_turn
 
     def run(self):
         self.setup()
-        state, messages = self.process()
-        if self.args.reflect:
-            state, messages = self.reflect(state, messages)
+        state, messages, end_turn = self.process()
+        if self.args.reflect and end_turn:
+            state, messages, end_turn = self.reflect(state, messages)
         log_end(self.log_file)
         return state, messages
 
@@ -287,7 +290,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file)
+        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
 
 
 class DirectWrite(BaseReflectChainAgent):
@@ -317,4 +320,4 @@ class DirectWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file)
+        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))

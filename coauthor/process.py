@@ -38,6 +38,8 @@ def initialize_state(state: dict | None, accumulated_output):
             "total_response_time": 0,
             "last_response": accumulated_output,
             "first_input_tokens": 0,
+            "total_cache_read_input_tokens": 0,
+            "total_cache_creation_input_tokens": 0,
         }
     else:
         for key in [
@@ -47,8 +49,8 @@ def initialize_state(state: dict | None, accumulated_output):
             "total_response_time",
             "last_response",
             "first_input_tokens",
-            "total_cached_input_tokens",
-            "total_cached_output_tokens",
+            "total_cache_read_input_tokens",
+            "total_cache_creation_input_tokens",
         ]:
             if key not in state:
                 state[key] = 0 if key != "last_response" else accumulated_output
@@ -96,8 +98,16 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens
+        state["total_cache_creation_input_tokens"] += getattr(response_object.usage, "cache_creation_input_tokens", 0)
+        state["total_cache_read_input_tokens"] += getattr(response_object.usage, "cache_read_input_tokens", 0)
+
         if state["continuation_count"] == 0:
-            state["first_input_tokens"] = input_tokens
+            state["first_input_tokens"] = (
+                input_tokens
+                + getattr(response_object.usage, "cache_creation_input_tokens", 0)
+                + getattr(response_object.usage, "cache_read_input_tokens", 0)
+            )
+            cprint(f"### First input tokens: {state['first_input_tokens']}", "white", "on_blue")
         else:
             print(f"### The last {k} characters of the previous response are: {colored(state['last_response'][-k:], 'yellow')}")
             print(f"### The first {k} characters of the new response are: {colored(new_response[:k], 'yellow')}")
@@ -112,7 +122,11 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             state["last_response"] = new_response
 
             if messages[-1]["role"] == "assistant":
-                messages[-1]["content"] = accumulated_output
+                # messages[-1]["content"] = accumulated_output
+                if prompt_settings.get("use_prompt_caching", False):
+                    messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
+                else:
+                    messages[-1]["content"] = accumulated_output
 
         end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected)
 
@@ -203,7 +217,14 @@ def process_first_round(
 
     user_request = load_prompt("user_request", prompt_settings)
 
-    messages = initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs)
+    messages = initialize_messages(
+        model,
+        system_prompt,
+        user_prefix,
+        user_request,
+        figure_inputs,
+        use_prompt_caching=prompt_settings.get("use_prompt_caching", False),
+    )
 
     accumulated_output = None
     prefill = output_settings["prefills"][round] if output_settings["prefills"] else ""
@@ -273,7 +294,10 @@ def process_reflection_round(
         reflection_message["content"].extend(image_content)
 
     # Add the user message text
-    reflection_message["content"].append({"type": "text", "text": user_message})
+    if prompt_settings.get("use_prompt_caching", False):
+        reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
+    else:
+        reflection_message["content"].append({"type": "text", "text": user_message})
 
     # Append the reflection message to the messages list
     messages.append(reflection_message)
