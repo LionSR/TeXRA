@@ -122,9 +122,13 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             state["last_response"] = new_response
 
             if messages[-1]["role"] == "assistant":
-                # messages[-1]["content"] = accumulated_output
                 if prompt_settings.get("use_prompt_caching", False):
-                    messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
+                    # messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
+                    if isinstance(messages[-1]["content"], list):
+                        messages[-1]["content"][-1].pop("cache_control")
+                        messages[-1]["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
+                    else:
+                        messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                 else:
                     messages[-1]["content"] = accumulated_output
 
@@ -164,7 +168,10 @@ def initialize_output_and_prefill(
         else:
             print(colored("### The output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
-            messages.append({"role": "assistant", "content": file_content})
+            if prompt_settings.get("use_prompt_caching", False):
+                messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
+            else:
+                messages.append({"role": "assistant", "content": file_content})
             print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
             if is_openai_model:
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
