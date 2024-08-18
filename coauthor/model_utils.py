@@ -107,9 +107,10 @@ def get_model_settings(args):
     return model_settings
 
 
-def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_tokens=None, cache_creation_output_tokens=None):
+def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_tokens=None, cache_read_input_tokens=None):
     prices = {
         "sonnet": (3, 15),
+        "sonnet+": (3, 15),
         "opus": (15, 75),
         "haiku": (0.25, 1.25),
         "gpt4t": (10, 30),
@@ -120,18 +121,24 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
     }
+    models_with_prompt_caching_support = ["sonnet+", "haiku"]
 
-    prompt_caching_prices = {model: tuple(rate * 0.1 for rate in rates) for model, rates in prices.items() if model in ["sonnet", "haiku"]}
+    prompt_cache_creation_prices = {
+        model: tuple(rate * 1.25 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support
+    }
+    prompt_cache_read_prices = {
+        model: tuple(rate * 0.1 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support
+    }
 
     total_price = 0
 
     for key, (input_rate, output_rate) in prices.items():
         if key in model:
             total_price = (input_tokens * input_rate + output_tokens * output_rate) / 1e6
-            if cache_creation_input_tokens and cache_creation_output_tokens:
-                total_price += (
-                    cache_creation_input_tokens * prompt_caching_prices[model][0] + cache_creation_output_tokens * prompt_caching_prices[model][1]
-                ) / 1e6
+            if cache_creation_input_tokens:
+                total_price += (cache_creation_input_tokens * prompt_cache_creation_prices[model][0]) / 1e6
+            if cache_read_input_tokens:
+                total_price += (cache_read_input_tokens * prompt_cache_read_prices[model][0]) / 1e6
 
             return total_price
 
