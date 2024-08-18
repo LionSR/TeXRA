@@ -190,7 +190,7 @@ def process_first_round(
     figure_inputs=None,
     state=None,
     messages=None,
-    tex_count_stats="",
+    tex_count_stats=None,
     first_k_tex_document=None,
     round=0,
 ):
@@ -198,7 +198,8 @@ def process_first_round(
     system_prompt = load_prompt("system", prompt_settings)
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_prefix = user_prefix_template.format(**user_vars)
-    user_prefix += tex_count_stats
+    if tex_count_stats:
+        user_prefix += tex_count_stats
 
     user_request = load_prompt("user_request", prompt_settings)
 
@@ -248,7 +249,7 @@ def process_reflection_round(
     output_settings,
     prompt_settings,
     figure_inputs=None,
-    tex_count_stats="",
+    tex_count_stats=None,
     first_k_tex_document=None,
     round=1,
 ):
@@ -259,7 +260,8 @@ def process_reflection_round(
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided
-    user_message = f"{tex_count_stats}{user_message}"
+    if tex_count_stats:
+        user_message = f"{tex_count_stats}{user_message}"
 
     # Create a new message for the reflection round
     reflection_message = {"role": "user", "content": []}
