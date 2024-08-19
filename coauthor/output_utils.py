@@ -24,7 +24,7 @@ def check_for_massive_repetition(last_response, new_response):
     massive_repetition_detected = len(longest_matching_substring) > 1000
 
     if massive_repetition_detected:
-        cprint(f"### repetition_ratio is {repetition_ratio}", "red")
+        cprint(f"### Repetition_ratio is {repetition_ratio}", "red")
         print(f"### Longest matching substring: {colored(longest_matching_substring, 'yellow')}")
         cprint("WARNING: Massive repetition detected. Stopping the process.", "white", "on_red")
 
