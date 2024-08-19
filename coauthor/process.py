@@ -65,6 +65,12 @@ def clean_response(new_response: str) -> str:
         "\n\n\\begin{equation}": "\n\\begin{equation}",
         "\\end{equation}\n\n": "\\end{equation}\n",
         "\\end{document}}\n\n\\<document name=": "\\end{document}}\n</document>\n\\<document name=",
+        "\\end{align}\n\\section": "\\end{align}\n\n\n\\section",
+        "\\end{equation}\n\\section": "\\end{equation}\n\n\n\\section",
+        "\\end{align}\n\\subsection": "\\end{align}\n\n\n\\subsection",
+        "\\end{equation}\n\\subsection": "\\end{equation}\n\n\n\\subsection",
+        "\\end{align}\n\\paragraph": "\\end{align}\n\n\n\\paragraph",
+        "\\end{equation}\n\\paragraph": "\\end{equation}\n\n\n\\paragraph",
     }
     for old, new in replacements.items():
         new_response = new_response.replace(old, new)
@@ -92,9 +98,6 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
         new_response = clean_response(new_response)
-
-        # Replace double line breaks with single line breaks
-        # new_response = re.sub(r'\n{3,}', '\n\n', new_response)
 
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens
@@ -157,8 +160,6 @@ def initialize_output_and_prefill(
     model,
     prefill,
     accumulated_output,
-    is_anthropic_model,
-    is_openai_model,
     first_k_tex_document=None,
 ):
     if os.path.exists(output_file) and os.path.getsize(output_file) > 5:
@@ -187,10 +188,10 @@ def initialize_output_and_prefill(
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex\n"})
 
-        if is_anthropic_model:
+        if is_anthropic_model(model):
             messages.append({"role": "assistant", "content": prefill})
             cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
-        elif is_openai_model:
+        elif is_openai_model(model):
             openai_prefill = f"Start your response with\n{prefill}"
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
             cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
@@ -213,9 +214,9 @@ def process_first_round(
     figure_inputs=None,
     state=None,
     messages=None,
+    round=0,
     tex_count_stats=None,
     first_k_tex_document=None,
-    round=0,
 ):
     model = model_settings["model"]
     system_prompt = load_prompt("system", prompt_settings)
@@ -247,8 +248,6 @@ def process_first_round(
         model,
         prefill,
         accumulated_output,
-        is_anthropic_model(model),
-        is_openai_model(model),
         first_k_tex_document,
     )
 
@@ -279,9 +278,9 @@ def process_reflection_round(
     output_settings,
     prompt_settings,
     figure_inputs=None,
+    round=1,
     tex_count_stats=None,
     first_k_tex_document=None,
-    round=1,
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_settings["model"]
@@ -309,6 +308,7 @@ def process_reflection_round(
         reflection_message["content"].append({"type": "text", "text": user_message})
 
     # Append the reflection message to the messages list
+    # Make sure the number of cache control is fewer than 4
     if prompt_settings.get("use_prompt_caching", False):
         if isinstance(messages[-1]["content"], list):
             if len(messages[-1]["content"]) == 1:
@@ -329,8 +329,6 @@ def process_reflection_round(
         model,
         prefill,
         accumulated_output,
-        is_anthropic_model(model),
-        is_openai_model(model),
         first_k_tex_document,
     )
 

@@ -81,8 +81,8 @@ def execute_agent(script, agent, model, input_file, **kwargs):
     if "figure_inputs" in kwargs and isinstance(kwargs["figure_inputs"], str):
         kwargs["figure_inputs"] = kwargs["figure_inputs"].split(",")
 
-    # Handle auto-extraction of figures
-    handle_auto_extract_figure(kwargs, input_file)
+    if kwargs.get("auto_extract_figure"):
+        handle_auto_extract_figure(kwargs, input_file)
 
     # Prepare all input files
     all_input_files = [input_file]
@@ -92,8 +92,8 @@ def execute_agent(script, agent, model, input_file, **kwargs):
         elif isinstance(kwargs["input_files"], list):
             all_input_files.extend(kwargs["input_files"])
 
-    # Handle auto-extraction of TikZ figures
-    handle_auto_extract_tikz_figure(kwargs, all_input_files)
+    if kwargs.get("auto_extract_tikz_figure"):
+        handle_auto_extract_tikz_figure(kwargs, all_input_files)
 
     for key, value in kwargs.items():
         if value is not None:
@@ -642,12 +642,6 @@ cli.add_command(revise_prl)
 cli.add_command(draft_rebuttal_prl)
 cli.add_command(revise_rebuttal_prl)
 
-
-# cli.add_command(reply_letter_prl)
-# cli.add_command(revise_main_prl)
-# cli.add_command(revise_supp_prl)
-# cli.add_command(polish_reply_prl)
-
 # clean up
 cli.add_command(clean_output)
 cli.add_command(clean_build)
@@ -667,7 +661,6 @@ cli.add_command(latexdiff_vc)
 cli.add_command(latexdiff_vc_multiple)
 cli.add_command(pack_latexdiff_vc)
 cli.add_command(pack_latexdiff_vc_multiple)
-
 
 # tools
 cli.add_command(tex_count)
