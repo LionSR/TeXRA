@@ -162,7 +162,7 @@ def initialize_output_and_prefill(
     accumulated_output,
     first_k_tex_document=None,
 ):
-    if os.path.exists(output_file) and os.path.getsize(output_file) > 5:
+    if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         file_content = read_file(output_file)
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the output file. Skipping continuation.")

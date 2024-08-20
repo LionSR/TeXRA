@@ -13,7 +13,7 @@
 <system_prompt>
 <![CDATA[
 When writing a professional *.tex LaTeX document, you must:
-- Use \begin{align} ... \end{align} for displayed equations.
+- Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
 - Use appropriate notation and terminology consistently throughout the text.
 - Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
 - Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"odinger'' over "Schrodinger".
