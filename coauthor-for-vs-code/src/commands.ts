@@ -262,7 +262,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         try {
           await vscode.workspace.fs.stat(fullPath);
           vscode.window.showTextDocument(fullPath);
-          await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
+          // await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
           await vscode.commands.executeCommand('latex-workshop.build');
           setTimeout(async () => {
             await vscode.commands.executeCommand('latex-workshop.view');
@@ -345,25 +345,24 @@ export function registerCommands(context: vscode.ExtensionContext) {
         command += ` --reflect=${reflect}`;
       }
 
-      if (autoExtractFigure) {
-        command += ' --auto_extract_figure';
-      }
-      if (autoExtractTikzFigure) {
-        command += ' --auto_extract_tikz_figure';
-      }
-      if (includeTikzReflection) {
-        command += ' --include_tikz_reflection';
-      }
-      if (includeTexCount) {
-        command += ' --include_tex_count';
-      }
-
       if (outputFiles && outputFiles.length > 0) {
         command += ` --output_files="${outputFiles.join(',')}"`;
       }
       if (outputNameOverride) {
         command += ` --output_name_override="${outputNameOverride}"`;
       }
+
+      const flagsToAdd = [
+        { condition: autoExtractFigure, flag: '--auto_extract_figure' },
+        { condition: autoExtractTikzFigure, flag: '--auto_extract_tikz_figure' },
+        { condition: includeTikzReflection, flag: '--include_tikz_reflection' },
+        { condition: includeTexCount, flag: '--include_tex_count' }
+      ];
+      flagsToAdd.forEach(({ condition, flag }) => {
+        if (condition) {
+          command += ` ${flag}`;
+        }
+      });
 
       terminal_new.sendText(command);
     }),

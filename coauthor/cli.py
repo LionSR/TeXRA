@@ -371,6 +371,7 @@ def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kw
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--edited_file", required=True, help="Path to the edited file")
+@click.option("--reflect", is_flag=True, default=False, help="Reflect the changes")
 def merge(model, input_file, edited_file, reflect):
     model, script_dir, _ = get_common_env(model)
     command = [
@@ -381,7 +382,7 @@ def merge(model, input_file, edited_file, reflect):
         f"--model={model}",
     ]
     if reflect:
-        command.append(f"--reflect={reflect}")
+        command.append("--reflect=True")
     subprocess.run(command)
 
 
