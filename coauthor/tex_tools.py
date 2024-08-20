@@ -1,6 +1,7 @@
 import os
 import subprocess
 import re
+import glob
 from termcolor import colored, cprint
 
 
@@ -101,13 +102,51 @@ def process_tikzpicture_endings(file_path):
     cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
 
 
-def run_latexdiff(input_file, output_file, agent=None, suffix="_diff"):
+def run_latexindent(file_path):
+    latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
+    command = ["latexindent", file_path, "-w", "-s"]
+    if latexindent_config:
+        command.append(f"-l={latexindent_config}")
+
+    try:
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print(f"Indented {file_path}")
+
+        # Clean up backup files
+        backup_files = glob.glob(f"{file_path}.bak[0-9]*")
+        for backup_file in backup_files:
+            try:
+                os.remove(backup_file)
+                print(f"Removed backup file: {backup_file}")
+            except OSError as e:
+                cprint(f"Error removing backup file {backup_file}: {e}", "yellow")
+
+        # Remove indent.log if it exists
+        indent_log = os.path.join(os.path.dirname(file_path), "indent.log")
+        if os.path.exists(indent_log):
+            try:
+                os.remove(indent_log)
+                print("Removed indent.log")
+            except OSError as e:
+                cprint(f"Error removing indent.log: {e}", "yellow")
+
+        return True
+    except subprocess.CalledProcessError:
+        cprint(f"Error indenting {file_path}", "red")
+        return False
+
+
+def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_indent=False):
     if not input_file:
         cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
     if agent is not None and "draw" in agent:
         return None
+
+    if run_indent:
+        if not run_latexindent(input_file) or not run_latexindent(output_file):
+            cprint("WARNING: Failed to indent one or both files. Proceeding with latexdiff anyway.", "yellow")
 
     # Check if both input and output files contain \begin{document} and \end{document}
     with open(input_file) as f:
