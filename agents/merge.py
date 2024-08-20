@@ -7,7 +7,7 @@ import re
 agent_path = coa.get_agent_path(coa, "merge")
 
 
-def get_output_file_name_merge(input_file, edited_file):
+def get_output_file_name_merge(input_file, edited_file, round):
     input_dir = os.path.dirname(input_file)
     input_base, _ = os.path.splitext(os.path.basename(input_file))
     edited_base, _ = os.path.splitext(os.path.basename(edited_file))
@@ -21,7 +21,7 @@ def get_output_file_name_merge(input_file, edited_file):
         base = edited_base_override
 
     round_match = re.search(r"_r(\d+)_", edited_base)
-    round = int(round_match.group(1)) if round_match else 0
+    round = int(round_match.group(1)) if round_match else round
     model = parts[-1]
     output = f"{base}_{agent}_r{round}_full_{model}.tex"
 
@@ -35,7 +35,7 @@ class Merge(DirectWrite):
         super().__init__(args, agent_path)
         self.input_file = args.input_file
         self.edited_file = args.edited_file
-        self.output_file = get_output_file_name_merge(self.input_file, self.edited_file)
+        self.output_file = [get_output_file_name_merge(self.input_file, self.edited_file, r) for r in range(2)]
 
     def get_user_vars(self):
         user_vars = {
@@ -46,8 +46,8 @@ class Merge(DirectWrite):
         coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
-    def get_output_file(self):
-        return get_output_file_name_merge(self.args.input_file, self.args.edited_file)
+    def get_output_file(self, round):
+        return get_output_file_name_merge(self.args.input_file, self.args.edited_file, round)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
@@ -57,7 +57,6 @@ class Merge(DirectWrite):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--edited_file", type=str, help="Path to the edited LaTeX document.")
     parser.add_argument("--agent", type=str, default="merge", help="Agent to choose.")
     args = parser.parse_args()
 
