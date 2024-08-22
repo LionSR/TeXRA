@@ -121,7 +121,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
     }
-    models_with_prompt_caching_support = ["sonnet+", "haiku"]
+    models_with_prompt_caching_support = ["sonnet+", "haiku", "opus"]
 
     prompt_cache_creation_prices = {
         model: tuple(rate * 1.25 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support

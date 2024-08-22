@@ -25,7 +25,7 @@ When writing a professional *.tex LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given a LaTeX document of a draft textbook chapter that your student wrote. Read the document carefully before proceeding to revise it.
+You will be given a LaTeX document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
 
 Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
 
