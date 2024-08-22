@@ -176,7 +176,7 @@ def initialize_output_and_prefill(
             else:
                 messages.append({"role": "assistant", "content": file_content})
             print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
-            if is_openai_model:
+            if is_openai_model(model):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
         use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
@@ -304,17 +304,16 @@ def process_reflection_round(
     # Add the user message text
     if prompt_settings.get("use_prompt_caching", False):
         reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
-    else:
-        reflection_message["content"].append({"type": "text", "text": user_message})
-
-    # Append the reflection message to the messages list
-    # Make sure the number of cache control is fewer than 4
-    if prompt_settings.get("use_prompt_caching", False):
+        # Append the reflection message to the messages list
+        # Make sure the number of cache control is fewer than 4
         if isinstance(messages[-1]["content"], list):
             if len(messages[-1]["content"]) == 1:
                 messages[0]["content"][-1].pop("cache_control")
             elif len(messages[-1]["content"]) >= 2:
                 messages[-1]["content"][-2].pop("cache_control")
+    else:
+        reflection_message["content"].append({"type": "text", "text": user_message})
+
     messages.append(reflection_message)
 
     accumulated_output = None
