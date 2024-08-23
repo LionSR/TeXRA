@@ -101,7 +101,7 @@ def get_model_settings(args):
         "model": model,
         "model_name": model_name,
         "max_tokens": max_tokens_mapping.get(model_name, 4096),
-        "temperature": 0,
+        "temperature": args.temperature,
     }
 
     return model_settings

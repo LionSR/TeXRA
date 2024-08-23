@@ -146,9 +146,21 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    # Replace "\end{document>" with "\end{document}" for sonnet 3.5
-    output_content = output_content.replace("\\end{document>", "\\end{document}")
-    output_content = output_content.replace("\\end{response}", "\\end{response}")
+    replacements = {
+        "\\end{document>": "\\end{document}",
+        "\\end{figure>": "\\end{figure}",
+        "\\end{tikzpicture>": "\\end{tikzpicture}",
+        "\\end{scope>": "\\end{scope}",
+        "\\end{latex_document>": "</latex_document>\n",
+        "\\end\n": "\\end{document}\n",
+        "\\end{response}": "\\end{response}",
+        "ansätze": 'ans"atze',
+        "Rényi": "R'enyi",
+    }
+
+    # Apply all replacements in a single loop
+    for old, new in replacements.items():
+        output_content = output_content.replace(old, new)
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [thinking_tag, "document"]
@@ -196,10 +208,10 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                     write_file(tex_file, content_text)
                     output_files.append(tex_file)
                     print(f"TeX file written: {colored(tex_file, 'cyan')}")
+                    return output_files
                 else:
                     cprint(f"WARNING: Invalid document structure in {document_tag}.", "white", "on_red")
 
-            return output_files
         else:
             cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
             return []

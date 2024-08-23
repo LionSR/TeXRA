@@ -16,6 +16,12 @@ def get_common_argparser():
         choices=["sonnet+", "opus", "sonnet", "haiku", "gpt4t", "gpt4o", "gpt4o-", "gpt4oOR", "gemini1p+OR", "gemini1f+OR", "llama3+OR"],
     )
     parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.0,
+        help="Temperature for the model.",
+    )
+    parser.add_argument(
         "--reflect",
         type=lambda x: (str(x).lower() in ["true", "1", "yes"]),
         default=False,
@@ -63,4 +69,5 @@ def get_common_argparser():
     parser.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ figure paths from the input file")
     parser.add_argument("--include_tikz_reflection", action="store_true", help="Include TikZ reflection in the output")
     parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
+
     return parser
