@@ -292,7 +292,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
-        return output_files
+        return self.output_files
 
 
 class DirectWrite(BaseReflectChainAgent):
