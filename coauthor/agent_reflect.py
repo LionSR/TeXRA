@@ -196,27 +196,28 @@ class BaseReflectChainAgent(ABC):
 
         return state, messages, end_turn
 
-    def reflect(self, state, messages):
+    def reflect(self, state, messages, round=1):
         reflection_figure_inputs = []
         if self.args.output_files:
             if self.prompt_settings.get("include_tex_count"):
                 self.tex_count_stats = self._get_tex_count_stats(self.args.output_files)
             if self.prompt_settings.get("include_tikz_reflection"):
                 # Handle multiple output files
-                for output_file in self.args.output_files:
+                for output_file in self.output_files[round]:
                     print(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
         else:
-            generated_output_file = get_output_file_name(
-                self.args.input_file,
-                self.args.agent,
-                self.model_settings["model"],
-                self.output_settings["output_type"],
-                round=0,
-                edited_file=self.edited_file,
-            )
+            # generated_output_file = get_output_file_name(
+            #     self.args.input_file,
+            #     self.args.agent,
+            #     self.model_settings["model"],
+            #     self.output_settings["output_type"],
+            #     round=0,
+            #     edited_file=self.edited_file,
+            # )
+            generated_output_file = self.output_files[0][0]
             if self.prompt_settings.get("include_tex_count"):
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
             if self.prompt_settings.get("include_tikz_reflection"):
@@ -291,6 +292,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
+        return output_files
 
 
 class DirectWrite(BaseReflectChainAgent):
