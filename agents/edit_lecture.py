@@ -65,6 +65,8 @@ def main():
             "polish_st_multiple",
             "draw_st_multiple",
             "correct_st_multiple",
+            "revise_st",
+            "revise_st_multiple",
         ],
     )
     args = parser.parse_args()
