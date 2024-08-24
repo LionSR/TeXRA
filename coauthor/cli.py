@@ -171,8 +171,6 @@ def polish_st(model, input_file, **kwargs):
     agent = "polish_st"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -182,8 +180,15 @@ def polish_qi(model, input_file, **kwargs):
     agent = "polish_qi"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_st(model, input_file, **kwargs):
+    agent = "revise_st"
+    if kwargs.get("output_files"):
+        agent = f"{agent}_multiple"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -193,8 +198,6 @@ def draw_st(model, input_file, **kwargs):
     agent = "draw_st"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -204,8 +207,6 @@ def draw_qi(model, input_file, **kwargs):
     agent = "draw_qi"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -615,6 +616,7 @@ cli.add_command(correct_st)
 cli.add_command(correct_qi)
 cli.add_command(polish_st)
 cli.add_command(polish_qi)
+cli.add_command(revise_st)
 cli.add_command(draw_st)
 cli.add_command(draw_qi)
 
