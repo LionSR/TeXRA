@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<agent name="polish_st_multiple" inherits="polish_st">
+<agent name="revise_st_multiple" inherits="revise_st">
 <settings>
     <document_tag>latex_documents</document_tag>
     <end_tag>&lt;/latex_documents&gt;</end_tag>
@@ -29,7 +29,7 @@ When writing a professional *.tex LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given multiple LaTeX documents representing chapters of the textbook ``Stochastic Thermodynamics in the World of Machine Learning''. Read all documents carefully before proceeding to revise them.
+You will be given multiple LaTeX documents representing chapters of the textbook ``Stochastic Thermodynamics in the World of Machine Learning'' that your student wrote. Read all documents carefully before proceeding to revise them.
 
 Here are the LaTeX documents with additional LaTeX document class and commands (where the math commands you should use are defined):
 
@@ -120,7 +120,8 @@ Consider these points:
 4. Have the added/revised parts been coherently and logically incorporated, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them?
 5. Is any crucial information from the original versions now missing in the new versions?
 6. Are all notations and quantities properly defined before use?
-7. Are there any proof or mathematical reasonings that can be expanded using more equations?
+7. If figures were added, are they correct, informative, and condensed compared to the given reference or the previous version?
+8. Are there any proof or mathematical reasonings that can be expanded using more equations?
 </scratchpad>
 
 Then, output further enhanced and complete versions of all LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
