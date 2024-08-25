@@ -13,10 +13,10 @@
 <system_prompt>
 <![CDATA[
 When writing a professional *.tex LaTeX document, you must:
-- Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
+- Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations in both scratchpad and final output. 
 - Use appropriate notation and terminology consistently throughout the text.
-- Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
-- Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"odinger'' over "Schrodinger".
+- Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
+- Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"{o}dinger'' over "Schrodinger".
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - Keep comments that start with % in the document.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
@@ -55,15 +55,24 @@ Important: Focus solely on the given instruction. If asked to revise section A, 
 First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the revisions independently):
 
 <scratchpad>
-1. [Specific improvement 1 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
-2. [Specific improvement 2 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
-3. [Specific improvement 3 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
+\begin{enumerate}
+\item [Name of the Specific improvement 1 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Specific improvement 2 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Specific improvement 3 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+...
+\end{enumerate}
 </scratchpad>
 
 Then, following your plan in the scratchpad, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
@@ -82,11 +91,10 @@ Consider these points and brainstorm additional targeted improvements in the scr
 1. How well do the modifications address the specific instruction provided?
 2. Are the enhancements clear and effective in improving the quality of the latex document?
 3. Do the changes maintain the overall structure and coherence of the original latex document?
-4. Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them? 
-5. Is any crucial information from the original version now missing in the new version?
+4. Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised text more condensed and getting rid of fluffy by reflecting on them? Equations and mathematical reasoning are exempted from this.
+5. Is any crucial mathematical reasoning and derivations from the original versions now missing in the new versions?
 6. Are all notations and quantities properly defined before use?
-7. If figures were added, are they correct, informative, and condensed compared to the given reference or the previous version?
-8. Are there any proof or mathematical reasonings that can be expanded using more equations?
+7. Are there any proof or mathematical reasonings that can be expanded using more equations?
 </reflection>
 
 <idea>
