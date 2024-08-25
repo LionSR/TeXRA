@@ -206,7 +206,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 - Increases the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
 - Make sure all the referee's comments (whether summary, recommendations, criticisms, or questions) have been addressed using concrete and convincing physical arguments. 
 - The style and tone of the reply letter should be similar to the provided example (under <document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">).
-- In the revised version, are there any fluffy statements like "XXX provides crucial insights into the structure and behavior of these systems" that can be condensed using the ``show, don't tell'' technique?
+- In the revised version, are there any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' that can be condensed using the ``show, don't tell'' technique?
 - PRL has a very strict policy on the word count of the main paper. Make sure the word count of the main paper (excluding the appendix) is not more than roughly 3500 words. Your added text needs to be very condensed and to the point. Otherwise you would need to condense the other parts of the paper.
 </requirements>
 

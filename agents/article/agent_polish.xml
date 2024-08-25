@@ -78,9 +78,9 @@ Consider these points and brainstorm additional targeted improvements in the scr
 2. Are the enhancements clear, condensed, and effective in improving the quality of the latex document? If not, how could they be further refined?
 3. Do the changes maintain the overall structure and coherence of the original latex document? If not, what adjustments could be made to ensure a smooth flow?
 4. Have the added parts been coherently and logically incorporated, rather than just appended, into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
-5. Are there any super important information or details from the original version that are now missing in the new version?
+5. Are there any mathematical reasonings or equations from the original version that are now missing in the new version?
 6. Are there any notations or quantities used before being defined?
-7. In the added parts, are there any fluffy like "XXX provides crucial insights into the structure and behavior of these systems." that can be densed using the "show not tell" technique?
+7. In the added parts, are there any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems.'' that can be densed using the "show not tell" technique?
 </reflection>
 <idea>
 1. [Additional improvement 1]
