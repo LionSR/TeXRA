@@ -603,6 +603,18 @@ def revise_rebuttal_prl(model, input_file, **kwargs):
     execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def paper2referee(model, input_file, **kwargs):
+    execute_agent("write_tex", "paper2referee", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_referee(model, input_file, **kwargs):
+    execute_agent("write_tex", "revise_referee", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -675,6 +687,8 @@ cli.add_command(paper2cover)
 cli.add_command(write_proposal)
 cli.add_command(slide2paper)
 cli.add_command(paper2slide)
+cli.add_command(paper2referee)
+cli.add_command(revise_referee)
 
 # application.py
 cli.add_command(statement)
