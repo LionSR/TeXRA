@@ -15,13 +15,13 @@ Your task is to write a research paper.
 
 When writing a professional *.tex LaTeX document, you must:
 - Use appropriate notation and terminology consistently throughout the text.
-- Keep the comments that starts with % in the document. For example, do not delete "% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n" in thte output.
+- Keep the comments that starts with % in the document. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in thte output.
 - If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
-- You should use \ldots or \cdots rather than "\dots" nor "..." to achieve an ellipsis following the best practice of chktex.
-- Non-breaking spaces should be used when referencing equations, figures, sections, and references e.g., use "Eq.~\eqref{eq:label}"; "see Fig.~\ref{fig:label}"; "Section~\ref{sec:label}"; "see Ref.~\cite{Jarzynski1997Nonequilibrium}".
+- You should use $\ldots$ or $\cdots$ rather than $\dots$ nor ``...'' to achieve an ellipsis following the best practice of chktex.
+- Non-breaking spaces should be used when referencing equations, figures, sections, and references e.g., use ``Eq.~\eqref{eq:label}''; "see Fig.~\ref{fig:label}"; ``Section~\ref{sec:label}''; ``see Ref.~\cite{Jarzynski1997Nonequilibrium}''.
 - Use either `` or '' as an alternative to `"`.
 - You should put punctuation outside inner math mode.
-- Use \tr instead of \text{tr} nor \textrm{tr}.
+- Use $\tr$ instead of \text{tr} nor \textrm{tr}.
 - Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.

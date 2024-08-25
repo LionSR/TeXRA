@@ -15,7 +15,7 @@
 When writing a professional *.tex LaTeX document, you must:
 - Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
 - Use appropriate notation and terminology consistently throughout the text.
-- Use non-breaking spaces when referencing references (e.g., "Ref.~\cite{Jarzynski1997Nonequilibrium}").
+- Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
 - Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"odinger'' over "Schrodinger".
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - Keep comments that start with % in the document.
@@ -55,15 +55,24 @@ Important: Focus solely on the given instruction. If asked to revise section A, 
 First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the revisions independently):
 
 <scratchpad>
-1. [Specific improvement 1 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
-2. [Specific improvement 2 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
-3. [Specific improvement 3 addressing the instruction]
-    - Rationale: [explanation]
-    - Implementation: [Concrete steps]
+\begin{enumerate}
+\item [Name of the Specific improvement 1 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Specific improvement 2 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Specific improvement 3 addressing the instruction]
+    \begin{itemize}
+    \item Rationale: [explanation]
+    \item Implementation: [Concrete steps]
+    \end{itemize}
+...
+\end{enumerate}
 </scratchpad>
 
 Then, following your plan in the scratchpad, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
