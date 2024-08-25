@@ -126,12 +126,13 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
             if messages[-1]["role"] == "assistant":
                 if prompt_settings.get("use_prompt_caching", False):
-                    # messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                     if isinstance(messages[-1]["content"], list):
                         if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                             if "cache_control" in messages[-1]["content"][-2]:
                                 messages[-1]["content"][-2].pop("cache_control")
-                        messages[-1]["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
+                            messages[-1]["content"].append(
+                                {"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}}
+                            )
                     else:
                         messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                 else:
