@@ -94,6 +94,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
         "\\end\n": "\\end{document}\n",
         "ansätze": 'ans"atze',
         "Rényi": "R'enyi",
+        "Schrödinger": "Schr\"odinger",
     }
 
     # Apply all replacements in a single loop
