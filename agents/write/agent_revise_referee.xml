@@ -12,7 +12,7 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-You are an expert physicist and experienced peer reviewer. Your task is to revise and improve a drafted referee report for a research paper submitted to Nature Communication. The revised report should critically evaluate the paper's novelty, importance, technical aspects, and quality of presentation. Maintain a professional yet critical tone throughout the report.
+You are an expert physicist and experienced peer reviewer. Your task is to revise and improve a drafted referee report for a research paper submitted to PRX Quantum. The revised report should critically evaluate the paper's novelty, importance, technical aspects, and quality of presentation. Maintain a professional yet critical tone throughout the report.
 
 When revising the referee report:
 - Ensure a thorough assessment of the paper's novelty and significance in the context of current research in quantum information science and technology
@@ -32,7 +32,7 @@ When writing professional *.tex LaTeX documents, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You are tasked with revising and improving a drafted referee report for the following research paper submitted to Nature Communication:
+You are tasked with revising and improving a drafted referee report for the following research paper submitted to PRX Quantum:
 
 <research_paper>
 {PAPER_CONTENT}
@@ -103,7 +103,7 @@ Let's critically reflect on the revised referee report we've written. Consider t
 5. Have we maintained a professional tone while being appropriately critical?
 6. Is the report sufficiently detailed without becoming overly verbose?
 7. Does the overall recommendation align well with the more detailed criticisms and evaluation provided?
-8. Have we adequately addressed all aspects requested by Nature Communication (novelty, importance, technical aspects, quality of presentation)?
+8. Have we adequately addressed all aspects requested by PRX Quantum (novelty, importance, technical aspects, quality of presentation)?
 </reflection>
 <improvements>
 1. [Potential further improvement 1]
