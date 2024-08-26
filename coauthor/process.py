@@ -130,9 +130,9 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
                         if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                             if "cache_control" in messages[-1]["content"][-2]:
                                 messages[-1]["content"][-2].pop("cache_control")
-                            messages[-1]["content"].append(
-                                {"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}}
-                            )
+                        messages[-1]["content"].append(
+                            {"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}}
+                        )
                     else:
                         messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                 else:
@@ -167,6 +167,8 @@ def initialize_output_and_prefill(
         file_content = read_file(output_file)
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
             print("### end_tag detected in the output file. Skipping continuation.")
+            if messages[-1]["content"][-1].get("cache_control"):
+                messages[-1]["content"][-1].pop("cache_control")
             messages.append({"role": "assistant", "content": file_content})
             return None, True, messages
         else:
@@ -228,6 +230,7 @@ def process_first_round(
 
     user_request = load_prompt("user_request", prompt_settings)
 
+    # this needs to be combined with the prefill logic
     messages = initialize_messages(
         model,
         system_prompt,
@@ -304,7 +307,8 @@ def process_reflection_round(
 
     # Add the user message text
     if prompt_settings.get("use_prompt_caching", False):
-        reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
+        # reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
+        reflection_message["content"].append({"type": "text", "text": user_message})
         # Append the reflection message to the messages list
         # Make sure the number of cache control is fewer than 4
         if isinstance(messages[-1]["content"], list):
