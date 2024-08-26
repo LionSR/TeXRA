@@ -778,6 +778,19 @@ document.addEventListener('DOMContentLoaded', function () {
     updateEditedFileSelect(baseFile);
   });
 
+  // Add event listener for the new refresh button
+  document.getElementById('refreshEditedFilesButton').addEventListener('click', function () {
+    const baseFile = document.getElementById('baseFileSelect').value;
+    if (baseFile) {
+      vscode.postMessage({
+        command: 'requestEditedFile',
+        baseFile: baseFile
+      });
+    } else {
+      vscode.window.showInformationMessage('Please select a base file first.');
+    }
+  });
+
   // Add function to update edited file select when base file changes
   function updateEditedFileSelect(baseFile) {
     if (baseFile) {
