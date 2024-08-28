@@ -187,6 +187,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
             output_files = []
             for doc in latex_documents.findall("document"):
                 source = doc.get("name")
+                print(f"XML Source: {colored(source, 'cyan')}")
                 content = doc.text
 
                 if source is not None and content is not None:
@@ -194,7 +195,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
 
                     # Extract agent name and model from the output file name
                     output_parts = os.path.basename(output_file).split("_")
-                    agent = output_parts[1]
+                    agent = output_parts[-2]
                     model = output_parts[-1].split(".")[0]
 
                     # Determine the round number from the output file name
