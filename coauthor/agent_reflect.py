@@ -285,6 +285,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
                 self._replace_input_commands(self.base_files, output_files)
             else:
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+
                 self._handle_single_output(processed_output_file)
                 self.output_files[round] = [processed_output_file]
 
