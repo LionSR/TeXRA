@@ -20,13 +20,18 @@ class WriteTex(ThinkAndWrite):
                 if "main" in file.lower():
                     user_vars["PAPER_CONTENT"] = coa.read_file(file)
                     break
-                
+
         return user_vars
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--agent", type=str, default="paper2cover", choices=["paper2cover", "proposal", "slide2paper", "paper2slide", "paper2referee", "revise_referee"])
+    parser.add_argument(
+        "--agent",
+        type=str,
+        default="paper2cover",
+        choices=["paper2cover", "proposal", "slide2paper", "paper2slide", "paper2referee", "revise_referee"],
+    )
     args = parser.parse_args()
 
     write_tex = WriteTex(args, agent_path)

@@ -92,9 +92,6 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
         "\\end{scope>": "\\end{scope}",
         "\\end{latex_document>": "</latex_document>\n",
         "\\end\n": "\\end{document}\n",
-        "ansätze": 'ans"atze',
-        "Rényi": "R'enyi",
-        "Schrödinger": "Schr\"odinger",
     }
 
     # Apply all replacements in a single loop
@@ -185,34 +182,36 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
         latex_documents = root.find(document_tag)
         if latex_documents is not None:
             output_files = []
+
+            # Extract agent name and model from the output file name
+            output_parts = os.path.basename(output_file).split("_")
+            agent = output_parts[-3]
+            model = output_parts[-1].split(".")[0]
+
+            # Determine the round number from the output file name
+            round_match = re.search(r"_r(\d+)_", output_file)
+            round = int(round_match.group(1)) if round_match else 0
+
             for doc in latex_documents.findall("document"):
                 source = doc.get("name")
                 print(f"XML Source: {colored(source, 'cyan')}")
                 content = doc.text
 
                 if source is not None and content is not None:
-                    content_text = content.strip()
-
-                    # Extract agent name and model from the output file name
-                    output_parts = os.path.basename(output_file).split("_")
-                    agent = output_parts[-2]
-                    model = output_parts[-1].split(".")[0]
-
-                    # Determine the round number from the output file name
-                    round_match = re.search(r"_r(\d+)_", output_file)
-                    round = int(round_match.group(1)) if round_match else 0
-
                     # Generate the output file name
                     base_name, extension = os.path.splitext(source)
                     tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
+
+                    content_text = content.strip()
 
                     # Write the content to the file
                     write_file(tex_file, content_text)
                     output_files.append(tex_file)
                     print(f"TeX file written: {colored(tex_file, 'cyan')}")
-                    return output_files
                 else:
                     cprint(f"WARNING: Invalid document structure in {document_tag}.", "white", "on_red")
+
+            return output_files
 
         else:
             cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
