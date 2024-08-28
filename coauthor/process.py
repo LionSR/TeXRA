@@ -71,6 +71,17 @@ def clean_response(new_response: str) -> str:
         "\\end{equation}\n\\subsection": "\\end{equation}\n\n\n\\subsection",
         "\\end{align}\n\\paragraph": "\\end{align}\n\n\n\\paragraph",
         "\\end{equation}\n\\paragraph": "\\end{equation}\n\n\n\\paragraph",
+        "ansätze": 'ans{\\"a}tze',
+        "Rényi": "R{\\'e}nyi",
+        "Schrödinger": 'Schr{\\"o}dinger',
+        "delve": "discuss",
+        "delving into": "discussing",
+        "It's important to note": "Note that",
+        "our exploration": "our discussion",
+        "embark": "start",
+        "realm": "area",
+        "intricate": "complex",
+        "the concept of": "",
     }
     for old, new in replacements.items():
         new_response = new_response.replace(old, new)
@@ -130,9 +141,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
                         if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                             if "cache_control" in messages[-1]["content"][-2]:
                                 messages[-1]["content"][-2].pop("cache_control")
-                        messages[-1]["content"].append(
-                            {"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}}
-                        )
+                        messages[-1]["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
                     else:
                         messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
                 else:
