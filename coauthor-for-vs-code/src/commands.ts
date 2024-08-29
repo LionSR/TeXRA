@@ -466,7 +466,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
       const model = getConfig().get('defaultMergeModel', 'sonnet+');
       const reflect = getConfig().get('defaultMergeReflect', 'False');
       const fileToUse = baseFile || inputFile;
-      terminal.sendText(`coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`);
+      // const fileToUse = baseFile; // Not working! baseFile is None
+      terminal.sendText(`coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model}`);
     }),
     vscode.commands.registerCommand('coauthor.packMultiple', (inputFile: string, additionalInputFiles: string[], agent: string, model: string, outputNameOverride: string, outputFiles: string[]) => {
       const terminal = ensureTerminal();
