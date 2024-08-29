@@ -92,6 +92,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
         "\\end{scope>": "\\end{scope}",
         "\\end{latex_document>": "</latex_document>\n",
         "\\end\n": "\\end{document}\n",
+        "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
     }
 
     # Apply all replacements in a single loop
