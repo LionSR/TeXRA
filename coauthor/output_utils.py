@@ -44,9 +44,13 @@ def ensure_correct_xml_structure(file_path, document_tag):
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
                     content += f"\n</{document_tag}>"
 
-            find_str = "\\end{document}\n\n<document name"
-            replace_str = "\\end{document}\n</document>\n\n<document name"
-            content = content.replace(find_str, replace_str)
+            replacements = {
+                "\\end{document}\n\n<document name": "\\end{document}\n</document>\n\n<document name",
+                "\\end{document}\n<document name": "\\end{document}\n</document>\n<document name",
+                "\\end{document}\n</latex_documents>": "\\end{document}\n</document>\n</latex_documents>",
+            }
+            for find_str, replace_str in replacements.items():
+                content = content.replace(find_str, replace_str)
 
             file.seek(0)
             file.write(content)
