@@ -11,6 +11,17 @@ class EditTexBase:
             coa.update_user_vars_multiple_output(self.args, user_vars)
         else:
             coa.update_user_vars_single_output(self.args, user_vars)
+
+        if self.args.agent == "convert":
+            if "iclr" in self.args.input_file:
+                user_vars["ICLR_TEMPLATE"] = coa.read_file(self.args.input_file)
+            if "neurips" in self.args.input_file:
+                user_vars["NeurIPS_TEX"] = coa.read_file(self.args.input_file)
+            for file in self.args.input_files:
+                if "iclr" in file.lower():
+                    user_vars["ICLR_TEMPLATE"] = coa.read_file(file)
+                if "neurips" in file.lower():
+                    user_vars["NeurIPS_TEX"] = coa.read_file(file)
         return user_vars
 
 
@@ -38,6 +49,7 @@ def main():
             "correct_with_auxiliary",
             "draw_multiple",
             "draw_with_auxiliary",
+            "convert",  # Add the new "convert" agent
         ],
     )
     args = parser.parse_args()
