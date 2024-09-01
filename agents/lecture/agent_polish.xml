@@ -88,24 +88,34 @@ Let's critically reflect like a harsh professor on the changes made according to
 Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.
 <scratchpad>
 <reflection>
-1. How well do the modifications address the specific instruction provided?
-2. Are the enhancements clear and effective in improving the quality of the latex document?
-3. Do the changes maintain the overall structure and coherence of the original latex document?
-4. Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow?
-5. Are all notations and quantities properly defined before use?
+\begin{enumerate}
+\item How well do the modifications address the specific instruction provided?
+\item Are the enhancements clear and effective in improving the quality of the latex document?
+\item Do the changes maintain the overall structure and coherence of the original latex document?
+\item Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow?
+\item Are all notations and quantities properly defined before use?
+\end{enumerate}
 </reflection>
 
 <idea>
-1. [Additional improvement 1]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-2. [Additional improvement 2]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-3. [Additional improvement 3]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+\begin{enumerate}
+\item [Name of the Additional improvement 1]
+\begin{itemize}
+        \item Rationale: [Brief explanation]
+        \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Additional improvement 2]
+    \begin{itemize}
+        \item Rationale: [Brief explanation]
+        \item Implementation: [Concrete steps]
+    \end{itemize}
+\item [Name of the Additional improvement 3]
+    \begin{itemize}
+        \item Rationale: [Brief explanation]
+        \item Implementation: [Concrete steps]
+    \end{itemize}
 ...
+\end{enumerate}
 </idea>
 </scratchpad>
 
