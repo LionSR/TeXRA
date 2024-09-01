@@ -615,6 +615,17 @@ def revise_referee(model, input_file, **kwargs):
     execute_agent("write_tex", "revise_referee", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+def convert_tex(model, input_file, **kwargs):
+    agent = "convert"
+    if kwargs.get("output_files"):
+        agent = f"{agent}_multiple"
+    elif kwargs.get("auxiliary_files"):
+        agent = f"{agent}_with_auxiliary"
+    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -696,6 +707,9 @@ cli.add_command(statement)
 # grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
+
+# convert_tex.py
+cli.add_command(convert_tex)
 
 
 if __name__ == "__main__":
