@@ -82,7 +82,7 @@ def clean_response(new_response: str) -> str:
         "embark": "start",
         "realm": "area",
         "intricate": "complex",
-        "the concept of": "",
+        # "the concept of": "",
     }
     for old, new in replacements.items():
         new_response = new_response.replace(old, new)
