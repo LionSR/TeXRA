@@ -96,6 +96,19 @@ def process_tikzpicture_endings(file_path):
     replacement = r"\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}"
     content = re.sub(pattern, replacement, content)
 
+    patterns = [
+        # (r'(\\documentclass\{lecture\})(.*?)\\makeheader', ""),
+        # (r'\\subbibliography\{library\.bib\}\s*\\end\{document\}', ""),
+        (r"\\end\{document\}\s*\\chapter", r"\\chapter"),
+        (r"\\end\{document\}\s*\\addcontentsline", r"\\addcontentsline"),
+        (r"\}(\s*)\\end\{tikzpicture\};", r"};\1\\end{tikzpicture}"),
+        (r"\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;", r"\1\\end{tikzpicture}};\\DIFaddendFL"),
+        # (r"\};(\s*)\\end\{tikzpicture\}", r"\1\\end{tikzpicture}\1};"),
+    ]
+
+    for pattern, replacement in patterns:
+        content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
