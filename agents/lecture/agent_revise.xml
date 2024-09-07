@@ -13,14 +13,16 @@
 <system_prompt>
 <![CDATA[
 When writing a professional *.tex LaTeX document, you must:
-- Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations in both scratchpad and final output. 
-- Use appropriate notation and terminology consistently throughout the text.
-- Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
-- Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"{o}dinger'' over "Schrodinger".
-- Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
-- Keep comments that start with % in the document.
-- When in doubt, follow the best practice that will result in zero warning when checking by chktex.
-- Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
+\begin{itemize}
+\item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations in both scratchpad and final output. 
+\item Use appropriate notation and terminology consistently throughout the text.
+\item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
+\item Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"{o}dinger'' over "Schrodinger".
+\item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
+\item Keep comments that start with % in the document.
+\item When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+\item Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
+\end{itemize}
 ]]>
 </system_prompt>
 <user_prefix>
@@ -99,14 +101,14 @@ Consider these points and brainstorm additional targeted improvements in the scr
 
 <idea>
 1. [Additional improvement 1]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+    \item Rationale: [Brief explanation]
+    \item Implementation: [Concrete steps]
 2. [Additional improvement 2]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+    \item Rationale: [Brief explanation]
+    \item Implementation: [Concrete steps]
 3. [Additional improvement 3]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+    \item Rationale: [Brief explanation]
+    \item Implementation: [Concrete steps]
 ...
 </idea>
 </scratchpad>

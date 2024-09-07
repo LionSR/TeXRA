@@ -21,6 +21,7 @@ When writing a professional *.tex LaTeX document, you must:
 - Keep comments that start with % in the document.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
 - Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels.
+- Use 
 ]]>
 </system_prompt>
 <user_prefix>
