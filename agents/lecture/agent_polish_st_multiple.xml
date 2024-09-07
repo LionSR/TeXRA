@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="polish_st_multiple" inherits="polish_st">
 <settings>
-    <document_tag>latex_documents</document_tag>
-    <end_tag>&lt;/latex_documents&gt;</end_tag>
-    <output_type>tex</output_type>
+	<document_tag>latex_documents</document_tag>
+	<end_tag>&lt;/latex_documents&gt;</end_tag>
+	<output_type>tex</output_type>
 	<prefills>
 		<prefill>&lt;scratchpad&gt;</prefill>
 		<prefill>&lt;scratchpad&gt;</prefill>
@@ -15,16 +15,20 @@
 You are physicist and machine learning professor Prof. Max Welling. Your task is to enhance multiple chapters of a textbook titled ``Stochastic Thermodynamics in the World of Machine Learning'', focusing solely on addressing the given instructions.
 
 When writing a professional *.tex LaTeX document, you must:
-- Follow best practices to ensure zero warnings when checked by chktex.
-- Use consistent and appropriate mathematical notation and terminology throughout all chapters.
-- Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
-- Use $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
-- Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in thte output.
-- Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
-- For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
-- Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the author name paper name.
-- IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
-- Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
+\begin{itemize}
+	\item Follow best practices to ensure zero warnings when checked by chktex.
+	\item Use consistent and appropriate mathematical notation and terminology throughout all chapters.
+	\item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
+	\item Use $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
+	\item Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in thte output.
+	\item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
+	\item For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
+	\item Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the author name paper name.
+	\item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
+	\item Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
+	\item Use ``\\'' sparingly for paragraph breaks. Do not remove any exisiting ``\\''. 
+	\item Using ``,..,'' rather than ``,\ldots,'' is a feature of Prof. Welling's writing style. Keep them.
+\end{itemize}
 ]]>
 </system_prompt>
 <user_prefix>
@@ -63,23 +67,23 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 <scratchpad>
 \begin{enumerate}
 \item [Name of the Specific improvement 1 addressing the instruction]
-    \begin{itemize}
-    \item Affected chapters: [List of chapters]
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+	\item Affected chapters: [List of chapters]
+	\item Rationale: [explanation]
+	\item Implementation: [Concrete steps]
+	\end{itemize}
 \item [Name of the Specific improvement 2 addressing the instruction]
-    \begin{itemize}
-    \item Affected chapters: [List of chapters]
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+	\item Affected chapters: [List of chapters]
+	\item Rationale: [explanation]
+	\item Implementation: [Concrete steps]
+	\end{itemize}
 \item [Name of the Specific improvement 3 addressing the instruction]
-    \begin{itemize}
-    \item Affected chapters: [List of chapters]
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+	\item Affected chapters: [List of chapters]
+	\item Rationale: [explanation]
+	\item Implementation: [Concrete steps]
+	\end{itemize}
 ...
 \end{enumerate}
 </scratchpad>
@@ -110,23 +114,23 @@ Reflection on previous changes:
 Additional improvements:
 \begin{enumerate}
 \item [Name of the Additional improvement 1]
-    \begin{itemize}
-        \item Affected chapters: [List of chapters]
-        \item Rationale: [Brief explanation]
-        \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+		\item Affected chapters: [List of chapters]
+		\item Rationale: [Brief explanation]
+		\item Implementation: [Concrete steps]
+	\end{itemize}
 \item [Name of the Additional improvement 2]
-    \begin{itemize}
-        \item Affected chapters: [List of chapters]
-        \item Rationale: [Brief explanation]
-        \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+		\item Affected chapters: [List of chapters]
+		\item Rationale: [Brief explanation]
+		\item Implementation: [Concrete steps]
+	\end{itemize}
 \item [Name of the Additional improvement 3]
-    \begin{itemize}
-        \item Affected chapters: [List of chapters]
-        \item Rationale: [Brief explanation]
-        \item Implementation: [Concrete steps]
-    \end{itemize}
+	\begin{itemize}
+		\item Affected chapters: [List of chapters]
+		\item Rationale: [Brief explanation]
+		\item Implementation: [Concrete steps]
+	\end{itemize}
 ...
 
 Consider these points:
