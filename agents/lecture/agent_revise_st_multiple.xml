@@ -113,18 +113,25 @@ Reflection on previous changes:
 3. [Identification of any areas that may need further improvement]
 
 Additional improvements:
-1. [Additional improvement 1]
+\begin{enumerate}
+\item [Name of the Additional improvement 1]
+	\begin{itemize}
 		\item Affected chapters: [List of chapters]
 		\item Rationale: [Brief explanation]
 		\item Implementation: [Concrete steps]
-2. [Additional improvement 2]
+	\end{itemize}
+\item [Name of the Additional improvement 2]
+	\begin{itemize}
 		\item Affected chapters: [List of chapters]
 		\item Rationale: [Brief explanation]
 		\item Implementation: [Concrete steps]
-3. [Additional improvement 3]
+	\end{itemize}
+\item [Name of the Additional improvement 3]
+	\begin{itemize}
 		\item Affected chapters: [List of chapters]
 		\item Rationale: [Brief explanation]
 		\item Implementation: [Concrete steps]
+	\end{itemize}
 ...
 
 Consider these points:
