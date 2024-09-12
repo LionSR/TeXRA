@@ -7,6 +7,8 @@ model_mapping = {
     "opus": "claude-3-opus-20240229",
     "sonnet": "claude-3-sonnet-20240229",
     "haiku": "claude-3-haiku-20240307",
+    "gpto1": "o1-preview-2024-09-12",
+    "gpto1-": "o1-mini-2024-09-12",
     "gpt4o": "gpt-4o-2024-08-06",
     "gpt4t": "gpt-4-turbo-2024-04-09",
     "gpt4o-": "gpt-4o-mini-2024-07-18",
@@ -35,6 +37,8 @@ openai_models = {
     "gpt4o",
     "gpt4t",
     "gpt4o-",
+    "gpto1",
+    "gpto1-",
 }
 
 openrouter_models = {
@@ -95,6 +99,8 @@ def get_model_settings(args):
         "claude-3-5-sonnet-20240620": 8192,
         "gpt-4o-mini-2024-07-18": 16384,
         "gpt-4o-2024-08-06": 16384,
+        "o1-preview-2024-09-12": 32768,
+        "o1-mini-2024-09-12": 65536,
     }
 
     model_settings = {
@@ -117,6 +123,8 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gpt4o": (2.5, 10),
         "gpt4o-": (0.15, 0.6),
         "gpt4oOR": (6, 18),
+        "gpto1": (15, 60),
+        "gpto1-": (3, 12),
         "gemini1p+OR": (2.5, 7.5),
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),

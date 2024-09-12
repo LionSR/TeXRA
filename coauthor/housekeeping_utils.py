@@ -10,7 +10,7 @@ from termcolor import cprint
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
 TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
-MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
+MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpto1", "gpto1-", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
 
 
 def get_agent_first_name_chunk(agent):
