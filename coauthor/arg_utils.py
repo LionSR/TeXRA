@@ -13,7 +13,21 @@ def get_common_argparser():
         type=str,
         default="sonnet+",
         help="Model name to use for processing.",
-        choices=["sonnet+", "opus", "sonnet", "haiku", "gpt4t", "gpt4o", "gpt4o-", "gpt4oOR", "gemini1p+OR", "gemini1f+OR", "llama3+OR"],
+        choices=[
+            "sonnet+",
+            "opus",
+            "sonnet",
+            "haiku",
+            "gpto1",
+            "gpto1-",
+            "gpt4t",
+            "gpt4o",
+            "gpt4o-",
+            "gpt4oOR",
+            "gemini1p+OR",
+            "gemini1f+OR",
+            "llama3+OR",
+        ],
     )
     parser.add_argument(
         "--temperature",
