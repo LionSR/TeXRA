@@ -32,13 +32,18 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
 
 def _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag):
     """Create a response using OpenAI model."""
-    response_object = client.chat.completions.create(
-        model=model_name,
-        max_tokens=max_tokens,
-        messages=messages,
-        temperature=temperature,
-        stop=end_tag,
-    )
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+    }
+    if "o1" in model_name:
+        kwargs["temperature"] = 1
+    else:
+        kwargs["stop"] = end_tag
+
+    response_object = client.chat.completions.create(**kwargs)
     print(colored(f"using openai model: {model_name}", "green"))
     return response_object
 
@@ -82,7 +87,7 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
     """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-    if is_openai_model(model):
+    if is_openai_model(model) and "o1" not in model:
         messages.insert(0, {"role": "system", "content": system_prompt})
 
     if figure_inputs:
@@ -92,6 +97,9 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
     if use_prompt_caching:
         messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
     else:
+        if "o1" in model:
+            messages[-1]["content"].append({"type": "text", "text": system_prompt})
+
         messages[-1]["content"].append({"type": "text", "text": user_request})
 
     return messages
