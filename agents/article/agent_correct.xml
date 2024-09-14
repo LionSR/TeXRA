@@ -25,7 +25,7 @@ When writing a professional *.tex LaTeX document, you must:
 - Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
 - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
 - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
-- Use the math commands defined in the auxuiliary file command0.tex.
+- Use the math commands defined in the auxuiliary file command0.tex if provided.
 ]]>
 </system_prompt>
 <user_prefix>
@@ -45,8 +45,6 @@ Please carefully read through the entire document, looking for any typos, gramma
 As you review the document, make the following corrections and improvements:
 - Ensure that all mathematical equations are correct and all statements are factually accurate.
 - Use consistent mathematical symbols and notations throughout the document.
-- Improve the quality and formatting of the LaTeX formulas where needed.
-- Apply consistent indentation, spacing, and line breaks. For example, '\item [(a)]Show that...' should be corrected to '\item [(a)] Show that...'.
 
 Use the following format for your output
 <latex_document>
