@@ -60,10 +60,13 @@ def initialize_state(state: dict | None, accumulated_output):
 def clean_response(new_response: str) -> str:
     # For Claude 3.5/GPT models, remove extra line breaks around equations and document tags
     replacements = {
+        "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
+        "\\end{scratchpad}": "</scratchpad>",
         "\n\n\\begin{align}": "\n\\begin{align}",
         "\\end{align}\n\n": "\\end{align}\n",
         "\n\n\\begin{equation}": "\n\\begin{equation}",
         "\\end{equation}\n\n": "\\end{equation}\n",
+        "</figure>\n": "\\end{figure}\n",
         "\\end{document>\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{align}\n\\section": "\\end{align}\n\n\n\\section",
