@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<agent name="correct_multiple" inherits="correct">
+<settings>
+    <document_tag>latex_documents</document_tag>
+    <end_tag>&lt;/latex_documents&gt;</end_tag>
+    <output_type>tex</output_type>
+	<prefills>
+		<prefill>&lt;scratchpad&gt;</prefill>
+		<prefill>&lt;scratchpad&gt;</prefill>
+	</prefills>
+</settings>
+<prompts>
+<system_prompt>
+<![CDATA[
+Your task is to write a research paper.
+
+When writing a professional *.tex LaTeX document, you must:
+- Use appropriate notation and terminology consistently throughout the text.
+- Keep the comments that starts with % in the document. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in thte output.
+- If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
+- You should use $\ldots$ or $\cdots$ rather than $\dots$ nor ``...'' to achieve an ellipsis following the best practice of chktex.
+- Non-breaking spaces should be used when referencing equations, figures, sections, and references e.g., use ``Eq.~\ref{eq:label}''; ``see Fig.~\ref{fig:label}''; ``Section~\ref{sec:label}''; ``see Ref.~\cite{Jarzynski1997Nonequilibrium}''.
+- Use either `` or '' as an alternative to `"`.
+- You should put punctuation outside inner math mode.
+- Use $\tr$ instead of \text{tr} nor \textrm{tr}.
+- Prefer $\bra{...}$ and $\ket{...}$ over $|...rangle$ and $\langle...|$
+- Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
+- When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+- Use the math commands defined in the auxuiliary file command0.tex if provided.
+]]>
+</system_prompt>
+<user_prefix>
+<![CDATA[
+I am going to give you a latex document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+
+Here are the LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
+
+<documents>
+{AUXILIARY_FILE_CONTENTS}
+{ADDITIONAL_INPUT_CONTENTS}
+<document name="{INPUT_FILE}">
+{INPUT_CONTENT}
+</document>
+</documents>
+
+Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
+
+<instruction>
+{INSTRUCTION}
+</instruction>
+For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
+
+The output files should be in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
+]]>
+</user_prefix>
+<user_request>
+<![CDATA[
+In the scratchpad below, brainstorm concrete ways to significantly improve the quality of all papers that are directly relevant to the instruction above. Do not consider any other aspects of the papers. Be as concrete as to change what in which section of which paper in what ways. Use the scratchpad as an opportunity to formulate as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change, and the concrete steps to be taken to implement the changes starting from the beginning of each document.
+
+<scratchpad>
+1. [Specific improvement 1 addressing the instruction]
+    - Affected papers: [List of papers]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+2. [Specific improvement 2 addressing the instruction]
+    - Affected papers: [List of papers]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+3. [Specific improvement 3 addressing the instruction]
+    - Affected papers: [List of papers]
+    - Rationale: [explanation]
+    - Implementation: [Concrete steps]
+</scratchpad>
+
+Then, following your plan in the scratchpad, please output updated versions of all LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+
+<latex_documents>
+<document name="{OUTPUT_FILES_ORDER[0]}">
+{1ST_UPDATED_LATEX_DOCUMENT_1}
+</document>
+<document name="{OUTPUT_FILES_ORDER[1]}">
+{1ST_UPDATED_LATEX_DOCUMENT_2}
+</document>
+... (repeat for all output files)
+</latex_documents>
+]]>
+</user_request>
+<user_reflect>
+<![CDATA[
+Now that you have made initial improvements to the papers, please reflect on your changes and consider any additional improvements that could further enhance the quality of the papers while staying focused on the original instruction.
+
+<scratchpad>
+Reflection on previous changes:
+1. [Summary of major changes made to each paper]
+2. [Evaluation of the effectiveness of these changes]
+3. [Identification of any areas that may need further improvement]
+
+Additional improvements:
+1. [Additional improvement 1]
+    - Affected papers: [List of papers]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+2. [Additional improvement 2]
+    - Affected papers: [List of papers]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+3. [Additional improvement 3]
+    - Affected papers: [List of papers]
+    - Rationale: [Brief explanation]
+    - Implementation: [Concrete steps]
+...
+</scratchpad>
+
+Then, output further enhanced and complete versions of all LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+
+Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
+]]>
+</user_reflect>
+</prompts>
+</agent>
