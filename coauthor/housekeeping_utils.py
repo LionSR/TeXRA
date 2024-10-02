@@ -9,7 +9,7 @@ from termcolor import cprint
 
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
-TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib"]
+TEMP_EXTENSIONS = [".pdf", ".aux", ".bbl", ".blg", ".fdb_latexmk", ".fls", ".log", ".out", ".synctex.gz", ".bib", ".nav", ".run.xml", ".snm", ".toc", "-blx.bib"]
 MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpto1", "gpto1-", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
 
 

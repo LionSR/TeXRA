@@ -395,6 +395,12 @@ def paper2cover(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def paper2poster(model, input_file, **kwargs):
+    execute_agent("write_tex", "paper2poster", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def write_proposal(model, input_file, **kwargs):
     execute_agent("write_tex", "proposal", model, input_file, **kwargs)
 
@@ -700,6 +706,7 @@ cli.add_command(slide2paper)
 cli.add_command(paper2slide)
 cli.add_command(paper2referee)
 cli.add_command(revise_referee)
+cli.add_command(paper2poster)
 
 # application.py
 cli.add_command(statement)
