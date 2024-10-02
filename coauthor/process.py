@@ -67,6 +67,7 @@ def clean_response(new_response: str) -> str:
         "\n\n\\begin{equation}": "\n\\begin{equation}",
         "\\end{equation}\n\n": "\\end{equation}\n",
         "</figure>\n": "\\end{figure}\n",
+        "\\end{revised_statement>": "</revised_statement>",
         "\\end{document>\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{align}\n\\section": "\\end{align}\n\n\n\\section",

@@ -94,6 +94,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     # Define a dictionary of replacements for better maintainability
     replacements = {
         "\\end{document>": "\\end{document}",
+        "\\end{revised_statement>": "</revised_statement>",
         "\\end{figure>": "\\end{figure}",
         "\\end{tikzpicture>": "\\end{tikzpicture}",
         "\\end{scope>": "\\end{scope}",
