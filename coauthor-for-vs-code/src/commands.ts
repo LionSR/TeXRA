@@ -239,7 +239,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         }
       }
     }),
-    vscode.commands.registerCommand('coauthor.indentTex', () => {
+    vscode.commands.registerCommand('coauthor.indentTex', async () => {
       // const terminal = ensureTerminal();
       // terminal.show();
       // terminal.sendText("coauthor indent-tex");
@@ -645,7 +645,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           input_file: fileToUse,
           edited_file: editedFile,
           model,
-          reflect: reflect === 'True'
+          reflect
         });
         vscode.window.showInformationMessage(`Merge completed: ${response.data}`);
       } catch (error) {
