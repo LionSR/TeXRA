@@ -3,8 +3,11 @@ import os
 import click
 import shlex
 import subprocess
+from fastapi import FastAPI
+import uvicorn
 from dotenv import load_dotenv
 
+from coauthor.api import router
 from coauthor.arg_utils import comma_separated_list
 from coauthor.figure_tools import (
     extract_figure_paths,
@@ -117,6 +120,20 @@ def execute_agent(script, agent, model, input_file, **kwargs):
 def cli():
     """Main CLI group for coauthor commands."""
     pass
+
+
+@click.command()
+@click.option("--host", default="0.0.0.0", help="The host to bind the server to")
+@click.option("--port", default=8000, help="The port to bind the server to")
+@click.option("--reload", is_flag=True, default=False, help="Enable auto-reload")
+def api(host, port, reload):
+    uvicorn.run("coauthor.cli:create_app", host=host, port=port, reload=reload)
+
+
+def create_app():
+    app = FastAPI()
+    app.include_router(router)
+    return app
 
 
 @click.command()
@@ -634,6 +651,9 @@ def convert_tex(model, input_file, **kwargs):
 
 if __name__ == "__main__":
     cli()
+
+# api
+cli.add_command(api)
 
 # edit_tex.py
 cli.add_command(correct_tex)
