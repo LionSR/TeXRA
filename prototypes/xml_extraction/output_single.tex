@@ -8,7 +8,7 @@ The transformed distribution is given by:
 To train the Boltzmann Generator, we minimize the KL divergence between $q_\ta(\bx)$ and $\rhoeq(\bx)$:
 \begin{align}
     \KL[q_\ta||\rhoeq] &= \eE_{q_\ta}[\log q_\ta(\bx) + \bt \cU(\bx)] + \log Z \label{eq:bg_kl}\\
-                        &= -\cS[q_\ta] + \beta \eE_{q_\ta}[\cU(\bx)] + \log Z, \label{eq:bg_kl_entropy}
+                       &= -\cS[q_\ta] + \beta \eE_{q_\ta}[\cU(\bx)] + \log Z, \label{eq:bg_kl_entropy}
 \end{align}
 where $\cS[q_\ta]$ is the entropy of $q_\ta$. This objective can be expressed in terms of the latent variables $\bz$:
 \begin{align}
@@ -25,19 +25,19 @@ Note that the $\log Z$ term is constant with respect to $\ta$ and thus disappear
 To compute these gradients, we can use the following steps:
 \begin{align}
     \na_\ta \log |\det J_{f_\ta}(\bz)| &= \tr\left(J_{f_\ta}(\bz)^{-1} \na_\ta J_{f_\ta}(\bz)\right), \label{eq:bg_jacobian_grad}\\
-    \na_\ta \cU(f_\ta(\bz)) &= \na_\bx \cU(f_\ta(\bz)) \cdot \na_\ta f_\ta(\bz), \label{eq:bg_potential_grad}
+    \na_\ta \cU(f_\ta(\bz))            &= \na_\bx \cU(f_\ta(\bz)) \cdot \na_\ta f_\ta(\bz), \label{eq:bg_potential_grad}
 \end{align}
 where $\tr(\cdot)$ denotes the trace of a matrix. The term $\na_\ta J_{f_\ta}(\bz)$ can be computed using automatic differentiation techniques.
 
 When samples $\{\bx_i\}_{i=1}^M$ from the target distribution $\rhoeq(\bx)$ are available (e.g., from MCMC, molecular dynamics), we can train the Boltzmann Generator by minimizing the reverse KL divergence:
 \begin{align}
     \KL[\rhoeq || q_\ta] &= \eE_{\rhoeq}[\log \rhoeq(\bx) - \log q_\ta(\bx)] \label{eq:bg_reverse_kl}\\
-                            &= -\frac{1}{M} \sum_{i=1}^M \log q_\ta(\bx_i) + \text{const}, \label{eq:bg_reverse_kl_samples}
+                         &= -\frac{1}{M} \sum_{i=1}^M \log q_\ta(\bx_i) + \text{const}, \label{eq:bg_reverse_kl_samples}
 \end{align}
 where the constant term includes $\eE_{\rhoeq}[\log \rhoeq(\bx)]$, which is independent of $\ta$. This is equivalent to maximizing the log-likelihood:
 \begin{align}
     \cL(\ta) &= \frac{1}{M} \sum_{i=1}^M \log q_\ta(\bx_i) \label{eq:bg_mle}\\
-                &= \frac{1}{M} \sum_{i=1}^M \log p_Z(f_\ta^{-1}(\bx_i)) + \log |\det J_{f_\ta^{-1}}(\bx_i)|. \label{eq:bg_mle_expanded}
+             &= \frac{1}{M} \sum_{i=1}^M \log p_Z(f_\ta^{-1}(\bx_i)) + \log |\det J_{f_\ta^{-1}}(\bx_i)|. \label{eq:bg_mle_expanded}
 \end{align}
 
 The gradients for this objective are given by:
