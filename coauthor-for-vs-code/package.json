@@ -104,7 +104,8 @@
             "paper2poster",
             "slide2paper",
             "write-proposal",
-            "txt2tex"
+            "txt2tex",
+            "translate2chn"
           ],
           "description": "List of available agents",
           "scope": "resource"

@@ -65,11 +65,11 @@ In your conversion, focus on the following:
 - Do not modify, condense, or expand the original content; focus on accurate conversion to LaTeX
 </requirements>
 
-Please output the full LaTeX source for the research paper, enclosed in the <latex_content></latex_content> tag:
+Please output the full LaTeX source for the research paper, enclosed in the <latex_document></latex_document> tag:
 
-<latex_content>
+<latex_document>
 % Your LaTeX source here
-</latex_content>
+</latex_document>
 ]]>
 </user_request>
 
@@ -96,11 +96,11 @@ After thoroughly reviewing the original research paper text, the sample LaTeX fi
 - Preserve the original structure and content of the research paper, including all sections and subsections
 </requirements>
 
-Please output the revised LaTeX code (under the <latex_content> </latex_content> tag) that meets the above requirements. The revised code should be a significant improvement over the initial draft in terms of accuracy, consistency, and clarity.
+Please output the revised LaTeX code (under the <latex_document> </latex_document> tag) that meets the above requirements. The revised code should be a significant improvement over the initial draft in terms of accuracy, consistency, and clarity.
 
-<latex_content>
+<latex_document>
 % Your revised LaTeX code here
-</latex_content>
+</latex_document>
 ]]>
 </user_reflect>
 </prompts>

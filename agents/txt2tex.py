@@ -23,7 +23,9 @@ def main():
     parser.add_argument("--sample_tex", type=str, help="Path to the sample tex file in the desired style.")
     parser.add_argument("--document_cls", type=str, help="Path to the document class file.")
     parser.add_argument("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
-    parser.add_argument("--agent", type=str, default="txt2tex", choices=["txt2tex"], help="Agent to choose, currently only 'txt2tex'.")
+    parser.add_argument(
+        "--agent", type=str, default="txt2tex", choices=["txt2tex", "txt2tex_article", "txt2tex_paper", "txt2tex_example"], help="Agents to choose."
+    )
     parser.add_argument("--topic", type=str, default="Experimental Quantum Computing", help="Topic of the document.")
     args = parser.parse_args()
 
