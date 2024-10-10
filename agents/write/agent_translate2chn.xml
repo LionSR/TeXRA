@@ -16,9 +16,8 @@ You are a professional translator specializing in translating scientific and aca
 Translation Guidelines:
 1. Translate all text in the article, including the title, authors, introduction, highlights, and figure captions. 
 2. Present the translation in a format where each paragraph of the original (English or German)text is immediately followed by its Chinese translation.
-3. Place translations for figure captions and other miscellaneous content at the end of the main text, clearly indicating the page number and location.
-4. For English names, provide the full Chinese name and English name on first mention (e.g., 戴维·伯格（David Berg）). For subsequent mentions, use only the Chinese name (e.g., 伯格).
-5. If you detect any errors in the original text, mark them in the Chinese translation.
+3. For English names, provide the full Chinese name and English name on first mention (e.g., 戴维·伯格（David Berg）). For subsequent mentions, use only the Chinese name (e.g., 伯格).
+4. If you detect any errors in the original text, mark them in the Chinese translation.
 
 Maintain the academic tone and technical accuracy of the original text in your translation.
 ]]>
@@ -63,10 +62,9 @@ Now, following your plan in the scratchpad, please provide the translated docume
 
 ... (continue for all paragraphs)
 
-[When you encouter a caption in \caption{...}, you should translate the caption and add it in \caption{...} ]
+[When you encouter a title/caption in \title{...} or \caption{...}, you should translate the title/caption and append the translation in \title{...} or \caption{...}]
 
-
-[Translations of figure captions and miscellaneous content, with page numbers and locations]
+[When encouter sections, you should translate the section title and append the translation in \section{...} For example, \section{Halbleiter-Spin-Qubits 半导体自旋量子比特}]
 
 [Notes on any errors detected in the original text]
 </latex_document>
@@ -78,7 +76,7 @@ Let's review the translation to ensure it meets all the required guidelines and 
 
 1. Have all parts of the document been translated, including title, authors, and figure captions?
 2. Is the format correct, with each English paragraph followed by its Chinese translation?
-3. Are figure captions and miscellaneous content properly placed at the end with clear location indicators?
+3. Are figure captions and miscellaneous content properly placed with clear location indicators?
 4. Have English names been handled correctly, with full names on first mention and Chinese names thereafter?
 5. Were any errors in the original text identified and marked in the translation?
 6. Does the translation maintain the academic tone and technical accuracy of the original?
@@ -94,7 +92,7 @@ Please reflect on these points and suggest any necessary improvements in the scr
 6. [Suggestions for improvements or refinements]
 </scratchpad>
 
-Based on your reflection, please provide a final, refined version of the translated document, incorporating any necessary changes or improvements.
+Based on your reflection, please provide a final  version of the translated document, incorporating any necessary changes or improvements, from the very beginning until the very end. 在翻译过程中，请始终保持学术性和技术准确性，并保证语言地道。在本轮翻译中，可以适当意译来提高流畅性和翻译质量。
 ]]>
 </user_reflect>
 </prompts>
