@@ -129,9 +129,9 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
         latex_document = root.find(document_tag)
         if latex_document is not None:
             # Get the full content of the latex document
-            latex_content = ET.tostring(latex_document, encoding="unicode", method="text")
-            latex_content = latex_content.strip()
-            write_file(tex_file, latex_content)
+            latex_document = ET.tostring(latex_document, encoding="unicode", method="text")
+            latex_document = latex_document.strip()
+            write_file(tex_file, latex_document)
         else:
             cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
 
