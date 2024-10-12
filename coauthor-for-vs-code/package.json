@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -368,6 +368,7 @@
   },
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
-    "jest-worker": "^29.7.0"
+    "jest-worker": "^29.7.0",
+    "terser-webpack-plugin": "^5.3.10"
   }
 }
