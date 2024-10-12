@@ -23,6 +23,7 @@ def get_common_argparser():
             "gpt4t",
             "gpt4o",
             "gpt4o-",
+            "gpt4ol",
             "gpt4oOR",
             "gemini1p+OR",
             "gemini1f+OR",
