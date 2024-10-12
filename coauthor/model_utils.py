@@ -12,6 +12,7 @@ model_mapping = {
     "gpt4o": "gpt-4o-2024-08-06",
     "gpt4t": "gpt-4-turbo-2024-04-09",
     "gpt4o-": "gpt-4o-mini-2024-07-18",
+    "gpt4ol": "chatgpt-4o-latest",
     "gpt4oOR": "openai/gpt-4o:extended",
     "gemini1p+OR": "google/gemini-pro-1.5",
     "gemini1f+OR": "google/gemini-flash-1.5",
@@ -37,6 +38,7 @@ openai_models = {
     "gpt4o",
     "gpt4t",
     "gpt4o-",
+    "gpt4ol",
     "gpto1",
     "gpto1-",
 }
@@ -101,6 +103,7 @@ def get_model_settings(args):
         "gpt-4o-2024-08-06": 16384,
         "o1-preview-2024-09-12": 32768,
         "o1-mini-2024-09-12": 65536,
+        "chatgpt-4o-latest": 16384,
     }
 
     model_settings = {
@@ -125,6 +128,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gpt4oOR": (6, 18),
         "gpto1": (15, 60),
         "gpto1-": (3, 12),
+        "gpt4ol": (5, 15),
         "gemini1p+OR": (2.5, 7.5),
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
