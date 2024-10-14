@@ -50,8 +50,12 @@ def ensure_correct_xml_structure(file_path, document_tag):
                 "\\end{document}\n</latex_documents>": "\\end{document}\n</document>\n</latex_documents>",
                 "<scratchpad><scratchpad>": "<scratchpad>",
                 "<scratchpad>\n<scratchpad>": "<scratchpad>",
+                "<scratchpad>\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
+                "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
+                "</latex_document>\n```\n</latex_document>": "</latex_document>\n",
                 "<scratchpad><latex_document>": "<scratchpad></scratchpad><latex_document>",
                 "\end{scratchpad>": "</scratchpad>",
+                "\end{latex_document>\n</latex_document>": "</latex_document>",
             }
             for find_str, replace_str in replacements.items():
                 content = content.replace(find_str, replace_str)
