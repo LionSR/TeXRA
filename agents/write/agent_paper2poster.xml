@@ -45,19 +45,20 @@ Please carefully review the provided research paper before creating the poster.
 
 Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a physics audience in A5 format.
 
-When creating the poster, please follow these guidelines:
-1. Use LaTeX Beamer syntax and commands correctly.
-2. Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
-3. Include detailed mathematical equations, derivations, and explanations from the original paper.
-4. Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
-5. Write concise yet informative explanations for each section.
-6. Maintain a professional and scientifically rigorous tone throughout the poster.
-7. Use appropriate physics notation and terminology consistently.
-8. Prioritize both mathematical depth and visual representations of key ideas.
-9. Ensure the poster is visually appealing and readable at A5 size, despite the increased detail.
-10. Include author information, affiliations, and contact details.
-11. End with a concise yet comprehensive conclusion summarizing the main findings and their implications.
-12. Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
+\begin{itemize}
+    \item Use LaTeX Beamer syntax and commands correctly.
+    \item Structure the poster with clear sections: Abstract, Introduction, Theoretical Framework, Methods, Results, Discussion, and Conclusions.
+    \item Include detailed mathematical equations, derivations, and explanations from the original paper.
+    \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
+    \item Write concise yet informative explanations for each section.
+    \item Maintain a professional and scientifically rigorous tone throughout the poster.
+    \item Use appropriate physics notation and terminology consistently.
+    \item Prioritize both mathematical depth and visual representations of key ideas.
+    \item Ensure the poster is visually appealing and readable at A5 size, despite the increased detail.
+    \item Include author information, affiliations, and contact details.
+    \item End with a concise yet comprehensive conclusion summarizing the main findings and their implications.
+    \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
+\end{itemize}
 
 Additionally, if provided, focus on the following specific instruction:
 <instruction>
@@ -70,14 +71,16 @@ Additionally, if provided, focus on the following specific instruction:
 Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a physics audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
 
 <scratchpad>
-1. [Title, author information, and abstract]
-2. [Introduction and motivation]
-3. [Theoretical Framework]
-4. [Methods and experimental setup]
-5. [Key Results and data analysis]
-6. [Discussion of findings]
-7. [Conclusions and future work]
-8. [References]
+\begin{enumerate}
+    \item Title, author information, and abstract
+    \item Introduction and motivation
+    \item Theoretical Framework
+    \item Methods and experimental setup
+    \item Key Results and data analysis
+    \item Discussion of findings
+    \item Conclusions and future work
+    \item References
+\end{enumerate}
 </scratchpad>
 
 Then, please create the LaTeX Beamer poster, incorporating the key points outlined in the scratchpad. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
