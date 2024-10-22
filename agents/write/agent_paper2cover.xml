@@ -50,31 +50,38 @@ Additonally, if provided, focus on the following specific instruction:
 Based on the research paper provided, please write a compelling cover letter for submission to a Physical Review journal. In the scratchpad below, outline the key points you plan to include in the cover letter.
 
 <scratchpad>
-1. [Key point 1 to highlight in the cover letter]
-2. [Key point 2 to highlight in the cover letter]
-3. [Key point 3 to highlight in the cover letter]
-4. [Explanation of why the paper is suitable for the chosen Physical Review journal]
+\begin{enumerate}
+    \item [Key point 1 to highlight in the cover letter]
+    \item [Key point 2 to highlight in the cover letter]
+    \item [Key point 3 to highlight in the cover letter]
+    \item [Explanation of why the paper is suitable for the chosen Physical Review journal]
+\end{enumerate}
 </scratchpad>
-Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research
-It should use professional latex format, such as ``name'' for double quotes, and ``\\``for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. Use the following format:
+Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research.
+
+The cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\`` at the end of each paragraph for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. Use the following format:
 
 <cover_letter>
-\documentclass[a4paper,12pt]{article}
+\documentclass[a4paper,12pt]{letter}
 \usepackage{fullpage}
 \setlength{\parindent}{0em}
 
+\signature{The names of the authors}
+\address{The address of the authors}
+
 \begin{document}
 
-Dear Editor,
-\vspace{3em}
+\begin{letter}{Editor}
+
+\opening{Dear Editor,}
 
 {COVER_LETTER_CONTENT}
 
-\vspace{3em}
-Yours sincerely,
+\closing{Yours sincerely,}
+
 \vspace{1.5em}
 
-{AUTHOR_NAMES}
+\end{letter}
 
 \end{document}
 </cover_letter>
@@ -86,45 +93,63 @@ Let's critically reflect on the cover letter we've written. Consider these point
 
 <scratchpad>
 <reflection>
-1. Does the cover letter effectively highlight the key findings and significance of the research?
-2. Is the explanation of why the paper is suitable for the chosen Physical Review journal clear and compelling?
-3. Is the tone appropriately formal and professional for academic correspondence?
-4. Are all necessary components (paper title, authors) included?
-5. Is the letter condensed and focused yet with sufficient detail?
-6. Are there any areas where the letter could be more persuasive?
+\begin{enumerate}
+    \item Does the cover letter effectively highlight the key findings and significance of the research?
+    \item Is the explanation of why the paper is suitable for the chosen Physical Review journal clear and compelling?
+    \item Is the tone appropriately formal and professional for academic correspondence?
+    \item Are all necessary components (paper title, authors) included?
+    \item Is the letter dense and focused yet with sufficient detail?
+    \item Are there any areas where the letter could be more persuasive?
+\end{enumerate}
 </reflection>
 <improvements>
-1. [Potential improvement 1]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-2. [Potential improvement 2]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-3. [Potential improvement 3]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+\begin{enumerate}
+    \item [Potential improvement 1]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Potential improvement 2]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Potential improvement 3]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+\end{enumerate}
 </improvements>
 </scratchpad>
 
-Then, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. Use the following latex format:
+Then, based on the first version of the cover letter, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. 
+
+Again, the cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\``for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. 
+
+Use the following latex format:
 
 <cover_letter>
-\documentclass[a4paper,12pt]{article}
+\documentclass[a4paper,12pt]{letter}
 \usepackage{fullpage}
 \setlength{\parindent}{0em}
 
+\signature{The names of the authors}
+\address{The address of the authors}
+
 \begin{document}
 
-Dear Editor,
-\vspace{3em}
+\begin{letter}{Editor}
+
+\opening{Dear Editor,}
 
 {IMPROVED_COVER_LETTER_CONTENT}
 
-\vspace{3em}
-Yours sincerely,
+\closing{Yours sincerely,}
+
 \vspace{1.5em}
 
-{AUTHOR_NAMES}
+\end{letter}
 
 \end{document}
 </cover_letter>

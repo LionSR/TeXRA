@@ -38,16 +38,18 @@ Please carefully review the provided research paper before creating the presenta
 Your task is to create a professional LaTeX Beamer presentation for a physics audience.
 
 When creating the presentation, please follow these guidelines:
-1. Use LaTeX Beamer syntax and commands correctly.
-2. Structure the presentation with a clear introduction, body, and conclusion.
-3. Include 10-15 slides, covering the main points of the paper.
-4. Use appropriate equations, figures, and tables from the original paper.
-5. Write condensed bullet points to convey information effectively.
-6. Maintain a professional and scientifically rigorous tone throughout the presentation.
-7. Use appropriate physics notation and terminology consistently.
-8. Prioritize visual representations and key takeaways over verbose descriptions.
-9. Include slide numbers for easy reference.
-10. End with a conclusion slide summarizing the main findings and potential future work.
+\begin{enumerate}
+    \item Use LaTeX Beamer syntax and commands correctly.
+    \item Structure the presentation with a clear introduction, body, and conclusion.
+    \item Include 10-15 slides, covering the main points of the paper.
+    \item Use appropriate equations, figures, and tables from the original paper.
+    \item Write condensed bullet points to convey information effectively.
+    \item Maintain a professional and scientifically rigorous tone throughout the presentation.
+    \item Use appropriate physics notation and terminology consistently.
+    \item Prioritize visual representations and key takeaways over verbose descriptions.
+    \item Include slide numbers for easy reference.
+    \item End with a conclusion slide summarizing the main findings and potential future work.
+\end{enumerate}
 
 Additonally, if provided, focus on the following specific instruction:
 <instruction>

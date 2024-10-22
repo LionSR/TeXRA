@@ -57,30 +57,42 @@ Additionally, if provided, focus on the following specific instruction:
 Based on the research paper and the drafted referee report provided, please revise and improve the referee report for Nature Commucanition. In the scratchpad below, outline the key points you plan to address in your revised report, focusing on areas that need more critical analysis, elaboration, or specific examples.
 
 <scratchpad>
-1. [Aspect of the report to improve]
-   - Current state: [Brief description of how this aspect is addressed in the draft]
-   - Proposed improvement: [Specific changes or additions to enhance this aspect]
-   - Rationale: [Why this improvement is necessary]
-
-2. [Another aspect to improve]
-   - Current state: [Brief description]
-   - Proposed improvement: [Specific changes or additions]
-   - Rationale: [Justification for the improvement]
-
-3. [Additional aspect to improve]
-   - Current state: [Brief description]
-   - Proposed improvement: [Specific changes or additions]
-   - Rationale: [Justification for the improvement]
-
-4. [Overall structure and flow]
-   - Current state: [Brief assessment of the draft's structure]
-   - Proposed improvement: [Suggestions for better organization or flow]
-   - Rationale: [How this will enhance the report's effectiveness]
-
-5. [Critical analysis and specificity]
-   - Current state: [Assessment of the draft's level of critical analysis]
-   - Proposed improvement: [Ways to increase critical analysis and specificity]
-   - Rationale: [Importance of detailed, critical feedback]
+\begin{enumerate}
+    \item [Aspect of the report to improve]
+        \begin{itemize}
+            \item Current state: [Brief description of how this aspect is addressed in the draft]
+            \item Proposed improvement: [Specific changes or additions to enhance this aspect]
+            \item Rationale: [Why this improvement is necessary]
+        \end{itemize}
+    
+    \item [Another aspect to improve]
+        \begin{itemize}
+            \item Current state: [Brief description]
+            \item Proposed improvement: [Specific changes or additions]
+            \item Rationale: [Justification for the improvement]
+        \end{itemize}
+    
+    \item [Additional aspect to improve]
+        \begin{itemize}
+            \item Current state: [Brief description]
+            \item Proposed improvement: [Specific changes or additions]
+            \item Rationale: [Justification for the improvement]
+        \end{itemize}
+    
+    \item [Overall structure and flow]
+        \begin{itemize}
+            \item Current state: [Brief assessment of the draft's structure]
+            \item Proposed improvement: [Suggestions for better organization or flow]
+            \item Rationale: [How this will enhance the report's effectiveness]
+        \end{itemize}
+    
+    \item [Critical analysis and specificity]
+        \begin{itemize}
+            \item Current state: [Assessment of the draft's level of critical analysis]
+            \item Proposed improvement: [Ways to increase critical analysis and specificity]
+            \item Rationale: [Importance of detailed, critical feedback]
+        \end{itemize}
+\end{enumerate}
 </scratchpad>
 
 Then, please write the revised referee report, incorporating the improvements outlined in the scratchpad. The report should be more critical, detailed, and provide a thorough evaluation of the paper. Use a similar format in the provided draft report and output the revised referee report in LaTeX format in <revised_referee_report></revised_referee_report> tag.
@@ -96,25 +108,35 @@ Let's critically reflect on the revised referee report we've written. Consider t
 
 <scratchpad>
 <reflection>
-1. Have we significantly improved the critical analysis compared to the original draft?
-2. Are our evaluations of the paper's strengths and weaknesses more specific and well-supported?
-3. Have we provided more detailed, actionable feedback for the authors?
-4. Is the report more thorough in its assessment of novelty, importance, technical aspects, and presentation quality?
-5. Have we maintained a professional tone while being appropriately critical?
-6. Is the report sufficiently detailed without becoming overly verbose?
-7. Does the overall recommendation align well with the more detailed criticisms and evaluation provided?
-8. Have we adequately addressed all aspects requested by PRX Quantum (novelty, importance, technical aspects, quality of presentation)?
+\begin{enumerate}
+    \item Have we significantly improved the critical analysis compared to the original draft?
+    \item Are our evaluations of the paper's strengths and weaknesses more specific and well-supported?
+    \item Have we provided more detailed, actionable feedback for the authors?
+    \item Is the report more thorough in its assessment of novelty, importance, technical aspects, and presentation quality?
+    \item Have we maintained a professional tone while being appropriately critical?
+    \item Is the report sufficiently detailed without becoming overly verbose?
+    \item Does the overall recommendation align well with the more detailed criticisms and evaluation provided?
+    \item Have we adequately addressed all aspects requested by PRX Quantum (novelty, importance, technical aspects, quality of presentation)?
+\end{enumerate}
 </reflection>
 <improvements>
-1. [Potential further improvement 1]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-2. [Potential further improvement 2]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-3. [Potential further improvement 3]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
+\begin{enumerate}
+    \item [Potential further improvement 1]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Potential further improvement 2]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Potential further improvement 3]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+\end{enumerate}
 </improvements>
 </scratchpad>
 
