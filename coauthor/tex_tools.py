@@ -154,8 +154,9 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
         cprint("WARNING: input_file is None or empty", "yellow")
         return None
 
-    if agent is not None and "draw" in agent:
-        return None
+    if agent is not None:
+        if "draw" in agent:
+            return None
 
     if run_indent:
         if not run_latexindent(input_file) or not run_latexindent(output_file):
