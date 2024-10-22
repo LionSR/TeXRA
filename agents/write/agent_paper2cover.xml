@@ -55,10 +55,28 @@ Based on the research paper provided, please write a compelling cover letter for
 3. [Key point 3 to highlight in the cover letter]
 4. [Explanation of why the paper is suitable for the chosen Physical Review journal]
 </scratchpad>
-Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research. Use the following format:
+Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research
+It should use professional latex format, such as ``name'' for double quotes, and ``\\``for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. Use the following format:
 
 <cover_letter>
+\documentclass[a4paper,12pt]{article}
+\usepackage{fullpage}
+\setlength{\parindent}{0em}
+
+\begin{document}
+
+Dear Editor,
+\vspace{3em}
+
 {COVER_LETTER_CONTENT}
+
+\vspace{3em}
+Yours sincerely,
+\vspace{1.5em}
+
+{AUTHOR_NAMES}
+
+\end{document}
 </cover_letter>
 ]]>
 </user_request>
@@ -71,9 +89,9 @@ Let's critically reflect on the cover letter we've written. Consider these point
 1. Does the cover letter effectively highlight the key findings and significance of the research?
 2. Is the explanation of why the paper is suitable for the chosen Physical Review journal clear and compelling?
 3. Is the tone appropriately formal and professional for academic correspondence?
-4. Are all necessary components (paper title, authors, contact information) included?
-5. Is the letter condensed and focused, typically not exceeding one page?
-6. Are there any areas where the letter could be more persuasive or impactful?
+4. Are all necessary components (paper title, authors) included?
+5. Is the letter condensed and focused yet with sufficient detail?
+6. Are there any areas where the letter could be more persuasive?
 </reflection>
 <improvements>
 1. [Potential improvement 1]
@@ -88,10 +106,27 @@ Let's critically reflect on the cover letter we've written. Consider these point
 </improvements>
 </scratchpad>
 
-Then, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. Use the following format:
+Then, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. Use the following latex format:
 
 <cover_letter>
+\documentclass[a4paper,12pt]{article}
+\usepackage{fullpage}
+\setlength{\parindent}{0em}
+
+\begin{document}
+
+Dear Editor,
+\vspace{3em}
+
 {IMPROVED_COVER_LETTER_CONTENT}
+
+\vspace{3em}
+Yours sincerely,
+\vspace{1.5em}
+
+{AUTHOR_NAMES}
+
+\end{document}
 </cover_letter>
 ]]>
 </user_reflect>
