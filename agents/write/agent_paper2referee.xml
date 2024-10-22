@@ -107,16 +107,24 @@ Consider these points and brainstorm potential improvements in the scratchpad be
 - Have we adequately addressed all aspects requested by PRX Quantum (novelty, importance, technical aspects, quality of presentation)?
 </reflection>
 <improvements>
-1. [Potential improvement 1]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-2. [Potential improvement 2]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-3. [Potential improvement 3]
-    - Rationale: [Brief explanation]
-    - Implementation: [Concrete steps]
-...
+\begin{enumerate}
+    \item [Potential improvement 1]
+        \begin{itemize}
+            \item \textbf{Rationale:} [Brief explanation]
+            \item \textbf{Implementation:} [Concrete steps]
+        \end{itemize}
+    \item [Potential improvement 2]
+        \begin{itemize}
+            \item \textbf{Rationale:} [Brief explanation]
+            \item \textbf{Implementation:} [Concrete steps]
+        \end{itemize}
+    \item [Potential improvement 3]
+        \begin{itemize}
+            \item \textbf{Rationale:} [Brief explanation]
+            \item \textbf{Implementation:} [Concrete steps]
+        \end{itemize}
+    \item[\ldots]
+\end{enumerate}
 </improvements>
 </scratchpad>
 
