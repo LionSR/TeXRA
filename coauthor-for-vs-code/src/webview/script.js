@@ -71,7 +71,10 @@ function updateMultipleFileSelect(selectId, toggleIconId, files) {
     if (containerDiv) {
       containerDiv.style.display = 'block';
     }
-    vscode.postMessage({ command: 'showInformationMessage', text: `Added ${newFiles.length} file(s) to ${selectId}` });
+    vscode.postMessage({ 
+      command: 'showInformationMessage', 
+      text: `Added ${newFiles.length} file(s) to ${selectId}`
+    });
   }
   saveState();
 }
@@ -355,7 +358,10 @@ window.addEventListener('message', event => {
         // Trigger change event to update related fields
         fileSelect.dispatchEvent(new Event('change'));
       } else {
-        vscode.window.showInformationMessage(`The current file is not in the ${message.fileType} file list: ${message.filePath}`);
+        vscode.postMessage({ 
+          command: 'showInformationMessage', 
+          text: `The current file is not in the ${message.fileType} file list: ${message.filePath}`
+        });
       }
       break;
     case 'setTheme':
@@ -787,7 +793,10 @@ document.addEventListener('DOMContentLoaded', function () {
         baseFile: baseFile
       });
     } else {
-      vscode.window.showInformationMessage('Please select a base file first.');
+      vscode.postMessage({ 
+        command: 'showInformationMessage', 
+        text: 'Please select a base file first.'
+      });
     }
   });
 
