@@ -71,8 +71,8 @@ function updateMultipleFileSelect(selectId, toggleIconId, files) {
     if (containerDiv) {
       containerDiv.style.display = 'block';
     }
-    vscode.postMessage({ 
-      command: 'showInformationMessage', 
+    vscode.postMessage({
+      command: 'showInformationMessage',
       text: `Added ${newFiles.length} file(s) to ${selectId}`
     });
   }
@@ -358,8 +358,8 @@ window.addEventListener('message', event => {
         // Trigger change event to update related fields
         fileSelect.dispatchEvent(new Event('change'));
       } else {
-        vscode.postMessage({ 
-          command: 'showInformationMessage', 
+        vscode.postMessage({
+          command: 'showInformationMessage',
           text: `The current file is not in the ${message.fileType} file list: ${message.filePath}`
         });
       }
@@ -564,6 +564,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
+
     vscode.postMessage({
       command: 'packSingle',
       inputFile: inputFile,
@@ -572,6 +573,11 @@ document.addEventListener('DOMContentLoaded', function () {
       model: model,
       outputNameOverride: outputNameOverride
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Packing single file: ${inputFile}`
+    });
   });
   document.getElementById('cleanSingleButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
@@ -579,6 +585,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const reflect = document.getElementById('reflectSelect').value;
     const model = document.getElementById('modelSelect').value;
     const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
+
     vscode.postMessage({
       command: 'cleanSingle',
       inputFile: inputFile,
@@ -587,33 +594,51 @@ document.addEventListener('DOMContentLoaded', function () {
       model: model,
       outputNameOverride: outputNameOverride
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Cleaning single file: ${inputFile}`
+    });
   });
   document.getElementById('latexDiffButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const baseFile = document.getElementById('baseFileSelect').value;
     const editedFile = document.getElementById('editedFileSelect').value;
+
     vscode.postMessage({
       command: 'latexDiff',
       inputFile: inputFile,
       baseFile: baseFile,
       editedFile: editedFile
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Running LaTeX diff between ${baseFile} and ${editedFile}`
+    });
   });
   document.getElementById('latexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
+
     vscode.postMessage({
       command: 'latexDiffVC',
       inputFile: inputFile,
       baseFile: baseFile,
       commitHash: commitHash
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`
+    });
   });
   document.getElementById('packLatexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
+
     vscode.postMessage({
       command: 'packLatexDiffVC',
       inputFile: inputFile,
@@ -621,17 +646,28 @@ document.addEventListener('DOMContentLoaded', function () {
       commitHash: commitHash,
       clean: false
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Packing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`
+    });
   });
   document.getElementById('cleanLatexDiffVCButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const baseFile = document.getElementById('baseFileSelect').value;
     const commitHash = document.getElementById('commitSelect').value;
+
     vscode.postMessage({
       command: 'cleanLatexDiffVC',
       inputFile: inputFile,
       baseFile: baseFile,
       commitHash: commitHash,
       clean: true
+    });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Cleaning LaTeX diff with version control: ${baseFile} at commit ${commitHash}`
     });
   });
   document.getElementById('currentBaseFileButton').addEventListener('click', function () {
@@ -653,10 +689,16 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('mergeButton').addEventListener('click', function () {
     const inputFile = document.getElementById('inputFileSelect').value;
     const editedFile = document.getElementById('editedFileSelect').value;
+
     vscode.postMessage({
       command: 'merge',
       inputFile: inputFile,
       editedFile: editedFile
+    });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Merging files: ${inputFile} and ${editedFile}`
     });
   });
 
@@ -709,6 +751,11 @@ document.addEventListener('DOMContentLoaded', function () {
       outputNameOverride: outputNameOverrideValue,
       outputFiles: outputFiles
     });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Packing multiple files: ${[inputFile, ...additionalInputFiles].join(', ')}`
+    });
   });
 
   document.getElementById('cleanMultipleButton').addEventListener('click', function () {
@@ -732,6 +779,11 @@ document.addEventListener('DOMContentLoaded', function () {
       model: model,
       outputNameOverride: outputNameOverrideValue,
       outputFiles: outputFiles
+    });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Cleaning multiple files: ${[inputFile, ...additionalInputFiles].join(', ')}`
     });
   });
 
@@ -793,8 +845,8 @@ document.addEventListener('DOMContentLoaded', function () {
         baseFile: baseFile
       });
     } else {
-      vscode.postMessage({ 
-        command: 'showInformationMessage', 
+      vscode.postMessage({
+        command: 'showInformationMessage',
         text: 'Please select a base file first.'
       });
     }
