@@ -21,6 +21,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async message => {
       switch (message.command) {
+        case 'showInformationMessage':
+          vscode.window.showInformationMessage(message.text);
+          break;
         case 'cleanOutput':
           vscode.commands.executeCommand('coauthor.cleanOutput');
           break;
