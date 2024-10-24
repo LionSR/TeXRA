@@ -5,8 +5,15 @@ import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
 import { getWorkspacePath, getRelativePath } from './utils/commonUtils';
 
+let outputChannel: vscode.OutputChannel;
+
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
-  constructor(private readonly context: vscode.ExtensionContext) { }
+  constructor(private readonly context: vscode.ExtensionContext) {
+    // Initialize output channel if it doesn't exist
+    if (!outputChannel) {
+      outputChannel = vscode.window.createOutputChannel('Coauthor');
+    }
+  }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = {
@@ -23,6 +30,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       switch (message.command) {
         case 'showInformationMessage':
           vscode.window.showInformationMessage(message.text);
+          outputChannel.appendLine(message.text);
           break;
         case 'cleanOutput':
           vscode.commands.executeCommand('coauthor.cleanOutput');
