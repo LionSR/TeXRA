@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 model_mapping = {
+    "sonnet++": "claude-3-5-sonnet-20241022",
     "sonnet+": "claude-3-5-sonnet-20240620",
     "opus": "claude-3-opus-20240229",
     "sonnet": "claude-3-sonnet-20240229",
@@ -21,11 +22,13 @@ model_mapping = {
 
 anthropic_models = {
     "claude-3-5-sonnet",
+    "claude-3-5-sonnet-latest",
     "claude-3-haiku",
     "claude-3-sonnet",
     "claude-3-opus",
     "claude-3-sonnet-20240229",
     "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022",
     "claude-3-opus-20240229",
     "claude-3-haiku-20240307",
     "sonnet+",
@@ -120,6 +123,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
     prices = {
         "sonnet": (3, 15),
         "sonnet+": (3, 15),
+        "sonnet++": (3, 15),
         "opus": (15, 75),
         "haiku": (0.25, 1.25),
         "gpt4t": (10, 30),

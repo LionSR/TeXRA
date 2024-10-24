@@ -104,7 +104,7 @@ In your conversion, focus on the following:
 - Do not modify, condense, or expand the original content; focus on accurate conversion to LaTeX
 </requirements>
 
-Please output the full LaTeX source, enclosed in the <latex_document></latex_document> tag:
+Please output the full LaTeX source, enclosed in the ``<latex_document>'' tag:
 
 <latex_document>
 % Your LaTeX source here

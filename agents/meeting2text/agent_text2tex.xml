@@ -83,7 +83,7 @@ where $X$ is the variable and $Y$ is the variable. [YOU MUST USE the align and o
 \end{document}
 </latex_template>
 
-Output the LaTeX document inside the <latex_document></latex_document> tags. 
+Output the LaTeX document inside the ``<latex_document>'' tags. 
 ]]>
 </user_request>
 <user_reflect>
@@ -104,7 +104,7 @@ Please output the revised LaTeX document that meets the above requirements and i
 
 ... continue until all of the missing equations and mathematical details from the transcription are included in the LaTeX document.
 </scratchpad>
-and output the LaTeX document inside the <latex_document></latex_document> tags. 
+and output the LaTeX document inside the ``<latex_document>'' tags. 
 ]]>
 </user_reflect>
 </prompts>

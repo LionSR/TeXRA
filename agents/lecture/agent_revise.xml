@@ -113,7 +113,7 @@ Consider these points and brainstorm additional targeted improvements in the scr
 </idea>
 </scratchpad>
 
-Then, following your plan in the above scratchpad, output a further enhanced and complete version of the LaTeX document in the <latex_document></latex_document> tag.
+Then, following your plan in the above scratchpad, output a further enhanced and complete version of the LaTeX document in the ``<latex_document>'' tag.
 Remember to stay laser-focused on the specific instruction provided or the additional plan in the above scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the above scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>
