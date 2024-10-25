@@ -56,6 +56,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
                 "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
                 "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
                 "</latex_document>\n```\n</latex_document>": "</latex_document>\n",
+                "</latex_document>\n</latex_document>": "</latex_document>\n",
                 r"\end{scratchpad>": "</scratchpad>",
                 "\\end{latex_document>\n</latex_document>": "</latex_document>",
             }
