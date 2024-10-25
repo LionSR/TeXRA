@@ -14,6 +14,7 @@ def get_common_argparser():
         default="sonnet+",
         help="Model name to use for processing.",
         choices=[
+            "sonnet++",
             "sonnet+",
             "opus",
             "sonnet",

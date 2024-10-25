@@ -26,7 +26,7 @@ TEMP_EXTENSIONS = [
     ".toc",
     "-blx.bib",
 ]
-MODELS = ["opus", "sonnet", "sonnet+", "haiku", "gpto1", "gpto1-", "gpt4ol", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
+MODELS = ["opus", "sonnet", "sonnet+", "sonnet++", "haiku", "gpto1", "gpto1-", "gpt4ol", "gpt4t", "gpt4o", "gpt4o-", "gemini1p+OR", "gemini1f+OR", "llama3+OR"]
 
 
 def get_agent_first_name_chunk(agent):
