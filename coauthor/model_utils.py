@@ -31,6 +31,7 @@ anthropic_models = {
     "claude-3-5-sonnet-20241022",
     "claude-3-opus-20240229",
     "claude-3-haiku-20240307",
+    "sonnet++",
     "sonnet+",
     "opus",
     "sonnet",
@@ -137,7 +138,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
     }
-    models_with_prompt_caching_support = ["sonnet+", "haiku", "opus"]
+    models_with_prompt_caching_support = ["sonnet++", "sonnet+", "haiku", "opus"]
 
     prompt_cache_creation_prices = {
         model: tuple(rate * 1.25 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support
