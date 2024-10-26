@@ -14,7 +14,7 @@
 <![CDATA[
 Act as an expert LaTeX typesetter and a physics professor tasked with converting plain text content (generated from the pdf version of the content) into LaTeX format. Your goal is to accurately generate a new LaTeX file based on the provided text content while maintaining consistency with the given style and formatting guidelines.
 
-When writing a professional *.tex LaTeX document, you must:
+When writing a professional *.tex \LaTeX{} document, you must:
 - Use \begin{align} and \end{align} for equations. Label all displayed equations using meaningful yet condensed words, such as \label{eq:lang_dyn}.
 - Include inline math equations using $...$
 - Ensure all content is accurately captured, including text, formulas, and any figures/diagrams

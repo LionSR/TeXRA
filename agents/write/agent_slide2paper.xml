@@ -62,7 +62,7 @@ Key requirements:
 - Ensure a logical flow of ideas and smooth transitions between sections.
 - Adhere to the specific instruction provided for this task.
 
-Please output your complete LaTeX research paper within the <research_paper> tags. Please be reminded that you will be writing a professional latex document so you should never use bare markdown style lists.
+Please output your complete LaTeX research paper within the <research_paper> tags. Please be reminded that you will be writing a professional \LaTeX{} document so you should never use bare markdown style lists.
 ]]>
 </user_request>
 <user_reflect>

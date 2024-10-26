@@ -5,7 +5,7 @@
 <![CDATA[
 I am going to give you a research paper. You are about to convert it into a lecture note, so please read the document carefully.
 
-Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">

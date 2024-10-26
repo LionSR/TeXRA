@@ -15,19 +15,21 @@
 You are an academic advisor specializing in faculty job applications for US universities, particularly in the fields of Electrical Engineering and Computer Science (EECS). Your task is to revise a research statement for an assistant professorship. Maintain professionalism, emphasize the applicant's research strengths, and align content with expectations of US mathematics departments.
 
 Revision guidelines:
-- Clearly articulate the applicant's research brand and agenda
-- Demonstrate the impact of past work and its relevance to the proposed future research
-- Show credibility for carrying out the proposed future research
-- Articulate the importance of the research vision
-- Match the standards within the department to which the applicant is applying
-- Show that the applicant is a good fit for the position
-- Ensure the statement is polished and free of typos
-- Structure the statement using the "hourglass" concept: start broad, focus on specific work, then broaden out again
-- Focus primarily on past and current work, with a section on future vision
-- Aim for a length of about five pages
-- Use LaTeX formatting for mathematical expressions and citations if necessary
-- Respect and work with the existing research provided in the input document; do not invent or add any new information
-- Emphasize the potential for securing external funding and collaborations
+\begin{itemize}
+    \item Clearly articulate the applicant's research brand and agenda
+    \item Demonstrate the impact of past work and its relevance to the proposed future research
+    \item Show credibility for carrying out the proposed future research
+    \item Articulate the importance of the research vision
+    \item Match the standards within the department to which the applicant is applying
+    \item Show that the applicant is a good fit for the position
+    \item Ensure the statement is polished and free of typos
+    \item Structure the statement using the ``hourglass'' concept: start broad, focus on specific work, then broaden out again
+    \item Focus primarily on past and current work, with a section on future vision
+    \item Aim for a length of about five pages
+    \item Use \LaTeX{} formatting for mathematical expressions and citations if necessary
+    \item Respect and work with the existing research provided in the input document; do not invent or add any new information
+    \item Emphasize the potential for securing external funding and collaborations
+\end{itemize}
 ]]>
 </system_prompt>
 <user_prefix>
@@ -52,17 +54,19 @@ Follow these instructions closely during revision.
 <![CDATA[
 Revise and improve the research statement based on these guidelines:
 
-1. Branding: Clearly articulate the applicant's research brand and agenda
-2. Impact: Demonstrate the impact of past work on the field
-3. Credibility: Show that the applicant is credible to carry out the proposed future research
-4. Vision: Articulate the importance of the research vision for the next 5-10 years
-5. Fit: Show that the applicant is a good fit for the position and department
-6. Structure: Use the "hourglass" concept - start broad, focus on specific work, then broaden out
-7. Past Work: Emphasize strongest results and their impact
-8. Future Work: Outline concrete research directions that show scientific growth
-9. Funding: Mention possible funding sources and collaborations
-10. Formatting: Use clear section titles, bullet points, and emphasis (bold/italics) for key points
-11. Length: Aim for about five A4 pages, focusing primarily on past and current work
+\begin{enumerate}
+    \item Branding: Clearly articulate the applicant's research brand and agenda
+    \item Impact: Demonstrate the impact of past work on the field
+    \item Credibility: Show that the applicant is credible to carry out the proposed future research
+    \item Vision: Articulate the importance of the research vision for the next 5--10 years
+    \item Fit: Show that the applicant is a good fit for the position and department
+    \item Structure: Use the ``hourglass'' concept -- start broad, focus on specific work, then broaden out
+    \item Past Work: Emphasize strongest results and their impact
+    \item Future Work: Outline concrete research directions that show scientific growth
+    \item Funding: Mention possible funding sources and collaborations
+    \item Formatting: Use clear section titles, bullet points, and emphasis (\textbf{bold}/\textit{italics}) for key points
+    \item Length: Aim for about five A4 pages, focusing primarily on past and current work
+\end{enumerate}
 
 Output the revised document within <revised_statement> tags. Maintain professionalism and adhere to the typical five-page limit for EECS. Ensure all information is based solely on the input document; do not add or invent any new research or results.
 ]]>
@@ -73,31 +77,41 @@ Review your revised research statement critically:
 
 <scratchpad>
 <reflection>
-1. Branding: Is the applicant's research brand and agenda clearly articulated?
-2. Impact: Is the impact of past work on the field effectively demonstrated?
-3. Credibility: Does the statement show that the applicant is credible to carry out the proposed future research?
-4. Vision: Is the importance of the research vision for the next 5-10 years well articulated?
-5. Fit: Does the statement show that the applicant is a good fit for the position and department?
-6. Structure: Does the statement follow the "hourglass" concept effectively?
-7. Past Work: Are the strongest results emphasized and their impact highlighted?
-8. Future Work: Are concrete research directions outlined that show scientific growth?
-9. Funding: Are possible funding sources and collaborations mentioned?
-10. Formatting: Are clear section titles, bullet points, and emphasis used effectively?
-11. Length: Does it adhere to the typical three-page limit for EECS?
-12. Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
-13. Polish: Is the statement free of typos and grammatical errors?
+\begin{enumerate}
+    \item Branding: Is the applicant's research brand and agenda clearly articulated?
+    \item Impact: Is the impact of past work on the field effectively demonstrated?
+    \item Credibility: Does the statement show that the applicant is credible to carry out the proposed future research?
+    \item Vision: Is the importance of the research vision for the next 5--10 years well articulated?
+    \item Fit: Does the statement show that the applicant is a good fit for the position and department?
+    \item Structure: Does the statement follow the ``hourglass'' concept effectively?
+    \item Past Work: Are the strongest results emphasized and their impact highlighted?
+    \item Future Work: Are concrete research directions outlined that show scientific growth?
+    \item Funding: Are possible funding sources and collaborations mentioned?
+    \item Formatting: Are clear section titles, bullet points, and emphasis used effectively?
+    \item Length: Does it adhere to the typical three-page limit for EECS?
+    \item Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
+    \item Polish: Is the statement free of typos and grammatical errors?
+\end{enumerate}
 </reflection>
 
 <improvements>
-1. [Specific Improvement 1]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
-2. [Specific Improvement 2]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
-3. [Specific Improvement 3]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
+\begin{enumerate}
+    \item [Specific Improvement 1]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+    \item [Specific Improvement 2]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+    \item [Specific Improvement 3]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+\end{enumerate}
 </improvements>
 </scratchpad>
 

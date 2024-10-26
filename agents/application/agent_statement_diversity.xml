@@ -53,16 +53,18 @@ Follow these instructions closely during revision.
 <![CDATA[
 Revise and improve the diversity statement based on these guidelines:
 
-1. Perspective: Clearly articulate the applicant's understanding of DEI in higher education
-2. Experiences: Highlight concrete examples of DEI work or personal experiences from the input document
-3. Research: If applicable, describe how the applicant's research contributes to DEI
-4. Teaching: Discuss inclusive teaching practices or experiences with diverse student groups
-5. Service: Highlight any DEI-related service or outreach activities mentioned in the original statement
-6. Future Plans: Outline specific ways the applicant plans to advance DEI as a faculty member
-7. Relevance: Tailor content to the specific institution's DEI efforts and policies
-8. Impact: Emphasize the applicant's potential contributions to the institution's DEI mission
-9. Structure: Maintain a logical flow (perspective, experiences, future plans)
-10. Length: Ensure the statement is concise, typically around one page
+\begin{enumerate}
+    \item Perspective: Clearly articulate the applicant's understanding of DEI in higher education
+    \item Experiences: Highlight concrete examples of DEI work or personal experiences from the input document
+    \item Research: If applicable, describe how the applicant's research contributes to DEI
+    \item Teaching: Discuss inclusive teaching practices or experiences with diverse student groups
+    \item Service: Highlight any DEI-related service or outreach activities mentioned in the original statement
+    \item Future Plans: Outline specific ways the applicant plans to advance DEI as a faculty member
+    \item Relevance: Tailor content to the specific institution's DEI efforts and policies
+    \item Impact: Emphasize the applicant's potential contributions to the institution's DEI mission
+    \item Structure: Maintain a logical flow (perspective, experiences, future plans)
+    \item Length: Ensure the statement is concise, typically around one page
+\end{enumerate}
 
 Output the revised document within <revised_statement> tags. Maintain professionalism and adhere to the typical one-page limit. Ensure all information is based solely on the input document; do not add or invent any new experiences or details.
 ]]>
@@ -73,29 +75,39 @@ Review your revised diversity statement critically:
 
 <scratchpad>
 <reflection>
-1. Perspective: Is the applicant's understanding of DEI in higher education clearly articulated?
-2. Experiences: Are concrete examples of DEI work or personal experiences from the input document effectively presented?
-3. Research: If applicable, is the DEI aspect of the applicant's research clearly described?
-4. Teaching: Are inclusive teaching practices or experiences with diverse students highlighted?
-5. Service: Are DEI-related service or outreach activities from the original statement included?
-6. Future Plans: Are specific plans to advance DEI as a faculty member outlined?
-7. Relevance: Is the content tailored to the specific institution's DEI efforts and policies?
-8. Impact: Is the applicant's potential contribution to the institution's DEI mission emphasized?
-9. Structure: Is there a logical flow from perspective to experiences to future plans?
-10. Length: Does it adhere to the typical one-page limit?
-11. Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
+\begin{enumerate}
+    \item Perspective: Is the applicant's understanding of DEI in higher education clearly articulated?
+    \item Experiences: Are concrete examples of DEI work or personal experiences from the input document effectively presented?
+    \item Research: If applicable, is the DEI aspect of the applicant's research clearly described?
+    \item Teaching: Are inclusive teaching practices or experiences with diverse students highlighted?
+    \item Service: Are DEI-related service or outreach activities from the original statement included?
+    \item Future Plans: Are specific plans to advance DEI as a faculty member outlined?
+    \item Relevance: Is the content tailored to the specific institution's DEI efforts and policies?
+    \item Impact: Is the applicant's potential contribution to the institution's DEI mission emphasized?
+    \item Structure: Is there a logical flow from perspective to experiences to future plans?
+    \item Length: Does it adhere to the typical one-page limit?
+    \item Accuracy: Does the revised statement contain only information present in the original document, without any new or invented details?
+\end{enumerate}
 </reflection>
 
 <improvements>
-1. [Specific Improvement 1]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
-2. [Specific Improvement 2]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
-3. [Specific Improvement 3]
-    - Rationale: [Brief explanation based on original content]
-    - Implementation: [Concrete steps using only existing information]
+\begin{enumerate}
+    \item [Specific Improvement 1]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+    \item [Specific Improvement 2]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+    \item [Specific Improvement 3]
+        \begin{itemize}
+            \item Rationale: [Brief explanation based on original content]
+            \item Implementation: [Concrete steps using only existing information]
+        \end{itemize}
+\end{enumerate}
 </improvements>
 </scratchpad>
 
