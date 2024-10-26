@@ -110,18 +110,18 @@ Consider these points and brainstorm potential improvements in the scratchpad be
 \begin{enumerate}
     \item [Potential improvement 1]
         \begin{itemize}
-            \item \textbf{Rationale:} [Brief explanation]
-            \item \textbf{Implementation:} [Concrete steps]
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
         \end{itemize}
     \item [Potential improvement 2]
         \begin{itemize}
-            \item \textbf{Rationale:} [Brief explanation]
-            \item \textbf{Implementation:} [Concrete steps]
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
         \end{itemize}
     \item [Potential improvement 3]
         \begin{itemize}
-            \item \textbf{Rationale:} [Brief explanation]
-            \item \textbf{Implementation:} [Concrete steps]
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
         \end{itemize}
     \item[\ldots]
 \end{enumerate}
