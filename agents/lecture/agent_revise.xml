@@ -12,7 +12,7 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-When writing a professional *.tex LaTeX document, you must:
+When writing a professional *.tex \LaTeX{} document, you must:
 \begin{itemize}
 	\item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations in both scratchpad and final output. 
 	\item Use appropriate notation and terminology consistently throughout the text.
@@ -27,9 +27,9 @@ When writing a professional *.tex LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given a LaTeX document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
+You will be given a \LaTeX{} document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
 
-Here is the LaTeX document with additional LaTeX document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -77,7 +77,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
 \end{enumerate}
 </scratchpad>
 
-Then, following your plan in the scratchpad, output an updated version of the LaTeX document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
+Then, following your plan in the scratchpad, output an updated version of the \LaTeX{} document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -91,8 +91,8 @@ Consider these points and brainstorm additional targeted improvements in the scr
 <scratchpad>
 <reflection>
 1. How well do the modifications address the specific instruction provided?
-2. Are the enhancements clear and effective in improving the quality of the latex document?
-3. Do the changes maintain the overall structure and coherence of the original latex document?
+2. Are the enhancements clear and effective in improving the quality of the \LaTeX{} document?
+3. Do the changes maintain the overall structure and coherence of the original \LaTeX{} document?
 4. Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised text more condensed and getting rid of fluffy by reflecting on them? Equations and mathematical reasoning are welcome and exempted from this.
 5. Is any mathematical reasoning and derivations from the original versions now missing in the new versions?
 6. Are all notations and quantities properly defined before use?
@@ -113,7 +113,7 @@ Consider these points and brainstorm additional targeted improvements in the scr
 </idea>
 </scratchpad>
 
-Then, following your plan in the above scratchpad, output a further enhanced and complete version of the LaTeX document in the ``<latex_document>'' tag.
+Then, following your plan in the above scratchpad, output a further enhanced and complete version of the \LaTeX{} document in the ``<latex_document>'' tag.
 Remember to stay laser-focused on the specific instruction provided or the additional plan in the above scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the above scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>

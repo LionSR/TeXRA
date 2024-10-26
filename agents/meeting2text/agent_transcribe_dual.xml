@@ -45,12 +45,12 @@ Create a highly accurate transcription by synergizing the Whisper and Otter.ai t
 1. Use the Whisper transcript as the primary source for content accuracy.
 2. Incorporate speaker identification from the Otter.ai transcript.
 3. When there are discrepancies, prefer the Whisper version unless the Otter.ai version makes more contextual sense.
-5. Transform spoken equations into LaTeX format:
+5. Transform spoken equations into \LaTeX{} format:
     - For inline equations, use single dollar signs, e.g., $\sigma_x$ and $\ket{\psi}$
     - For displayed equations, use double dollar signs, e.g., $$...$$
 6. Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
 7. Correct punctuation as needed.
-8. Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
+8. Remove filler words and phrases like ``I know'', ``yeah'', ``I mean'', ``oh'', ``you know'', ``very good'', ``I see'', ``very simple'' etc.
 9. Ensure grammatical correctness.
 10. Fix any remaining recognition errors or mistranscriptions.
 </instruction>
