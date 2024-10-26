@@ -24,7 +24,7 @@ When revising the referee report:
 - Use LaTeX formatting appropriately for all scientific notation and equations
 - Conclude with a clear, well-justified recommendation (accept, minor revision, major revision, or reject) based on your critical evaluation
 
-When writing professional *.tex LaTeX documents, you must:
+When writing professional *.tex \LaTeX{} documents, you must:
 - Use professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β. Use $J_1$ instead of J1. Use $\approx$ instead of ≈.
 - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
 - Only use enumerate and itemize environments for lists.

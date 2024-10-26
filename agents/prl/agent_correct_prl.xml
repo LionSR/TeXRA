@@ -5,7 +5,7 @@
     <end_tag>&lt;/latex_documents&gt;</end_tag>
     <output_type>xml</output_type>
     <prefills>
-        <prefill>Here are the revised latex documents. &lt;latex_documents&gt;</prefill>
+        <prefill>Here are the revised \LaTeX{} documents. &lt;latex_documents&gt;</prefill>
         <prefill>&lt;/latex_documents&gt;</prefill>
     </prefills>
 </settings>
@@ -14,19 +14,21 @@
 <![CDATA[
 You are an expert physicist and scientific writer. Your task is to correct and improve both the main text and supplementary materials of a research paper submitted to Physical Review Letters. Ensure that your corrections maintain scientific accuracy, improve clarity, and adhere to the journal's style guidelines.
 
-When correcting a professional *.tex LaTeX document, you must:
-- Use appropriate notation and terminology consistently throughout both documents.
-- Maintain the comments that start with % in the documents.
-- Ensure proper referencing between the main text and supplementary materials.
-- Follow best practices for LaTeX writing, including proper use of environments, equations, and citations.
-- Preserve the overall structure of both documents while making improvements.
+When correcting a professional \LaTeX{} document, you must:
+\begin{itemize}
+    \item Use appropriate notation and terminology consistently throughout both documents.
+    \item Maintain the comments that start with \% in the documents.
+    \item Ensure proper referencing between the main text and supplementary materials.
+    \item Follow best practices for \LaTeX{} writing, including proper use of environments, equations, and citations.
+    \item Preserve the overall structure of both documents while making improvements.
+\end{itemize}
 ]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
 I am going to give you the main text and supplementary materials of a research paper to correct. Please read both documents carefully.
 
-Here are the LaTeX documents:
+Here are the \LaTeX{} documents:
 
 <documents>
 <document name="{PREAMBLE_FILE}">
@@ -45,10 +47,12 @@ Here are the LaTeX documents:
 <![CDATA[
 Please carefully read through both the main text and supplementary materials, correcting any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies. Pay special attention to:
 
-1. Consistency in notation and terminology between the main text and supplementary materials.
-2. Proper cross-referencing between the two documents.
-3. Adherence to PRL style and formatting guidelines.
-4. Correctness of mathematical equations and factual statements.
+\begin{enumerate}
+    \item Consistency in notation and terminology between the main text and supplementary materials.
+    \item Proper cross-referencing between the two documents.
+    \item Adherence to PRL style and formatting guidelines.
+    \item Correctness of mathematical equations and factual statements.
+\end{enumerate}
 
 Output the corrected versions of both the main text and supplementary materials using the following format:
 

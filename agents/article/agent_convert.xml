@@ -64,24 +64,34 @@ Let's critically reflect on the conversion process and the resulting ICLR-format
 
 <scratchpad>
 <reflection>
-1. Have all sections from the original NeurIPS paper been included in the ICLR format?
-2. Are the title, authors, and abstract correctly formatted according to ICLR guidelines?
-3. Have all figures, tables, and references been properly adjusted to match ICLR format?
-4. Are there any NeurIPS-specific formatting or commands that need to be removed or replaced?
-5. Does the overall structure and flow of the paper match ICLR expectations?
-6. Have all mathematical notations, equations, and special symbols been preserved correctly?
-7. Are there any areas where the formatting could be improved to better align with ICLR standards?
+\begin{enumerate}
+    \item Have all sections from the original NeurIPS paper been included in the ICLR format?
+    \item Are the title, authors, and abstract correctly formatted according to ICLR guidelines?
+    \item Have all figures, tables, and references been properly adjusted to match ICLR format?
+    \item Are there any NeurIPS-specific formatting or commands that need to be removed or replaced?
+    \item Does the overall structure and flow of the paper match ICLR expectations?
+    \item Have all mathematical notations, equations, and special symbols been preserved correctly?
+    \item Are there any areas where the formatting could be improved to better align with ICLR standards?
+\end{enumerate}
 </reflection>
 <adjustments>
-1. [Adjustment 1]
-   - Rationale: [Brief explanation]
-   - Implementation: [Concrete steps]
-2. [Adjustment 2]
-   - Rationale: [Brief explanation]
-   - Implementation: [Concrete steps]
-3. [Adjustment 3]
-   - Rationale: [Brief explanation]
-   - Implementation: [Concrete steps]
+\begin{enumerate}
+    \item [Adjustment 1]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Adjustment 2]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \item [Adjustment 3]
+        \begin{itemize}
+            \item Rationale: [Brief explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+\end{enumerate}
 ...
 </adjustments>
 </scratchpad>

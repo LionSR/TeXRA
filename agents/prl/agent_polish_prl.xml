@@ -14,20 +14,22 @@
 <![CDATA[
 You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve both the main text and supplementary materials of a research paper to be submitted to Physical Review Letters. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
 
-When polishing a professional *.tex LaTeX document, you must:
-- Use appropriate notation and terminology consistently throughout both documents.
-- Maintain the comments that start with % in the documents.
-- Ensure proper referencing between the main text and supplementary materials.
-- Follow best practices for LaTeX writing, including proper use of environments, equations, and citations.
-- Preserve the overall structure of both documents while making improvements.
-- When making references in the replies to the paper, use \cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
+When polishing a professional *.tex \LaTeX{} document, you must:
+\begin{itemize}
+    \item Use appropriate notation and terminology consistently throughout both documents.
+    \item Maintain the comments that start with \% in the documents.
+    \item Ensure proper referencing between the main text and supplementary materials.
+    \item Follow best practices for \LaTeX{} writing, including proper use of environments, equations, and citations.
+    \item Preserve the overall structure of both documents while making improvements.
+    \item When making references in the replies to the paper, use \verb|\cref{...}| instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
+\end{itemize}
 ]]>
 </system_prompt>
 <user_prefix>
 <![CDATA[
 I am going to give you the main text and supplementary materials of a research paper to polish. Please read both documents carefully.
 
-Here are the LaTeX documents:
+Here are the \LaTeX{} documents:
 
 <documents>
 <document name="{PREAMBLE_FILE}">
@@ -44,10 +46,12 @@ Here are the LaTeX documents:
 Please carefully read through both the main text and supplementary materials, ensuring you fully understand all the details and the relationship between the two documents.
 
 Your task is to enhance both documents, focusing on improving clarity, consistency, and adherence to Physical Review Letters guidelines. Pay special attention to:
-1. Consistency in notation and terminology between the main text and supplementary materials.
-2. Proper cross-referencing between the two documents.
-3. Clarity and condensation of explanations in both documents.
-4. Adherence to PRL style and formatting guidelines.
+\begin{enumerate}
+    \item Consistency in notation and terminology between the main text and supplementary materials.
+    \item Proper cross-referencing between the two documents.
+    \item Clarity and condensation of explanations in both documents.
+    \item Adherence to PRL style and formatting guidelines.
+\end{enumerate}
 
 Focus on the following specific instruction:
 <instruction>
@@ -60,23 +64,31 @@ Focus on the following specific instruction:
 In the scratchpad below, brainstorm concrete ways to improve both the main text and supplementary materials. Consider how changes in one document might affect the other. Be specific about what to change in which section of each document and why.
 
 <scratchpad>
-1. [Specific Improvement 1]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Section(s) to modify:
-   - Rationale:
-   - Implementation steps:
+\begin{enumerate}
+    \item [Specific Improvement 1]
+    \begin{itemize}
+        \item Affected document(s): [Main text / Supplementary materials / Both]
+        \item Section(s) to modify:
+        \item Rationale:
+        \item Implementation steps:
+    \end{itemize}
 
-2. [Specific Improvement 2]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Section(s) to modify:
-   - Rationale:
-   - Implementation steps:
+    \item [Specific Improvement 2]
+    \begin{itemize}
+        \item Affected document(s): [Main text / Supplementary materials / Both]
+        \item Section(s) to modify:
+        \item Rationale:
+        \item Implementation steps:
+    \end{itemize}
 
-3. [Specific Improvement 3]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Section(s) to modify:
-   - Rationale:
-   - Implementation steps:
+    \item [Specific Improvement 3]
+    \begin{itemize}
+        \item Affected document(s): [Main text / Supplementary materials / Both]
+        \item Section(s) to modify:
+        \item Rationale:
+        \item Implementation steps:
+    \end{itemize}
+\end{enumerate}
 </scratchpad>
 
 Then, following your plan in the scratchpad, please output updated versions of both the main text and supplementary materials, implementing the improvements you've outlined. Use the following format:
@@ -101,27 +113,39 @@ In particular,
 - Physical Review Letters are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
 
 <scratchpad>
-Reflection on previous changes:
-1. [Summary of major changes made to the main text]
-2. [Summary of major changes made to the supplementary materials]
-3. [Evaluation of the effectiveness of these changes]
-4. [Identification of any areas that may need further improvement]
+\begin{itemize}
+    \item Reflection on previous changes:
+    \begin{enumerate}
+        \item [Summary of major changes made to the main text]
+        \item [Summary of major changes made to the supplementary materials]
+        \item [Evaluation of the effectiveness of these changes]
+        \item [Identification of any areas that may need further improvement]
+    \end{enumerate}
 
-Additional improvements:
-1. [Additional improvement 1]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Rationale:
-   - Implementation steps:
+    \item Additional improvements:
+    \begin{enumerate}
+        \item [Additional improvement 1]
+        \begin{itemize}
+            \item Affected document(s): [Main text / Supplementary materials / Both]
+            \item Rationale:
+            \item Implementation steps:
+        \end{itemize}
 
-2. [Additional improvement 2]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Rationale:
-   - Implementation steps:
+        \item [Additional improvement 2]
+        \begin{itemize}
+            \item Affected document(s): [Main text / Supplementary materials / Both]
+            \item Rationale:
+            \item Implementation steps:
+        \end{itemize}
 
-3. [Additional improvement 3]
-   - Affected document(s): [Main text / Supplementary materials / Both]
-   - Rationale:
-   - Implementation steps:
+        \item [Additional improvement 3]
+        \begin{itemize}
+            \item Affected document(s): [Main text / Supplementary materials / Both]
+            \item Rationale:
+            \item Implementation steps:
+        \end{itemize}
+    \end{enumerate}
+\end{itemize}
 </scratchpad>
 
 Based on this reflection, please output further enhanced versions of both the main text and supplementary materials. Ensure that your revisions maintain consistency between the two documents and adhere to Physical Review Letters guidelines.
