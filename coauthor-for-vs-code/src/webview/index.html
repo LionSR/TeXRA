@@ -1,272 +1,545 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src ${cspSource} https:; font-src https://cdnjs.cloudflare.com;"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="${styleUri}" />
+    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+  </head>
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src ${cspSource} https:; font-src https://cdnjs.cloudflare.com;">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="${styleUri}">
-  <script nonce="${nonce}" src="${scriptUri}"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
-</head>
+  <body>
+    <div class="content-wrapper">
+      <div class="compact-selections">
+        <div class="select-group">
+          <i class="fas fa-tasks" title="Agent"></i>
+          <select id="agentSelect">
+            ${agentOptions}
+          </select>
+        </div>
+        <div class="select-group">
+          <i class="fas fa-robot" title="Model"></i>
+          <select id="modelSelect">
+            <option value="sonnet++">sonnet3++</option>
+            <option value="sonnet+">sonnet3+</option>
+            <option value="opus">opus3</option>
+            <option value="sonnet">sonnet3</option>
+            <option value="haiku">haiku3</option>
+            <option value="gpto1">gpto1(32k)</option>
+            <option value="gpto1-">gpto1-(64k)</option>
+            <option value="gpt4t">gpt4t</option>
+            <option value="gpt4oOR">gpt4o(64k)</option>
+            <option value="gpt4o">gpt4o(16k)</option>
+            <option value="gpt4o-">gpt4o-</option>
+            <option value="gpt4ol">gpt4ol</option>
+            <option value="gemini1p+OR">gemini1.5 pro</option>
+            <option value="gemini1f+OR">gemini1.5 fresh</option>
+            <option value="llama3+OR">llama3.1 405B</option>
+          </select>
+        </div>
+        <div class="select-group">
+          <i class="fas fa-sync-alt" title="Reflect"></i>
+          <select id="reflectSelect">
+            <option value="True">True</option>
+            <option value="False">False</option>
+          </select>
+        </div>
+      </div>
+      <div class="file-selection-group">
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="inputFileSelect"
+                ><i class="fas fa-file-alt"></i> Select Input File:</label
+              >
+            </div>
+            <div class="file-select-actions">
+              <button
+                id="refreshAllFilesButton"
+                class="action-button"
+                title="Refresh all file lists"
+              >
+                <i class="fas fa-sync-alt"></i>
+              </button>
+              <button
+                id="emptyInputFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentInputFileButton"
+                class="action-button"
+                title="Set current file as input"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+              <span
+                id="toggleMultipleInputFiles"
+                class="toggle-icon"
+                title="More"
+                >▼</span
+              >
+              <button
+                id="addOpenedFilesButton"
+                class="icon-button"
+                title="Add opened files as input"
+              >
+                <i class="fas fa-folder-open"></i>
+              </button>
+              <button
+                id="emptyMultipleInputFilesButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+              <button
+                id="selectMultipleInputFilesButton"
+                class="icon-button"
+                title="Add"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <select id="inputFileSelect">
+            <option value="">None</option>
+          </select>
+          <div
+            id="multipleInputFilesContainer"
+            class="multiple-files-container"
+            style="display: none"
+          >
+            <div class="multiple-files-content">
+              <div
+                id="multipleInputFilesSelect"
+                class="multiple-files-list"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="sampleFileSelect"
+              ><i class="fas fa-file-alt"></i> Select Reference File:</label
+            >
+            <div class="file-select-actions">
+              <button
+                id="emptySampleFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentSampleFileButton"
+                class="action-button"
+                title="Set current file as reference"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+              <span
+                id="toggleMultipleSampleFiles"
+                class="toggle-icon"
+                title="More"
+                >▼</span
+              >
+              <button
+                id="addOpenedSampleFilesButton"
+                class="icon-button"
+                title="Add opened files as reference"
+              >
+                <i class="fas fa-folder-open"></i>
+              </button>
+              <button
+                id="emptyMultipleSampleFilesButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+              <button
+                id="selectMultipleSampleFilesButton"
+                class="icon-button"
+                title="Add"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <select id="sampleFileSelect">
+            <option value="">None</option>
+          </select>
+          <div
+            id="multipleSampleFilesContainer"
+            class="multiple-files-container"
+            style="display: none"
+          >
+            <div class="multiple-files-content">
+              <div
+                id="multipleSampleFilesSelect"
+                class="multiple-files-list"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="auxFileSelect"
+              ><i class="fas fa-file-alt"></i> Select Auxiliary File:</label
+            >
+            <div class="file-select-actions">
+              <button id="emptyAuxFileButton" class="icon-button" title="Empty">
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentAuxFileButton"
+                class="action-button"
+                title="Set current file as auxiliary"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+              <span id="toggleMultipleAuxFiles" class="toggle-icon" title="More"
+                >▼</span
+              >
+              <button
+                id="addOpenedAuxFilesButton"
+                class="icon-button"
+                title="Add opened files as auxiliary"
+              >
+                <i class="fas fa-folder-open"></i>
+              </button>
+              <button
+                id="emptyMultipleAuxFilesButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+              <button
+                id="selectMultipleAuxFilesButton"
+                class="icon-button"
+                title="Add"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <select id="auxFileSelect">
+            <option value="">None</option>
+          </select>
+          <div
+            id="multipleAuxFilesContainer"
+            class="multiple-files-container"
+            style="display: none"
+          >
+            <div class="multiple-files-content">
+              <div
+                id="multipleAuxFilesSelect"
+                class="multiple-files-list"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="figureFileSelect"
+                ><i class="fas fa-file-alt"></i> Select Figure File:</label
+              >
+            </div>
+            <div class="file-select-actions">
+              <button
+                id="emptyFigureFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentFigureFileButton"
+                class="action-button"
+                title="Set current file as figure"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+              <span id="toggleMultipleFigures" class="toggle-icon" title="More"
+                >▼</span
+              >
+              <button
+                id="emptyMultipleFiguresButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+              <button
+                id="selectMultipleFiguresButton"
+                class="icon-button"
+                title="Add"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <select id="figureFileSelect">
+            <option value="">None</option>
+          </select>
+          <div
+            id="multipleFiguresContainer"
+            class="multiple-files-container"
+            style="display: none"
+          >
+            <div class="multiple-files-content">
+              <div id="multipleFiguresSelect" class="multiple-files-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <label for="outputFilesSelect">
+              <span id="toggleOutputFiles" class="toggle-icon" title="More"
+                >▼</span
+              ><span class="advanced-feature">Multiple File Output</span>
+            </label>
+            <div class="file-select-actions">
+              <button
+                id="emptyOutputFilesButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+              <button
+                id="selectMultipleOutputFilesButton"
+                class="icon-button"
+                title="Add"
+              >
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+          <div id="outputFilesContainer" style="display: none">
+            <div id="outputFilesList" class="multiple-files-list"></div>
+          </div>
+        </div>
+      </div>
+      <p></p>
+      <div class="instruction-box">
+        <div class="instruction-header">
+          <label for="instructionInput"
+            ><i class="fas fa-pencil-alt"></i> Specific Instructions:</label
+          >
+          <button
+            id="emptyInstructionsButton"
+            class="icon-button"
+            title="Empty"
+          >
+            <i class="fas fa-eraser"></i>
+          </button>
+        </div>
+        <textarea
+          id="instructionInput"
+          placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."
+        ></textarea>
+      </div>
+      <div class="tool-use-execute">
+        <div class="checkbox-grid">
+          <label
+            ><input type="checkbox" id="autoExtractFigure" />
+            <i class="fas fa-image"></i> Auto-extract Figs</label
+          >
+          <label
+            ><input type="checkbox" id="autoExtractTikzFigure" />
+            <i class="fas fa-draw-polygon"></i> Auto-extract TikZ Figs</label
+          >
+          <label
+            ><input type="checkbox" id="includeTikzReflection" />
+            <i class="fas fa-sync-alt"></i> Include TikZ Reflection</label
+          >
+          <label
+            ><input type="checkbox" id="includeTexCount" />
+            <i class="fas fa-calculator"></i> Include Tex Count</label
+          >
+        </div>
+        <div class="execute-row">
+          <div class="output-name-override-container">
+            <span
+              id="toggleOutputNameOverride"
+              class="toggle-icon"
+              title="Toggle Output Name Override"
+              >▼</span
+            >
+            <input
+              type="text"
+              id="outputNameOverride"
+              placeholder="Override output name (include extension)"
+            />
+          </div>
+          <button id="executeButton">
+            <i class="fas fa-play"></i> Execute
+          </button>
+        </div>
+      </div>
+      <div class="section">
+        <h6 class="section-header">
+          <i class="fas fa-broom"></i> Housekeeping
+        </h6>
+        <div class="button-group">
+          <span>For the Selected Agent and Files:</span>
+          <button id="packSingleButton" class="icon-button" title="Pack">
+            <i class="fas fa-box"></i>
+          </button>
+          <button id="cleanSingleButton" class="icon-button" title="Clean">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+          <button
+            id="packMultipleButton"
+            class="icon-button"
+            title="Pack(Multiple)"
+          >
+            <i class="fas fa-boxes"></i>
+          </button>
+          <button
+            id="cleanMultipleButton"
+            class="icon-button"
+            title="Clean(Multiple)"
+          >
+            <i class="fas fa-dumpster"></i>
+          </button>
+        </div>
+        <div class="button-group">
+          <span>For All the Files:</span>
+          <button id="indentTexButton" class="icon-button" title="Indent TeX">
+            <i class="fas fa-indent"></i>
+          </button>
+          <button
+            id="cleanOutputButton"
+            class="icon-button"
+            title="Clean Output"
+          >
+            <i class="fas fa-broom"></i>
+          </button>
+          <button id="cleanBuildButton" class="icon-button" title="Clean Build">
+            <i class="fas fa-recycle"></i>
+          </button>
+        </div>
+      </div>
 
-<body>
-  <div class="content-wrapper">
-    <div class="compact-selections">
-      <div class="select-group">
-        <i class="fas fa-tasks" title="Agent"></i>
-        <select id="agentSelect">
-          ${agentOptions}
-        </select>
-      </div>
-      <div class="select-group">
-        <i class="fas fa-robot" title="Model"></i>
-        <select id="modelSelect">
-          <option value="sonnet++">sonnet3++</option>
-          <option value="sonnet+">sonnet3+</option>
-          <option value="opus">opus3</option>
-          <option value="sonnet">sonnet3</option>
-          <option value="haiku">haiku3</option>
-          <option value="gpto1">gpto1(32k)</option>
-          <option value="gpto1-">gpto1-(64k)</option>
-          <option value="gpt4t">gpt4t</option>
-          <option value="gpt4oOR">gpt4o(64k)</option>
-          <option value="gpt4o">gpt4o(16k)</option>
-          <option value="gpt4o-">gpt4o-</option>
-          <option value="gpt4ol">gpt4ol</option>
-          <option value="gemini1p+OR">gemini1.5 pro</option>
-          <option value="gemini1f+OR">gemini1.5 fresh</option>
-          <option value="llama3+OR">llama3.1 405B</option>
-        </select>
-      </div>
-      <div class="select-group">
-        <i class="fas fa-sync-alt" title="Reflect"></i>
-        <select id="reflectSelect">
-          <option value="True">True</option>
-          <option value="False">False</option>
-        </select>
-      </div>
-    </div>
-    </p>
-    <div class="file-selection-group">
-      <div class="file-select">
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <label for="inputFileSelect"><i class="fas fa-file-alt"></i> Select Input File:</label>
+      <div class="section">
+        <h6 class="section-header">
+          <i class="fas fa-code-branch"></i> Smart Diffs
+        </h6>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="baseFileSelect"
+                ><i class="fas fa-file-alt"></i> Select Base File:</label
+              >
+              <button
+                id="currentBaseFileButton"
+                class="action-button"
+                title="Set current file as base"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+            </div>
           </div>
-          <div class="file-select-actions">
-            <button id="refreshAllFilesButton" class="action-button" title="Refresh all file lists"><i class="fas fa-sync-alt"></i></button>
-            <button id="emptyInputFileButton" class="icon-button" title="Empty"><i class="fas fa-times"></i></button>
-            <button id="currentInputFileButton" class="action-button" title="Set current file as input"><i
-              class="fas fa-file-code"></i></button>
-            <span id="toggleMultipleInputFiles" class="toggle-icon" title="More">▼</span>
-            <button id="addOpenedFilesButton" class="icon-button" title="Add opened files as input"><i
-              class="fas fa-folder-open"></i></button>
-          <button id="emptyMultipleInputFilesButton" class="icon-button" title="Empty"><i
-              class="fas fa-trash-alt"></i></button>
-          <button id="selectMultipleInputFilesButton" class="icon-button" title="Add"><i
-              class="fas fa-plus"></i></button>
-          </div>
+          <select id="baseFileSelect">
+            <option value="">None</option>
+          </select>
         </div>
-        <select id="inputFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleInputFilesContainer" class="multiple-files-container" style="display: none;">
-          <div class="multiple-files-content">
-            <div id="multipleInputFilesSelect" class="multiple-files-list"></div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="editedFileSelect"
+                ><i class="fas fa-file-edit"></i> Select Edited File:</label
+              >
+              <button
+                id="currentEditedFileButton"
+                class="action-button"
+                title="Set current file as edited"
+              >
+                <i class="fas fa-file-code"></i>
+              </button>
+              <button
+                id="refreshEditedFilesButton"
+                class="action-button"
+                title="Refresh edited files"
+              >
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
+            <div class="file-select-actions">
+              <button id="mergeButton" class="icon-button" title="Merge">
+                <i class="fas fa-code-merge"></i>Merge
+              </button>
+              <button
+                id="latexDiffButton"
+                class="icon-button"
+                title="latexdiff the edited file with the base file"
+              >
+                <i class="fas fa-file-diff"></i>latexdiff
+              </button>
+            </div>
           </div>
+          <select id="editedFileSelect">
+            <option value="">None</option>
+          </select>
         </div>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <label for="sampleFileSelect"><i class="fas fa-file-alt"></i> Select Reference File:</label>
-          <div class="file-select-actions">
-            <button id="emptySampleFileButton" class="icon-button" title="Empty"><i class="fas fa-times"></i></button>
-            <button id="currentSampleFileButton" class="action-button" title="Set current file as reference"><i
-                class="fas fa-file-code"></i></button>
-            <span id="toggleMultipleSampleFiles" class="toggle-icon" title="More">▼</span>
-            <button id="addOpenedSampleFilesButton" class="icon-button" title="Add opened files as reference"><i
-                class="fas fa-folder-open"></i></button>
-            <button id="emptyMultipleSampleFilesButton" class="icon-button" title="Empty"><i
-                class="fas fa-trash-alt"></i></button>
-            <button id="selectMultipleSampleFilesButton" class="icon-button" title="Add"><i
-                class="fas fa-plus"></i></button>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <label for="commitSelect"
+                ><i class="fas fa-code-commit"></i> Select Commit:</label
+              >
+              <button
+                id="refreshCommitsButton"
+                class="icon-button"
+                title="Refresh"
+              >
+                <i class="fas fa-sync"></i>
+              </button>
+              <button
+                id="packLatexDiffVCButton"
+                class="icon-button"
+                title="Pack"
+              >
+                <i class="fas fa-box"></i>
+              </button>
+              <button
+                id="cleanLatexDiffVCButton"
+                class="icon-button"
+                title="Clean"
+              >
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </div>
+            <div class="file-select-actions">
+              <button
+                id="latexDiffVCButton"
+                class="icon-button"
+                title="latexdiff-vc with another git commit"
+              >
+                <i class="fas fa-file-diff"></i>latexdiff-vc
+              </button>
+            </div>
           </div>
-        </div>
-        <select id="sampleFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleSampleFilesContainer" class="multiple-files-container" style="display: none;">
-          <div class="multiple-files-content">
-            <div id="multipleSampleFilesSelect" class="multiple-files-list"></div>
-          </div>
-        </div>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <label for="auxFileSelect"><i class="fas fa-file-alt"></i> Select Auxiliary File:</label>
-          <div class="file-select-actions">
-            <button id="emptyAuxFileButton" class="icon-button" title="Empty"><i class="fas fa-times"></i></button>
-            <button id="currentAuxFileButton" class="action-button" title="Set current file as auxiliary"><i
-                class="fas fa-file-code"></i></button>
-            <span id="toggleMultipleAuxFiles" class="toggle-icon" title="More">▼</span>
-            <button id="addOpenedAuxFilesButton" class="icon-button" title="Add opened files as auxiliary"><i
-                class="fas fa-folder-open"></i></button>
-            <button id="emptyMultipleAuxFilesButton" class="icon-button" title="Empty"><i
-                class="fas fa-trash-alt"></i></button>
-            <button id="selectMultipleAuxFilesButton" class="icon-button" title="Add"><i
-                class="fas fa-plus"></i></button>
-          </div>
-        </div>
-        <select id="auxFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleAuxFilesContainer" class="multiple-files-container" style="display: none;">
-          <div class="multiple-files-content">
-            <div id="multipleAuxFilesSelect" class="multiple-files-list"></div>
-          </div>
-        </div>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <label for="figureFileSelect"><i class="fas fa-file-alt"></i> Select Figure File:</label>
-          </div>
-          <div class="file-select-actions">
-            <button id="emptyFigureFileButton" class="icon-button" title="Empty"><i class="fas fa-times"></i></button>
-            <button id="currentFigureFileButton" class="action-button" title="Set current file as figure"><i
-                class="fas fa-file-code"></i></button>
-            <span id="toggleMultipleFigures" class="toggle-icon" title="More">▼</span>
-            <button id="emptyMultipleFiguresButton" class="icon-button" title="Empty"><i
-                class="fas fa-trash-alt"></i></button>
-            <button id="selectMultipleFiguresButton" class="icon-button" title="Add"><i
-                class="fas fa-plus"></i></button>
-          </div>
-        </div>
-        <select id="figureFileSelect">
-          <option value="">None</option>
-        </select>
-        <div id="multipleFiguresContainer" class="multiple-files-container" style="display: none;">
-          <div class="multiple-files-content">
-            <div id="multipleFiguresSelect" class="multiple-files-list"></div>
-          </div>
-        </div>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <label for="outputFilesSelect">
-            <span id="toggleOutputFiles" class="toggle-icon" title="More">▼</span><span
-              class="advanced-feature">Multiple File Output</span>
-          </label>
-          <div class="file-select-actions">
-            <button id="emptyOutputFilesButton" class="icon-button" title="Empty"><i class="fas fa-trash-alt"></i></button>
-            <button id="selectMultipleOutputFilesButton" class="icon-button" title="Add"><i class="fas fa-plus"></i></button>
-          </div>
-        </div>
-        <div id="outputFilesContainer" style="display: none;">
-          <div id="outputFilesList" class="multiple-files-list"></div>
+          <select id="commitSelect">
+            <option value="HEAD">HEAD</option>
+          </select>
         </div>
       </div>
     </div>
-    <p>
-    <div class="instruction-box">
-      <div class="instruction-header">
-        <label for="instructionInput"><i class="fas fa-pencil-alt"></i> Specific Instructions:</label>
-        <button id="emptyInstructionsButton" class="icon-button" title="Empty"><i class="fas fa-eraser"></i></button>
-      </div>
-      <textarea id="instructionInput"
-        placeholder="Enter your instructions such as: Gently correct mathematical mistakes and typos."></textarea>
-    </div>
-    <div class="tool-use-execute">
-      <div class="checkbox-grid">
-        <label><input type="checkbox" id="autoExtractFigure"> <i class="fas fa-image"></i> Auto-extract Figs</label>
-        <label><input type="checkbox" id="autoExtractTikzFigure"> <i class="fas fa-draw-polygon"></i> Auto-extract TikZ
-          Figs</label>
-        <label><input type="checkbox" id="includeTikzReflection"> <i class="fas fa-sync-alt"></i> Include TikZ
-          Reflection</label>
-        <label><input type="checkbox" id="includeTexCount"> <i class="fas fa-calculator"></i> Include Tex Count</label>
-      </div>
-      <div class="execute-row">
-        <div class="output-name-override-container">
-          <span id="toggleOutputNameOverride" class="toggle-icon" title="Toggle Output Name Override">▼</span>
-          <input type="text" id="outputNameOverride" placeholder="Override output name (include extension)">
-        </div>
-        <button id="executeButton"><i class="fas fa-play"></i> Execute</button>
-      </div>
-    </div>
-    </p>
-    <div class="section">
-      <h6 class="section-header"><i class="fas fa-broom"></i> Housekeeping</h6>
-      <div class="button-group">
-        <span>For the Selected Agent and Files:</span>
-        <button id="packSingleButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
-        <button id="cleanSingleButton" class="icon-button" title="Clean"><i class="fas fa-trash-alt"></i></button>
-        <button id="packMultipleButton" class="icon-button" title="Pack(Multiple)"><i class="fas fa-boxes"></i></button>
-        <button id="cleanMultipleButton" class="icon-button" title="Clean(Multiple)"><i
-            class="fas fa-dumpster"></i></button>
-      </div>
-      <div class="button-group">
-        <span>For All the Files:</span>
-        <button id="indentTexButton" class="icon-button" title="Indent TeX"><i class="fas fa-indent"></i></button>
-        <button id="cleanOutputButton" class="icon-button" title="Clean Output"><i class="fas fa-broom"></i></button>
-        <button id="cleanBuildButton" class="icon-button" title="Clean Build"><i class="fas fa-recycle"></i></button>
-      </div>
-    </div>
-
-    <div class="section">
-      <h6 class="section-header"><i class="fas fa-code-branch"></i> Smart Diffs</h6>
-      <div class="file-select">
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <label for="baseFileSelect"><i class="fas fa-file-alt"></i> Select Base File:</label>
-            <button id="currentBaseFileButton" class="action-button" title="Set current file as base"><i
-                class="fas fa-file-code"></i></button>
-          </div>
-        </div>
-        <select id="baseFileSelect">
-          <option value="">None</option>
-        </select>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <label for="editedFileSelect"><i class="fas fa-file-edit"></i> Select Edited File:</label>
-            <button id="currentEditedFileButton" class="action-button" title="Set current file as edited"><i
-                class="fas fa-file-code"></i></button>
-            <button id="refreshEditedFilesButton" class="action-button" title="Refresh edited files"><i
-                class="fas fa-sync-alt"></i></button>
-          </div>
-          <div class="file-select-actions">
-            <button id="mergeButton" class="icon-button" title="Merge"><i class="fas fa-code-merge"></i>Merge</button>
-            <button id="latexDiffButton" class="icon-button" title="latexdiff the edited file with the base file"><i
-                class="fas fa-file-diff"></i>latexdiff</button>
-          </div>
-        </div>
-        <select id="editedFileSelect">
-          <option value="">None</option>
-        </select>
-      </div>
-      <div class="file-select">
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <label for="commitSelect"><i class="fas fa-code-commit"></i> Select Commit:</label>
-            <button id="refreshCommitsButton" class="icon-button" title="Refresh"><i class="fas fa-sync"></i></button>
-            <button id="packLatexDiffVCButton" class="icon-button" title="Pack"><i class="fas fa-box"></i></button>
-            <button id="cleanLatexDiffVCButton" class="icon-button" title="Clean"><i
-                class="fas fa-trash-alt"></i></button>
-          </div>
-          <div class="file-select-actions">
-            <button id="latexDiffVCButton" class="icon-button" title="latexdiff-vc with another git commit"><i class="fas fa-file-diff"></i>latexdiff-vc</button>
-          </div>
-        </div>
-        <select id="commitSelect">
-          <option value="HEAD">HEAD</option>
-        </select>
-      </div>
-    </div>
-  </div>
-</body>
-
+  </body>
 </html>
