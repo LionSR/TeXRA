@@ -35,7 +35,6 @@
   - Fixed Content Security Policy in index.html to allow loading Sortable.js from CDN
 - Aider wrote most of the codes.
 
-
 ## [0.8.0]
 
 - **Added:**
