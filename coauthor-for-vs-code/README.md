@@ -142,7 +142,11 @@ Users can customize the included directories by modifying their VS Code settings
 
 ```json
 {
-  "coauthor.includedDirectories": ["Discrete-Time", "FiguresEx", "AnotherDirectory"]
+  "coauthor.includedDirectories": [
+    "Discrete-Time",
+    "FiguresEx",
+    "AnotherDirectory"
+  ]
 }
 ```
 
