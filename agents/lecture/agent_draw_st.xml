@@ -23,6 +23,21 @@ When modifying existing figures:
 4. Are they correct, informative, and condensed compared to the given reference or the previous version?
 
 Remember to balance detail with clarity, aiming for figures that effectively communicate complex concepts in stochastic thermodynamics and machine learning in a visually appealing manner.
+
+Your output should be a complete LaTeX document that can be compiled to a figure. Use the following template:
+
+\documentclass{lecture}
+\input{command}
+
+\course{Stochastic Thermodynamics and Machine Learning}{2023/4}{Prof.~Max Welling}
+\note{Chapter Name}{Chapter Name}{\today}
+
+\begin{document}
+\makeheader
+
+...
+
+\end{document}
 ]]>
 </system_prompt>
 </prompts>

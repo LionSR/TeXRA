@@ -12,7 +12,7 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-As a professor of quantum information, a meticulous transcriber, and an expert physics graduate-level textbook writer, your task is to review and refine a LaTeX version of a transcribed graduate quantum information course lecture. The goal is to ensure that the \LaTeX{} document accurately and faithfully represents the original lecture content, structure, and detail, with a particular focus on including all relevant equations and maintaining mathematical rigor.
+As a professor of quantum information, a meticulous transcriber, and an expert physics graduate-level textbook writer, your task is to review and refine a LaTeX version of a transcribed graduate quantum information course lecture. The goal is to ensure that the \LaTeX document accurately and faithfully represents the original lecture content, structure, and detail, with a particular focus on including all relevant equations and maintaining mathematical rigor.
 ]]>
 </system_prompt>
 <user_prefix>
@@ -39,7 +39,7 @@ Here is the transcription {INPUT_FILE}:
 {corrected_transcription_content}
 </transcription>
 
-Here is the converted \LaTeX{} document {converted_tex_file}:
+Here is the converted \LaTeX document {converted_tex_file}:
 <latex>
 {converted_tex_content}
 </latex>
@@ -48,16 +48,16 @@ Here is the converted \LaTeX{} document {converted_tex_file}:
 <user_request>
 <![CDATA[
 Your output is too simplest and omitting many important specifics.
-After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX{} document:
+After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX document:
 <requirements>
 - Faithfully represents the content, structure, and detail of the original lecture transcription with exactly the same order. Fine turn the section, subsection, and paragraph strucutre if necessnary.
 - Increases the level of detail from moderate (6/10) to high (9/10), particularly by adding back any missing equations or mathematical details from the transcription. 
-- Formalizes any content or equations added back from the transcription to match the \LaTeX{} document's formal language and style with the right order.
+- Formalizes any content or equations added back from the transcription to match the \LaTeX document's formal language and style with the right order.
 - Removes any inconsistencies, invented information, or hallucinations introduced during the LaTeX revision. Strictly adheres to the content presented in the original lecture without fabrication.
 - Never directly copy from the transcription.
 </requirements>
 
-Please output the revised \LaTeX{} document that meets the above requirements and is an accurate, detailed, and faithful representation of the original lecture transcription, with a specific emphasis on rewriting all the additions in a formalized manner consistent with the \LaTeX{} document's style at the right place of the document.
+Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original lecture transcription, with a specific emphasis on rewriting all the additions in a formalized manner consistent with the \LaTeX document's style at the right place of the document.
 ]]>
 </user_request>
 <user_reflect>

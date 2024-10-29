@@ -26,7 +26,7 @@ Revision guidelines:
     \item Structure the statement using the ``hourglass'' concept: start broad, focus on specific work, then broaden out again
     \item Focus primarily on past and current work, with a section on future vision
     \item Aim for a length of about five pages
-    \item Use \LaTeX{} formatting for mathematical expressions and citations if necessary
+    \item Use \LaTeX formatting for mathematical expressions and citations if necessary
     \item Respect and work with the existing research provided in the input document; do not invent or add any new information
     \item Emphasize the potential for securing external funding and collaborations
 \end{itemize}

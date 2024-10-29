@@ -21,12 +21,12 @@ When drafting the rebuttal and revising the paper, you must:
     \item Provide specific, detailed responses to referee comments, including concrete examples and references to changes made in the paper.
     \item Ensure all mathematical equations and scientific concepts are accurately represented and explained.
     \item Balance between addressing referee concerns and maintaining the integrity of the original research.
-    \item Use \LaTeX{} formatting appropriately for all scientific notation and equations.
+    \item Use \LaTeX formatting appropriately for all scientific notation and equations.
     \item Tailor your responses to the specific field and context of the research paper.
     \item Demonstrate a deep understanding of the research topic and its broader implications in the field.
 \end{itemize}
 
-When writing professional *.tex \LaTeX{} documents, you must:
+When writing professional *.tex \LaTeX documents, you must:
 - Use professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β. Use $J_1$ instead of J1. Use $\approx$ instead of ≈.
 - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
 - Only use enumerate and itemize environments for lists. 

@@ -19,7 +19,7 @@ You are a professor of quantum information, a meticulous transcriber, and an exp
 <![CDATA[
 I am going to give you a transcribed txt from a lecture of a graduate quantum information course. You are about to rewrite it line by line into formal graduate textbook language using LaTeX, so read extremely carefully.
 
-Here is the transcription {INPUT_FILE} with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
+Here is the transcription {INPUT_FILE} with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -36,7 +36,7 @@ Here is the transcription {INPUT_FILE} with additional \LaTeX{} document class a
 </user_prefix>
 <user_request>
 <![CDATA[
-Your task is to rewrite the provided transcribed lecture into a long-formed graduate-level physics textbook style \LaTeX{} document, closely following these guidelines:
+Your task is to rewrite the provided transcribed lecture into a long-formed graduate-level physics textbook style \LaTeX document, closely following these guidelines:
 <guidelines>
 \begin{enumerate}
     \item The rewrite should meticulously reflect all information from the lecture, strictly maintaining the original order in the transcription.
@@ -156,7 +156,7 @@ $M=UDU^\dagger$, where $U$ is a unitary matrix and $D$ is a diagonal matrix. Ind
 and thus $U U^\dagger = \Id$.
 </example_paragraph>
 
-Organize the \LaTeX{} document using this template:
+Organize the \LaTeX document using this template:
 <latex_template>
 \documentclass{lecture}
 \input{commands_qi}
@@ -188,24 +188,24 @@ Organize the \LaTeX{} document using this template:
 \end{document}
 </latex_template>
 
-Output the \LaTeX{} document.
+Output the \LaTeX document.
 ]]>
 </user_request>
 <user_reflect>
 <![CDATA[
 Your output is too simplest and omitting many specifics. Your level of detailness si
-After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX{} document:
+After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX document:
 <requirements>
 \begin{itemize}
     \item Faithfully represent the content, structure, and detail of the original lecture transcription, maintaining the exact order. Refine the section, subsection, and paragraph structure if necessary.
     \item Increase the level of detail from moderate (6/10) to high (9/10), particularly by reincorporating any missing equations or mathematical details from the transcription.
-    \item Formalize any content or equations reintroduced from the transcription to align with the \LaTeX{} document's formal language and style, preserving the correct order.
+    \item Formalize any content or equations reintroduced from the transcription to align with the \LaTeX document's formal language and style, preserving the correct order.
     \item Eliminate any inconsistencies, invented information, or hallucinations that may have been introduced during the LaTeX revision. Strictly adhere to the content presented in the original lecture without fabrication.
     \item Refrain from directly copying from the transcription; instead, rephrase and formalize the content.
 \end{itemize}
 </requirements>
 
-Please output the revised \LaTeX{} document that meets the above requirements and is an accurate, detailed, and faithful representation of the original lecture transcription, with a specific emphasis on rewriting all the additions in a formalized manner consistent with the \LaTeX{} document's style at the right place of the document.
+Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original lecture transcription, with a specific emphasis on rewriting all the additions in a formalized manner consistent with the \LaTeX document's style at the right place of the document.
 ]]>
 </user_reflect>
 </prompts>

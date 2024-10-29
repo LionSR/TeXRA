@@ -12,7 +12,7 @@
 <prompts>
 <system_prompt>
 <![CDATA[
-When writing a professional *.tex \LaTeX{} document, you must:
+When writing a professional *.tex \LaTeX document, you must:
 - Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
 - Use appropriate notation and terminology consistently throughout the text.
 - Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
@@ -26,9 +26,9 @@ When writing a professional *.tex \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given a \LaTeX{} document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
+You will be given a \LaTeX document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
 
-Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -76,7 +76,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
 \end{enumerate}
 </scratchpad>
 
-Then, following your plan in the scratchpad, output an updated version of the \LaTeX{} document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
+Then, following your plan in the scratchpad, output an updated version of the \LaTeX document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -91,8 +91,8 @@ Consider these points and brainstorm additional targeted improvements in the scr
 <reflection>
 \begin{enumerate}
 \item How well do the modifications address the specific instruction provided?
-\item Are the enhancements clear and effective in improving the quality of the \LaTeX{} document?
-\item Do the changes maintain the overall structure and coherence of the original \LaTeX{} document?
+\item Are the enhancements clear and effective in improving the quality of the \LaTeX document?
+\item Do the changes maintain the overall structure and coherence of the original \LaTeX document?
 \item Have the added/revised parts been coherently and logically incorporated, rather than just appended, improving global and paragraph coherence, cohesion, and flow?
 \item Are all notations and quantities properly defined before use?
 \end{enumerate}
@@ -120,7 +120,7 @@ Consider these points and brainstorm additional targeted improvements in the scr
 </idea>
 </scratchpad>
 
-Then, following your plan in the above scratchpad, output a further enhanced and complete version of the \LaTeX{} document in the <latex_document></latex_document> tag.
+Then, following your plan in the above scratchpad, output a further enhanced and complete version of the \LaTeX document in the `<latex_document>' tag. Include all the changes you added in the previous step.
 Remember to stay laser-focused on the specific instruction provided or the additional plan in the above scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the above scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 ]]>
 </user_reflect>

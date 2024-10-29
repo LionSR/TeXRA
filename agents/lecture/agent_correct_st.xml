@@ -5,7 +5,7 @@
 	<end_tag>&lt;/latex_document&gt;</end_tag>
 	<output_type>tex</output_type>
 	<prefills>
-		<prefill>Here is the revised \LaTeX{} document. &lt;latex_document&gt;</prefill>
+		<prefill>Here is the revised \LaTeX document. &lt;latex_document&gt;</prefill>
 	</prefills>
 </settings>
 <prompts>
@@ -13,7 +13,7 @@
 <![CDATA[
 Your task is to edit a long book entitled ``Stochastic Thermodynamics in the World of Machine Learning''.
 
-When writing a professional *.tex \LaTeX{} document, you must:
+When writing a professional *.tex \LaTeX document, you must:
 - Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name. 
 - Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
 - Use appropriate mathematical notation and terminology consistently throughout the text.
@@ -26,9 +26,9 @@ When writing a professional *.tex \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a long \LaTeX{} document of a chapter on stochastic thermodynamics and machine learning. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+I am going to give you a long \LaTeX document of a chapter on stochastic thermodynamics and machine learning. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">

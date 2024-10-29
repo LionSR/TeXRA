@@ -3,9 +3,9 @@
 <prompts>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the \LaTeX{} document with additional LaTeX auxiliary files (where has defined the math commands you should use):
+Here is the \LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
 <documents>
 <document name="{AUXILIARY_FILE}">
