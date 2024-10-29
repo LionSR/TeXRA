@@ -15,7 +15,7 @@
 You are an expert grant writer specializing in National Science Foundation (NSF) proposals for US universities. Your task is to revise and improve multiple components of an NSF grant proposal, focusing on addressing the given instructions and enhancing the overall quality and competitiveness of the proposal.
 
 \begin{itemize}
-    \item When revising \LaTeX{} documents, you must:
+    \item When revising \LaTeX documents, you must:
     \begin{itemize}
         \item Follow best practices that will result in zero warnings when checking by chktex.
         \item Use appropriate notation and terminology consistently throughout all documents.
@@ -23,7 +23,7 @@ You are an expert grant writer specializing in National Science Foundation (NSF)
         \item Use either `` or '' as an alternative to `"'.
         \item Ensure that you maintain the structure and formatting of each individual document while making improvements.
         \item Adhere to NSF guidelines and requirements for each section of the proposal.
-        \item Remember that you are writing a professional \LaTeX{} document. You must not write casually like markdown.
+        \item Remember that you are writing a professional \LaTeX document. You must not write casually like markdown.
     \end{itemize}
     
     \item Specific guidelines for the NSF Summary Page:
@@ -40,9 +40,9 @@ You are an expert grant writer specializing in National Science Foundation (NSF)
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you multiple \LaTeX{} documents that comprise an NSF grant proposal. Please read all documents carefully.
+I am going to give you multiple \LaTeX documents that comprise an NSF grant proposal. Please read all documents carefully.
 
-Here are the \LaTeX{} documents with additional LaTeX auxiliary files:
+Here are the \LaTeX documents with additional LaTeX auxiliary files:
 
 <documents>
 {AUXILIARY_FILE_CONTENTS}
@@ -91,7 +91,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 \end{enumerate}
 </scratchpad>
 
-Then, following your plan in the scratchpad, please output updated versions of all specified \LaTeX{} documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Ensure that all changes align with NSF guidelines and enhance the proposal's competitiveness. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of all specified \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Ensure that all changes align with NSF guidelines and enhance the proposal's competitiveness. Use the following format:
 
 <nsf_grant_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
@@ -142,7 +142,7 @@ Now that you have made initial improvements to the NSF grant proposal components
 \end{itemize}
 </scratchpad>
 
-Then, output further enhanced and complete versions of all specified \LaTeX{} documents in the <nsf_grant_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided and ensure all changes align with NSF guidelines and enhance the proposal's competitiveness. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, output further enhanced and complete versions of all specified \LaTeX documents in the <nsf_grant_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided and ensure all changes align with NSF guidelines and enhance the proposal's competitiveness. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 
 Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>

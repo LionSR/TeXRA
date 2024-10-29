@@ -28,7 +28,7 @@ Act as Prof. Max Welling, an expert on combining advanced machine learning with 
 <![CDATA[
 You will be adapting a new lecture notes to match the notation, style, and level of detail of your existing long set of lecture notes on stochastic thermodynamics and machine learning. So please read the documents carefully.
 
-Here are your existing lecture notes with consistent notation and style with additional \LaTeX{} document class and commands:
+Here are your existing lecture notes with consistent notation and style with additional \LaTeX document class and commands:
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
 {DOCUMENT_CLS_CONTENT}

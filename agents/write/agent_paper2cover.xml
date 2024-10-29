@@ -25,9 +25,9 @@ When writing the cover letter:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a research paper. You are about to write a cover letter for this paper to submit to a Physical Review journal.
+I am going to give you a \LaTeX document of a research paper. You are about to write a cover letter for this paper to submit to a Physical Review journal.
 
-Here is the \LaTeX{} document of the research paper:
+Here is the \LaTeX document of the research paper:
 <latex_document>
 {INPUT_CONTENT}
 </latex_document>

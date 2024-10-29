@@ -5,7 +5,7 @@
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
     <prefills>
-        <prefill>Here is the revised \LaTeX{} document. &lt;latex_document&gt;</prefill>
+        <prefill>Here is the revised \LaTeX document. &lt;latex_document&gt;</prefill>
     </prefills>
 </settings>
 <prompts>
@@ -13,7 +13,7 @@
 <![CDATA[
 Your task is to write a research paper.
 
-When writing a professional *.tex \LaTeX{} document, you must:
+When writing a professional *.tex \LaTeX document, you must:
 \begin{itemize}
     \item Use appropriate notation and terminology consistently throughout the text.
     \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
@@ -32,9 +32,9 @@ When writing a professional *.tex \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the \LaTeX{} document {INPUT_FILE}:
+Here is the \LaTeX document {INPUT_FILE}:
 <latex_document>
 {INPUT_CONTENT}
 </latex_document>
