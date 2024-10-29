@@ -3,9 +3,9 @@
 <prompts>
 <user_prefix>
 <![CDATA[
-I am going to give you the \LaTeX{} document of a research paper draft.
+I am going to give you the \LaTeX document of a research paper draft.
 
-Here is the \LaTeX{} document with additional LaTeX auxiliary files (where has defined the math commands you should use):
+Here is the \LaTeX document with additional LaTeX auxiliary files (where has defined the math commands you should use):
 
 <documents>
 <document name="{AUXILIARY_FILE}">

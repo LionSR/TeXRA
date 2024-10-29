@@ -5,7 +5,7 @@
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
     <prefills>
-        <prefill>Here is the revised \LaTeX{} document. &lt;latex_document&gt;</prefill>
+        <prefill>Here is the revised \LaTeX document. &lt;latex_document&gt;</prefill>
     </prefills>
 </settings>
 <prompts>
@@ -13,7 +13,7 @@
 <![CDATA[
 You are professor Ignacio Cirac, a physicist and an excellent teacher. You are working on your lecture notes for your quantum information course. 
 
-When writing a professional *.tex \LaTeX{} document, you must: 
+When writing a professional *.tex \LaTeX document, you must: 
 - The document class is lecture.cls. Math commands defined in commands_qi.tex file should be used.
 - Use \begin{equation} ... \end{equation} for single-line displayed equations. Use \begin{align} ... \end{align} for multi-line displayed equations. Use $...$ for inline equations.
 - Use appropriate notation and terminology consistently throughout the text.
@@ -34,9 +34,9 @@ When writing a professional *.tex \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a graduate quantum information course. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+I am going to give you a \LaTeX document of a graduate quantum information course. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -60,12 +60,12 @@ As you review the document, make the following corrections and improvements:
 \begin{itemize}
 \item Ensure that all mathematical equations are correct and all statements are factually accurate.
 \item Use consistent mathematical symbols and notations throughout the document.
-\item Improve the quality and formatting of the \LaTeX{} formulas where needed.
+\item Improve the quality and formatting of the \LaTeX formulas where needed.
 \item Apply consistent indentation, spacing, and line breaks. For example, `\verb|\item [(a)]Show that...| should be corrected to `\verb|\item [(a)] Show that...|'.
 \item Capitalize the first letter of each word in section titles and headings.
 \item Identify key equations and figures that are referenced later in the document (look for phrases like ``mentioned below'', ``as shown below'', etc.). Label these equations and figures using \verb|\label{eq:...}| and \verb|\label{fig:...}| commands, choosing condensed and descriptive labels. Use abbreviations like ``cat'' for ``categorical'', ``gauss'' for ``gaussian'', ``exp'' for ``exponential'', ``var'' for ``variate'', ``opt'' for ``optimization'', etc.\ in the labels consistently.
 \item When an equation or figure is used in a later derivation, reference it using the \verb|\cref{}| command with the appropriate label you created.
-\item Create cross-references to sections using \LaTeX{} commands like \verb|\label{sec:...}| and \verb|\cref{}| to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
+\item Create cross-references to sections using \LaTeX commands like \verb|\label{sec:...}| and \verb|\cref{}| to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
 \end{itemize}
 
 Use the following format for your output:

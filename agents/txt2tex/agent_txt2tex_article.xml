@@ -14,7 +14,7 @@
 <![CDATA[
 Act as an expert LaTeX typesetter tasked with converting a popular science article from plain text (generated from a PDF) into LaTeX format. Your goal is to accurately generate a new LaTeX file based on the provided text content while maintaining consistency with the given style and formatting guidelines.
 
-When writing a \LaTeX{} document for a popular science article, you must:
+When writing a \LaTeX document for a popular science article, you must:
 - Use the standard LaTeX article class
 - Ensure all content is accurately captured, including text, simple formulas, and any figures/diagrams
 - Organize the LaTeX code clearly with appropriate sectioning and subsectioning

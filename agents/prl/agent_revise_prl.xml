@@ -14,7 +14,7 @@
 <![CDATA[
 Your task is to revise a research paper submitted to Physical Review Letters and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
 
-When writing a professional *.tex \LaTeX{} document, you must:
+When writing a professional *.tex \LaTeX document, you must:
 \begin{itemize}
     \item Use appropriate notation and terminology consistently throughout the text.
     \item Ensure that you maintain the structure and formatting of each individual document while making improvements.
@@ -104,7 +104,7 @@ In the scratchpad below, brainstorm concrete ways to revise the paper(s) based o
 \end{enumerate}
 </scratchpad>
 
-Then, output further enhanced and complete versions of all the \LaTeX{} documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay focused on addressing the referees' comments and concerns while maintaining the quality and coherence of all documents.
+Then, output further enhanced and complete versions of all the \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay focused on addressing the referees' comments and concerns while maintaining the quality and coherence of all documents.
 
 Use the following format for the output:
 <latex_documents>

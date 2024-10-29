@@ -14,7 +14,7 @@
 <![CDATA[
 Your task is to write a research paper.
 
-When writing a professional \LaTeX{} document, you must:
+When writing a professional \LaTeX document, you must:
 \begin{itemize}
     \item Use appropriate notation and terminology consistently throughout the text.
     \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
@@ -33,9 +33,9 @@ When writing a professional \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
+I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here are the \LaTeX{} documents with additional LaTeX auxiliary files (where the math commands are defined):
+Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
 
 <documents>
 {AUXILIARY_FILE_CONTENTS}
@@ -74,7 +74,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
     - Implementation: [Concrete steps]
 </scratchpad>
 
-Then, following your plan in the scratchpad, please output updated versions of all \LaTeX{} documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of all \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
@@ -127,7 +127,7 @@ Now that you have made initial improvements to the papers, please reflect on you
 ...
 </scratchpad>
 
-Then, output further enhanced and complete versions of all \LaTeX{} documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 
 Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>

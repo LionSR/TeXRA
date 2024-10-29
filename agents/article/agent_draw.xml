@@ -26,9 +26,9 @@ When creating or modifying figures, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I am going to give you a \LaTeX{} document of a research paper. You are about to create or revise the figures in this paper, so please read the document carefully.
+I am going to give you a \LaTeX document of a research paper. You are about to create or revise the figures in this paper, so please read the document carefully.
 
-Here is the \LaTeX{} document {INPUT_FILE}:
+Here is the \LaTeX document {INPUT_FILE}:
 <latex_document>
 {INPUT_CONTENT}
 </latex_document>
@@ -50,7 +50,7 @@ In the scratchpad below, brainstorm concrete ways to create or significantly imp
 3. [Specific figure creation/improvement idea 3 that directly addresses the instruction]
 </scratchpad>
 
-Then, following your plan in the scratchpad, please output an updated version of the \LaTeX{} document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
+Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -76,7 +76,7 @@ Please carefully consider these points and brainstorm additional targeted improv
 ...
 </scratchpad>
 
-Then, please output a further enhanced version of the \LaTeX{} document, incorporating the reflections and additional improvements discussed in the scratchpad. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad and create figures that are correct, aesthetically pleasing, informative, and condensed, in the style of a professional research paper. If I ask you to revise figure 1 only, do not create a figure 2.
+Then, please output a further enhanced version of the \LaTeX document, incorporating the reflections and additional improvements discussed in the scratchpad. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad and create figures that are correct, aesthetically pleasing, informative, and condensed, in the style of a professional research paper. If I ask you to revise figure 1 only, do not create a figure 2.
 ]]>
 </user_reflect>
 </prompts>

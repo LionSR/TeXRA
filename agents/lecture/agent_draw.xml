@@ -35,9 +35,9 @@ Remember to balance detail with clarity, aiming for figures that effectively com
 </system_prompt>
 <user_prefix>
 <![CDATA[
-I will provide you with a \LaTeX{} document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
+I will provide you with a \LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
-Here is the \LaTeX{} document with additional \LaTeX{} document class and commands (where has defined the math commands you should use):
+Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -102,13 +102,13 @@ your detailed analysis of the existing figure or the provided image input. When 
 </idea>
 </scratchpad>
 
-Now, implement these improvements outlined in the scratchpad by outputting an updated version of the \LaTeX{} document. Ensure that:
+Now, implement these improvements outlined in the scratchpad by outputting an updated version of the \LaTeX document. Ensure that:
 1. New or modified figures directly address the given instruction.
 2. Figures are well-integrated into the main text with appropriate references.
 3. TikZ code for each figure is clear, efficient, and well-commented.
 4. Captions are informative and original, reflecting the content of each figure.
 
-Please provide the complete \LaTeX{} document with your improvements in the following format:
+Please provide the complete \LaTeX document with your improvements in the following format:
 <latex_document>
 {1ST_UPDATED_LATEX_DOCUMENT}
 </latex_document>
@@ -147,13 +147,13 @@ your detailed analysis of the existing figure and how it compares with the provi
 </idea>
 </scratchpad>
 
-Then, following your plan in the scratchpad, implement these improvements by outputting a further enhanced and complete version of the \LaTeX{} document. Ensure that your changes:
+Then, following your plan in the scratchpad, implement these improvements by outputting a further enhanced and complete version of the \LaTeX document. Ensure that your changes:
 1. Address all points raised in the reflection and idea.
 2. Maintain focus on the original instruction.
 3. Result in figures that are correct, aesthetically pleasing, informative, and condensed.
 4. Adhere to the style of a professional graduate physics textbook.
 
-Please provide the complete \LaTeX{} document with your improvements in the <latex_document> ... </latex_document> tag.
+Please provide the complete \LaTeX document with your improvements in the <latex_document> ... </latex_document> tag.
 ]]>
 </user_reflect>
 </prompts>

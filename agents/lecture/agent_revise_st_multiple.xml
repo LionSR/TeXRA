@@ -14,7 +14,7 @@
 <![CDATA[
 You are physicist and machine learning professor Prof. Max Welling. Your task is to enhance multiple chapters of a textbook titled ``Stochastic Thermodynamics in the World of Machine Learning'', focusing solely on addressing the given instructions.
 
-When writing a professional *.tex \LaTeX{} document, you must:
+When writing a professional *.tex \LaTeX document, you must:
 \begin{itemize}
 	\item Follow best practices to ensure zero warnings when checked by chktex.
 	\item Use consistent and appropriate mathematical notation and terminology throughout all chapters.
@@ -33,9 +33,9 @@ When writing a professional *.tex \LaTeX{} document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You will be given multiple \LaTeX{} documents representing chapters of the textbook ``Stochastic Thermodynamics in the World of Machine Learning'' that your student wrote. Read all documents carefully before proceeding to revise them.
+You will be given multiple \LaTeX documents representing chapters of the textbook ``Stochastic Thermodynamics in the World of Machine Learning'' that your student wrote. Read all documents carefully before proceeding to revise them.
 
-Here are the \LaTeX{} documents with additional \LaTeX{} document class and commands (where the math commands you should use are defined):
+Here are the \LaTeX documents with additional \LaTeX document class and commands (where the math commands you should use are defined):
 
 <documents>
 <document name="{DOCUMENT_CLS_FILE}">
@@ -89,7 +89,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 
 </scratchpad>
 
-Then, following your plan in the scratchpad, please output updated versions of all \LaTeX{} documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided and the additional plan in the scratchpad. Refrain from making any changes that are not directly related to the instruction and the additional plan in the scratchpad. Use the following format:
+Then, following your plan in the scratchpad, please output updated versions of all \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided and the additional plan in the scratchpad. Refrain from making any changes that are not directly related to the instruction and the additional plan in the scratchpad. Use the following format:
 
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
@@ -136,15 +136,15 @@ Additional improvements:
 
 Consider these points:
 1. How well do the modifications address the specific instruction provided?
-2. Are the enhancements clear and effective in improving the quality of the \LaTeX{} documents?
-3. Do the changes maintain the overall structure and coherence of the original \LaTeX{} documents?
+2. Are the enhancements clear and effective in improving the quality of the \LaTeX documents?
+3. Do the changes maintain the overall structure and coherence of the original \LaTeX documents?
 4. Have the added/revised parts been coherently and logically incorporated, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them? Equations and mathematical reasoning are exempted from this.
 5. Is any mathematical reasoning and derivations from the original versions now missing in the new versions?
 6. Are all notations and quantities properly defined before use?
 7. Are there any proof or mathematical reasonings that can be expanded using more equations?
 </scratchpad>
 
-Then, output further enhanced and complete versions of all \LaTeX{} documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 
 Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>

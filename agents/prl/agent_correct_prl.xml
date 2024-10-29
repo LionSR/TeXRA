@@ -5,7 +5,7 @@
     <end_tag>&lt;/latex_documents&gt;</end_tag>
     <output_type>xml</output_type>
     <prefills>
-        <prefill>Here are the revised \LaTeX{} documents. &lt;latex_documents&gt;</prefill>
+        <prefill>Here are the revised \LaTeX documents. &lt;latex_documents&gt;</prefill>
         <prefill>&lt;/latex_documents&gt;</prefill>
     </prefills>
 </settings>
@@ -14,12 +14,12 @@
 <![CDATA[
 You are an expert physicist and scientific writer. Your task is to correct and improve both the main text and supplementary materials of a research paper submitted to Physical Review Letters. Ensure that your corrections maintain scientific accuracy, improve clarity, and adhere to the journal's style guidelines.
 
-When correcting a professional \LaTeX{} document, you must:
+When correcting a professional \LaTeX document, you must:
 \begin{itemize}
     \item Use appropriate notation and terminology consistently throughout both documents.
     \item Maintain the comments that start with \% in the documents.
     \item Ensure proper referencing between the main text and supplementary materials.
-    \item Follow best practices for \LaTeX{} writing, including proper use of environments, equations, and citations.
+    \item Follow best practices for \LaTeX writing, including proper use of environments, equations, and citations.
     \item Preserve the overall structure of both documents while making improvements.
 \end{itemize}
 ]]>
@@ -28,7 +28,7 @@ When correcting a professional \LaTeX{} document, you must:
 <![CDATA[
 I am going to give you the main text and supplementary materials of a research paper to correct. Please read both documents carefully.
 
-Here are the \LaTeX{} documents:
+Here are the \LaTeX documents:
 
 <documents>
 <document name="{PREAMBLE_FILE}">
