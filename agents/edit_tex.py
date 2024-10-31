@@ -22,6 +22,10 @@ class EditTexBase:
                     user_vars["ICLR_TEMPLATE"] = coa.read_file(file)
                 if "neurips" in file.lower():
                     user_vars["NeurIPS_TEX"] = coa.read_file(file)
+        elif self.args.agent == "ocr":
+            # OCR-specific variables will be handled by the image processing pipeline
+            user_vars["IMAGE_CONTENT"] = ""  # Placeholder, will be populated externally
+            user_vars["INSERTION_LOCATION"] = self.args.insertion_point if hasattr(self.args, "insertion_point") else ""
         return user_vars
 
 
@@ -49,11 +53,14 @@ def main():
             "correct_with_auxiliary",
             "draw_multiple",
             "draw_with_auxiliary",
-            "convert",  # Add the new "convert" agent
+            "convert",
+            "ocr",
         ],
     )
+
     args = parser.parse_args()
 
+    # OCR agent should use ThinkAndWrite to analyze notation and ensure consistency
     if args.agent.startswith("correct"):
         edit_tex = EditTexDirect(args, agent_path)
     else:
