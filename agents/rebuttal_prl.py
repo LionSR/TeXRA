@@ -35,6 +35,7 @@ class ReplyPRLBase:
                     user_vars[file_arg.upper() + "_FILE"] = file_path
                 else:
                     user_vars[file_arg.upper()] = file_path
+
                 content = coa.read_file(file_path)
                 if file_arg == "input_file":
                     user_vars["MAIN_CONTENT"] = content
@@ -51,7 +52,9 @@ class ReplyPRLBase:
                 elif file_arg == "example_rebuttal_letter":
                     user_vars["EXAMPLE_REBUTTAL_LETTER"] = content
                 elif file_arg == "instruction_file":
-                    user_vars["INSTRUCTION"] = content
+                    # user_vars["INSTRUCTION"] = content
+                    if user_vars["INSTRUCTION"] is not None:
+                        user_vars["INSTRUCTION"] = content + "\n\n" + user_vars["INSTRUCTION"]
                 else:
                     user_vars[file_arg.upper() + "_CONTENT"] = content
 
