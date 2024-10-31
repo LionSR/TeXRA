@@ -59,6 +59,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
                 "</latex_document>\n</latex_document>": "</latex_document>\n",
                 r"\end{scratchpad>": "</scratchpad>",
                 "\\end{latex_document>\n</latex_document>": "</latex_document>",
+                "<rebuttal_letter><scratchpad>\n\n<rebuttal_letter><scratchpad>": "<rebuttal_letter><scratchpad>",
             }
             for find_str, replace_str in replacements.items():
                 content = content.replace(find_str, replace_str)
