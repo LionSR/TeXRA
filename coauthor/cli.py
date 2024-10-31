@@ -644,6 +644,14 @@ def translate2chn(model, input_file, **kwargs):
     execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
 
 
+@click.command()
+@shared_arguments
+@click.option("--insertion-point", type=str, help="Location in the document where OCR content should be inserted")
+def ocr_tex(model, input_file, **kwargs):
+    """Convert handwritten mathematical content to LaTeX and insert it into the document."""
+    execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
+
+
 if __name__ == "__main__":
     cli()
 
@@ -651,6 +659,8 @@ if __name__ == "__main__":
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
+cli.add_command(convert_tex)
+cli.add_command(ocr_tex)
 
 # edit_lecture.py
 cli.add_command(correct_st)
@@ -728,10 +738,12 @@ cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
 
 # convert_tex.py
-cli.add_command(convert_tex)
+
 
 # translate_to_chinese.py
 cli.add_command(translate2chn)
+
+# ocr_tex.py
 
 
 if __name__ == "__main__":
