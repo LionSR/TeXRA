@@ -68,7 +68,7 @@ def _create_anthropic_response(client, model_name, max_tokens, messages, tempera
     """Create a response using Anthropic model."""
     extra_headers = None
     if "claude-3-5-sonnet" in model_name.lower() or "claude-3-haiku" in model_name.lower() or "claude-3-opus" in model_name.lower():
-        extra_headers = {"anthropic-beta": "prompt-caching-2024-07-31"}
+        extra_headers = {"anthropic-beta": ["prompt-caching-2024-07-31", "token-counting-2024-11-01"]}
 
     response_object = client.messages.create(
         model=model_name,
