@@ -1,7 +1,8 @@
 import os
 from termcolor import colored, cprint
+import base64
 
-from .img_utils import get_base64_encoded_image, process_pdf_input
+from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
 from .model_utils import is_openai_model, is_anthropic_model, is_openrouter_model
 
 
@@ -68,16 +69,18 @@ def _create_anthropic_response(client, model_name, max_tokens, messages, tempera
     """Create a response using Anthropic model."""
     extra_headers = None
     if "claude-3-5-sonnet" in model_name.lower() or "claude-3-haiku" in model_name.lower() or "claude-3-opus" in model_name.lower():
-        extra_headers = {"anthropic-beta": ["prompt-caching-2024-07-31", "token-counting-2024-11-01"]}
+        extra_headers = ["prompt-caching-2024-07-31"]
+        if model_name == "claude-3-5-sonnet-20241022":
+            extra_headers.append("pdfs-2024-09-25")
 
-    response_object = client.messages.create(
+    response_object = client.beta.messages.create(
         model=model_name,
         max_tokens=max_tokens,
         messages=messages,
         temperature=temperature,
         stop_sequences=[end_tag] if end_tag else None,
         system=system_prompt,
-        extra_headers=extra_headers,
+        betas=extra_headers,
     )
     print(colored(f"using anthropic model: {model_name}", "green"))
     return response_object
@@ -122,7 +125,8 @@ def create_image_message(model, figure_inputs):
 
         _, file_extension = os.path.splitext(figure_input)
         img_data, media_type = _process_image_file(figure_input, file_extension, model)
-
+        # print(f"### DEBUG: Processed image file: {figure_input}, media type: {media_type}")
+        # print(f"### DEBUG: length of img_data: {len(img_data)}")
         if img_data is not None:
             _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
         else:
@@ -139,8 +143,15 @@ def create_image_message(model, figure_inputs):
 def _process_image_file(figure_input, file_extension, model):
     """Process the image file and return the image data and media type."""
     if file_extension.lower() == ".pdf":
-        img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
-        media_type = "image/png"
+        # For PDFs, use document type for Anthropic models and convert to PNG for others
+        if model in ["claude-3-5-sonnet-20241022", "sonnet++"] and page_count_pdf(figure_input) > 1:
+            # print(f"### DEBUG: Processing PDF for Anthropic model: {figure_input}")
+            with open(figure_input, "rb") as f:
+                img_data = base64.standard_b64encode(f.read()).decode("utf-8")
+            media_type = "application/pdf"
+        else:
+            img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
+            media_type = "image/png"
     else:
         img_data = get_base64_encoded_image(figure_input)
         media_type = {
@@ -156,10 +167,12 @@ def _process_image_file(figure_input, file_extension, model):
 def _add_image_content(image_contents, added_figures, figure_input, img_data, media_type):
     """Add image content to the lists."""
     if isinstance(img_data, list):
+        # print(f"### DEBUG: Adding {len(img_data)} pages to the image contents")
         for i, data in enumerate(img_data):
             image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
         added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
     else:
+        # print(f"### DEBUG: Adding single page to the image contents")
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
         added_figures.append(figure_input)
 
@@ -168,21 +181,29 @@ def _create_image_content(image_contents, model):
     """Create the image content for the message."""
     content = []
     for image in image_contents:
-        content.extend(
-            [
-                {"type": "text", "text": f"Image: {image['file_name']}"},
-                {
-                    "type": "image_url" if is_openai_model(model) else "image",
-                    "image_url" if is_openai_model(model) else "source": {
-                        "url" if is_openai_model(model) else "type": (
-                            f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
-                        ),
-                        "media_type": image["media_type"],
-                        "data": image["data"],
+        if is_anthropic_model(model) and image["media_type"] == "application/pdf":
+            content.extend(
+                [
+                    {"type": "text", "text": f"Document: {image['file_name']}"},
+                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": image["data"]}},
+                ]
+            )
+        else:
+            content.extend(
+                [
+                    {"type": "text", "text": f"Image: {image['file_name']}"},
+                    {
+                        "type": "image_url" if is_openai_model(model) else "image",
+                        "image_url" if is_openai_model(model) else "source": {
+                            "url" if is_openai_model(model) else "type": (
+                                f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                            ),
+                            "media_type": image["media_type"],
+                            "data": image["data"],
+                        },
                     },
-                },
-            ]
-        )
+                ]
+            )
     return content
 
 
