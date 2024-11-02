@@ -104,3 +104,9 @@ def process_pdf_input(pdf_path, is_openai=False, **kwargs):
     except (fitz.FileDataError, fitz.EmptyFileError):
         print(f"Warning: The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")
         return None
+
+
+def page_count_pdf(pdf_path):
+    """Get the number of pages in a PDF file."""
+    doc = fitz.open(pdf_path)
+    return doc.page_count
