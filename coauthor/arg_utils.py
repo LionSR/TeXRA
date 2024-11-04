@@ -18,6 +18,7 @@ def get_common_argparser():
             "sonnet+",
             "opus",
             "sonnet",
+            "haiku++",
             "haiku",
             "gpto1",
             "gpto1-",
