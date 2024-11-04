@@ -68,7 +68,12 @@ def _create_openrouter_response(client, model_name, max_tokens, messages, temper
 def _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt):
     """Create a response using Anthropic model."""
     extra_headers = None
-    if "claude-3-5-sonnet" in model_name.lower() or "claude-3-haiku" in model_name.lower() or "claude-3-opus" in model_name.lower():
+    if (
+        "claude-3-5-sonnet" in model_name.lower()
+        or "claude-3-haiku" in model_name.lower()
+        or "claude-3-opus" in model_name.lower()
+        or "claude-3-5-haiku" in model_name.lower()
+    ):
         extra_headers = ["prompt-caching-2024-07-31"]
         if model_name == "claude-3-5-sonnet-20241022":
             extra_headers.append("pdfs-2024-09-25")
