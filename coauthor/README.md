@@ -25,10 +25,10 @@ After installation, you need to set up your API keys. Create a `.env` file in th
 2. Open `.env` in a text editor
 3. Replace the placeholder values with your actual API keys:
 
-  ```bash
-  OPENAI_API_KEY=your_actual_openai_api_key_here
-  ANTHROPIC_API_KEY=your_actual_anthropic_api_key_here
-  ```
+```bash
+OPENAI_API_KEY=your_actual_openai_api_key_here
+ANTHROPIC_API_KEY=your_actual_anthropic_api_key_here
+```
 
 4. Optionally, you can change the default model or set a custom `LATEXINDENT_CONFIG` path.
 
