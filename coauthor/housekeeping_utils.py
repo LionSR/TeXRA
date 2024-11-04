@@ -31,6 +31,7 @@ MODELS = [
     "sonnet",
     "sonnet+",
     "sonnet++",
+    "haiku++",
     "haiku",
     "gpto1",
     "gpto1-",
