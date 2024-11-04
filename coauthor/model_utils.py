@@ -7,6 +7,7 @@ model_mapping = {
     "sonnet+": "claude-3-5-sonnet-20240620",
     "opus": "claude-3-opus-20240229",
     "sonnet": "claude-3-sonnet-20240229",
+    "haiku++": "claude-3-5-haiku-20241022",
     "haiku": "claude-3-haiku-20240307",
     "gpto1": "o1-preview-2024-09-12",
     "gpto1-": "o1-mini-2024-09-12",
@@ -31,11 +32,13 @@ anthropic_models = {
     "claude-3-5-sonnet-20241022",
     "claude-3-opus-20240229",
     "claude-3-haiku-20240307",
+    "claude-3-5-haiku-20241022",
     "sonnet++",
     "sonnet+",
     "opus",
     "sonnet",
     "haiku",
+    "haiku++",
 }
 
 openai_models = {
@@ -103,6 +106,8 @@ def get_model_settings(args):
         "google/gemini-flash-1.5": 32768,
         "meta-llama/llama-3-1b-8192": 131072,
         "claude-3-5-sonnet-20240620": 8192,
+        "claude-3-5-sonnet-20241022": 8192,
+        "claude-3-5-haiku-20241022": 8192,
         "gpt-4o-mini-2024-07-18": 16384,
         "gpt-4o-2024-08-06": 16384,
         "o1-preview-2024-09-12": 32768,
@@ -127,6 +132,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "sonnet++": (3, 15),
         "opus": (15, 75),
         "haiku": (0.25, 1.25),
+        "haiku++": (1, 5.0),
         "gpt4t": (10, 30),
         "gpt4o": (2.5, 10),
         "gpt4o-": (0.15, 0.6),
@@ -138,7 +144,7 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
     }
-    models_with_prompt_caching_support = ["sonnet++", "sonnet+", "haiku", "opus"]
+    models_with_prompt_caching_support = ["sonnet++", "sonnet+", "haiku", "opus", "haiku++"]
 
     prompt_cache_creation_prices = {
         model: tuple(rate * 1.25 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support
