@@ -14,18 +14,7 @@ This is the frontend component of the CoAuthor project, a Visual Studio Code ext
 
 ## Installation
 
-For quick installation, refer to the [main README](../README.md).
-
-For manual installation or development setup:
-
-1. Open VS Code.
-2. Open the folder containing the CoAuthor extension (where the `releases` folder is located).
-3. In the VS Code file explorer, navigate to the `releases` folder.
-4. Find the newest `.vsix` file (e.g., `coauthor-0.5.6.vsix`).
-5. Right-click on the `.vsix` file.
-6. From the context menu, select "Install Extension VSIX".
-
-This method allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
+For quick installation, refer to the [main README](../README.md), which allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
 
 ### Manual Installation (For developers or customization)
 
@@ -86,7 +75,7 @@ This flexible file selection system allows you to easily manage complex projects
 
 ### Specific Instructions
 
-The "Specific Instructions" text area allows you to provide detailed instructions for the AI model. These instructions are not just passed along verbatim; instead, they are carefully analyzed and expanded upon by the model. The AI will:
+The "Specific Instructions" text area allows you to provide detailed instructions for the AI model. These instructions are passed along verbatim; in addition, they are also carefully analyzed and expanded upon by the model. The AI will:
 
 1. Interpret your instructions in the context of the selected agent
 2. Break down complex instructions into manageable steps
