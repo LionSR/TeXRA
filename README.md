@@ -67,12 +67,11 @@ For detailed frontend information, see the [CoAuthor Frontend README](coauthor-f
    - Copy `.env.sample` to `.env`
    - Edit `.env` and add your OpenAI and Anthropic API keys
 
-### Frontend Installation
+### Frontend Installation [Quick]
 
 1. Open VS Code.
-2. Open the folder containing the CoAuthor extension (where the `releases` folder is located).
-3. In the VS Code file explorer, navigate to the `releases` folder.
-4. Find the newest `.vsix` file (e.g., `coauthor-0.5.6.vsix`).
+2. Download the newest release (`.vsix` file, e.g., `coauthor-0.5.6.vsix`) from the release page of the Github repo.
+4. Find the newest `.vsix` file in the vs code file explorer.
 5. Right-click on the `.vsix` file.
 6. From the context menu, select "Install Extension VSIX".
 
@@ -89,7 +88,7 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 7. Click "Execute" to run the AI-assisted agent
 8. Review the output in the newly created file
 
-Although GPT models are supported, we recommend using sonnet+ or opus for the best experience.
+Although many models are supported, we recommend using Anthropic sonnet+/opus or O1-series model for the best experience.
 
 ## Available Agentic agents
 
@@ -115,7 +114,7 @@ CoAuthor offers various customization options:
 
 - Modify available agentic agents in VS Code settings
 - Adjust included directories and file types
-- Fine-tune prompts for specific agents (see backend documentation)
+- Fine-tune prompts for specific agents in the xml prompt files (see backend documentation)
 - Configure model parameters like temperature and max tokens
 
 ## Advanced Features
