@@ -113,7 +113,7 @@ CoAuthor backend can be seamlessly integrated with the CoAuthor VS Code extensio
 - Use a git client (e.g., Tower, GitHub Desktop) to track diffs in your git-tracked paper/lecture note folders.
 - Install a full, complete, and local TeX Live distribution to use latexdiff, latexindent, and latexdiff-vc.
 
-## agents and Prompts
+## Agents and Prompts
 
 CoAuthor's agents are defined in the `agents` directory. Each Agent typically has its own Python script and associated prompt files. Here's how the structure works:
 
