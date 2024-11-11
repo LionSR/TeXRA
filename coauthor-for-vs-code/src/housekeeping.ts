@@ -129,7 +129,6 @@ async function copyFile(source: string, destination: string): Promise<void> {
 }
 
 async function findFile(inputDir: string, pattern: string, ext?: string): Promise<string | null> {
-    outputChannel.appendLine(`findFile called with inputDir=${inputDir}, pattern=${pattern}, ext=${ext}`);
     const workspacePath = getWorkspacePath();
     if (!workspacePath) return null;
     
@@ -166,7 +165,6 @@ async function findFile(inputDir: string, pattern: string, ext?: string): Promis
             continue;
         }
     }
-    outputChannel.appendLine(`No file found for pattern: ${pattern}`);
     return null;
 }
 
@@ -334,10 +332,18 @@ export async function runCleanMultiple(
     inputFiles: string[],
     agent: string
 ): Promise<void> {
+    outputChannel.appendLine(`runCleanMultiple called with: model=${model}, inputFile=${inputFile}, agent=${agent}`);
+    outputChannel.appendLine(`Additional files: ${inputFiles.join(', ')}`);
+
     await runCleanSingle(model, inputFile, agent);
-    for (const file of inputFiles) {
-        await runCleanSingle(model, file, agent);
+
+    // Clean input files
+    if (inputFiles && inputFiles.length > 0) {
+        for (const file of inputFiles) {
+            await runCleanSingle(model, file, agent);
+        }
     }
+
     vscode.window.showInformationMessage("Cleanup complete for multiple files.");
 }
 
@@ -346,8 +352,17 @@ export async function runPackMultiple(
     inputFile: string,
     inputFiles: string[],
     agent: string,
-    outputNameOverride?: string
+    outputNameOverride?: string,
 ): Promise<string> {
+    outputChannel.appendLine(`runPackMultiple called with: model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`);
+    outputChannel.appendLine(`Additional files: ${inputFiles.join(', ')}`);
+
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+        outputChannel.appendLine('[Error] No workspace path found');
+        return '';
+    }
+
     let baseName: string;
     let outputDir: string;
 
@@ -360,35 +375,60 @@ export async function runPackMultiple(
     }
 
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    const commonOutputFolder = path.join(outputDir, "Versions", `${now}_${baseName}_multiple_${agent}_${model}`);
+    const commonOutputFolder = path.join(workspacePath, outputDir, "Versions", `${now}_${baseName}_multiple_${agent}_${model}`);
+    outputChannel.appendLine(`Common output folder: ${commonOutputFolder}`);
 
-    // Create output directory
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(commonOutputFolder));
+    try {
+        // Create output directory
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(commonOutputFolder));
+        outputChannel.appendLine(`Created output directory: ${commonOutputFolder}`);
 
-    // Pack all input files
-    for (const file of inputFiles) {
-        await runPackSingle(model, file, agent, commonOutputFolder);
-    }
-
-    // Pack additional XML files
-    const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-    const additionalPatterns = [
-        `${baseName}_${agentFirstNameChunk}_r0_${model}.xml`,
-        `${baseName}_${agentFirstNameChunk}_r1_${model}.xml`
-    ];
-
-    for (const pattern of additionalPatterns) {
-        const filePath = path.join(outputDir, pattern);
-        try {
-            await moveFile(filePath, path.join(commonOutputFolder, pattern));
-        } catch (error) {
-            // Ignore if file doesn't exist
-            continue;
+        // Pack main input file or override file
+        if (outputNameOverride) {
+            await runPackSingle(model, outputNameOverride, agent, commonOutputFolder);
+        } else {
+            await runPackSingle(model, inputFile, agent, commonOutputFolder);
         }
-    }
 
-    vscode.window.showInformationMessage(`All files packed into ${commonOutputFolder}`);
-    return commonOutputFolder;
+
+        // Pack input files
+        if (inputFiles && inputFiles.length > 0) {
+            for (const file of inputFiles) {
+                outputChannel.appendLine(`Packing input file: ${file}`);
+                await runPackSingle(model, file, agent, commonOutputFolder);
+            }
+        }
+
+        // Pack additional XML files
+        const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+        const additionalPatterns = [
+            `${baseName}_${agentFirstNameChunk}_r0_${model}.xml`,
+            `${baseName}_${agentFirstNameChunk}_r1_${model}.xml`
+        ];
+
+        for (const pattern of additionalPatterns) {
+            const filePath = path.join(workspacePath, outputDir, pattern);
+            try {
+                const fileUri = vscode.Uri.file(filePath);
+                const exists = await vscode.workspace.fs.stat(fileUri).then(() => true, () => false);
+                if (exists) {
+                    outputChannel.appendLine(`Found additional XML file: ${filePath}`);
+                    await moveFile(filePath, path.join(commonOutputFolder, pattern));
+                }
+            } catch (error) {
+                outputChannel.appendLine(`XML file not found or error: ${filePath}`);
+                continue;
+            }
+        }
+
+        vscode.window.showInformationMessage(`All files packed into ${commonOutputFolder}`);
+        return commonOutputFolder;
+
+    } catch (error) {
+        outputChannel.appendLine(`Error during multiple pack operation: ${error}`);
+        vscode.window.showErrorMessage(`Error during multiple pack operation: ${error}`);
+        return '';
+    }
 }
 
 export async function runCleanBuild(): Promise<void> {
