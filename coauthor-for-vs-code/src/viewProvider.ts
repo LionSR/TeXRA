@@ -30,7 +30,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
-    // vscode.window.showInformationMessage(`HTML Content Length: ${webviewView.webview.html.length}`);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
@@ -259,7 +258,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           );
           break;
         case 'modelSelected':
-          // vscode.window.showInformationMessage(`Selected model: ${message.model}`);
           if (message.model) {
             webviewView.webview.postMessage({
               command: 'modelSelected',
