@@ -51,7 +51,7 @@ Remember, accuracy is paramount in this task. Even small discrepancies can affec
 </user_request>
 <user_reflect>
 <![CDATA[
-After thoroughly reviewing the original \LaTeX document (under the <original_latex></original_latex> tag), the edited version of the document (under the <edited_latex></edited_latex> tag), and your generated merged document (under the <full_edited_latex></full_edited_latex> tag), please critically check that your output satisfies the following requirements:
+After thoroughly reviewing the original \LaTeX document (under the <original_latex> tag), the edited version of the document (under the <edited_latex> tag), and your generated merged document (under the <full_edited_latex> tag), please critically check that your output satisfies the following requirements:
 
 <requirements>
 - All changes and additions from the edited version are accurately incorporated.
@@ -61,7 +61,7 @@ After thoroughly reviewing the original \LaTeX document (under the <original_lat
 - The output is a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.
 </requirements>
 
-If any of these requirements are not fully met, please revise your merged document to address the issues. Output the updated version under the <full_edited_latex></full_edited_latex> tag.
+If any of these requirements are not fully met, please revise your merged document to address the issues. Output the updated version under the <full_edited_latex> tag.
 
 If you are satisfied that your output meets all the requirements, please confirm this by stating "The merged document meets all the specified requirements." Otherwise, provide the revised document.
 

@@ -157,7 +157,7 @@ Please review your draft LaTeX Beamer presentation critically, focusing on the f
 
 Based on this reflection, please revise the LaTeX Beamer presentation to enhance its content, structure, and overall quality. Ensure that the presentation effectively communicates the key aspects of the research paper to a physics audience.
 
-Output your revised presentation within the <beamer_presentation></beamer_presentation> tags.
+Output your revised presentation within the <beamer_presentation> tags.
 ]]>
 </user_reflect>
     </prompts>
