@@ -132,7 +132,7 @@ So, in other words, you could have just taken the classical probabilities and th
 </example>
 </examples>
 
-Output the improved version of the document inside the <improved_document></improved_document> tag.
+Output the improved version of the document inside the <improved_document> tag.
 ]]>
 </user_request>
 <user_reflect>

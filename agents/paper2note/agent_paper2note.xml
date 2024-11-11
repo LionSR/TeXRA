@@ -58,7 +58,7 @@ Please carefully read the provided research paper and adapt it into a condensed 
 
 In your adaptation, focus on the following:
 <requirements>
-- Use the LaTeX commands and mathematical notations frequently used in the provided sample chapters (under the tag <sample_chapters></sample_chapters>). 
+- Use the LaTeX commands and mathematical notations frequently used in the provided sample chapters (under the tag <sample_chapters>). 
 - Begin the lecture notes directly with the main content. Dive straight into the mathematical concepts and flesh out the details, as demonstrated in the sample chapters.
 - Derive every equation and result rather than only stating the results. Include multi-step derivations using the align environment.
 - Omit all the figures in the output lecture note.
@@ -66,7 +66,7 @@ In your adaptation, focus on the following:
 - Do not mention the experiments or empirical results from the paper.
 </requirements>
 
-Please output the full LaTeX source for the lecture notes, enclosed in the <lecture_note></lecture_note> tag:
+Please output the full LaTeX source for the lecture notes, enclosed in the <lecture_note> tag:
 
 <lecture_note>
 % Your LaTeX source here
@@ -77,15 +77,15 @@ Please output the full LaTeX source for the lecture notes, enclosed in the <lect
 <![CDATA[
 Your output lecture notes adapted from the research paper are too generic, not specific and not mathematical enough, with some parts of the paper missing from the notes.
 
-After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
+After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements> tag and the following instructions:
 <instruction>
 - Increase the level of detail from moderate (6/10) to high (9/10)
 - Ensure that all major mathematical formulations and derivations from the paper are covered in-depth, with clear explanations and step-by-step derivations.
 - The style, notation, and structure of the lecture notes should closely match the provided sample chapters and the sample lecture notes.
-- Make sure all the math commands exists inside the commands file <command></command> tag or from the packages imported there.
+- Make sure all the math commands exists inside the commands file `<command>' tag or from the packages imported there.
 </instruction>
 
-Please output the revised lecture notes (under the <lecture_note></lecture_note> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+Please output the revised lecture notes (under the <lecture_note> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
 
 <lecture_note>
 % Your revised LaTeX source here

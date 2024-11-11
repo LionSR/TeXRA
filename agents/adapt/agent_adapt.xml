@@ -15,12 +15,12 @@
 Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Your task is to write a long book entitled ``Stochastic Thermodynamics in the World of Machine Learning''.
 
 \begin{itemize}
-    \item Cite relevant papers in the field using commands like \verb|\cite{Jarzynski2011Equalities}| or \verb|\cite{Seifert2012Stochastic}| which include only the first word of the paper name. 
-    \item Use \verb|\begin{align} ... \end{align}| for displayed equations.
-    \item Use \verb|$\de$| for $\delta$, \verb|$\der$| for $\partial$, \verb|$\bx$| for $\boldsymbol{x}$ etc following \texttt{command.tex}.
+    \item Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities}or \cite{Seifert2012Stochastic}which include only the first word of the paper name. 
+    \item Use \begin{align} ... \end{align} for displayed equations.
+    \item Use $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
     \item Use appropriate mathematical notation and terminology consistently throughout the text.
-    \item For quotation, prefer \verb|``Schr\"odinger''| over \verb|"Schrodinger"|. Use either \verb|``| or \verb|''| as an alternative to \verb|"|.
-    \item Label referenced equations and figures using \verb|\label{eqn:...}| and \verb|\label{fig:...}| commands, choosing condensed and descriptive labels. Use abbreviations like `cat' for `categorical', `gauss' for `gaussian', `exp' for `exponential', `var' for `variate', `opt' for `optimization', etc.
+    \item For quotation, prefer ``Schr\"odinger''over "Schrodinger". Use either ``or ''as an alternative to "|.
+    \item Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like `cat' for `categorical', `gauss' for `gaussian', `exp' for `exponential', `var' for `variate', `opt' for `optimization', etc.
 \end{itemize}
 ]]>
 </system_prompt>
@@ -56,33 +56,33 @@ You need to include the derivations of the path probability for the Langevin sys
     \item The output should standalone without any appendix.
 \end{itemize}
 
-In <scratchpad></scratchpad> tag, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
+In `<scratchpad>' tag, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
 
 \begin{itemize}
     \item Use the same document class (\texttt{lecture.cls}) and auxiliary command files (\texttt{command.tex}) as your existing notes
     \item Maintain a consistent set of notations throughout 
     \item Match the tone and style of writing in your existing notes
-    \item Provide the same level of detail in explanations and derivations as your existing notes, using multi-line \verb|\begin{align} ... \end{align}| environments for detailed derivations where appropriate
+    \item Provide the same level of detail in explanations and derivations as your existing notes, using multi-line \begin{align} ... \end{align}environments for detailed derivations where appropriate
 \end{itemize}
 
-After showing your work, please output the fully adapted content inside <adapted_lecture_notes></adapted_lecture_notes> tag, ready to be integrated with your existing lecture notes.
+After showing your work, please output the fully adapted content inside '<adapted_lecture_notes>' tag, ready to be integrated with your existing lecture notes.
 ]]>
 </user_request>
 <user_reflect>
 <![CDATA[
 Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
 
-After thoroughly reviewing the exisiting lecture notes (under the <existing_lecture_notes></existing_lecture_notes> tag), the new lecture notes (under the <new_lecture_notes></new_lecture_notes> tag), and your generated lecture notes (under the <adapted_lecture_notes></adapted_lecture_notes> tag), please revise the lecture notes to satisfy the previous requirements under the <requirements></requirements> tag and the following instructions:
+After thoroughly reviewing the exisiting lecture notes (under the <existing_lecture_notes> tag), the new lecture notes (under the <new_lecture_notes> tag), and your generated lecture notes (under the '<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the <requirements> tag and the following instructions:
 <instruction>
 \begin{itemize}
     \item Increase the level of detail from moderate (5/10) to high (9/10)
     \item Ensure that all major mathematical formulations and derivations from the new lecture note are covered in-depth, with clear explanations and step-by-step derivations
     \item The style, notation, and structure of the output lecture notes should closely match the provided existing lecture notes
-    \item Make sure all the math commands exist inside the commands file \verb|<command></command>| tag or from the packages imported there
+    \item Make sure all the math commands exist inside the commands file `<command>'tag or from the packages imported there
 \end{itemize}
 </instruction>
 
-Please output the revised lecture notes (under the <adapted_lecture_notes></adapted_lecture_notes> tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+Please output the revised lecture notes (under the '<adapted_lecture_notes>' tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
 
 <adapted_lecture_notes>
 % Your revised LaTeX source here
