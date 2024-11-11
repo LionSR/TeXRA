@@ -23,6 +23,7 @@ import {
   runPackLatexDiffVCMultiple,
   runCleanLatexDiffVC,
   runCleanLatexDiffVCMultiple,
+  runIndentTex,
 } from './housekeeping';
 
 let outputChannel: vscode.OutputChannel;
@@ -318,9 +319,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
       runCleanBuild();
     }),
     vscode.commands.registerCommand('coauthor.indentTex', () => {
-      const terminal = ensureTerminal();
-      terminal.show();
-      terminal.sendText('coauthor indent-tex');
+      // const terminal = ensureTerminal();
+      // terminal.show();
+      // terminal.sendText('coauthor indent-tex');
+      runIndentTex();
     }),
     vscode.commands.registerCommand(
       'coauthor.cleanSingle',
