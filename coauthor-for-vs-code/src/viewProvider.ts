@@ -52,8 +52,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
           const inputFiles_val =
-            message.inputFiles &&
-            message.inputFiles.length > 0
+            message.inputFiles && message.inputFiles.length > 0
               ? message.inputFiles
               : null;
           const sampleFiles_val =
