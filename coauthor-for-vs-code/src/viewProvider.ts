@@ -368,6 +368,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             message.clean,
           );
           break;
+        case 'cleanLatexDiffVC':
+          vscode.commands.executeCommand(
+            'coauthor.cleanLatexDiffVC',
+            message.inputFile,
+            message.baseFile,
+            message.commitHash,
+            message.clean,
+          );
+          break;
         case 'getCurrentFile':
           const fileType = message.fileType || 'input';
           const currentOpenFile = await vscode.commands.executeCommand<string>(
