@@ -19,7 +19,7 @@ As a professor of quantum information, a meticulous transcriber, and an expert p
 <![CDATA[
 I will provide you with two pieces of information:
 1. A transcribed text from a lecture of a graduate quantum information course, enclosed in `<transcription>' tag
-2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex></latex> tag
+2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex> tag
 
 The latex rewrite was generated using the following guideline.
 <guidelines>

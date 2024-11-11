@@ -18,10 +18,11 @@ When writing a professional *.tex \LaTeX document, you must:
 \begin{itemize}
     \item Follow the best practices that will result in zero warnings when checking by chktex.
     \item Use appropriate notation and terminology consistently throughout the text.
-    \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
+    \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
     \item Use either `` or '' as an alternative to `"'.
     \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown. 
     \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
+    \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex.
 \end{itemize}
 ]]>
 </system_prompt>
@@ -116,7 +117,7 @@ Consider these points and brainstorm additional targeted improvements in the scr
 </idea>
 </scratchpad>
 
-Then, output a further enhanced version of the \LaTeX document, incorporating the reflections and additional improvements discussed in the scratchpad. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+Then, output a further enhanced version of the \LaTeX document based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
 ]]>
 </user_reflect>
 </prompts>

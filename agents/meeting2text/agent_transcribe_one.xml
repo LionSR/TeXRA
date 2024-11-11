@@ -57,7 +57,7 @@ Refer back to the example edited transcript to see how these guidelines should b
 
 Before you begin editing, carefully read through the full transcript to ensure you understand the overall context and flow of the discussion. Then, go through and meticulously edit the transcript line by line.
 
-After you are done editing, please provide your final edited version of the transcript inside <edited_transcript></edited_transcript> tag. 
+After you are done editing, please provide your final edited version of the transcript inside <edited_transcript> tag. 
 The edited transcript should use markdown format, be easy to follow, with clear distinctions between speakers and a logical flow of information. Example output:
 <example>
 **Speaker 1:** [Speaker 1's dialogue line 1]
