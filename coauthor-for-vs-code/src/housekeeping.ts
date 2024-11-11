@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
+import * as cp from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(cp.exec);
 
 let outputChannel: vscode.OutputChannel;
 outputChannel = vscode.window.createOutputChannel('Coauthor Housekeeping');
@@ -14,6 +17,7 @@ const EXCLUDED_DIRS = new Set([
   'figs',
   'figures',
   'Notes',
+  'Diffs',
 ]);
 const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 const TEMP_EXTENSIONS = [
@@ -889,4 +893,131 @@ export async function runCleanLatexDiffVCMultiple(
   }
 
   vscode.window.showInformationMessage('Multiple LaTeX diff files cleaned');
+}
+
+export async function runIndentTex(): Promise<void> {
+  outputChannel.appendLine('Starting LaTeX indentation process');
+
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    vscode.window.showErrorMessage('No workspace folder open');
+    return;
+  }
+
+  // Get latexindent config from VS Code settings
+  const config = getConfig().get<string>('latexindentConfig');
+  outputChannel.appendLine(`LaTeX indent config: ${config}`);
+
+  if (config) {
+    // Check if config file exists
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(config));
+    } catch (error) {
+      outputChannel.appendLine(
+        `Error: Latexindent config file not found at ${config}`,
+      );
+      vscode.window.showErrorMessage(
+        `Latexindent config file not found at ${config}`,
+      );
+      return;
+    }
+  }
+
+  const processDirectory = async (dirPath: string) => {
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(
+        vscode.Uri.file(dirPath),
+      );
+      for (const [name, type] of entries) {
+        if (EXCLUDED_DIRS.has(name.toLowerCase())) {
+          continue;
+        }
+        if (name.includes('Diffs')) {
+          continue;
+        }
+
+        const fullPath = path.join(dirPath, name);
+
+        if (type === vscode.FileType.Directory) {
+          await processDirectory(fullPath);
+        } else if (type === vscode.FileType.File && name.endsWith('.tex')) {
+          outputChannel.appendLine(`Processing file: ${fullPath}`);
+          try {
+            const command = [
+              'latexindent',
+              `"${fullPath}"`,
+              '-w', // Write to file
+              '-s', // Silent mode
+              config ? `-l="${config}"` : '', // Add config only if it exists
+            ]
+              .filter(Boolean)
+              .join(' ');
+
+            outputChannel.appendLine(`Executing command: ${command}`);
+            await execAsync(command);
+            outputChannel.appendLine(`Successfully indented: ${fullPath}`);
+          } catch (error) {
+            outputChannel.appendLine(
+              `Error indenting file ${fullPath}: ${error}`,
+            );
+            continue;
+          }
+        }
+      }
+    } catch (error) {
+      outputChannel.appendLine(
+        `Error processing directory ${dirPath}: ${error}`,
+      );
+    }
+  };
+
+  try {
+    await processDirectory(workspacePath);
+
+    // Clean up temporary files recursively
+    const processCleanup = async (dirPath: string) => {
+      try {
+        const entries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(dirPath),
+        );
+        for (const [name, type] of entries) {
+          if (EXCLUDED_DIRS.has(name.toLowerCase())) {
+            continue;
+          }
+          if (name.includes('Diffs')) {
+            continue;
+          }
+
+          const fullPath = path.join(dirPath, name);
+
+          if (type === vscode.FileType.Directory) {
+            await processCleanup(fullPath);
+          } else if (type === vscode.FileType.File) {
+            // Check for temporary files
+            if (
+              name.endsWith('.bak') ||
+              name.endsWith('.bak0') ||
+              name.endsWith('.bak1') ||
+              name === 'indent.log'
+            ) {
+              outputChannel.appendLine(`Found cleanup file: ${fullPath}`);
+              await deleteFile(fullPath);
+            }
+          }
+        }
+      } catch (error) {
+        outputChannel.appendLine(
+          `Error during cleanup in directory ${dirPath}: ${error}`,
+        );
+      }
+    };
+
+    // Start cleanup from workspace root
+    await processCleanup(workspacePath);
+
+    vscode.window.showInformationMessage('All .tex files have been indented');
+  } catch (error) {
+    outputChannel.appendLine(`Error during indentation process: ${error}`);
+    vscode.window.showErrorMessage(`Error during indentation: ${error}`);
+  }
 }
