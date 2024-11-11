@@ -694,10 +694,16 @@ document.addEventListener('DOMContentLoaded', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
       const agent = document.getElementById('agentSelect').value;
       const model = document.getElementById('modelSelect').value;
-      const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
+      const outputNameOverride =
+        document.getElementById('outputNameOverride').value.trim() || null;
 
-      console.log('Sending packSingle command with:', { inputFile, agent, model, outputNameOverride });
-      
+      console.log('Sending packSingle command with:', {
+        inputFile,
+        agent,
+        model,
+        outputNameOverride,
+      });
+
       if (!inputFile || !agent || !model) {
         vscode.postMessage({
           command: 'showInformationMessage',
