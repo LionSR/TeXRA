@@ -647,7 +647,7 @@ document.addEventListener('DOMContentLoaded', function () {
             : [];
       };
 
-      const additionalInputFiles = getFiles(
+      const inputFiles = getFiles(
         'multipleInputFilesSelect',
         'inputFileSelect',
       ).filter((file) => file !== inputFile);
@@ -673,7 +673,7 @@ document.addEventListener('DOMContentLoaded', function () {
         command: 'execute',
         agent: agent,
         inputFile: inputFile,
-        additionalInputFiles: additionalInputFiles,
+        inputFiles: inputFiles,
         sampleFiles: sampleFiles,
         auxFiles: auxFiles,
         figureFiles: figureFiles,
@@ -906,7 +906,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .getElementById('packMultipleButton')
     .addEventListener('click', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
-      const additionalInputFiles = getSelectedFiles(
+      const inputFiles = getSelectedFiles(
         document.getElementById('multipleInputFilesSelect'),
       );
       const agent = document.getElementById('agentSelect').value;
@@ -924,9 +924,8 @@ document.addEventListener('DOMContentLoaded', function () {
       vscode.postMessage({
         command: 'packMultiple',
         inputFile: inputFile,
-        additionalInputFiles: additionalInputFiles,
+        inputFiles: inputFiles,
         agent: agent,
-        reflect: reflect,
         model: model,
         outputNameOverride: outputNameOverrideValue,
         outputFiles: outputFiles,
@@ -934,7 +933,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       vscode.postMessage({
         command: 'showInformationMessage',
-        text: `Packing multiple files: ${[inputFile, ...additionalInputFiles].join(', ')}`,
+        text: `Packing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
       });
     });
 
@@ -942,7 +941,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .getElementById('cleanMultipleButton')
     .addEventListener('click', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
-      const additionalInputFiles = getSelectedFiles(
+      const inputFiles = getSelectedFiles(
         document.getElementById('multipleInputFilesSelect'),
       );
       const agent = document.getElementById('agentSelect').value;
@@ -960,9 +959,8 @@ document.addEventListener('DOMContentLoaded', function () {
       vscode.postMessage({
         command: 'cleanMultiple',
         inputFile: inputFile,
-        additionalInputFiles: additionalInputFiles,
+        inputFiles: inputFiles,
         agent: agent,
-        reflect: reflect,
         model: model,
         outputNameOverride: outputNameOverrideValue,
         outputFiles: outputFiles,
@@ -970,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       vscode.postMessage({
         command: 'showInformationMessage',
-        text: `Cleaning multiple files: ${[inputFile, ...additionalInputFiles].join(', ')}`,
+        text: `Cleaning multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
       });
     });
 
