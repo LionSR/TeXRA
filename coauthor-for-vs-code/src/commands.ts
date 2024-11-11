@@ -12,7 +12,7 @@ import {
   ensureArray,
 } from './utils/commonUtils';
 import { listInputFiles } from './utils';
-import { runPackSingle, runCleanSingle } from './housekeeping';
+import { runPackSingle, runCleanSingle, runCleanMultiple, runPackMultiple } from './housekeeping';
 
 let outputChannel: vscode.OutputChannel;
 outputChannel = vscode.window.createOutputChannel('Coauthor');
@@ -474,7 +474,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         reflect: string,
         model: string,
         figureFiles: string | string[] | null,
-        additionalInputFiles: string[] | null,
+        inputFiles: string[] | null,
         sampleFiles: string | string[] | null,
         autoExtractFigure: boolean,
         autoExtractTikzFigure: boolean,
@@ -495,7 +495,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           }
         };
 
-        addFilesToCommand(ensureArray(additionalInputFiles), '--input_files');
+        addFilesToCommand(ensureArray(inputFiles), '--input_files');
         addFilesToCommand(ensureArray(auxFiles), '--auxiliary_files');
         addFilesToCommand(ensureArray(figureFiles), '--figure_inputs');
         addFilesToCommand(ensureArray(sampleFiles), '--sample_files');
@@ -665,48 +665,85 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       'coauthor.packMultiple',
-      (
+      // (
+      //   inputFile: string,
+      //   inputFiles: string[],
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      //   outputFiles: string[]
+      // ) => {
+        // const terminal = ensureTerminal();
+        // terminal.show();
+        // const allInputFiles = [inputFile, ...inputFiles];
+        // let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent} 
+        // --model=${model}`;
+        // if (outputNameOverride) {
+          // command += ` --output_name_override="${outputNameOverride}"`;
+        // outputChannel.appendLine(`packMultiple command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, ${outputNameOverride}`);
+        // terminal.sendText(command);
+      // },
+      // ),
+      async (
         inputFile: string,
-        additionalInputFiles: string[],
+        inputFiles: string[],
         agent: string,
         model: string,
         outputNameOverride: string,
-        outputFiles: string[],
+        outputFiles: string[]
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const allInputFiles = [inputFile, ...additionalInputFiles];
-        let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --output_name_override="${outputNameOverride}"`;
-        }
 
-        terminal.sendText(command);
-      },
+        if (!inputFile || !agent || !model) {
+            outputChannel.appendLine(`[ERROR] Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`);
+            vscode.window.showErrorMessage('Missing required parameters for pack multiple');
+            return;
+        }
+        await runPackMultiple(model, inputFile, outputFiles, agent, outputNameOverride);
+      }
     ),
     vscode.commands.registerCommand(
       'coauthor.cleanMultiple',
-      (
+      // (
+      //   inputFile: string,
+      //   inputFiles: string[],
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      //   outputFiles: string[]
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   const allInputFiles = [inputFile, ...inputFiles];
+      //   let inputFilesWithOverride = outputNameOverride
+      //     ? [outputNameOverride, ...outputFiles]
+      //     : outputFiles;
+      //   let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=$
+      //   {agent} --model=${model}`;
+      //   terminal.sendText(command);
+      // },
+      async (
         inputFile: string,
-        additionalInputFiles: string[],
+        inputFiles: string[],
         agent: string,
         model: string,
         outputNameOverride: string,
-        outputFiles: string[],
+        outputFiles: string[]
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const allInputFiles = [inputFile, ...additionalInputFiles];
+        outputChannel.appendLine(`cleanMultiple command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, ${outputNameOverride}`);
+        if (!inputFile || !agent || !model) {
+            outputChannel.appendLine(`[ERROR] Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`);
+            vscode.window.showErrorMessage('Missing required parameters for clean multiple');
+            return;
+        }
         let inputFilesWithOverride = outputNameOverride
           ? [outputNameOverride, ...outputFiles]
           : outputFiles;
-        let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=${agent} --model=${model}`;
-        terminal.sendText(command);
-      },
+        await runCleanMultiple(model, inputFile, inputFilesWithOverride, agent);
+      }
     ),
     vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
-      const inputFiles = await listInputFiles();
-      return inputFiles;
+      const inputFilesRefreshed = await listInputFiles();
+      return inputFilesRefreshed;
     }),
     vscode.commands.registerCommand('coauthor.selectBaseFile', async () => {
       const baseFile = await vscode.window.showOpenDialog({
