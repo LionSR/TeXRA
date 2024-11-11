@@ -19,6 +19,10 @@ import {
   runPackMultiple,
   runCleanOutput,
   runCleanBuild,
+  runPackLatexDiffVC,
+  runPackLatexDiffVCMultiple,
+  runCleanLatexDiffVC,
+  runCleanLatexDiffVCMultiple,
 } from './housekeeping';
 
 let outputChannel: vscode.OutputChannel;
@@ -273,13 +277,32 @@ export function registerCommands(context: vscode.ExtensionContext) {
         commitHash: string,
         clean: boolean = false,
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const cleanFlag = clean ? '--clean' : '';
-        const fileToUse = baseFile || inputFile;
-        terminal.sendText(
-          `coauthor pack-latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash} ${cleanFlag}`,
+        // const terminal = ensureTerminal();
+        // terminal.show();
+        // const cleanFlag = clean ? '--clean' : '';
+        // const fileToUse = baseFile || inputFile;
+        // terminal.sendText(
+        //     `coauthor pack-latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash} ${cleanFlag}`,
+        // );
+        outputChannel.appendLine(
+          `packLatexDiffVC command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
         );
+        const fileToUse = baseFile || inputFile;
+        await runPackLatexDiffVC(fileToUse, commitHash, clean);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.packLatexDiffVCMultiple',
+      async (
+        inputFiles: string[],
+        commitHash: string,
+        clean: boolean = false,
+      ) => {
+        outputChannel.appendLine(
+          `packLatexDiffVCMultiple command called with: commitHash=${commitHash}, clean=${clean}`,
+        );
+        outputChannel.appendLine(`Input files: ${inputFiles.join(', ')}`);
+        await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
       },
     ),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
@@ -813,6 +836,26 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(
       'coauthor.chatView',
       new CoAuthorViewProvider(context),
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.cleanLatexDiffVC',
+      async (inputFile: string, baseFile: string, commitHash: string) => {
+        outputChannel.appendLine(
+          `cleanLatexDiffVC command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
+        );
+        const fileToUse = baseFile || inputFile;
+        await runCleanLatexDiffVC(fileToUse, commitHash);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.cleanLatexDiffVCMultiple',
+      async (inputFiles: string[], commitHash: string) => {
+        outputChannel.appendLine(
+          `cleanLatexDiffVCMultiple command called with: commitHash=${commitHash}`,
+        );
+        outputChannel.appendLine(`Input files: ${inputFiles.join(', ')}`);
+        await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
+      },
     ),
   );
 }
