@@ -693,16 +693,23 @@ document.addEventListener('DOMContentLoaded', function () {
     .addEventListener('click', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
       const agent = document.getElementById('agentSelect').value;
-      const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
-      const outputNameOverride =
-        document.getElementById('outputNameOverride').value.trim() || null;
+      const outputNameOverride = document.getElementById('outputNameOverride').value.trim() || null;
+
+      console.log('Sending packSingle command with:', { inputFile, agent, model, outputNameOverride });
+      
+      if (!inputFile || !agent || !model) {
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select all required fields (input file, agent, and model)',
+        });
+        return;
+      }
 
       vscode.postMessage({
         command: 'packSingle',
         inputFile: inputFile,
         agent: agent,
-        reflect: reflect,
         model: model,
         outputNameOverride: outputNameOverride,
       });
@@ -717,7 +724,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .addEventListener('click', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
       const agent = document.getElementById('agentSelect').value;
-      const reflect = document.getElementById('reflectSelect').value;
+      // const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
       const outputNameOverride =
         document.getElementById('outputNameOverride').value.trim() || null;
@@ -726,7 +733,6 @@ document.addEventListener('DOMContentLoaded', function () {
         command: 'cleanSingle',
         inputFile: inputFile,
         agent: agent,
-        reflect: reflect,
         model: model,
         outputNameOverride: outputNameOverride,
       });
