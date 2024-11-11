@@ -51,10 +51,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const model_val = message.model;
           const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
-          const additionalInputFiles_val =
-            message.additionalInputFiles &&
-            message.additionalInputFiles.length > 0
-              ? message.additionalInputFiles
+          const inputFiles_val =
+            message.inputFiles &&
+            message.inputFiles.length > 0
+              ? message.inputFiles
               : null;
           const sampleFiles_val =
             message.sampleFiles && message.sampleFiles.length > 0
@@ -86,7 +86,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               reflect_val,
               model_val,
               figureFiles_val,
-              additionalInputFiles_val,
+              inputFiles_val,
               sampleFiles_val,
               autoExtractFigure_val,
               autoExtractTikzFigure_val,
@@ -287,7 +287,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand(
             'coauthor.packMultiple',
             message.inputFile,
-            message.additionalInputFiles,
+            message.inputFiles,
             message.agent,
             message.model,
             message.outputNameOverride,
@@ -298,7 +298,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand(
             'coauthor.cleanMultiple',
             message.inputFile,
-            message.additionalInputFiles,
+            message.inputFiles,
             message.agent,
             message.model,
             message.outputNameOverride,
