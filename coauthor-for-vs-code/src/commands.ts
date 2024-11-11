@@ -12,6 +12,10 @@ import {
   ensureArray,
 } from './utils/commonUtils';
 import { listInputFiles } from './utils';
+import { runPackSingle, runCleanSingle } from './housekeeping';
+
+let outputChannel: vscode.OutputChannel;
+outputChannel = vscode.window.createOutputChannel('Coauthor');
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -213,22 +217,35 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       'coauthor.packSingle',
-      (
-        inputFile: string,
-        agent: string,
-        model: string,
-        outputNameOverride: string,
-      ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        let command = `coauthor pack-single --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --input_file="${outputNameOverride}"`;
-        } else {
-          command += ` --input_file="${inputFile}"`;
+      // (
+      //   inputFile: string,
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   let command = `coauthor pack-single --agent=${agent} --model=${model}`;
+      //   if (outputNameOverride) {
+      //     command += ` --input_file="${outputNameOverride}"`;
+      //   } else {
+      //     command += ` --input_file="${inputFile}"`;
+      //   }
+      //   terminal.sendText(command);
+      // },
+      async (inputFile: string, agent: string, model: string, outputNameOverride?: string) => {
+        outputChannel.appendLine(`packSingle command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`);
+        if (!inputFile || !agent || !model) {
+            outputChannel.appendLine(`[ERROR] Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`);
+            vscode.window.showErrorMessage('Missing required parameters for pack single');
+            return;
         }
-        terminal.sendText(command);
-      },
+        if (outputNameOverride) {
+          await runPackSingle(model, outputNameOverride, agent);
+        } else {
+          await runPackSingle(model, inputFile, agent);
+        }
+      }
     ),
     vscode.commands.registerCommand(
       'coauthor.packLatexDiffVC',
@@ -264,22 +281,35 @@ export function registerCommands(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand(
       'coauthor.cleanSingle',
-      (
-        inputFile: string,
-        agent: string,
-        model: string,
-        outputNameOverride: string,
-      ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        let command = `coauthor clean-single --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --input_file="${outputNameOverride}"`;
-        } else {
-          command += ` --input_file="${inputFile}"`;
+      // (
+      //   inputFile: string,
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   let command = `coauthor clean-single --agent=${agent} --model=${model}`;
+      //   if (outputNameOverride) {
+      //     command += ` --input_file="${outputNameOverride}"`;
+      //   } else {
+      //     command += ` --input_file="${inputFile}"`;
+      //   }
+      //   terminal.sendText(command);
+      // },
+      async (inputFile: string, agent: string, model: string, outputNameOverride: string) => {
+        outputChannel.appendLine(`cleanSingle command called with: nputFile=${inputFile}, agent=${agent}, model=${model}, ${outputNameOverride}`);
+        if (!inputFile || !agent || !model) {
+            outputChannel.appendLine(`[ERROR] Missing required parameters: nputFile=${inputFile}, agent=${agent}, model=${model}`);
+            vscode.window.showErrorMessage('Missing required parameters for clean single');
+            return;
         }
-        terminal.sendText(command);
-      },
+        if (outputNameOverride) {
+          await runCleanSingle(model, outputNameOverride, agent);
+        } else {
+          await runCleanSingle(model, inputFile, agent);
+        }
+      }
     ),
     vscode.commands.registerCommand(
       'coauthor.latexDiff',
