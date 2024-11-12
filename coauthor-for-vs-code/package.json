@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -57,7 +57,10 @@
             "items": {
               "type": "string"
             },
-            "default": ["Discrete-Time", "PapersEx"],
+            "default": [
+              "Discrete-Time",
+              "PapersEx"
+            ],
             "description": "Directories to consider as the root for input files",
             "editPresentation": "multilineText",
             "order": 1
@@ -67,7 +70,12 @@
             "items": {
               "type": "string"
             },
-            "default": ["Discrete-Time", "FiguresEx", "Figures", "Figs"],
+            "default": [
+              "Discrete-Time",
+              "FiguresEx",
+              "Figures",
+              "Figs"
+            ],
             "description": "Directories to include in the figure path",
             "editPresentation": "multilineText",
             "order": 2
@@ -185,7 +193,10 @@
           "coauthor.merge.defaultReflect": {
             "type": "string",
             "default": "False",
-            "enum": ["True", "False"],
+            "enum": [
+              "True",
+              "False"
+            ],
             "description": "Default reflect setting for merge operations",
             "order": 2
           }
@@ -252,6 +263,11 @@
       {
         "command": "coauthor.merge",
         "title": "CoAuthor: Merge Files"
+      },
+      {
+        "command": "coauthor.openAgentEditor",
+        "title": "CoAuthor: Open Agent Editor",
+        "category": "CoAuthor"
       }
     ],
     "viewsContainers": {
@@ -271,7 +287,18 @@
           "name": "Your Favourite CoAuthor ❤️"
         }
       ]
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "coauthor.agentEditor",
+        "displayName": "Agent Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.agent.xml"
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -290,6 +317,7 @@
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.34",
     "@types/vscode": "^1.89.0",
+    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-electron": "^2.4.0",
@@ -319,6 +347,7 @@
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
     "jest-worker": "^29.7.0",
-    "terser-webpack-plugin": "^5.3.10"
+    "terser-webpack-plugin": "^5.3.10",
+    "xml2js": "^0.6.2"
   }
 }
