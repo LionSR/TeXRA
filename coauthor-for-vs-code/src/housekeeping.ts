@@ -3,7 +3,15 @@ import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
-import { deleteFile, moveFile, copyFile, findFile, createDirectory, readDirectory, fileExists} from './utils/fileUtils';
+import {
+  deleteFile,
+  moveFile,
+  copyFile,
+  findFile,
+  createDirectory,
+  readDirectory,
+  fileExists,
+} from './utils/fileUtils';
 import { log, initializeLogging } from './utils/logUtils';
 const execAsync = promisify(cp.exec);
 
@@ -142,9 +150,17 @@ export async function runCleanSingle(
         await deleteFile(filePath);
       }
 
-      const buildFilePath = await findFile(path.join(inputDir, 'build'), pattern, ext);
+      const buildFilePath = await findFile(
+        path.join(inputDir, 'build'),
+        pattern,
+        ext,
+      );
       if (buildFilePath) {
-        log(CHANNEL_NAME, category, `Found build file to delete: ${buildFilePath}`);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Found build file to delete: ${buildFilePath}`,
+        );
         filesFound = true;
         await deleteFile(buildFilePath);
       }
@@ -229,11 +245,9 @@ export async function runPackSingle(
 
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    outputFolder = outputFolder || path.join(
-      inputDir,
-      'Versions',
-      `${now}_${baseName}_${agent}_${model}`,
-    );
+    outputFolder =
+      outputFolder ||
+      path.join(inputDir, 'Versions', `${now}_${baseName}_${agent}_${model}`);
     log(CHANNEL_NAME, category, `Output folder: ${outputFolder}`);
 
     try {
@@ -263,7 +277,12 @@ export async function runPackSingle(
 
       vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
     } catch (error) {
-      log(CHANNEL_NAME, category, `Error during file operations: ${error}`, true);
+      log(
+        CHANNEL_NAME,
+        category,
+        `Error during file operations: ${error}`,
+        true,
+      );
       vscode.window.showErrorMessage(`Error during packing: ${error}`);
       return '';
     }
@@ -350,7 +369,11 @@ export async function runPackMultiple(
   try {
     // Use fileUtils.createDirectory instead
     await createDirectory(commonOutputFolder);
-    log(CHANNEL_NAME, category, `Created output directory: ${commonOutputFolder}`);
+    log(
+      CHANNEL_NAME,
+      category,
+      `Created output directory: ${commonOutputFolder}`,
+    );
 
     // Pack main input file or override file
     if (outputNameOverride) {
@@ -386,8 +409,15 @@ export async function runPackMultiple(
     log(CHANNEL_NAME, category, `All files packed into ${commonOutputFolder}`);
     return commonOutputFolder;
   } catch (error) {
-    log(CHANNEL_NAME, category, `Error during multiple pack operation: ${error}`, true);
-    vscode.window.showErrorMessage(`Error during multiple pack operation: ${error}`);
+    log(
+      CHANNEL_NAME,
+      category,
+      `Error during multiple pack operation: ${error}`,
+      true,
+    );
+    vscode.window.showErrorMessage(
+      `Error during multiple pack operation: ${error}`,
+    );
     return '';
   }
 }
@@ -457,7 +487,7 @@ export async function runCleanOutput(): Promise<void> {
           const ext = path.extname(name);
           if (validExtensions.has(ext)) {
             // Check if file matches any model pattern
-            if (MODELS.some(model => name.includes(`_${model}`))) {
+            if (MODELS.some((model) => name.includes(`_${model}`))) {
               filesToDelete.add(path.join(dirPath, name));
             }
           }
@@ -779,7 +809,9 @@ export async function runIndentTex(): Promise<void> {
 
             log(CHANNEL_NAME, category, `Executing command: ${command}`);
             try {
-              const { stdout, stderr } = await execAsync(command, { cwd: workspacePath });
+              const { stdout, stderr } = await execAsync(command, {
+                cwd: workspacePath,
+              });
               if (stdout) {
                 log(CHANNEL_NAME, category, `Command output: ${stdout}`);
               }
@@ -790,18 +822,31 @@ export async function runIndentTex(): Promise<void> {
             } catch (execError) {
               log(CHANNEL_NAME, category, `Command error: ${execError}`, true);
               if (execError instanceof Error && 'stderr' in execError) {
-                log(CHANNEL_NAME, category, `Command stderr: ${(execError as any).stderr}`, true);
+                log(
+                  CHANNEL_NAME,
+                  category,
+                  `Command stderr: ${(execError as any).stderr}`,
+                  true,
+                );
               }
               continue;
             }
           } catch (error) {
-            log(CHANNEL_NAME, category, `Error indenting file ${fullPath}: ${error}`);
+            log(
+              CHANNEL_NAME,
+              category,
+              `Error indenting file ${fullPath}: ${error}`,
+            );
             continue;
           }
         }
       }
     } catch (error) {
-      log(CHANNEL_NAME, category, `Error processing directory ${dirPath}: ${error}`);
+      log(
+        CHANNEL_NAME,
+        category,
+        `Error processing directory ${dirPath}: ${error}`,
+      );
     }
   };
 
@@ -841,7 +886,8 @@ export async function runIndentTex(): Promise<void> {
         log(
           CHANNEL_NAME,
           category,
-          `Error during cleanup in directory ${dirPath}: ${error}`, true
+          `Error during cleanup in directory ${dirPath}: ${error}`,
+          true,
         );
       }
     };
