@@ -3,10 +3,12 @@ import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
+import { deleteFile, moveFile, copyFile, findFile } from './utils/fileUtils';
+import { log, initializeLogging } from './utils/logUtils';
 const execAsync = promisify(cp.exec);
 
-let outputChannel: vscode.OutputChannel;
-outputChannel = vscode.window.createOutputChannel('Coauthor Housekeeping');
+const CHANNEL_NAME = 'Coauthor Housekeeping';
+initializeLogging(CHANNEL_NAME);
 
 const EXCLUDED_DIRS = new Set([
   'Figs',
@@ -56,14 +58,14 @@ const MODELS = [
 ];
 
 function getAgentFirstNameChunk(agent: string): string {
-  outputChannel.appendLine(`Getting agent first name chunk for: ${agent}`);
+  log(CHANNEL_NAME, 'Agent', `Getting agent first name chunk for: ${agent}`);
   let result: string;
   if (agent.startsWith('write-')) {
     result = agent.split('-')[1];
   } else {
     result = agent.includes('_') ? agent.split('_')[0] : agent.split('-')[0];
   }
-  outputChannel.appendLine(`Agent first name chunk: ${result}`);
+  log(CHANNEL_NAME, 'Agent', `Agent first name chunk resolved to: ${result}`);
   return result;
 }
 
@@ -90,139 +92,24 @@ function getFilePatterns(
   return patterns;
 }
 
-async function deleteFile(filePath: string): Promise<void> {
-  try {
-    const uri = vscode.Uri.file(filePath);
-    await vscode.workspace.fs.delete(uri, { useTrash: false });
-    outputChannel.appendLine(`Deleted: ${filePath}`);
-  } catch (error) {
-    if (error instanceof vscode.FileSystemError) {
-      vscode.window.showWarningMessage(
-        `Unable to delete ${filePath}. It may be in use.`,
-      );
-    } else {
-      vscode.window.showErrorMessage(`Error deleting ${filePath}: ${error}`);
-    }
-  }
-}
-
-async function moveFile(source: string, destination: string): Promise<void> {
-  outputChannel.appendLine(`Moving file from ${source} to ${destination}`);
-  try {
-    const sourceUri = vscode.Uri.file(source);
-    const destUri = vscode.Uri.file(destination);
-
-    // Check if source exists
-    const sourceExists = await vscode.workspace.fs.stat(sourceUri).then(
-      () => true,
-      () => false,
-    );
-    if (!sourceExists) {
-      outputChannel.appendLine(`[Error] Source file doesn't exist: ${source}`);
-      return;
-    }
-
-    await vscode.workspace.fs.rename(sourceUri, destUri);
-    outputChannel.appendLine(`Successfully moved: ${source} to ${destination}`);
-  } catch (error) {
-    outputChannel.appendLine(
-      `[Error] Error moving file from ${source} to ${destination}: ${error}`,
-    );
-    vscode.window.showErrorMessage(`Error moving file: ${error}`);
-  }
-}
-
-async function copyFile(source: string, destination: string): Promise<void> {
-  outputChannel.appendLine(`Copying file from ${source} to ${destination}`);
-  try {
-    const sourceUri = vscode.Uri.file(source);
-    const destUri = vscode.Uri.file(destination);
-
-    // Check if source exists
-    const sourceExists = await vscode.workspace.fs.stat(sourceUri).then(
-      () => true,
-      () => false,
-    );
-    if (!sourceExists) {
-      outputChannel.appendLine(`[Error] Source file doesn't exist: ${source}`);
-      return;
-    }
-
-    await vscode.workspace.fs.copy(sourceUri, destUri, { overwrite: true });
-    outputChannel.appendLine(
-      `Successfully copied: source=${source} to destination=${destination}`,
-    );
-  } catch (error) {
-    outputChannel.appendLine(
-      `[Error] Error copying file from source=${source} to destination=${destination}: ${error}`,
-    );
-    vscode.window.showErrorMessage(`Error copying file: ${error}`);
-  }
-}
-
-async function findFile(
-  inputDir: string,
-  pattern: string,
-  ext?: string,
-): Promise<string | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) return null;
-
-  const searchDirs = [
-    path.join(workspacePath, inputDir, 'build'),
-    path.join(workspacePath, inputDir),
-  ];
-
-  for (const searchDir of searchDirs) {
-    try {
-      const dirUri = vscode.Uri.file(searchDir);
-
-      const exists = await vscode.workspace.fs.stat(dirUri).then(
-        () => true,
-        () => false,
-      );
-      if (!exists) {
-        outputChannel.appendLine(`Directory doesn't exist: ${searchDir}`);
-        continue;
-      }
-
-      const files = await vscode.workspace.fs.readDirectory(dirUri);
-      for (const [fileName, fileType] of files) {
-        if (fileType === vscode.FileType.File) {
-          if (ext) {
-            if (fileName === `${pattern}${ext}`) {
-              const foundPath = path.join(searchDir, fileName);
-              outputChannel.appendLine(`Found file: ${foundPath}`);
-              return foundPath;
-            }
-          } else if (fileName.startsWith(pattern)) {
-            const foundPath = path.join(searchDir, fileName);
-            outputChannel.appendLine(`Found file: ${foundPath}`);
-            return foundPath;
-          }
-        }
-      }
-    } catch (error) {
-      outputChannel.appendLine(
-        `Error searching directory searchDir=${searchDir}: ${error}`,
-      );
-      continue;
-    }
-  }
-  return null;
-}
-
 export async function runCleanSingle(
   model: string,
   inputFile: string,
   agent: string,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runCleanSingle called with: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+  const category = 'Clean-Single';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
+
   if (!inputFile || !model || !agent) {
-    outputChannel.appendLine(
-      `[Error] Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+    log(
+      CHANNEL_NAME,
+      category,
+      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+      true,
     );
     vscode.window.showErrorMessage(
       'Missing required parameters for clean single',
@@ -232,22 +119,24 @@ export async function runCleanSingle(
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    outputChannel.appendLine('[Error] No workspace path found');
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
     return;
   }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  outputChannel.appendLine(
+  log(
+    CHANNEL_NAME,
+    category,
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk);
-  outputChannel.appendLine(`Generated patterns: ${filePatterns}`);
+  log(CHANNEL_NAME, category, `Generated patterns: ${filePatterns}`);
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
-  outputChannel.appendLine(`Using extensions: ${extensions}`);
+  log(CHANNEL_NAME, category, `Using extensions: ${extensions}`);
 
   let filesFound = false;
   for (const pattern of filePatterns) {
@@ -267,12 +156,12 @@ export async function runCleanSingle(
           () => false,
         );
         if (exists) {
-          outputChannel.appendLine(`Found file to delete: ${filePath}`);
+          log(CHANNEL_NAME, category, `Found file to delete: ${filePath}`);
           filesFound = true;
           await deleteFile(filePath);
         }
       } catch (error) {
-        outputChannel.appendLine(`File not found or error: ${filePath}`);
+        log(CHANNEL_NAME, category, `File not found or error: ${filePath}`);
       }
 
       try {
@@ -282,14 +171,18 @@ export async function runCleanSingle(
           () => false,
         );
         if (buildExists) {
-          outputChannel.appendLine(
+          log(
+            CHANNEL_NAME,
+            category,
             `Found build file to delete: ${buildFilePath}`,
           );
           filesFound = true;
           await deleteFile(buildFilePath);
         }
       } catch (error) {
-        outputChannel.appendLine(
+        log(
+          CHANNEL_NAME,
+          category,
           `Build file not found or error: ${buildFilePath}`,
         );
       }
@@ -297,7 +190,9 @@ export async function runCleanSingle(
   }
 
   if (!filesFound) {
-    outputChannel.appendLine(
+    log(
+      CHANNEL_NAME,
+      category,
       `No matching files found to clean for ${inputFile}`,
     );
     vscode.window.showInformationMessage(
@@ -314,12 +209,19 @@ export async function runPackSingle(
   agent: string,
   outputFolder?: string,
 ): Promise<string> {
-  outputChannel.appendLine(
-    `runPackSingle called with: model=${model}, inputFile=${inputFile}, agent=${agent}, ${outputFolder}`,
+  const category = 'Pack-Single';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
   );
+
   if (!inputFile || !model || !agent) {
-    outputChannel.appendLine(
-      `[ERROR] Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+    log(
+      CHANNEL_NAME,
+      category,
+      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+      true,
     );
     vscode.window.showErrorMessage(
       'Missing required parameters for pack single',
@@ -329,13 +231,15 @@ export async function runPackSingle(
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    outputChannel.appendLine('[Error] No workspace path found');
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
     return '';
   }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  outputChannel.appendLine(
+  log(
+    CHANNEL_NAME,
+    category,
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
@@ -344,7 +248,7 @@ export async function runPackSingle(
     ...getFilePatterns(baseName, model, agentFirstNameChunk),
     baseName,
   ];
-  outputChannel.appendLine(`Generated patterns: ${filePatterns}`);
+  log(CHANNEL_NAME, category, `Generated patterns: ${filePatterns}`);
 
   const movedFiles: string[] = [];
   const copiedFiles: string[] = [];
@@ -354,7 +258,7 @@ export async function runPackSingle(
     for (const ext of PACK_EXTENSIONS) {
       const filePath = await findFile(inputDir, pattern, ext);
       if (filePath) {
-        outputChannel.appendLine(`Found file: ${filePath}`);
+        log(CHANNEL_NAME, category, `Found file: ${filePath}`);
         if (
           filePath === path.join(workspacePath, inputFile) ||
           pattern === baseName
@@ -367,8 +271,8 @@ export async function runPackSingle(
     }
   }
 
-  outputChannel.appendLine(`Files to move: ${movedFiles}`);
-  outputChannel.appendLine(`Files to copy: ${copiedFiles}`);
+  log(CHANNEL_NAME, category, `Files to move: ${movedFiles}`);
+  log(CHANNEL_NAME, category, `Files to copy: ${copiedFiles}`);
 
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
@@ -380,32 +284,40 @@ export async function runPackSingle(
         'Versions',
         `${now}_${baseName}_${agent}_${model}`,
       );
-    outputChannel.appendLine(`Output folder: ${outputFolder}`);
+    log(CHANNEL_NAME, category, `Output folder: ${outputFolder}`);
 
     try {
       // Create output directory
       await vscode.workspace.fs.createDirectory(vscode.Uri.file(outputFolder));
-      outputChannel.appendLine(`Created output directory: ${outputFolder}`);
+      log(CHANNEL_NAME, category, `Created output directory: ${outputFolder}`);
 
       // Move and copy files
       for (const file of movedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
-        outputChannel.appendLine(`Moving file from ${file} to ${destination}`);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Moving file from ${file} to ${destination}`,
+        );
         await moveFile(file, destination);
       }
       for (const file of copiedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
-        outputChannel.appendLine(`Copying file from ${file} to ${destination}`);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Copying file from ${file} to ${destination}`,
+        );
         await copyFile(file, destination);
       }
 
       vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
     } catch (error) {
-      outputChannel.appendLine(`Error during file operations: ${error}`);
+      log(CHANNEL_NAME, category, `Error during file operations: ${error}`);
       vscode.window.showErrorMessage(`Error during packing: ${error}`);
     }
   } else {
-    outputChannel.appendLine(`No files found to pack for ${inputFile}`);
+    log(CHANNEL_NAME, category, `No files found to pack for ${inputFile}`);
     vscode.window.showInformationMessage(
       `No files found to pack for ${inputFile}`,
     );
@@ -430,10 +342,13 @@ export async function runCleanMultiple(
   inputFiles: string[],
   agent: string,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runCleanMultiple called with: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+  const category = 'Clean-Multiple';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
-  outputChannel.appendLine(`Additional files: ${inputFiles.join(', ')}`);
+  log(CHANNEL_NAME, category, `Additional files: ${inputFiles.join(', ')}`);
 
   await runCleanSingle(model, inputFile, agent);
 
@@ -444,7 +359,7 @@ export async function runCleanMultiple(
     }
   }
 
-  vscode.window.showInformationMessage('Cleanup complete for multiple files.');
+  log(CHANNEL_NAME, category, 'Cleanup complete for multiple files.');
 }
 
 export async function runPackMultiple(
@@ -454,14 +369,17 @@ export async function runPackMultiple(
   agent: string,
   outputNameOverride?: string,
 ): Promise<string> {
-  outputChannel.appendLine(
-    `runPackMultiple called with: model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+  const category = 'Pack-Multiple';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
   );
-  outputChannel.appendLine(`Additional files: ${inputFiles.join(', ')}`);
+  log(CHANNEL_NAME, category, `Additional files: ${inputFiles.join(', ')}`);
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    outputChannel.appendLine('[Error] No workspace path found');
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
     return '';
   }
 
@@ -483,14 +401,18 @@ export async function runPackMultiple(
     'Versions',
     `${now}_${baseName}_multiple_${agent}_${model}`,
   );
-  outputChannel.appendLine(`Common output folder: ${commonOutputFolder}`);
+  log(CHANNEL_NAME, category, `Common output folder: ${commonOutputFolder}`);
 
   try {
     // Create output directory
     await vscode.workspace.fs.createDirectory(
       vscode.Uri.file(commonOutputFolder),
     );
-    outputChannel.appendLine(`Created output directory: ${commonOutputFolder}`);
+    log(
+      CHANNEL_NAME,
+      category,
+      `Created output directory: ${commonOutputFolder}`,
+    );
 
     // Pack main input file or override file
     if (outputNameOverride) {
@@ -502,7 +424,7 @@ export async function runPackMultiple(
     // Pack input files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
-        outputChannel.appendLine(`Packing input file: ${file}`);
+        log(CHANNEL_NAME, category, `Packing input file: ${file}`);
         await runPackSingle(model, file, agent, commonOutputFolder);
       }
     }
@@ -523,21 +445,23 @@ export async function runPackMultiple(
           () => false,
         );
         if (exists) {
-          outputChannel.appendLine(`Found additional XML file: ${filePath}`);
+          log(CHANNEL_NAME, category, `Found additional XML file: ${filePath}`);
           await moveFile(filePath, path.join(commonOutputFolder, pattern));
         }
       } catch (error) {
-        outputChannel.appendLine(`XML file not found or error: ${filePath}`);
+        log(CHANNEL_NAME, category, `XML file not found or error: ${filePath}`);
         continue;
       }
     }
 
-    vscode.window.showInformationMessage(
-      `All files packed into ${commonOutputFolder}`,
-    );
+    log(CHANNEL_NAME, category, `All files packed into ${commonOutputFolder}`);
     return commonOutputFolder;
   } catch (error) {
-    outputChannel.appendLine(`Error during multiple pack operation: ${error}`);
+    log(
+      CHANNEL_NAME,
+      category,
+      `Error during multiple pack operation: ${error}`,
+    );
     vscode.window.showErrorMessage(
       `Error during multiple pack operation: ${error}`,
     );
@@ -546,8 +470,12 @@ export async function runPackMultiple(
 }
 
 export async function runCleanBuild(): Promise<void> {
+  const category = 'Clean-Build';
+  log(CHANNEL_NAME, category, 'Starting build directory cleanup');
+
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
+    log(CHANNEL_NAME, category, 'No workspace folder open', true);
     vscode.window.showErrorMessage('No workspace folder open');
     return;
   }
@@ -594,17 +522,20 @@ export async function runCleanBuild(): Promise<void> {
         }
       }
     } catch (error) {
-      outputChannel.appendLine(
+      log(
+        CHANNEL_NAME,
+        category,
         `[Error] Error processing directory ${dirPath}: ${error}`,
       );
     }
   };
 
   await processDirectory(workspacePath);
-  vscode.window.showInformationMessage('Build directories cleaned');
+  log(CHANNEL_NAME, category, 'Build directories cleaned');
 }
 
 export async function runCleanOutput(): Promise<void> {
+  const category = 'Clean-Output';
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
     vscode.window.showErrorMessage('No workspace folder open');
@@ -644,7 +575,9 @@ export async function runCleanOutput(): Promise<void> {
         }
       }
     } catch (error) {
-      outputChannel.appendLine(
+      log(
+        CHANNEL_NAME,
+        category,
         `[Error] Error processing directory ${dirPath}: ${error}`,
       );
     }
@@ -656,7 +589,7 @@ export async function runCleanOutput(): Promise<void> {
     await deleteFile(file);
   }
 
-  vscode.window.showInformationMessage('All AI Generated Output files cleaned');
+  log(CHANNEL_NAME, category, 'All AI Generated Output files cleaned');
 }
 
 export async function runPackLatexDiffVC(
@@ -664,25 +597,30 @@ export async function runPackLatexDiffVC(
   commitHash: string,
   clean: boolean = false,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runPackLatexDiffVC called with: inputFile=${inputFile}, commitHash=${commitHash}, clean=${clean}`,
+  const category = 'Pack-Latex-Diff-VC';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting LaTeX diff packing with inputFile=${inputFile}, commitHash=${commitHash}, clean=${clean}`,
   );
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    outputChannel.appendLine('[Error] No workspace path found');
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
     return;
   }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  outputChannel.appendLine(
+  log(
+    CHANNEL_NAME,
+    category,
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
   // Define patterns for files to process
   const filePatterns = [`${baseName}-diff${commitHash}`];
-  outputChannel.appendLine(`File patterns: ${filePatterns}`);
+  log(CHANNEL_NAME, category, `File patterns: ${filePatterns}`);
 
   const filesToProcess: string[] = [];
   const filesToDelete: string[] = [];
@@ -692,7 +630,7 @@ export async function runPackLatexDiffVC(
     for (const ext of ['.tex', '.pdf']) {
       const filePath = await findFile(inputDir, pattern, ext);
       if (filePath) {
-        outputChannel.appendLine(`Found file to process: ${filePath}`);
+        log(CHANNEL_NAME, category, `Found file to process: ${filePath}`);
         filesToProcess.push(filePath);
 
         // Find associated temporary files
@@ -709,7 +647,7 @@ export async function runPackLatexDiffVC(
                 () => false,
               );
             if (exists) {
-              outputChannel.appendLine(`Found temporary file: ${tempFile}`);
+              log(CHANNEL_NAME, category, `Found temporary file: ${tempFile}`);
               filesToDelete.push(tempFile);
             }
           } catch (error) {
@@ -726,7 +664,7 @@ export async function runPackLatexDiffVC(
       for (const file of [...filesToProcess, ...filesToDelete]) {
         await deleteFile(file);
       }
-      outputChannel.appendLine('Cleanup complete.');
+      log(CHANNEL_NAME, category, 'Cleanup complete.');
       vscode.window.showInformationMessage('LaTeX diff files cleaned');
     } else {
       // Move files to output folder
@@ -743,7 +681,11 @@ export async function runPackLatexDiffVC(
         await vscode.workspace.fs.createDirectory(
           vscode.Uri.file(outputFolder),
         );
-        outputChannel.appendLine(`Created output directory: ${outputFolder}`);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Created output directory: ${outputFolder}`,
+        );
 
         // Move main files
         for (const file of filesToProcess) {
@@ -755,16 +697,14 @@ export async function runPackLatexDiffVC(
           await deleteFile(file);
         }
 
-        vscode.window.showInformationMessage(
-          `Files packed into ${outputFolder}`,
-        );
+        log(CHANNEL_NAME, category, `Files packed into ${outputFolder}`);
       } catch (error) {
-        outputChannel.appendLine(`Error during packing: ${error}`);
+        log(CHANNEL_NAME, category, `Error during packing: ${error}`);
         vscode.window.showErrorMessage(`Error during packing: ${error}`);
       }
     }
   } else {
-    outputChannel.appendLine('No files found to process.');
+    log(CHANNEL_NAME, category, 'No files found to process.');
     vscode.window.showInformationMessage(
       'No LaTeX diff files found to process',
     );
@@ -776,13 +716,16 @@ export async function runPackLatexDiffVCMultiple(
   commitHash: string,
   clean: boolean = false,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runPackLatexDiffVCMultiple called with: commitHash=${commitHash}, clean=${clean}`,
+  const category = 'Pack-Latex-Diff-VC-Multiple';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting multiple LaTeX diff packing with commitHash=${commitHash}, clean=${clean}`,
   );
-  outputChannel.appendLine(`Input files: ${inputFiles.join(', ')}`);
+  log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    outputChannel.appendLine('[Error] No input files provided');
+    log(CHANNEL_NAME, category, '[Error] No input files provided', true);
     vscode.window.showErrorMessage(
       'No input files provided for multiple LaTeX diff packing',
     );
@@ -790,36 +733,41 @@ export async function runPackLatexDiffVCMultiple(
   }
 
   for (const inputFile of inputFiles) {
-    outputChannel.appendLine(`Processing file: ${inputFile}`);
+    log(CHANNEL_NAME, category, `Processing file: ${inputFile}`);
     await runPackLatexDiffVC(inputFile, commitHash, clean);
   }
 
-  vscode.window.showInformationMessage('Multiple LaTeX diff files processed');
+  log(CHANNEL_NAME, category, 'Multiple LaTeX diff files processed');
 }
 
 export async function runCleanLatexDiffVC(
   inputFile: string,
   commitHash: string,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runCleanLatexDiffVC called with: inputFile=${inputFile}, commitHash=${commitHash}`,
+  const category = 'Clean-Latex-Diff-VC';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting LaTeX diff cleaning with inputFile=${inputFile}, commitHash=${commitHash}`,
   );
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    outputChannel.appendLine('[Error] No workspace path found');
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
     return;
   }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  outputChannel.appendLine(
+  log(
+    CHANNEL_NAME,
+    category,
     `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
   );
 
   // Define patterns for files to process
   const filePatterns = [`${baseName}-diff${commitHash}`];
-  outputChannel.appendLine(`File patterns: ${filePatterns}`);
+  log(CHANNEL_NAME, category, `File patterns: ${filePatterns}`);
 
   const filesToDelete: string[] = [];
 
@@ -829,7 +777,7 @@ export async function runCleanLatexDiffVC(
     for (const ext of ['.tex', '.pdf']) {
       const filePath = await findFile(inputDir, pattern, ext);
       if (filePath) {
-        outputChannel.appendLine(`Found main file to delete: ${filePath}`);
+        log(CHANNEL_NAME, category, `Found main file to delete: ${filePath}`);
         filesToDelete.push(filePath);
       }
     }
@@ -838,7 +786,11 @@ export async function runCleanLatexDiffVC(
     for (const tempExt of TEMP_EXTENSIONS) {
       const filePath = await findFile(inputDir, pattern, tempExt);
       if (filePath) {
-        outputChannel.appendLine(`Found temporary file to delete: ${filePath}`);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Found temporary file to delete: ${filePath}`,
+        );
         filesToDelete.push(filePath);
       }
 
@@ -849,7 +801,9 @@ export async function runCleanLatexDiffVC(
         tempExt,
       );
       if (buildFilePath) {
-        outputChannel.appendLine(
+        log(
+          CHANNEL_NAME,
+          category,
           `Found build file to delete: ${buildFilePath}`,
         );
         filesToDelete.push(buildFilePath);
@@ -862,10 +816,10 @@ export async function runCleanLatexDiffVC(
     for (const file of filesToDelete) {
       await deleteFile(file);
     }
-    outputChannel.appendLine('Cleanup complete.');
+    log(CHANNEL_NAME, category, 'Cleanup complete.');
     vscode.window.showInformationMessage('LaTeX diff files cleaned');
   } else {
-    outputChannel.appendLine('No files found to clean.');
+    log(CHANNEL_NAME, category, 'No files found to clean.');
     vscode.window.showInformationMessage('No LaTeX diff files found to clean');
   }
 }
@@ -874,13 +828,16 @@ export async function runCleanLatexDiffVCMultiple(
   inputFiles: string[],
   commitHash: string,
 ): Promise<void> {
-  outputChannel.appendLine(
-    `runCleanLatexDiffVCMultiple called with: commitHash=${commitHash}`,
+  const category = 'Clean-Latex-Diff-VC-Multiple';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Starting multiple LaTeX diff cleaning with commitHash=${commitHash}`,
   );
-  outputChannel.appendLine(`Input files: ${inputFiles.join(', ')}`);
+  log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    outputChannel.appendLine('[Error] No input files provided');
+    log(CHANNEL_NAME, category, '[Error] No input files provided', true);
     vscode.window.showErrorMessage(
       'No input files provided for multiple LaTeX diff cleaning',
     );
@@ -888,33 +845,38 @@ export async function runCleanLatexDiffVCMultiple(
   }
 
   for (const inputFile of inputFiles) {
-    outputChannel.appendLine(`Processing file: ${inputFile}`);
+    log(CHANNEL_NAME, category, `Processing file: ${inputFile}`);
     await runCleanLatexDiffVC(inputFile, commitHash);
   }
 
-  vscode.window.showInformationMessage('Multiple LaTeX diff files cleaned');
+  log(CHANNEL_NAME, category, 'Multiple LaTeX diff files cleaned');
 }
 
 export async function runIndentTex(): Promise<void> {
-  outputChannel.appendLine('Starting LaTeX indentation process');
+  const category = 'Indent-Tex';
+  log(CHANNEL_NAME, category, 'Starting LaTeX indentation process');
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
+    log(CHANNEL_NAME, category, 'No workspace folder open', true);
     vscode.window.showErrorMessage('No workspace folder open');
     return;
   }
 
   // Get latexindent config from VS Code settings
   const config = getConfig().get<string>('latexindentConfig');
-  outputChannel.appendLine(`LaTeX indent config: ${config}`);
+  log(CHANNEL_NAME, category, `LaTeX indent config: ${config}`);
 
   if (config) {
     // Check if config file exists
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(config));
     } catch (error) {
-      outputChannel.appendLine(
+      log(
+        CHANNEL_NAME,
+        category,
         `Error: Latexindent config file not found at ${config}`,
+        true,
       );
       vscode.window.showErrorMessage(
         `Latexindent config file not found at ${config}`,
@@ -941,7 +903,7 @@ export async function runIndentTex(): Promise<void> {
         if (type === vscode.FileType.Directory) {
           await processDirectory(fullPath);
         } else if (type === vscode.FileType.File && name.endsWith('.tex')) {
-          outputChannel.appendLine(`Processing file: ${fullPath}`);
+          log(CHANNEL_NAME, category, `Processing file: ${fullPath}`);
           try {
             const command = [
               'latexindent',
@@ -953,11 +915,13 @@ export async function runIndentTex(): Promise<void> {
               .filter(Boolean)
               .join(' ');
 
-            outputChannel.appendLine(`Executing command: ${command}`);
+            log(CHANNEL_NAME, category, `Executing command: ${command}`);
             await execAsync(command);
-            outputChannel.appendLine(`Successfully indented: ${fullPath}`);
+            log(CHANNEL_NAME, category, `Successfully indented: ${fullPath}`);
           } catch (error) {
-            outputChannel.appendLine(
+            log(
+              CHANNEL_NAME,
+              category,
               `Error indenting file ${fullPath}: ${error}`,
             );
             continue;
@@ -965,7 +929,9 @@ export async function runIndentTex(): Promise<void> {
         }
       }
     } catch (error) {
-      outputChannel.appendLine(
+      log(
+        CHANNEL_NAME,
+        category,
         `Error processing directory ${dirPath}: ${error}`,
       );
     }
@@ -1000,13 +966,15 @@ export async function runIndentTex(): Promise<void> {
               name.endsWith('.bak1') ||
               name === 'indent.log'
             ) {
-              outputChannel.appendLine(`Found cleanup file: ${fullPath}`);
+              log(CHANNEL_NAME, category, `Found cleanup file: ${fullPath}`);
               await deleteFile(fullPath);
             }
           }
         }
       } catch (error) {
-        outputChannel.appendLine(
+        log(
+          CHANNEL_NAME,
+          category,
           `Error during cleanup in directory ${dirPath}: ${error}`,
         );
       }
@@ -1015,9 +983,9 @@ export async function runIndentTex(): Promise<void> {
     // Start cleanup from workspace root
     await processCleanup(workspacePath);
 
-    vscode.window.showInformationMessage('All .tex files have been indented');
+    log(CHANNEL_NAME, category, 'All .tex files have been indented');
   } catch (error) {
-    outputChannel.appendLine(`Error during indentation process: ${error}`);
+    log(CHANNEL_NAME, category, `Error during indentation process: ${error}`);
     vscode.window.showErrorMessage(`Error during indentation: ${error}`);
   }
 }
