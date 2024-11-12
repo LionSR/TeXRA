@@ -5,23 +5,64 @@ import {
   getRelativePath,
   getConfig,
   ensureArray,
+  getNestedConfig,
 } from './utils/commonUtils';
+import { log, initializeLogging } from './utils/logUtils';
+
+const CHANNEL_NAME = 'Coauthor Utils';
+initializeLogging(CHANNEL_NAME);
 
 export async function listInputFiles(): Promise<string[]> {
+  const category = 'List-Input-Files';
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
-  const config = getConfig();
-  const getConfigArray = (key: string) => config.get<string[]>(key) ?? [];
+  const ignoredFileExtensions = getNestedConfig<string[]>(
+    'files.ignored.fileExtensions',
+    [],
+  );
+  const ignoredDirectories = getNestedConfig<string[]>(
+    'files.ignored.directories',
+    [],
+  );
+  const ignoredKeywords = getNestedConfig<string[]>(
+    'files.ignored.keywords',
+    [],
+  );
+  const ignoredInputFiles = getNestedConfig<string[]>(
+    'files.ignored.inputFiles',
+    [],
+  );
+
+  log(
+    CHANNEL_NAME,
+    category,
+    `Ignored Extensions: ${JSON.stringify(ignoredFileExtensions)}`,
+  );
+  log(
+    CHANNEL_NAME,
+    category,
+    `Ignored Directories: ${JSON.stringify(ignoredDirectories)}`,
+  );
+  log(
+    CHANNEL_NAME,
+    category,
+    `Ignored Keywords: ${JSON.stringify(ignoredKeywords)}`,
+  );
+  log(
+    CHANNEL_NAME,
+    category,
+    `Ignored Input Files: ${JSON.stringify(ignoredInputFiles)}`,
+  );
 
   return getFilesRecursively(
     workspacePath,
     workspacePath,
     ['.txt', '.tex', '.md'],
-    getConfigArray('ignoredFileExtensions'),
-    getConfigArray('ignoredDirectories'),
-    getConfigArray('ignoredKeywords'),
-    getConfigArray('ignoredInputFiles'),
+    ignoredFileExtensions,
+    ignoredDirectories,
+    ignoredKeywords,
+    ignoredInputFiles,
   );
 }
 
@@ -31,52 +72,64 @@ export async function listAuxFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
-  const config = getConfig();
-  const ignoredExtensions = ensureArray(
-    config.get<string[]>('ignoredFileExtensions'),
+  const ignoredExtensions = getNestedConfig<string[]>(
+    'files.ignored.fileExtensions',
+    [],
   );
-  const ignoredKeywords = ensureArray(config.get<string[]>('ignoredKeywords'));
-  const additionalIgnoredAuxKeywords = ensureArray(
-    config.get<string[]>('additionalIgnoredAuxKeywords'),
+  const ignoredKeywords = getNestedConfig<string[]>(
+    'files.ignored.keywords',
+    [],
   );
-  const ignoredDirectories = ensureArray(
-    config.get<string[]>('ignoredDirectories'),
+  const additionalIgnoredAuxKeywords = getNestedConfig<string[]>(
+    'files.ignored.auxKeywords',
+    [],
+  );
+  const ignoredDirectories = getNestedConfig<string[]>(
+    'files.ignored.directories',
+    [],
   );
 
+  const safeIgnoredKeywords = ignoredKeywords || [];
+  const safeAuxKeywords = additionalIgnoredAuxKeywords || [];
+
   const combinedIgnoredKeywords = [
-    ...new Set([...ignoredKeywords, ...additionalIgnoredAuxKeywords]),
+    ...new Set([...safeIgnoredKeywords, ...safeAuxKeywords]),
   ];
 
   return getFilesInDirectory(
     workspacePath,
     ['.txt', '.tex', '.cls', '.md'],
-    ignoredExtensions,
-    ignoredDirectories,
+    ignoredExtensions || [],
+    ignoredDirectories || [],
     combinedIgnoredKeywords,
   );
 }
 
 export async function listFigureFiles(): Promise<string[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const workspacePath = workspaceFolders[0].uri.fsPath;
-    const config = getConfig();
-    const includedFigureExtensions = config.get<string[]>(
-      'includedFigureExtensions',
-    ) || ['.png', '.pdf', '.jpeg', '.jpg', '.svg'];
-    const ignoredFigureDirectories =
-      config.get<string[]>('ignoredFigureDirectories') || [];
-    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    return await getFilesRecursively(
-      workspacePath,
-      workspacePath,
-      includedFigureExtensions,
-      [],
-      ignoredFigureDirectories,
-      ignoredKeywords,
-    );
-  }
-  return [];
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) return [];
+
+  const includedFigureExtensions = getNestedConfig<string[]>(
+    'files.included.figureExtensions',
+    ['.png', '.pdf', '.jpeg', '.jpg', '.svg'],
+  );
+  const ignoredFigureDirectories = getNestedConfig<string[]>(
+    'files.ignored.figureDirectories',
+    [],
+  );
+  const ignoredKeywords = getNestedConfig<string[]>(
+    'files.ignored.keywords',
+    [],
+  );
+
+  return getFilesRecursively(
+    workspacePath,
+    workspacePath,
+    includedFigureExtensions,
+    [],
+    ignoredFigureDirectories,
+    ignoredKeywords,
+  );
 }
 
 export async function listEditedFiles(baseFileName: string): Promise<string[]> {
@@ -156,10 +209,24 @@ export async function getFilesRecursively(
   const dirEntries = await vscode.workspace.fs.readDirectory(
     vscode.Uri.file(dir),
   );
+
+  // Convert all directory names to lowercase for case-insensitive comparison
+  const normalizedExcludeDirs = new Set(
+    excludeDirectories.map((d) => d.toLowerCase()),
+  );
+
   const files = await Promise.all(
     dirEntries.map(async ([name, type]) => {
-      const fullPath = `${dir}/${name}`;
-      const relativePath = fullPath.replace(`${root}/`, '');
+      const fullPath = path.join(dir, name);
+      const relativePath = path.relative(root, fullPath);
+
+      // Check if any parent directory should be excluded
+      const pathParts = relativePath.split(path.sep);
+      if (
+        pathParts.some((part) => normalizedExcludeDirs.has(part.toLowerCase()))
+      ) {
+        return [];
+      }
 
       const stat = await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
       const isSymbolicLink =
@@ -169,7 +236,7 @@ export async function getFilesRecursively(
       if (
         (type === vscode.FileType.Directory || isSymbolicLink) &&
         !name.startsWith('.') &&
-        !excludeDirectories.includes(name)
+        !normalizedExcludeDirs.has(name.toLowerCase())
       ) {
         return await getFilesRecursively(
           fullPath,
@@ -184,15 +251,18 @@ export async function getFilesRecursively(
         type === vscode.FileType.File &&
         !name.startsWith('.') &&
         (includeExtensions.length === 0 ||
-          includeExtensions.some((ext) => name.endsWith(ext))) &&
-        !excludeExtensions.some((ext) => name.endsWith(ext)) &&
+          includeExtensions.some((ext) =>
+            name.toLowerCase().endsWith(ext.toLowerCase()),
+          )) &&
+        !excludeExtensions.some((ext) =>
+          name.toLowerCase().endsWith(ext.toLowerCase()),
+        ) &&
         !excludeKeywords.some((keyword) => name.includes(keyword)) &&
         !excludeFiles.includes(name)
       ) {
         return [relativePath];
-      } else {
-        return [];
       }
+      return [];
     }),
   );
   return files.flat();

@@ -10,6 +10,7 @@ import {
   showErrorMessage,
   getConfig,
   ensureArray,
+  getNestedConfig,
 } from './utils/commonUtils';
 import { listInputFiles } from './utils';
 import {
@@ -586,8 +587,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       const workspacePath = getWorkspacePath();
       if (workspacePath) {
-        const config = getConfig();
-        const numberOfCommits = config.get('numberOfCommitsToShow', 20);
+        const numberOfCommits = getNestedConfig(
+          'git.numberOfCommitsToShow',
+          20,
+        );
         return new Promise<string[]>((resolve, reject) => {
           exec(
             `git log -n ${numberOfCommits} --pretty=format:"%h: %s (%cr)"`,
@@ -795,12 +798,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
       async (inputFile: string, baseFile: string, editedFile: string) => {
         const terminal = ensureTerminal();
         terminal.show();
-        const model = getConfig().get('defaultMergeModel', 'sonnet+');
-        const reflect = getConfig().get('defaultMergeReflect', 'False');
+        const model = getNestedConfig('merge.defaultModel', 'sonnet+');
+        const reflect = getNestedConfig('merge.defaultReflect', 'False');
         const fileToUse = baseFile || inputFile;
-        // const fileToUse = baseFile; // Not working! baseFile is None
         terminal.sendText(
-          `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model}`,
+          `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`,
         );
       },
     ),
