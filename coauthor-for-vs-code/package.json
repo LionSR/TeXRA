@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.9.13",
+  "version": "0.10.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -241,6 +241,11 @@
           "default": 20,
           "description": "Number of recent commits to show in the commit selection dropdown",
           "scope": "resource"
+        },
+        "coauthor.latexindentConfig": {
+          "type": "string",
+          "default": "/Users/siruilu/Local/TEX/latexindent.yaml",
+          "description": "Path to latexindent configuration file"
         }
       }
     },
