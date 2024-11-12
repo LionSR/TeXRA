@@ -94,14 +94,21 @@ function renderAgentList() {
 
 // Agent selection
 function selectAgent(agentId) {
-	vscode.postMessage({
-		command: 'showInformationMessage',
-		text: `Selected agent: ${agentId}`
+	const previousAgent = state.selectedAgent;
+	state.selectedAgent = agentId;
+	
+	const agentItems = document.querySelectorAll('.agent-item');
+	agentItems.forEach(item => {
+		item.style.transition = 'background-color 0.2s';
+		item.classList.remove('selected');
 	});
 
-	state.selectedAgent = agentId;
+	const selectedItem = document.querySelector(`[data-agent-id="${agentId}"]`);
+	if (selectedItem) {
+		selectedItem.classList.add('selected');
+	}
+
 	vscode.setState(state);
-	renderAgentList();
 	renderAgentEditor(agentId);
 }
 
@@ -113,7 +120,10 @@ function renderAgentEditor(agentId) {
 	const editor = document.getElementById('agentForm');
 	editor.innerHTML = `
         <div class="editor-header">
-            <h2>${agent.name}</h2>
+            <div>
+                <h2>${agent.name}</h2>
+                ${agent.extends ? `<div class="inherit-info">extends ${agent.extends}</div>` : ''}
+            </div>
             ${agent.isDefault ? '<span class="default-badge">Default</span>' : ''}
         </div>
         

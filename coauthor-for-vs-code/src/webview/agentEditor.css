@@ -4,6 +4,7 @@
 	gap: 20px;
 	height: 100vh;
 	padding: 20px;
+	background: var(--vscode-editor-background);
 }
 
 .agent-list {
@@ -11,100 +12,151 @@
 	padding-right: 20px;
 }
 
-.agent-editor {
-	padding: 20px;
-}
-
-.field-group {
-	margin-bottom: 15px;
-}
-
-.field-label {
-	display: block;
-	margin-bottom: 5px;
-	color: var(--vscode-foreground);
-}
-
-.field-input {
-	width: 100%;
-	padding: 5px;
-	background: var(--vscode-input-background);
-	color: var(--vscode-input-foreground);
-	border: 1px solid var(--vscode-input-border);
-}
-
-.inherited {
-	opacity: 0.7;
-	background: var(--vscode-textBlockQuote-background);
-}
-
-.source-info {
-	font-size: 0.8em;
-	color: var(--vscode-descriptionForeground);
-	margin-top: 2px;
-}
-
-.button {
-	background: var(--vscode-button-background);
-	color: var(--vscode-button-foreground);
-	border: none;
-	padding: 5px 10px;
-	cursor: pointer;
-}
-
-.button:hover {
-	background: var(--vscode-button-hoverBackground);
-}
-
-.empty-message {
-	padding: 20px;
-	text-align: center;
-	color: var(--vscode-descriptionForeground);
-	font-style: italic;
-}
-
 .agent-item {
-	padding: 8px;
+	padding: 8px 12px;
 	margin: 4px 0;
 	cursor: pointer;
-	border: 1px solid var(--vscode-panel-border);
 	border-radius: 4px;
-	background-color: var(--vscode-input-background);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	transition: background 0.2s;
 }
 
 .agent-item:hover {
-	background-color: var(--vscode-list-hoverBackground);
+	background: var(--vscode-list-hoverBackground);
 }
 
 .agent-item.selected {
-	background-color: var(--vscode-list-activeSelectionBackground);
+	background: var(--vscode-list-activeSelectionBackground);
 	color: var(--vscode-list-activeSelectionForeground);
+}
+
+.agent-item .inherit-info {
+	font-size: 0.85em;
+	opacity: 0.7;
 }
 
 .inherited-agent {
 	border-left: 3px solid var(--vscode-activityBarBadge-background);
 }
 
-.default-agent {
-	font-style: italic;
+.field-group {
+	margin-bottom: 20px;
 }
 
-.inherit-info {
-	font-size: 0.8em;
+.field-container {
+	position: relative;
+	padding: 8px;
+	border-radius: 4px;
+	border: 1px solid var(--vscode-input-border);
+	background: var(--vscode-input-background);
+}
+
+.field-container.inherited {
+	background: var(--vscode-textBlockQuote-background);
+	opacity: 0.9;
+}
+
+.field-container input,
+.field-container textarea,
+.field-container select {
+	width: 100%;
+	padding: 6px 8px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border);
+	border-radius: 3px;
+}
+
+.field-container textarea {
+	min-height: 100px;
+	resize: vertical;
+}
+
+.inheritance-info {
+	font-size: 0.85em;
 	color: var(--vscode-descriptionForeground);
-	margin-left: 8px;
+	margin-top: 4px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.editor-header {
+	margin-bottom: 20px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.editor-actions {
+	margin-top: 20px;
+	display: flex;
+	gap: 10px;
+	justify-content: flex-end;
 }
 
 .button {
-	background-color: var(--vscode-button-background);
-	color: var(--vscode-button-foreground);
-	border: none;
 	padding: 6px 12px;
 	border-radius: 3px;
 	cursor: pointer;
-	margin-top: 10px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: none;
+	font-size: 13px;
+}
+
+.primary-button {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.secondary-button {
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
 }
 
 .button:hover {
-	background-color: var(--vscode-button-hoverBackground);
+	opacity: 0.9;
+}
+
+.default-badge {
+	font-size: 0.85em;
+	padding: 2px 6px;
+	border-radius: 3px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+}
+
+.prefills-container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.add-button {
+	align-self: flex-start;
+	margin-top: 8px;
+}
+
+.remove-prefill {
+	position: absolute;
+	right: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	background: none;
+	border: none;
+	color: var(--vscode-errorForeground);
+	cursor: pointer;
+	opacity: 0.7;
+}
+
+.remove-prefill:hover {
+	opacity: 1;
 }

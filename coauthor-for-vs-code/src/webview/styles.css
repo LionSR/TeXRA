@@ -581,3 +581,66 @@ button .fas {
 #executeButton {
   white-space: nowrap;
 }
+
+/* Agent list styling */
+.agent-list {
+  padding: 8px;
+  background: var(--agent-list-bg);
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+.agent-item {
+  padding: 6px 8px;
+  margin: 2px 0;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-item:hover {
+  background: var(--agent-list-hover);
+}
+
+.agent-item.selected {
+  background: var(--agent-list-selected);
+  color: var(--agent-list-selected-fg);
+}
+
+.agent-item .inheritance-indicator {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+/* Field styling */
+.field-container {
+  margin-bottom: 12px;
+}
+
+.field-container.inherited {
+  background: var(--field-inherited-bg);
+  border: 1px solid var(--field-inherited-border);
+  padding: 8px;
+  border-radius: 3px;
+}
+
+.field-container.inherited input,
+.field-container.inherited textarea {
+  opacity: 0.8;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.field-label .inheritance-badge {
+  font-size: 0.8em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}

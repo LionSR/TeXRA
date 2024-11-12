@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { log, initializeLogging } from './utils/logUtils';
 import { AgentManager } from './agentManager';
+import * as path from 'path';
 
 const CHANNEL_NAME = 'Coauthor Agent Editor';
 initializeLogging(CHANNEL_NAME);
@@ -154,19 +155,21 @@ function getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri, style
 	<body>
 		<div class="container">
 			<div class="agent-list">
-				<h2>Agents</h2>
+				<div class="editor-header">
+					<h2>Agents</h2>
+					<button id="newAgent" class="secondary-button">
+						<i class="codicon codicon-add"></i>
+						New Agent
+					</button>
+				</div>
 				<div id="agentList"></div>
-				<button id="newAgent" class="button">New Agent</button>
 			</div>
 			<div class="agent-editor">
 				<div id="agentForm"></div>
 			</div>
 		</div>
 		<script>
-			// Initialize vscode API
 			const vscode = acquireVsCodeApi();
-			
-			// Log initialization
 			vscode.postMessage({
 				command: 'showInformationMessage',
 				text: 'Initializing Agent Editor'
