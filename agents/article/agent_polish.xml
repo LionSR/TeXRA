@@ -30,7 +30,7 @@ When writing a professional *.tex \LaTeX document, you must:
 <![CDATA[
 I am going to give you the \LaTeX document of a research paper draft.  Read the document carefully before proceeding.
 
-Here is the \LaTeX document with additional input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
+Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
 <documents>
 {AUXILIARY_FILES}
