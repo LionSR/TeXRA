@@ -115,7 +115,7 @@ async function processTikzpictureEndings(filePath: string): Promise<void> {
 
 export async function runLatexDiff(
   inputFile: string,
-  editedFile: string
+  editedFile: string,
 ): Promise<void> {
   const category = 'LaTeX-Diff';
   try {
@@ -132,12 +132,16 @@ export async function runLatexDiff(
     const inputContent = await processFile(fullInputPath);
     const editedContent = await processFile(fullEditedPath);
 
-    if (!inputContent.includes('\\begin{document}') || 
-        !inputContent.includes('\\end{document}') ||
-        !editedContent.includes('\\begin{document}') || 
-        !editedContent.includes('\\end{document}')) {
+    if (
+      !inputContent.includes('\\begin{document}') ||
+      !inputContent.includes('\\end{document}') ||
+      !editedContent.includes('\\begin{document}') ||
+      !editedContent.includes('\\end{document}')
+    ) {
       log(CHANNEL_NAME, category, 'Files missing document environment', true);
-      vscode.window.showWarningMessage('Files must contain \\begin{document} and \\end{document}');
+      vscode.window.showWarningMessage(
+        'Files must contain \\begin{document} and \\end{document}',
+      );
       return;
     }
 
@@ -177,7 +181,7 @@ export async function runLatexDiff(
 
 export async function runLatexDiffVC(
   inputFile: string,
-  commitHash: string
+  commitHash: string,
 ): Promise<void> {
   const category = 'LaTeX-Diff-VC';
   try {
@@ -191,18 +195,22 @@ export async function runLatexDiffVC(
 
     // Check if file contains required commands
     const inputContent = await processFile(fullInputPath);
-    if (!inputContent.includes('\\begin{document}') || 
-        !inputContent.includes('\\end{document}')) {
+    if (
+      !inputContent.includes('\\begin{document}') ||
+      !inputContent.includes('\\end{document}')
+    ) {
       log(CHANNEL_NAME, category, 'File missing document environment', true);
-      vscode.window.showWarningMessage('File must contain \\begin{document} and \\end{document}');
+      vscode.window.showWarningMessage(
+        'File must contain \\begin{document} and \\end{document}',
+      );
       return;
     }
 
     const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
     const outputPath = path.join(
-      workspacePath, 
+      workspacePath,
       path.dirname(inputFile),
-      path.basename(diffFileName)
+      path.basename(diffFileName),
     );
 
     const command = [
