@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.89.0"
@@ -18,237 +18,180 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "configuration": {
-      "type": "object",
-      "title": "CoAuthor",
-      "properties": {
-        "coauthor.includedInputDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
+    "configuration": [
+      {
+        "title": "CoAuthor",
+        "properties": {
+          "coauthor.agents": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "correct-tex",
+              "polish-tex",
+              "draw-tex",
+              "adapt-tex",
+              "write-tex",
+              "meeting2text",
+              "text2tex",
+              "paper2note",
+              "paper2cover",
+              "paper2slide",
+              "paper2poster",
+              "slide2paper",
+              "write-proposal",
+              "txt2tex",
+              "translate2chn"
+            ],
+            "description": "List of available agents",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: File Handling",
+        "properties": {
+          "coauthor.files.included.inputDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": ["Discrete-Time", "PapersEx"],
+            "description": "Directories to consider as the root for input files",
+            "editPresentation": "multilineText",
+            "order": 1
           },
-          "default": [
-            "Discrete-Time",
-            "PapersEx"
-          ],
-          "description": "Directories to consider as the root for input files",
-          "scope": "resource"
-        },
-        "coauthor.includedSampleDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
+          "coauthor.files.included.figureDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": ["Discrete-Time", "FiguresEx", "Figures", "Figs"],
+            "description": "Directories to include in the figure path",
+            "editPresentation": "multilineText",
+            "order": 2
           },
-          "default": [
-            "Discrete-Time",
-            "PapersEx"
-          ],
-          "description": "Directories to consider as the root for sample files",
-          "scope": "resource"
-        },
-        "coauthor.includedAuxDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
+          "coauthor.files.ignored.figureDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "build",
+              "node_modules",
+              "__pycache__",
+              "Versions",
+              "versions"
+            ],
+            "description": "Directories to ignore in the figure path",
+            "editPresentation": "multilineText",
+            "order": 3
           },
-          "default": [
-            "Discrete-Time",
-            "PapersEx"
-          ],
-          "description": "Directories to consider as the root for auxiliary files",
-          "scope": "resource"
-        },
-        "coauthor.includedFigureDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
+          "coauthor.files.ignored.directories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "build",
+              "node_modules",
+              "__pycache__",
+              "figures",
+              "figs",
+              "versions",
+              "Versions",
+              "stuff",
+              "draft",
+              "exercises"
+            ],
+            "description": "Directories to ignore when listing files",
+            "editPresentation": "multilineText",
+            "order": 3
           },
-          "default": [
-            "Discrete-Time",
-            "FiguresEx"
-          ],
-          "description": "Directories to include in the figure path when selecting multiple figures",
-          "scope": "resource"
-        },
-        "coauthor.includedFigureExtensions": {
-          "type": "array",
-          "items": {
-            "type": "string"
+          "coauthor.files.ignored.keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "Makefile",
+              "template",
+              "_log",
+              "_thinking",
+              "_diff",
+              "diff",
+              "draw",
+              "Versions",
+              "versions",
+              ".egg-info"
+            ],
+            "description": "Keywords to ignore when selecting files",
+            "editPresentation": "multilineText",
+            "order": 4
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: LaTeX",
+        "properties": {
+          "coauthor.latex.latexindentConfig": {
+            "type": "string",
+            "default": "/Users/siruilu/Local/TEX/latexindent.yaml",
+            "description": "Path to latexindent configuration file",
+            "editPresentation": "singlelineText",
+            "order": 1
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Git",
+        "properties": {
+          "coauthor.git.numberOfCommitsToShow": {
+            "type": "number",
+            "default": 20,
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Number of recent commits to show in the commit selection dropdown",
+            "order": 1
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Merge",
+        "properties": {
+          "coauthor.merge.defaultModel": {
+            "type": "string",
+            "default": "sonnet+",
+            "enum": [
+              "opus",
+              "sonnet+",
+              "sonnet",
+              "gpt4t",
+              "gpt4o",
+              "gpt4o-"
+            ],
+            "enumDescriptions": [
+              "Claude 3 Opus",
+              "Claude 3 Sonnet+",
+              "Claude 3 Sonnet",
+              "GPT-4 Turbo",
+              "GPT-4O",
+              "GPT-4O Mini"
+            ],
+            "description": "Default model to use for merge operations",
+            "order": 1
           },
-          "default": [
-            ".png",
-            ".pdf",
-            ".jpeg",
-            ".jpg",
-            ".svg"
-          ],
-          "description": "File extensions to include when listing figure files",
-          "scope": "resource"
-        },
-        "coauthor.agents": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "correct-tex",
-            "polish-tex",
-            "draw-tex",
-            "adapt-tex",
-            "write-tex",
-            "meeting2text",
-            "text2tex",
-            "paper2note",
-            "paper2cover",
-            "paper2slide",
-            "paper2poster",
-            "slide2paper",
-            "write-proposal",
-            "txt2tex",
-            "translate2chn"
-          ],
-          "description": "List of available agents",
-          "scope": "resource"
-        },
-        "coauthor.ignoredFileExtensions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            ".pdf",
-            ".bst",
-            ".bib",
-            ".cls",
-            ".json",
-            ".py",
-            ".ipynb",
-            ".png",
-            ".vsix",
-            ".ts",
-            ".js"
-          ],
-          "description": "File extensions to ignore when listing text files",
-          "scope": "resource"
-        },
-        "coauthor.ignoredDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "build",
-            "node_modules",
-            "__pycache__",
-            "figures",
-            "Figs",
-            "Figures",
-            "figs",
-            "Versions"
-          ],
-          "description": "Directories to ignore when listing files",
-          "scope": "resource"
-        },
-        "coauthor.ignoredFigureDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "build",
-            "node_modules",
-            "__pycache__",
-            "Versions"
-          ],
-          "description": "Directories to ignore when listing figure files",
-          "scope": "resource"
-        },
-        "coauthor.ignoredKeywords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "Makefile",
-            "template",
-            "_log",
-            "_thinking",
-            "_diff",
-            "diff",
-            "draw",
-            "Versions",
-            ".egg-info"
-          ],
-          "description": "Keywords to ignore when selecting files",
-          "scope": "resource"
-        },
-        "coauthor.additionalIgnoredAuxKeywords": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "gpt",
-            "sonnet",
-            "haiku",
-            "opus",
-            "gpt4t",
-            "gpt4o",
-            "gpto1"
-          ],
-          "description": "Additional keywords to ignore when listing auxiliary files, including model names",
-          "scope": "resource"
-        },
-        "coauthor.ignoredInputFiles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "command.tex",
-            "preamble.tex"
-          ],
-          "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
-          "scope": "resource"
-        },
-        "coauthor.defaultMergeModel": {
-          "type": "string",
-          "default": "sonnet+",
-          "enum": [
-            "opus",
-            "sonnet+",
-            "sonnet",
-            "haiku",
-            "gpt4t",
-            "gpt4o",
-            "gpt4o-"
-          ],
-          "description": "Default model to use for CoAuthor operations",
-          "scope": "resource"
-        },
-        "coauthor.defaultMergeReflect": {
-          "type": "string",
-          "default": "False",
-          "enum": [
-            "True",
-            "False"
-          ],
-          "description": "Default reflect setting for CoAuthor operations",
-          "scope": "resource"
-        },
-        "coauthor.numberOfCommitsToShow": {
-          "type": "number",
-          "default": 20,
-          "description": "Number of recent commits to show in the commit selection dropdown",
-          "scope": "resource"
-        },
-        "coauthor.latexindentConfig": {
-          "type": "string",
-          "default": "/Users/siruilu/Local/TEX/latexindent.yaml",
-          "description": "Path to latexindent configuration file"
+          "coauthor.merge.defaultReflect": {
+            "type": "string",
+            "default": "False",
+            "enum": ["True", "False"],
+            "description": "Default reflect setting for merge operations",
+            "order": 2
+          }
         }
       }
-    },
+    ],
     "commands": [
       {
         "command": "coauthor.cleanOutput",
