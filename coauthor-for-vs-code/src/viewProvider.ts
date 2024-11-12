@@ -10,18 +10,16 @@ import {
 import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
 import { getWorkspacePath, getRelativePath } from './utils/commonUtils';
+import { log, initializeLogging } from './utils/logUtils';
 
-let outputChannel: vscode.OutputChannel;
+const CHANNEL_NAME = 'Coauthor View';
+initializeLogging(CHANNEL_NAME);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
-  constructor(private readonly context: vscode.ExtensionContext) {
-    // Initialize output channel if it doesn't exist
-    if (!outputChannel) {
-      outputChannel = vscode.window.createOutputChannel('Coauthor');
-    }
-  }
+  constructor(private readonly context: vscode.ExtensionContext) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
+    const category = 'Webview';
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -30,13 +28,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
-    // vscode.window.showInformationMessage(`HTML Content Length: ${webviewView.webview.html.length}`);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
+      log(CHANNEL_NAME, category, `Received message: ${message.command}`);
+
       switch (message.command) {
         case 'showInformationMessage':
           vscode.window.showInformationMessage(message.text);
-          outputChannel.appendLine(message.text);
+          log(CHANNEL_NAME, category, `Information message: ${message.text}`);
           break;
         case 'cleanOutput':
           vscode.commands.executeCommand('coauthor.cleanOutput');
@@ -52,10 +51,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const model_val = message.model;
           const reflect_val = message.reflect;
           const inputFile_val = message.inputFile;
-          const additionalInputFiles_val =
-            message.additionalInputFiles &&
-            message.additionalInputFiles.length > 0
-              ? message.additionalInputFiles
+          const inputFiles_val =
+            message.inputFiles && message.inputFiles.length > 0
+              ? message.inputFiles
               : null;
           const sampleFiles_val =
             message.sampleFiles && message.sampleFiles.length > 0
@@ -87,7 +85,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               reflect_val,
               model_val,
               figureFiles_val,
-              additionalInputFiles_val,
+              inputFiles_val,
               sampleFiles_val,
               autoExtractFigure_val,
               autoExtractTikzFigure_val,
@@ -102,15 +100,19 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             );
           }
           break;
+
         case 'selectInputFile':
         case 'selectSampleFile':
         case 'selectAuxFile':
         case 'selectFigureFile':
           const singleFileType = message.command.replace('select', '');
+          log(CHANNEL_NAME, category, `Selecting ${singleFileType}`);
+
           const file = await vscode.commands.executeCommand<string>(
             `coauthor.${message.command}`,
           );
           if (file) {
+            log(CHANNEL_NAME, category, `Selected ${singleFileType}: ${file}`);
             webviewView.webview.postMessage({
               command: `${singleFileType.charAt(0).toLowerCase() + singleFileType.slice(1)}Selected`,
               filePath: file,
@@ -259,7 +261,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           );
           break;
         case 'modelSelected':
-          // vscode.window.showInformationMessage(`Selected model: ${message.model}`);
           if (message.model) {
             webviewView.webview.postMessage({
               command: 'modelSelected',
@@ -289,7 +290,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand(
             'coauthor.packMultiple',
             message.inputFile,
-            message.additionalInputFiles,
+            message.inputFiles,
             message.agent,
             message.model,
             message.outputNameOverride,
@@ -300,7 +301,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand(
             'coauthor.cleanMultiple',
             message.inputFile,
-            message.additionalInputFiles,
+            message.inputFiles,
             message.agent,
             message.model,
             message.outputNameOverride,
@@ -365,6 +366,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'packLatexDiffVC':
           vscode.commands.executeCommand(
             'coauthor.packLatexDiffVC',
+            message.inputFile,
+            message.baseFile,
+            message.commitHash,
+            message.clean,
+          );
+          break;
+        case 'cleanLatexDiffVC':
+          vscode.commands.executeCommand(
+            'coauthor.cleanLatexDiffVC',
             message.inputFile,
             message.baseFile,
             message.commitHash,
@@ -529,7 +539,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     if (!workspaceFolders) {
       return [];
     }
-    const workspacePath = workspaceFolders[0].uri.fsPath;
+    // const workspacePath = workspaceFolders[0].uri.fsPath;
 
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments

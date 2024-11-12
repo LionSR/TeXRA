@@ -12,6 +12,24 @@ import {
   ensureArray,
 } from './utils/commonUtils';
 import { listInputFiles } from './utils';
+import {
+  runPackSingle,
+  runCleanSingle,
+  runCleanMultiple,
+  runPackMultiple,
+  runCleanOutput,
+  runCleanBuild,
+  runPackLatexDiffVC,
+  runPackLatexDiffVCMultiple,
+  runCleanLatexDiffVC,
+  runCleanLatexDiffVCMultiple,
+  runIndentTex,
+} from './housekeeping';
+import { runLatexDiff, runLatexDiffVC } from './utils/texUtils';
+import { log, initializeLogging } from './utils/logUtils';
+
+const CHANNEL_NAME = 'Coauthor Commands';
+initializeLogging(CHANNEL_NAME);
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -213,21 +231,52 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       'coauthor.packSingle',
-      (
+      // (
+      //   inputFile: string,
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   let command = `coauthor pack-single --agent=${agent} --model=${model}`;
+      //   if (outputNameOverride) {
+      //     command += ` --input_file="${outputNameOverride}"`;
+      //   } else {
+      //     command += ` --input_file="${inputFile}"`;
+      //   }
+      //   terminal.sendText(command);
+      // },
+      async (
         inputFile: string,
         agent: string,
         model: string,
-        outputNameOverride: string,
+        outputNameOverride?: string,
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        let command = `coauthor pack-single --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --input_file="${outputNameOverride}"`;
-        } else {
-          command += ` --input_file="${inputFile}"`;
+        const category = 'Pack-Single';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+        );
+
+        if (!inputFile || !agent || !model) {
+          log(
+            CHANNEL_NAME,
+            category,
+            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+            true,
+          );
+          vscode.window.showErrorMessage(
+            'Missing required parameters for pack single',
+          );
+          return;
         }
-        terminal.sendText(command);
+        if (outputNameOverride) {
+          await runPackSingle(model, outputNameOverride, agent);
+        } else {
+          await runPackSingle(model, inputFile, agent);
+        }
       },
     ),
     vscode.commands.registerCommand(
@@ -238,52 +287,114 @@ export function registerCommands(context: vscode.ExtensionContext) {
         commitHash: string,
         clean: boolean = false,
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const cleanFlag = clean ? '--clean' : '';
-        const fileToUse = baseFile || inputFile;
-        terminal.sendText(
-          `coauthor pack-latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash} ${cleanFlag}`,
+        // const terminal = ensureTerminal();
+        // terminal.show();
+        // const cleanFlag = clean ? '--clean' : '';
+        // const fileToUse = baseFile || inputFile;
+        // terminal.sendText(
+        //     `coauthor pack-latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash} ${cleanFlag}`,
+        // );
+        const category = 'Pack-Latex-Diff-VC';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
         );
+        const fileToUse = baseFile || inputFile;
+        await runPackLatexDiffVC(fileToUse, commitHash, clean);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.packLatexDiffVCMultiple',
+      async (
+        inputFiles: string[],
+        commitHash: string,
+        clean: boolean = false,
+      ) => {
+        const category = 'Pack-Latex-Diff-VC-Multiple';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: commitHash=${commitHash}, clean=${clean}`,
+        );
+        log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
+        await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
       },
     ),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
-      const terminal = ensureTerminal();
-      terminal.show();
-      terminal.sendText('coauthor clean-output');
+      // const terminal = ensureTerminal();
+      // terminal.show();
+      // terminal.sendText('coauthor clean-output');
+      runCleanOutput();
     }),
     vscode.commands.registerCommand('coauthor.cleanBuild', () => {
-      const terminal = ensureTerminal();
-      terminal.show();
-      terminal.sendText('coauthor clean-build');
+      // const terminal = ensureTerminal();
+      // terminal.show();
+      // terminal.sendText('coauthor clean-build');
+      runCleanBuild();
     }),
     vscode.commands.registerCommand('coauthor.indentTex', () => {
-      const terminal = ensureTerminal();
-      terminal.show();
-      terminal.sendText('coauthor indent-tex');
+      // const terminal = ensureTerminal();
+      // terminal.show();
+      // terminal.sendText('coauthor indent-tex');
+      runIndentTex();
     }),
     vscode.commands.registerCommand(
       'coauthor.cleanSingle',
-      (
+      // (
+      //   inputFile: string,
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   let command = `coauthor clean-single --agent=${agent} --model=${model}`;
+      //   if (outputNameOverride) {
+      //     command += ` --input_file="${outputNameOverride}"`;
+      //   } else {
+      //     command += ` --input_file="${inputFile}"`;
+      //   }
+      //   terminal.sendText(command);
+      // },
+      async (
         inputFile: string,
         agent: string,
         model: string,
         outputNameOverride: string,
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        let command = `coauthor clean-single --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --input_file="${outputNameOverride}"`;
-        } else {
-          command += ` --input_file="${inputFile}"`;
+        const category = 'Clean-Single';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+        );
+
+        if (!inputFile || !agent || !model) {
+          log(
+            CHANNEL_NAME,
+            category,
+            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+            true,
+          );
+          vscode.window.showErrorMessage(
+            'Missing required parameters for clean single',
+          );
+          return;
         }
-        terminal.sendText(command);
+        if (outputNameOverride) {
+          await runCleanSingle(model, outputNameOverride, agent);
+        } else {
+          await runCleanSingle(model, inputFile, agent);
+        }
       },
     ),
     vscode.commands.registerCommand(
       'coauthor.latexDiff',
-      (inputFile: string, baseFile: string, editedFile: string) => {
+      async (inputFile: string, baseFile: string, editedFile: string) => {
+        // (inputFile: string, baseFile: string, editedFile: string) => {
+        // Comment out old terminal-based code
+        /*
         const terminal = ensureTerminal();
         terminal.show();
         const editedFileName = path.basename(editedFile);
@@ -334,11 +445,45 @@ export function registerCommands(context: vscode.ExtensionContext) {
             }
           }
         }, 2000); // Adjust delay as needed based on expected command execution time
+        */
+        // Add new implementation
+        const fileToUse = baseFile || inputFile;
+        try {
+          await runLatexDiff(fileToUse, editedFile);
+
+          // Open the diff file and build it
+          const diffFileName = `${path.parse(path.basename(editedFile)).name}_diff.tex`;
+          const workspacePath = getWorkspacePath();
+          if (!workspacePath) {
+            throw new Error('No workspace path found');
+          }
+          const fullPath = vscode.Uri.file(
+            path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+          );
+
+          await vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand(
+            'workbench.view.extension.latex-workshop-activitybar',
+          );
+          await vscode.commands.executeCommand('latex-workshop.build');
+
+          // Wait for build to complete before viewing
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000);
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       },
     ),
     vscode.commands.registerCommand(
       'coauthor.latexDiffVC',
       async (inputFile: string, baseFile: string, commitHash: string) => {
+        // Comment out old terminal-based code
+        /*
+        (inputFile: string, baseFile: string, commitHash: string) => {
         const terminal = ensureTerminal();
         terminal.show();
 
@@ -359,35 +504,61 @@ export function registerCommands(context: vscode.ExtensionContext) {
         terminal.sendText(
           `coauthor latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash}`,
         );
+        */
 
         // Wait for the command to execute and the file to be generated
-        setTimeout(async () => {
-          try {
-            await vscode.workspace.fs.stat(fullPath);
-            vscode.window.showTextDocument(fullPath);
-            // await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
-            await vscode.commands.executeCommand('latex-workshop.build');
-            setTimeout(async () => {
-              await vscode.commands.executeCommand('latex-workshop.view');
-            }, 5000); // Adjust the delay based on expected build time
-          } catch (error) {
-            if (
-              error instanceof vscode.FileSystemError &&
-              error.code === 'FileNotFound'
-            ) {
-              vscode.window.showErrorMessage(
-                'Diff file could not be found. Expected path: ' +
-                  fullPath.fsPath,
-              );
-            } else if (error instanceof Error) {
-              vscode.window.showErrorMessage(
-                'An error occurred: ' + error.message,
-              );
-            } else {
-              vscode.window.showErrorMessage('An unknown error occurred.');
-            }
+        // setTimeout(async () => {
+        //   try {
+        //     await vscode.workspace.fs.stat(fullPath);
+        //     vscode.window.showTextDocument(fullPath);
+        //     // await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
+        //     await vscode.commands.executeCommand('latex-workshop.build');
+        //     setTimeout(async () => {
+        //       await vscode.commands.executeCommand('latex-workshop.view');
+        //     }, 5000); // Adjust the delay based on expected build time
+        //   } catch (error) {
+        //     if (
+        //       error instanceof vscode.FileSystemError &&
+        //       error.code === 'FileNotFound'
+        //     ) {
+        //       vscode.window.showErrorMessage(
+        //         'Diff file could not be found. Expected path: ' +
+        //           fullPath.fsPath,
+        //       );
+        //     } else if (error instanceof Error) {
+        //       vscode.window.showErrorMessage(
+        //         'An error occurred: ' + error.message,
+        //       );
+        //     } else {
+        //       vscode.window.showErrorMessage('An unknown error occurred.');
+        //     }
+        //   }
+        // }, 2000); // Adjust delay as needed based on expected command execution time
+        const fileToUse = baseFile || inputFile;
+        try {
+          await runLatexDiffVC(fileToUse, commitHash);
+
+          const diffFileName = `${path.parse(path.basename(fileToUse)).name}-diff${commitHash}.tex`;
+          const workspacePath = getWorkspacePath();
+          if (!workspacePath) {
+            throw new Error('No workspace path found');
           }
-        }, 2000); // Adjust delay as needed based on expected command execution time
+          const fullPath = vscode.Uri.file(
+            path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+          );
+
+          await vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand('latex-workshop.build');
+
+          // Wait for build to complete before viewing
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000);
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       },
     ),
     vscode.commands.registerCommand('coauthor.isGitRepository', async () => {
@@ -444,7 +615,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         reflect: string,
         model: string,
         figureFiles: string | string[] | null,
-        additionalInputFiles: string[] | null,
+        inputFiles: string[] | null,
         sampleFiles: string | string[] | null,
         autoExtractFigure: boolean,
         autoExtractTikzFigure: boolean,
@@ -465,7 +636,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           }
         };
 
-        addFilesToCommand(ensureArray(additionalInputFiles), '--input_files');
+        addFilesToCommand(ensureArray(inputFiles), '--input_files');
         addFilesToCommand(ensureArray(auxFiles), '--auxiliary_files');
         addFilesToCommand(ensureArray(figureFiles), '--figure_inputs');
         addFilesToCommand(ensureArray(sampleFiles), '--sample_files');
@@ -635,48 +806,116 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       'coauthor.packMultiple',
-      (
+      // (
+      //   inputFile: string,
+      //   inputFiles: string[],
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      //   outputFiles: string[]
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   const allInputFiles = [inputFile, ...inputFiles];
+      //   let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent}
+      //   --model=${model}`;
+      //   if (outputNameOverride) {
+      //     command += ` --output_name_override="${outputNameOverride}"`;
+      //   terminal.sendText(command);
+      // }
+      // ),
+      async (
         inputFile: string,
-        additionalInputFiles: string[],
+        inputFiles: string[],
         agent: string,
         model: string,
         outputNameOverride: string,
         outputFiles: string[],
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const allInputFiles = [inputFile, ...additionalInputFiles];
-        let command = `coauthor pack-multiple --input_file="${inputFile}" --input_files="${outputFiles.join(',')}" --agent=${agent} --model=${model}`;
-        if (outputNameOverride) {
-          command += ` --output_name_override="${outputNameOverride}"`;
-        }
+        const category = 'Pack-Multiple';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+        );
 
-        terminal.sendText(command);
+        if (!inputFile || !agent || !model) {
+          log(
+            CHANNEL_NAME,
+            category,
+            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+            true,
+          );
+          vscode.window.showErrorMessage(
+            'Missing required parameters for pack multiple',
+          );
+          return;
+        }
+        await runPackMultiple(
+          model,
+          inputFile,
+          outputFiles,
+          agent,
+          outputNameOverride,
+        );
       },
     ),
     vscode.commands.registerCommand(
       'coauthor.cleanMultiple',
-      (
+      // (
+      //   inputFile: string,
+      //   inputFiles: string[],
+      //   agent: string,
+      //   model: string,
+      //   outputNameOverride: string,
+      //   outputFiles: string[]
+      // ) => {
+      //   const terminal = ensureTerminal();
+      //   terminal.show();
+      //   const allInputFiles = [inputFile, ...inputFiles];
+      //   let inputFilesWithOverride = outputNameOverride
+      //     ? [outputNameOverride, ...outputFiles]
+      //     : outputFiles;
+      //   let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=$
+      //   {agent} --model=${model}`;
+      //   terminal.sendText(command);
+      // },
+      async (
         inputFile: string,
-        additionalInputFiles: string[],
+        inputFiles: string[],
         agent: string,
         model: string,
         outputNameOverride: string,
         outputFiles: string[],
       ) => {
-        const terminal = ensureTerminal();
-        terminal.show();
-        const allInputFiles = [inputFile, ...additionalInputFiles];
+        const category = 'Clean-Multiple';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+        );
+
+        if (!inputFile || !agent || !model) {
+          log(
+            CHANNEL_NAME,
+            category,
+            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+            true,
+          );
+          vscode.window.showErrorMessage(
+            'Missing required parameters for clean multiple',
+          );
+          return;
+        }
         let inputFilesWithOverride = outputNameOverride
           ? [outputNameOverride, ...outputFiles]
           : outputFiles;
-        let command = `coauthor clean-multiple --input_file="${inputFile}" --input_files="${inputFilesWithOverride.join(',')}" --agent=${agent} --model=${model}`;
-        terminal.sendText(command);
+        await runCleanMultiple(model, inputFile, inputFilesWithOverride, agent);
       },
     ),
     vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
-      const inputFiles = await listInputFiles();
-      return inputFiles;
+      const inputFilesRefreshed = await listInputFiles();
+      return inputFilesRefreshed;
     }),
     vscode.commands.registerCommand('coauthor.selectBaseFile', async () => {
       const baseFile = await vscode.window.showOpenDialog({
@@ -697,6 +936,32 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(
       'coauthor.chatView',
       new CoAuthorViewProvider(context),
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.cleanLatexDiffVC',
+      async (inputFile: string, baseFile: string, commitHash: string) => {
+        const category = 'Clean-Latex-Diff-VC';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
+        );
+        const fileToUse = baseFile || inputFile;
+        await runCleanLatexDiffVC(fileToUse, commitHash);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.cleanLatexDiffVCMultiple',
+      async (inputFiles: string[], commitHash: string) => {
+        const category = 'Clean-Latex-Diff-VC-Multiple';
+        log(
+          CHANNEL_NAME,
+          category,
+          `Command called with: commitHash=${commitHash}`,
+        );
+        log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
+        await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
+      },
     ),
   );
 }
