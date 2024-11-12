@@ -245,7 +245,7 @@ class BaseReflectChainAgent(ABC):
 
         print(
             f"\n\nProcessed input file {colored(self.args.input_file, 'green')} "
-            f"and/or additional input files {colored(self.args.input_files, 'green')}. "
+            f"and/or input files {colored(self.args.input_files, 'green')}. "
             f"The reflection output was saved as {colored(self.output_file[1], 'green')}"
         )
 
