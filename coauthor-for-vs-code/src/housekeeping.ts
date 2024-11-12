@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath, getConfig } from './utils/commonUtils';
+import {
+  getWorkspacePath,
+  getConfig,
+  getNestedConfig,
+} from './utils/commonUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import {
@@ -751,7 +755,7 @@ export async function runIndentTex(): Promise<void> {
   log(CHANNEL_NAME, category, 'Starting LaTeX indentation process');
 
   // Get latexindent config from VS Code settings
-  const config = getConfig().get<string>('latexindentConfig');
+  const config = getNestedConfig<string>('latex.latexindentConfig');
   log(CHANNEL_NAME, category, `LaTeX indent config: ${config}`);
 
   const workspacePath = getWorkspacePath();
