@@ -1,0 +1,266 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { promisify } from 'util';
+import * as cp from 'child_process';
+import { log, initializeLogging } from './logUtils';
+import { getWorkspacePath } from './commonUtils';
+
+const execAsync = promisify(cp.exec);
+
+const CHANNEL_NAME = 'Coauthor TeX Utils';
+initializeLogging(CHANNEL_NAME);
+
+async function processFile(filePath: string): Promise<string> {
+  const uri = vscode.Uri.file(filePath);
+  const content = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(content).toString('utf-8');
+}
+
+async function writeFile(filePath: string, content: string): Promise<void> {
+  const uri = vscode.Uri.file(filePath);
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
+}
+
+async function processDiffFile(diffFileName: string): Promise<void> {
+  const category = 'Process-Diff';
+  try {
+    const content = await processFile(diffFileName);
+    const lines = content.split('\n');
+
+    let newContent = '';
+    let addBlock = false;
+    const packagesToAddNewline = [
+      '\\usepackage{tikz}',
+      '\\usepackage{pgfplots}',
+      '\\providecommand{\\DIFaddbegin}',
+      '\\RequirePackage[normalem]{ulem}',
+      '\\usetikzlibrary',
+      '\\RequirePackage{color}',
+    ];
+
+    let documentStarted = false;
+
+    for (const line of lines) {
+      if (
+        line.startsWith('%!TEX root') ||
+        line.startsWith('% !TEX root') ||
+        line.startsWith('%! TEX root')
+      ) {
+        continue;
+      }
+
+      if (packagesToAddNewline.some((pkg) => line.includes(pkg))) {
+        newContent += '\n';
+      }
+
+      if (line.includes('\\documentclass') || line.includes('\\input')) {
+        addBlock = false;
+        documentStarted = true;
+      } else if (
+        (line.includes('%DIF ADD') || line.includes('Here is')) &&
+        !documentStarted
+      ) {
+        addBlock = true;
+      }
+
+      if (!addBlock) {
+        newContent += line + '\n';
+      }
+
+      if (line.includes('\\RequirePackage{color}')) {
+        newContent += '\n';
+      }
+    }
+
+    await writeFile(diffFileName, newContent);
+    log(CHANNEL_NAME, category, `Line breaks added to ${diffFileName}`);
+  } catch (error) {
+    log(CHANNEL_NAME, category, `Error processing diff file: ${error}`, true);
+    throw error;
+  }
+}
+
+async function processTikzpictureEndings(filePath: string): Promise<void> {
+  const category = 'Process-Tikz';
+  try {
+    const content = await processFile(filePath);
+
+    let newContent = content;
+    const patterns = [
+      [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
+      [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
+      [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
+      [
+        /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;/g,
+        '$1\\end{tikzpicture}};\\DIFaddendFL',
+      ],
+    ];
+
+    for (const [pattern, replacement] of patterns) {
+      newContent = newContent.replace(pattern, replacement as string);
+    }
+
+    await writeFile(filePath, newContent);
+    log(CHANNEL_NAME, category, `Tikzpicture endings fixed in ${filePath}`);
+  } catch (error) {
+    log(
+      CHANNEL_NAME,
+      category,
+      `Error processing tikzpicture endings: ${error}`,
+      true,
+    );
+    throw error;
+  }
+}
+
+export async function runLatexDiff(
+  inputFile: string,
+  editedFile: string,
+): Promise<void> {
+  const category = 'LaTeX-Diff';
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Convert relative paths to absolute paths
+    const fullInputPath = path.join(workspacePath, inputFile);
+    const fullEditedPath = path.join(workspacePath, editedFile);
+
+    // Check if files contain required commands
+    const inputContent = await processFile(fullInputPath);
+    const editedContent = await processFile(fullEditedPath);
+
+    if (
+      !inputContent.includes('\\begin{document}') ||
+      !inputContent.includes('\\end{document}') ||
+      !editedContent.includes('\\begin{document}') ||
+      !editedContent.includes('\\end{document}')
+    ) {
+      log(CHANNEL_NAME, category, 'Files missing document environment', true);
+      vscode.window.showWarningMessage(
+        'Files must contain \\begin{document} and \\end{document}',
+      );
+      return;
+    }
+
+    const editedFileName = path.basename(editedFile);
+    const diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
+    const outputPath = path.join(
+      workspacePath,
+      path.dirname(inputFile),
+      diffFileName,
+    );
+
+    const command = [
+      'latexdiff',
+      '--flatten',
+      '--encoding=utf8',
+      '-c',
+      '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
+      `"${inputFile}"`,
+      `"${editedFile}"`,
+    ].join(' ');
+
+    log(CHANNEL_NAME, category, `Running command: ${command}`);
+    const { stdout } = await execAsync(command, { cwd: workspacePath });
+
+    // Write the output to the diff file
+    await writeFile(outputPath, stdout);
+
+    await processDiffFile(outputPath);
+    await processTikzpictureEndings(outputPath);
+
+    log(CHANNEL_NAME, category, 'LaTeX diff completed successfully');
+  } catch (error) {
+    log(CHANNEL_NAME, category, `Error running LaTeX diff: ${error}`, true);
+    throw error;
+  }
+}
+
+export async function runLatexDiffVC(
+  inputFile: string,
+  commitHash: string,
+): Promise<void> {
+  const category = 'LaTeX-Diff-VC';
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Convert relative path to absolute path
+    const fullInputPath = path.join(workspacePath, inputFile);
+
+    // Check if file contains required commands
+    const inputContent = await processFile(fullInputPath);
+    if (
+      !inputContent.includes('\\begin{document}') ||
+      !inputContent.includes('\\end{document}')
+    ) {
+      log(CHANNEL_NAME, category, 'File missing document environment', true);
+      vscode.window.showWarningMessage(
+        'File must contain \\begin{document} and \\end{document}',
+      );
+      return;
+    }
+
+    const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
+    const outputPath = path.join(
+      workspacePath,
+      path.dirname(inputFile),
+      path.basename(diffFileName),
+    );
+
+    const command = [
+      'latexdiff-vc',
+      '--encoding=utf8',
+      '-c',
+      '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
+      '--force',
+      '--flatten',
+      '--git',
+      '-r',
+      commitHash,
+      `"${inputFile}"`,
+    ].join(' ');
+
+    log(CHANNEL_NAME, category, `Running command: ${command}`);
+    await execAsync(command, { cwd: workspacePath }); // Execute from workspace root
+
+    await processDiffFile(outputPath);
+    await processTikzpictureEndings(outputPath);
+
+    log(CHANNEL_NAME, category, 'LaTeX diff VC completed successfully');
+  } catch (error) {
+    log(CHANNEL_NAME, category, `Error running LaTeX diff VC: ${error}`, true);
+    throw error;
+  }
+}
+
+export async function runLatexDiffVCMultiple(
+  inputFiles: string[],
+  commitHash: string,
+): Promise<void> {
+  const category = 'LaTeX-Diff-VC-Multiple';
+  log(
+    CHANNEL_NAME,
+    category,
+    `Processing multiple files with commit ${commitHash}`,
+  );
+
+  for (const inputFile of inputFiles) {
+    try {
+      await runLatexDiffVC(inputFile, commitHash);
+    } catch (error) {
+      log(
+        CHANNEL_NAME,
+        category,
+        `Error processing ${inputFile}: ${error}`,
+        true,
+      );
+      continue;
+    }
+  }
+}
