@@ -3,7 +3,7 @@ import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
-import { deleteFile, moveFile, copyFile, findFile } from './utils/fileUtils';
+import { deleteFile, moveFile, copyFile, findFile, createDirectory, readDirectory, fileExists} from './utils/fileUtils';
 import { log, initializeLogging } from './utils/logUtils';
 const execAsync = promisify(cp.exec);
 
@@ -19,7 +19,7 @@ const EXCLUDED_DIRS = new Set([
   'figs',
   'figures',
   'Notes',
-  'Diffs',
+  'diffs',
 ]);
 const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 const TEMP_EXTENSIONS = [
@@ -73,7 +73,7 @@ function getFilePatterns(
   base: string,
   model: string,
   agent: string,
-  numRounds: number = 4,
+  numRounds: number = 3,
 ): string[] {
   const patterns: string[] = [];
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
@@ -117,12 +117,6 @@ export async function runCleanSingle(
     return;
   }
 
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace path found', true);
-    return;
-  }
-
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
   log(
@@ -141,50 +135,18 @@ export async function runCleanSingle(
   let filesFound = false;
   for (const pattern of filePatterns) {
     for (const ext of extensions) {
-      const filePath = path.join(workspacePath, inputDir, `${pattern}${ext}`);
-      const buildFilePath = path.join(
-        workspacePath,
-        inputDir,
-        'build',
-        `${pattern}${ext}`,
-      );
-
-      try {
-        const uri = vscode.Uri.file(filePath);
-        const exists = await vscode.workspace.fs.stat(uri).then(
-          () => true,
-          () => false,
-        );
-        if (exists) {
-          log(CHANNEL_NAME, category, `Found file to delete: ${filePath}`);
-          filesFound = true;
-          await deleteFile(filePath);
-        }
-      } catch (error) {
-        log(CHANNEL_NAME, category, `File not found or error: ${filePath}`);
+      const filePath = await findFile(inputDir, pattern, ext);
+      if (filePath) {
+        log(CHANNEL_NAME, category, `Found file to delete: ${filePath}`);
+        filesFound = true;
+        await deleteFile(filePath);
       }
 
-      try {
-        const buildUri = vscode.Uri.file(buildFilePath);
-        const buildExists = await vscode.workspace.fs.stat(buildUri).then(
-          () => true,
-          () => false,
-        );
-        if (buildExists) {
-          log(
-            CHANNEL_NAME,
-            category,
-            `Found build file to delete: ${buildFilePath}`,
-          );
-          filesFound = true;
-          await deleteFile(buildFilePath);
-        }
-      } catch (error) {
-        log(
-          CHANNEL_NAME,
-          category,
-          `Build file not found or error: ${buildFilePath}`,
-        );
+      const buildFilePath = await findFile(path.join(inputDir, 'build'), pattern, ext);
+      if (buildFilePath) {
+        log(CHANNEL_NAME, category, `Found build file to delete: ${buildFilePath}`);
+        filesFound = true;
+        await deleteFile(buildFilePath);
       }
     }
   }
@@ -229,12 +191,6 @@ export async function runPackSingle(
     return '';
   }
 
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace path found', true);
-    return '';
-  }
-
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
   log(
@@ -259,10 +215,7 @@ export async function runPackSingle(
       const filePath = await findFile(inputDir, pattern, ext);
       if (filePath) {
         log(CHANNEL_NAME, category, `Found file: ${filePath}`);
-        if (
-          filePath === path.join(workspacePath, inputFile) ||
-          pattern === baseName
-        ) {
+        if (filePath === inputFile || pattern === baseName) {
           copiedFiles.push(filePath);
         } else {
           movedFiles.push(filePath);
@@ -276,19 +229,16 @@ export async function runPackSingle(
 
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    outputFolder =
-      outputFolder ||
-      path.join(
-        workspacePath,
-        inputDir,
-        'Versions',
-        `${now}_${baseName}_${agent}_${model}`,
-      );
+    outputFolder = outputFolder || path.join(
+      inputDir,
+      'Versions',
+      `${now}_${baseName}_${agent}_${model}`,
+    );
     log(CHANNEL_NAME, category, `Output folder: ${outputFolder}`);
 
     try {
-      // Create output directory
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(outputFolder));
+      // Use the new helper function
+      await createDirectory(outputFolder);
       log(CHANNEL_NAME, category, `Created output directory: ${outputFolder}`);
 
       // Move and copy files
@@ -313,8 +263,9 @@ export async function runPackSingle(
 
       vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
     } catch (error) {
-      log(CHANNEL_NAME, category, `Error during file operations: ${error}`);
+      log(CHANNEL_NAME, category, `Error during file operations: ${error}`, true);
       vscode.window.showErrorMessage(`Error during packing: ${error}`);
+      return '';
     }
   } else {
     log(CHANNEL_NAME, category, `No files found to pack for ${inputFile}`);
@@ -327,7 +278,7 @@ export async function runPackSingle(
   for (const pattern of filePatterns) {
     for (const ext of TEMP_EXTENSIONS) {
       const filePath = await findFile(inputDir, pattern, ext);
-      if (filePath && filePath !== path.join(workspacePath, inputFile)) {
+      if (filePath && filePath !== inputFile) {
         await deleteFile(filePath);
       }
     }
@@ -377,12 +328,6 @@ export async function runPackMultiple(
   );
   log(CHANNEL_NAME, category, `Additional files: ${inputFiles.join(', ')}`);
 
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace path found', true);
-    return '';
-  }
-
   let baseName: string;
   let outputDir: string;
 
@@ -396,7 +341,6 @@ export async function runPackMultiple(
 
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
   const commonOutputFolder = path.join(
-    workspacePath,
     outputDir,
     'Versions',
     `${now}_${baseName}_multiple_${agent}_${model}`,
@@ -404,15 +348,9 @@ export async function runPackMultiple(
   log(CHANNEL_NAME, category, `Common output folder: ${commonOutputFolder}`);
 
   try {
-    // Create output directory
-    await vscode.workspace.fs.createDirectory(
-      vscode.Uri.file(commonOutputFolder),
-    );
-    log(
-      CHANNEL_NAME,
-      category,
-      `Created output directory: ${commonOutputFolder}`,
-    );
+    // Use fileUtils.createDirectory instead
+    await createDirectory(commonOutputFolder);
+    log(CHANNEL_NAME, category, `Created output directory: ${commonOutputFolder}`);
 
     // Pack main input file or override file
     if (outputNameOverride) {
@@ -437,34 +375,19 @@ export async function runPackMultiple(
     ];
 
     for (const pattern of additionalPatterns) {
-      const filePath = path.join(workspacePath, outputDir, pattern);
-      try {
-        const fileUri = vscode.Uri.file(filePath);
-        const exists = await vscode.workspace.fs.stat(fileUri).then(
-          () => true,
-          () => false,
-        );
-        if (exists) {
-          log(CHANNEL_NAME, category, `Found additional XML file: ${filePath}`);
-          await moveFile(filePath, path.join(commonOutputFolder, pattern));
-        }
-      } catch (error) {
-        log(CHANNEL_NAME, category, `XML file not found or error: ${filePath}`);
-        continue;
+      const filePath = path.join(outputDir, pattern);
+      // Use fileUtils.fileExists instead
+      if (await fileExists(filePath)) {
+        log(CHANNEL_NAME, category, `Found additional XML file: ${filePath}`);
+        await moveFile(filePath, path.join(commonOutputFolder, pattern));
       }
     }
 
     log(CHANNEL_NAME, category, `All files packed into ${commonOutputFolder}`);
     return commonOutputFolder;
   } catch (error) {
-    log(
-      CHANNEL_NAME,
-      category,
-      `Error during multiple pack operation: ${error}`,
-    );
-    vscode.window.showErrorMessage(
-      `Error during multiple pack operation: ${error}`,
-    );
+    log(CHANNEL_NAME, category, `Error during multiple pack operation: ${error}`, true);
+    vscode.window.showErrorMessage(`Error during multiple pack operation: ${error}`);
     return '';
   }
 }
@@ -473,44 +396,25 @@ export async function runCleanBuild(): Promise<void> {
   const category = 'Clean-Build';
   log(CHANNEL_NAME, category, 'Starting build directory cleanup');
 
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace folder open', true);
-    vscode.window.showErrorMessage('No workspace folder open');
-    return;
-  }
-
   async function cleanBuildDir(directory: string) {
     const buildDir = path.join(directory, 'build');
-    try {
-      const buildDirUri = vscode.Uri.file(buildDir);
-      const exists = await vscode.workspace.fs.stat(buildDirUri).then(
-        () => true,
-        () => false,
-      );
-
-      if (exists) {
-        const files = await vscode.workspace.fs.readDirectory(buildDirUri);
-        for (const [name, type] of files) {
-          if (type === vscode.FileType.File) {
-            await deleteFile(path.join(buildDir, name));
-          }
+    if (await fileExists(buildDir)) {
+      const files = await readDirectory(buildDir);
+      for (const [name, type] of files) {
+        if (type === vscode.FileType.File) {
+          await deleteFile(path.join(buildDir, name));
         }
       }
-    } catch (error) {
-      // Ignore if directory doesn't exist
     }
   }
 
   // Clean root build directory
-  await cleanBuildDir(workspacePath);
+  await cleanBuildDir('.');
 
   // Recursively clean build directories in subdirectories
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(dirPath),
-      );
+      const entries = await readDirectory(dirPath);
       for (const [name, type] of entries) {
         if (
           type === vscode.FileType.Directory &&
@@ -530,28 +434,18 @@ export async function runCleanBuild(): Promise<void> {
     }
   };
 
-  await processDirectory(workspacePath);
+  await processDirectory('.');
   log(CHANNEL_NAME, category, 'Build directories cleaned');
 }
 
 export async function runCleanOutput(): Promise<void> {
   const category = 'Clean-Output';
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    vscode.window.showErrorMessage('No workspace folder open');
-    return;
-  }
-
-  const patterns = MODELS.map((model) => `*_${model}*.tex`);
-  const patternsBuild = MODELS.map((model) => `*/build/*_${model}*`);
-
   const filesToDelete = new Set<string>();
+  const validExtensions = new Set(['.tex', '.pdf', '.xml']);
 
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(dirPath),
-      );
+      const entries = await readDirectory(dirPath);
       for (const [name, type] of entries) {
         if (EXCLUDED_DIRS.has(name.toLowerCase())) {
           continue;
@@ -560,15 +454,10 @@ export async function runCleanOutput(): Promise<void> {
         if (type === vscode.FileType.Directory) {
           await processDirectory(path.join(dirPath, name));
         } else if (type === vscode.FileType.File) {
-          // Check if file matches any pattern
-          for (const model of MODELS) {
-            if (name.includes(`_${model}`) && name.endsWith('.tex')) {
-              filesToDelete.add(path.join(dirPath, name));
-            }
-            if (name.includes(`_${model}`) && name.endsWith('.pdf')) {
-              filesToDelete.add(path.join(dirPath, name));
-            }
-            if (name.includes(`_${model}`) && name.endsWith('.xml')) {
+          const ext = path.extname(name);
+          if (validExtensions.has(ext)) {
+            // Check if file matches any model pattern
+            if (MODELS.some(model => name.includes(`_${model}`))) {
               filesToDelete.add(path.join(dirPath, name));
             }
           }
@@ -583,7 +472,7 @@ export async function runCleanOutput(): Promise<void> {
     }
   };
 
-  await processDirectory(workspacePath);
+  await processDirectory('.');
 
   for (const file of filesToDelete) {
     await deleteFile(file);
@@ -603,12 +492,6 @@ export async function runPackLatexDiffVC(
     category,
     `Starting LaTeX diff packing with inputFile=${inputFile}, commitHash=${commitHash}, clean=${clean}`,
   );
-
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace path found', true);
-    return;
-  }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
@@ -639,19 +522,9 @@ export async function runPackLatexDiffVC(
             path.dirname(filePath),
             `${pattern}${tempExt}`,
           );
-          try {
-            const exists = await vscode.workspace.fs
-              .stat(vscode.Uri.file(tempFile))
-              .then(
-                () => true,
-                () => false,
-              );
-            if (exists) {
-              log(CHANNEL_NAME, category, `Found temporary file: ${tempFile}`);
-              filesToDelete.push(tempFile);
-            }
-          } catch (error) {
-            // Ignore errors for non-existent files
+          if (await fileExists(tempFile)) {
+            log(CHANNEL_NAME, category, `Found temporary file: ${tempFile}`);
+            filesToDelete.push(tempFile);
           }
         }
       }
@@ -670,17 +543,14 @@ export async function runPackLatexDiffVC(
       // Move files to output folder
       const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
       const outputFolder = path.join(
-        workspacePath,
         inputDir,
         'Diffs',
         `${now}_${baseName}_${commitHash}`,
       );
 
       try {
-        // Create output directory
-        await vscode.workspace.fs.createDirectory(
-          vscode.Uri.file(outputFolder),
-        );
+        // Use fileUtils.createDirectory instead
+        await createDirectory(outputFolder);
         log(
           CHANNEL_NAME,
           category,
@@ -750,12 +620,6 @@ export async function runCleanLatexDiffVC(
     category,
     `Starting LaTeX diff cleaning with inputFile=${inputFile}, commitHash=${commitHash}`,
   );
-
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace path found', true);
-    return;
-  }
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
@@ -856,19 +720,19 @@ export async function runIndentTex(): Promise<void> {
   const category = 'Indent-Tex';
   log(CHANNEL_NAME, category, 'Starting LaTeX indentation process');
 
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    log(CHANNEL_NAME, category, 'No workspace folder open', true);
-    vscode.window.showErrorMessage('No workspace folder open');
-    return;
-  }
-
   // Get latexindent config from VS Code settings
   const config = getConfig().get<string>('latexindentConfig');
   log(CHANNEL_NAME, category, `LaTeX indent config: ${config}`);
 
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    log(CHANNEL_NAME, category, 'No workspace path found', true);
+    vscode.window.showErrorMessage('No workspace path found');
+    return;
+  }
+
   if (config) {
-    // Check if config file exists
+    // Check if config file exists - use fs.access directly since this is an absolute path
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(config));
     } catch (error) {
@@ -887,9 +751,7 @@ export async function runIndentTex(): Promise<void> {
 
   const processDirectory = async (dirPath: string) => {
     try {
-      const entries = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(dirPath),
-      );
+      const entries = await readDirectory(dirPath);
       for (const [name, type] of entries) {
         if (EXCLUDED_DIRS.has(name.toLowerCase())) {
           continue;
@@ -910,42 +772,46 @@ export async function runIndentTex(): Promise<void> {
               `"${fullPath}"`,
               '-w', // Write to file
               '-s', // Silent mode
-              config ? `-l="${config}"` : '', // Add config only if it exists
+              config ? `-l="${config}"` : '', // Use absolute config path directly
             ]
               .filter(Boolean)
               .join(' ');
 
             log(CHANNEL_NAME, category, `Executing command: ${command}`);
-            await execAsync(command);
-            log(CHANNEL_NAME, category, `Successfully indented: ${fullPath}`);
+            try {
+              const { stdout, stderr } = await execAsync(command, { cwd: workspacePath });
+              if (stdout) {
+                log(CHANNEL_NAME, category, `Command output: ${stdout}`);
+              }
+              if (stderr) {
+                log(CHANNEL_NAME, category, `Command stderr: ${stderr}`, true);
+              }
+              log(CHANNEL_NAME, category, `Successfully indented: ${fullPath}`);
+            } catch (execError) {
+              log(CHANNEL_NAME, category, `Command error: ${execError}`, true);
+              if (execError instanceof Error && 'stderr' in execError) {
+                log(CHANNEL_NAME, category, `Command stderr: ${(execError as any).stderr}`, true);
+              }
+              continue;
+            }
           } catch (error) {
-            log(
-              CHANNEL_NAME,
-              category,
-              `Error indenting file ${fullPath}: ${error}`,
-            );
+            log(CHANNEL_NAME, category, `Error indenting file ${fullPath}: ${error}`);
             continue;
           }
         }
       }
     } catch (error) {
-      log(
-        CHANNEL_NAME,
-        category,
-        `Error processing directory ${dirPath}: ${error}`,
-      );
+      log(CHANNEL_NAME, category, `Error processing directory ${dirPath}: ${error}`);
     }
   };
 
   try {
-    await processDirectory(workspacePath);
+    await processDirectory('.');
 
     // Clean up temporary files recursively
     const processCleanup = async (dirPath: string) => {
       try {
-        const entries = await vscode.workspace.fs.readDirectory(
-          vscode.Uri.file(dirPath),
-        );
+        const entries = await readDirectory(dirPath);
         for (const [name, type] of entries) {
           if (EXCLUDED_DIRS.has(name.toLowerCase())) {
             continue;
@@ -975,13 +841,13 @@ export async function runIndentTex(): Promise<void> {
         log(
           CHANNEL_NAME,
           category,
-          `Error during cleanup in directory ${dirPath}: ${error}`,
+          `Error during cleanup in directory ${dirPath}: ${error}`, true
         );
       }
     };
 
     // Start cleanup from workspace root
-    await processCleanup(workspacePath);
+    await processCleanup('.');
 
     log(CHANNEL_NAME, category, 'All .tex files have been indented');
   } catch (error) {
