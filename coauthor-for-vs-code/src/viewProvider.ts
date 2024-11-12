@@ -10,18 +10,16 @@ import {
 import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
 import { getWorkspacePath, getRelativePath } from './utils/commonUtils';
+import { log, initializeLogging } from './utils/logUtils';
 
-let outputChannel: vscode.OutputChannel;
+const CHANNEL_NAME = 'Coauthor View';
+initializeLogging(CHANNEL_NAME);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
-  constructor(private readonly context: vscode.ExtensionContext) {
-    // Initialize output channel if it doesn't exist
-    if (!outputChannel) {
-      outputChannel = vscode.window.createOutputChannel('Coauthor');
-    }
-  }
+  constructor(private readonly context: vscode.ExtensionContext) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
+    const category = 'Webview';
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -32,10 +30,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
+      log(CHANNEL_NAME, category, `Received message: ${message.command}`);
+
       switch (message.command) {
         case 'showInformationMessage':
           vscode.window.showInformationMessage(message.text);
-          outputChannel.appendLine(message.text);
+          log(CHANNEL_NAME, category, `Information message: ${message.text}`);
           break;
         case 'cleanOutput':
           vscode.commands.executeCommand('coauthor.cleanOutput');
@@ -100,15 +100,19 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             );
           }
           break;
+
         case 'selectInputFile':
         case 'selectSampleFile':
         case 'selectAuxFile':
         case 'selectFigureFile':
           const singleFileType = message.command.replace('select', '');
+          log(CHANNEL_NAME, category, `Selecting ${singleFileType}`);
+
           const file = await vscode.commands.executeCommand<string>(
             `coauthor.${message.command}`,
           );
           if (file) {
+            log(CHANNEL_NAME, category, `Selected ${singleFileType}: ${file}`);
             webviewView.webview.postMessage({
               command: `${singleFileType.charAt(0).toLowerCase() + singleFileType.slice(1)}Selected`,
               filePath: file,
@@ -535,7 +539,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     if (!workspaceFolders) {
       return [];
     }
-    const workspacePath = workspaceFolders[0].uri.fsPath;
+    // const workspacePath = workspaceFolders[0].uri.fsPath;
 
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
