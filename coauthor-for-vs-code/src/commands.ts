@@ -25,6 +25,7 @@ import {
   runCleanLatexDiffVCMultiple,
   runIndentTex,
 } from './housekeeping';
+import { runLatexDiff, runLatexDiffVC } from './utils/texUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
 const CHANNEL_NAME = 'Coauthor Commands';
@@ -390,7 +391,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       'coauthor.latexDiff',
-      (inputFile: string, baseFile: string, editedFile: string) => {
+      async (inputFile: string, baseFile: string, editedFile: string) => {
+        // (inputFile: string, baseFile: string, editedFile: string) => {
+        // Comment out old terminal-based code
+        /*
         const terminal = ensureTerminal();
         terminal.show();
         const editedFileName = path.basename(editedFile);
@@ -441,11 +445,45 @@ export function registerCommands(context: vscode.ExtensionContext) {
             }
           }
         }, 2000); // Adjust delay as needed based on expected command execution time
+        */
+        // Add new implementation
+        const fileToUse = baseFile || inputFile;
+        try {
+          await runLatexDiff(fileToUse, editedFile);
+
+          // Open the diff file and build it
+          const diffFileName = `${path.parse(path.basename(editedFile)).name}_diff.tex`;
+          const workspacePath = getWorkspacePath();
+          if (!workspacePath) {
+            throw new Error('No workspace path found');
+          }
+          const fullPath = vscode.Uri.file(
+            path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+          );
+
+          await vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand(
+            'workbench.view.extension.latex-workshop-activitybar',
+          );
+          await vscode.commands.executeCommand('latex-workshop.build');
+
+          // Wait for build to complete before viewing
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000);
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       },
     ),
     vscode.commands.registerCommand(
       'coauthor.latexDiffVC',
       async (inputFile: string, baseFile: string, commitHash: string) => {
+        // Comment out old terminal-based code
+        /*
+        (inputFile: string, baseFile: string, commitHash: string) => {
         const terminal = ensureTerminal();
         terminal.show();
 
@@ -466,35 +504,61 @@ export function registerCommands(context: vscode.ExtensionContext) {
         terminal.sendText(
           `coauthor latexdiff-vc --input_file="${fileToUse}" --commit_hash=${commitHash}`,
         );
+        */
 
         // Wait for the command to execute and the file to be generated
-        setTimeout(async () => {
-          try {
-            await vscode.workspace.fs.stat(fullPath);
-            vscode.window.showTextDocument(fullPath);
-            // await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
-            await vscode.commands.executeCommand('latex-workshop.build');
-            setTimeout(async () => {
-              await vscode.commands.executeCommand('latex-workshop.view');
-            }, 5000); // Adjust the delay based on expected build time
-          } catch (error) {
-            if (
-              error instanceof vscode.FileSystemError &&
-              error.code === 'FileNotFound'
-            ) {
-              vscode.window.showErrorMessage(
-                'Diff file could not be found. Expected path: ' +
-                  fullPath.fsPath,
-              );
-            } else if (error instanceof Error) {
-              vscode.window.showErrorMessage(
-                'An error occurred: ' + error.message,
-              );
-            } else {
-              vscode.window.showErrorMessage('An unknown error occurred.');
-            }
+        // setTimeout(async () => {
+        //   try {
+        //     await vscode.workspace.fs.stat(fullPath);
+        //     vscode.window.showTextDocument(fullPath);
+        //     // await vscode.commands.executeCommand('workbench.view.extension.latex-workshop-activitybar');
+        //     await vscode.commands.executeCommand('latex-workshop.build');
+        //     setTimeout(async () => {
+        //       await vscode.commands.executeCommand('latex-workshop.view');
+        //     }, 5000); // Adjust the delay based on expected build time
+        //   } catch (error) {
+        //     if (
+        //       error instanceof vscode.FileSystemError &&
+        //       error.code === 'FileNotFound'
+        //     ) {
+        //       vscode.window.showErrorMessage(
+        //         'Diff file could not be found. Expected path: ' +
+        //           fullPath.fsPath,
+        //       );
+        //     } else if (error instanceof Error) {
+        //       vscode.window.showErrorMessage(
+        //         'An error occurred: ' + error.message,
+        //       );
+        //     } else {
+        //       vscode.window.showErrorMessage('An unknown error occurred.');
+        //     }
+        //   }
+        // }, 2000); // Adjust delay as needed based on expected command execution time
+        const fileToUse = baseFile || inputFile;
+        try {
+          await runLatexDiffVC(fileToUse, commitHash);
+
+          const diffFileName = `${path.parse(path.basename(fileToUse)).name}-diff${commitHash}.tex`;
+          const workspacePath = getWorkspacePath();
+          if (!workspacePath) {
+            throw new Error('No workspace path found');
           }
-        }, 2000); // Adjust delay as needed based on expected command execution time
+          const fullPath = vscode.Uri.file(
+            path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+          );
+
+          await vscode.window.showTextDocument(fullPath);
+          await vscode.commands.executeCommand('latex-workshop.build');
+
+          // Wait for build to complete before viewing
+          setTimeout(async () => {
+            await vscode.commands.executeCommand('latex-workshop.view');
+          }, 5000);
+        } catch (error) {
+          vscode.window.showErrorMessage(
+            `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       },
     ),
     vscode.commands.registerCommand('coauthor.isGitRepository', async () => {
