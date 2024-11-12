@@ -1,5 +1,4 @@
 // coauthor-for-vs-code/src/webview/agentEditor.js
-const vscode = acquireVsCodeApi();
 
 // State management
 let state = {
