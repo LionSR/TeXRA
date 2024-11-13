@@ -136,18 +136,28 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders) {
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    const config = getConfig();
-    const ignoredExtensions =
-      config.get<string[]>('ignoredFileExtensions') || [];
-    const ignoredKeywords = config.get<string[]>('ignoredKeywords') || [];
-    const ignoredInputFiles = config.get<string[]>('ignoredInputFiles') || [];
-    const ignoredDirectories = config.get<string[]>('ignoredDirectories') || [];
+    const ignoredExtensions = getNestedConfig<string[]>(
+      'files.ignored.fileExtensions',
+      [],
+    );
+    const ignoredKeywords = getNestedConfig<string[]>(
+      'files.ignored.keywords',
+      [],
+    );
+    const ignoredInputFiles = getNestedConfig<string[]>(
+      'files.ignored.inputFiles',
+      [],
+    );
+    const ignoredDirectories = getNestedConfig<string[]>(
+      'files.ignored.directories',
+      [],
+    );
     const files = await getFilesRecursively(
       workspacePath,
       workspacePath,
       ['.txt', '.tex'],
       ignoredExtensions,
-      ignoredDirectories,
+      [...ignoredDirectories, 'Diffs', 'PapersEx'],
       ignoredKeywords,
       ignoredInputFiles,
     );
