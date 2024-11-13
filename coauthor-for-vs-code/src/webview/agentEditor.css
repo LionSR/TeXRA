@@ -212,7 +212,6 @@
   color: var(--vscode-button-foreground);
   border: none;
 }
-
 .button:hover {
   opacity: 0.9;
 }
