@@ -32,6 +32,7 @@ const EXCLUDED_DIRS = new Set([
   'figures',
   'Notes',
   'diffs',
+  'Diffs',
 ]);
 const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 const TEMP_EXTENSIONS = [
