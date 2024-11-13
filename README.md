@@ -136,7 +136,19 @@ To reduce clutter, configure LaTeX-workshop's output directory:
 
 This directs all LaTeX output files to a `build` subdirectory. Works with relative/absolute paths from the root file. No trailing slash needed.
 
-**Note:** Default for `latexmk` users. The extension auto-detects output directory from LaTeX tool arguments.
+**Note:** Default for `latexmk` users. The extension auto-detects output directory from LaTeX tool arguments. Recomend add `-pdf` and `-f` to the latexmk command. Use
+
+```json
+"latex-workshop.latex.magic.args": [
+  "-synctex=1",
+  "-interaction=nonstopmode",
+  "-file-line-error",
+  "%DOC%",
+  "-pdf",
+  "-f"
+]
+```
+
 
 ## Syncing Across Computers
 
