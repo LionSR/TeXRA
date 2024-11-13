@@ -7,139 +7,176 @@ const CHANNEL_NAME = 'Coauthor Agent Editor';
 initializeLogging(CHANNEL_NAME);
 
 export function registerAgentEditorCommands(context: vscode.ExtensionContext) {
-	context.subscriptions.push(
-		vscode.commands.registerCommand('coauthor.openAgentEditor', () => {
-			const category = 'Open-Editor';
-			log(CHANNEL_NAME, category, 'Opening agent editor');
+  context.subscriptions.push(
+    vscode.commands.registerCommand('coauthor.openAgentEditor', () => {
+      const category = 'Open-Editor';
+      log(CHANNEL_NAME, category, 'Opening agent editor');
 
-			const panel = vscode.window.createWebviewPanel(
-				'coauthor.agentEditor',
-				'Agent Editor',
-				vscode.ViewColumn.One,
-				{
-					enableScripts: true,
-					retainContextWhenHidden: true,
-					localResourceRoots: [
-						vscode.Uri.joinPath(context.extensionUri, 'src', 'webview')
-					]
-				}
-			);
+      const panel = vscode.window.createWebviewPanel(
+        'coauthor.agentEditor',
+        'Agent Editor',
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: [
+            vscode.Uri.joinPath(context.extensionUri, 'src', 'webview'),
+          ],
+        },
+      );
 
-			try {
-				// Get paths to resources
-				const webviewPath = vscode.Uri.joinPath(context.extensionUri, 'src', 'webview');
-				
-				const scriptUri = panel.webview.asWebviewUri(
-					vscode.Uri.joinPath(webviewPath, 'agentEditor.js')
-				);
-				const styleUri = panel.webview.asWebviewUri(
-					vscode.Uri.joinPath(webviewPath, 'agentEditor.css')
-				);
+      try {
+        // Get paths to resources
+        const webviewPath = vscode.Uri.joinPath(
+          context.extensionUri,
+          'src',
+          'webview',
+        );
 
-				log(CHANNEL_NAME, category, `Script URI: ${scriptUri}`);
-				log(CHANNEL_NAME, category, `Style URI: ${styleUri}`);
-				log(CHANNEL_NAME, category, `Webview Path: ${webviewPath}`);
+        const scriptUri = panel.webview.asWebviewUri(
+          vscode.Uri.joinPath(webviewPath, 'agentEditor.js'),
+        );
+        const styleUri = panel.webview.asWebviewUri(
+          vscode.Uri.joinPath(webviewPath, 'agentEditor.css'),
+        );
 
-				// Set webview content
-				panel.webview.html = getWebviewContent(panel.webview, scriptUri, styleUri);
-				log(CHANNEL_NAME, category, 'Webview content set');
+        log(CHANNEL_NAME, category, `Script URI: ${scriptUri}`);
+        log(CHANNEL_NAME, category, `Style URI: ${styleUri}`);
+        log(CHANNEL_NAME, category, `Webview Path: ${webviewPath}`);
 
-				// Create agent manager instance
-				const agentManager = new AgentManager(context);
+        // Set webview content
+        panel.webview.html = getWebviewContent(
+          panel.webview,
+          scriptUri,
+          styleUri,
+        );
+        log(CHANNEL_NAME, category, 'Webview content set');
 
-				// Handle messages from the webview
-				panel.webview.onDidReceiveMessage(async message => {
-					log(CHANNEL_NAME, category, `Received message: ${message.command}`);
-					
-					switch (message.command) {
-						case 'showInformationMessage':
-							log(CHANNEL_NAME, category, `Information: ${message.text}`);
-							break;
-						case 'showError':
-							log(CHANNEL_NAME, category, `Error: ${message.message}`, true);
-							vscode.window.showErrorMessage(message.message);
-							break;
-						case 'getAgents':
-							try {
-								const agents = Array.from(agentManager.getAgents().values());
-								const resolvedAgents = await Promise.all(
-									agents.map(agent => agentManager.resolveInheritance(agent))
-								);
-								
-								log(CHANNEL_NAME, category, `Sending ${resolvedAgents.length} agents to webview`);
-								panel.webview.postMessage({
-									command: 'updateAgents',
-									agents: resolvedAgents
-								});
-							} catch (error) {
-								log(CHANNEL_NAME, category, `Error getting agents: ${error}`, true);
-							}
-							break;
+        // Create agent manager instance
+        const agentManager = new AgentManager(context);
 
-						case 'getTheme':
-							const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-								? 'dark'
-								: 'light';
-							log(CHANNEL_NAME, category, `Sending theme: ${theme}`);
-							panel.webview.postMessage({
-								command: 'updateTheme',
-								theme: theme
-							});
-							break;
+        // Handle messages from the webview
+        panel.webview.onDidReceiveMessage(async (message) => {
+          log(CHANNEL_NAME, category, `Received message: ${message.command}`);
 
-						case 'saveAgent':
-							try {
-								await agentManager.saveAgent(message.agent);
-								log(CHANNEL_NAME, category, `Agent saved: ${message.agent.id}`);
-								panel.webview.postMessage({
-									command: 'agentSaved'
-								});
-							} catch (error) {
-								log(CHANNEL_NAME, category, `Error saving agent: ${error}`, true);
-								vscode.window.showErrorMessage(`Failed to save agent: ${error}`);
-							}
-							break;
+          switch (message.command) {
+            case 'showInformationMessage':
+              log(CHANNEL_NAME, category, `Information: ${message.text}`);
+              break;
+            case 'showError':
+              log(CHANNEL_NAME, category, `Error: ${message.message}`, true);
+              vscode.window.showErrorMessage(message.message);
+              break;
+            case 'getAgents':
+              try {
+                const agents = Array.from(agentManager.getAgents().values());
+                const resolvedAgents = await Promise.all(
+                  agents.map((agent) => agentManager.resolveInheritance(agent)),
+                );
 
-						case 'showError':
-							vscode.window.showErrorMessage(message.message);
-							break;
-					}
-				});
+                log(
+                  CHANNEL_NAME,
+                  category,
+                  `Sending ${resolvedAgents.length} agents to webview`,
+                );
+                panel.webview.postMessage({
+                  command: 'updateAgents',
+                  agents: resolvedAgents,
+                });
+              } catch (error) {
+                log(
+                  CHANNEL_NAME,
+                  category,
+                  `Error getting agents: ${error}`,
+                  true,
+                );
+              }
+              break;
 
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				log(CHANNEL_NAME, category, `Error creating webview: ${errorMessage}`, true);
-				vscode.window.showErrorMessage(`Failed to open agent editor: ${errorMessage}`);
-			}
-		}),
+            case 'getTheme':
+              const theme =
+                vscode.window.activeColorTheme.kind ===
+                vscode.ColorThemeKind.Dark
+                  ? 'dark'
+                  : 'light';
+              log(CHANNEL_NAME, category, `Sending theme: ${theme}`);
+              panel.webview.postMessage({
+                command: 'updateTheme',
+                theme: theme,
+              });
+              break;
 
-		vscode.commands.registerCommand('coauthor.createAgent', async () => {
-			const name = await vscode.window.showInputBox({
-				prompt: 'Enter new agent name',
-				validateInput: (value) => {
-					return value && value.length > 0 ? null : 'Agent name is required';
-				}
-			});
-			if (name) {
-				// Create new agent logic
-			}
-		}),
+            case 'saveAgent':
+              try {
+                await agentManager.saveAgent(message.agent);
+                log(CHANNEL_NAME, category, `Agent saved: ${message.agent.id}`);
+                panel.webview.postMessage({
+                  command: 'agentSaved',
+                });
+              } catch (error) {
+                log(
+                  CHANNEL_NAME,
+                  category,
+                  `Error saving agent: ${error}`,
+                  true,
+                );
+                vscode.window.showErrorMessage(
+                  `Failed to save agent: ${error}`,
+                );
+              }
+              break;
 
-		vscode.commands.registerCommand('coauthor.exportAgent', async () => {
-			const uri = await vscode.window.showSaveDialog({
-				filters: {
-					'XML files': ['xml']
-				}
-			});
-			if (uri) {
-				// Export agent logic
-			}
-		})
-	);
+            case 'showError':
+              vscode.window.showErrorMessage(message.message);
+              break;
+          }
+        });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        log(
+          CHANNEL_NAME,
+          category,
+          `Error creating webview: ${errorMessage}`,
+          true,
+        );
+        vscode.window.showErrorMessage(
+          `Failed to open agent editor: ${errorMessage}`,
+        );
+      }
+    }),
+
+    vscode.commands.registerCommand('coauthor.createAgent', async () => {
+      const name = await vscode.window.showInputBox({
+        prompt: 'Enter new agent name',
+        validateInput: (value) => {
+          return value && value.length > 0 ? null : 'Agent name is required';
+        },
+      });
+      if (name) {
+        // Create new agent logic
+      }
+    }),
+
+    vscode.commands.registerCommand('coauthor.exportAgent', async () => {
+      const uri = await vscode.window.showSaveDialog({
+        filters: {
+          'XML files': ['xml'],
+        },
+      });
+      if (uri) {
+        // Export agent logic
+      }
+    }),
+  );
 }
 
-function getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri, styleUri: vscode.Uri) {
-	return `<!DOCTYPE html>
+function getWebviewContent(
+  webview: vscode.Webview,
+  scriptUri: vscode.Uri,
+  styleUri: vscode.Uri,
+) {
+  return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
@@ -155,14 +192,14 @@ function getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri, style
 	<body>
 		<div class="container">
 			<div class="agent-list">
-				<div class="editor-header">
-					<h2>Agents</h2>
-					<button id="newAgent" class="secondary-button">
+				<div class="agent-list-header">
+					<h2>Prompt Agents</h2>
+					<button id="newAgent" class="button primary-button">
 						<i class="codicon codicon-add"></i>
 						New Agent
 					</button>
 				</div>
-				<div id="agentList"></div>
+				<div class="agent-items" id="agentList"></div>
 			</div>
 			<div class="agent-editor">
 				<div id="agentForm"></div>
@@ -181,10 +218,11 @@ function getWebviewContent(webview: vscode.Webview, scriptUri: vscode.Uri, style
 }
 
 function getNonce() {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
+  let text = '';
+  const possible =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }
