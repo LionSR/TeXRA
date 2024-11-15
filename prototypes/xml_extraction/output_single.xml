@@ -13,7 +13,7 @@
 1. Restructure the subsection to improve logical flow
     - Rationale: Address Max Welling's comments about the order of derivations
     - Implementation: 
-        a. Start with KL divergence minimization "abc"
+        a. Start with KL divergence minimization ``abc'''
         b. Present gradient computation
         c. Discuss the case with samples from the target distribution
         d. Move importance sampling estimation of Z to the end
