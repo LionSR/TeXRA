@@ -20,11 +20,11 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     end_tag = output_settings["end_tag"]
     system_prompt = prompt_settings["system_prompt"]
     if is_openrouter_model(model):
-        response_object = _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag)
+        response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_model(model):
         response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_compatible_model(model):
-        response_object = _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag)
+        response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_anthropic_model(model):
         response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
     else:
@@ -51,17 +51,18 @@ def _create_openai_response(client, model_name, max_tokens, messages, temperatur
     return response_object
 
 
-def _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag):
+def _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag):
     """Create a response using OpenRouter model."""
     kwargs = {
         "model": model_name,
         "messages": messages,
         "temperature": temperature,
         "max_completion_tokens": max_tokens,
+        "stop": end_tag,
         "extra_headers": {"X-Title": "CoA"},
     }
     response_object = client.chat.completions.create(**kwargs)
-    print(colored(f"using openrouter model: {model_name}", "green"))
+    print(colored(f"using openai-compatible model: {model_name}", "green"))
     return response_object
 
 
@@ -194,10 +195,10 @@ def _create_image_content(image_contents, model):
                 [
                     {"type": "text", "text": f"Image: {image['file_name']}"},
                     {
-                        "type": "image_url" if is_openai_model(model) else "image",
-                        "image_url" if is_openai_model(model) else "source": {
-                            "url" if is_openai_model(model) else "type": (
-                                f"data:{image['media_type']};base64,{image['data']}" if is_openai_model(model) else "base64"
+                        "type": "image" if is_anthropic_model(model) else "image_url",
+                        "source" if is_anthropic_model(model) else "image_url": {
+                            "type" if is_anthropic_model(model) else "url": (
+                                "base64" if is_anthropic_model(model) else f"data:{image['media_type']};base64,{image['data']}"
                             ),
                             "media_type": image["media_type"],
                             "data": image["data"],
