@@ -3,7 +3,7 @@ import time
 from termcolor import colored, cprint
 
 from .file_utils import read_file, write_file, append_file
-from .model_utils import is_openai_model, is_anthropic_model
+from .model_utils import is_openai_model, is_anthropic_model, is_openai_compatible_model
 from .message_utils import (
     create_image_message,
     initialize_messages,
@@ -161,7 +161,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         state["continuation_count"] += 1
         print(f"\nContinuation #{state['continuation_count']}")
 
-        if is_openai_model(model_settings["model"]):
+        if is_openai_compatible_model(model_settings["model"]):
             handle_openai_continuation(messages, new_response, k, output_settings["end_tag"])
 
     return state, accumulated_output, end_turn
@@ -193,7 +193,7 @@ def initialize_output_and_prefill(
             else:
                 messages.append({"role": "assistant", "content": file_content})
             print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
-            if is_openai_model(model):
+            if is_openai_compatible_model(model):
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
         use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
@@ -201,14 +201,14 @@ def initialize_output_and_prefill(
             prefill += first_k_tex_document
             if is_anthropic_model(model):
                 accumulated_output = first_k_tex_document
-            elif is_openai_model(model):
+            elif is_openai_compatible_model(model):
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex\n"})
 
         if is_anthropic_model(model):
             messages.append({"role": "assistant", "content": prefill})
             cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
-        elif is_openai_model(model):
+        elif is_openai_compatible_model(model):
             openai_prefill = f"Start your response with\n{prefill}"
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
             cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
