@@ -24,7 +24,7 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     elif is_openai_model(model):
         response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_compatible_model(model):
-        response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
+        response_object = _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_anthropic_model(model):
         response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
     else:
@@ -53,16 +53,14 @@ def _create_openai_response(client, model_name, max_tokens, messages, temperatur
 
 def _create_openrouter_response(client, model_name, max_tokens, messages, temperature, end_tag):
     """Create a response using OpenRouter model."""
-    response_object = client.chat.completions.create(
-        extra_headers={
-            "X-Title": "CoA",
-        },
-        model=model_name,
-        max_tokens=max_tokens,
-        messages=messages,
-        temperature=temperature,
-        stop=end_tag,
-    )
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+        "extra_headers": {"X-Title": "CoA"},
+    }
+    response_object = client.chat.completions.create(**kwargs)
     print(colored(f"using openrouter model: {model_name}", "green"))
     return response_object
 
@@ -226,10 +224,15 @@ def extract_response_statistics(response_object, model, end_tag=None):
 
 def _extract_openai_statistics(response_object, end_tag):
     """Extract statistics from OpenAI response object."""
-    input_tokens = response_object.usage.prompt_tokens
-    output_tokens = response_object.usage.completion_tokens
     stop_reason = response_object.choices[0].finish_reason
     new_response = response_object.choices[0].message.content.strip()
+
+    if response_object.usage is None:
+        # raise ValueError("No usage information in the response object")
+        input_tokens, output_tokens = 0, 0
+    else:
+        input_tokens = response_object.usage.prompt_tokens
+        output_tokens = response_object.usage.completion_tokens
 
     if "stop" in stop_reason and "\\end{document}" not in new_response:
         new_response += f"\n{end_tag}"

@@ -16,8 +16,9 @@ model_mapping = {
     "gpt4o-": "gpt-4o-mini-2024-07-18",
     "gpt4ol": "chatgpt-4o-latest",
     "gpt4oOR": "openai/gpt-4o:extended",
-    "gemini1p+": "gemini-pro-1.5-latest",
-    "gemini1f+": "gemini-flash-1.5-latest",
+    "gemini1p+": "gemini-1.5-pro-latest",
+    "gemini1f+": "gemini-1.5-fresh-latest",
+    "geminiexp": "gemini-exp-1114",
     "gemini1p+OR": "google/gemini-pro-1.5",
     "gemini1f+OR": "google/gemini-flash-1.5",
     "llama3+OR": "meta-llama/llama-3.1-405b-instruct",
@@ -52,10 +53,7 @@ openai_models = {
     "gpto1-",
 }
 
-google_models = {
-    "gemini1p+",
-    "gemini1f+",
-}
+google_models = {"gemini1p+", "gemini1f+", "geminiexp"}
 
 openrouter_models = {
     "gpt4oOR",
@@ -68,6 +66,9 @@ openrouter_models = {
     "google/gemini-flash-1.5",
     "meta-llama/llama-3.1-405b-instruct",
 }
+
+
+models_with_prompt_caching_support = ["sonnet++", "sonnet+", "haiku", "opus", "haiku+"]
 
 
 def is_openai_model(model):
@@ -93,6 +94,8 @@ def is_openai_compatible_model(model):
         return True
     elif is_openrouter_model(model) and model.split("/")[1] in openai_models:
         return True
+    elif is_google_model(model):
+        return True
     return False
 
 
@@ -112,6 +115,8 @@ def get_model_client(model):
 
         return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     elif is_google_model(model):
+        from openai import OpenAI
+
         return OpenAI(api_key=os.getenv("GOOGLE_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta")
     else:
         raise ValueError("Unsupported model type")
@@ -134,8 +139,9 @@ def get_model_settings(args):
         "o1-preview-2024-09-12": 32768,
         "o1-mini-2024-09-12": 65536,
         # google models
-        "gemini-pro-1.5-latest": 32768,
-        "gemini-flash-1.5-latest": 32768,
+        "gemini-1.5-pro-latest": 32768,
+        "gemini-1.5-fresh-latest": 32768,
+        "gemini-exp-1114": 32768,
         # openrouter models
         "openai/gpt-4o:extended": 64000,
         "google/gemini-pro-1.5": 32768,
@@ -168,14 +174,13 @@ def compute_api_price(model, input_tokens, output_tokens, cache_creation_input_t
         "gpto1": (15, 60),
         "gpto1-": (3, 12),
         "gpt4ol": (5, 15),
+        "geminiexp": (2.5, 7.5),
         "gemini1p+": (2.5, 7.5),
         "gemini1f+": (0.075, 0.3),
         "gemini1p+OR": (2.5, 7.5),
         "gemini1f+OR": (0.075, 0.3),
         "llama3+OR": (3, 3),
     }
-    models_with_prompt_caching_support = ["sonnet++", "sonnet+", "haiku", "opus", "haiku+"]
-
     prompt_cache_creation_prices = {
         model: tuple(rate * 1.25 for rate in rates) for model, rates in prices.items() if model in models_with_prompt_caching_support
     }
