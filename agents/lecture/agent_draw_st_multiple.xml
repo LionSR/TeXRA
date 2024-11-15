@@ -49,7 +49,7 @@ Here are the \LaTeX documents with additional \LaTeX document class and commands
 <document name="{COMMAND_FILE}">
 {COMMAND_CONTENT}
 </document>
-{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
