@@ -38,8 +38,8 @@ I am going to give you a \LaTeX document of a research paper. You are about to c
 Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
 
 <documents>
-{AUXILIARY_FILE_CONTENTS}
-{ADDITIONAL_INPUT_CONTENTS}
+{AUXILIARY_FILES}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>

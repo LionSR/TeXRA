@@ -38,7 +38,7 @@ Here are the input files and document:
 
 <documents>
 {AUXILIARY_FILES}
-{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>

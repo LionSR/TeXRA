@@ -34,7 +34,7 @@ Here is the \LaTeX document with input files (which may include appendix, and La
 
 <documents>
 {AUXILIARY_FILES}
-{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>

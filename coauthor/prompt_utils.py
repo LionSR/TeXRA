@@ -85,9 +85,9 @@ def get_user_vars_basic(args):
 
 
 def update_user_vars_single_output(args, user_vars):
-    user_vars["ADDITIONAL_INPUT_CONTENTS"] = ""
+    user_vars["ADDITIONAL_INPUTS"] = ""
     if args.input_files:
-        user_vars["ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(args.input_files)
+        user_vars["ADDITIONAL_INPUTS"] = get_xml_format_from_files(args.input_files)
 
     user_vars["AUXILIARY_FILE"] = ""
     user_vars["AUXILIARY_CONTENT"] = ""
@@ -109,7 +109,7 @@ def update_user_vars_multiple_output(args, user_vars):
 
     user_vars["INPUT_FILE"] = args.input_file
     user_vars["INPUT_CONTENT"] = read_file(args.input_file)
-    user_vars["ADDITIONAL_INPUT_CONTENTS"] = get_xml_format_from_files(input_files[1:])
+    user_vars["ADDITIONAL_INPUTS"] = get_xml_format_from_files(input_files[1:])
 
     if args.auxiliary_files:
         user_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
@@ -118,6 +118,6 @@ def update_user_vars_multiple_output(args, user_vars):
         user_vars["AUXILIARY_FILE"] = "No auxiliary file provided"
         user_vars["AUXILIARY_CONTENT"] = "No auxiliary content"
 
-    user_vars["AUXILIARY_FILE_CONTENTS"] = get_xml_format_from_files(args.auxiliary_files)
+    user_vars["AUXILIARY_FILES"] = get_xml_format_from_files(args.auxiliary_files)
 
     user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
