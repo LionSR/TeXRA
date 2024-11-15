@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="draw_st_multiple" inherits="draw_st">
 <settings>
-    <document_tag>latex_documents</document_tag>
-    <end_tag>&lt;/latex_documents&gt;</end_tag>
-    <output_type>xml</output_type>
+	<document_tag>latex_documents</document_tag>
+	<end_tag>&lt;/latex_documents&gt;</end_tag>
+	<output_type>xml</output_type>
 	<prefills>
 		<prefill>&lt;scratchpad&gt;</prefill>
 		<prefill>&lt;scratchpad&gt;</prefill>
@@ -96,17 +96,17 @@ Your detailed analysis of the existing figures or the provided image inputs acro
 </figure_analysis>
 <idea>
 1. [Specific figure creation/improvement idea 1]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 2. [Specific figure creation/improvement idea 2]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 3. [Specific figure creation/improvement idea 3]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 </idea>
 </scratchpad>
 
@@ -140,9 +140,9 @@ Your detailed analysis of the existing figures across all chapters and how they 
 <reflection>
 1. Instruction Alignment: How well do the modifications address the specific instruction across all chapters? Identify any areas where alignment could be improved.
 2. Visual Clarity:
-   - Are there any overlapping texts or objects in any of the figures?
-   - Are all elements clearly visible in each figure?
-   - Suggest specific adjustments for size, width, or boldness if needed for any figure.
+    - Are there any overlapping texts or objects in any of the figures?
+    - Are all elements clearly visible in each figure?
+    - Suggest specific adjustments for size, width, or boldness if needed for any figure.
 3. Mathematical and Conceptual Accuracy: Evaluate the figures for mathematical correctness and effectiveness in conveying key concepts across all chapters.
 4. Stylistic Consistency: Assess how well the figures maintain consistency with the overall document style across chapters. Suggest adjustments if needed.
 5. Comparative Effectiveness: Compare the modified figures to any reference figures provided. Are they more condensed and visually appealing while conveying the same information?
@@ -153,17 +153,17 @@ Your detailed analysis of the existing figures across all chapters and how they 
 </reflection>
 <idea>
 1. [Refinement 1]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 2. [Refinement 2]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 3. [Refinement 3]
-   - Affected chapters: [List of chapters]
-   - Rationale:
-   - Implementation details:
+    - Affected chapters: [List of chapters]
+    - Rationale:
+    - Implementation details:
 ...
 </idea>
 </scratchpad>

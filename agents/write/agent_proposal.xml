@@ -67,7 +67,7 @@ Key requirements:
 - Include relevant figures using TikZ or other appropriate LaTeX packages.
 - Provide detailed, step-by-step derivations where appropriate.
 - Use precise physics terminology and notation consistently.
-- Avoid generic statements or "fluff". Every sentence should contribute specific, technical information.
+- Avoid generic statements or ``fluff''. Every sentence should contribute specific, technical information.
 - Include citations for all relevant background information and techniques.
 
 Use the following latex template to structure your proposal if not provided with a draft:

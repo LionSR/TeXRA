@@ -166,11 +166,11 @@ In summary, I thank the referee for his/her valuable suggestions/comments.  Foll
 </document>
 <document name="replies/list_of_major_changes.tex">
 \begin{enumerate}
-    \item A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material. 
-    \item The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space. 
-    \item Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material. 
-    \item Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments. 
-    \item Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated. 
+    \item A new example about Bell inequality with short-range two-body correlators in 2D has been added.  A new figure (Fig.2(d)) has been added into the main text and a new subsection about the 2D example with three figures has been added into the Supplementary Material.
+    \item The inset of Fig.2(c) has been moved to the Supplementary Material and the Fig.2 has been rearranged to save space.
+    \item Fig.3(a) is replaced with a plot for system size N=60. The original plot for N=20 has been moved to the Supplementary Material.
+    \item Revisions have been made to the abstract, introduction, and conclusion parts to account for the new results added and for addressing the referee A's comments.
+    \item Added new references [20-22] about the differences between quantum nonlocality and entanglement. Some of the existed references have been updated.
     \item Other minor changes throughout the whole manuscript.
 \end{enumerate}
 </document>

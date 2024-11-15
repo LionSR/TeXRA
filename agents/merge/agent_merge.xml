@@ -33,7 +33,7 @@ Here is the edited version of the \LaTeX document:
 <![CDATA[
 Follow these steps to create the full version of the edited document:
 1. Carefully read through both the original and edited versions of the document.
-2. For parts indicated as "unchanged" or "previous parts remain unchanged" in the edited version, copy the corresponding sections from the original document verbatim.
+2. For parts indicated as ``unchanged'' or ``previous parts remain unchanged'' in the edited version, copy the corresponding sections from the original document verbatim.
 3. Where specific edits or additions are shown in the edited version, incorporate these changes exactly as they appear, replacing the corresponding parts in the original document.
 4. Pay close attention to any structural elements like section headers, equations, figures, or tables. Ensure that these are maintained in their correct positions and formats.
 5. Be extremely careful not to introduce any new errors or typos. The goal is to create an accurate representation of the edited document as if all changes had been applied to the full original document.
@@ -55,7 +55,7 @@ After thoroughly reviewing the original \LaTeX document (under the <original_lat
 
 <requirements>
 - All changes and additions from the edited version are accurately incorporated.
-- Sections marked as "unchanged" in the edited version match the original document verbatim.
+- Sections marked as ``unchanged'' in the edited version match the original document verbatim.
 - The structure and formatting of the original document are maintained, including section headers, equations, figures, tables, and LaTeX commands and environments.
 - No parts of the document are accidentally omitted or duplicated.
 - The output is a complete \LaTeX document, including the preamble, document class declarations, and all content up to \end{document}.

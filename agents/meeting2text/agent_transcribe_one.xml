@@ -44,13 +44,13 @@ Improve the given noisy transcription while sticking to the original sentences a
 - Ensure each sentence has a reasonable length. Break extremely long sentences into shorter ones.
 - Correct punctuation as needed.
 - Correct grammatical mistakes and ensure proper sentence structure.
-- Remove filler words and phrases like "I know", "yeah", "I mean", "oh", "you know", "very good", "I see", "very simple" etc.
+- Remove filler words and phrases like ``I know'', ``yeah'', ``I mean'', ``oh'', ``you know'', ``very good'', ``I see'', ``very simple'' etc.
 - Fix recognition errors and mistranscriptions.
 - Transform spoken equations into LaTeX format:
     - For inline equations, use single dollar signs, e.g. $\sigma_x$ and $\ket{\psi}$
     - For displayed equations, use double dollar signs, e.g. $$...$$
 - Some partial identifications have been made to the speaker names. Identify the rest of the speakers in your transcript based on the context and include their names in the edited version.
-- Prefix each speaker's dialogue with their first name followed by a colon (e.g., "**Speaker1:**", "**Speaker2:**")
+- Prefix each speaker's dialogue with their first name followed by a colon (e.g., ``**Speaker1:**'', ``**Speaker2:**'')
 </instruction>
 
 Refer back to the example edited transcript to see how these guidelines should be applied in practice.
