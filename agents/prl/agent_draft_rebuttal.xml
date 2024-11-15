@@ -213,7 +213,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 <requirements>
 \begin{itemize}
     \item Increase the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
-    \item Ensure all referee comments (summary, recommendations, criticisms, or questions) are addressed using concrete and convincing physical arguments. 
+    \item Ensure all referee comments (summary, recommendations, criticisms, or questions) are addressed using concrete and convincing physical arguments.
     \item Match the style and tone of the reply letter to the provided example (under \verb|<document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">|).
     \item Review the revised version for fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' that can be condensed using the ``show, don't tell'' technique.
     \item Adhere to PRL's strict word count policy for the main paper. Ensure the main paper (excluding appendix) does not exceed $\sim$3500 words. Added text must be concise and focused. If necessary, condense other parts of the paper to maintain the word limit.
