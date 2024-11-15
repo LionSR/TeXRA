@@ -45,8 +45,8 @@ I am going to give you multiple \LaTeX documents that comprise an NSF grant prop
 Here are the \LaTeX documents with additional LaTeX auxiliary files:
 
 <documents>
-{AUXILIARY_FILE_CONTENTS}
-{ADDITIONAL_INPUT_CONTENTS}
+{AUXILIARY_FILES}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>

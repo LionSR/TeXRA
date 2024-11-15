@@ -30,7 +30,7 @@ Here is the Original document to be translated:
 
 <documents>
 {AUXILIARY_FILES}
-{ADDITIONAL_INPUT_CONTENTS}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>

@@ -33,8 +33,8 @@ I am going to give you multiple \LaTeX documents to revise. Please read all docu
 Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
 
 <documents>
-{AUXILIARY_FILE_CONTENTS}
-{ADDITIONAL_INPUT_CONTENTS}
+{AUXILIARY_FILES}
+{ADDITIONAL_INPUTS}
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
