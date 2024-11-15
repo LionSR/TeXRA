@@ -90,7 +90,7 @@ Output the \LaTeX document inside the ``<latex_document>'' tags.
 </user_request>
 <user_reflect>
 <![CDATA[
-Your output is too simple and omits many specifics and mathematics. Please thoroughly review the LaTeX version and compare it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missed points that were discussed, the missing equations or mathematical details from the transcription. 
+Your output is too simple and omits many specifics and mathematics. Please thoroughly review the LaTeX version and compare it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missed points that were discussed, the missing equations or mathematical details from the transcription.
 
 Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all the missing equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan
 <scratchpad>

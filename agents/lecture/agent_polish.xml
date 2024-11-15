@@ -101,7 +101,7 @@ Consider these points and brainstorm additional targeted improvements in the scr
 <idea>
 \begin{enumerate}
 \item [Name of the Additional improvement 1]
-\begin{itemize}
+    \begin{itemize}
         \item Rationale: [Brief explanation]
         \item Implementation: [Concrete steps]
     \end{itemize}
