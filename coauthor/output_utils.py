@@ -61,7 +61,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
                 "\\end{latex_document>\n</latex_document>": "</latex_document>",
                 "<rebuttal_letter><scratchpad>\n\n<rebuttal_letter><scratchpad>": "<rebuttal_letter><scratchpad>",
                 "\\begin{latex_document}": "<latex_document>",
-                "</scratchpad>\n\\section{": "</scratchpad>\n<\latex_document>\n\section{",
+                "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
             }
             for find_str, replace_str in REPLACEMENTS.items():
                 content = content.replace(find_str, replace_str)
@@ -220,6 +220,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                 if source is not None and content is not None:
                     # Generate the output file name
                     base_name, extension = os.path.splitext(source)
+                    extension = extension.strip(".")
                     tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
 
                     content_text = content.strip()
