@@ -92,7 +92,7 @@ def _create_anthropic_response(client, model_name, max_tokens, messages, tempera
 
 
 def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs, use_prompt_caching=False):
-    """Initialize messages for the conversation."""
+    """Initialize messages for the conversation. This function is important for recovering from the interruption."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
     if is_openai_model(model) and "o1" not in model:

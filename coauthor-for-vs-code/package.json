@@ -62,6 +62,16 @@
             "editPresentation": "multilineText",
             "order": 1
           },
+          "coauthor.files.included.auxDirectories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": ["Discrete-Time", "PapersEx"],
+            "description": "Directories to consider as the root for auxiliary files",
+            "editPresentation": "multilineText",
+            "order": 2
+          },
           "coauthor.files.included.figureDirectories": {
             "type": "array",
             "items": {
@@ -70,7 +80,7 @@
             "default": ["Discrete-Time", "FiguresEx", "Figures", "Figs"],
             "description": "Directories to include in the figure path",
             "editPresentation": "multilineText",
-            "order": 2
+            "order": 3
           },
           "coauthor.files.ignored.figureDirectories": {
             "type": "array",
@@ -86,7 +96,7 @@
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
-            "order": 3
+            "order": 4
           },
           "coauthor.files.ignored.directories": {
             "type": "array",
@@ -107,7 +117,7 @@
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",
-            "order": 3
+            "order": 5
           },
           "coauthor.files.ignored.keywords": {
             "type": "array",
@@ -128,7 +138,7 @@
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
-            "order": 4
+            "order": 6
           }
         }
       },

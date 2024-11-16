@@ -151,7 +151,7 @@ CoAuthor supports a hierarchical structure for prompts, allowing child prompts t
 2. The child prompt will inherit all settings and prompts from the parent.
 3. You can override or add to the inherited content in the child prompt file.
 
-For example, let's look at how `prompts_polish_with_auxiliary.xml` inherits from `prompts_polish.xml`:
+For example, let's look at how `prompts_polish_physics.xml` inherits from `prompts_polish.xml`:
 
 Parent prompt (`prompts_polish.xml`):
 
@@ -176,7 +176,7 @@ Parent prompt (`prompts_polish.xml`):
 Child prompt (`prompts_polish_physics.xml`):
 
 ```xml
-<agent name="polish_physicist" inherits="polish">
+<agent name="polish_physics" inherits="polish">
   <settings>
     <!-- Child settings -->
   </settings>
@@ -189,7 +189,7 @@ Child prompt (`prompts_polish_physics.xml`):
 </agent>
 ```
 
-In this example, `prompts_polish_with_auxiliary.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of agents while reusing most of the existing prompt structure.
+In this example, `prompts_polish_physics.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of agents while reusing most of the existing prompt structure.
 
 ## Agent Execution Logic
 

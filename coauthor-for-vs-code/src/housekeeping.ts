@@ -1,10 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import {
-  getWorkspacePath,
-  getConfig,
-  getNestedConfig,
-} from './utils/commonUtils';
+import { getWorkspacePath, getNestedConfig } from './utils/commonUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import {

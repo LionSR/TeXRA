@@ -9,7 +9,7 @@ import {
 } from './utils';
 import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
-import { getWorkspacePath, getRelativePath } from './utils/commonUtils';
+import { getWorkspacePath, getRelativePath, getNestedConfig } from './utils/commonUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
 const CHANNEL_NAME = 'Coauthor View';
@@ -505,8 +505,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       const styleUri = webview.asWebviewUri(cssPath);
       const scriptUri = webview.asWebviewUri(jsPath);
 
-      const config = vscode.workspace.getConfiguration('coauthor');
-      const agents = config.get<string[]>('agents') || [];
+      // const config = vscode.workspace.getConfiguration('coauthor');
+      // const agents = config.get<string[]>('agents') || [];
+      const agents = getNestedConfig<string[]>('agents', []);
       const agentOptions = agents
         .map((agent) => `<option value="${agent}">${agent}</option>`)
         .join('\n');
@@ -535,11 +536,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async getOpenedFiles(): Promise<string[]> {
-    const workspaceFolders = workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      return [];
-    }
-    // const workspacePath = workspaceFolders[0].uri.fsPath;
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) return [];
 
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
