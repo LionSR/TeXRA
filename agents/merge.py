@@ -41,7 +41,6 @@ class Merge(DirectWrite):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "INPUT_FILE": self.input_file,
                 "ORIGINAL_LATEX": coa.read_file(self.input_file),
                 "EDITED_LATEX": coa.read_file(self.edited_file),
             }

@@ -16,10 +16,9 @@ from .prompt_utils import load_agent_settings_and_prompts
 from .settings_utils import get_output_settings, get_prompt_settings
 
 
-def get_output_file_name(input_file, agent, model, output_type, round, edited_file=None):
+def get_output_file_name(input_file, agent, model, output_ext, round, edited_file=None):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
-    output_type = output_type.strip(".")
 
     if edited_file:
         # Extract the round number from the edited file
@@ -28,7 +27,7 @@ def get_output_file_name(input_file, agent, model, output_type, round, edited_fi
     else:
         new_round = round
 
-    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_type}"
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -87,7 +86,7 @@ class BaseReflectChainAgent(ABC):
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
 
-        self.use_prompt_caching = self.prompt_settings.get("use_prompt_caching", False)
+        self.use_prompt_caching = self.model_settings.get("use_prompt_caching", False)
 
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -108,23 +107,20 @@ class BaseReflectChainAgent(ABC):
         pass
 
     def _handle_single_output(self, output_file):
-        if self.output_settings["output_type"] == "tex":
+        if self.output_settings["output_ext"] == "tex":
             run_latexdiff(self.args.input_file, output_file, self.args.agent)
 
     def _handle_multiple_outputs(self, output_files):
         for input_file, output_file in zip(self.args.output_files, output_files):
             log_output_files(output_file, self.log_file)
-            if self.output_settings["output_type"] == "tex":
+            if self.output_settings["output_ext"] == "tex":
                 run_latexdiff(input_file, output_file, self.args.agent)
 
     def _get_tex_count_stats(self, input_files):
         if isinstance(input_files, str):
             input_files = [input_files]
         tex_count_stats = get_tex_count(input_files)
-        if tex_count_stats:
-            return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
-        else:
-            return None
+        return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
     def _get_first_k_from_document(self):
         k = self.output_settings.get("k", 1000)
@@ -261,7 +257,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
         if self.use_scratchpad:
             file_extension = "xml"
         else:
-            file_extension = self.output_settings["output_type"]
+            file_extension = self.output_settings["output_ext"]
 
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
@@ -284,7 +280,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
         return self.output_files
 
 
@@ -294,7 +290,7 @@ class DirectWrite(BaseReflectChainAgent):
 
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = self.output_settings["output_type"]
+        file_extension = self.output_settings["output_ext"]
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
@@ -315,4 +311,4 @@ class DirectWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
