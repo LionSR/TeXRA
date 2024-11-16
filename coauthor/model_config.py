@@ -75,7 +75,7 @@ class ModelConfig:
         if self.is_anthropic:
             return self._create_anthropic_response(client, messages, temperature, system_prompt, end_tag)
         else:
-            return self._create_openai_compatible_response(client, messages, temperature, end_tag, extra_kwargs)
+            return self._create_openai_response(client, messages, temperature, end_tag, extra_kwargs)
 
     def _create_anthropic_response(self, client, messages, temperature, system_prompt, end_tag):
         """Create a response using Anthropic's API."""
@@ -95,7 +95,7 @@ class ModelConfig:
             betas=extra_headers if extra_headers else None,
         )
 
-    def _create_openai_compatible_response(self, client, messages, temperature, end_tag, extra_kwargs):
+    def _create_openai_response(self, client, messages, temperature, end_tag, extra_kwargs):
         """Create a response using OpenAI-compatible API."""
         kwargs = {
             "model": self.full_name,
@@ -104,11 +104,10 @@ class ModelConfig:
             "max_completion_tokens": self.max_tokens,
         }
 
-        if "o1" not in self.name:
-            kwargs["stop"] = end_tag
-
         if "o1" in self.name:
             kwargs["temperature"] = 1.0
+        else:
+            kwargs["stop"] = end_tag
 
         if self.is_openrouter:
             kwargs["extra_headers"] = {"X-Title": "CoA"}
