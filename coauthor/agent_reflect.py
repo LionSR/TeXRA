@@ -19,7 +19,6 @@ from .settings_utils import get_output_settings, get_prompt_settings
 def get_output_file_name(input_file, agent, model, output_type, round, edited_file=None):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
-    output_type = output_type.strip(".")
 
     if edited_file:
         # Extract the round number from the edited file
@@ -121,10 +120,7 @@ class BaseReflectChainAgent(ABC):
         if isinstance(input_files, str):
             input_files = [input_files]
         tex_count_stats = get_tex_count(input_files)
-        if tex_count_stats:
-            return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n"
-        else:
-            return None
+        return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
     def _get_first_k_from_document(self):
         k = self.output_settings.get("k", 1000)

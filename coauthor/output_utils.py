@@ -10,7 +10,6 @@ from .file_utils import read_file, write_file
 def get_output_file_name(input_file, agent, model, output_type, round):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
-    output_type = output_type.strip(".")
     output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_type}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
@@ -44,7 +43,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
                     content += f"\n</{document_tag}>"
 
-            replacements = {
+            REPLACEMENTS = {
                 "\\end{document}\n\n<document name": "\\end{document}\n</document>\n\n<document name",
                 "\\end{document}\n<document name": "\\end{document}\n</document>\n<document name",
                 "\\end{document}\n</latex_documents>": "\\end{document}\n</document>\n</latex_documents>",
@@ -64,7 +63,7 @@ def ensure_correct_xml_structure(file_path, document_tag):
                 "\\begin{latex_document}": "<latex_document>",
                 "</scratchpad>\n\\section{": "</scratchpad>\n<\latex_document>\n\section{",
             }
-            for find_str, replace_str in replacements.items():
+            for find_str, replace_str in REPLACEMENTS.items():
                 content = content.replace(find_str, replace_str)
 
             file.seek(0)
@@ -104,7 +103,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     output_content = read_file(output_file)
 
     # Define a dictionary of replacements for better maintainability
-    replacements = {
+    REPLACEMENTS = {
         "\\end{document>": "\\end{document}",
         "\\end{revised_statement>": "</revised_statement>",
         "\\end{figure>": "\\end{figure}",
@@ -116,7 +115,7 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     }
 
     # Apply all replacements in a single loop
-    for old, new in replacements.items():
+    for old, new in REPLACEMENTS.items():
         output_content = output_content.replace(old, new)
 
     # Add CDATA sections to specified tags
@@ -165,7 +164,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    replacements = {
+    REPLACEMENTS = {
         "\\end{document>": "\\end{document}",
         "\\end{figure>": "\\end{figure}",
         "\\end{tikzpicture>": "\\end{tikzpicture}",
@@ -178,7 +177,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
     }
 
     # Apply all replacements in a single loop
-    for old, new in replacements.items():
+    for old, new in REPLACEMENTS.items():
         output_content = output_content.replace(old, new)
 
     # Add CDATA sections to specified tags
