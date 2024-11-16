@@ -1,5 +1,7 @@
 from termcolor import colored
 
+from .model_utils import CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT
+
 
 def get_output_settings(args, agent_settings):
     output_settings = {
@@ -9,17 +11,6 @@ def get_output_settings(args, agent_settings):
         "end_tag": agent_settings.get("end_tag", "\\end{document}"),
         "prefills": agent_settings.get("prefills", []),
     }
-
-    # For backward compatibility
-    if not output_settings["prefills"]:
-        prefill_first = agent_settings.get("prefill_first")
-        prefill_second = agent_settings.get("prefill_second")
-
-        if prefill_first:
-            output_settings["prefills"].append(prefill_first)
-        if prefill_second and prefill_second != prefill_first:
-            output_settings["prefills"].append(prefill_second)
-
     return output_settings
 
 
@@ -38,7 +29,7 @@ def get_prompt_settings(args, agent_path, prompt_dict):
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
         "include_tikz_reflection": args.include_tikz_reflection,
     }
-    if "sonnet+" in args.model or "haiku" in args.model or "opus" in args.model:
+    if any(model in args.model for model in CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT):
         prompt_settings["use_prompt_caching"] = True
 
     return prompt_settings

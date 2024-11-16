@@ -5,6 +5,8 @@ import subprocess
 from datetime import datetime
 from termcolor import cprint
 
+from .model_utils import MODEL_MAPPING
+
 # MUST BE EXTREMELY careful with the subtle differences and edge cases
 
 EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
@@ -26,23 +28,7 @@ TEMP_EXTENSIONS = [
     ".toc",
     "-blx.bib",
 ]
-MODELS = [
-    "opus",
-    "sonnet",
-    "sonnet+",
-    "sonnet++",
-    "haiku+",
-    "haiku",
-    "gpto1",
-    "gpto1-",
-    "gpt4ol",
-    "gpt4t",
-    "gpt4o",
-    "gpt4o-",
-    "gemini1p+OR",
-    "gemini1f+OR",
-    "llama3+OR",
-]
+MODELS = list(MODEL_MAPPING.keys())
 
 
 def get_agent_first_name_chunk(agent):

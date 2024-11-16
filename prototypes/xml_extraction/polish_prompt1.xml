@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="polish">
-<settings document_tag="latex_document" end_tag="\end{document}" output_type="tex" prefill_first="scratchpad">
+<settings document_tag="latex_document" end_tag="\end{document}" output_type="tex" prefill="scratchpad">
 </settings>
 <prompts>
 <system_prompt>
