@@ -3,7 +3,7 @@
 <settings>
     <document_tag>revised_statement</document_tag>
     <end_tag>&lt;/revised_statement&gt;</end_tag>
-    <output_type>tex</output_type>
+    <output_ext>tex</output_ext>
     <prefills>
         <prefill>&lt;scratchpad&gt;</prefill>
         <prefill>&lt;scratchpad&gt;</prefill>
