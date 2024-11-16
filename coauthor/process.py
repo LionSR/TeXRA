@@ -3,7 +3,7 @@ import time
 from termcolor import colored, cprint
 
 from .file_utils import read_file, write_file, append_file
-from .model_utils import is_openai_model, is_anthropic_model, is_openai_compatible_model
+from .model_utils import is_anthropic_model, is_openai_compatible_model
 from .message_utils import (
     create_image_message,
     initialize_messages,
@@ -57,9 +57,9 @@ def initialize_state(state: dict | None, accumulated_output):
     return state
 
 
-def clean_response(new_response: str) -> str:
+def clean_response_in_session(new_response: str) -> str:
     # For Claude 3.5/GPT models, remove extra line breaks around equations and document tags
-    replacements = {
+    REPLACEMENTS = {
         "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
         "\\end{scratchpad}": "</scratchpad>",
         "\n\n\\begin{align}": "\n\\begin{align}",
@@ -88,7 +88,7 @@ def clean_response(new_response: str) -> str:
         "intricate": "complex",
         # "the concept of": "",
     }
-    for old, new in replacements.items():
+    for old, new in REPLACEMENTS.items():
         new_response = new_response.replace(old, new)
     return new_response
 
@@ -113,7 +113,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
-        new_response = clean_response(new_response)
+        new_response = clean_response_in_session(new_response)
 
         state["total_input_tokens"] += input_tokens
         state["total_output_tokens"] += output_tokens

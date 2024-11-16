@@ -1,5 +1,5 @@
 import argparse
-from model_utils import model_mapping
+from .model_utils import MODEL_MAPPING
 
 
 def comma_separated_list(value):
@@ -14,7 +14,7 @@ def get_common_argparser():
         type=str,
         default="sonnet+",
         help="Model name to use for processing.",
-        choices=list(model_mapping.keys()),
+        choices=list(MODEL_MAPPING.keys()),
     )
     parser.add_argument(
         "--temperature",
