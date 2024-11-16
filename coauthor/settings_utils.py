@@ -7,7 +7,7 @@ def get_output_settings(args, agent_settings):
     output_settings = {
         "k": 200,
         "document_tag": agent_settings.get("document_tag"),
-        "output_type": agent_settings.get("output_type", "txt"),
+        "output_ext": agent_settings.get("output_ext", "txt"),
         "end_tag": agent_settings.get("end_tag", "\\end{document}"),
         "prefills": agent_settings.get("prefills", []),
     }

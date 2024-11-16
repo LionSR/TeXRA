@@ -3,7 +3,7 @@
 <settings>
     <document_tag>rebuttal_letter</document_tag>
     <end_tag>&lt;/rebuttal_letter&gt;</end_tag>
-    <output_type>xml</output_type>
+    <output_ext>xml</output_ext>
     <prefills>
         <prefill>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill>
         <prefill>&lt;rebuttal_letter&gt;&lt;scratchpad&gt;</prefill>
