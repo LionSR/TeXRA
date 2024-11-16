@@ -18,13 +18,13 @@ user_reflect = prompts.find("user_reflect").text.strip()
 
 document_tag = settings.find("document_tag").text.strip()
 end_tag = settings.find("end_tag").text.strip()
-output_type = settings.find("output_type").text.strip()
+output_ext = settings.find("output_ext").text.strip()
 prefill = settings.get("prefill")
 
 print("\nSettings:")
 cprint(f"Document Tag: {document_tag}", "blue")
 cprint(f"End Tag: {end_tag}", "blue")
-cprint(f"Output Type: {output_type}", "blue")
+cprint(f"Output Type: {output_ext}", "blue")
 cprint(f"Prefill: {prefill}", "blue")
 
 print("System Prompt:")

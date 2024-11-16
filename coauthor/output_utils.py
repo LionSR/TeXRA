@@ -7,10 +7,10 @@ import xml.etree.ElementTree as ET
 from .file_utils import read_file, write_file
 
 
-def get_output_file_name(input_file, agent, model, output_type, round):
+def get_output_file_name(input_file, agent, model, output_ext, round):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
-    output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_type}"
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_ext}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
