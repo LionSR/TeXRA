@@ -3,11 +3,9 @@ import time
 from termcolor import colored, cprint
 
 from .file_utils import read_file, write_file, append_file
-from .model_utils import is_anthropic_model, is_openai_compatible_model
 from .message_utils import (
     create_image_message,
     initialize_messages,
-    create_response,
     extract_response_statistics,
     check_stop_conditions,
     print_stop_flags,
@@ -17,6 +15,7 @@ from .message_utils import (
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition
 from .prompt_utils import load_prompt
+from .model_config import ModelConfig
 
 
 def write_to_output_file(file_exists, best_connector, new_response, output_file):
@@ -93,23 +92,25 @@ def clean_response_in_session(new_response: str) -> str:
     return new_response
 
 
-def process_response_cycle(client, state, accumulated_output, messages, output_file, model_settings, output_settings, prompt_settings):
+def process_response_cycle(client, state, accumulated_output, messages, output_file, model_config: ModelConfig, output_settings, prompt_settings):
     end_turn = False
     k = output_settings["k"]
 
     while not end_turn:
         file_exists = os.path.exists(output_file)
         start_time = time.time()
-        response_object = create_response(
-            client=client, messages=messages, model_settings=model_settings, output_settings=output_settings, prompt_settings=prompt_settings
+        response_object = model_config.create_response(
+            client=client,
+            messages=messages,
+            temperature=output_settings["temperature"],
+            system_prompt=prompt_settings["system_prompt"],
+            end_tag=output_settings["end_tag"],
         )
         response_time = time.time() - start_time
         state["total_response_time"] += response_time
         print(f"### Response time: {colored(response_time, 'green')} seconds")
 
-        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(
-            response_object, model_settings["model"], output_settings["end_tag"]
-        )
+        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, output_settings["end_tag"])
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
@@ -141,7 +142,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             state["last_response"] = new_response
 
             if messages[-1]["role"] == "assistant":
-                if model_settings.get("use_prompt_caching", False):
+                if model_config.supports_prompt_caching:
                     if isinstance(messages[-1]["content"], list):
                         if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                             if "cache_control" in messages[-1]["content"][-2]:
@@ -161,7 +162,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
         state["continuation_count"] += 1
         print(f"\nContinuation #{state['continuation_count']}")
 
-        if is_openai_compatible_model(model_settings["model"]):
+        if model_config.is_openai_compatible:
             handle_openai_continuation(messages, new_response, k, output_settings["end_tag"])
 
     return state, accumulated_output, end_turn
@@ -169,11 +170,10 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
 def initialize_output_and_prefill(
     output_file,
-    model_settings,
+    model_config: ModelConfig,
     output_settings,
     prompt_settings,
     messages,
-    model,
     prefill,
     accumulated_output,
     first_k_tex_document=None,
@@ -189,34 +189,34 @@ def initialize_output_and_prefill(
         else:
             print(colored("### The output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
-            if model_settings.get("use_prompt_caching", False):
+            if model_config.supports_prompt_caching:
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
             else:
                 messages.append({"role": "assistant", "content": file_content})
             print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
-            if is_openai_compatible_model(model):
+            if model_config.is_openai_compatible:
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
         use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
         if output_settings.get("output_ext") == "tex" and use_prefill_from_input and first_k_tex_document:
             prefill += first_k_tex_document
-            if is_anthropic_model(model):
+            if model_config.is_anthropic:
                 accumulated_output = first_k_tex_document
-            elif is_openai_compatible_model(model):
+            elif model_config.is_openai_compatible:
                 accumulated_output = ""
                 messages.append({"role": "assistant", "content": "```latex\n"})
 
-        if is_anthropic_model(model):
+        if model_config.is_anthropic:
             messages.append({"role": "assistant", "content": prefill})
             cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
-        elif is_openai_compatible_model(model):
+        elif model_config.is_openai_compatible:
             openai_prefill = f"Start your response with\n{prefill}"
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
             cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
 
-        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model:
+        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and model_config.is_anthropic:
             write_file(output_file, prefill)
-        elif output_settings.get("output_ext") == "xml" and is_anthropic_model:
+        elif output_settings.get("output_ext") == "xml" and model_config.is_anthropic:
             write_file(output_file, prefill + "\n")
 
     return accumulated_output, False, messages
@@ -226,7 +226,7 @@ def process_first_round(
     client,
     output_file,
     user_vars,
-    model_settings,
+    model_config: ModelConfig,
     output_settings,
     prompt_settings,
     figure_inputs=None,
@@ -236,7 +236,6 @@ def process_first_round(
     tex_count_stats=None,
     first_k_tex_document=None,
 ):
-    model = model_settings["model"]
     system_prompt = load_prompt("system", prompt_settings)
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_prefix = user_prefix_template.format(**user_vars)
@@ -245,14 +244,12 @@ def process_first_round(
 
     user_request = load_prompt("user_request", prompt_settings)
 
-    # this needs to be combined with the prefill logic
     messages = initialize_messages(
-        model,
+        model_config,
         system_prompt,
         user_prefix,
         user_request,
         figure_inputs,
-        use_prompt_caching=model_settings.get("use_prompt_caching", False),
     )
 
     accumulated_output = None
@@ -261,11 +258,10 @@ def process_first_round(
 
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
-        model_settings,
+        model_config,
         output_settings,
         prompt_settings,
         messages,
-        model,
         prefill,
         accumulated_output,
         first_k_tex_document,
@@ -281,9 +277,9 @@ def process_first_round(
         accumulated_output,
         messages,
         output_file,
-        model_settings=model_settings,
-        output_settings=output_settings,
-        prompt_settings=prompt_settings,
+        model_config,
+        output_settings,
+        prompt_settings,
     )
 
     return state, accumulated_output, end_turn, messages
@@ -294,7 +290,7 @@ def process_reflection_round(
     output_file,
     state,
     messages,
-    model_settings,
+    model_config: ModelConfig,
     output_settings,
     prompt_settings,
     figure_inputs=None,
@@ -303,7 +299,7 @@ def process_reflection_round(
     first_k_tex_document=None,
 ):
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
-    model = model_settings["model"]
+    model = model_config.name
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_message = f"{user_request_reflect}\n"
@@ -322,7 +318,7 @@ def process_reflection_round(
         reflection_message["content"].extend(image_content)
 
     # Add the user message text
-    if model_settings.get("use_prompt_caching", False):
+    if model_config.supports_prompt_caching:
         # reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
         reflection_message["content"].append({"type": "text", "text": user_message})
         # Append the reflection message to the messages list
@@ -343,11 +339,10 @@ def process_reflection_round(
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
-        model_settings,
+        model_config,
         output_settings,
         prompt_settings,
         messages,
-        model,
         prefill,
         accumulated_output,
         first_k_tex_document,
@@ -366,9 +361,9 @@ def process_reflection_round(
         accumulated_output,
         messages,
         output_file,
-        model_settings=model_settings,
-        output_settings=output_settings,
-        prompt_settings=prompt_settings,
+        model_config,
+        output_settings,
+        prompt_settings,
     )
 
     return state, accumulated_output, end_turn, messages

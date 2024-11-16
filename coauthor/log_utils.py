@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from termcolor import colored
 
-from .model_utils import compute_api_price
+from .model_config import ModelConfig
 from .file_utils import append_file
 
 
@@ -51,7 +51,7 @@ def log_end(log_file):
     append_file(log_file, "</log_entry>\n")
 
 
-def log_and_print_statistics(state, model, log_file=None, prompt_caching=False):
+def log_and_print_statistics(state, model_config: ModelConfig, log_file=None, prompt_caching=False):
     total_input_tokens = state.get("total_input_tokens", 0)
     total_output_tokens = state.get("total_output_tokens", 0)
     total_response_time = state.get("total_response_time", 0)
@@ -69,9 +69,11 @@ def log_and_print_statistics(state, model, log_file=None, prompt_caching=False):
         total_input_tokens_all = total_cache_creation_input_tokens + total_cache_read_input_tokens
         percentage_cached = (total_cache_read_input_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         print(f"Percentage cached: {percentage_cached}%")
-        cost = compute_api_price(model, total_input_tokens, total_output_tokens, total_cache_creation_input_tokens, total_cache_read_input_tokens)
+        cost = model_config.compute_price(
+            total_input_tokens, total_output_tokens, total_cache_creation_input_tokens, total_cache_read_input_tokens
+        )
     else:
-        cost = compute_api_price(model, total_input_tokens, total_output_tokens)
+        cost = model_config.compute_price(total_input_tokens, total_output_tokens)
 
     print("Total response time : {} seconds".format(colored(total_response_time, "green")))
     print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
