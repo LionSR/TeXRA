@@ -38,9 +38,9 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 
 def get_user_vars_basic(args):
     user_vars = {
+        "INSTRUCTION": args.instruction if args.instruction else None,
         "INPUT_FILE": args.input_file,
         "INPUT_CONTENT": read_file(args.input_file),
-        "INSTRUCTION": args.instruction if args.instruction else None,
         "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
         "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
         "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
