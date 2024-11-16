@@ -10,6 +10,7 @@ def get_output_settings(args, agent_settings):
         "output_ext": agent_settings.get("output_ext", "txt"),
         "end_tag": agent_settings.get("end_tag", "\\end{document}"),
         "prefills": agent_settings.get("prefills", []),
+        "temperature": args.temperature,
     }
     return output_settings
 
