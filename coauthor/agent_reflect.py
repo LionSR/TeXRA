@@ -2,21 +2,25 @@ import os
 import re
 from termcolor import colored, cprint
 from abc import ABC, abstractmethod
+from typing import Optional, List
+
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
-from .tex_tools import run_latexdiff, get_tex_count
+from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
 from .output_utils import (
     ensure_correct_xml_structure,
     split_scratchpad_output_xml,
     split_multiple_scratchpad_output_xml,
 )
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
-from .prompt_utils import load_agent_settings_and_prompts
+from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
 from .settings_utils import get_output_settings, get_prompt_settings
-from .model_config import MODEL_CONFIGS
+from .model_config import MODEL_CONFIGS, ModelConfig
+from .file_utils import read_file
+from .state import State
 
 
-def get_output_file_name(input_file, agent, model, output_ext, round, edited_file=None):
+def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
 
@@ -32,21 +36,27 @@ def get_output_file_name(input_file, agent, model, output_ext, round, edited_fil
     return output_file
 
 
-def run_latexdiff_for_round(base_file, output_file, agent, round):
-    if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
-        run_latexdiff(base_file, output_file, agent, suffix="_diff")
-    else:
-        print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
+def get_user_vars_basic(args):
+    user_vars = {
+        "INPUT_FILE": args.input_file,
+        "INPUT_CONTENT": read_file(args.input_file),
+        "INSTRUCTION": args.instruction if args.instruction else None,
+        "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
+        "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
+        "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
+        "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
+    }
+    return user_vars
 
 
-def run_latexdiff_between_rounds(output_file1, output_file2, agent):
-    if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
-        first_round = re.search(r"_r(\d+)_", output_file1).group(1)
-        second_round = re.search(r"_r(\d+)_", output_file2).group(1)
-        diff_suffix = f"_diffr{second_round}r{first_round}"
-        run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
-    else:
-        print(f"Warning: Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
+def update_user_vars_multiple_output(args, user_vars):
+    all_input_files = [args.input_file] + (args.input_files or [])
+    if not args.output_files:
+        raise ValueError("Output files are required for multiple output agents.")
+    if len(args.output_files) > len(all_input_files):
+        raise ValueError("Number of output files must not be greater than the number of input files.")
+
+    user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
 
 class BaseReflectChainAgent(ABC):
@@ -55,19 +65,19 @@ class BaseReflectChainAgent(ABC):
     Provides a common structure for agents that involve reflection and processing.
     """
 
-    def __init__(self, args, agent_path):
+    def __init__(self, args, agent_path: str):
         self.args = args
         self.agent_path = agent_path
         self.agent_settings = None
         self.prompt_dict = None
         self.user_vars = None
-        self.model_config = None
+        self.model_config: Optional[ModelConfig] = None
         self.output_settings = None
         self.prompt_settings = None
         self.client = None
         self.log_file = None
         self.output_file = {0: None, 1: None}
-        self.output_files = {0: [], 1: []}
+        self.output_files: dict[int, List[str]] = {0: [], 1: []}
         if self.args.output_files:
             self.base_files = self.args.output_files
         else:
@@ -101,30 +111,30 @@ class BaseReflectChainAgent(ABC):
         pass
 
     @abstractmethod
-    def handle_output(self, state, end_turn, output_file, round=0):
+    def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         pass
 
     @abstractmethod
-    def get_output_file(self, round=0):
+    def get_output_file(self, round: int = 0) -> str:
         pass
 
-    def _handle_single_output(self, output_file):
+    def _handle_single_output(self, output_file: str) -> None:
         if self.output_settings["output_ext"] == "tex":
             run_latexdiff(self.args.input_file, output_file, self.args.agent)
 
-    def _handle_multiple_outputs(self, output_files):
+    def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         for input_file, output_file in zip(self.args.output_files, output_files):
             log_output_files(output_file, self.log_file)
             if self.output_settings["output_ext"] == "tex":
                 run_latexdiff(input_file, output_file, self.args.agent)
 
-    def _get_tex_count_stats(self, input_files):
+    def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
         if isinstance(input_files, str):
             input_files = [input_files]
         tex_count_stats = get_tex_count(input_files)
         return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
-    def _get_first_k_from_document(self):
+    def _get_first_k_from_document(self) -> Optional[str]:
         k = self.output_settings.get("k", 1000)
         try:
             with open(self.args.input_file, encoding="utf-8") as f:
@@ -134,7 +144,7 @@ class BaseReflectChainAgent(ABC):
             print(f"Error reading file {self.args.input_file}: {e}")
             return None
 
-    def _handle_latexdiff(self, round):
+    def _handle_latexdiff(self, round: int) -> None:
         cprint(f"Handling latexdiff for {self.args.agent} in round {round}", "blue", "on_white")
 
         print(f"base_files: {self.base_files}")
@@ -147,7 +157,7 @@ class BaseReflectChainAgent(ABC):
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
                 run_latexdiff_between_rounds(output_file1, output_file2, self.args.agent)
 
-    def _replace_input_commands(self, base_files, output_files):
+    def _replace_input_commands(self, base_files: List[str], output_files: List[str]) -> None:
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
 
         for output_file in output_files:
@@ -173,6 +183,7 @@ class BaseReflectChainAgent(ABC):
             self.tex_count_stats = self._get_tex_count_stats(input_files)
         if self.prompt_settings.get("use_prefill_from_input"):
             self.first_k_tex_document = self._get_first_k_from_document()
+
         state, accumulated_output, end_turn, messages = process_first_round(
             self.client,
             self.output_file[0],
@@ -194,7 +205,7 @@ class BaseReflectChainAgent(ABC):
 
         return state, messages, end_turn
 
-    def reflect(self, state, messages, round=1):
+    def reflect(self, state: State, messages, round: int = 1):
         reflection_figure_inputs = []
         if self.args.output_files:
             if self.prompt_settings.get("include_tex_count"):
@@ -251,10 +262,10 @@ class BaseReflectChainAgent(ABC):
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
-    def __init__(self, args, agent_path):
+    def __init__(self, args, agent_path: str):
         super().__init__(args, agent_path)
 
-    def get_output_file(self, round=0):
+    def get_output_file(self, round: int = 0) -> str:
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         if self.use_scratchpad:
             file_extension = "xml"
@@ -263,7 +274,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
         return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
-    def handle_output(self, state, end_turn, output_file, round=0):
+    def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         if end_turn:
             ensure_correct_xml_structure(output_file, self.agent_settings["document_tag"])
 
@@ -283,19 +294,19 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.model_config, self.log_file)
-        return self.output_files
+        return self.output_files[round]
 
 
 class DirectWrite(BaseReflectChainAgent):
-    def __init__(self, args, agent_path):
+    def __init__(self, args, agent_path: str):
         super().__init__(args, agent_path)
 
-    def get_output_file(self, round=0):
+    def get_output_file(self, round: int = 0) -> str:
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_ext"]
         return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
-    def handle_output(self, state, end_turn, output_file, round=0):
+    def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         if end_turn:
             if self.args.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
@@ -314,3 +325,4 @@ class DirectWrite(BaseReflectChainAgent):
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.model_config, self.log_file)
+        return self.output_files[round]

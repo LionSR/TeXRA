@@ -67,27 +67,3 @@ def load_prompt(prompt_type, prompt_settings):
     prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
     print(f"{prompt_type}: {colored(prompt, 'magenta')}")
     return prompt
-
-
-# in the future split the following into a different file (maybe share with agent_reflect or a standalone file to be shared with different chains)
-def get_user_vars_basic(args):
-    user_vars = {
-        "INPUT_FILE": args.input_file,
-        "INPUT_CONTENT": read_file(args.input_file),
-        "INSTRUCTION": args.instruction if args.instruction else None,
-        "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
-        "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
-        "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
-        "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
-    }
-    return user_vars
-
-
-def update_user_vars_multiple_output(args, user_vars):
-    all_input_files = [args.input_file] + (args.input_files or [])
-    if not args.output_files:
-        raise ValueError("Output files are required for multiple output agents.")
-    if len(args.output_files) > len(all_input_files):
-        raise ValueError("Number of output files must not be greater than the number of input files.")
-
-    user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
