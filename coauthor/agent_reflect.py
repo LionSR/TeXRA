@@ -16,7 +16,7 @@ from .prompt_utils import load_agent_settings_and_prompts
 from .settings_utils import get_output_settings, get_prompt_settings
 
 
-def get_output_file_name(input_file, agent, model, output_type, round, edited_file=None):
+def get_output_file_name(input_file, agent, model, output_ext, round, edited_file=None):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
 
@@ -27,7 +27,7 @@ def get_output_file_name(input_file, agent, model, output_type, round, edited_fi
     else:
         new_round = round
 
-    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_type}"
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
 
@@ -107,13 +107,13 @@ class BaseReflectChainAgent(ABC):
         pass
 
     def _handle_single_output(self, output_file):
-        if self.output_settings["output_type"] == "tex":
+        if self.output_settings["output_ext"] == "tex":
             run_latexdiff(self.args.input_file, output_file, self.args.agent)
 
     def _handle_multiple_outputs(self, output_files):
         for input_file, output_file in zip(self.args.output_files, output_files):
             log_output_files(output_file, self.log_file)
-            if self.output_settings["output_type"] == "tex":
+            if self.output_settings["output_ext"] == "tex":
                 run_latexdiff(input_file, output_file, self.args.agent)
 
     def _get_tex_count_stats(self, input_files):
@@ -257,7 +257,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
         if self.use_scratchpad:
             file_extension = "xml"
         else:
-            file_extension = self.output_settings["output_type"]
+            file_extension = self.output_settings["output_ext"]
 
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
@@ -290,7 +290,7 @@ class DirectWrite(BaseReflectChainAgent):
 
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = self.output_settings["output_type"]
+        file_extension = self.output_settings["output_ext"]
         return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):

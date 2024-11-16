@@ -197,7 +197,7 @@ def initialize_output_and_prefill(
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
         use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
-        if output_settings.get("output_type") == "tex" and use_prefill_from_input and first_k_tex_document:
+        if output_settings.get("output_ext") == "tex" and use_prefill_from_input and first_k_tex_document:
             prefill += first_k_tex_document
             if is_anthropic_model(model):
                 accumulated_output = first_k_tex_document
@@ -215,7 +215,7 @@ def initialize_output_and_prefill(
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and is_anthropic_model:
             write_file(output_file, prefill)
-        elif output_settings.get("output_type") == "xml" and is_anthropic_model:
+        elif output_settings.get("output_ext") == "xml" and is_anthropic_model:
             write_file(output_file, prefill + "\n")
 
     return accumulated_output, False, messages
