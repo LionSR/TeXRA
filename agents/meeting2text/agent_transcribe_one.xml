@@ -3,7 +3,7 @@
 <settings>
     <document_tag>edited_transcript</document_tag>
     <end_tag>&lt;/edited_transcript&gt;</end_tag>
-    <output_type>md</output_type>
+    <output_ext>md</output_ext>
     <prefills>
         <prefill>Here is the faithfully and correctly edited transcript:
 &lt;edited_transcript&gt;</prefill>
