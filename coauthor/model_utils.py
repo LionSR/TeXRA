@@ -134,6 +134,8 @@ def get_model_settings(args):
         "model_name": model_name,
         "max_tokens": MODEL_MAX_TOKENS.get(model_name, 4096),
     }
+    if any(model in args.model for model in CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT):
+        model_settings["use_prompt_caching"] = True
 
     return model_settings
 

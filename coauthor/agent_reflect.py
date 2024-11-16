@@ -86,7 +86,7 @@ class BaseReflectChainAgent(ABC):
         self.client = get_model_client(self.model_settings["model"])
         self.log_file = log_start(self.args)
 
-        self.use_prompt_caching = self.prompt_settings.get("use_prompt_caching", False)
+        self.use_prompt_caching = self.model_settings.get("use_prompt_caching", False)
 
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -280,7 +280,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
         return self.output_files
 
 
@@ -311,4 +311,4 @@ class DirectWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.prompt_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
