@@ -1,6 +1,7 @@
 import os
 import time
 from termcolor import colored, cprint
+from typing import Optional
 
 from .file_utils import read_file, write_file, append_file
 from .message_utils import (
@@ -13,47 +14,10 @@ from .message_utils import (
     has_end_tag,
 )
 from .openai_utils import best_connection_method
-from .output_utils import check_for_massive_repetition
+from .output_utils import check_for_massive_repetition, write_to_output_file
 from .prompt_utils import load_prompt
 from .model_config import ModelConfig
-
-
-def write_to_output_file(file_exists, best_connector, new_response, output_file):
-    if not file_exists:
-        print("Creating the file")
-        write_file(output_file, new_response)
-        file_exists = True
-    else:
-        print("Appending to file")
-        append_file(output_file, best_connector + new_response)
-
-
-def initialize_state(state: dict | None, accumulated_output):
-    if state is None:
-        state = {
-            "continuation_count": 0,
-            "total_input_tokens": 0,
-            "total_output_tokens": 0,
-            "total_response_time": 0,
-            "last_response": accumulated_output,
-            "first_input_tokens": 0,
-            "total_cache_read_input_tokens": 0,
-            "total_cache_creation_input_tokens": 0,
-        }
-    else:
-        for key in [
-            "continuation_count",
-            "total_input_tokens",
-            "total_output_tokens",
-            "total_response_time",
-            "last_response",
-            "first_input_tokens",
-            "total_cache_read_input_tokens",
-            "total_cache_creation_input_tokens",
-        ]:
-            if key not in state:
-                state[key] = 0 if key != "last_response" else accumulated_output
-    return state
+from .state import State
 
 
 def clean_response_in_session(new_response: str) -> str:
@@ -92,7 +56,9 @@ def clean_response_in_session(new_response: str) -> str:
     return new_response
 
 
-def process_response_cycle(client, state, accumulated_output, messages, output_file, model_config: ModelConfig, output_settings, prompt_settings):
+def process_response_cycle(
+    client, state: State, accumulated_output, messages, output_file, model_config: ModelConfig, output_settings, prompt_settings
+):
     end_turn = False
     k = output_settings["k"]
 
@@ -107,7 +73,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             end_tag=output_settings["end_tag"],
         )
         response_time = time.time() - start_time
-        state["total_response_time"] += response_time
+        state.update_response_time(response_time)
         print(f"### Response time: {colored(response_time, 'green')} seconds")
 
         new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, output_settings["end_tag"])
@@ -116,30 +82,21 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
         new_response = clean_response_in_session(new_response)
 
-        state["total_input_tokens"] += input_tokens
-        state["total_output_tokens"] += output_tokens
-        state["total_cache_creation_input_tokens"] += getattr(response_object.usage, "cache_creation_input_tokens", 0)
-        state["total_cache_read_input_tokens"] += getattr(response_object.usage, "cache_read_input_tokens", 0)
+        state.update_token_counts(
+            input_tokens,
+            output_tokens,
+            getattr(response_object.usage, "cache_read_input_tokens", 0),
+            getattr(response_object.usage, "cache_creation_input_tokens", 0),
+        )
 
-        if state["continuation_count"] == 0:
-            state["first_input_tokens"] = (
-                input_tokens
-                + getattr(response_object.usage, "cache_creation_input_tokens", 0)
-                + getattr(response_object.usage, "cache_read_input_tokens", 0)
-            )
-            cprint(f"### First input tokens: {state['first_input_tokens']}", "white", "on_blue")
-        else:
-            print(f"### The last {k} characters of the previous response are: {colored(state['last_response'][-k:], 'yellow')}")
-            print(f"### The first {k} characters of the new response are: {colored(new_response[:k], 'yellow')}")
+        best_connector, _ = best_connection_method(state.last_response[-k:], new_response[:k])
 
-        best_connector, _ = best_connection_method(state["last_response"][-k:], new_response[:k])
-
-        massive_repetition_detected = check_for_massive_repetition(state["last_response"], new_response)
+        massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
-            write_to_output_file(file_exists, best_connector, new_response, output_file)
+            file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
             print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
-            state["last_response"] = new_response
+            state.last_response = new_response
 
             if messages[-1]["role"] == "assistant":
                 if model_config.supports_prompt_caching:
@@ -159,8 +116,8 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected)
             break
 
-        state["continuation_count"] += 1
-        print(f"\nContinuation #{state['continuation_count']}")
+        state.increment_continuation()
+        print(f"\nContinuation #{state.continuation_count}")
 
         if model_config.is_openai_compatible:
             handle_openai_continuation(messages, new_response, k, output_settings["end_tag"])
@@ -230,12 +187,13 @@ def process_first_round(
     output_settings,
     prompt_settings,
     figure_inputs=None,
-    state=None,
+    state: Optional[State] = None,
     messages=None,
     round=0,
     tex_count_stats=None,
     first_k_tex_document=None,
 ):
+    """Process the first round of interaction."""
     system_prompt = load_prompt("system", prompt_settings)
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
     user_prefix = user_prefix_template.format(**user_vars)
@@ -268,9 +226,11 @@ def process_first_round(
     )
 
     if end_turn:
-        return initialize_state(state, None), accumulated_output, end_turn, messages
+        return State.initialize(accumulated_output), accumulated_output, end_turn, messages
 
-    state = initialize_state(state, accumulated_output)
+    if state is None:
+        state = State.initialize(accumulated_output)
+
     state, accumulated_output, end_turn = process_response_cycle(
         client,
         state,
@@ -288,7 +248,7 @@ def process_first_round(
 def process_reflection_round(
     client,
     output_file,
-    state,
+    state: State,
     messages,
     model_config: ModelConfig,
     output_settings,
@@ -298,6 +258,7 @@ def process_reflection_round(
     tex_count_stats=None,
     first_k_tex_document=None,
 ):
+    """Process the reflection round."""
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
     model = model_config.name
 
@@ -321,13 +282,12 @@ def process_reflection_round(
     if model_config.supports_prompt_caching:
         # reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
         reflection_message["content"].append({"type": "text", "text": user_message})
-        # Append the reflection message to the messages list
         # Make sure the number of cache control is fewer than 4
         if isinstance(messages[-1]["content"], list):
             if len(messages[-1]["content"]) == 1:
-                messages[0]["content"][-1].pop("cache_control")
+                messages[0]["content"][-1].pop("cache_control", None)
             elif len(messages[-1]["content"]) >= 2:
-                messages[-1]["content"][-2].pop("cache_control")
+                messages[-1]["content"][-2].pop("cache_control", None)
     else:
         reflection_message["content"].append({"type": "text", "text": user_message})
 
@@ -349,11 +309,11 @@ def process_reflection_round(
     )
 
     if end_turn:
-        return initialize_state(state, None), accumulated_output, end_turn, messages
+        return State.initialize(accumulated_output), accumulated_output, end_turn, messages
 
-    state = initialize_state(state, accumulated_output)
-    state["last_response"] = accumulated_output
-    state["continuation_count"] = 0
+    # Reset continuation count for reflection round while preserving other state
+    state.continuation_count = 0
+    state.last_response = accumulated_output
 
     state, accumulated_output, end_turn = process_response_cycle(
         client,
