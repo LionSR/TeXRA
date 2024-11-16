@@ -133,7 +133,6 @@ def get_model_settings(args):
         "model": model,
         "model_name": model_name,
         "max_tokens": MODEL_MAX_TOKENS.get(model_name, 4096),
-        "temperature": args.temperature,
     }
 
     return model_settings

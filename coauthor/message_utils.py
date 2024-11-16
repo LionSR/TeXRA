@@ -22,17 +22,17 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     model = model_settings["model"]
     model_name = model_settings["model_name"]
     max_tokens = model_settings["max_tokens"]
-    temperature = model_settings["temperature"]
+    temperature = output_settings["temperature"]
     end_tag = output_settings["end_tag"]
     system_prompt = prompt_settings["system_prompt"]
-    if is_openrouter_model(model):
+    if is_anthropic_model(model):
+        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
+    elif is_openrouter_model(model):
         response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_model(model):
         response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_compatible_model(model):
         response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
-    elif is_anthropic_model(model):
-        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
     else:
         raise ValueError(f"Unsupported model: {model}")
 
