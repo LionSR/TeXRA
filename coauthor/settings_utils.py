@@ -1,7 +1,5 @@
 from termcolor import colored
 
-from .model_utils import CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT
-
 
 def get_output_settings(args, agent_settings):
     output_settings = {
@@ -30,7 +28,4 @@ def get_prompt_settings(args, agent_path, prompt_dict):
         "auto_extract_tikz_figure": args.auto_extract_tikz_figure,
         "include_tikz_reflection": args.include_tikz_reflection,
     }
-    if any(model in args.model for model in CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT):
-        prompt_settings["use_prompt_caching"] = True
-
     return prompt_settings
