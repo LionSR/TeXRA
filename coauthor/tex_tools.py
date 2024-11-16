@@ -28,10 +28,10 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
             return True, None
         elif capture_output:
             result = subprocess.run(command, capture_output=True, **kwargs)
-            return True, result.stdout.strip()
+            return True, result.stdout.strip(), result.stderr.strip()
         else:
             subprocess.run(command, stderr=subprocess.PIPE, **kwargs)
-            return True, None
+            return True, None, None
     except subprocess.CalledProcessError as e:
         error_message = f"Error running command: {e}\nError output: {e.stderr}"
         print("\n" + colored(error_message, "red"))
@@ -60,12 +60,13 @@ def get_tex_count(file_paths):
 
         # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
         # here one needs a switch for -merge
-        success, output = run_external_command(["texcount", file_path], capture_output=True)
+        success, stdout, stderr = run_external_command(["texcount", file_path], capture_output=True)
         if success:
-            all_outputs.append(f"Tex Count Results for {file_path}:\n{output}")
+            all_outputs.append(f"Tex Count Results for {file_path}:\n{stdout}")
         else:
             cprint(f"Error getting tex count for {file_path}", "red")
-
+            cprint("Stdout:", stdout, "magenta")
+            cprint("Stderr:", stderr, "red")
     if all_outputs:
         combined_output = "\n\n".join(all_outputs)
         cprint(f"Combined Tex Count Results:\n{combined_output}", "yellow")
@@ -113,6 +114,20 @@ def process_tikzpicture_endings(file_path):
         file.write(content)
 
     cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
+
+
+def compile_latex_to_pdf(tex_file):
+    output_directory = os.path.dirname(tex_file)
+    command = ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file]
+
+    success, stdout, stderr = run_external_command(command, capture_output=True)
+
+    if success:
+        print(f"Compiled {tex_file} successfully.")
+    else:
+        cprint(f"Error compiling {tex_file}", "white", "on_red")
+        cprint("Stdout:", stdout, "magenta")
+        cprint("Stderr:", stderr, "red")
 
 
 def run_latexindent(file_path):
@@ -284,18 +299,18 @@ def process_diff_file(diff_file_name):
     cprint(f"Line breaks added to {diff_file_name}", "blue")
 
 
-def compile_latex_to_pdf(tex_file):
-    output_directory = os.path.dirname(tex_file)
-    command = ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file]
-
-    success, output = run_external_command(command, capture_output=True)
-
-    if success:
-        print(f"Compiled {tex_file} successfully.")
+def run_latexdiff_for_round(base_file, output_file, agent, round):
+    if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
+        run_latexdiff(base_file, output_file, agent, suffix="_diff")
     else:
-        cprint(f"Error compiling {tex_file}", "white", "on_red")
-        print("Error message:")
-        if output:
-            stdout, stderr = output.split("\n", 1)
-            cprint(stdout, "magenta")
-            cprint(stderr, "red")
+        print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
+
+
+def run_latexdiff_between_rounds(output_file1, output_file2, agent):
+    if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
+        first_round = re.search(r"_r(\d+)_", output_file1).group(1)
+        second_round = re.search(r"_r(\d+)_", output_file2).group(1)
+        diff_suffix = f"_diffr{second_round}r{first_round}"
+        run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
+    else:
+        print(f"Warning: Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")

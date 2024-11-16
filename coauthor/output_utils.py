@@ -4,7 +4,7 @@ from termcolor import colored, cprint
 import difflib
 import xml.etree.ElementTree as ET
 
-from .file_utils import read_file, write_file
+from .file_utils import read_file, write_file, append_file
 
 
 def get_output_file_name(input_file, agent, model, output_ext, round):
@@ -13,6 +13,18 @@ def get_output_file_name(input_file, agent, model, output_ext, round):
     output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_ext}"
     print(f"Output file: {colored(output_file, 'cyan')}")
     return output_file
+
+
+def write_to_output_file(file_exists, best_connector, new_response, output_file):
+    if not file_exists:
+        print("Creating the file")
+        write_file(output_file, new_response)
+        file_exists = True
+    else:
+        print("Appending to file")
+        append_file(output_file, best_connector + new_response)
+
+    return file_exists
 
 
 def check_for_massive_repetition(last_response, new_response):
