@@ -125,8 +125,6 @@ def correct_tex(model, input_file, **kwargs):
     agent = "correct"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
 
     execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
@@ -137,8 +135,6 @@ def polish_tex(model, input_file, **kwargs):
     agent = "polish"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 
@@ -148,8 +144,6 @@ def draw_tex(model, input_file, **kwargs):
     agent = "draw"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 
@@ -178,8 +172,6 @@ def polish_st(model, input_file, **kwargs):
 @shared_arguments
 def polish_qi(model, input_file, **kwargs):
     agent = "polish_qi"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -205,8 +197,6 @@ def draw_st(model, input_file, **kwargs):
 @shared_arguments
 def draw_qi(model, input_file, **kwargs):
     agent = "draw_qi"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
     execute_agent("edit_lecture", agent, model, input_file, **kwargs)
 
 
@@ -633,8 +623,6 @@ def convert_tex(model, input_file, **kwargs):
     agent = "convert"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    elif kwargs.get("auxiliary_files"):
-        agent = f"{agent}_with_auxiliary"
     execute_agent("edit_tex", agent, model, input_file, **kwargs)
 
 

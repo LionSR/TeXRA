@@ -8,18 +8,9 @@ class ReviseGrant(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
 
-        if self.args.input_files:
-            user_vars["ADDITIONAL_INPUTS"] = coa.get_xml_format_from_files(self.args.input_files)
-
-        if self.args.auxiliary_files:
-            user_vars["AUXILIARY_FILES"] = coa.get_xml_format_from_files(self.args.auxiliary_files)
-        else:
-            user_vars["AUXILIARY_FILES"] = ""
-
         if self.args.output_files:
-            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.args.output_files)
+            user_vars = coa.update_user_vars_multiple_output(self.args, user_vars)
 
-        coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
 

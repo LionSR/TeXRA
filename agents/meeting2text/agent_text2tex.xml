@@ -4,10 +4,10 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
@@ -85,7 +85,7 @@ where $X$ is the variable and $Y$ is the variable. [YOU MUST USE the align and o
 \end{document}
 </latex_template>
 
-Output the \LaTeX document inside the ``<latex_document>'' tags. 
+Output the \LaTeX document inside the `<latex_document>' tags. 
 ]]>
 </user_request>
 <user_reflect>
@@ -114,7 +114,7 @@ Please output the revised \LaTeX document that meets the above requirements and 
 
 ... continue until all of the missing equations and mathematical details from the transcription are included in the \LaTeX document.
 </scratchpad>
-and output the \LaTeX document inside the ``<latex_document>'' tags. 
+and output the \LaTeX document inside the `<latex_document>' tags. 
 ]]>
 </user_reflect>
 </prompts>

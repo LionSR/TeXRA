@@ -81,7 +81,7 @@ Before improving the \LaTeX document, please think in <scratchpad> about your pl
 ... continue until all major missing elements have been identified.
 </scratchpad>
 
-Then, output the improved \LaTeX document with the added content inside the ``<latex_document>'' tags. 
+Then, output the improved \LaTeX document with the added content inside the `<latex_document>' tags. 
 ]]>
 </user_request>
 <user_reflect>
@@ -123,7 +123,7 @@ Please review your additions and make any necessary adjustments. Think in <scrat
 ... continue until all necessary improvements have been addressed.
 </scratchpad>
 
-Output the final improved \LaTeX document inside the ``<latex_document>'' tags. 
+Output the final improved \LaTeX document inside the `<latex_document>' tags. 
 ]]>
 </user_reflect>
 </prompts>

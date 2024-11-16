@@ -13,8 +13,6 @@ class WriteTex(ThinkAndWrite):
         else:
             user_vars["REFERENCE_CONTENT"] = ""
 
-        coa.update_user_vars_single_output(self.args, user_vars)
-
         if self.args.input_files:
             for file in self.args.input_files:
                 if "main" in file.lower():

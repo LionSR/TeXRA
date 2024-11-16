@@ -209,14 +209,6 @@ class BaseReflectChainAgent(ABC):
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
         else:
-            # generated_output_file = get_output_file_name(
-            #     self.args.input_file,
-            #     self.args.agent,
-            #     self.model_settings["model"],
-            #     self.output_settings["output_type"],
-            #     round=0,
-            #     edited_file=self.edited_file,
-            # )
             generated_output_file = self.output_files[0][0]
             if self.prompt_settings.get("include_tex_count"):
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)

@@ -8,7 +8,6 @@ import {
   getRelativePath,
   showInfoMessage,
   showErrorMessage,
-  getConfig,
   ensureArray,
   getNestedConfig,
 } from './utils/commonUtils';
@@ -49,9 +48,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
             )
           : vscode.Uri.file(workspacePath);
 
-        const config = getConfig();
-        const includedInputDirectories =
-          config.get<string[]>('includedInputDirectories') || [];
+        const includedInputDirectories = getNestedConfig<string[]>(
+          'files.included.inputDirectories',
+          [],
+        );
 
         try {
           const fileUris = await vscode.window.showOpenDialog({
@@ -103,9 +103,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
             )
           : vscode.Uri.file(workspacePath);
 
-        const config = getConfig();
-        const includedSampleDirectories =
-          config.get<string[]>('includedSampleDirectories') || [];
+        const includedSampleDirectories = getNestedConfig<string[]>(
+          'files.included.sampleDirectories',
+          [],
+        );
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
@@ -150,9 +151,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
             )
           : vscode.Uri.file(workspacePath);
 
-        const config = getConfig();
-        const includedAuxDirectories =
-          config.get<string[]>('includedAuxDirectories') || [];
+        const includedAuxDirectories = getNestedConfig<string[]>(
+          'files.included.auxDirectories',
+          [],
+        );
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
@@ -197,10 +199,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
             )
           : vscode.Uri.file(workspacePath);
 
-        const config = getConfig();
-        const includedFigureDirectories = config.get<string[]>(
-          'includedFigureDirectories',
-        ) || ['FiguresEx'];
+        const includedFigureDirectories = getNestedConfig<string[]>(
+          'files.included.figureDirectories',
+          ['FiguresEx'],
+        );
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,

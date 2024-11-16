@@ -9,7 +9,7 @@ class Txt2Tex(DirectWrite):
         user_vars = coa.get_user_vars_basic(self.args)
         user_vars.update(
             {
-                "SAMPLE_TEX": coa.read_file(self.args.sample_tex),
+                "SAMPLE_TEX_CONTENT": coa.read_file(self.args.sample_tex),
                 "DOCUMENT_CLS_CONTENT": coa.read_file(self.args.document_cls),
                 "COMMAND_CONTENT": coa.read_file(self.args.commands_file),
                 "TOPIC": self.args.topic,

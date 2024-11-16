@@ -11,7 +11,6 @@ class ReviseApplicationDocument(ThinkAndWrite):
         if self.args.original_file:
             user_vars["INPUT_CONTENT"] = coa.read_file(self.args.original_file)
 
-        coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
 

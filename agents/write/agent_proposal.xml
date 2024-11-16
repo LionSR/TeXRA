@@ -4,10 +4,10 @@
     <document_tag>research_proposal</document_tag>
     <end_tag>&lt;/research_proposal&gt;</end_tag>
     <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

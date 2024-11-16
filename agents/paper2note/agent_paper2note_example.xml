@@ -17,11 +17,11 @@ Here is the \LaTeX document with additional \LaTeX document class and commands (
 <document name="{INPUT_FILE}">
 {INPUT_CONTENT}
 </document>
-<document name="EXAMPLE_PAPER">
-{EXAMPLE_PAPER}
+<document name="EXAMPLE_PAPER_FILE">
+{EXAMPLE_PAPER_CONTENT}
 </document>
-<document name="EXAMPLE_LECTURE_NOTE">
-{EXAMPLE_LECTURE_NOTE}
+<document name="EXAMPLE_LECTURE_NOTE_FILE">
+{EXAMPLE_LECTURE_NOTE_CONTENT}
 </document>
 </documents>
 

@@ -7,16 +7,14 @@ agent_path = coa.get_agent_path(coa, "lecture")
 class EditLectureBase:
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
+        document_cls_file = "lecture.cls"
+        command_file = "commands_qi.tex" if "qi" in self.args.agent else "command.tex"
         user_vars.update(
             {
-                "DOCUMENT_CLS_FILE": "lecture.cls",
-                "COMMAND_FILE": "commands_qi.tex" if "qi" in self.args.agent else "command.tex",
-            }
-        )
-        user_vars.update(
-            {
-                "DOCUMENT_CLS_CONTENT": coa.read_file(user_vars["DOCUMENT_CLS_FILE"]),
-                "COMMAND_CONTENT": coa.read_file(user_vars["COMMAND_FILE"]),
+                "DOCUMENT_CLS_FILE": document_cls_file,
+                "DOCUMENT_CLS_CONTENT": coa.read_file(document_cls_file),
+                "COMMAND_FILE": command_file,
+                "COMMAND_CONTENT": coa.read_file(command_file),
             }
         )
         if hasattr(self.args, "edit_file") and self.args.edit_file:
@@ -36,8 +34,6 @@ Please analyze both the original input and this previous edit, focusing on furth
             user_vars["EDITED_CONTENT_SECTION"] = ""
         if "multiple" in self.args.agent:
             coa.update_user_vars_multiple_output(self.args, user_vars)
-        else:
-            coa.update_user_vars_single_output(self.args, user_vars)
         return user_vars
 
 

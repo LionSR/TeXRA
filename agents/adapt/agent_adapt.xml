@@ -4,10 +4,10 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
@@ -65,14 +65,14 @@ In `<scratchpad>' tag, show your work and thought process as you paraphrase and 
     \item Provide the same level of detail in explanations and derivations as your existing notes, using multi-line \begin{align} ... \end{align}environments for detailed derivations where appropriate
 \end{itemize}
 
-After showing your work, please output the fully adapted content inside '<adapted_lecture_notes>' tag, ready to be integrated with your existing lecture notes.
+After showing your work, please output the fully adapted content inside `<adapted_lecture_notes>' tag, ready to be integrated with your existing lecture notes.
 ]]>
 </user_request>
 <user_reflect>
 <![CDATA[
 Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
 
-After thoroughly reviewing the exisiting lecture notes (under the <existing_lecture_notes> tag), the new lecture notes (under the <new_lecture_notes> tag), and your generated lecture notes (under the '<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the <requirements> tag and the following instructions:
+After thoroughly reviewing the exisiting lecture notes (under the `<existing_lecture_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
 <instruction>
 \begin{itemize}
     \item Increase the level of detail from moderate (5/10) to high (9/10)
@@ -82,7 +82,7 @@ After thoroughly reviewing the exisiting lecture notes (under the <existing_lect
 \end{itemize}
 </instruction>
 
-Please output the revised lecture notes (under the '<adapted_lecture_notes>' tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
+Please output the revised lecture notes (under the `<adapted_lecture_notes>' tag) that meet the above requirements. The revised notes should be a significant improvement over the initial draft in terms of depth, clarity, and adherence to the style and content of the provided samples.
 
 <adapted_lecture_notes>
 % Your revised LaTeX source here

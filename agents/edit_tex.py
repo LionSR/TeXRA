@@ -9,8 +9,6 @@ class EditTexBase:
         user_vars = coa.get_user_vars_basic(self.args)
         if "multiple" in self.args.agent:
             coa.update_user_vars_multiple_output(self.args, user_vars)
-        else:
-            coa.update_user_vars_single_output(self.args, user_vars)
 
         if self.args.agent == "convert":
             if "iclr" in self.args.input_file:
@@ -47,12 +45,9 @@ def main():
             "correct",
             "polish",
             "draw",
-            "polish_multiple",
-            "polish_with_auxiliary",
             "correct_multiple",
-            "correct_with_auxiliary",
+            "polish_multiple",
             "draw_multiple",
-            "draw_with_auxiliary",
             "convert",
             "ocr",
         ],
