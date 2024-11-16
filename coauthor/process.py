@@ -141,7 +141,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
             state["last_response"] = new_response
 
             if messages[-1]["role"] == "assistant":
-                if prompt_settings.get("use_prompt_caching", False):
+                if model_settings.get("use_prompt_caching", False):
                     if isinstance(messages[-1]["content"], list):
                         if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                             if "cache_control" in messages[-1]["content"][-2]:
@@ -169,6 +169,7 @@ def process_response_cycle(client, state, accumulated_output, messages, output_f
 
 def initialize_output_and_prefill(
     output_file,
+    model_settings,
     output_settings,
     prompt_settings,
     messages,
@@ -188,7 +189,7 @@ def initialize_output_and_prefill(
         else:
             print(colored("### The output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
             accumulated_output = file_content
-            if prompt_settings.get("use_prompt_caching", False):
+            if model_settings.get("use_prompt_caching", False):
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
             else:
                 messages.append({"role": "assistant", "content": file_content})
@@ -251,7 +252,7 @@ def process_first_round(
         user_prefix,
         user_request,
         figure_inputs,
-        use_prompt_caching=prompt_settings.get("use_prompt_caching", False),
+        use_prompt_caching=model_settings.get("use_prompt_caching", False),
     )
 
     accumulated_output = None
@@ -260,6 +261,7 @@ def process_first_round(
 
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
+        model_settings,
         output_settings,
         prompt_settings,
         messages,
@@ -320,7 +322,7 @@ def process_reflection_round(
         reflection_message["content"].extend(image_content)
 
     # Add the user message text
-    if prompt_settings.get("use_prompt_caching", False):
+    if model_settings.get("use_prompt_caching", False):
         # reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
         reflection_message["content"].append({"type": "text", "text": user_message})
         # Append the reflection message to the messages list
@@ -341,6 +343,7 @@ def process_reflection_round(
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
+        model_settings,
         output_settings,
         prompt_settings,
         messages,
