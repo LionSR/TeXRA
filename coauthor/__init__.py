@@ -36,9 +36,8 @@ from .openai_utils import best_connection_method
 from .prompt_utils import (
     load_agent_settings_and_prompts,
     get_user_vars_basic,
+    update_user_vars_multiple_output,
     get_xml_format_from_files,
     load_prompt,
-    update_user_vars_single_output,
-    update_user_vars_multiple_output,
 )
 from .settings_utils import get_output_settings, get_prompt_settings
