@@ -78,20 +78,19 @@ def multi_page_pdf_to_png(pdf_path, quality=300, max_size=(1024, 1024), max_page
     return base64_encoded_pngs
 
 
-def process_pdf_input(pdf_path, is_openai=False, **kwargs):
+def process_pdf_input(pdf_path, is_openai_compatible=False, **kwargs):
     """
     Process a PDF file and return base64 encoded PNG image(s).
 
     Args:
         pdf_path (str): Path to the PDF file.
-        is_openai (bool): Whether to use OpenAI API (allows more than 20 images).
+        is_openai_compatible (bool): Whether to use OpenAI Compatible API
         **kwargs: Additional arguments to pass to the conversion functions.
 
     Returns:
         Union[str, List[str], None]: Base64 encoded PNG image(s) or None if the file is empty or non-existent.
     """
     try:
-        # Open the PDF file to check the number of pages
         doc = fitz.open(pdf_path)
         page_count = doc.page_count
         doc.close()
@@ -99,7 +98,7 @@ def process_pdf_input(pdf_path, is_openai=False, **kwargs):
         if page_count == 1:
             return single_page_pdf_to_png(pdf_path, **kwargs)
         else:
-            max_pages = kwargs.get("max_pages", 20 if not is_openai else float("inf"))
+            max_pages = kwargs.get("max_pages", 20 if not is_openai_compatible else float("inf"))
             return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)
     except (fitz.FileDataError, fitz.EmptyFileError):
         print(f"Warning: The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")

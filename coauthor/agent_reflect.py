@@ -4,7 +4,6 @@ from termcolor import colored, cprint
 from abc import ABC, abstractmethod
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
-from .model_utils import get_model_client, get_model_settings
 from .tex_tools import run_latexdiff, get_tex_count
 from .output_utils import (
     ensure_correct_xml_structure,
@@ -14,6 +13,7 @@ from .output_utils import (
 from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts
 from .settings_utils import get_output_settings, get_prompt_settings
+from .model_config import MODEL_CONFIGS
 
 
 def get_output_file_name(input_file, agent, model, output_ext, round, edited_file=None):
@@ -61,7 +61,7 @@ class BaseReflectChainAgent(ABC):
         self.agent_settings = None
         self.prompt_dict = None
         self.user_vars = None
-        self.model_settings = None
+        self.model_config = None
         self.output_settings = None
         self.prompt_settings = None
         self.client = None
@@ -80,13 +80,15 @@ class BaseReflectChainAgent(ABC):
 
         self.agent_settings, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
         self.user_vars = self.get_user_vars()
-        self.model_settings = get_model_settings(self.args)
+
+        # Get model config instead of settings
+        model_name = self.args.model
+        self.model_config = MODEL_CONFIGS[model_name]
         self.output_settings = get_output_settings(self.args, self.agent_settings)
         self.prompt_settings = get_prompt_settings(self.args, self.agent_path, self.prompt_dict)
-        self.client = get_model_client(self.model_settings["model"])
-        self.log_file = log_start(self.args)
 
-        self.use_prompt_caching = self.model_settings.get("use_prompt_caching", False)
+        self.client = self.model_config.get_client()
+        self.log_file = log_start(self.args)
 
         self.use_scratchpad = "<scratchpad>" in self.output_settings["prefills"][0] if self.output_settings["prefills"] else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -175,7 +177,7 @@ class BaseReflectChainAgent(ABC):
             self.client,
             self.output_file[0],
             self.user_vars,
-            model_settings=self.model_settings,
+            model_config=self.model_config,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=self.args.figure_inputs,
@@ -222,7 +224,7 @@ class BaseReflectChainAgent(ABC):
             self.output_file[1],
             state,
             messages,
-            model_settings=self.model_settings,
+            model_config=self.model_config,
             output_settings=self.output_settings,
             prompt_settings=self.prompt_settings,
             figure_inputs=reflection_figure_inputs,
@@ -259,7 +261,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
         else:
             file_extension = self.output_settings["output_ext"]
 
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
+        return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
@@ -280,7 +282,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.model_config, self.log_file)
         return self.output_files
 
 
@@ -291,7 +293,7 @@ class DirectWrite(BaseReflectChainAgent):
     def get_output_file(self, round=0):
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
         file_extension = self.output_settings["output_ext"]
-        return get_output_file_name(base_output_file, self.args.agent, self.model_settings["model"], file_extension, round, self.edited_file)
+        return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
     def handle_output(self, state, end_turn, output_file, round=0):
         if end_turn:
@@ -311,4 +313,4 @@ class DirectWrite(BaseReflectChainAgent):
             self._handle_latexdiff(round)
 
         log_output_files(output_file, self.log_file)
-        log_and_print_statistics(state, self.args.model, self.log_file, self.model_settings.get("use_prompt_caching", False))
+        log_and_print_statistics(state, self.model_config, self.log_file)
