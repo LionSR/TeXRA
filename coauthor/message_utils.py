@@ -3,13 +3,7 @@ from termcolor import colored, cprint
 import base64
 
 from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
-from .model_utils import (
-    is_openai_model,
-    is_anthropic_model,
-    is_openrouter_model,
-    is_openai_compatible_model,
-    CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT,
-)
+from .model_config import ModelConfig
 
 
 def has_end_tag(file_content, end_tag, document_tag):
@@ -17,97 +11,21 @@ def has_end_tag(file_content, end_tag, document_tag):
     return end_tag in file_content or f"</{document_tag}>" in file_content
 
 
-def create_response(client, messages, model_settings, output_settings, prompt_settings):
-    """Create a response using the specified model and settings."""
-    model = model_settings["model"]
-    model_name = model_settings["model_name"]
-    max_tokens = model_settings["max_tokens"]
-    temperature = output_settings["temperature"]
-    end_tag = output_settings["end_tag"]
-    system_prompt = prompt_settings["system_prompt"]
-    if is_anthropic_model(model):
-        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
-    elif is_openrouter_model(model):
-        response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
-    elif is_openai_model(model):
-        response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
-    elif is_openai_compatible_model(model):
-        response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
-    else:
-        raise ValueError(f"Unsupported model: {model}")
-
-    return response_object
-
-
-def _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag):
-    """Create a response using OpenAI model."""
-    kwargs = {
-        "model": model_name,
-        "messages": messages,
-        "temperature": temperature,
-        "max_completion_tokens": max_tokens,
-    }
-    if "o1" in model_name:
-        kwargs["temperature"] = 1
-    else:
-        kwargs["stop"] = end_tag
-
-    response_object = client.chat.completions.create(**kwargs)
-    print(colored(f"using openai model: {model_name}", "green"))
-    return response_object
-
-
-def _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag):
-    """Create a response using OpenRouter model."""
-    kwargs = {
-        "model": model_name,
-        "messages": messages,
-        "temperature": temperature,
-        "max_completion_tokens": max_tokens,
-        "stop": end_tag,
-        "extra_headers": {"X-Title": "CoA"},
-    }
-    response_object = client.chat.completions.create(**kwargs)
-    print(colored(f"using openai-compatible model: {model_name}", "green"))
-    return response_object
-
-
-def _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt):
-    """Create a response using Anthropic model."""
-    extra_headers = None
-    if any(model in model_name.lower() for model in CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT):
-        extra_headers = ["prompt-caching-2024-07-31"]
-        if model_name == "claude-3-5-sonnet-20241022":
-            extra_headers.append("pdfs-2024-09-25")
-
-    response_object = client.beta.messages.create(
-        model=model_name,
-        max_tokens=max_tokens,
-        messages=messages,
-        temperature=temperature,
-        stop_sequences=[end_tag] if end_tag else None,
-        system=system_prompt,
-        betas=extra_headers,
-    )
-    print(colored(f"using anthropic model: {model_name}", "green"))
-    return response_object
-
-
-def initialize_messages(model, system_prompt, user_prefix, user_request, figure_inputs, use_prompt_caching=False):
-    """Initialize messages for the conversation. This function is important for recovering from the interruption."""
+def initialize_messages(model_config: ModelConfig, system_prompt, user_prefix, user_request, figure_inputs):
+    """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-    if is_openai_model(model) and "o1" not in model:
+    if model_config.is_openai and "o1" not in model_config.full_name:
         messages.insert(0, {"role": "system", "content": system_prompt})
 
     if figure_inputs:
-        image_content = create_image_message(model, figure_inputs)
+        image_content = create_image_message(model_config, figure_inputs)
         messages[-1]["content"].extend(image_content)
 
-    if use_prompt_caching:
+    if model_config.supports_prompt_caching:
         messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
     else:
-        if "o1" in model:
+        if "o1" in model_config.name:
             messages[-1]["content"].append({"type": "text", "text": system_prompt})
 
         messages[-1]["content"].append({"type": "text", "text": user_request})
@@ -115,7 +33,7 @@ def initialize_messages(model, system_prompt, user_prefix, user_request, figure_
     return messages
 
 
-def create_image_message(model, figure_inputs):
+def create_image_message(model_config: ModelConfig, figure_inputs):
     """Create image messages for the conversation."""
     image_contents = []
     added_figures = []
@@ -131,7 +49,7 @@ def create_image_message(model, figure_inputs):
             continue
 
         _, file_extension = os.path.splitext(figure_input)
-        img_data, media_type = _process_image_file(figure_input, file_extension, model)
+        img_data, media_type = _process_image_file(figure_input, file_extension, model_config)
         # print(f"### DEBUG: Processed image file: {figure_input}, media type: {media_type}")
         # print(f"### DEBUG: length of img_data: {len(img_data)}")
         if img_data is not None:
@@ -139,7 +57,7 @@ def create_image_message(model, figure_inputs):
         else:
             cprint(f"WARNING: Failed to process {figure_input}. Skipping.", "white", "on_red")
 
-    content = _create_image_content(image_contents, model)
+    content = _create_image_content(image_contents, model_config)
 
     print(f"Using images: {colored(figure_inputs, 'green')}")
     print(f"Successfully added figures: {colored(added_figures, 'cyan')}")
@@ -147,17 +65,16 @@ def create_image_message(model, figure_inputs):
     return content
 
 
-def _process_image_file(figure_input, file_extension, model):
+def _process_image_file(figure_input, file_extension, model_config: ModelConfig):
     """Process the image file and return the image data and media type."""
     if file_extension.lower() == ".pdf":
         # For PDFs, use document type for Anthropic models and convert to PNG for others
-        if model in ["claude-3-5-sonnet-20241022", "sonnet++"] and page_count_pdf(figure_input) > 1:
-            # print(f"### DEBUG: Processing PDF for Anthropic model: {figure_input}")
+        if model_config.name in ["claude-3-5-sonnet-20241022", "sonnet++"] and page_count_pdf(figure_input) > 1:
             with open(figure_input, "rb") as f:
                 img_data = base64.standard_b64encode(f.read()).decode("utf-8")
             media_type = "application/pdf"
         else:
-            img_data = process_pdf_input(figure_input, is_openai=is_openai_model(model))
+            img_data = process_pdf_input(figure_input, is_openai_compatible=model_config.is_openai_compatible)
             media_type = "image/png"
     else:
         img_data = get_base64_encoded_image(figure_input)
@@ -184,11 +101,11 @@ def _add_image_content(image_contents, added_figures, figure_input, img_data, me
         added_figures.append(figure_input)
 
 
-def _create_image_content(image_contents, model):
+def _create_image_content(image_contents, model_config):
     """Create the image content for the message."""
     content = []
     for image in image_contents:
-        if is_anthropic_model(model) and image["media_type"] == "application/pdf":
+        if model_config.is_anthropic and image["media_type"] == "application/pdf":
             content.extend(
                 [
                     {"type": "text", "text": f"Document: {image['file_name']}"},
@@ -200,10 +117,10 @@ def _create_image_content(image_contents, model):
                 [
                     {"type": "text", "text": f"Image: {image['file_name']}"},
                     {
-                        "type": "image" if is_anthropic_model(model) else "image_url",
-                        "source" if is_anthropic_model(model) else "image_url": {
-                            "type" if is_anthropic_model(model) else "url": (
-                                "base64" if is_anthropic_model(model) else f"data:{image['media_type']};base64,{image['data']}"
+                        "type": "image" if model_config.is_anthropic else "image_url",
+                        "source" if model_config.is_anthropic else "image_url": {
+                            "type" if model_config.is_anthropic else "url": (
+                                "base64" if model_config.is_anthropic else f"data:{image['media_type']};base64,{image['data']}"
                             ),
                             "media_type": image["media_type"],
                             "data": image["data"],
@@ -214,18 +131,12 @@ def _create_image_content(image_contents, model):
     return content
 
 
-def extract_response_statistics(response_object, model, end_tag=None):
+def extract_response_statistics(response_object, model_config: ModelConfig, end_tag=None):
     """Extract statistics from the response object."""
-    if is_anthropic_model(model):
+    if model_config.is_anthropic:
         return _extract_anthropic_statistics(response_object, end_tag)
-    elif is_openrouter_model(model):
-        return _extract_openai_statistics(response_object, end_tag)
-    elif is_openai_model(model):
-        return _extract_openai_statistics(response_object, end_tag)
-    elif is_openai_compatible_model(model):
-        return _extract_openai_statistics(response_object, end_tag)
     else:
-        raise ValueError(f"Unsupported model: {model}")
+        return _extract_openai_statistics(response_object, end_tag)
 
 
 def _extract_openai_statistics(response_object, end_tag):
@@ -234,7 +145,7 @@ def _extract_openai_statistics(response_object, end_tag):
     new_response = response_object.choices[0].message.content.strip()
 
     if response_object.usage is None:
-        # raise ValueError("No usage information in the response object")
+        cprint("WARNING: No usage information in the response object", "white", "on_red")
         input_tokens, output_tokens = 0, 0
     else:
         input_tokens = response_object.usage.prompt_tokens

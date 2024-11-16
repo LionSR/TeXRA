@@ -5,11 +5,11 @@ import subprocess
 from datetime import datetime
 from termcolor import cprint
 
-from .model_utils import MODEL_MAPPING
+from .model_config import MODEL_CONFIGS
 
 # MUST BE EXTREMELY careful with the subtle differences and edge cases
 
-EXCLUDED_DIRS = {"Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"}
+EXCLUDED_DIRS = ["Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"]
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
 TEMP_EXTENSIONS = [
     ".pdf",
@@ -28,7 +28,7 @@ TEMP_EXTENSIONS = [
     ".toc",
     "-blx.bib",
 ]
-MODELS = list(MODEL_MAPPING.keys())
+MODELS = list(MODEL_CONFIGS.keys())
 
 
 def get_agent_first_name_chunk(agent):
@@ -260,8 +260,6 @@ def run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean=False):
 
 
 def run_clean_build():
-    excluded_dirs = EXCLUDED_DIRS
-
     def clean_build_dir(directory):
         build_dir = os.path.join(directory, "build")
         if os.path.isdir(build_dir):
@@ -272,7 +270,7 @@ def run_clean_build():
     clean_build_dir(".")
 
     for root, dirs, _ in os.walk(".", topdown=True):
-        dirs[:] = [d for d in dirs if d.lower() not in excluded_dirs]
+        dirs[:] = [d for d in dirs if d.lower() not in EXCLUDED_DIRS]
         for dir in dirs:
             subdir = os.path.join(root, dir)
             clean_build_dir(subdir)
