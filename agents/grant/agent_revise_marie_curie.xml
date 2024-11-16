@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="revise_marie_curie_fellowship">
-<settings>
-    <document_tag>marie_curie_fellowship_documents</document_tag>
-    <end_tag>&lt;/marie_curie_fellowship_documents&gt;</end_tag>
-    <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
-</settings>
+    <settings>
+        <document_tag>marie_curie_fellowship_documents</document_tag>
+        <end_tag>&lt;/marie_curie_fellowship_documents&gt;</end_tag>
+        <output_type>tex</output_type>
+        <prefills>
+            <prefill>&lt;scratchpad&gt;</prefill>
+            <prefill>&lt;scratchpad&gt;</prefill>
+        </prefills>
+    </settings>
 <prompts>
 <system_prompt>
 <![CDATA[
@@ -143,7 +143,7 @@ Now that you have made initial improvements to the Marie Curie Fellowship propos
 ...
 </scratchpad>
 
-Then, output further enhanced and complete versions of all specified \LaTeX documents in the <marie_curie_fellowship_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided and ensure all changes align with MSCA guidelines and enhance the proposal's competitiveness. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
+Then, output further enhanced and complete versions of all specified \LaTeX documents in the `<marie_curie_fellowship_documents>' tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided and ensure all changes align with MSCA guidelines and enhance the proposal's competitiveness. Only modify sections explicitly mentioned in the instruction, unless changes in one section directly necessitate adjustments in another for consistency.
 
 Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
 ]]>

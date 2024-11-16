@@ -57,7 +57,7 @@ In your conversion, focus on the following:
 - Do not modify, condense, or expand the original content; focus on accurate conversion to LaTeX
 </requirements>
 
-Please output the full LaTeX source for the popular science article, enclosed in the ``<latex_document>'' tag:
+Please output the full LaTeX source for the popular science article, enclosed in the `<latex_document>' tag:
 
 <latex_document>
 % Your LaTeX source here
@@ -89,7 +89,7 @@ After carefully reviewing the original popular science article text and your ini
 - Maintain absolute fidelity to the original content, structure, and writing style
 </requirements>
 
-Please output the revised LaTeX code (under the <latex_document> </latex_document> tag) that addresses only the technical LaTeX issues while preserving the original content exactly. The revised code should be a faithful representation of the original text in proper LaTeX format.
+Please output the revised LaTeX code (under the `<latex_document>' tag) that addresses only the technical LaTeX issues while preserving the original content exactly. The revised code should be a faithful representation of the original text in proper LaTeX format.
 
 <latex_document>
 % Your technically corrected LaTeX code here

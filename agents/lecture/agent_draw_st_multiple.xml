@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="draw_st_multiple" inherits="draw_st">
 <settings>
-	<document_tag>latex_documents</document_tag>
-	<end_tag>&lt;/latex_documents&gt;</end_tag>
-	<output_type>xml</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <document_tag>latex_documents</document_tag>
+    <end_tag>&lt;/latex_documents&gt;</end_tag>
+    <output_type>xml</output_type>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

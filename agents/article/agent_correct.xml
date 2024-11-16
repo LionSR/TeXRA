@@ -34,10 +34,14 @@ When writing a professional *.tex \LaTeX document, you must:
 <![CDATA[
 I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
-Here is the \LaTeX document {INPUT_FILE}:
-<latex_document>
+Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
+
+<documents>
+{AUXILIARY_FILES}
+<document name="{INPUT_FILE}">
 {INPUT_CONTENT}
-</latex_document>
+</document>
+</documents>
 ]]>
 </user_prefix>
 <user_request>

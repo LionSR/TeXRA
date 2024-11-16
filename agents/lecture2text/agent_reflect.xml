@@ -4,10 +4,10 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
@@ -36,12 +36,12 @@ Please read the content within these tags line by line and extrmely carefully as
 
 Here is the transcription {INPUT_FILE}:
 <transcription>
-{corrected_transcription_content}
+{CORRECTED_TRANSCRIPTION_CONTENT}
 </transcription>
 
-Here is the converted \LaTeX document {converted_tex_file}:
+Here is the converted \LaTeX document {CONVERTED_TEX_FILE}:
 <latex>
-{converted_tex_content}
+{CONVERTED_TEX_CONTENT}
 </latex>
 ]]>
 </user_prefix>
@@ -60,7 +60,5 @@ After thoroughly and critically reviewing the LaTeX version and comparing it to 
 Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original lecture transcription, with a specific emphasis on rewriting all the additions in a formalized manner consistent with the \LaTeX document's style at the right place of the document.
 ]]>
 </user_request>
-<user_reflect>
-</user_reflect>
 </prompts>
 </agent>

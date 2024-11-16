@@ -60,10 +60,7 @@ def get_xml_format_from_file(file):
 
 
 def get_xml_format_from_files(files):
-    if files:
-        return "\n".join(get_xml_format_from_file(file) for file in files)
-    else:
-        return ""
+    return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
 def load_prompt(prompt_type, prompt_settings):
@@ -80,44 +77,17 @@ def get_user_vars_basic(args):
         "INSTRUCTION": args.instruction if args.instruction else None,
         "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
         "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
+        "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
+        "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
     }
     return user_vars
 
 
-def update_user_vars_single_output(args, user_vars):
-    user_vars["ADDITIONAL_INPUTS"] = ""
-    if args.input_files:
-        user_vars["ADDITIONAL_INPUTS"] = get_xml_format_from_files(args.input_files)
-
-    user_vars["AUXILIARY_FILE"] = ""
-    user_vars["AUXILIARY_CONTENT"] = ""
-    user_vars["AUXILIARY_FILES"] = ""
-    if args.auxiliary_files:
-        if len(args.auxiliary_files) > 1:
-            user_vars["AUXILIARY_FILES"] = get_xml_format_from_files(args.auxiliary_files)
-        else:
-            user_vars["AUXILIARY_FILE"] = os.path.basename(args.auxiliary_files[0])
-            user_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
-
-
 def update_user_vars_multiple_output(args, user_vars):
-    input_files = [args.input_file] + (args.input_files or [])
+    all_input_files = [args.input_file] + (args.input_files or [])
     if not args.output_files:
         raise ValueError("Output files are required for multiple output agents.")
-    if len(args.output_files) > len(input_files):
+    if len(args.output_files) > len(all_input_files):
         raise ValueError("Number of output files must not be greater than the number of input files.")
-
-    user_vars["INPUT_FILE"] = args.input_file
-    user_vars["INPUT_CONTENT"] = read_file(args.input_file)
-    user_vars["ADDITIONAL_INPUTS"] = get_xml_format_from_files(input_files[1:])
-
-    if args.auxiliary_files:
-        user_vars["AUXILIARY_FILE"] = args.auxiliary_files[0]
-        user_vars["AUXILIARY_CONTENT"] = read_file(args.auxiliary_files[0])
-    else:
-        user_vars["AUXILIARY_FILE"] = "No auxiliary file provided"
-        user_vars["AUXILIARY_CONTENT"] = "No auxiliary content"
-
-    user_vars["AUXILIARY_FILES"] = get_xml_format_from_files(args.auxiliary_files)
 
     user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
