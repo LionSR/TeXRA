@@ -3,7 +3,7 @@
 <settings>
     <document_tag>latex_documents</document_tag>
     <end_tag>&lt;/latex_documents&gt;</end_tag>
-    <output_type>tex</output_type>
+    <output_ext>tex</output_ext>
     <prefills>
         <prefill>&lt;scratchpad&gt;</prefill>
         <prefill>&lt;scratchpad&gt;</prefill>

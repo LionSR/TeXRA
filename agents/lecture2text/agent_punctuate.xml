@@ -3,7 +3,7 @@
 <settings>
     <document_tag>improved_document</document_tag>
     <end_tag>&lt;/improved_document&gt;</end_tag>
-    <output_type>txt</output_type>
+    <output_ext>txt</output_ext>
     <prefills>
         <prefill>&lt;improved_document&gt;</prefill>
     </prefills>
