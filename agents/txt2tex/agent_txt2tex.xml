@@ -44,7 +44,7 @@ Your task is to generate a new LaTeX file based on this content, following the p
 
 You are also provided with a sample LaTeX file in the desired style:
 <sample_tex>
-{SAMPLE_TEX}
+{SAMPLE_TEX_CONTENT}
 </sample_tex>
 
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
@@ -104,7 +104,7 @@ In your conversion, focus on the following:
 - Do not modify, condense, or expand the original content; focus on accurate conversion to LaTeX
 </requirements>
 
-Please output the full LaTeX source, enclosed in the ``<latex_document>'' tag:
+Please output the full LaTeX source, enclosed in the `<latex_document>' tag:
 
 <latex_document>
 % Your LaTeX source here
@@ -131,7 +131,7 @@ After thoroughly reviewing the original text file, the sample LaTeX file, and yo
 - Improve the overall clarity and readability of the LaTeX code, making it publication-ready
 </requirements>
 
-Please output the revised LaTeX code (under the <latex_document> </latex_document> tag) that meets the above requirements. The revised code should be a significant improvement over the initial draft in terms of accuracy, consistency, and clarity.
+Please output the revised LaTeX code (under the `<latex_document>' tag) that meets the above requirements. The revised code should be a significant improvement over the initial draft in terms of accuracy, consistency, and clarity.
 
 <latex_document>
 % Your revised LaTeX code here

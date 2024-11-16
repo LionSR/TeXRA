@@ -73,7 +73,7 @@
 - **Changed:**
   - Refactored codebase to improve readability, organization, and efficiency
   - Optimized model pricing calculation in compute_api_price function
-  - Updated model_mapping in openai_utils.py
+  - Updated MODEL_MAPPING in openai_utils.py
   - Improved handling of user variables in prompt_utils.py
   - Created common utility functions for housekeeping agents
   - Added function `run_pack_latexdiff_vc` for packing LaTeX diff files with version control information

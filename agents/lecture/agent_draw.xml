@@ -4,10 +4,10 @@
     <document_tag>latex_document</document_tag>
     <end_tag>&lt;/latex_document&gt;</end_tag>
     <output_type>tex</output_type>
-	<prefills>
-		<prefill>&lt;scratchpad&gt;</prefill>
-		<prefill>&lt;scratchpad&gt;</prefill>
-	</prefills>
+    <prefills>
+        <prefill>&lt;scratchpad&gt;</prefill>
+        <prefill>&lt;scratchpad&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>
@@ -153,7 +153,7 @@ Then, following your plan in the scratchpad, implement these improvements by out
 3. Result in figures that are correct, aesthetically pleasing, informative, and condensed.
 4. Adhere to the style of a professional graduate physics textbook.
 
-Please provide the complete \LaTeX document with your improvements in the <latex_document> ... </latex_document> tag.
+Please provide the complete \LaTeX document with your improvements in the `<latex_document>' ... </latex_document> tag.
 ]]>
 </user_reflect>
 </prompts>

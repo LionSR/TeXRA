@@ -7,21 +7,25 @@ agent_path = coa.get_agent_path(coa, "lecture2text")
 class Lecture2Text(DirectWrite):
     def get_user_vars(self):
         user_vars = coa.get_user_vars_basic(self.args)
+
+        document_cls_file = "lecture.cls"
+        command_file = "commands_qi.tex"
+
         user_vars.update(
             {
-                "DOCUMENT_CLS_FILE": "lecture.cls",
-                "DOCUMENT_CLS_CONTENT": coa.read_file("lecture.cls"),
-                "COMMAND_FILE": "commands_qi.tex",
-                "COMMAND_CONTENT": coa.read_file("commands_qi.tex"),
+                "DOCUMENT_CLS_FILE": document_cls_file,
+                "DOCUMENT_CLS_CONTENT": coa.read_file(document_cls_file),
+                "COMMAND_FILE": command_file,
+                "COMMAND_CONTENT": coa.read_file(command_file),
             }
         )
         if self.args.agent in ["2tex", "reflect"]:
             user_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document")
             user_vars.update(
                 {
-                    "corrected_transcription_content": coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document"),
-                    "converted_tex_file": self.args.input_file.replace(".txt", ".tex"),
-                    "converted_tex_content": coa.read_file(self.args.input_file.replace(".txt", ".tex")),
+                    "CORRECTED_TRANSCRIPTION_CONTENT": coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document"),
+                    "CONVERTED_TEX_FILE": self.args.input_file.replace(".txt", ".tex"),
+                    "CONVERTED_TEX_CONTENT": coa.read_file(self.args.input_file.replace(".txt", ".tex")),
                 }
             )
         elif self.args.agent in ["transcribe", "punctuate"]:

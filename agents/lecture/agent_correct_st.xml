@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <agent name="correct_st">
 <settings>
-	<document_tag>latex_document</document_tag>
-	<end_tag>&lt;/latex_document&gt;</end_tag>
-	<output_type>tex</output_type>
-	<prefills>
-		<prefill>Here is the revised \LaTeX document. &lt;latex_document&gt;</prefill>
-	</prefills>
+    <document_tag>latex_document</document_tag>
+    <end_tag>&lt;/latex_document&gt;</end_tag>
+    <output_type>tex</output_type>
+    <prefills>
+        <prefill>Here is the revised \LaTeX document. &lt;latex_document&gt;</prefill>
+    </prefills>
 </settings>
 <prompts>
 <system_prompt>

@@ -3,7 +3,6 @@ import * as path from 'path';
 import {
   getWorkspacePath,
   getRelativePath,
-  getConfig,
   ensureArray,
   getNestedConfig,
 } from './utils/commonUtils';
@@ -133,43 +132,41 @@ export async function listFigureFiles(): Promise<string[]> {
 }
 
 export async function listEditedFiles(baseFileName: string): Promise<string[]> {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    const workspacePath = workspaceFolders[0].uri.fsPath;
-    const ignoredExtensions = getNestedConfig<string[]>(
-      'files.ignored.fileExtensions',
-      [],
-    );
-    const ignoredKeywords = getNestedConfig<string[]>(
-      'files.ignored.keywords',
-      [],
-    );
-    const ignoredInputFiles = getNestedConfig<string[]>(
-      'files.ignored.inputFiles',
-      [],
-    );
-    const ignoredDirectories = getNestedConfig<string[]>(
-      'files.ignored.directories',
-      [],
-    );
-    const files = await getFilesRecursively(
-      workspacePath,
-      workspacePath,
-      ['.txt', '.tex'],
-      ignoredExtensions,
-      [...ignoredDirectories, 'Diffs', 'PapersEx'],
-      ignoredKeywords,
-      ignoredInputFiles,
-    );
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) return [];
+  
+  const ignoredExtensions = getNestedConfig<string[]>(
+    'files.ignored.fileExtensions',
+    [],
+  );
+  const ignoredKeywords = getNestedConfig<string[]>(
+    'files.ignored.keywords',
+    [],
+  );
+  const ignoredInputFiles = getNestedConfig<string[]>(
+    'files.ignored.inputFiles',
+    [],
+  );
+  const ignoredDirectories = getNestedConfig<string[]>(
+    'files.ignored.directories',
+    [],
+  );
+  const files = await getFilesRecursively(
+    workspacePath,
+    workspacePath,
+    ['.txt', '.tex'],
+    ignoredExtensions,
+    [...ignoredDirectories, 'Diffs', 'PapersEx'],
+    ignoredKeywords,
+    ignoredInputFiles,
+  );
 
-    return files.filter((file) => {
-      const fileBaseName = path.basename(file, path.extname(file));
-      return (
-        fileBaseName.startsWith(baseFileName) && fileBaseName !== baseFileName
-      );
-    });
-  }
-  return [];
+  return files.filter((file) => {
+    const fileBaseName = path.basename(file, path.extname(file));
+    return (
+      fileBaseName.startsWith(baseFileName) && fileBaseName !== baseFileName
+    );
+  });
 }
 
 export async function getFilesInDirectory(
