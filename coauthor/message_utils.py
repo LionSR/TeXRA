@@ -3,7 +3,13 @@ from termcolor import colored, cprint
 import base64
 
 from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
-from .model_utils import is_openai_model, is_anthropic_model, is_openrouter_model, is_openai_compatible_model
+from .model_utils import (
+    is_openai_model,
+    is_anthropic_model,
+    is_openrouter_model,
+    is_openai_compatible_model,
+    CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT,
+)
 
 
 def has_end_tag(file_content, end_tag, document_tag):
@@ -16,17 +22,17 @@ def create_response(client, messages, model_settings, output_settings, prompt_se
     model = model_settings["model"]
     model_name = model_settings["model_name"]
     max_tokens = model_settings["max_tokens"]
-    temperature = model_settings["temperature"]
+    temperature = output_settings["temperature"]
     end_tag = output_settings["end_tag"]
     system_prompt = prompt_settings["system_prompt"]
-    if is_openrouter_model(model):
+    if is_anthropic_model(model):
+        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
+    elif is_openrouter_model(model):
         response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_model(model):
         response_object = _create_openai_response(client, model_name, max_tokens, messages, temperature, end_tag)
     elif is_openai_compatible_model(model):
         response_object = _create_openai_compatible_response(client, model_name, max_tokens, messages, temperature, end_tag)
-    elif is_anthropic_model(model):
-        response_object = _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt)
     else:
         raise ValueError(f"Unsupported model: {model}")
 
@@ -69,8 +75,7 @@ def _create_openai_compatible_response(client, model_name, max_tokens, messages,
 def _create_anthropic_response(client, model_name, max_tokens, messages, temperature, end_tag, system_prompt):
     """Create a response using Anthropic model."""
     extra_headers = None
-    claude_models_with_prompt_caching = {"claude-3-5-sonnet", "claude-3-haiku", "claude-3-opus", "claude-3-5-haiku"}
-    if any(model in model_name.lower() for model in claude_models_with_prompt_caching):
+    if any(model in model_name.lower() for model in CLAUDE_MODELS_WITH_PROMPT_CACHING_SUPPORT):
         extra_headers = ["prompt-caching-2024-07-31"]
         if model_name == "claude-3-5-sonnet-20241022":
             extra_headers.append("pdfs-2024-09-25")
@@ -211,14 +216,14 @@ def _create_image_content(image_contents, model):
 
 def extract_response_statistics(response_object, model, end_tag=None):
     """Extract statistics from the response object."""
-    if is_openrouter_model(model):
+    if is_anthropic_model(model):
+        return _extract_anthropic_statistics(response_object, end_tag)
+    elif is_openrouter_model(model):
         return _extract_openai_statistics(response_object, end_tag)
     elif is_openai_model(model):
         return _extract_openai_statistics(response_object, end_tag)
     elif is_openai_compatible_model(model):
         return _extract_openai_statistics(response_object, end_tag)
-    elif is_anthropic_model(model):
-        return _extract_anthropic_statistics(response_object, end_tag)
     else:
         raise ValueError(f"Unsupported model: {model}")
 
