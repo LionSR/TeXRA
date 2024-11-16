@@ -4,6 +4,7 @@ import base64
 
 from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
 from .model_config import ModelConfig
+from .state import State
 
 
 def has_end_tag(file_content, end_tag, document_tag):
@@ -195,13 +196,15 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
     messages.append({"role": "user", "content": user_message_continuation})
 
 
-def check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected):
+def check_stop_conditions(
+    stop_reason: str, new_response: str, state: State, output_settings: dict, massive_repetition_detected: bool
+) -> tuple[bool, bool]:
     """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
     encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
-    continuation_limit = state["continuation_count"] > 10
-    input_token_limit = state["total_input_tokens"] > 1500000
-    output_token_limit = state["total_output_tokens"] > 2.5 * state["first_input_tokens"]
+    continuation_limit = state.continuation_count > 10
+    input_token_limit = state.total_input_tokens > 1500000
+    output_token_limit = state.total_output_tokens > 2.5 * state.first_input_tokens
 
     if output_token_limit:
         cprint("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.", "white", "on_red")
@@ -211,14 +214,14 @@ def check_stop_conditions(stop_reason, new_response, state, output_settings, mas
     return end_turn, should_stop
 
 
-def print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected):
+def print_stop_flags(end_turn: bool, new_response: str, state: State, output_settings: dict, massive_repetition_detected: bool) -> None:
     """Print the flags indicating why the conversation stopped."""
     print("Printing the flags")
     print(f"end_turn: {end_turn}")
     document_tag = output_settings["document_tag"]
     print(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
-    print(f"continuation_limit: {state['continuation_count'] > 10}")
-    print(f"input_token_limit: {state['total_input_tokens'] > 100000}")
+    print(f"continuation_limit: {state.continuation_count > 10}")
+    print(f"input_token_limit: {state.total_input_tokens > 100000}")
     print(f"massive_repetition_detected: {massive_repetition_detected}")
-    print(f"output_token_limit: {state['total_output_tokens'] > 2.5 * state['first_input_tokens']}")
-    print(colored(f"### {state['last_response'][-output_settings['k']:]}", "yellow"))
+    print(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
+    print(colored(f"### {state.last_response[-output_settings['k']:]}", "yellow"))
