@@ -3,6 +3,7 @@ import coauthor as coa
 from termcolor import colored
 import os
 import re
+from .state import State
 
 agent_path = coa.get_agent_path(coa, "merge")
 
@@ -50,7 +51,7 @@ class Merge(DirectWrite):
     def get_output_file(self, round):
         return get_output_file_name_merge(self.args.input_file, self.args.edited_file, round)
 
-    def handle_output(self, state, end_turn, output_file, round=0):
+    def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> None:
         if end_turn:
             super().handle_output(state, end_turn, output_file, round)
             print(colored(f"Output file: {output_file}", "yellow"))
