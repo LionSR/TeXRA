@@ -1,97 +1,271 @@
 import os
-import re
+import sqlite3
 from datetime import datetime
 from termcolor import colored
+import json
 
 from .model_config import ModelConfig
-from .file_utils import append_file
+
+
+def get_db_path():
+    """Get path to SQLite database in current working directory"""
+    return os.path.join(os.getcwd(), ".coauthor_logs.db")
+
+
+def init_db():
+    """Initialize SQLite database with a single comprehensive table"""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Single table containing all necessary information
+    c.execute(
+        """CREATE TABLE IF NOT EXISTS coauthor_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp DATETIME,
+        agent TEXT,
+        model TEXT,
+        input_file TEXT,
+        input_files TEXT,  -- JSON array of additional input files
+        auxiliary_files TEXT,  -- JSON array of auxiliary files
+        figure_inputs TEXT,  -- JSON array of figure inputs
+        sample_files TEXT,  -- JSON array of sample files
+        output_file TEXT,  -- Main output file
+        output_files TEXT,  -- JSON array of output files from args
+        xml_output_file TEXT,  -- Latest XML output file
+        xml_output_files TEXT,  -- JSON array of all XML output files including reflection
+        is_reflection BOOLEAN,
+        instruction TEXT,
+        reflect BOOLEAN,  -- From args.reflect
+        auto_extract_figure BOOLEAN,  -- Flag
+        auto_extract_tikz_figure BOOLEAN,  -- Flag
+        include_tikz_reflection BOOLEAN,  -- Flag
+        include_tex_count BOOLEAN,  -- Flag
+        use_prefill_from_input BOOLEAN,  -- Flag
+        round_stats TEXT  -- JSON array of stats per round
+    )"""
+    )
+
+    conn.commit()
+    conn.close()
 
 
 def log_start(args):
-    # Get the directory of the output name override or input file, or use appropriate fallback
-    if args.output_name_override:
-        input_dir = os.path.dirname(args.output_name_override)
-        base_filename = os.path.basename(args.output_name_override)
-    elif args.input_file:
-        input_dir = os.path.dirname(args.input_file)
-        base_filename = os.path.basename(args.input_file)
-    else:
-        input_dir = os.getcwd()
-        base_filename = "default.xml"
+    """Initialize a new log entry and return its ID"""
+    init_db()
+    conn = sqlite3.connect(get_db_path())
+    c = conn.cursor()
 
-    base_name = os.path.splitext(base_filename)[0]
+    # Convert lists to JSON strings for storage
+    input_files = json.dumps(args.input_files) if args.input_files else None
+    auxiliary_files = json.dumps(args.auxiliary_files) if args.auxiliary_files else None
+    figure_inputs = json.dumps(args.figure_inputs) if args.figure_inputs else None
+    sample_files = json.dumps(args.sample_files) if args.sample_files else None
+    output_files = json.dumps(args.output_files) if args.output_files else None
 
-    log_dir = os.path.join(input_dir, "Log")
-    os.makedirs(log_dir, exist_ok=True)
+    # Initialize empty array for round stats
+    round_stats = json.dumps([])
 
-    log_filename = f"{base_name}_log.xml"
-    log_file = os.path.join(log_dir, log_filename)
+    c.execute(
+        """INSERT INTO coauthor_logs (
+        timestamp, agent, model, input_file, input_files,
+        auxiliary_files, figure_inputs, sample_files, output_files, 
+        instruction, round_stats, reflect,
+        auto_extract_figure, auto_extract_tikz_figure,
+        include_tikz_reflection, include_tex_count,
+        use_prefill_from_input
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            datetime.now(),
+            args.agent,
+            args.model,
+            args.input_file,
+            input_files,
+            auxiliary_files,
+            figure_inputs,
+            sample_files,
+            output_files,
+            args.instruction,
+            round_stats,
+            args.reflect,
+            args.auto_extract_figure,
+            args.auto_extract_tikz_figure,
+            args.include_tikz_reflection,
+            args.include_tex_count,
+            args.use_prefill_from_input,
+        ),
+    )
 
-    with open(log_file, "a+") as f:
-        f.write("\n<log_entry>\n")
-        f.write("  <metadata>\n")
-        f.write(f"    <time>{datetime.now()}</time>\n")
-        f.write(f"    <agent>{args.agent}</agent>\n")
-        f.write(f"    <model>{args.model}</model>\n")
+    log_id = c.lastrowid
+    conn.commit()
+    conn.close()
 
-        optional_output_fields = ["output_name_override", "input_file", "input_files", "auxiliary_files", "figure_inputs"]
-
-        for field in optional_output_fields:
-            value = getattr(args, field, None)
-            if value:
-                f.write(f"    <{field}>{value}</{field}>\n")
-
-        f.write("  </metadata>\n")
-        f.write(f"  <instruction>{args.instruction}</instruction>\n")
-
-    return log_file
+    return log_id
 
 
-def log_end(log_file):
-    append_file(log_file, "</log_entry>\n")
+def log_end(log_id):
+    """No-op as we don't need explicit end markers in SQLite"""
+    pass
 
 
-def log_and_print_statistics(state, model_config: ModelConfig, log_file=None, prompt_caching=False):
+def log_and_print_statistics(state, model_config: ModelConfig, log_id=None, prompt_caching=False):
+    """Log statistics to SQLite and print them to console"""
     total_input_tokens = state.get("total_input_tokens", 0)
     total_output_tokens = state.get("total_output_tokens", 0)
     total_response_time = state.get("total_response_time", 0)
 
-    # Print the statistics to the command line
+    # Print statistics to console
     print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
     print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
 
-    if prompt_caching:
-        total_cache_read_input_tokens = state.get("total_cache_read_input_tokens", 0)
-        total_cache_creation_input_tokens = state.get("total_cache_creation_input_tokens", 0)
-        print(f"Total input tokens (cache read): {total_cache_read_input_tokens}")
-        print(f"Total input tokens (cache create): {total_cache_creation_input_tokens}")
+    # Calculate caching statistics
+    cache_read_tokens = state.get("total_cache_read_input_tokens", 0)
+    cache_creation_tokens = state.get("total_cache_creation_input_tokens", 0)
+    percentage_cached = 0
 
-        total_input_tokens_all = total_cache_creation_input_tokens + total_cache_read_input_tokens
-        percentage_cached = (total_cache_read_input_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
+    if prompt_caching:
+        print(f"Total input tokens (cache read): {cache_read_tokens}")
+        print(f"Total input tokens (cache create): {cache_creation_tokens}")
+
+        total_input_tokens_all = cache_creation_tokens + cache_read_tokens
+        percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         print(f"Percentage cached: {percentage_cached}%")
-        cost = model_config.compute_price(
-            total_input_tokens, total_output_tokens, total_cache_creation_input_tokens, total_cache_read_input_tokens
-        )
+        cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_creation_tokens, cache_read_tokens)
     else:
         cost = model_config.compute_price(total_input_tokens, total_output_tokens)
 
     print("Total response time : {} seconds".format(colored(total_response_time, "green")))
     print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
 
-    # Log the statistics to the log file if exists in the directory
-    if os.path.exists(log_file):
-        statistics_xml = f"""  <statistics
-    total_input_tokens="{total_input_tokens}"
-    total_output_tokens="{total_output_tokens}"
-    total_response_time="{total_response_time:.2f}"
-    total_cost="${cost:.2f}"
-  />
-"""
-        append_file(log_file, statistics_xml)
+    # Update statistics in database if we have a log ID
+    if log_id is not None:
+        conn = sqlite3.connect(get_db_path())
+        c = conn.cursor()
+
+        # Get current round from is_reflection
+        c.execute("SELECT is_reflection, round_stats FROM coauthor_logs WHERE id = ?", (log_id,))
+        row = c.fetchone()
+        current_round = 1 if row[0] else 0
+        round_stats = json.loads(row[1]) if row[1] else []
+
+        # Create stats for current round
+        round_stat = {
+            "round": current_round,
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens,
+            "response_time": total_response_time,
+            "cost": cost,
+            "cache_read_tokens": cache_read_tokens,
+            "cache_creation_tokens": cache_creation_tokens,
+            "percentage_cached": percentage_cached
+        }
+
+        # Update or append round stats
+        if current_round < len(round_stats):
+            round_stats[current_round] = round_stat
+        else:
+            round_stats.append(round_stat)
+
+        # Update the database
+        c.execute(
+            """UPDATE coauthor_logs SET
+            round_stats = ?
+            WHERE id = ?""",
+            (json.dumps(round_stats), log_id)
+        )
+
+        conn.commit()
+        conn.close()
 
 
-def log_output_files(output_file, log_file):
+def log_output_files(output_file, log_id):
+    """Update the output file information in the log entry"""
+    if log_id is None:
+        return
+
+    import re
+
     round_match = re.search(r"_r(\d+)_", output_file)
-    round = int(round_match.group(1)) if round_match else 0
-    tag = "reflection_output_file" if round > 0 else "output_file"
-    append_file(log_file, f"  <{tag}>{output_file}</{tag}>\n")
+    is_reflection = bool(round_match and int(round_match.group(1)) > 0)
+
+    conn = sqlite3.connect(get_db_path())
+    c = conn.cursor()
+
+    # Get existing output files
+    c.execute("SELECT xml_output_files FROM coauthor_logs WHERE id = ?", (log_id,))
+    row = c.fetchone()
+    existing_files = json.loads(row[0]) if row and row[0] else []
+
+    # Add new output file if not already present
+    if output_file not in existing_files:
+        existing_files.append(output_file)
+
+    # Update the database
+    c.execute(
+        """UPDATE coauthor_logs SET
+        xml_output_file = ?,
+        xml_output_files = ?,
+        is_reflection = ?
+        WHERE id = ?""",
+        (output_file, json.dumps(existing_files), is_reflection, log_id),  # Latest output file  # All output files
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_task_info(log_id):
+    """Retrieve task information for VS Code frontend"""
+    conn = sqlite3.connect(get_db_path())
+    c = conn.cursor()
+
+    c.execute(
+        """SELECT 
+        timestamp, agent, model, input_file, output_file,
+        instruction, round_stats, reflect,
+        auto_extract_figure, auto_extract_tikz_figure,
+        include_tikz_reflection, include_tex_count,
+        use_prefill_from_input,
+        input_files, auxiliary_files, figure_inputs, sample_files
+        FROM coauthor_logs WHERE id = ?""",
+        (log_id,),
+    )
+
+    row = c.fetchone()
+    if row:
+        round_stats = json.loads(row[6])
+        latest_stats = round_stats[-1] if round_stats else {}
+        
+        info = {
+            "timestamp": row[0],
+            "agent": row[1],
+            "model": row[2],
+            "input_file": row[3],
+            "output_file": row[4],
+            "instruction": row[5],
+            "total_input_tokens": latest_stats.get("input_tokens", 0),
+            "total_output_tokens": latest_stats.get("output_tokens", 0),
+            "total_response_time": latest_stats.get("response_time", 0),
+            "total_cost": latest_stats.get("cost", 0),
+            "percentage_cached": latest_stats.get("percentage_cached", 0),
+            "round_stats": round_stats,  # Include all rounds' stats
+            "flags": {
+                "reflect": row[7],
+                "auto_extract_figure": row[8],
+                "auto_extract_tikz_figure": row[9],
+                "include_tikz_reflection": row[10],
+                "include_tex_count": row[11],
+                "use_prefill_from_input": row[12]
+            },
+            "files": {
+                "input_files": json.loads(row[13]) if row[13] else [],
+                "auxiliary_files": json.loads(row[14]) if row[14] else [],
+                "figure_inputs": json.loads(row[15]) if row[15] else [],
+                "sample_files": json.loads(row[16]) if row[16] else []
+            }
+        }
+        conn.close()
+        return info
+
+    conn.close()
+    return None
