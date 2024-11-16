@@ -5,6 +5,7 @@ from termcolor import colored
 import json
 
 from .model_config import ModelConfig
+from .state import State
 
 
 def get_db_path():
@@ -108,19 +109,19 @@ def log_end(log_id):
     pass
 
 
-def log_and_print_statistics(state, model_config: ModelConfig, log_id=None, prompt_caching=False):
+def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=None, prompt_caching=False):
     """Log statistics to SQLite and print them to console"""
-    total_input_tokens = state.get("total_input_tokens", 0)
-    total_output_tokens = state.get("total_output_tokens", 0)
-    total_response_time = state.get("total_response_time", 0)
+    total_input_tokens = state.total_input_tokens
+    total_output_tokens = state.total_output_tokens
+    total_response_time = state.total_response_time
 
     # Print statistics to console
     print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
     print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
 
     # Calculate caching statistics
-    cache_read_tokens = state.get("total_cache_read_input_tokens", 0)
-    cache_creation_tokens = state.get("total_cache_creation_input_tokens", 0)
+    cache_read_tokens = state.total_cache_read_input_tokens
+    cache_creation_tokens = state.total_cache_creation_input_tokens
     percentage_cached = 0
 
     if prompt_caching:
@@ -157,7 +158,7 @@ def log_and_print_statistics(state, model_config: ModelConfig, log_id=None, prom
             "cost": cost,
             "cache_read_tokens": cache_read_tokens,
             "cache_creation_tokens": cache_creation_tokens,
-            "percentage_cached": percentage_cached
+            "percentage_cached": percentage_cached,
         }
 
         # Update or append round stats
@@ -171,7 +172,7 @@ def log_and_print_statistics(state, model_config: ModelConfig, log_id=None, prom
             """UPDATE coauthor_logs SET
             round_stats = ?
             WHERE id = ?""",
-            (json.dumps(round_stats), log_id)
+            (json.dumps(round_stats), log_id),
         )
 
         conn.commit()
@@ -235,7 +236,7 @@ def get_task_info(log_id):
     if row:
         round_stats = json.loads(row[6])
         latest_stats = round_stats[-1] if round_stats else {}
-        
+
         info = {
             "timestamp": row[0],
             "agent": row[1],
@@ -255,14 +256,14 @@ def get_task_info(log_id):
                 "auto_extract_tikz_figure": row[9],
                 "include_tikz_reflection": row[10],
                 "include_tex_count": row[11],
-                "use_prefill_from_input": row[12]
+                "use_prefill_from_input": row[12],
             },
             "files": {
                 "input_files": json.loads(row[13]) if row[13] else [],
                 "auxiliary_files": json.loads(row[14]) if row[14] else [],
                 "figure_inputs": json.loads(row[15]) if row[15] else [],
-                "sample_files": json.loads(row[16]) if row[16] else []
-            }
+                "sample_files": json.loads(row[16]) if row[16] else [],
+            },
         }
         conn.close()
         return info
