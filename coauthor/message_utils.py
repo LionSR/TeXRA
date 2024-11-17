@@ -6,6 +6,7 @@ import base64
 from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
 from .model_config import ModelConfig
 from .state import State
+from .config import AgentSettings
 
 
 def has_end_tag(file_content, end_tag, document_tag):
@@ -29,7 +30,7 @@ def initialize_messages(model_config: ModelConfig, system_prompt, user_prefix, u
 
     if model_config.supports_prompt_caching:
         messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-    
+
     messages[-1]["content"].append({"type": "text", "text": user_request})
 
     return messages
@@ -185,9 +186,9 @@ def _extract_anthropic_statistics(response_object, end_tag):
     return new_response, input_tokens, output_tokens, stop_reason
 
 
-def handle_openai_continuation(messages, new_response, k, end_tag):
+def handle_openai_continuation(messages, new_response, end_tag, K):
     """Handle continuation for OpenAI models."""
-    prefill_tokens = new_response[-k:]
+    prefill_tokens = new_response[-K:]
     user_message_continuation = (
         f"Your response got cut off, because you only have limited response space. "
         f"Continue writing exactly from where you left off until the very end, "
@@ -198,11 +199,11 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
 
 
 def check_stop_conditions(
-    stop_reason: str, new_response: str, state: State, agent_settings: dict, massive_repetition_detected: bool
+    stop_reason: str, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool
 ) -> tuple[bool, bool]:
     """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-    encounter_document_tag = f"</{agent_settings['document_tag']}>" in new_response
+    encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
     continuation_limit = state.continuation_count > 10
     input_token_limit = state.total_input_tokens > 1500000
     output_token_limit = state.total_output_tokens > 2.5 * state.first_input_tokens

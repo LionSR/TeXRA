@@ -1,7 +1,6 @@
 import os
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Optional, List, Dict
 
 from .logging_utils import logger
@@ -15,52 +14,10 @@ from .output_utils import (
 )
 from .logdb_utils import log_start, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
-from .settings_utils import get_agent_settings, get_agent_prompts
 from .model_config import MODEL_CONFIGS, ModelConfig
 from .file_utils import read_file
 from .state import State
-
-
-@dataclass
-class PromptConfig:
-    """Configuration for agent prompts."""
-    system_prompt: str
-    user_prefix_prompt: str
-    user_request_prompt: str
-    user_reflect_prompt: str
-    prefills: List[str]
-    use_prefill_from_input: bool = False
-
-    @classmethod
-    def from_prompt_dict(cls, prompt_dict: Dict[str, str]) -> 'PromptConfig':
-        """Create a PromptConfig from a dictionary of prompts."""
-        return cls(
-            system_prompt=prompt_dict.get("system_prompt", ""),
-            user_prefix_prompt=prompt_dict.get("user_prefix_prompt", ""),
-            user_request_prompt=prompt_dict.get("user_request_prompt", ""),
-            user_reflect_prompt=prompt_dict.get("user_reflect_prompt", ""),
-            prefills=prompt_dict.get("prefills", ""),
-            use_prefill_from_input=prompt_dict.get("use_prefill_from_input", False)
-        )
-
-
-@dataclass
-class ToolUseConfig:
-    """Configuration for tool usage."""
-    include_tex_count: bool
-    auto_extract_figure: bool
-    auto_extract_tikz_figure: bool
-    include_tikz_reflection: bool
-
-    @classmethod
-    def from_args(cls, args) -> 'ToolUseConfig':
-        """Create a ToolUseConfig from command line arguments."""
-        return cls(
-            include_tex_count=args.include_tex_count,
-            auto_extract_figure=args.auto_extract_figure,
-            auto_extract_tikz_figure=args.auto_extract_tikz_figure,
-            include_tikz_reflection=args.include_tikz_reflection
-        )
+from .config import TaskConfig, AgentSettings, PromptTemplate
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -112,13 +69,12 @@ class BaseReflectChainAgent(ABC):
     def __init__(self, args, agent_path: str):
         self.args = args
         self.agent_path = agent_path
-        self.agent_settings = None
         self.prompt_dict = None
         self.user_vars = None
         self.model_config: Optional[ModelConfig] = None
-        self.agent_settings = None
-        self.agent_prompts: Optional[PromptConfig] = None
-        self.tooluse: Optional[ToolUseConfig] = None
+        self.agent_settings: Optional[AgentSettings] = None
+        self.agent_prompts: Optional[PromptTemplate] = None
+        self.task_config: Optional[TaskConfig] = None
         self.client = None
         self.log_file = None
         self.output_file = {0: None, 1: None}
@@ -132,22 +88,30 @@ class BaseReflectChainAgent(ABC):
     def setup(self):
         logger.debug(f"Args: {self.args}")
         logger.info(f"Processing file: {self.args.input_file}")
-
         # Load settings and prompts
-        self.agent_settings, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
+        self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
         self.user_vars = self.get_user_vars()
+        
+        """Set up the agent with necessary configurations."""
+        # Load model configuration
+        if self.args.model in MODEL_CONFIGS:
+            self.model_config = MODEL_CONFIGS[self.args.model]
+        else:
+            raise ValueError(f"Model {self.args.model} not found in MODEL_CONFIGS")
 
-        # Get model config
-        model_name = self.args.model
-        self.model_config = MODEL_CONFIGS[model_name]
-        self.agent_settings = get_agent_settings(self.args, self.agent_settings)
-        self.agent_prompts = PromptConfig.from_prompt_dict(get_agent_prompts(self.args, self.agent_path, self.prompt_dict))
-        self.tooluse = ToolUseConfig.from_args(self.args)
+        self.agent_settings = AgentSettings.from_dict(self.args, self.settings_dict)
+        self.agent_prompts = PromptTemplate.from_dict(self.prompt_dict)
+        logger.debug(f"Agent settings: {self.agent_settings}")
+        logger.debug(f"Agent prompts: {self.agent_prompts}")
+        logger.debug(f"Prompt dict: {self.prompt_dict.keys()}")
+
+        # Initialize task configuration
+        self.task_config = TaskConfig.from_args(self.args)
 
         self.client = self.model_config.get_client()
         self.log_file = log_start(self.args)
 
-        self.use_scratchpad = "<scratchpad>" in self.agent_prompts.prefills[0] if self.agent_prompts.prefills else False
+        self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
         self.output_file[1] = self.get_output_file(round=1)
         self.tex_count_stats = None
@@ -166,13 +130,13 @@ class BaseReflectChainAgent(ABC):
         pass
 
     def _handle_single_output(self, output_file: str) -> None:
-        if self.agent_settings["output_ext"] == "tex":
+        if self.agent_settings.output_ext == "tex":
             run_latexdiff(self.args.input_file, output_file, self.args.agent)
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         for input_file, output_file in zip(self.args.output_files, output_files):
             log_output_files(output_file, self.log_file)
-            if self.agent_settings["output_ext"] == "tex":
+            if self.agent_settings.output_ext == "tex":
                 run_latexdiff(input_file, output_file, self.args.agent)
 
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
@@ -182,7 +146,7 @@ class BaseReflectChainAgent(ABC):
         return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
     def _get_first_k_from_document(self) -> Optional[str]:
-        k = self.agent_settings.get("K", 1000)
+        k = self.task_config.K
         try:
             with open(self.args.input_file, encoding="utf-8") as f:
                 content = f.read()
@@ -226,9 +190,9 @@ class BaseReflectChainAgent(ABC):
 
     def process(self):
         input_files = [self.args.input_file] + (self.args.input_files or [])
-        if self.tooluse.include_tex_count:
+        if self.task_config.include_tex_count:
             self.tex_count_stats = self._get_tex_count_stats(input_files)
-        if self.tooluse.auto_extract_figure:
+        if self.task_config.auto_extract_figure:
             self.first_k_tex_document = self._get_first_k_from_document()
 
         # Initialize state and messages
@@ -242,6 +206,7 @@ class BaseReflectChainAgent(ABC):
             state,
             messages,
             model_config=self.model_config,
+            task_config=self.task_config,
             agent_settings=self.agent_settings,
             agent_prompts=self.agent_prompts,
             figure_inputs=self.args.figure_inputs,
@@ -258,9 +223,9 @@ class BaseReflectChainAgent(ABC):
     def reflect(self, state: State, messages, round: int = 1):
         reflection_figure_inputs = []
         if self.args.output_files:
-            if self.tooluse.include_tex_count:
+            if self.task_config.include_tex_count:
                 self.tex_count_stats = self._get_tex_count_stats(self.args.output_files)
-            if self.tooluse.include_tikz_reflection:
+            if self.task_config.auto_extract_tikz_figure_reflect:
                 # Handle multiple output files
                 for output_file in self.output_files[round]:
                     logger.debug(f"Extracting TikZ figures from {output_file}")
@@ -269,15 +234,15 @@ class BaseReflectChainAgent(ABC):
                         reflection_figure_inputs.extend(extracted_tikz_figures)
         else:
             generated_output_file = self.output_files[0][0]
-            if self.tooluse.include_tex_count:
+            if self.task_config.include_tex_count:
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
-            if self.tooluse.include_tikz_reflection:
+            if self.task_config.auto_extract_tikz_figure_reflect:
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
                     reflection_figure_inputs.extend(extracted_tikz_figures)
 
-        if self.tooluse.auto_extract_figure:
+        if self.task_config.auto_extract_figure:
             self.first_k_tex_document = self._get_first_k_from_document()
 
         state, accumulated_output, end_turn, messages = process_reflection_round(
@@ -287,6 +252,7 @@ class BaseReflectChainAgent(ABC):
             state,
             messages,
             model_config=self.model_config,
+            task_config=self.task_config,
             agent_settings=self.agent_settings,
             agent_prompts=self.agent_prompts,
             figure_inputs=reflection_figure_inputs,
@@ -320,22 +286,22 @@ class ThinkAndWrite(BaseReflectChainAgent):
         if self.use_scratchpad:
             file_extension = "xml"
         else:
-            file_extension = self.agent_settings["output_ext"]
+            file_extension = self.agent_settings.output_ext
 
         return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         if end_turn:
-            ensure_correct_xml_structure(output_file, self.agent_settings["document_tag"])
+            ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
 
             if self.args.output_files:
-                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
 
                 self._replace_input_commands(self.base_files, output_files)
             else:
-                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
 
                 self._handle_single_output(processed_output_file)
                 self.output_files[round] = [processed_output_file]
@@ -353,20 +319,20 @@ class DirectWrite(BaseReflectChainAgent):
 
     def get_output_file(self, round: int = 0) -> str:
         base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
-        file_extension = self.agent_settings["output_ext"]
+        file_extension = self.agent_settings.output_ext
         return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         if end_turn:
             if self.args.output_files:  # Multiple output files
-                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
                 self.output_file[round] = output_files[0]  # Set the first file as the singular output
 
                 self._replace_input_commands(self.base_files, output_files)
             else:  # Single output file
-                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings["document_tag"])
+                processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 self._handle_single_output(processed_output_file)
                 self.output_file[round] = processed_output_file
                 self.output_files[round] = [processed_output_file]
