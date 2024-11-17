@@ -1,9 +1,9 @@
 from coauthor.agent_reflect import DirectWrite
 import coauthor as coa
-from termcolor import colored
 import os
 import re
 from .state import State
+from coauthor.logging_utils import logger
 
 agent_path = coa.get_agent_path(coa, "merge")
 
@@ -27,7 +27,7 @@ def get_output_file_name_merge(input_file, edited_file, round):
     output = f"{base}_{agent}_r{round}_full_{model}.tex"
 
     output = os.path.join(input_dir, output)
-    print(f"Merge output file: {colored(output, 'cyan')}")
+    logger.info(f"Merge output file: {output}")
     return output
 
 
@@ -54,7 +54,7 @@ class Merge(DirectWrite):
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> None:
         if end_turn:
             super().handle_output(state, end_turn, output_file, round)
-            print(colored(f"Output file: {output_file}", "yellow"))
+            logger.info(f"Output file: {output_file}")
 
 
 def main():
