@@ -3,8 +3,8 @@ import shutil
 import glob
 import subprocess
 from datetime import datetime
-from termcolor import cprint
 
+from .logging_utils import logger
 from .model_config import MODEL_CONFIGS
 
 # MUST BE EXTREMELY careful with the subtle differences and edge cases
@@ -76,19 +76,19 @@ def delete_file(file_path):
     try:
         if os.path.isfile(file_path):
             os.remove(file_path)
-            print(f"Deleted: {file_path}")
+            logger.info(f"Deleted file: {file_path}")
         elif os.path.isdir(file_path):
             shutil.rmtree(file_path)
-            print(f"Deleted directory: {file_path}")
+            logger.info(f"Deleted dir: {file_path}")
     except PermissionError:
-        cprint(f"WARNING: Unable to delete {file_path}. It may be in use or you may not have permission.", "white", "on_red")
+        logger.error(f"Cannot delete {file_path} - file in use or permission denied")
     except Exception as e:
-        cprint(f"WARNING: Error deleting {file_path}: {str(e)}", "white", "on_red")
+        logger.error(f"Failed to delete {file_path}: {str(e)}")
 
 
 def move_file(source, destination):
     shutil.move(source, destination)
-    print(f"Moved: {source}")
+    logger.info(f"Moved file: {source}")
 
 
 def find_file(input_dir, pattern, ext=None):
@@ -124,7 +124,7 @@ def run_clean_single(model, input_file, agent):
                 if os.path.exists(file_path):
                     delete_file(file_path)
 
-    print(f"Cleanup complete for {input_file}.")
+    logger.info(f"Cleanup finished: {input_file}.")
 
 
 def run_pack_single(model, input_file, agent, output_folder=None):
@@ -156,9 +156,9 @@ def run_pack_single(model, input_file, agent, output_folder=None):
             move_file(file_path, output_folder)
         for file_path in copied_files:
             shutil.copy(file_path, output_folder)
-            print(f"Copied: {file_path}")
+            logger.info(f"Copied file: {file_path}")
 
-        print(f"Files packed into {output_folder}")
+        logger.info(f"Files packed to: {output_folder}")
 
     for pattern in file_patterns:
         for ext in TEMP_EXTENSIONS:
@@ -166,7 +166,7 @@ def run_pack_single(model, input_file, agent, output_folder=None):
             if file_path and file_path != input_file:
                 delete_file(file_path)
 
-    print(f"Packing complete for {input_file}.")
+    logger.info(f"Packing finished: {input_file}.")
     return output_folder
 
 
@@ -174,7 +174,7 @@ def run_clean_multiple(model, input_file, input_files, agent):
     run_clean_single(model, input_file, agent)
     for f in input_files:
         run_clean_single(model, f, agent)
-    print("\nCleanup complete for multiple files.")
+    logger.info("Multi-file cleanup finished")
 
 
 def run_pack_multiple(model, input_file, input_files, agent, output_name_override):
@@ -200,7 +200,7 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
 
     # Pack input files
     for input_file in input_files:
-        print(f"\nPacking {input_file} into {common_output_folder}")
+        logger.info(f"\nPacking files to: {common_output_folder}")
         run_pack_single(model, input_file, agent, output_folder=common_output_folder)
 
     # Pack additional XML files
@@ -209,7 +209,7 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
         if os.path.exists(file_path):
             move_file(file_path, common_output_folder)
 
-    print(f"All files packed into {common_output_folder}")
+    logger.info(f"All files packed to: {common_output_folder}")
     return common_output_folder
 
 
@@ -240,7 +240,7 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
         if clean:
             for file_path in files_to_process + files_to_delete:
                 delete_file(file_path)
-            cprint("Cleanup complete.", "green")
+            logger.info("Cleanup finished")
         else:  # move files to output folder
             os.makedirs(output_folder, exist_ok=True)
             for file_path in files_to_process:
@@ -249,9 +249,9 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
             for file_path in files_to_delete:
                 delete_file(file_path)
 
-            cprint(f"Files packed into {output_folder}", "green")
+            logger.info(f"Files packed to: {output_folder}")
     else:
-        cprint("No files found to process.", "yellow")
+        logger.warning("No files found to process.")
 
 
 def run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean=False):
@@ -275,7 +275,7 @@ def run_clean_build():
             subdir = os.path.join(root, dir)
             clean_build_dir(subdir)
 
-    print("All specified files have been deleted.")
+    logger.info("All specified files deleted")
 
 
 def run_clean_output():
@@ -298,11 +298,11 @@ def run_clean_output():
             if os.path.exists(file):
                 delete_file(file)
             else:
-                print(f"File not found: {file}")
+                logger.warning(f"Not found: {file}")
         except OSError as e:
-            print(f"Error deleting {file}: {e}")
+            logger.error(f"Failed to delete {file}: {e}")
 
-    print("Cleanup complete.")
+    logger.info("Cleanup finished")
 
 
 def run_indent_tex():
@@ -322,4 +322,4 @@ def run_indent_tex():
         for file in glob.glob(pattern, recursive=True):
             delete_file(file)
 
-    print("All .tex files have been indented and temporary files have been deleted.")
+    logger.info("All .tex files indented and temp files deleted")

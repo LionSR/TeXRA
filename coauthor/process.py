@@ -1,8 +1,8 @@
 import os
 import time
-from termcolor import colored, cprint
 from typing import Optional
 
+from .logging_utils import logger
 from .file_utils import read_file, write_file, append_file
 from .message_utils import (
     create_image_message,
@@ -39,11 +39,11 @@ def process_response_cycle(
         )
         response_time = time.time() - start_time
         state.update_response_time(response_time)
-        print(f"### Response time: {colored(response_time, 'green')} seconds")
+        logger.info(f"Response time: {response_time:.2f}s")
 
         new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, output_settings["end_tag"])
-        print(f"### Reason for stopping: {stop_reason}")
-        print(f"### Usage: {colored(response_object.usage, 'cyan')}")
+        logger.info(f"Stop reason: {stop_reason}")
+        logger.info(f"Token usage: {response_object.usage}")
 
         new_response = apply_replacements(new_response, get_all_replacements())
 
@@ -60,7 +60,7 @@ def process_response_cycle(
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
-            print(f"### Last {k} characters of the response: {colored(new_response[-k:], 'yellow')}")
+            logger.debug(f"### Last {k} characters of the response: {new_response[-k:]}")
             state.last_response = new_response
 
             if messages[-1]["role"] == "assistant":
@@ -82,7 +82,7 @@ def process_response_cycle(
             break
 
         state.increment_continuation()
-        print(f"\nContinuation #{state.continuation_count}")
+        logger.info(f"Starting continuation #{state.continuation_count}")
 
         if model_config.is_openai_compatible:
             handle_openai_continuation(messages, new_response, k, output_settings["end_tag"])
@@ -103,19 +103,19 @@ def initialize_output_and_prefill(
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         file_content = read_file(output_file)
         if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
-            print("### end_tag detected in the output file. Skipping continuation.")
+            logger.debug("End tag detected - skipping continuation")
             if messages[-1]["content"][-1].get("cache_control"):
                 messages[-1]["content"][-1].pop("cache_control")
             messages.append({"role": "assistant", "content": file_content})
             return None, True, messages
         else:
-            print(colored("### The output file exists but did not detect the end_tag. Continuing from the file.", "yellow"))
+            logger.warning("Output file exists but no end tag found - continuing from file")
             accumulated_output = file_content
             if model_config.supports_prompt_caching:
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
             else:
                 messages.append({"role": "assistant", "content": file_content})
-            print(f"### Using existing file content as prefill: {colored(output_file, 'green')}")
+            logger.debug(f"Using existing content as prefill: {output_file}")
             if model_config.is_openai_compatible:
                 handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
     else:
@@ -130,11 +130,11 @@ def initialize_output_and_prefill(
 
         if model_config.is_anthropic:
             messages.append({"role": "assistant", "content": prefill})
-            cprint(f"anthropic prefill: {prefill}", "white", "on_blue")
+            logger.debug(f"Anthropic prefill: {prefill}")
         elif model_config.is_openai_compatible:
             openai_prefill = f"Start your response with\n{prefill}"
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
-            cprint(f"openai prefill: {openai_prefill}", "white", "on_blue")
+            logger.debug(f"OpenAI prefill: {openai_prefill}")
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and model_config.is_anthropic:
             write_file(output_file, prefill)
@@ -159,6 +159,7 @@ def process_first_round(
     first_k_tex_document=None,
 ):
     """Process the first round of interaction."""
+    logger.info(f"Processing round {round}")
     system_prompt = load_prompt("system", prompt_settings)
     system_prompt = render_prompt(system_prompt, user_vars)
 
@@ -210,6 +211,7 @@ def process_first_round(
         prompt_settings,
     )
 
+    logger.info(f"Completed round {round}")
     return state, accumulated_output, end_turn, messages
 
 
@@ -228,7 +230,8 @@ def process_reflection_round(
     first_k_tex_document=None,
 ):
     """Process the reflection round."""
-    print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
+    logger.info(f"Processing round {round}")
+    logger.info("Reflection round started")
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_request_reflect = render_prompt(user_request_reflect, user_vars)
@@ -295,4 +298,5 @@ def process_reflection_round(
         prompt_settings,
     )
 
+    logger.info(f"Completed round {round}")
     return state, accumulated_output, end_turn, messages
