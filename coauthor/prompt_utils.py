@@ -38,7 +38,7 @@ def load_agent_settings_and_prompts(agent_path, agent):
             # Handle prefills
             prefills_elem = root.find("settings/prefills")
             if prefills_elem is not None:
-                agent_prompts["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
+                agent_settings["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
 
             settings = merge_dicts(parent_settings, agent_settings)
             prompts = merge_dicts(parent_prompts, agent_prompts)
@@ -49,7 +49,7 @@ def load_agent_settings_and_prompts(agent_path, agent):
             # Handle prefills
             prefills_elem = root.find("settings/prefills")
             if prefills_elem is not None:
-                prompts["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
+                settings["prefills"] = [prefill.text for prefill in prefills_elem.findall("prefill")]
 
         return settings, prompts
 

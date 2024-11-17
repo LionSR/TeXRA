@@ -59,18 +59,18 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
 \begin{enumerate}
 \item [Name of the Specific improvement 1 addressing the instruction]
     \begin{itemize}
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
+        \item Rationale: [explanation]
+        \item Implementation: [Concrete steps]
     \end{itemize}
 \item [Name of the Specific improvement 2 addressing the instruction]
     \begin{itemize}
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
+        \item Rationale: [explanation]
+        \item Implementation: [Concrete steps]
     \end{itemize}
 \item [Name of the Specific improvement 3 addressing the instruction]
     \begin{itemize}
-    \item Rationale: [explanation]
-    \item Implementation: [Concrete steps]
+        \item Rationale: [explanation]
+        \item Implementation: [Concrete steps]
     \end{itemize}
 ...
 \end{enumerate}
