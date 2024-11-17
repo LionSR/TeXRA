@@ -17,8 +17,11 @@ def initialize_messages(model_config: ModelConfig, system_prompt, user_prefix, u
     """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-    if model_config.is_openai and "o1" not in model_config.full_name:
-        messages.insert(0, {"role": "system", "content": system_prompt})
+    if model_config.is_openai:
+        if "o1" in model_config.name:
+            messages.insert(0, {"role": "user", "content": [{"type": "text", "text": system_prompt}]})
+        else:
+            messages.insert(0, {"role": "system", "content": system_prompt})
 
     if figure_inputs:
         image_content = create_image_message(model_config, figure_inputs)
@@ -26,11 +29,8 @@ def initialize_messages(model_config: ModelConfig, system_prompt, user_prefix, u
 
     if model_config.supports_prompt_caching:
         messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-    else:
-        if "o1" in model_config.name:
-            messages[-1]["content"].append({"type": "text", "text": system_prompt})
-
-        messages[-1]["content"].append({"type": "text", "text": user_request})
+    
+    messages[-1]["content"].append({"type": "text", "text": user_request})
 
     return messages
 
@@ -198,11 +198,11 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
 
 
 def check_stop_conditions(
-    stop_reason: str, new_response: str, state: State, output_settings: dict, massive_repetition_detected: bool
+    stop_reason: str, new_response: str, state: State, agent_settings: dict, massive_repetition_detected: bool
 ) -> tuple[bool, bool]:
     """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-    encounter_document_tag = f"</{output_settings['document_tag']}>" in new_response
+    encounter_document_tag = f"</{agent_settings['document_tag']}>" in new_response
     continuation_limit = state.continuation_count > 10
     input_token_limit = state.total_input_tokens > 1500000
     output_token_limit = state.total_output_tokens > 2.5 * state.first_input_tokens
@@ -215,14 +215,14 @@ def check_stop_conditions(
     return end_turn, should_stop
 
 
-def print_stop_flags(end_turn: bool, new_response: str, state: State, output_settings: dict, massive_repetition_detected: bool) -> None:
+def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: dict, massive_repetition_detected: bool) -> None:
     """Print the flags indicating why the conversation stopped."""
-    logger.info("Printing the flags")
-    logger.info(f"end_turn: {end_turn}")
-    document_tag = output_settings["document_tag"]
-    logger.info(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
-    logger.info(f"continuation_limit: {state.continuation_count > 10}")
-    logger.info(f"input_token_limit: {state.total_input_tokens > 100000}")
-    logger.info(f"massive_repetition_detected: {massive_repetition_detected}")
-    logger.info(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
-    logger.warning(f"### {state.last_response[-output_settings['k']:]}")
+    logger.debug("Printing the flags")
+    logger.debug(f"end_turn: {end_turn}")
+    document_tag = agent_settings["document_tag"]
+    logger.debug(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
+    logger.debug(f"continuation_limit: {state.continuation_count > 10}")
+    logger.debug(f"input_token_limit: {state.total_input_tokens > 100000}")
+    logger.debug(f"massive_repetition_detected: {massive_repetition_detected}")
+    logger.debug(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
+    logger.debug(f"{state.last_response[-agent_settings['k']:]}")
