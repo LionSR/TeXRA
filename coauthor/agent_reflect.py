@@ -1,9 +1,8 @@
 import os
 import re
-from termcolor import colored, cprint
 from abc import ABC, abstractmethod
 from typing import Optional, List
-
+from .logging_utils import logger
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
 from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
@@ -32,7 +31,7 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
         new_round = round
 
     output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
-    print(f"Output file: {colored(output_file, 'cyan')}")
+    logger.debug(f"Output file: {output_file}")
     return output_file
 
 
@@ -86,8 +85,8 @@ class BaseReflectChainAgent(ABC):
         self.edited_file = args.edited_file if hasattr(args, "edited_file") else None
 
     def setup(self):
-        print(f"{colored('args:', 'blue')} {self.args}")
-        print(colored(f"Processing {self.args.input_file}...\n", "green"))
+        logger.debug(f"Args: {self.args}")
+        logger.info(f"Processing file: {self.args.input_file}")
 
         self.agent_settings, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
         self.user_vars = self.get_user_vars()
@@ -142,14 +141,14 @@ class BaseReflectChainAgent(ABC):
                 content = f.read()
                 return content[:k].strip()  # Return only the first k characters, stripped
         except OSError as e:
-            print(f"Error reading file {self.args.input_file}: {e}")
+            logger.error(f"Error reading file {self.args.input_file}: {e}")
             return None
 
     def _handle_latexdiff(self, round: int) -> None:
-        cprint(f"Handling latexdiff for {self.args.agent} in round {round}", "blue", "on_white")
+        logger.info(f"Running latexdiff for {self.args.agent} round {round}")
 
-        print(f"base_files: {self.base_files}")
-        print(f"#{round} output_files : {self.output_files[round]}")
+        logger.debug(f"Base files: {self.base_files}")
+        logger.debug(f"Round {round} output files: {self.output_files[round]}")
 
         for base_file, output_file in zip(self.base_files, self.output_files[round]):
             run_latexdiff_for_round(base_file, output_file, self.args.agent, round)
@@ -176,7 +175,7 @@ class BaseReflectChainAgent(ABC):
             if new_content != content:
                 with open(output_file, "w") as f:
                     f.write(new_content)
-                print(f"Updated input commands in {output_file}")
+                logger.debug(f"Updated input commands in {output_file}")
 
     def process(self):
         input_files = [self.args.input_file] + (self.args.input_files or [])
@@ -199,10 +198,7 @@ class BaseReflectChainAgent(ABC):
 
         self.handle_output(state, end_turn, self.output_file[0], round=0)
 
-        print(
-            f"\n\nProcessed input files {colored(', '.join(input_files), 'green')}. "
-            f"The output was saved as {colored(self.output_file[0], 'green')}"
-        )
+        logger.info(f"\n\nProcessed input files {', '.join(input_files)}. " f"The output was saved as {self.output_file[0]}")
 
         return state, messages, end_turn
 
@@ -214,7 +210,7 @@ class BaseReflectChainAgent(ABC):
             if self.prompt_settings.get("include_tikz_reflection"):
                 # Handle multiple output files
                 for output_file in self.output_files[round]:
-                    print(f"Extracting TikZ figures from {output_file}")
+                    logger.debug(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
@@ -223,7 +219,7 @@ class BaseReflectChainAgent(ABC):
             if self.prompt_settings.get("include_tex_count"):
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
             if self.prompt_settings.get("include_tikz_reflection"):
-                print(f"Extracting TikZ figures from {generated_output_file}")
+                logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
                     reflection_figure_inputs.extend(extracted_tikz_figures)
@@ -246,10 +242,10 @@ class BaseReflectChainAgent(ABC):
         )
         self.handle_output(state, end_turn, self.output_file[1], round=1)
 
-        print(
-            f"\n\nProcessed input file {colored(self.args.input_file, 'green')} "
-            f"and/or input files {colored(self.args.input_files, 'green')}. "
-            f"The reflection output was saved as {colored(self.output_file[1], 'green')}"
+        logger.info(
+            f"\n\nProcessed input file {self.args.input_file} "
+            f"and/or input files {self.args.input_files}. "
+            f"The reflection output was saved as {self.output_file[1]}"
         )
 
         return state, messages, end_turn

@@ -2,7 +2,7 @@ import os
 import subprocess
 import re
 import glob
-from termcolor import colored, cprint
+from .logging_utils import logger
 
 
 def run_external_command(command, output_file=None, encoding="utf-8", capture_output=False):
@@ -15,24 +15,24 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
     :param capture_output: Whether to capture and return the command output
     :return: Tuple containing (success_flag, output_message, error_message)
     """
-    print("\nRunning command:", colored(" ".join(command), "green"))
-    
+    logger.info("\nRunning command: " + " ".join(command))
+
     def truncate_output(text, max_chars=150):
         if text and len(text) > max_chars:
             return "..." + text[-max_chars:]
         return text
-    
+
     try:
         kwargs = {
             "text": True,
             "capture_output": True,  # Always capture output for better error handling
         }
-        
+
         if output_file:
             with open(output_file, "w", encoding=encoding) as file:
                 result = subprocess.run(command, **kwargs)
                 file.write(result.stdout)
-            print("\nCommand completed.\nOutput saved to", colored(output_file, "blue"))
+            logger.info("\nCommand completed.\nOutput saved to " + output_file)
             return True, None, None
         else:
             result = subprocess.run(command, **kwargs)
@@ -42,9 +42,9 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
                 return False, truncate_output(result.stdout.strip()), result.stderr.strip()
     except subprocess.CalledProcessError as e:
         error_message = "Error running command:\n"
-        if hasattr(e, 'stderr') and e.stderr:
+        if hasattr(e, "stderr") and e.stderr:
             error_message += f"\nStderr:\n{truncate_output(e.stderr)}"
-        print("\n" + colored(error_message, "red"))
+        logger.error("\n" + error_message)
         return False, None, error_message
 
 
@@ -61,11 +61,11 @@ def get_tex_count(file_paths):
     all_outputs = []
     for file_path in file_paths:
         if not os.path.exists(file_path):
-            cprint(f"Error: File {file_path} does not exist.", "red")
+            logger.warning(f"Warning: File {file_path} does not exist.")
             continue
 
         if ".tex" not in file_path:
-            cprint(f"Error: File {file_path} is not a LaTeX file. Skipping.", "yellow")
+            logger.warning(f"Error: File {file_path} is not a LaTeX file. Skipping.")
             continue
 
         # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
@@ -74,12 +74,12 @@ def get_tex_count(file_paths):
         if success:
             all_outputs.append(f"Tex Count Results for {file_path}:\n{stdout}")
         else:
-            cprint(f"Error getting tex count for {file_path}", "red")
-            cprint("Stdout:", stdout, "magenta")
-            cprint("Stderr:", stderr, "red")
+            logger.error(f"Error getting tex count for {file_path}")
+            logger.error(f"Stdout: {stdout}")
+            logger.error(f"Stderr: {stderr}")
     if all_outputs:
         combined_output = "\n\n".join(all_outputs)
-        cprint(f"Combined Tex Count Results:\n{combined_output}", "yellow")
+        logger.info(f"Combined Tex Count Results:\n{combined_output}")
         return combined_output
     return None
 
@@ -123,7 +123,7 @@ def process_tikzpicture_endings(file_path):
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
-    cprint(f"Tikzpicture endings fixed in {file_path}", "blue")
+    logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
 def compile_latex_to_pdf(tex_file):
@@ -133,13 +133,13 @@ def compile_latex_to_pdf(tex_file):
     try:
         success, stdout, stderr = run_external_command(command, capture_output=True)
         if success:
-            print(f"Compiled {tex_file} successfully.")
+            logger.info(f"Compiled {tex_file} successfully.")
             return True
         else:
-            print(colored(f"Error compiling {tex_file}", "red"))
+            logger.error(f"Error compiling {tex_file}")
             return False
     except ValueError as e:
-        print(colored(f"Error compiling {tex_file}: {str(e)}", "red"))
+        logger.error(f"Error compiling {tex_file}: {str(e)}")
         return False
 
 
@@ -151,35 +151,35 @@ def run_latexindent(file_path):
 
     try:
         subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"Indented {file_path}")
+        logger.info(f"Indented {file_path}")
 
         # Clean up backup files
         backup_files = glob.glob(f"{file_path}.bak[0-9]*")
         for backup_file in backup_files:
             try:
                 os.remove(backup_file)
-                print(f"Removed backup file: {backup_file}")
+                logger.info(f"Removed backup file: {backup_file}")
             except OSError as e:
-                cprint(f"Error removing backup file {backup_file}: {e}", "yellow")
+                logger.warning(f"Error removing backup file {backup_file}: {e}")
 
         # Remove indent.log if it exists
         indent_log = os.path.join(os.path.dirname(file_path), "indent.log")
         if os.path.exists(indent_log):
             try:
                 os.remove(indent_log)
-                print("Removed indent.log")
+                logger.info("Removed indent.log")
             except OSError as e:
-                cprint(f"Error removing indent.log: {e}", "yellow")
+                logger.warning(f"Error removing indent.log: {e}")
 
         return True
     except subprocess.CalledProcessError:
-        cprint(f"Error indenting {file_path}", "red")
+        logger.error(f"Error indenting {file_path}")
         return False
 
 
 def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_indent=False):
     if not input_file:
-        cprint("WARNING: input_file is None or empty", "yellow")
+        logger.warning("Input file is None or empty")
         return None
 
     if agent is not None:
@@ -188,7 +188,7 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
 
     if run_indent:
         if not run_latexindent(input_file) or not run_latexindent(output_file):
-            cprint("WARNING: Failed to indent one or both files. Proceeding with latexdiff anyway.", "yellow")
+            logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
     with open(input_file) as f:
@@ -202,8 +202,8 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
         or "\\begin{document}" not in output_content
         or "\\end{document}" not in output_content
     ):
-        cprint("WARNING: One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.", "yellow")
-        cprint(f"Input file: {input_file}, Output file: {output_file}", "yellow")
+        logger.warning("One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.")
+        logger.warning(f"Input file: {input_file}, Output file: {output_file}")
         return None
 
     diff_file_name = output_file.replace(".tex", f"{suffix}.tex")
@@ -228,7 +228,7 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
 
 def run_latexdiff_vc(input_file, commit_hash):
     if not input_file:
-        cprint("WARNING: input_file is None or empty", "yellow")
+        logger.warning("Input file is None or empty")
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
@@ -236,7 +236,7 @@ def run_latexdiff_vc(input_file, commit_hash):
         input_content = f.read()
 
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
-        cprint("WARNING: Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.", "yellow")
+        logger.warning("Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.")
         return None
 
     diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
@@ -309,14 +309,14 @@ def process_diff_file(diff_file_name):
             if "\\RequirePackage{color}" in line:
                 diff_file.write("\n")
 
-    cprint(f"Line breaks added to {diff_file_name}", "blue")
+    logger.info(f"Line breaks added to {diff_file_name}")
 
 
 def run_latexdiff_for_round(base_file, output_file, agent, round):
     if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
         run_latexdiff(base_file, output_file, agent, suffix="_diff")
     else:
-        print(f"Warning: Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
+        logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
 
 
 def run_latexdiff_between_rounds(output_file1, output_file2, agent):
@@ -326,4 +326,47 @@ def run_latexdiff_between_rounds(output_file1, output_file2, agent):
         diff_suffix = f"_diffr{second_round}r{first_round}"
         run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
     else:
-        print(f"Warning: Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
+        logger.warning(f"Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
+
+
+def run_external_command(command, output_file=None, encoding="utf-8", capture_output=False):
+    """
+    Run an external command and handle its output.
+
+    :param command: List containing the command and its arguments
+    :param output_file: Path to the output file (if any)
+    :param encoding: Encoding to use for file operations
+    :param capture_output: Whether to capture and return the command output
+    :return: Tuple containing (success_flag, output_message, error_message)
+    """
+    logger.info("\nRunning command: " + " ".join(command))
+
+    def truncate_output(text, max_chars=150):
+        if text and len(text) > max_chars:
+            return "..." + text[-max_chars:]
+        return text
+
+    try:
+        kwargs = {
+            "text": True,
+            "capture_output": True,  # Always capture output for better error handling
+        }
+
+        if output_file:
+            with open(output_file, "w", encoding=encoding) as file:
+                result = subprocess.run(command, **kwargs)
+                file.write(result.stdout)
+            logger.info("\nCommand completed.\nOutput saved to " + output_file)
+            return True, None, None
+        else:
+            result = subprocess.run(command, **kwargs)
+            if result.returncode == 0:
+                return True, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
+            else:
+                return False, truncate_output(result.stdout.strip()), result.stderr.strip()
+    except subprocess.CalledProcessError as e:
+        error_message = "Error running command:\n"
+        if hasattr(e, "stderr") and e.stderr:
+            error_message += f"\nStderr:\n{truncate_output(e.stderr)}"
+        logger.error("\n" + error_message)
+        return False, None, error_message
