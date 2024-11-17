@@ -2,6 +2,7 @@ import os
 import re
 from abc import ABC, abstractmethod
 from typing import Optional, List
+
 from .logging_utils import logger
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
 from .process import process_first_round, process_reflection_round
@@ -11,7 +12,7 @@ from .output_utils import (
     split_scratchpad_output_xml,
     split_multiple_scratchpad_output_xml,
 )
-from .log_utils import log_start, log_end, log_and_print_statistics, log_output_files
+from .logdb_utils import log_start, log_end, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
 from .settings_utils import get_output_settings, get_prompt_settings
 from .model_config import MODEL_CONFIGS, ModelConfig
@@ -255,7 +256,6 @@ class BaseReflectChainAgent(ABC):
         state, messages, end_turn = self.process()
         if self.args.reflect and end_turn:
             state, messages, end_turn = self.reflect(state, messages)
-        log_end(self.log_file)
         return state, messages
 
 
