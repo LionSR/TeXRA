@@ -29,14 +29,14 @@ I will provide you with an academic article to translate into Chinese. Please re
 Here is the Original document to be translated:
 
 <documents>
-{AUXILIARY_FILES}
-{ADDITIONAL_INPUTS}
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+{{ AUXILIARY_FILES }}
+{{ ADDITIONAL_INPUTS }}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
 </documents>
 
-Please translate this document {INPUT_FILE} into Chinese following the guidelines provided in the system prompt.
+Please translate this document {{ INPUT_FILE }}into Chinese following the guidelines provided in the system prompt.
 ]]>
 </user_prefix>
 <user_request>

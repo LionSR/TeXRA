@@ -8,20 +8,20 @@ I am going to give you a research paper. You are about to convert it into a lect
 Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{DOCUMENT_CLS_FILE}">
-{DOCUMENT_CLS_CONTENT}
+<document name="{{ DOCUMENT_CLS_FILE }}">
+{{ DOCUMENT_CLS_CONTENT }}
 </document>
-<document name="{COMMAND_FILE}">
-{COMMAND_CONTENT}
+<document name="{{ COMMAND_FILE }}">
+{{ COMMAND_CONTENT }}
 </document>
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
-<document name="EXAMPLE_PAPER_FILE">
-{EXAMPLE_PAPER_CONTENT}
+<document name="{{ EXAMPLE_PAPER_FILE }}">
+{{ EXAMPLE_PAPER_CONTENT }}
 </document>
-<document name="EXAMPLE_LECTURE_NOTE_FILE">
-{EXAMPLE_LECTURE_NOTE_CONTENT}
+<document name="{{ EXAMPLE_LECTURE_NOTE_FILE }}">
+{{ EXAMPLE_LECTURE_NOTE_CONTENT }}
 </document>
 </documents>
 

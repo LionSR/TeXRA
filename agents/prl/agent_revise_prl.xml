@@ -29,31 +29,31 @@ You will be revising a paper submitted to Physical Review Letters based on refer
 
 <documents>
 <document name="Cover Letter">
-{COVER_LETTER}
+{{ COVER_LETTER_CONTENT }}
 </document>
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
-<document name="{SUPP_FILE}">
-{SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+{{ SUPP_CONTENT }}
 </document>
 <document name="Editor Decision Letter">
-{EDITOR_LETTER}
+{{ EDITOR_LETTER_CONTENT }}
 </document>
 <document name="Referee Report A">
-{REFEREE_REPORT_A}
+{{ REFEREE_REPORT_A_CONTENT }}
 </document>
 <document name="Referee Report B">
-{REFEREE_REPORT_B}
+{{ REFEREE_REPORT_B_CONTENT }}
 </document>
 <document name="Example Reply Letter">
-{EXAMPLE_REPLY_LETTER}
+{{ EXAMPLE_REPLY_LETTER }}
 </document>
 <document name="Instruction">
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </document>
 <document name="Draft Reply Letter">
-{DRAFT_REPLY_LETTER}
+{{{ DRAFT_REPLY_LETTER }}}
 </document>
 </documents>
 
@@ -69,7 +69,7 @@ Explanation of documents:
 (9) Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
 
 You will be revising all of the following documents:
-OUTPUT_FILES_ORDER={OUTPUT_FILES_ORDER}
+OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
 ]]>
 </user_prefix>
 <user_request>
@@ -107,10 +107,10 @@ Then, output further enhanced and complete versions of all the \LaTeX documents 
 Use the following format for the output:
 <latex_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
-{1ST_UPDATED_LATEX_DOCUMENT_1}
+% 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
 </document>
 <document name="{OUTPUT_FILES_ORDER[1]}">
-{1ST_UPDATED_LATEX_DOCUMENT_2}
+% 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
 </document>
 ... (repeat for all output files)
 </latex_documents>

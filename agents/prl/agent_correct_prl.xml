@@ -31,14 +31,14 @@ I am going to give you the main text and supplementary materials of a research p
 Here are the \LaTeX documents:
 
 <documents>
-<document name="{PREAMBLE_FILE}">
-{PREAMBLE_CONTENT}
+<document name="{{ PREAMBLE_FILE }}">
+{{ PREAMBLE_CONTENT }}
 </document>
-<document name="{MAIN_FILE}">
-{MAIN_CONTENT}
+<document name="{{ MAIN_FILE }}">
+{{ MAIN_CONTENT }}
 </document>
-<document name="{SUPP_FILE}">
-{SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+{{ SUPP_CONTENT }}
 </document>
 </documents>
 ]]>
@@ -57,11 +57,11 @@ Please carefully read through both the main text and supplementary materials, co
 Output the corrected versions of both the main text and supplementary materials using the following format:
 
 <latex_documents>
-<document name="{MAIN_FILE}">
-{CORRECTED_MAIN_CONTENT}
+<document name="{{ MAIN_FILE }}">
+% CORRECTED_MAIN_CONTENT HERE
 </document>
-<document name="{SUPP_FILE}">
-{CORRECTED_SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+% CORRECTED_SUPP_CONTENT HERE
 </document>
 </latex_documents>
 ]]>

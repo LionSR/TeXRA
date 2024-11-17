@@ -9,9 +9,9 @@ class WriteTex(ThinkAndWrite):
         user_vars = coa.get_user_vars_basic(self.args)
 
         if self.args.sample_files:
-            user_vars["REFERENCE_CONTENT"] = "\n".join([coa.read_file(sample) for sample in self.args.sample_files])
+            user_vars["SAMPLES"] = "\n".join([coa.read_file(sample) for sample in self.args.sample_files])
         else:
-            user_vars["REFERENCE_CONTENT"] = ""
+            user_vars["SAMPLES"] = ""
 
         if self.args.input_files:
             for file in self.args.input_files:

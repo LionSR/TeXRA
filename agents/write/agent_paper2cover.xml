@@ -29,19 +29,19 @@ I am going to give you a \LaTeX document of a research paper. You are about to w
 
 Here is the \LaTeX document of the research paper:
 <latex_document>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </latex_document>
 
 If a sample cover letter has been provided, it is enclosed in the following tags:
 <sample_cover_letter>
-{REFERENCE_CONTENT}
+{{ SAMPLES }}
 </sample_cover_letter>
 
 Please carefully read through the entire research paper above and ensure you fully understand all the details. Your task is to write a cover letter for this paper.
 
 Additonally, if provided, focus on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 ]]>
 </user_prefix>
@@ -143,7 +143,7 @@ Use the following latex format:
 
 \opening{Dear Editor,}
 
-{IMPROVED_COVER_LETTER_CONTENT}
+% IMPROVED_COVER_LETTER_CONTENT HERE
 
 \closing{Yours sincerely,}
 
