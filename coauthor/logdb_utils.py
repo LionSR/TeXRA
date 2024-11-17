@@ -3,7 +3,6 @@ import sqlite3
 from datetime import datetime
 import json
 
-
 from .model_config import ModelConfig
 from .state import State
 from .logging_utils import logger
@@ -103,11 +102,6 @@ def log_start(args):
     conn.close()
 
     return log_id
-
-
-def log_end(log_id):
-    """No-op as we don't need explicit end markers in SQLite"""
-    pass
 
 
 def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=None, prompt_caching=False):
