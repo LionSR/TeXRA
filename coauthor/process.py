@@ -229,7 +229,6 @@ def process_reflection_round(
 ):
     """Process the reflection round."""
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
-    model = model_config.name
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
     user_request_reflect = render_prompt(user_request_reflect, user_vars)
@@ -245,7 +244,7 @@ def process_reflection_round(
     # Add figure inputs to the message if available
     if figure_inputs:
         print(f"Creating image message with {len(figure_inputs)} figures")
-        image_content = create_image_message(model, figure_inputs)
+        image_content = create_image_message(model_config, figure_inputs)
         reflection_message["content"].extend(image_content)
 
     # Add the user message text

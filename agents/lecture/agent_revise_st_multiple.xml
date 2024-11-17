@@ -38,7 +38,7 @@ You will be given multiple \LaTeX documents representing chapters of the textboo
 Here are the \LaTeX documents with additional \LaTeX document class and commands (where the math commands you should use are defined):
 
 <documents>
-<document name="{{ DOCUMENT_CLS_FILE }">
+<document name="{{ DOCUMENT_CLS_FILE }}">
 {{ DOCUMENT_CLS_CONTENT }}
 </document>
 <document name="{{ COMMAND_FILE }}">

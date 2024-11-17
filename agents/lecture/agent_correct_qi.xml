@@ -39,7 +39,7 @@ I am going to give you a \LaTeX document of a graduate quantum information cours
 Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{{ DOCUMENT_CLS_FILE }">
+<document name="{{ DOCUMENT_CLS_FILE }}">
 {{ DOCUMENT_CLS_CONTENT }}
 </document>
 <document name="{{ COMMAND_FILE }}">
