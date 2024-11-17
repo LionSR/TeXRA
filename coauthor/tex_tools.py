@@ -218,7 +218,7 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
         output_file,
     ]
 
-    success, _ = run_external_command(latexdiff_command, diff_file_name)
+    success, _, _ = run_external_command(latexdiff_command, diff_file_name)
     if not success:
         return None
 
@@ -254,7 +254,7 @@ def run_latexdiff_vc(input_file, commit_hash):
         input_file,
     ]
 
-    success, _ = run_external_command(latexdiff_vc_command)
+    success, _, _ = run_external_command(latexdiff_vc_command)
     if not success:
         return None
 
@@ -327,46 +327,3 @@ def run_latexdiff_between_rounds(output_file1, output_file2, agent):
         run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
     else:
         logger.warning(f"Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
-
-
-def run_external_command(command, output_file=None, encoding="utf-8", capture_output=False):
-    """
-    Run an external command and handle its output.
-
-    :param command: List containing the command and its arguments
-    :param output_file: Path to the output file (if any)
-    :param encoding: Encoding to use for file operations
-    :param capture_output: Whether to capture and return the command output
-    :return: Tuple containing (success_flag, output_message, error_message)
-    """
-    logger.info("\nRunning command: " + " ".join(command))
-
-    def truncate_output(text, max_chars=150):
-        if text and len(text) > max_chars:
-            return "..." + text[-max_chars:]
-        return text
-
-    try:
-        kwargs = {
-            "text": True,
-            "capture_output": True,  # Always capture output for better error handling
-        }
-
-        if output_file:
-            with open(output_file, "w", encoding=encoding) as file:
-                result = subprocess.run(command, **kwargs)
-                file.write(result.stdout)
-            logger.info("\nCommand completed.\nOutput saved to " + output_file)
-            return True, None, None
-        else:
-            result = subprocess.run(command, **kwargs)
-            if result.returncode == 0:
-                return True, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
-            else:
-                return False, truncate_output(result.stdout.strip()), result.stderr.strip()
-    except subprocess.CalledProcessError as e:
-        error_message = "Error running command:\n"
-        if hasattr(e, "stderr") and e.stderr:
-            error_message += f"\nStderr:\n{truncate_output(e.stderr)}"
-        logger.error("\n" + error_message)
-        return False, None, error_message

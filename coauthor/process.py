@@ -15,17 +15,17 @@ from .message_utils import (
 )
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, write_to_output_file
-from .prompt_utils import load_prompt, render_prompt
+from .prompt_utils import render_prompt
 from .model_config import ModelConfig
 from .state import State
 from .replacement_utils import get_all_replacements, apply_replacements
 
 
 def process_response_cycle(
-    client, state: State, accumulated_output, messages, output_file, model_config: ModelConfig, output_settings, prompt_settings
+    client, state: State, accumulated_output, messages, output_file, model_config: ModelConfig, agent_settings, agent_prompts
 ):
     end_turn = False
-    k = output_settings["k"]
+    k = agent_settings["K"]
 
     while not end_turn:
         file_exists = os.path.exists(output_file)
@@ -33,15 +33,15 @@ def process_response_cycle(
         response_object = model_config.create_response(
             client=client,
             messages=messages,
-            temperature=output_settings["temperature"],
-            system_prompt=prompt_settings["system_prompt"],
-            end_tag=output_settings["end_tag"],
+            temperature=agent_settings["temperature"],
+            system_prompt=agent_prompts.system_prompt,  # Use system_prompt directly from PromptConfig
+            end_tag=agent_settings["end_tag"],
         )
         response_time = time.time() - start_time
         state.update_response_time(response_time)
         logger.info(f"Response time: {response_time:.2f}s")
 
-        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, output_settings["end_tag"])
+        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, agent_settings["end_tag"])
         logger.info(f"Stop reason: {stop_reason}")
         logger.info(f"Token usage: {response_object.usage}")
 
@@ -60,7 +60,7 @@ def process_response_cycle(
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
-            logger.debug(f"### Last {k} characters of the response: {new_response[-k:]}")
+            logger.debug(f"Last {k} characters of the response: {new_response[-k:]}")
             state.last_response = new_response
 
             if messages[-1]["role"] == "assistant":
@@ -75,17 +75,17 @@ def process_response_cycle(
                 else:
                     messages[-1]["content"] = accumulated_output
 
-        end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, output_settings, massive_repetition_detected)
+        end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
 
         if should_stop:
-            print_stop_flags(end_turn, new_response, state, output_settings, massive_repetition_detected)
+            print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
             break
 
         state.increment_continuation()
         logger.info(f"Starting continuation #{state.continuation_count}")
 
         if model_config.is_openai_compatible:
-            handle_openai_continuation(messages, new_response, k, output_settings["end_tag"])
+            handle_openai_continuation(messages, new_response, k, agent_settings["end_tag"])
 
     return state, accumulated_output, end_turn
 
@@ -93,8 +93,8 @@ def process_response_cycle(
 def initialize_output_and_prefill(
     output_file,
     model_config: ModelConfig,
-    output_settings,
-    prompt_settings,
+    agent_settings,
+    agent_prompts,
     messages,
     prefill,
     accumulated_output,
@@ -102,7 +102,7 @@ def initialize_output_and_prefill(
 ):
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         file_content = read_file(output_file)
-        if has_end_tag(file_content, output_settings["end_tag"], output_settings["document_tag"]):
+        if has_end_tag(file_content, agent_settings["end_tag"], agent_settings["document_tag"]):
             logger.debug("End tag detected - skipping continuation")
             if messages[-1]["content"][-1].get("cache_control"):
                 messages[-1]["content"][-1].pop("cache_control")
@@ -117,10 +117,9 @@ def initialize_output_and_prefill(
                 messages.append({"role": "assistant", "content": file_content})
             logger.debug(f"Using existing content as prefill: {output_file}")
             if model_config.is_openai_compatible:
-                handle_openai_continuation(messages, file_content, output_settings["k"], output_settings["end_tag"])
+                handle_openai_continuation(messages, file_content, agent_settings["K"], agent_settings["end_tag"])
     else:
-        use_prefill_from_input = prompt_settings.get("use_prefill_from_input", False)
-        if output_settings.get("output_ext") == "tex" and use_prefill_from_input and first_k_tex_document:
+        if agent_prompts.use_prefill_from_input and agent_settings.get("output_ext") == "tex" and first_k_tex_document:
             prefill += first_k_tex_document
             if model_config.is_anthropic:
                 accumulated_output = first_k_tex_document
@@ -138,7 +137,7 @@ def initialize_output_and_prefill(
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and model_config.is_anthropic:
             write_file(output_file, prefill)
-        elif output_settings.get("output_ext") == "xml" and model_config.is_anthropic:
+        elif agent_settings.get("output_ext") == "xml" and model_config.is_anthropic:
             write_file(output_file, prefill + "\n")
 
     return accumulated_output, False, messages
@@ -148,46 +147,43 @@ def process_first_round(
     client,
     output_file,
     user_vars,
+    state: State,
+    messages,
     model_config: ModelConfig,
-    output_settings,
-    prompt_settings,
+    agent_settings,
+    agent_prompts,
     figure_inputs=None,
-    state: Optional[State] = None,
-    messages=None,
     round=0,
     tex_count_stats=None,
     first_k_tex_document=None,
 ):
-    """Process the first round of interaction."""
+    """Process the first round."""
     logger.info(f"Processing round {round}")
-    system_prompt = load_prompt("system", prompt_settings)
-    system_prompt = render_prompt(system_prompt, user_vars)
 
-    user_prefix_template = load_prompt("user_prefix", prompt_settings)
-    user_prefix = render_prompt(user_prefix_template, user_vars)
+    user_request = render_prompt(agent_prompts.user_request_prompt, user_vars)
+    user_prefix = render_prompt(agent_prompts.user_prefix_prompt, user_vars)
     if tex_count_stats:
-        user_prefix += tex_count_stats
+        user_prefix = f"{tex_count_stats}{user_prefix}"
+    user_request = render_prompt(agent_prompts.user_request_prompt, user_vars)
 
-    user_request = load_prompt("user_request", prompt_settings)
-    user_request = render_prompt(user_request, user_vars)
-
+    # Initialize messages
     messages = initialize_messages(
         model_config,
-        system_prompt,
+        agent_prompts.system_prompt,
         user_prefix,
         user_request,
         figure_inputs,
     )
 
     accumulated_output = None
-    prefill = output_settings["prefills"][round] if output_settings["prefills"] else ""
-    accumulated_output = prefill
+    prefill = agent_prompts.prefills[0] if agent_prompts.prefills else ""
 
+    accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         model_config,
-        output_settings,
-        prompt_settings,
+        agent_settings,
+        agent_prompts,
         messages,
         prefill,
         accumulated_output,
@@ -197,8 +193,7 @@ def process_first_round(
     if end_turn:
         return State.initialize(accumulated_output), accumulated_output, end_turn, messages
 
-    if state is None:
-        state = State.initialize(accumulated_output)
+    state = State.initialize(accumulated_output)
 
     state, accumulated_output, end_turn = process_response_cycle(
         client,
@@ -207,8 +202,8 @@ def process_first_round(
         messages,
         output_file,
         model_config,
-        output_settings,
-        prompt_settings,
+        agent_settings,
+        agent_prompts,
     )
 
     logger.info(f"Completed round {round}")
@@ -222,8 +217,8 @@ def process_reflection_round(
     state: State,
     messages,
     model_config: ModelConfig,
-    output_settings,
-    prompt_settings,
+    agent_settings,
+    agent_prompts,
     figure_inputs=None,
     round=1,
     tex_count_stats=None,
@@ -231,10 +226,8 @@ def process_reflection_round(
 ):
     """Process the reflection round."""
     logger.info(f"Processing round {round}")
-    logger.info("Reflection round started")
 
-    user_request_reflect = load_prompt("user_reflect", prompt_settings)
-    user_request_reflect = render_prompt(user_request_reflect, user_vars)
+    user_request_reflect = render_prompt(agent_prompts.user_reflect_prompt, user_vars)
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided
@@ -252,7 +245,6 @@ def process_reflection_round(
 
     # Add the user message text
     if model_config.supports_prompt_caching:
-        # reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
         reflection_message["content"].append({"type": "text", "text": user_message})
         # Make sure the number of cache control is fewer than 4
         if isinstance(messages[-1]["content"], list):
@@ -266,14 +258,14 @@ def process_reflection_round(
     messages.append(reflection_message)
 
     accumulated_output = None
-    prefill = output_settings["prefills"][round] if len(output_settings["prefills"]) > 1 else output_settings["prefills"][0]
+    prefill = agent_prompts.prefills[round] if len(agent_prompts.prefills) > 1 else agent_prompts.prefills[0]
 
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         model_config,
-        output_settings,
-        prompt_settings,
+        agent_settings,
+        agent_prompts,
         messages,
         prefill,
         accumulated_output,
@@ -294,8 +286,8 @@ def process_reflection_round(
         messages,
         output_file,
         model_config,
-        output_settings,
-        prompt_settings,
+        agent_settings,
+        agent_prompts,
     )
 
     logger.info(f"Completed round {round}")
