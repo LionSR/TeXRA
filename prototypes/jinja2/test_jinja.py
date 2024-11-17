@@ -2,7 +2,6 @@ from typing import Dict, Set
 from jinja2 import Template, Environment, meta
 
 
-
 def check_template_variables(template_str: str, variables: Dict) -> tuple[Set[str], Set[str]]:
     """
     Check for missing and extra variables in the template.
@@ -21,13 +20,13 @@ def check_template_variables(template_str: str, variables: Dict) -> tuple[Set[st
 
 def read_template(file_path: str) -> str:
     """Read template content from a file."""
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         return f.read()
 
 
 def simple_template_test():
     # Read template from file
-    template_str = read_template('template_jinja.txt')
+    template_str = read_template("template_jinja.txt")
 
     # Test Case 1: All variables present
     print("Test Case 1: All required variables")

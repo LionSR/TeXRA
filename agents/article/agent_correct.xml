@@ -42,6 +42,13 @@ Here is the \LaTeX document with input files (which may include appendix, and La
 {{ INPUT_CONTENT }}
 </document>
 </documents>
+
+{% if INSTRUCTION %}
+Specific instructions (if provided) that you must follow:
+<instruction>
+{{ INSTRUCTION }}
+</instruction>
+{% endif %}
 ]]>
 </user_prefix>
 <user_request>
