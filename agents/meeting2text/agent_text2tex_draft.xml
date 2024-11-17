@@ -17,19 +17,19 @@ When writing a professional *.tex \LaTeX document, you must:
 <![CDATA[
 I am going to give you a draft \LaTeX document and a transcribed text from an academic discussion. Your main task is to identify missing content and equations in the draft and add them based on the transcription. Read both documents extremely carefully.
 
-Here is the draft .tex \LaTeX document {INPUT_FILE}:
+Here is the draft .tex \LaTeX document {{ INPUT_FILE }}:
 <draft_document>
-{DRAFT_CONTENT}
+{{ DRAFT_CONTENT }}
 </draft_document>
 
 Here is the .md transcription:
 <transcript>
-{TRANSCRIPT_CONTENT}
+{{ TRANSCRIPT_CONTENT }}
 </transcript>
 
 If there are instructions provided below, please follow them and expand them in the scratchpad.
 <instructions>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instructions>
 ]]>
 </user_prefix>

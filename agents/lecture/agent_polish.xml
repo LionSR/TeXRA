@@ -31,22 +31,22 @@ You will be given a \LaTeX document of a working draft textbook chapter. Read th
 Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{DOCUMENT_CLS_FILE}">
-{DOCUMENT_CLS_CONTENT}
+<document name="{{ DOCUMENT_CLS_FILE }}">
+{{ DOCUMENT_CLS_CONTENT }}
 </document>
-<document name="{COMMAND_FILE}">
-{COMMAND_CONTENT}
+<document name="{{ COMMAND_FILE }}">
+{{ COMMAND_CONTENT }}
 </document>
-{ADDITIONAL_INPUTS}
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+{{ ADDITIONAL_INPUTS }}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
 </documents>
 
 Please carefully read through the entire chapter and ensure you fully understand all the details.
 Your task is to enhance this chapter focusing solely on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 ]]>
@@ -78,7 +78,7 @@ First, brainstorm concrete ways to improve the chapter quality, focusing strictl
 
 Then, following your plan in the scratchpad, output an updated version of the \LaTeX document with targeted enhancements that address only the specific instruction provided and the additional plan in the scratchpad. Do not make changes unrelated to the instruction and the additional plan in the scratchpad. Use the following format for your output:
 <latex_document>
-{1ST_UPDATED_LATEX_DOCUMENT}
+% 1ST_UPDATED_LATEX_DOCUMENT HERE
 </latex_document>
 ]]>
 </user_request>

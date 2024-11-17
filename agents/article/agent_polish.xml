@@ -33,17 +33,17 @@ I am going to give you the \LaTeX document of a research paper draft.  Read the 
 Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
 <documents>
-{AUXILIARY_FILES}
-{ADDITIONAL_INPUTS}
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+{{ AUXILIARY_FILES }}
+{{ ADDITIONAL_INPUTS }}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
 </documents>
 
 Please carefully read through the entire research paper above and ensure you fully understand all the details.
 Your task is to enhance this paper focusing solely on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 ]]>
@@ -73,7 +73,7 @@ In the scratchpad below, brainstorm concrete ways to significantly improve the q
 
 Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
 <latex_document>
-{1ST_UPDATED_LATEX_DOCUMENT}
+% 1ST_UPDATED_LATEX_DOCUMENT HERE
 </latex_document>
 ]]>
 </user_request>

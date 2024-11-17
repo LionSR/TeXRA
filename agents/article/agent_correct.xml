@@ -37,9 +37,9 @@ I am going to give you a \LaTeX document of a research paper. You are about to c
 Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
 <documents>
-{AUXILIARY_FILES}
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+{{ AUXILIARY_FILES }}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
 </documents>
 ]]>
@@ -54,7 +54,7 @@ As you review the document, make the following corrections and improvements:
 
 Use the following format for your output
 <latex_document>
-{1ST_UPDATED_LATEX_DOCUMENT}
+% 1ST_UPDATED_LATEX_DOCUMENT HERE
 </latex_document>
 ]]>
 </user_request>

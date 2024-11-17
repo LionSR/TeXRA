@@ -34,14 +34,14 @@ The latex rewrite was generated using the following guideline.
 
 Please read the content within these tags line by line and extrmely carefully as they are crucial for completing the task.
 
-Here is the transcription {INPUT_FILE}:
+Here is the transcription {{ INPUT_FILE }}:
 <transcription>
-{CORRECTED_TRANSCRIPTION_CONTENT}
+{{ CORRECTED_TRANSCRIPTION_CONTENT }}
 </transcription>
 
-Here is the converted \LaTeX document {CONVERTED_TEX_FILE}:
+Here is the converted \LaTeX document {{ CONVERTED_TEX_FILE }}:
 <latex>
-{CONVERTED_TEX_CONTENT}
+{{ CONVERTED_TEX_CONTENT }}
 </latex>
 ]]>
 </user_prefix>
