@@ -40,7 +40,7 @@ def init_db():
         reflect BOOLEAN,  -- From args.reflect
         auto_extract_figure BOOLEAN,  -- Flag
         auto_extract_tikz_figure BOOLEAN,  -- Flag
-        include_tikz_reflection BOOLEAN,  -- Flag
+        auto_extract_tikz_figure_reflect BOOLEAN,  -- Flag
         include_tex_count BOOLEAN,  -- Flag
         use_prefill_from_input BOOLEAN,  -- Flag
         round_stats TEXT  -- JSON array of stats per round
@@ -73,7 +73,7 @@ def log_start(args):
         auxiliary_files, figure_inputs, sample_files, output_files, 
         instruction, round_stats, reflect,
         auto_extract_figure, auto_extract_tikz_figure,
-        include_tikz_reflection, include_tex_count,
+        auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
@@ -91,7 +91,7 @@ def log_start(args):
             args.reflect,
             args.auto_extract_figure,
             args.auto_extract_tikz_figure,
-            args.include_tikz_reflection,
+            args.auto_extract_tikz_figure_reflect,
             args.include_tex_count,
             args.use_prefill_from_input,
         ),
@@ -220,7 +220,7 @@ def get_task_info(log_id):
         timestamp, agent, model, input_file, output_file,
         instruction, round_stats, reflect,
         auto_extract_figure, auto_extract_tikz_figure,
-        include_tikz_reflection, include_tex_count,
+        auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
         input_files, auxiliary_files, figure_inputs, sample_files
         FROM coauthor_logs WHERE id = ?""",
@@ -249,7 +249,7 @@ def get_task_info(log_id):
                 "reflect": row[7],
                 "auto_extract_figure": row[8],
                 "auto_extract_tikz_figure": row[9],
-                "include_tikz_reflection": row[10],
+                "auto_extract_tikz_figure_reflect": row[10],
                 "include_tex_count": row[11],
                 "use_prefill_from_input": row[12],
             },
