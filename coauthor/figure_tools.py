@@ -1,11 +1,9 @@
 import re
 import os
 from jinja2 import Template
-from termcolor import cprint, colored
-
 from .file_utils import read_file, write_file
 from .tex_tools import compile_latex_to_pdf
-
+from .logging_utils import logger
 
 TIKZ_TEMPLATE = Template(
     r"""
@@ -38,18 +36,18 @@ def extract_figure_paths(latex_file_path):
 
         # Find all graphicspaths
         graphicspath_matches = graphicspath_pattern.findall(content)
-        print(f"Graphicspath matches: {graphicspath_matches}")  # Debug print
+        logger.debug(f"Graphicspath matches: {graphicspath_matches}")
 
         for match in graphicspath_matches:
             paths = [match.strip("{}")]  # Remove outer braces
-            print(f"Paths found in graphicspath: {paths}")  # Debug print
+            logger.debug(f"Paths found in graphicspath: {paths}")
             for path in paths:
                 normalized_path = os.path.normpath(os.path.join(latex_dir, path.strip("/")))
                 graphicspaths.append(normalized_path)
-                print(f"Added graphicspath: {normalized_path}")
+                logger.debug(f"Added graphicspath: {normalized_path}")
 
         # Debug print to check graphicspaths
-        print(f"Graphicspaths: {graphicspaths}")
+        logger.debug(f"Graphicspaths: {graphicspaths}")
 
         # Find all matches in the content for both patterns
         for pattern in figure_patterns:
@@ -63,11 +61,11 @@ def extract_figure_paths(latex_file_path):
                         break
 
     except FileNotFoundError:
-        cprint(f"Error: File '{latex_file_path}' not found.", "white", "on_red")
+        logger.error(f"File '{latex_file_path}' not found.")
     except Exception as e:
-        cprint(f"An error occurred: {str(e)}", "white", "on_red")
+        logger.error(f"An error occurred: {str(e)}")
 
-    print("Found figure paths:", colored(figure_paths, "green"))
+    logger.debug("Found figure paths: " + ", ".join(figure_paths))
     return figure_paths
 
 
@@ -108,9 +106,9 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
     build_dir = os.path.join(input_dir, "build", f"{input_name}")
     os.makedirs(build_dir, exist_ok=True)
 
-    print("Extracting TikZ pictures with labels...")
+    logger.debug("Extracting TikZ pictures with labels...")
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
-    print(f"Found {len(labeled_tikzpictures)} labeled TikZ pictures.")
+    logger.debug(f"Found {len(labeled_tikzpictures)} labeled TikZ pictures.")
     compiled_files = []
 
     for label, tikzpictures in labeled_tikzpictures:
@@ -134,7 +132,7 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
 
 def handle_auto_extract_figure(kwargs, input_file):
     extracted_figure_paths = extract_figure_paths(input_file)
-    print("Extracting figure paths:", colored(extracted_figure_paths, "cyan"))
+    logger.debug("Extracting figure paths: " + ", ".join(extracted_figure_paths))
     if extracted_figure_paths:
         if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
             kwargs["figure_inputs"] = extracted_figure_paths
