@@ -15,7 +15,7 @@ from .message_utils import (
 )
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, write_to_output_file
-from .prompt_utils import load_prompt
+from .prompt_utils import load_prompt, render_prompt
 from .model_config import ModelConfig
 from .state import State
 
@@ -195,12 +195,15 @@ def process_first_round(
 ):
     """Process the first round of interaction."""
     system_prompt = load_prompt("system", prompt_settings)
+    system_prompt = render_prompt(system_prompt, user_vars)
+    
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
-    user_prefix = user_prefix_template.format(**user_vars)
+    user_prefix = render_prompt(user_prefix_template, user_vars)
     if tex_count_stats:
         user_prefix += tex_count_stats
 
     user_request = load_prompt("user_request", prompt_settings)
+    user_request = render_prompt(user_request, user_vars)
 
     messages = initialize_messages(
         model_config,
@@ -248,6 +251,7 @@ def process_first_round(
 def process_reflection_round(
     client,
     output_file,
+    user_vars,
     state: State,
     messages,
     model_config: ModelConfig,
@@ -263,6 +267,7 @@ def process_reflection_round(
     model = model_config.name
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
+    user_request_reflect = render_prompt(user_request_reflect, user_vars)
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided

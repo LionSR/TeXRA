@@ -21,13 +21,13 @@ I will provide you with the content of a NeurIPS paper (neurips_main.tex) and th
 Here are the files:
 
 <documents>
-{AUXILIARY_FILES}
+{{ AUXILIARY_FILES }}
 <document name="neurips_main.tex">
-{NeurIPS_TEX}
+{{ NeurIPS_TEX }}
 </document> 
 
 <document name="iclr2025_conference.tex">
-{ICLR_TEMPLATE}
+{{ ICLR_TEMPLATE }}
 </document>
 </documents>
 
@@ -53,8 +53,8 @@ In the scratchpad below, outline your plan for converting the NeurIPS paper to t
 Now, following your plan in the scratchpad, please output the reformatted paper in ICLR format. Ensure that all content from the original NeurIPS paper is preserved and properly formatted according to ICLR guidelines. Use the following format:
 
 <latex_document>
-[Insert the reformatted LaTeX content here]
-[BOTH THE MAIN TEXT AND THE APPENDIX MUST BE INCLUDED]
+% Insert the reformatted LaTeX content here
+% BOTH THE MAIN TEXT AND THE APPENDIX MUST BE INCLUDED
 </latex_document>
 ]]>
 </user_request>

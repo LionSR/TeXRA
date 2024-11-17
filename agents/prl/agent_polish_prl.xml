@@ -32,14 +32,14 @@ I am going to give you the main text and supplementary materials of a research p
 Here are the \LaTeX documents:
 
 <documents>
-<document name="{PREAMBLE_FILE}">
-{PREAMBLE_CONTENT}
+<document name="{{ PREAMBLE_FILE }}">
+{{ PREAMBLE_CONTENT }}
 </document>
-<document name="{MAIN_FILE}">
-{MAIN_CONTENT}
+<document name="{{ MAIN_FILE }}">
+{{ MAIN_CONTENT }}
 </document>
-<document name="{SUPP_FILE}">
-{SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+{{ SUPP_CONTENT }}
 </document>
 </documents>
 
@@ -55,7 +55,7 @@ Your task is to enhance both documents, focusing on improving clarity, consisten
 
 Focus on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 ]]>
 </user_prefix>
@@ -92,11 +92,11 @@ In the scratchpad below, brainstorm concrete ways to improve both the main text 
 Then, following your plan in the scratchpad, please output updated versions of both the main text and supplementary materials, implementing the improvements you've outlined. Use the following format:
 
 <latex_documents>
-<document name="{MAIN_FILE}">
-{REVISED_MAIN_CONTENT}
+<document name="{{ MAIN_FILE }}">
+% REVISED_MAIN_CONTENT HERE
 </document>
-<document name="{SUPP_FILE}">
-{REVISED_SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+% REVISED_SUPP_CONTENT HERE
 </document>
 </latex_documents>
 ]]>
@@ -147,10 +147,10 @@ Based on this reflection, please output further enhanced versions of both the ma
 
 <latex_documents>
 <document name="{MAIN_FILE}">
-{FINAL_REVISED_MAIN_CONTENT}
+% FINAL_REVISED_MAIN_CONTENT HERE
 </document>
 <document name="{SUPP_FILE}">
-{FINAL_REVISED_SUPP_CONTENT}
+% FINAL_REVISED_SUPP_CONTENT HERE
 </document>
 </latex_documents>
 ]]>

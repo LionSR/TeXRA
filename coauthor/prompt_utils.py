@@ -1,6 +1,8 @@
 import os
 from termcolor import colored
 import xml.etree.ElementTree as ET
+from jinja2 import Template
+from typing import Dict, Any
 
 from .file_utils import read_file
 
@@ -63,7 +65,14 @@ def get_xml_format_from_files(files):
     return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
-def load_prompt(prompt_type, prompt_settings):
+def load_prompt(prompt_type: str, prompt_settings: Dict[str, Any]) -> str:
+    """Load and return a prompt string from settings."""
     prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
     print(f"{prompt_type}: {colored(prompt, 'magenta')}")
     return prompt
+
+
+def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
+    """Render a prompt string using Jinja2 templating."""
+    template = Template(prompt)
+    return template.render(**variables)

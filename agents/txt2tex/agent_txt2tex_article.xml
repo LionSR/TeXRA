@@ -33,7 +33,7 @@ When writing a \LaTeX document for a popular science article, you must:
 <![CDATA[
 You are provided with the following text content of a popular science article:
 <txt_content>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </txt_content>
 
 Your task is to generate a new LaTeX file based on this popular science article content, following the provided guidelines.
