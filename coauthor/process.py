@@ -3,7 +3,7 @@ import time
 from typing import Optional
 
 from .logging_utils import logger
-from .file_utils import read_file, write_file, append_file
+from .file_utils import read_file, write_file
 from .message_utils import (
     create_image_message,
     initialize_messages,
@@ -19,13 +19,20 @@ from .prompt_utils import render_prompt
 from .model_config import ModelConfig
 from .state import State
 from .replacement_utils import get_all_replacements, apply_replacements
-
+from .config import TaskConfig, AgentSettings, PromptTemplate
 
 def process_response_cycle(
-    client, state: State, accumulated_output, messages, output_file, model_config: ModelConfig, agent_settings, agent_prompts
+    client, 
+    state: State, 
+    accumulated_output, 
+    messages, 
+    output_file, 
+    model_config: ModelConfig, 
+    task_config: TaskConfig,
+    agent_settings: AgentSettings,
+    agent_prompts: PromptTemplate
 ):
     end_turn = False
-    k = agent_settings["K"]
 
     while not end_turn:
         file_exists = os.path.exists(output_file)
@@ -33,15 +40,14 @@ def process_response_cycle(
         response_object = model_config.create_response(
             client=client,
             messages=messages,
-            temperature=agent_settings["temperature"],
-            system_prompt=agent_prompts.system_prompt,  # Use system_prompt directly from PromptConfig
-            end_tag=agent_settings["end_tag"],
+            temperature=task_config.temperature,
+            system_prompt=agent_prompts.system_prompt,
+            end_tag=agent_settings.end_tag,
         )
         response_time = time.time() - start_time
         state.update_response_time(response_time)
         logger.info(f"Response time: {response_time:.2f}s")
-
-        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, agent_settings["end_tag"])
+        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, agent_settings.end_tag)
         logger.info(f"Stop reason: {stop_reason}")
         logger.info(f"Token usage: {response_object.usage}")
 
@@ -54,13 +60,13 @@ def process_response_cycle(
             getattr(response_object.usage, "cache_creation_input_tokens", 0),
         )
 
-        best_connector, _ = best_connection_method(state.last_response[-k:], new_response[:k])
+        best_connector, _ = best_connection_method(state.last_response[-task_config.K:], new_response[:task_config.K])
 
         massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
         if not massive_repetition_detected:
             accumulated_output += best_connector + new_response
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
-            logger.debug(f"Last {k} characters of the response: {new_response[-k:]}")
+            logger.debug(f"Last {task_config.K} characters of the response: {new_response[-task_config.K:]}")
             state.last_response = new_response
 
             if messages[-1]["role"] == "assistant":
@@ -85,7 +91,7 @@ def process_response_cycle(
         logger.info(f"Starting continuation #{state.continuation_count}")
 
         if model_config.is_openai_compatible:
-            handle_openai_continuation(messages, new_response, k, agent_settings["end_tag"])
+            handle_openai_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
 
     return state, accumulated_output, end_turn
 
@@ -93,8 +99,8 @@ def process_response_cycle(
 def initialize_output_and_prefill(
     output_file,
     model_config: ModelConfig,
-    agent_settings,
-    agent_prompts,
+    agent_settings: AgentSettings,
+    agent_prompts: PromptTemplate,
     messages,
     prefill,
     accumulated_output,
@@ -102,7 +108,7 @@ def initialize_output_and_prefill(
 ):
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         file_content = read_file(output_file)
-        if has_end_tag(file_content, agent_settings["end_tag"], agent_settings["document_tag"]):
+        if has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
             logger.debug("End tag detected - skipping continuation")
             if messages[-1]["content"][-1].get("cache_control"):
                 messages[-1]["content"][-1].pop("cache_control")
@@ -117,9 +123,9 @@ def initialize_output_and_prefill(
                 messages.append({"role": "assistant", "content": file_content})
             logger.debug(f"Using existing content as prefill: {output_file}")
             if model_config.is_openai_compatible:
-                handle_openai_continuation(messages, file_content, agent_settings["K"], agent_settings["end_tag"])
+                handle_openai_continuation(messages, file_content, agent_settings.end_tag, agent_settings.K)
     else:
-        if agent_prompts.use_prefill_from_input and agent_settings.get("output_ext") == "tex" and first_k_tex_document:
+        if agent_settings.use_prefill_from_input and agent_settings.get("output_ext") == "tex" and first_k_tex_document:
             prefill += first_k_tex_document
             if model_config.is_anthropic:
                 accumulated_output = first_k_tex_document
@@ -150,8 +156,9 @@ def process_first_round(
     state: State,
     messages,
     model_config: ModelConfig,
-    agent_settings,
-    agent_prompts,
+    task_config: TaskConfig,
+    agent_settings: AgentSettings,
+    agent_prompts: PromptTemplate,
     figure_inputs=None,
     round=0,
     tex_count_stats=None,
@@ -176,7 +183,7 @@ def process_first_round(
     )
 
     accumulated_output = None
-    prefill = agent_prompts.prefills[0] if agent_prompts.prefills else ""
+    prefill = agent_settings.prefills[0] if agent_settings.prefills else ""
 
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
@@ -202,8 +209,10 @@ def process_first_round(
         messages,
         output_file,
         model_config,
+        task_config,
         agent_settings,
         agent_prompts,
+        
     )
 
     logger.info(f"Completed round {round}")
@@ -217,8 +226,9 @@ def process_reflection_round(
     state: State,
     messages,
     model_config: ModelConfig,
-    agent_settings,
-    agent_prompts,
+    task_config: TaskConfig,
+    agent_settings: AgentSettings,
+    agent_prompts: PromptTemplate,
     figure_inputs=None,
     round=1,
     tex_count_stats=None,
@@ -258,7 +268,7 @@ def process_reflection_round(
     messages.append(reflection_message)
 
     accumulated_output = None
-    prefill = agent_prompts.prefills[round] if len(agent_prompts.prefills) > 1 else agent_prompts.prefills[0]
+    prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > 1 else agent_settings.prefills[0]
 
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
@@ -286,6 +296,7 @@ def process_reflection_round(
         messages,
         output_file,
         model_config,
+        task_config,
         agent_settings,
         agent_prompts,
     )
