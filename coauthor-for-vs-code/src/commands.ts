@@ -612,7 +612,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand(
       'coauthor.execute',
-      (
+      async (
         agent: string,
         inputFile: string,
         auxFiles: string | string[] | null,
@@ -632,6 +632,25 @@ export function registerCommands(context: vscode.ExtensionContext) {
         const terminalName = `${agent}@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
+
+        // Check if virtual environment string is configured
+        const virtualEnvString = getNestedConfig<string>('python.virtualEnvString', '');
+
+        if (virtualEnvString) {
+          if (terminal_new.shellIntegration) {
+            const execution = terminal_new.shellIntegration.executeCommand(virtualEnvString);
+            await new Promise<void>((resolve) => {
+              const disposable = vscode.window.onDidEndTerminalShellExecution(event => {
+                if (event.execution === execution) {
+                  disposable.dispose();
+                  resolve();
+                }
+              });
+            });
+          } else {
+            terminal_new.sendText(virtualEnvString);
+          }
+        }
 
         let command = `coauthor ${agent} --input_file="${inputFile}"`;
 
