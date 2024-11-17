@@ -2,10 +2,10 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "publisher": "Sirui-Lu",
   "engines": {
-    "vscode": "^1.89.0"
+    "vscode": "^1.93.1"
   },
   "categories": [
     "Programming Languages",
@@ -57,7 +57,10 @@
             "items": {
               "type": "string"
             },
-            "default": ["Discrete-Time", "PapersEx"],
+            "default": [
+              "Discrete-Time",
+              "PapersEx"
+            ],
             "description": "Directories to consider as the root for input files",
             "editPresentation": "multilineText",
             "order": 1
@@ -67,7 +70,10 @@
             "items": {
               "type": "string"
             },
-            "default": ["Discrete-Time", "PapersEx"],
+            "default": [
+              "Discrete-Time",
+              "PapersEx"
+            ],
             "description": "Directories to consider as the root for auxiliary files",
             "editPresentation": "multilineText",
             "order": 2
@@ -77,7 +83,12 @@
             "items": {
               "type": "string"
             },
-            "default": ["Discrete-Time", "FiguresEx", "Figures", "Figs"],
+            "default": [
+              "Discrete-Time",
+              "FiguresEx",
+              "Figures",
+              "Figs"
+            ],
             "description": "Directories to include in the figure path",
             "editPresentation": "multilineText",
             "order": 3
@@ -155,6 +166,17 @@
         }
       },
       {
+        "title": "CoAuthor: Python Environment",
+        "properties": {
+          "coauthor.python.virtualEnvString": {
+            "type": "string",
+            "default": "",
+            "description": "Command to activate Python virtual environment (e.g., 'source venv/bin/activate' for Unix or 'venv\\Scripts\\activate.bat' for Windows). Leave empty to use system Python.",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "CoAuthor: Git",
         "properties": {
           "coauthor.git.numberOfCommitsToShow": {
@@ -195,7 +217,10 @@
           "coauthor.merge.defaultReflect": {
             "type": "string",
             "default": "False",
-            "enum": ["True", "False"],
+            "enum": [
+              "True",
+              "False"
+            ],
             "description": "Default reflect setting for merge operations",
             "order": 2
           }
@@ -278,7 +303,7 @@
         {
           "type": "webview",
           "id": "coauthor.chatView",
-          "name": "Your Favourite CoAuthor ❤️"
+          "name": "Your Favourite CoAuthor "
         }
       ]
     }
@@ -299,7 +324,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.34",
-    "@types/vscode": "^1.89.0",
+    "@types/vscode": "^1.93.1",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-electron": "^2.4.0",
