@@ -695,7 +695,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           },
           {
             condition: includeTikzReflection,
-            flag: '--include_tikz_reflection',
+            flag: '--auto_extract_tikz_figure_reflect',
           },
           { condition: includeTexCount, flag: '--include_tex_count' },
         ];
