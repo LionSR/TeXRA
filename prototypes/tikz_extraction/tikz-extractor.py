@@ -109,7 +109,6 @@ def compile_latex_to_pdf(tex_file):
     except subprocess.CalledProcessError as e:
         print(f"Error compiling {tex_file}")
         print("Error message:")
-        print(e.stdout)
         print(e.stderr)
 
 
