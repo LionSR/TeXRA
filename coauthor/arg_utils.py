@@ -68,7 +68,7 @@ def get_common_argparser():
     parser.add_argument("--use_prefill_from_input", action="store_true", help="Use the prefill from the input file")
     parser.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
     parser.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ figure paths from the input file")
-    parser.add_argument("--include_tikz_reflection", action="store_true", help="Include TikZ reflection in the output")
+    parser.add_argument("--auto_extract_tikz_figure_reflect", action="store_true", help="Include TikZ reflection in the output")
     parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
 
     return parser

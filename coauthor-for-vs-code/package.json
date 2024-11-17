@@ -353,7 +353,9 @@
   },
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
+    "@types/yaml": "^1.9.6",
     "jest-worker": "^29.7.0",
-    "terser-webpack-plugin": "^5.3.10"
+    "terser-webpack-plugin": "^5.3.10",
+    "yaml": "^2.6.0"
   }
 }
