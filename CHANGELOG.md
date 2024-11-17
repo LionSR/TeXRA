@@ -324,7 +324,7 @@
 ## [0.9.2]
 
 - Refactored `process_first_round` function to return fewer values
-- Moved system prompt loading to `get_prompt_settings` for better organization
+- Moved system prompt loading to `get_agent_prompts` for better organization
 - Updated all agent files to use the new `process_first_round` function signature
 - Improved handling of scratchpad content in `split_scratchpad_output`
 - Minor code improvements and optimizations
