@@ -8,11 +8,7 @@ def check_format_variables(template_str: str) -> Set[str]:
     Returns set of variable names used in the template.
     """
     formatter = string.Formatter()
-    template_vars = {
-        field_name for _, field_name, _, _ 
-        in formatter.parse(template_str) 
-        if field_name is not None
-    }
+    template_vars = {field_name for _, field_name, _, _ in formatter.parse(template_str) if field_name is not None}
     return template_vars
 
 
@@ -23,23 +19,23 @@ def check_format_variables_match(template_str: str, variables: Dict) -> tuple[Se
     """
     template_vars = check_format_variables(template_str)
     provided_vars = set(variables.keys())
-    
+
     missing_vars = template_vars - provided_vars
     extra_vars = provided_vars - template_vars
-    
+
     return missing_vars, extra_vars
 
 
 def read_template(file_path: str) -> str:
     """Read template content from a file."""
-    with open(file_path, 'r') as f:
+    with open(file_path, "r") as f:
         return f.read()
 
 
 def simple_format_test():
     # Read template from file
-    template_str = read_template('template_string.txt')
-    
+    template_str = read_template("template_string.txt")
+
     # Test Case 1: All variables present
     print("Test Case 1: All required variables")
     variables = {
