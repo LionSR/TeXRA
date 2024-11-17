@@ -22,19 +22,19 @@ The first transcription is from Otter.ai, which is less accurate but includes sp
 The second transcription is from Whisper, which is more accurate but lacks speaker identification. 
 Your task is to synergize these transcriptions to create a super accurate version with correct speaker identification.
 
-Here is the Otter.ai transcription {OTTER_INPUT_FILE}:
+Here is the Otter.ai transcription {{ OTTER_INPUT_FILE }}:
 <otter_document>
-{OTTER_INPUT_CONTENT}
+{{ OTTER_INPUT_CONTENT }}
 </otter_document>
 
-Here is the Whisper transcription {WHISPER_INPUT_FILE}:
+Here is the Whisper transcription {{ WHISPER_INPUT_FILE }}:
 <whisper_document>
-{WHISPER_INPUT_CONTENT}
+{{ WHISPER_INPUT_CONTENT }}
 </whisper_document>
 
 For context, the discussion is
 <context>
-{CONTEXT}
+{{ CONTEXT }}
 </context>
 ]]>
 </user_prefix>

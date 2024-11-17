@@ -40,32 +40,32 @@ When revising professional *.tex \LaTeX documents, you must:
 You will be revising a rebuttal package for a paper submitted to Physical Review Letters. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
 
 <documents>
-<document name="{REPLY_TO_EDITOR_FILE}">
-{REPLY_TO_EDITOR}
+<document name="{{ REPLY_TO_EDITOR_FILE }}">
+{{ REPLY_TO_EDITOR }}
 </document>
-<document name="{REPLY_TO_REFEREES_FILE}">
-{REPLY_TO_REFEREES}
+<document name="{{ REPLY_TO_REFEREES_FILE }}">
+{{ REPLY_TO_REFEREES }}
 </document>
-<document name="{LIST_OF_MAJOR_CHANGES_FILE}">
-{LIST_OF_MAJOR_CHANGES}
+<document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
+{{ LIST_OF_MAJOR_CHANGES }}
 </document>
-<document name="{INPUT_FILE}">
-{MAIN_CONTENT}
+<document name="{{ INPUT_FILE }}">
+{{ MAIN_CONTENT }}
 </document>
-<document name="{SUPP_FILE}">
-{SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+{{ SUPP_CONTENT }}
 </document>
-<document name="{EDITOR_LETTER_FILE}">
-{EDITOR_LETTER}
+<document name="{{ EDITOR_LETTER_CONTENT_FILE }}">
+{{ EDITOR_LETTER_CONTENT }}
 </document>
-<document name="{REFEREE_REPORT_A_FILE}">
-{REFEREE_REPORT_A}
+<document name="{{ REFEREE_REPORT_A_FILE }}">
+{{ REFEREE_REPORT_A_CONTENT }}
 </document>
-<document name="{REFEREE_REPORT_B_FILE}">
-{REFEREE_REPORT_B}
+<document name="{{ REFEREE_REPORT_B_FILE }}">
+{{ REFEREE_REPORT_B_CONTENT }}
 </document>
-<document name="{INSTRUCTION_FILE}">
-{INSTRUCTION}
+<document name="{{ INSTRUCTION_FILE }}">
+{{ INSTRUCTION }}
 </document>
 </documents>
 
@@ -73,7 +73,7 @@ Explanation of documents:
 (1) Reply to Editor: The current version of the letter to the editor.
 (2) Reply to Referees: The current point-by-point response to referee comments.
 (3) List of Major Changes: The current list of significant changes made to the paper.
-(4) Main Paper: The current revised version of the main paper, identified by {INPUT_FILE}.
+(4) Main Paper: The current revised version of the main paper, identified by {{ INPUT_FILE }}.
 (5) Supplementary Materials: The current revised version of the supplementary information.
 (6) Editor Decision Letter: The full text of the editor's decision and comments.
 (7) Referee Report A: The full text of the first referee's report.
@@ -107,24 +107,24 @@ Write the revised rebuttal package in the following format:
 <scratchpad>
 your detailed plan here
 </scratchpad>
-<document name="{REPLY_TO_EDITOR_FILE}">
-(Insert the revised letter to the editor here, maintaining the LaTeX structure)
+<document name="{{ REPLY_TO_EDITOR_FILE }}">
+% Insert the revised letter to the editor here, maintaining the LaTeX structure
 </document>
 
-<document name="{REPLY_TO_REFEREES_FILE}">
-(Insert the revised point-by-point response to referees here, maintaining the LaTeX structure and environments)
+<document name="{{ REPLY_TO_REFEREES_FILE }}">
+% Insert the revised point-by-point response to referees here, maintaining the LaTeX structure and environments
 </document>
 
-<document name="{LIST_OF_MAJOR_CHANGES_FILE}">
-(Insert the revised list of major changes here, maintaining the LaTeX structure)
+<document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
+% Insert the revised list of major changes here, maintaining the LaTeX structure
 </document>
 
-<document name="{INPUT_FILE}">
-(Insert the further revised text of the main paper here. Present the full text.)
+<document name="{{ INPUT_FILE }}">
+% Insert the further revised text of the main paper here. Present the full text.    
 </document>
 
-<document name="{SUPP_FILE}">
-(Insert the further revised text of the supplementary materials here. You only need to insert the sections that will be changed.)
+<document name="{{ SUPP_FILE }}">
+% Insert the further revised text of the supplementary materials here. You only need to insert the sections that will be changed.
 </document>
 
 </rebuttal_letter>

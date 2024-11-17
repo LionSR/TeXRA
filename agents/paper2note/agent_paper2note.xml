@@ -24,30 +24,29 @@ When writing a professional *.tex \LaTeX document, you must:
 </system_prompt>
 <user_prefix>
 <![CDATA[
-You are provided with the paper {INPUT_FILE} and the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
+You are provided with the paper {{ INPUT_FILE }}and the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 Here are the the document class and custom commands for the LaTeX file are as follows:
 <document_class>
-{DOCUMENT_CLS_CONTENT}
+{{ DOCUMENT_CLS_CONTENT }}
 </document_class>
 <command>
-{COMMAND_CONTENT}
+{{ COMMAND_CONTENT }}
 </command>
 You are also provided with a sample LaTeX file in the desired style:
-<reference_document>
-{REFERENCE_CONTENT}
-</reference_document>
+{{ SAMPLES }}
+
 
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
 
 Here is the research paper:
 <research_paper>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </research_paper>
 
 If a specific instruction has been provided, it is enclosed in the following tags:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 If an instruction is provided, make sure to follow it closely while drafting your proposal.
 ]]>

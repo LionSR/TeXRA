@@ -31,19 +31,19 @@ When writing the proposal, follow these guidelines:
 You are tasked with writing an experimental physics proposal based on the following information:
 
 <proposal_details>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </proposal_details>
 
 If a reference proposal has been provided, it is enclosed in the following tags:
 <reference_proposal>
-{REFERENCE_CONTENT}
+{{ SAMPLES }}
 </reference_proposal>
 
 Please carefully review the provided information and reference proposal (if available) before drafting your proposal.
 
 If a specific instruction has been provided, it is enclosed in the following tags:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 If an instruction is provided, make sure to follow it closely while drafting your proposal.
 ]]>

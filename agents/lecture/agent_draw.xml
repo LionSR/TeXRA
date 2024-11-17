@@ -40,15 +40,15 @@ I will provide you with a \LaTeX document of a draft textbook chapter. Your task
 Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
 <documents>
-<document name="{DOCUMENT_CLS_FILE}">
-{DOCUMENT_CLS_CONTENT}
+<document name="{{ DOCUMENT_CLS_FILE }">
+{{ DOCUMENT_CLS_CONTENT }}
 </document>
-<document name="{COMMAND_FILE}">
-{COMMAND_CONTENT}
+<document name="{{ COMMAND_FILE }}">
+{{ COMMAND_CONTENT }}
 </document>
-{ADDITIONAL_INPUTS}
-<document name="{INPUT_FILE}">
-{INPUT_CONTENT}
+{{ ADDITIONAL_INPUTS }}
+<document name="{{ INPUT_FILE }}">
+{{ INPUT_CONTENT }}
 </document>
 </documents>
 
@@ -61,7 +61,7 @@ Please thoroughly analyze the entire draft chapter above, focusing on:
 Your task is to create or enhance the figures in this draft chapter, focusing on the following specific instruction:
 
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 
 When approaching this task, consider the following:
@@ -110,7 +110,7 @@ Now, implement these improvements outlined in the scratchpad by outputting an up
 
 Please provide the complete \LaTeX document with your improvements in the following format:
 <latex_document>
-{1ST_UPDATED_LATEX_DOCUMENT}
+% 1ST_UPDATED_LATEX_DOCUMENT HERE
 </latex_document>
 ]]>
 </user_request>
