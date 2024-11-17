@@ -42,10 +42,12 @@ Revise the following research statement for an EECS assistant professorship in a
 
 Review the document carefully before revising. Respect and work with the existing research provided; do not invent new results or add any information not present in the original document.
 
-Specific instructions (if provided):
+{% if INSTRUCTION %}
+Specific instructions that you must follow during the revision:
 <instruction>
 {{ INSTRUCTION }}
 </instruction>
+{% endif %}
 
 Follow these instructions closely during revision.
 ]]>
