@@ -15,45 +15,10 @@ from .message_utils import (
 )
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, write_to_output_file
-from .prompt_utils import load_prompt
+from .prompt_utils import load_prompt, render_prompt
 from .model_config import ModelConfig
 from .state import State
-
-
-def clean_response_in_session(new_response: str) -> str:
-    # For Claude 3.5/GPT models, remove extra line breaks around equations and document tags
-    REPLACEMENTS = {
-        "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
-        "\\end{scratchpad}": "</scratchpad>",
-        "\n\n\\begin{align}": "\n\\begin{align}",
-        "\\end{align}\n\n": "\\end{align}\n",
-        "\n\n\\begin{equation}": "\n\\begin{equation}",
-        "\\end{equation}\n\n": "\\end{equation}\n",
-        "</figure>\n": "\\end{figure}\n",
-        "\\end{revised_statement>": "</revised_statement>",
-        "\\end{document>\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
-        "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
-        "\\end{align}\n\\section": "\\end{align}\n\n\n\\section",
-        "\\end{equation}\n\\section": "\\end{equation}\n\n\n\\section",
-        "\\end{align}\n\\subsection": "\\end{align}\n\n\n\\subsection",
-        "\\end{equation}\n\\subsection": "\\end{equation}\n\n\n\\subsection",
-        "\\end{align}\n\\paragraph": "\\end{align}\n\n\n\\paragraph",
-        "\\end{equation}\n\\paragraph": "\\end{equation}\n\n\n\\paragraph",
-        "ansätze": 'ans{\\"a}tze',
-        "Rényi": "R{\\'e}nyi",
-        "Schrödinger": 'Schr{\\"o}dinger',
-        "delve": "discuss",
-        "delving into": "discussing",
-        "It's important to note": "Note that",
-        "our exploration": "our discussion",
-        "embark": "start",
-        "realm": "area",
-        "intricate": "complex",
-        # "the concept of": "",
-    }
-    for old, new in REPLACEMENTS.items():
-        new_response = new_response.replace(old, new)
-    return new_response
+from .replacement_utils import get_all_replacements, apply_replacements
 
 
 def process_response_cycle(
@@ -80,7 +45,7 @@ def process_response_cycle(
         print(f"### Reason for stopping: {stop_reason}")
         print(f"### Usage: {colored(response_object.usage, 'cyan')}")
 
-        new_response = clean_response_in_session(new_response)
+        new_response = apply_replacements(new_response, get_all_replacements())
 
         state.update_token_counts(
             input_tokens,
@@ -195,12 +160,15 @@ def process_first_round(
 ):
     """Process the first round of interaction."""
     system_prompt = load_prompt("system", prompt_settings)
+    system_prompt = render_prompt(system_prompt, user_vars)
+
     user_prefix_template = load_prompt("user_prefix", prompt_settings)
-    user_prefix = user_prefix_template.format(**user_vars)
+    user_prefix = render_prompt(user_prefix_template, user_vars)
     if tex_count_stats:
         user_prefix += tex_count_stats
 
     user_request = load_prompt("user_request", prompt_settings)
+    user_request = render_prompt(user_request, user_vars)
 
     messages = initialize_messages(
         model_config,
@@ -248,6 +216,7 @@ def process_first_round(
 def process_reflection_round(
     client,
     output_file,
+    user_vars,
     state: State,
     messages,
     model_config: ModelConfig,
@@ -260,9 +229,9 @@ def process_reflection_round(
 ):
     """Process the reflection round."""
     print("\n\n", colored("### Reflection round started or continued.", "blue"), "\n\n")
-    model = model_config.name
 
     user_request_reflect = load_prompt("user_reflect", prompt_settings)
+    user_request_reflect = render_prompt(user_request_reflect, user_vars)
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided
@@ -275,7 +244,7 @@ def process_reflection_round(
     # Add figure inputs to the message if available
     if figure_inputs:
         print(f"Creating image message with {len(figure_inputs)} figures")
-        image_content = create_image_message(model, figure_inputs)
+        image_content = create_image_message(model_config, figure_inputs)
         reflection_message["content"].extend(image_content)
 
     # Add the user message text

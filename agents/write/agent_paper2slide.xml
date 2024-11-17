@@ -30,7 +30,7 @@ When creating the presentation:
 You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
 
 <research_paper>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </research_paper>
 
 Please carefully review the provided research paper before creating the presentation.
@@ -53,7 +53,7 @@ When creating the presentation, please follow these guidelines:
 
 Additonally, if provided, focus on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 ]]>
 </user_prefix>

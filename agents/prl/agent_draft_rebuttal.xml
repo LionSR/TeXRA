@@ -38,28 +38,28 @@ You will be drafting a reply letter to referee reports for a paper submitted to 
 
 <documents>
 <document name="{COVER_LETTER_FILE}">
-{COVER_LETTER}
+{{ COVER_LETTER_CONTENT }}
 </document>
-<document name="{INPUT_FILE}">
-{MAIN_CONTENT}
+<document name="{{ INPUT_FILE }}">
+{{ MAIN_CONTENT }}
 </document>
-<document name="{SUPP_FILE}">
-{SUPP_CONTENT}
+<document name="{{ SUPP_FILE }}">
+{{ SUPP_CONTENT }}
 </document>
-<document name="{EDITOR_LETTER_FILE}">
-{EDITOR_LETTER}
+<document name="{EDITOR_LETTER_CONTENT_FILE}">
+{{ EDITOR_LETTER_CONTENT }}
 </document>
 <document name="{REFEREE_REPORT_A_FILE}">
-{REFEREE_REPORT_A}
+{{ REFEREE_REPORT_A_CONTENT }}
 </document>
 <document name="{REFEREE_REPORT_B_FILE}">
-{REFEREE_REPORT_B}
+{{ REFEREE_REPORT_B_CONTENT }}
 </document>
 <document name="{EXAMPLE_REBUTTAL_LETTER_FILE}">
-{EXAMPLE_REBUTTAL_LETTER}
+{{ EXAMPLE_REBUTTAL_LETTER }}
 </document>
 <document name="{INSTRUCTION_FILE}">
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </document>
 </documents>
 
@@ -194,10 +194,10 @@ Your response to the second comment here.
 \end{document}
 </document>
 
-<document name="{INPUT_FILE}">
+<document name="{{ INPUT_FILE }}">
 (Insert the full text of your revised paper here.)
 </document>
-<document name="{SUPP_FILE}">
+<document name="{{ SUPP_FILE }}">
 (Insert the full text of your revised supplementary materials here.)
 </document>
 
@@ -220,7 +220,7 @@ After thoroughly and critically reviewing the paper, the cover letters, the repo
 \end{itemize}
 </requirements>
 
-Start with laying down your plan in the `<scratchpad>' tag. Then proceed to output the revised letter to the editor (under <document name="{REPLY_TO_EDITOR_FILE}">) and the revised response letter (under <document name="{REPLY_TO_REFEREES_FILE}">), the revised main paper (under <document name="{INPUT_FILE}">) and the revised supplementary materials (under <document name="{SUPP_FILE}">) that meets the above requirements.
+Start with laying down your plan in the `<scratchpad>' tag. Then proceed to output the revised letter to the editor (under <document name="{REPLY_TO_EDITOR_FILE}">) and the revised response letter (under <document name="{REPLY_TO_REFEREES_FILE}">), the revised main paper (under <document name="{{ INPUT_FILE }}">) and the revised supplementary materials (under <document name="{{ SUPP_FILE }}">) that meets the above requirements.
 ]]>
 </user_reflect>
 </prompts>

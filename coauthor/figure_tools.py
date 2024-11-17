@@ -1,6 +1,6 @@
 import re
 import os
-from string import Template
+from jinja2 import Template
 from termcolor import cprint, colored
 
 from .file_utils import read_file, write_file
@@ -18,7 +18,7 @@ TIKZ_TEMPLATE = Template(
 \usetikzlibrary{shapes, arrows}
 
 \begin{document}
-$tikzpicture
+{{ tikzpicture }}
 \end{document}
 """
 )
@@ -91,7 +91,7 @@ def extract_tikzpictures_with_labels(latex_file):
 
 
 def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
-    standalone_content = TIKZ_TEMPLATE.substitute(tikzpicture=tikzpicture)
+    standalone_content = TIKZ_TEMPLATE.render(tikzpicture=tikzpicture)
     if suffix is not None and suffix != "":
         filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
     else:
