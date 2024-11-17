@@ -38,19 +38,26 @@ class ReplyPRLBase:
 
                 content = coa.read_file(file_path)
                 if file_arg == "input_file":
+                    user_vars["MAIN_FILE"] = file_path
                     user_vars["MAIN_CONTENT"] = content
                 elif file_arg == "supp_file":
+                    user_vars["SUPP_FILE"] = file_path
                     user_vars["SUPP_CONTENT"] = content
                 elif file_arg == "cover_letter":
-                    user_vars["COVER_LETTER"] = content
+                    user_vars["COVER_LETTER_FILE"] = file_path
+                    user_vars["COVER_LETTER_CONTENT"] = content
                 elif file_arg == "editor_letter":
-                    user_vars["EDITOR_LETTER"] = content
+                    user_vars["EDITOR_LETTER_FILE"] = file_path
+                    user_vars["EDITOR_LETTER_CONTENT"] = content
                 elif file_arg == "referee_report_a":
-                    user_vars["REFEREE_REPORT_A"] = content
+                    user_vars["REFEREE_REPORT_A_FILE"] = file_path
+                    user_vars["REFEREE_REPORT_A_CONTENT"] = content
                 elif file_arg == "referee_report_b":
-                    user_vars["REFEREE_REPORT_B"] = content
+                    user_vars["REFEREE_REPORT_B_FILE"] = file_path
+                    user_vars["REFEREE_REPORT_B_CONTENT"] = content
                 elif file_arg == "example_rebuttal_letter":
-                    user_vars["EXAMPLE_REBUTTAL_LETTER"] = content
+                    user_vars["EXAMPLE_REBUTTAL_LETTER_FILE"] = file_path
+                    user_vars["EXAMPLE_REBUTTAL_LETTER_CONTENT"] = content
                 elif file_arg == "instruction_file":
                     # user_vars["INSTRUCTION"] = content
                     if user_vars["INSTRUCTION"] is not None:

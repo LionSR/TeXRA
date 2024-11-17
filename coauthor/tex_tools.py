@@ -13,29 +13,39 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
     :param output_file: Path to the output file (if any)
     :param encoding: Encoding to use for file operations
     :param capture_output: Whether to capture and return the command output
-    :return: Tuple containing (success_flag, output_or_error_message)
+    :return: Tuple containing (success_flag, output_message, error_message)
     """
-    print("Running command:", colored(" ".join(command), "green"))
+    print("\nRunning command:", colored(" ".join(command), "green"))
+    
+    def truncate_output(text, max_chars=150):
+        if text and len(text) > max_chars:
+            return "..." + text[-max_chars:]
+        return text
+    
     try:
         kwargs = {
-            "check": True,
             "text": True,
+            "capture_output": True,  # Always capture output for better error handling
         }
+        
         if output_file:
             with open(output_file, "w", encoding=encoding) as file:
-                subprocess.run(command, stdout=file, stderr=subprocess.PIPE, **kwargs)
+                result = subprocess.run(command, **kwargs)
+                file.write(result.stdout)
             print("\nCommand completed.\nOutput saved to", colored(output_file, "blue"))
-            return True, None
-        elif capture_output:
-            result = subprocess.run(command, capture_output=True, **kwargs)
-            return True, result.stdout.strip(), result.stderr.strip()
-        else:
-            subprocess.run(command, stderr=subprocess.PIPE, **kwargs)
             return True, None, None
+        else:
+            result = subprocess.run(command, **kwargs)
+            if result.returncode == 0:
+                return True, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
+            else:
+                return False, truncate_output(result.stdout.strip()), result.stderr.strip()
     except subprocess.CalledProcessError as e:
-        error_message = f"Error running command: {e}\nError output: {e.stderr}"
+        error_message = "Error running command:\n"
+        if hasattr(e, 'stderr') and e.stderr:
+            error_message += f"\nStderr:\n{truncate_output(e.stderr)}"
         print("\n" + colored(error_message, "red"))
-        return False, error_message
+        return False, None, error_message
 
 
 def get_tex_count(file_paths):
@@ -118,16 +128,19 @@ def process_tikzpicture_endings(file_path):
 
 def compile_latex_to_pdf(tex_file):
     output_directory = os.path.dirname(tex_file)
-    command = ["pdflatex", "-interaction=nonstopmode", f"-output-directory={output_directory}", tex_file]
+    command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, tex_file]
 
-    success, stdout, stderr = run_external_command(command, capture_output=True)
-
-    if success:
-        print(f"Compiled {tex_file} successfully.")
-    else:
-        cprint(f"Error compiling {tex_file}", "white", "on_red")
-        cprint("Stdout:", stdout, "magenta")
-        cprint("Stderr:", stderr, "red")
+    try:
+        success, stdout, stderr = run_external_command(command, capture_output=True)
+        if success:
+            print(f"Compiled {tex_file} successfully.")
+            return True
+        else:
+            print(colored(f"Error compiling {tex_file}", "red"))
+            return False
+    except ValueError as e:
+        print(colored(f"Error compiling {tex_file}: {str(e)}", "red"))
+        return False
 
 
 def run_latexindent(file_path):

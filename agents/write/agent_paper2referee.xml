@@ -35,7 +35,7 @@ When writing professional *.tex \LaTeX documents, you must:
 You are tasked with writing a critical referee report for the following research paper submitted to PRX Quantum:
 
 <research_paper>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </research_paper>
 
 Please carefully read through the entire research paper above and ensure you fully understand all the details before writing your report.
@@ -43,12 +43,12 @@ Please carefully read through the entire research paper above and ensure you ful
 Here is an example of a referee report for another paper, which you can use as a reference for style and structure:
 
 <reference_report>
-{REFERENCE_CONTENT}
+{{ SAMPLES }}
 </reference_report>
 
 Additionally, if provided, focus on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 ]]>
 </user_prefix>
@@ -83,7 +83,7 @@ Then, please write the full latex referee report, incorporating the key points o
 
 \vspace{1em}
 
-{latex_document_CONTENT}
+% LATEX_DOCUMENT_CONTENT here
 
 \end{document}
 </latex_document>
@@ -133,7 +133,7 @@ Then, please output an significantly improved version of the referee report, inc
 <latex_document>
 \documentclass[a4paper,12pt]{article}
 ...
-{IMPROVED_latex_document_CONTENT}
+% IMPROVED_LATEX_DOCUMENT_CONTENT here
 ...
 \end{document}
 </latex_document>

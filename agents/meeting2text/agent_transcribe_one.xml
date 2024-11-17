@@ -21,16 +21,16 @@ You will be editing a noisy academic discussion transcript that has been transcr
 
 <documents>
 <document name="example_transcript">
-{EXAMPLE_TRANSCRIPT}
+{{ EXAMPLE_TRANSCRIPT }}
 </document>
 <document name="example_edited_transcript">
-{EXAMPLE_EDITED_TRANSCRIPT}
+{{ EXAMPLE_EDITED_TRANSCRIPT }}
 </document>
 <document name="transcript_to_edit">
-{TRANSCRIPT}
+{{ TRANSCRIPT }}
 </document>
 <document name="context">
-{CONTEXT}
+{{ CONTEXT }}
 </document>
 </documents>
 ]]>

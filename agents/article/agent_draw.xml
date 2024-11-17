@@ -28,16 +28,16 @@ When creating or modifying figures, you must:
 <![CDATA[
 I am going to give you a \LaTeX document of a research paper. You are about to create or revise the figures in this paper, so please read the document carefully.
 
-Here is the \LaTeX document {INPUT_FILE}:
+Here is the \LaTeX document {{ INPUT_FILE }}:
 <latex_document>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </latex_document>
 
 Please carefully read through the entire research paper above and ensure you fully understand all the details.
 
 Your task is to create or enhance the figures in this paper, focusing solely on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 ]]>
 </user_prefix>
@@ -52,7 +52,7 @@ In the scratchpad below, brainstorm concrete ways to create or significantly imp
 
 Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with the new or enhanced figures that laser-focus on addressing the specific instruction provided. Ensure that the figures are well-integrated into the main text with appropriate references. Use the following format:
 <latex_document>
-{1ST_UPDATED_LATEX_DOCUMENT}
+% 1ST_UPDATED_LATEX_DOCUMENT HERE
 </latex_document>
 ]]>
 </user_request>

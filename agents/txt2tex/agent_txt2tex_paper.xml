@@ -24,25 +24,25 @@ When writing a professional *.tex \LaTeX document, you must:
 <![CDATA[
 You are provided with the following text content of a research paper:
 <txt_content>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </txt_content>
 
 Your task is to generate a new LaTeX file based on this research paper content, following the provided guidelines.
 
 You are also provided with a sample LaTeX file in the desired style:
 <sample_tex>
-{SAMPLE_TEX_CONTENT}
+{{ SAMPLE_TEX_CONTENT }}
 </sample_tex>
 
 Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
 
 The document class and custom commands for the LaTeX file are as follows:
 <document_class>
-{DOCUMENT_CLS_CONTENT}
+{{ DOCUMENT_CLS_CONTENT }}
 </document_class>
 
 <command>
-{COMMAND_CONTENT}
+{{ COMMAND_CONTENT }}
 </command>
 ]]>
 </user_prefix>

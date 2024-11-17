@@ -31,22 +31,22 @@ Revision guidelines:
 Revise the following diversity statement for an academic position in a US institution:
 
 <original_document>
-{INPUT_CONTENT}
+{{ INPUT_CONTENT }}
 </original_document>
+
+Another document from the application package: {{ SAMPLE_FILE }}
+<sample_document>
+{{ SAMPLE_CONTENT }}
+</sample_document>
 
 Review the document carefully before revising. Respect and work with the existing experiences provided; do not invent new experiences or add any information not present in the original document.
 
-Specific instructions (if provided):
+{% if INSTRUCTION %}
+Specific instructions that you must follow closely during the revision:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
-
-Another document from the application package: {SAMPLE_FILE}
-<sample_document>
-{SAMPLE_CONTENT}
-</sample_document>
-
-Follow these instructions closely during revision.
+{% endif %}
 ]]>
 </user_prefix>
 <user_request>
