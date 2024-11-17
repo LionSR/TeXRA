@@ -1,11 +1,12 @@
 import os
 import sqlite3
 from datetime import datetime
-from termcolor import colored
 import json
+
 
 from .model_config import ModelConfig
 from .state import State
+from .logging_utils import logger
 
 
 def get_db_path():
@@ -116,8 +117,8 @@ def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=Non
     total_response_time = state.total_response_time
 
     # Print statistics to console
-    print("Total input tokens  : {}".format(colored(total_input_tokens, "cyan")))
-    print("Total output tokens : {}".format(colored(total_output_tokens, "cyan")))
+    logger.info(f"Total input tokens  : {total_input_tokens}")
+    logger.info(f"Total output tokens : {total_output_tokens}")
 
     # Calculate caching statistics
     cache_read_tokens = state.total_cache_read_input_tokens
@@ -125,18 +126,18 @@ def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=Non
     percentage_cached = 0
 
     if prompt_caching:
-        print(f"Total input tokens (cache read): {cache_read_tokens}")
-        print(f"Total input tokens (cache create): {cache_creation_tokens}")
+        logger.info(f"Total input tokens (cache read): {cache_read_tokens}")
+        logger.info(f"Total input tokens (cache create): {cache_creation_tokens}")
 
         total_input_tokens_all = cache_creation_tokens + cache_read_tokens
         percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
-        print(f"Percentage cached: {percentage_cached}%")
+        logger.info(f"Percentage cached: {percentage_cached}%")
         cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_creation_tokens, cache_read_tokens)
     else:
         cost = model_config.compute_price(total_input_tokens, total_output_tokens)
 
-    print("Total response time : {} seconds".format(colored(total_response_time, "green")))
-    print("Total cost          : ${}".format(colored(f"{cost:.2f}", "yellow")))
+    logger.info(f"Total response time : {total_response_time} seconds")
+    logger.warning(f"Total cost          : ${cost:.2f}")
 
     # Update statistics in database if we have a log ID
     if log_id is not None:
