@@ -5,6 +5,7 @@ import difflib
 import xml.etree.ElementTree as ET
 
 from .file_utils import read_file, write_file, append_file
+from .replacement_utils import get_replacements_by_category, apply_replacements
 
 
 def get_output_file_name(input_file, agent, model, output_ext, round):
@@ -55,28 +56,9 @@ def ensure_correct_xml_structure(file_path, document_tag):
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
                     content += f"\n</{document_tag}>"
 
-            REPLACEMENTS = {
-                "\\end{document}\n\n<document name": "\\end{document}\n</document>\n\n<document name",
-                "\\end{document}\n<document name": "\\end{document}\n</document>\n<document name",
-                "\\end{document}\n</latex_documents>": "\\end{document}\n</document>\n</latex_documents>",
-                "<scratchpad><scratchpad>": "<scratchpad>",
-                "<scratchpad> <scratchpad>": "<scratchpad>",
-                "<scratchpad>\n<scratchpad>": "<scratchpad>",
-                "<scratchpad>\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-                "<scratchpad><latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-                "<scratchpad><cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
-                "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
-                "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-                "</latex_document>\n```\n</latex_document>": "</latex_document>\n",
-                "</latex_document>\n</latex_document>": "</latex_document>\n",
-                r"\end{scratchpad>": "</scratchpad>",
-                "\\end{latex_document>\n</latex_document>": "</latex_document>",
-                "<rebuttal_letter><scratchpad>\n\n<rebuttal_letter><scratchpad>": "<rebuttal_letter><scratchpad>",
-                "\\begin{latex_document}": "<latex_document>",
-                "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
-            }
-            for find_str, replace_str in REPLACEMENTS.items():
-                content = content.replace(find_str, replace_str)
+            # Apply replacements from centralized utilities
+            content = apply_replacements(content, get_replacements_by_category("latex_xml"))
+            content = apply_replacements(content, get_replacements_by_category("scratchpad_xml"))
 
             file.seek(0)
             file.write(content)
@@ -114,21 +96,9 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    # Define a dictionary of replacements for better maintainability
-    REPLACEMENTS = {
-        "\\end{document>": "\\end{document}",
-        "\\end{revised_statement>": "</revised_statement>",
-        "\\end{figure>": "\\end{figure}",
-        "\\end{tikzpicture>": "\\end{tikzpicture}",
-        "\\end{scope>": "\\end{scope}",
-        "\\end{latex_document>": "</latex_document>\n",
-        "\\end\n": "\\end{document}\n",
-        "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
-    }
-
-    # Apply all replacements in a single loop
-    for old, new in REPLACEMENTS.items():
-        output_content = output_content.replace(old, new)
+    # Apply replacements
+    output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
+    output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [document_tag, thinking_tag]
@@ -176,21 +146,9 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
     # Read the content of the output file
     output_content = read_file(output_file)
 
-    REPLACEMENTS = {
-        "\\end{document>": "\\end{document}",
-        "\\end{figure>": "\\end{figure}",
-        "\\end{tikzpicture>": "\\end{tikzpicture}",
-        "\\end{scope>": "\\end{scope}",
-        "\\end{latex_document>": "</latex_document>\n",
-        "\\end\n": "\\end{document}\n",
-        "\\end{response}": "\\end{response}",
-        "ansätze": 'ans"atze',
-        "Rényi": "R'enyi",
-    }
-
-    # Apply all replacements in a single loop
-    for old, new in REPLACEMENTS.items():
-        output_content = output_content.replace(old, new)
+    # Apply output XML replacements
+    output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
+    output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
 
     # Add CDATA sections to specified tags
     tags_to_wrap = [thinking_tag, "document"]
