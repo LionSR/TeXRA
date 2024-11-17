@@ -1,4 +1,4 @@
-from termcolor import colored
+from .logging_utils import logger
 
 
 def get_output_settings(args, agent_settings):
@@ -14,7 +14,7 @@ def get_output_settings(args, agent_settings):
 
 
 def get_prompt_settings(args, agent_path, prompt_dict):
-    print("agent_path:", colored(f"{agent_path}", "yellow"))
+    logger.info(f"agent_path: {agent_path}")
 
     prompt_settings = {
         "agent_path": agent_path,
