@@ -1,8 +1,9 @@
 import os
 import re
-from termcolor import colored, cprint
+from .logging_utils import logger
 import difflib
 import xml.etree.ElementTree as ET
+
 
 from .file_utils import read_file, write_file, append_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
@@ -12,17 +13,17 @@ def get_output_file_name(input_file, agent, model, output_ext, round):
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
     output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_ext}"
-    print(f"Output file: {colored(output_file, 'cyan')}")
+    logger.debug(f"Output file: {output_file}")
     return output_file
 
 
 def write_to_output_file(file_exists, best_connector, new_response, output_file):
     if not file_exists:
-        print("Creating the file")
+        logger.debug("Creating new file")
         write_file(output_file, new_response)
         file_exists = True
     else:
-        print("Appending to file")
+        logger.debug("Appending to existing file")
         append_file(output_file, best_connector + new_response)
 
     return file_exists
@@ -36,15 +37,15 @@ def check_for_massive_repetition(last_response, new_response):
     massive_repetition_detected = len(longest_matching_substring) > 1000
 
     if massive_repetition_detected:
-        cprint(f"### Repetition_ratio is {repetition_ratio}", "red")
-        print(f"### Longest matching substring: {colored(longest_matching_substring, 'yellow')}")
-        cprint("WARNING: Massive repetition detected. Stopping the process.", "white", "on_red")
+        logger.error(f"Repetition ratio: {repetition_ratio}")
+        logger.error(f"Longest matching substring: {longest_matching_substring}")
+        logger.error("Massive repetition detected - stopping process.")
 
     return massive_repetition_detected
 
 
 def ensure_correct_xml_structure(file_path, document_tag):
-    cprint(f"Ensuring correct XML structure: {file_path}", "white", "on_green")
+    logger.debug(f"Ensuring correct XML structure: {file_path}")
     with open(file_path, "r+", encoding="utf-8") as file:
         content = file.read()
         if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
@@ -81,7 +82,7 @@ def add_cdata_to_tags_multiple(xml_data, tags):
 
 # this and the next function needs to have a better mechanism for giving the post-fix tho the names of the multiple outputs
 def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratchpad", split_and_save_thinking=False):
-    print(f"Splitting scratchpad output XML: {colored(output_file, 'cyan')}")
+    logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
     if document_tag == "latex_documents" or document_tag == "rebuttal_letter":
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
@@ -89,9 +90,9 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
     base_name, extension = os.path.splitext(output_file)
     log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
     tex_file = f"{base_name}.tex"
-    print(f"TeX file: {colored(tex_file, 'cyan')}")
+    logger.debug(f"TeX file: {tex_file}")
     if split_and_save_thinking:
-        print(f"Thinking file: {colored(log_file_thinking, 'cyan')}")
+        logger.debug(f"Thinking file: {log_file_thinking}")
 
     # Read the content of the output file
     output_content = read_file(output_file)
@@ -126,22 +127,22 @@ def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratch
             latex_document = latex_document.strip()
             write_file(tex_file, latex_document)
         else:
-            cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
+            logger.error(f"No {document_tag} found in output file.")
 
     except ET.ParseError as e:
-        cprint(f"ERROR: Failed to parse XML content: {str(e)}", "white", "on_red")
+        logger.error(f"Failed to parse XML content: {str(e)}")
 
     return tex_file
 
 
 def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratchpad", split_and_save_thinking=False):
-    print(f"Splitting multiple scratchpad output XML: {colored(output_file, 'cyan')}")
+    logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
 
     base_name, extension = os.path.splitext(output_file)
     log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
 
     if split_and_save_thinking:
-        print(f"Log file: {colored(log_file_thinking, 'cyan')}")
+        logger.debug(f"Log file: {log_file_thinking}")
 
     # Read the content of the output file
     output_content = read_file(output_file)
@@ -184,7 +185,7 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
 
             for doc in latex_documents.findall("document"):
                 source = doc.get("name")
-                print(f"XML Source: {colored(source, 'cyan')}")
+                logger.debug(f"XML Source: {source}")
                 content = doc.text
 
                 if source is not None and content is not None:
@@ -198,16 +199,16 @@ def split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag
                     # Write the content to the file
                     write_file(tex_file, content_text)
                     output_files.append(tex_file)
-                    print(f"TeX file written: {colored(tex_file, 'cyan')}")
+                    logger.debug(f"TeX file written: {tex_file}")
                 else:
-                    cprint(f"WARNING: Invalid document structure in {document_tag}.", "white", "on_red")
+                    logger.error(f"Invalid document structure in {document_tag}")
 
             return output_files
 
         else:
-            cprint(f"WARNING: No {document_tag} found in the output file.", "white", "on_red")
+            logger.error(f"No {document_tag} found in output file.")
             return []
 
     except ET.ParseError as e:
-        cprint(f"ERROR: Failed to parse XML content: {str(e)}", "white", "on_red")
+        logger.error(f"Failed to parse XML content: {str(e)}")
         return []

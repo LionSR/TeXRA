@@ -1,9 +1,8 @@
 import os
-from termcolor import colored
 import xml.etree.ElementTree as ET
 from jinja2 import Template
 from typing import Dict, Any
-
+from .logging_utils import logger
 from .file_utils import read_file
 
 
@@ -67,8 +66,10 @@ def get_xml_format_from_files(files):
 
 def load_prompt(prompt_type: str, prompt_settings: Dict[str, Any]) -> str:
     """Load and return a prompt string from settings."""
+    logger.debug(f"Loading prompt: {prompt_type}")
     prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
-    print(f"{prompt_type}: {colored(prompt, 'magenta')}")
+    logger.info(f"Loaded prompt: {prompt_type}")
+    logger.debug(f"{prompt_type}: {prompt}")
     return prompt
 
 

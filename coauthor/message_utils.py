@@ -1,6 +1,7 @@
 import os
-from termcolor import colored, cprint
+from .logging_utils import logger
 import base64
+
 
 from .img_utils import get_base64_encoded_image, process_pdf_input, page_count_pdf
 from .model_config import ModelConfig
@@ -46,22 +47,22 @@ def create_image_message(model_config: ModelConfig, figure_inputs):
 
     for figure_input in figure_inputs:
         if not os.path.exists(figure_input):
-            cprint(f"WARNING: File {figure_input} does not exist. Skipping.", "white", "on_red")
+            logger.error(f"File not found: {figure_input}")
             continue
 
         _, file_extension = os.path.splitext(figure_input)
         img_data, media_type = _process_image_file(figure_input, file_extension, model_config)
-        # print(f"### DEBUG: Processed image file: {figure_input}, media type: {media_type}")
-        # print(f"### DEBUG: length of img_data: {len(img_data)}")
+        logger.debug(f"Processed image: {figure_input}, type: {media_type}")
+        logger.debug(f"length of img_data: {len(img_data)}")
         if img_data is not None:
             _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
         else:
-            cprint(f"WARNING: Failed to process {figure_input}. Skipping.", "white", "on_red")
+            logger.error(f"Failed to process {figure_input}")
 
     content = _create_image_content(image_contents, model_config)
 
-    print(f"Using images: {colored(figure_inputs, 'green')}")
-    print(f"Successfully added figures: {colored(added_figures, 'cyan')}")
+    logger.info(f"Using images: {figure_inputs}")
+    logger.info(f"Successfully added: {added_figures}")
 
     return content
 
@@ -92,12 +93,12 @@ def _process_image_file(figure_input, file_extension, model_config: ModelConfig)
 def _add_image_content(image_contents, added_figures, figure_input, img_data, media_type):
     """Add image content to the lists."""
     if isinstance(img_data, list):
-        # print(f"### DEBUG: Adding {len(img_data)} pages to the image contents")
+        logger.debug(f"Adding {len(img_data)} pages to the image contents")
         for i, data in enumerate(img_data):
             image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
         added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
     else:
-        # print(f"### DEBUG: Adding single page to the image contents")
+        logger.debug(f"Adding single page to the image contents")
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
         added_figures.append(figure_input)
 
@@ -146,7 +147,7 @@ def _extract_openai_statistics(response_object, end_tag):
     new_response = response_object.choices[0].message.content.strip()
 
     if response_object.usage is None:
-        cprint("WARNING: No usage information in the response object", "white", "on_red")
+        logger.error("No usage information in response object")
         input_tokens, output_tokens = 0, 0
     else:
         input_tokens = response_object.usage.prompt_tokens
@@ -165,16 +166,16 @@ def _extract_anthropic_statistics(response_object, end_tag):
     stop_reason = response_object.stop_reason
 
     if output_tokens == 3:
-        cprint("WARNING: Some errors might have appeared. No output generated", "white", "on_red")
-        print(f"### DEBUG response_object: {response_object}")
-        print(f"### DEBUG response_object.content: {response_object.content}")
+        logger.error("No output generated - API returned empty response")
+        logger.debug(f"response_object: {response_object}")
+        logger.debug(f"response_object.content: {response_object.content}")
         raise ValueError("No output generated")
 
     if response_object.type == "error":
-        cprint("WARNING: Error from the API:", "white", "on_red")
-        print(f"### DEBUG output_tokens: {output_tokens}")
-        print(f"### DEBUG error: {response_object.error}")
-        raise ValueError("Error from the API")
+        logger.error("API error")
+        logger.debug(f"output_tokens: {output_tokens}")
+        logger.debug(f"error: {response_object.error}")
+        raise ValueError("API error")
 
     new_response = response_object.content[0].text.strip()
 
@@ -192,7 +193,7 @@ def handle_openai_continuation(messages, new_response, k, end_tag):
         f"Continue writing exactly from where you left off until the very end, "
         f'marked by {end_tag}. Avoid repeat yourself and avoid starting over. Start your response at the next token after: "{prefill_tokens}"'
     )
-    print("User message:", colored(user_message_continuation, "magenta"))
+    logger.info("User message: " + user_message_continuation)
     messages.append({"role": "user", "content": user_message_continuation})
 
 
@@ -207,7 +208,7 @@ def check_stop_conditions(
     output_token_limit = state.total_output_tokens > 2.5 * state.first_input_tokens
 
     if output_token_limit:
-        cprint("WARNING: Total output tokens exceed 2.5 times the number of the first input tokens. Halting the process.", "white", "on_red")
+        logger.error("Output tokens exceed 2.5x input tokens - halting process")
 
     should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
 
@@ -216,12 +217,12 @@ def check_stop_conditions(
 
 def print_stop_flags(end_turn: bool, new_response: str, state: State, output_settings: dict, massive_repetition_detected: bool) -> None:
     """Print the flags indicating why the conversation stopped."""
-    print("Printing the flags")
-    print(f"end_turn: {end_turn}")
+    logger.info("Printing the flags")
+    logger.info(f"end_turn: {end_turn}")
     document_tag = output_settings["document_tag"]
-    print(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
-    print(f"continuation_limit: {state.continuation_count > 10}")
-    print(f"input_token_limit: {state.total_input_tokens > 100000}")
-    print(f"massive_repetition_detected: {massive_repetition_detected}")
-    print(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
-    print(colored(f"### {state.last_response[-output_settings['k']:]}", "yellow"))
+    logger.info(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
+    logger.info(f"continuation_limit: {state.continuation_count > 10}")
+    logger.info(f"input_token_limit: {state.total_input_tokens > 100000}")
+    logger.info(f"massive_repetition_detected: {massive_repetition_detected}")
+    logger.info(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
+    logger.warning(f"### {state.last_response[-output_settings['k']:]}")
