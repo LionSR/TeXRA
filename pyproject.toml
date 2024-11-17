@@ -18,7 +18,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "termcolor",
     "colorlog",
     "requests",
     "openai",
@@ -26,7 +25,6 @@ dependencies = [
     "IPython",
     "click",
     "PyMuPDF",
-    "termcolor",
     "python-dotenv",
     "pillow",
     "jinja2",
