@@ -28,7 +28,7 @@ Please carefully read through the entire research paper{plural} above and ensure
 <user_request>
 Your task is to enhance {this_these} paper{plural} focusing solely on the following specific instruction:
 <instruction>
-{INSTRUCTION}
+{{ INSTRUCTION }}
 </instruction>
 
 In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper{plural} that are directly relevant to the instruction above. Do not consider any other aspects of the paper{plural}. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate {a_} as detailed as possible action plan{plural} so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of {the_each} document.

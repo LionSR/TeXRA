@@ -43,6 +43,7 @@ def get_user_vars_basic(args):
         "INPUT_CONTENT": read_file(args.input_file),
         "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
         "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
+        "SAMPLES": get_xml_format_from_files(args.sample_files),
         "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
         "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
     }
@@ -233,6 +234,7 @@ class BaseReflectChainAgent(ABC):
         state, accumulated_output, end_turn, messages = process_reflection_round(
             self.client,
             self.output_file[1],
+            self.user_vars,
             state,
             messages,
             model_config=self.model_config,
