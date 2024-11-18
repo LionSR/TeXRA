@@ -6,9 +6,7 @@ agent_path = coa.get_agent_path(coa, "article")
 
 class EditTexBase:
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
-        if "multiple" in self.args.agent:
-            coa.update_user_vars_multiple_output(self.args, user_vars)
+        user_vars = super().get_user_vars()
 
         if self.args.agent == "convert":
             if "iclr" in self.args.input_file:
