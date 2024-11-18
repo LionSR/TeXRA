@@ -3,7 +3,7 @@ import colorlog
 import sys
 
 
-def setup_logger(name="coauthor"):
+def setup_logger(name: str = "coauthor") -> logging.Logger:
     """Set up a colored logger instance.
 
     Args:

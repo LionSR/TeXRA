@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from .logging_utils import logger
 from .file_utils import read_file, write_file
@@ -18,19 +19,19 @@ from .prompt_utils import render_prompt
 from .model_config import ModelConfig
 from .state import State
 from .replacement_utils import get_all_replacements, apply_replacements
-from .config import TaskConfig, AgentSettings, PromptTemplate
+from .config import TaskConfig, AgentSettings, AgentPrompts
 
 
 def process_response_cycle(
-    client,
+    client: Any,
     state: State,
-    accumulated_output,
+    accumulated_output: str,
     messages,
-    output_file,
+    output_file: str,
     model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
-    agent_prompts: PromptTemplate,
+    agent_prompts: AgentPrompts,
 ):
     end_turn = False
 
@@ -84,6 +85,7 @@ def process_response_cycle(
         end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
 
         if should_stop:
+            # these reasons should be enum in the future
             print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
             break
 
@@ -97,15 +99,15 @@ def process_response_cycle(
 
 
 def initialize_output_and_prefill(
-    output_file,
+    output_file: str,
     model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
-    agent_prompts: PromptTemplate,
+    agent_prompts: AgentPrompts,
     messages,
-    prefill,
-    accumulated_output,
-    first_k_tex_document=None,
+    prefill: str,
+    accumulated_output: str,
+    first_k_tex_document: Optional[str] = None,
 ):
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         file_content = read_file(output_file)
@@ -151,28 +153,28 @@ def initialize_output_and_prefill(
 
 
 def process_first_round(
-    client,
-    output_file,
-    user_vars,
+    client: Any,
+    output_file: str,
+    user_vars: Dict[str, str],
     state: State,
-    messages,
+    messages: List[Dict[str, Any]],
     model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
-    agent_prompts: PromptTemplate,
-    figure_inputs=None,
-    round=0,
-    tex_count_stats=None,
-    first_k_tex_document=None,
+    agent_prompts: AgentPrompts,
+    figure_inputs: Optional[List[str]] = None,
+    round: int = 0,
+    tex_count_stats: Optional[str] = None,
+    first_k_tex_document: Optional[str] = None,
 ):
     """Process the first round."""
     logger.info(f"Processing round {round}")
 
-    user_request = render_prompt(agent_prompts.user_request_prompt, user_vars)
-    user_prefix = render_prompt(agent_prompts.user_prefix_prompt, user_vars)
+    user_request = render_prompt(agent_prompts.user_request, user_vars)
+    user_prefix = render_prompt(agent_prompts.user_prefix, user_vars)
     if tex_count_stats:
         user_prefix = f"{tex_count_stats}{user_prefix}"
-    user_request = render_prompt(agent_prompts.user_request_prompt, user_vars)
+    user_request = render_prompt(agent_prompts.user_request, user_vars)
 
     # Initialize messages
     messages = initialize_messages(
@@ -221,24 +223,24 @@ def process_first_round(
 
 
 def process_reflection_round(
-    client,
-    output_file,
-    user_vars,
+    client: Any,
+    output_file: str,
+    user_vars: Dict[str, str],
     state: State,
     messages,
     model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
-    agent_prompts: PromptTemplate,
-    figure_inputs=None,
-    round=1,
-    tex_count_stats=None,
-    first_k_tex_document=None,
+    agent_prompts: AgentPrompts,
+    figure_inputs: Optional[List[str]] = None,
+    round: int = 1,
+    tex_count_stats: Optional[str] = None,
+    first_k_tex_document: Optional[str] = None,
 ):
     """Process the reflection round."""
     logger.info(f"Processing round {round}")
 
-    user_request_reflect = render_prompt(agent_prompts.user_reflect_prompt, user_vars)
+    user_request_reflect = render_prompt(agent_prompts.user_reflect, user_vars)
     user_message = f"{user_request_reflect}\n"
 
     # Add tex count stats if provided

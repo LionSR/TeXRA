@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.5",
+  "version": "0.10.6",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -324,7 +324,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.34",
-    "@types/vscode": "^1.93.1",
+    "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-electron": "^2.4.0",
