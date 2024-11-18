@@ -85,6 +85,7 @@ def process_response_cycle(
         end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
 
         if should_stop:
+            # these reasons should be enum in the future
             print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
             break
 

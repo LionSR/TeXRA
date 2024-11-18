@@ -4,7 +4,7 @@ import os
 import io
 import fitz
 
-from typing import Union, List
+from typing import List
 
 
 def get_base64_encoded_image(image_path: str) -> str:
