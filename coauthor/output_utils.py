@@ -46,24 +46,26 @@ def check_for_massive_repetition(last_response, new_response):
 
 def ensure_correct_xml_structure(file_path, document_tag):
     logger.debug(f"Ensuring correct XML structure: {file_path}")
-    with open(file_path, "r+", encoding="utf-8") as file:
-        content = file.read()
-        if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
-            if not content.endswith(f"</{document_tag}>"):
-                if "</{document_tag}>" not in content:
-                    content += f"\n</{document_tag}>"
-                else:
-                    # Move the closing tag to the end
-                    content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
-                    content += f"\n</{document_tag}>"
+    # with open(file_path, "r+", encoding="utf-8") as file:
+    # content = file.read()
+    content = read_file(file_path)
+    if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
+        if not content.endswith(f"</{document_tag}>"):
+            if "</{document_tag}>" not in content:
+                content += f"\n</{document_tag}>"
+            else:
+                # Move the closing tag to the end
+                content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
+                content += f"\n</{document_tag}>"
 
-            # Apply replacements from centralized utilities
-            content = apply_replacements(content, get_replacements_by_category("latex_xml"))
-            content = apply_replacements(content, get_replacements_by_category("scratchpad_xml"))
+        # Apply replacements from centralized utilities
+        content = apply_replacements(content, get_replacements_by_category("latex_xml"))
+        content = apply_replacements(content, get_replacements_by_category("scratchpad_xml"))
 
-            file.seek(0)
-            file.write(content)
-            file.truncate()
+    # file.seek(0)
+    # file.write(content)
+    # file.truncate()
+    write_file(file_path, content)
 
 
 def add_cdata_to_tags(xml_data, tags):
