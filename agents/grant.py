@@ -6,11 +6,7 @@ agent_path = coa.get_agent_path(coa, "grant")
 
 class ReviseGrant(ThinkAndWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
-
-        if self.args.output_files:
-            user_vars = coa.update_user_vars_multiple_output(self.args, user_vars)
-
+        user_vars = super().get_user_vars()
         return user_vars
 
 

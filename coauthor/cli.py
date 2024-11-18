@@ -594,14 +594,12 @@ def revise_prl(model, input_file, **kwargs):
 @shared_arguments
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def draft_rebuttal_prl(model, input_file, **kwargs):
-    _, _, prompt_dir = get_common_env(model)
     execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_rebuttal_prl(model, input_file, **kwargs):
-    _, _, prompt_dir = get_common_env(model)
     execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
 
 

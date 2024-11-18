@@ -6,7 +6,7 @@ agent_path = coa.get_agent_path(coa, "prl")
 
 class EditPRLBase:
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
         user_vars.update(
             {
                 "PREAMBLE_FILE": self.args.preamble_file,

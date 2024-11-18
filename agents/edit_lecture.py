@@ -6,7 +6,7 @@ agent_path = coa.get_agent_path(coa, "lecture")
 
 class EditLectureBase:
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
         document_cls_file = "lecture.cls"
         command_file = "commands_qi.tex" if "qi" in self.args.agent else "command.tex"
         user_vars.update(
@@ -32,8 +32,6 @@ Please analyze both the original input and this previous edit, focusing on furth
 """
         else:
             user_vars["EDITED_CONTENT_SECTION"] = ""
-        if "multiple" in self.args.agent:
-            coa.update_user_vars_multiple_output(self.args, user_vars)
         return user_vars
 
 
