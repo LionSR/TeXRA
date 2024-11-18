@@ -3,17 +3,21 @@ import subprocess
 import re
 import glob
 from .logging_utils import logger
+from .file_utils import write_file, read_file
+from .replacement_utils import get_replacements_by_category, apply_replacement_regex
 
 
-def run_external_command(command, output_file=None, encoding="utf-8", capture_output=False):
-    """
-    Run an external command and handle its output.
+def run_external_command(command, output_file=None, encoding="utf-8", capture_output=True):
+    """Run an external command and handle its output.
 
-    :param command: List containing the command and its arguments
-    :param output_file: Path to the output file (if any)
-    :param encoding: Encoding to use for file operations
-    :param capture_output: Whether to capture and return the command output
-    :return: Tuple containing (success_flag, output_message, error_message)
+    Args:
+        command: List containing the command and its arguments
+        output_file: Path to the output file (if any)
+        encoding: Encoding to use for file operations
+        capture_output: Whether to capture and return the command output
+
+    Returns:
+        Tuple[bool, Optional[str], Optional[str]]: (success_flag, output_message, error_message)
     """
     logger.info("\nRunning command: " + " ".join(command))
 
@@ -25,12 +29,16 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
     try:
         kwargs = {
             "text": True,
-            "capture_output": True,  # Always capture output for better error handling
+            "capture_output": capture_output,
+            "encoding": encoding,
         }
 
         if output_file:
             with open(output_file, "w", encoding=encoding) as file:
                 result = subprocess.run(command, **kwargs)
+                if result.returncode != 0:
+                    logger.error(f"\nCommand failed with return code {result.returncode}")
+                    return False, None, result.stderr.strip()
                 file.write(result.stdout)
             logger.info("\nCommand completed.\nOutput saved to " + output_file)
             return True, None, None
@@ -100,29 +108,16 @@ def process_tikzpicture_endings(file_path):
 
     :param file_path: Path to the LaTeX diff file
     """
-    with open(file_path, encoding="utf-8") as file:
-        content = file.read()
+    if not os.path.exists(file_path):
+        logger.warning(f"File {file_path} does not exist. Skipping.")
+        return None
 
-    pattern = re.compile(r"(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}")
-    replacement = r"\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}"
-    content = re.sub(pattern, replacement, content)
+    content = read_file(file_path)
 
-    patterns = [
-        # (r'(\\documentclass\{lecture\})(.*?)\\makeheader', ""),
-        # (r'\\subbibliography\{library\.bib\}\s*\\end\{document\}', ""),
-        (r"\\end\{document\}\s*\\chapter", r"\\chapter"),
-        (r"\\end\{document\}\s*\\addcontentsline", r"\\addcontentsline"),
-        (r"\}(\s*)\\end\{tikzpicture\};", r"};\1\\end{tikzpicture}"),
-        (r"\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;", r"\1\\end{tikzpicture}};\\DIFaddendFL"),
-        # (r"\};(\s*)\\end\{tikzpicture\}", r"\1\\end{tikzpicture}\1};"),
-    ]
+    # Apply tikz-specific replacements
+    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
 
-    for pattern, replacement in patterns:
-        content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-
-    with open(file_path, "w", encoding="utf-8") as file:
-        file.write(content)
-
+    write_file(file_path, content)
     logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 

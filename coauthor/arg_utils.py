@@ -7,8 +7,12 @@ def comma_separated_list(value):
     return [item.strip("'\"") for item in items]
 
 
-def get_common_argparser():
-    parser = argparse.ArgumentParser(description="Process files with AI-assisted techniques.")
+def add_common_arguments(parser):
+    """Add common arguments to the argument parser.
+
+    Groups related arguments together for better organization.
+    """
+    # Model arguments
     parser.add_argument(
         "--model",
         type=str,
@@ -28,47 +32,85 @@ def get_common_argparser():
         default=False,
         help="Whether to perform a reflection round after the initial processing.",
     )
-    parser.add_argument(
+
+    # Input file arguments
+    input_group = parser.add_argument_group("Input Files")
+    input_group.add_argument(
         "--input_file",
         type=str,
-        help="Path to the main file(s) to be processed. Multiple files can be specified.",
+        default=None,
+        help="Path to input file.",
     )
-    parser.add_argument(
+    input_group.add_argument(
         "--input_files",
         type=comma_separated_list,
         default=[],
         help="Path to input files. Multiple files can be specified.",
     )
-    parser.add_argument(
+
+    # Sample file arguments
+    sample_group = parser.add_argument_group("Sample Files")
+    sample_group.add_argument(
+        "--sample_file",
+        type=str,
+        default=None,
+        help="Path to the sample file.",
+    )
+    sample_group.add_argument(
         "--sample_files",
         type=comma_separated_list,
         default=[],
         help="Path to the sample file(s). Multiple files can be specified.",
     )
-    parser.add_argument(
+
+    # Auxiliary file arguments
+    aux_group = parser.add_argument_group("Auxiliary Files")
+    aux_group.add_argument(
+        "--auxiliary_file",
+        type=str,
+        default=None,
+        help="Path to the auxiliary file.",
+    )
+    aux_group.add_argument(
         "--auxiliary_files",
         type=comma_separated_list,
         default=[],
         help="Path to the auxiliary file(s). Multiple files can be specified.",
     )
-    parser.add_argument(
+
+    # Figure input arguments
+    figure_group = parser.add_argument_group("Figure Files")
+    figure_group.add_argument(
+        "--figure_input",
+        type=str,
+        default=None,
+        help="Path to the figure input file.",
+    )
+    figure_group.add_argument(
         "--figure_inputs",
         type=comma_separated_list,
         default=[],
         help="Path to the figure input file(s). Multiple files can be specified.",
     )
+
+    # Tool usage arguments
+    tool_group = parser.add_argument_group("Tool Usage")
+    tool_group.add_argument("--use_prefill_from_input", action="store_true", help="Use the prefill from the input file")
+    tool_group.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
+    tool_group.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ figure paths from the input file")
+    tool_group.add_argument("--auto_extract_tikz_figure_reflect", action="store_true", help="Include TikZ reflection in the output")
+    tool_group.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
+
+    # Other arguments
+    parser.add_argument("--edited_file", type=str, help="Path to the file that are already edited")
+    parser.add_argument("--instruction", type=str, default=None, help="The specific instruction or hints to be followed")
     parser.add_argument("--output_files", type=comma_separated_list, default=None, help="Paths to the output files")
     parser.add_argument("--output_name_override", type=str, default=None, help="Override base output name")
-    parser.add_argument(
-        "--edited_file",
-        type=str,
-        help="Path to the file that are already edited. Multiple files can be specified.",
-    )
-    parser.add_argument("--instruction", type=str, default=None, help="The specific instruction or the hints to be followed.")
-    parser.add_argument("--use_prefill_from_input", action="store_true", help="Use the prefill from the input file")
-    parser.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract figure paths from the input file")
-    parser.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ figure paths from the input file")
-    parser.add_argument("--auto_extract_tikz_figure_reflect", action="store_true", help="Include TikZ reflection in the output")
-    parser.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
 
+    return parser
+
+
+def get_common_argparser():
+    parser = argparse.ArgumentParser(description="Process files with AI-assisted techniques.")
+    add_common_arguments(parser)
     return parser

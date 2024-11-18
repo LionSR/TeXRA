@@ -16,7 +16,7 @@ def read_file(file_path, raise_warning=True):
         if raise_warning:
             warnings.warn(f"File not found: {file_path}")
         return ""
-    with open(file_path, encoding="utf-8") as file:
+    with open(file_path, "r+", encoding="utf-8") as file:
         return file.read().strip()
 
 
