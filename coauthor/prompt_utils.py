@@ -64,15 +64,6 @@ def get_xml_format_from_files(files):
     return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
-def load_prompt(prompt_type: str, prompt_settings: Dict[str, Any]) -> str:
-    """Load and return a prompt string from settings."""
-    logger.debug(f"Loading prompt: {prompt_type}")
-    prompt = prompt_settings.get(f"{prompt_type}_prompt", "")
-    logger.info(f"Loaded prompt: {prompt_type}")
-    logger.debug(f"{prompt_type}: {prompt}")
-    return prompt
-
-
 def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
     """Render a prompt string using Jinja2 templating."""
     template = Template(prompt)
