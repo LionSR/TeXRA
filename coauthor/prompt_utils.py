@@ -6,12 +6,12 @@ from .logging_utils import logger
 from .file_utils import read_file
 
 
-def load_xml(file_path):
+def load_xml(file_path: str) -> ET.Element:
     tree = ET.parse(file_path)
     return tree.getroot()
 
 
-def merge_dicts(base, override):
+def merge_dicts(base: dict, override: dict) -> dict:
     result = base.copy()
     for key, value in override.items():
         if isinstance(value, dict) and key in result:
@@ -21,7 +21,7 @@ def merge_dicts(base, override):
     return result
 
 
-def load_agent_settings_and_prompts(agent_path, agent):
+def load_agent_settings_and_prompts(agent_path: str, agent: str):
     def load_agent_from_xml(agent_path, agent_name):
         agent_prompt_file = f"{agent_path}/agent_{agent_name}.xml"
         if not os.path.exists(agent_prompt_file):
@@ -56,11 +56,11 @@ def load_agent_settings_and_prompts(agent_path, agent):
     return load_agent_from_xml(agent_path, agent)
 
 
-def get_xml_format_from_file(file):
+def get_xml_format_from_file(file: str) -> str:
     return f'<document name="{file}">\n' f"{read_file(file)}\n" f"</document>"
 
 
-def get_xml_format_from_files(files):
+def get_xml_format_from_files(files: list[str]) -> str:
     return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
