@@ -10,8 +10,6 @@ from .file_utils import (
 )
 from .process import process_first_round, process_reflection_round
 from .message_utils import (
-    extract_response_statistics,
-    initialize_messages,
     create_image_message,
     handle_openai_continuation,
     check_stop_conditions,
