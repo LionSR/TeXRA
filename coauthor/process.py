@@ -6,8 +6,6 @@ from .logging_utils import logger
 from .file_utils import read_file, write_file
 from .message_utils import (
     create_image_message,
-    initialize_messages,
-    extract_response_statistics,
     check_stop_conditions,
     print_stop_flags,
     handle_openai_continuation,
@@ -48,7 +46,9 @@ def process_response_cycle(
         response_time = time.time() - start_time
         state.update_response_time(response_time)
         logger.info(f"Response time: {response_time:.2f}s")
-        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, agent_settings.end_tag)
+        new_response, input_tokens, output_tokens, stop_reason = model_config.extract_response_statistics(
+            response_object, agent_settings.end_tag
+        )
         logger.info(f"Stop reason: {stop_reason}")
         logger.info(f"Token usage: {response_object.usage}")
 
