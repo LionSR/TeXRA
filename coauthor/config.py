@@ -25,7 +25,7 @@ class PromptTemplate:
 @dataclass
 class TaskConfig:
     """Configuration for task execution and tool usage."""
-    
+
     model: str
     temperature: float
     reflect: bool
@@ -41,7 +41,7 @@ class TaskConfig:
     output_name_override: Optional[str]
     edited_file: Optional[str]
     instruction: Optional[str]
-    
+
     # Tool usage configuration
     use_prefill_from_input: bool
     auto_extract_figure: bool
@@ -50,8 +50,8 @@ class TaskConfig:
     include_tex_count: bool
 
     # Processing configuration
-    K: int
-    
+    K: int = 200
+
     @classmethod
     def from_args(cls, args) -> "TaskConfig":
         """Create a TaskConfig from command line arguments."""
@@ -66,13 +66,12 @@ class TaskConfig:
             output_files=args.output_files,
             output_name_override=args.output_name_override,
             instruction=args.instruction,
-            
             # Processing configuration
             reflect=args.reflect,
             use_prefill_from_input=args.use_prefill_from_input,
             temperature=args.temperature,
-            K=200,  # Default value
-            
+            model=args.model,
+            agent=args.agent,
             # Tool usage configuration
             include_tex_count=args.include_tex_count,
             auto_extract_figure=args.auto_extract_figure,
@@ -83,20 +82,19 @@ class TaskConfig:
 
 @dataclass
 class AgentSettings:
-    """Configuration for agent behavior and generation settings."""    
+    """Configuration for agent behavior and generation settings."""
+
     # Document settings
-    use_prefill_from_input: bool
     document_tag: Optional[str]
     prefills: List[str] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
-    
+
     @classmethod
-    def from_dict(cls, args, settings_dict: Dict[str, Any]) -> "AgentSettings":
-        """Create AgentSettings from command line arguments and settings dictionary."""
-        return cls(            
+    def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
+        """Create AgentSettings from settings dictionary."""
+        return cls(
             # Document settings
-            use_prefill_from_input=args.use_prefill_from_input,
             prefills=settings_dict.get("prefills", []),
             document_tag=settings_dict.get("document_tag"),
             output_ext=settings_dict.get("output_ext", "txt"),
