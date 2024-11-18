@@ -1,16 +1,9 @@
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .logging_utils import logger
 from .file_utils import read_file, write_file
-from .message_utils import (
-    create_image_message,
-    check_stop_conditions,
-    print_stop_flags,
-    handle_openai_continuation,
-    has_end_tag,
-)
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, write_to_output_file
 from .prompt_utils import render_prompt
@@ -46,9 +39,7 @@ def process_response_cycle(
         response_time = time.time() - start_time
         state.update_response_time(response_time)
         logger.info(f"Response time: {response_time:.2f}s")
-        new_response, input_tokens, output_tokens, stop_reason = model_config.extract_response_statistics(
-            response_object, agent_settings.end_tag
-        )
+        new_response, input_tokens, output_tokens, stop_reason = model_config.extract_response_statistics(response_object, agent_settings.end_tag)
         logger.info(f"Stop reason: {stop_reason}")
         logger.info(f"Token usage: {response_object.usage}")
 
@@ -82,18 +73,22 @@ def process_response_cycle(
                 else:
                     messages[-1]["content"] = accumulated_output
 
-        end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
+        # Check if we need to continue due to truncation
+        if not end_turn and not model_config.has_end_tag(new_response, agent_settings.end_tag, agent_settings.document_tag):
+            model_config.handle_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
+            continue
+
+        # Check stop conditions
+        end_turn, should_stop = model_config.check_stop_conditions(
+            stop_reason, new_response, state, agent_settings, massive_repetition_detected
+        )
+        model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected, task_config.K)
 
         if should_stop:
-            # these reasons should be enum in the future
-            print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
             break
 
         state.increment_continuation()
         logger.info(f"Starting continuation #{state.continuation_count}")
-
-        if model_config.is_openai_compatible:
-            handle_openai_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
 
     return state, accumulated_output, end_turn
 
@@ -112,7 +107,7 @@ def initialize_output_and_prefill(
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
         # try to get prefill from existing file
         file_content = read_file(output_file)
-        if has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
+        if model_config.has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
             logger.debug("End tag detected - skipping continuation")
             if messages[-1]["content"][-1].get("cache_control"):
                 messages[-1]["content"][-1].pop("cache_control")
@@ -127,7 +122,7 @@ def initialize_output_and_prefill(
                 messages.append({"role": "assistant", "content": file_content})
             logger.debug(f"Using existing content as prefill: {output_file}")
             if model_config.is_openai_compatible:
-                handle_openai_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
+                model_config.handle_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
     else:
         if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
             prefill += first_k_tex_document
@@ -248,16 +243,7 @@ def process_reflection_round(
         user_message = f"{tex_count_stats}{user_message}"
 
     # Create a new message for the reflection round using model-specific implementation
-    reflection_message = model_config.create_reflection_message(user_message, figure_inputs)
-
-    messages.append(reflection_message)
-
-    # Make sure the number of cache control is fewer than 4 for Anthropic models
-    if model_config.supports_prompt_caching and isinstance(messages[-1]["content"], list):
-        if len(messages[-1]["content"]) == 1:
-            messages[0]["content"][-1].pop("cache_control", None)
-        elif len(messages[-1]["content"]) >= 2:
-            messages[-1]["content"][-2].pop("cache_control", None)
+    messages = model_config.create_reflection_message(messages, user_message, figure_inputs)
 
     accumulated_output = None
     prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
