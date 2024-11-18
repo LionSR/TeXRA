@@ -216,14 +216,14 @@ def check_stop_conditions(
     return end_turn, should_stop
 
 
-def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: dict, massive_repetition_detected: bool) -> None:
+def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool, K=200) -> None:
     """Print the flags indicating why the conversation stopped."""
     logger.debug("Printing the flags")
     logger.debug(f"end_turn: {end_turn}")
-    document_tag = agent_settings["document_tag"]
+    document_tag = agent_settings.document_tag
     logger.debug(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
     logger.debug(f"continuation_limit: {state.continuation_count > 10}")
     logger.debug(f"input_token_limit: {state.total_input_tokens > 100000}")
     logger.debug(f"massive_repetition_detected: {massive_repetition_detected}")
     logger.debug(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
-    logger.debug(f"{state.last_response[-agent_settings['k']:]}")
+    logger.debug(f"{state.last_response[-K:]}")
