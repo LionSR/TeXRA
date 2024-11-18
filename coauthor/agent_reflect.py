@@ -67,49 +67,61 @@ class BaseReflectChainAgent(ABC):
     """
 
     def __init__(self, args, agent_path: str):
+        """Initialize the agent with command line arguments and agent path."""
         self.args = args
         self.agent_path = agent_path
+
+        # Initialize basic attributes
+        self.output_file = ["", ""]
+        self.output_files = {0: [], 1: []}
+        self.base_files = []
+        self.user_vars = self.get_user_vars()
+
+        # Initialize configurations
+        self.task_config = TaskConfig.from_args(args)
+        self.edited_file = self.task_config.edited_file
+
+        # These will be initialized in setup()
+        self.settings_dict = None
         self.prompt_dict = None
-        self.user_vars = None
-        self.model_config: Optional[ModelConfig] = None
-        self.agent_settings: Optional[AgentSettings] = None
-        self.agent_prompts: Optional[PromptTemplate] = None
-        self.task_config: Optional[TaskConfig] = None
+        self.model_config = None
+        self.agent_settings = None
+        self.agent_prompts = None
         self.client = None
         self.log_file = None
-        self.output_file = {0: None, 1: None}
-        self.output_files: dict[int, List[str]] = {0: [], 1: []}
-        if self.args.output_files:
-            self.base_files = self.args.output_files
-        else:
-            self.base_files = [self.args.input_file]
-        self.edited_file = args.edited_file if hasattr(args, "edited_file") else None
+        self.use_scratchpad = False
+        self.tex_count_stats = None
+        self.first_k_tex_document = None
 
     def setup(self):
-        logger.debug(f"Args: {self.args}")
-        logger.info(f"Processing file: {self.args.input_file}")
-        # Load settings and prompts
-        self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.args.agent)
-        self.user_vars = self.get_user_vars()
-        
-        """Set up the agent with necessary configurations."""
-        # Load model configuration
-        if self.args.model in MODEL_CONFIGS:
-            self.model_config = MODEL_CONFIGS[self.args.model]
+        """Set up the agent for processing."""
+        # Initialize base files
+        if self.task_config.output_files:
+            self.base_files = self.task_config.output_files
         else:
-            raise ValueError(f"Model {self.args.model} not found in MODEL_CONFIGS")
+            self.base_files = [self.task_config.input_file]
 
-        self.agent_settings = AgentSettings.from_dict(self.args, self.settings_dict)
-        self.agent_prompts = PromptTemplate.from_dict(self.prompt_dict)
-        logger.debug(f"Agent settings: {self.agent_settings}")
-        logger.debug(f"Agent prompts: {self.agent_prompts}")
-        logger.debug(f"Prompt dict: {self.prompt_dict.keys()}")
+        # Set up logging
+        logger.debug(f"Args: {self.args}")  # Keep this for debugging
+        logger.info(f"Processing file: {self.task_config.input_file}")
 
-        # Initialize task configuration
-        self.task_config = TaskConfig.from_args(self.args)
+        # Initialize model config
+        if self.task_config.model in MODEL_CONFIGS:
+            self.model_config = MODEL_CONFIGS[self.task_config.model]
+        else:
+            raise ValueError(f"Model {self.task_config.model} not found in MODEL_CONFIGS")
 
         self.client = self.model_config.get_client()
-        self.log_file = log_start(self.args)
+
+        # Load agent settings and prompts
+        self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.task_config.agent)
+        self.agent_settings = AgentSettings.from_dict(self.settings_dict)
+        self.agent_prompts = PromptTemplate.from_dict(self.prompt_dict)
+        # logger.debug(f"Agent settings: {self.agent_settings}")
+        # logger.debug(f"Agent prompts: {self.agent_prompts}")
+
+        # Initialize logging
+        self.log_file = log_start(self.args)  # Keep args here as it's used in log_start
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -131,13 +143,13 @@ class BaseReflectChainAgent(ABC):
 
     def _handle_single_output(self, output_file: str) -> None:
         if self.agent_settings.output_ext == "tex":
-            run_latexdiff(self.args.input_file, output_file, self.args.agent)
+            run_latexdiff(self.task_config.input_file, output_file, self.task_config.agent)
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
-        for input_file, output_file in zip(self.args.output_files, output_files):
+        for input_file, output_file in zip(self.task_config.output_files, output_files):
             log_output_files(output_file, self.log_file)
             if self.agent_settings.output_ext == "tex":
-                run_latexdiff(input_file, output_file, self.args.agent)
+                run_latexdiff(input_file, output_file, self.task_config.agent)
 
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
         if isinstance(input_files, str):
@@ -146,34 +158,33 @@ class BaseReflectChainAgent(ABC):
         return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
     def _get_first_k_from_document(self) -> Optional[str]:
-        k = self.task_config.K
+        K = self.task_config.K
         try:
-            with open(self.args.input_file, encoding="utf-8") as f:
+            with open(self.task_config.input_file, encoding="utf-8") as f:
                 content = f.read()
-                return content[:k].strip()  # Return only the first k characters, stripped
+                return content[:K].strip()  # Return only the first k characters, stripped
         except OSError as e:
-            logger.error(f"Error reading file {self.args.input_file}: {e}")
+            logger.error(f"Error reading file {self.task_config.input_file}: {e}")
             return None
 
     def _handle_latexdiff(self, round: int) -> None:
-        logger.info(f"Running latexdiff for {self.args.agent} round {round}")
+        logger.info(f"Running latexdiff for {self.task_config.agent} round {round}")
 
         logger.debug(f"Base files: {self.base_files}")
         logger.debug(f"Round {round} output files: {self.output_files[round]}")
 
         for base_file, output_file in zip(self.base_files, self.output_files[round]):
-            run_latexdiff_for_round(base_file, output_file, self.args.agent, round)
+            run_latexdiff_for_round(base_file, output_file, self.task_config.agent, round)
 
         for r in range(1, round + 1):
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
-                run_latexdiff_between_rounds(output_file1, output_file2, self.args.agent)
+                run_latexdiff_between_rounds(output_file1, output_file2, self.task_config.agent)
 
     def _replace_input_commands(self, base_files: List[str], output_files: List[str]) -> None:
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
 
         for output_file in output_files:
-            with open(output_file) as f:
-                content = f.read()
+            content = read_file(output_file)
 
             def replace_input(match):
                 input_file = match.group(1)
@@ -189,7 +200,7 @@ class BaseReflectChainAgent(ABC):
                 logger.debug(f"Updated input commands in {output_file}")
 
     def process(self):
-        input_files = [self.args.input_file] + (self.args.input_files or [])
+        input_files = [self.task_config.input_file] + (self.task_config.input_files or [])
         if self.task_config.include_tex_count:
             self.tex_count_stats = self._get_tex_count_stats(input_files)
         if self.task_config.auto_extract_figure:
@@ -209,7 +220,7 @@ class BaseReflectChainAgent(ABC):
             task_config=self.task_config,
             agent_settings=self.agent_settings,
             agent_prompts=self.agent_prompts,
-            figure_inputs=self.args.figure_inputs,
+            figure_inputs=self.task_config.figure_inputs,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
@@ -222,9 +233,10 @@ class BaseReflectChainAgent(ABC):
 
     def reflect(self, state: State, messages, round: int = 1):
         reflection_figure_inputs = []
-        if self.args.output_files:
+        if self.task_config.output_files:
+            # Handle multiple output files
             if self.task_config.include_tex_count:
-                self.tex_count_stats = self._get_tex_count_stats(self.args.output_files)
+                self.tex_count_stats = self._get_tex_count_stats(self.task_config.output_files)
             if self.task_config.auto_extract_tikz_figure_reflect:
                 # Handle multiple output files
                 for output_file in self.output_files[round]:
@@ -233,6 +245,8 @@ class BaseReflectChainAgent(ABC):
                     if extracted_tikz_figures:
                         reflection_figure_inputs.extend(extracted_tikz_figures)
         else:
+            # Handle single output file
+            logger.debug(f"Output files: {self.output_files}")
             generated_output_file = self.output_files[0][0]
             if self.task_config.include_tex_count:
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
@@ -262,8 +276,8 @@ class BaseReflectChainAgent(ABC):
         self.handle_output(state, end_turn, self.output_file[1], round=1)
 
         logger.info(
-            f"\n\nProcessed input file {self.args.input_file} "
-            f"and/or input files {self.args.input_files}. "
+            f"\n\nProcessed input file {self.task_config.input_file} "
+            f"and/or input files {self.task_config.input_files}. "
             f"The reflection output was saved as {self.output_file[1]}"
         )
 
@@ -272,7 +286,7 @@ class BaseReflectChainAgent(ABC):
     def run(self):
         self.setup()
         state, messages, end_turn = self.process()
-        if self.args.reflect and end_turn:
+        if self.task_config.reflect and end_turn:
             state, messages, end_turn = self.reflect(state, messages)
         return state, messages
 
@@ -282,19 +296,22 @@ class ThinkAndWrite(BaseReflectChainAgent):
         super().__init__(args, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        """Get the output file name for the given round."""
+        base_output_file = self.task_config.output_name_override if self.task_config.output_name_override else self.task_config.input_file
+        file_extension = self.agent_settings.output_ext
         if self.use_scratchpad:
             file_extension = "xml"
         else:
             file_extension = self.agent_settings.output_ext
 
-        return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
+        return get_output_file_name(base_output_file, self.task_config.agent, self.model_config.name, file_extension, round, self.task_config.edited_file)
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
+        """Handle the output for the given round."""
         if end_turn:
             ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
 
-            if self.args.output_files:
+            if self.task_config.output_files:
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
@@ -318,13 +335,17 @@ class DirectWrite(BaseReflectChainAgent):
         super().__init__(args, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
-        base_output_file = self.args.output_name_override if self.args.output_name_override else self.args.input_file
+        """Get the output file name for the given round."""
         file_extension = self.agent_settings.output_ext
-        return get_output_file_name(base_output_file, self.args.agent, self.model_config.name, file_extension, round, self.edited_file)
+        base_output_file = self.task_config.output_name_override if self.task_config.output_name_override else self.task_config.input_file
+        return get_output_file_name(
+            base_output_file, self.task_config.agent, self.model_config.name, file_extension, round, self.task_config.edited_file
+        )
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
+        """Handle the output for the given round."""
         if end_turn:
-            if self.args.output_files:  # Multiple output files
+            if self.task_config.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
@@ -341,4 +362,5 @@ class DirectWrite(BaseReflectChainAgent):
 
         log_output_files(output_file, self.log_file)
         log_and_print_statistics(state, self.model_config, self.log_file)
+        
         return self.output_files[round]
