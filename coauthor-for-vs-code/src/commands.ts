@@ -634,18 +634,24 @@ export function registerCommands(context: vscode.ExtensionContext) {
         terminal_new.show();
 
         // Check if virtual environment string is configured
-        const virtualEnvString = getNestedConfig<string>('python.virtualEnvString', '');
+        const virtualEnvString = getNestedConfig<string>(
+          'python.virtualEnvString',
+          '',
+        );
 
         if (virtualEnvString) {
           if (terminal_new.shellIntegration) {
-            const execution = terminal_new.shellIntegration.executeCommand(virtualEnvString);
+            const execution =
+              terminal_new.shellIntegration.executeCommand(virtualEnvString);
             await new Promise<void>((resolve) => {
-              const disposable = vscode.window.onDidEndTerminalShellExecution(event => {
-                if (event.execution === execution) {
-                  disposable.dispose();
-                  resolve();
-                }
-              });
+              const disposable = vscode.window.onDidEndTerminalShellExecution(
+                (event) => {
+                  if (event.execution === execution) {
+                    disposable.dispose();
+                    resolve();
+                  }
+                },
+              );
             });
           } else {
             terminal_new.sendText(virtualEnvString);
