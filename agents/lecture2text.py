@@ -6,7 +6,7 @@ agent_path = coa.get_agent_path(coa, "lecture2text")
 
 class Lecture2Text(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
 
         document_cls_file = "lecture.cls"
         command_file = "commands_qi.tex"
