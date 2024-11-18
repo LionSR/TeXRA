@@ -186,8 +186,7 @@ def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=Non
 
 
 def log_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None):
-    """Update the output file information in the log entry
-
+    """
     Args:
         output_file: The current output file
         log_id: The log entry ID
