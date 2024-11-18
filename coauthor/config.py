@@ -3,22 +3,22 @@ from typing import Optional, List, Dict, Any
 
 
 @dataclass
-class PromptTemplate:
+class AgentPrompts:
     """Configuration for agent prompts."""
 
     system_prompt: str
-    user_prefix_prompt: str
-    user_request_prompt: str
-    user_reflect_prompt: str
+    user_prefix: str
+    user_request: str
+    user_reflect: str
 
     @classmethod
-    def from_dict(cls, prompt_dict: Dict[str, str]) -> "PromptTemplate":
-        """Create a PromptTemplate from a dictionary of prompts."""
+    def from_dict(cls, prompt_dict: Dict[str, str]) -> "AgentPrompts":
+        """Create a AgentPrompts from a dictionary of prompts."""
         return cls(
             system_prompt=prompt_dict.get("system_prompt", ""),
-            user_prefix_prompt=prompt_dict.get("user_prefix", ""),
-            user_request_prompt=prompt_dict.get("user_request", ""),
-            user_reflect_prompt=prompt_dict.get("user_reflect", ""),
+            user_prefix=prompt_dict.get("user_prefix", ""),
+            user_request=prompt_dict.get("user_request", ""),
+            user_reflect=prompt_dict.get("user_reflect", ""),
         )
 
 

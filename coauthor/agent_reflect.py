@@ -12,12 +12,12 @@ from .output_utils import (
     split_scratchpad_output_xml,
     split_multiple_scratchpad_output_xml,
 )
-from .logdb_utils import log_start, log_and_print_statistics, log_output_files
+from .logdb_utils import log_db_start, log_db_and_print_statistics, log_db_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
 from .model_config import MODEL_CONFIGS
 from .file_utils import read_file
 from .state import State
-from .config import TaskConfig, AgentSettings, PromptTemplate
+from .config import TaskConfig, AgentSettings, AgentPrompts
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -111,7 +111,7 @@ class BaseReflectChainAgent(ABC):
         # Load agent settings and prompts
         self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.task_config.agent)
         self.agent_settings = AgentSettings.from_dict(self.settings_dict)
-        self.agent_prompts = PromptTemplate.from_dict(self.prompt_dict)
+        self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
         # logger.debug(f"Agent settings: {self.agent_settings}")
         # logger.debug(f"Agent prompts: {self.agent_prompts}")
 
@@ -122,7 +122,7 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_file = log_start(self.task_config)
+        self.log_file = log_db_start(self.task_config)
 
     @abstractmethod
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
@@ -138,7 +138,7 @@ class BaseReflectChainAgent(ABC):
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         for input_file, output_file in zip(self.task_config.output_files, output_files):
-            log_output_files(output_file, self.log_file)
+            log_db_output_files(output_file, self.log_file)
             if self.agent_settings.output_ext == "tex":
                 run_latexdiff(input_file, output_file, self.task_config.agent)
 
@@ -318,8 +318,8 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_output_files(output_file, self.log_file, self.output_files[round])
-        log_and_print_statistics(state, self.model_config, self.log_file)
+        log_db_output_files(output_file, self.log_file, self.output_files[round])
+        log_db_and_print_statistics(state, self.model_config, self.log_file)
         return self.output_files[round]
 
 
@@ -353,7 +353,7 @@ class DirectWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_output_files(output_file, self.log_file, self.output_files[round])
-        log_and_print_statistics(state, self.model_config, self.log_file)
+        log_db_output_files(output_file, self.log_file, self.output_files[round])
+        log_db_and_print_statistics(state, self.model_config, self.log_file)
 
         return self.output_files[round]

@@ -3,11 +3,11 @@ import re
 import warnings
 
 
-def get_agent_path(library, prompt_name):
+def get_agent_path(library, prompt_name: str) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
 
 
-def read_file(file_path, raise_warning=True):
+def read_file(file_path: str, raise_warning: bool = True) -> str:
     if file_path is None:
         if raise_warning:
             warnings.warn(f"File not provided: {file_path}")
@@ -20,16 +20,16 @@ def read_file(file_path, raise_warning=True):
         return file.read().strip()
 
 
-def write_file(file_path, content):
+def write_file(file_path: str, content: str) -> None:
     with open(file_path, "w", encoding="utf-8") as file:
         file.write(content)
 
 
-def append_file(file_path, content):
+def append_file(file_path: str, content: str) -> None:
     with open(file_path, "a", encoding="utf-8") as file:
         file.write(content)
 
 
-def extract_text_from_tags(input_content, document_tag):
+def extract_text_from_tags(input_content: str, document_tag: str) -> str:
     match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
     return match.group(1) if match else input_content
