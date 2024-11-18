@@ -84,7 +84,7 @@ def add_cdata_to_tags_multiple(xml_data, tags):
 def split_scratchpad_output_xml(output_file, document_tag, thinking_tag="scratchpad", split_and_save_thinking=False):
     logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
-    if document_tag == "latex_documents" or document_tag == "rebuttal_letter":
+    if document_tag in ["latex_documents", "rebuttal_letter"]:
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)
