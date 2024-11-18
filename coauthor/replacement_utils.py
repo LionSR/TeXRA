@@ -6,6 +6,7 @@ the application for cleaning and normalizing text content.
 
 from typing import Dict, Optional
 from dataclasses import dataclass
+import re
 
 
 @dataclass
@@ -96,6 +97,20 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{document}\n<document name": "\\end{document}\n</document>\n<document name",
         "</latex_document>\n</latex_document>": "</latex_document>\n",
         "</latex_document>\n\n</latex_document>": "</latex_document>\n",
+        "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\makeheader[Previous",
+    },
+)
+
+# TikZ picture fixes
+TIKZ_REPLACEMENTS = ReplacementCategory(
+    name="tikz",
+    description="Fixes for TikZ picture formatting and structure",
+    patterns={
+        r"(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}": r"\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}",
+        r"\\end\{document\}\s*\\chapter": r"\\chapter",
+        r"\\end\{document\}\s*\\addcontentsline": r"\\addcontentsline",
+        r"\}(\s*)\\end\{tikzpicture\};": r"};\1\\end{tikzpicture}",
+        r"\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;": r"\1\\end{tikzpicture}};\\DIFaddendFL",
     },
 )
 
@@ -129,6 +144,7 @@ def get_all_replacements() -> Dict[str, str]:
         STYLE_REPLACEMENTS,
         # FORMAT
         LATEX_XML_REPLACEMENTS,
+        TIKZ_REPLACEMENTS,
     ]
 
     for category in categories:
@@ -152,6 +168,7 @@ def get_replacements_by_category(category_name: str) -> Optional[Dict[str, str]]
         "characters": CHARACTER_REPLACEMENTS,
         "style": STYLE_REPLACEMENTS,
         "latex_xml": LATEX_XML_REPLACEMENTS,
+        "tikz": TIKZ_REPLACEMENTS,
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
     }
 
@@ -171,4 +188,20 @@ def apply_replacements(text: str, replacements: Dict[str, str]) -> str:
     """
     for old, new in replacements.items():
         text = text.replace(old, new)
+    return text
+
+
+def apply_replacement_regex(text: str, replacements: Dict[str, str], flags: int = 0) -> str:
+    """Apply a dictionary of regex replacements to the given text.
+
+    Args:
+        text: Text to process
+        replacements: Dictionary of regex patterns and their replacements
+        flags: Optional regex flags (e.g., re.DOTALL)
+
+    Returns:
+        Processed text with all regex replacements applied
+    """
+    for pattern, replacement in replacements.items():
+        text = re.sub(pattern, replacement, text, flags=flags)
     return text
