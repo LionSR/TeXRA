@@ -55,7 +55,7 @@ class TaskConfig:
     @classmethod
     def from_args(cls, args) -> "TaskConfig":
         """Create a TaskConfig from command line arguments."""
-        return cls(
+        config = cls(
             # Input/Output configuration
             input_file=args.input_file,
             input_files=args.input_files,
@@ -78,6 +78,16 @@ class TaskConfig:
             auto_extract_tikz_figure=args.auto_extract_tikz_figure,
             auto_extract_tikz_figure_reflect=args.auto_extract_tikz_figure_reflect,
         )
+        config.validate()
+        return config
+
+    def validate(self):
+        """Validate the configuration."""
+        # For multiple output agents
+        if self.output_files:
+            all_input_files = [self.input_file] + (self.input_files or [])
+            if len(self.output_files) > len(all_input_files):
+                raise ValueError("Number of output files must not be greater than the number of input files.")
 
 
 @dataclass
