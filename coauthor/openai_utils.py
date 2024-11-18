@@ -1,8 +1,9 @@
 import os
 from openai import OpenAI
+from typing import Optional
 
 
-def best_connection_method(str1, str2, openai_api_key=None):
+def best_connection_method(str1: str, str2: str, openai_api_key: Optional[str] = None) -> tuple[str, str]:
     """
     Example usage
     str1 = "Hello"
