@@ -2,10 +2,12 @@ import os
 import sqlite3
 from datetime import datetime
 import json
+from typing import Optional, List
 
 from .model_config import ModelConfig
 from .state import State
 from .logging_utils import logger
+from .config import TaskConfig, AgentSettings
 
 
 def get_db_path():
@@ -31,10 +33,9 @@ def init_db():
         auxiliary_files TEXT,  -- JSON array of auxiliary files
         figure_inputs TEXT,  -- JSON array of figure inputs
         sample_files TEXT,  -- JSON array of sample files
+        output_files TEXT,  -- JSON array of target output files from task_config
+        actual_output_files TEXT,  -- JSON array of actual output files from agent
         output_file TEXT,  -- Main output file
-        output_files TEXT,  -- JSON array of output files from args
-        xml_output_file TEXT,  -- Latest XML output file
-        xml_output_files TEXT,  -- JSON array of all XML output files including reflection
         is_reflection BOOLEAN,
         instruction TEXT,
         reflect BOOLEAN,  -- From args.reflect
@@ -51,18 +52,24 @@ def init_db():
     conn.close()
 
 
-def log_start(args):
-    """Initialize a new log entry and return its ID"""
+def log_start(task_config, agent_settings):
+    """Initialize a new log entry and return its ID
+
+    Args:
+        task_config (TaskConfig): Configuration for task execution
+        agent_settings (AgentSettings): Configuration for agent behavior
+    """
     init_db()
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
 
     # Convert lists to JSON strings for storage
-    input_files = json.dumps(args.input_files) if args.input_files else None
-    auxiliary_files = json.dumps(args.auxiliary_files) if args.auxiliary_files else None
-    figure_inputs = json.dumps(args.figure_inputs) if args.figure_inputs else None
-    sample_files = json.dumps(args.sample_files) if args.sample_files else None
-    output_files = json.dumps(args.output_files) if args.output_files else None
+    input_files = json.dumps(task_config.input_files) if task_config.input_files else None
+    auxiliary_files = json.dumps(task_config.auxiliary_files) if task_config.auxiliary_files else None
+    figure_inputs = json.dumps(task_config.figure_inputs) if task_config.figure_inputs else None
+    sample_files = json.dumps(task_config.sample_files) if task_config.sample_files else None
+    output_files = json.dumps(task_config.output_files) if task_config.output_files else None
+    actual_output_files = json.dumps([])  # Initialize as empty, will be updated by log_output_files
 
     # Initialize empty array for round stats
     round_stats = json.dumps([])
@@ -70,30 +77,34 @@ def log_start(args):
     c.execute(
         """INSERT INTO coauthor_logs (
         timestamp, agent, model, input_file, input_files,
-        auxiliary_files, figure_inputs, sample_files, output_files, 
+        auxiliary_files, figure_inputs, sample_files, output_file, output_files,
+        actual_output_files, is_reflection,
         instruction, round_stats, reflect,
         auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now(),
-            args.agent,
-            args.model,
-            args.input_file,
+            task_config.agent,
+            task_config.model,
+            task_config.input_file,
             input_files,
             auxiliary_files,
             figure_inputs,
             sample_files,
+            None,  # output_file - will be updated later by log_output_files
             output_files,
-            args.instruction,
+            actual_output_files,
+            False,  # is_reflection - will be updated during reflection
+            task_config.instruction,
             round_stats,
-            args.reflect,
-            args.auto_extract_figure,
-            args.auto_extract_tikz_figure,
-            args.auto_extract_tikz_figure_reflect,
-            args.include_tex_count,
-            args.use_prefill_from_input,
+            task_config.reflect,
+            task_config.auto_extract_figure,
+            task_config.auto_extract_tikz_figure,
+            task_config.auto_extract_tikz_figure_reflect,
+            task_config.include_tex_count,
+            task_config.use_prefill_from_input,
         ),
     )
 
@@ -174,8 +185,14 @@ def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=Non
         conn.close()
 
 
-def log_output_files(output_file, log_id):
-    """Update the output file information in the log entry"""
+def log_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None):
+    """Update the output file information in the log entry
+    
+    Args:
+        output_file: The current output file
+        log_id: The log entry ID
+        all_output_files: List of all output files for this round (optional)
+    """
     if log_id is None:
         return
 
@@ -188,22 +205,26 @@ def log_output_files(output_file, log_id):
     c = conn.cursor()
 
     # Get existing output files
-    c.execute("SELECT xml_output_files FROM coauthor_logs WHERE id = ?", (log_id,))
+    c.execute("SELECT actual_output_files FROM coauthor_logs WHERE id = ?", (log_id,))
     row = c.fetchone()
-    existing_files = json.loads(row[0]) if row and row[0] else []
+    actual_files = json.loads(row[0]) if row and row[0] else []
 
-    # Add new output file if not already present
-    if output_file not in existing_files:
-        existing_files.append(output_file)
+    # Add new output files if not already present
+    if all_output_files:
+        for file in all_output_files:
+            if file not in actual_files:
+                actual_files.append(file)
+    elif output_file not in actual_files:  # Backward compatibility
+        actual_files.append(output_file)
 
     # Update the database
     c.execute(
         """UPDATE coauthor_logs SET
-        xml_output_file = ?,
-        xml_output_files = ?,
+        output_file = ?,
+        actual_output_files = ?,
         is_reflection = ?
         WHERE id = ?""",
-        (output_file, json.dumps(existing_files), is_reflection, log_id),  # Latest output file  # All output files
+        (output_file, json.dumps(actual_files), is_reflection, log_id),
     )
 
     conn.commit()
@@ -222,7 +243,8 @@ def get_task_info(log_id):
         auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
-        input_files, auxiliary_files, figure_inputs, sample_files
+        input_files, auxiliary_files, figure_inputs, sample_files,
+        output_files, actual_output_files
         FROM coauthor_logs WHERE id = ?""",
         (log_id,),
     )
@@ -258,6 +280,8 @@ def get_task_info(log_id):
                 "auxiliary_files": json.loads(row[14]) if row[14] else [],
                 "figure_inputs": json.loads(row[15]) if row[15] else [],
                 "sample_files": json.loads(row[16]) if row[16] else [],
+                "target_output_files": json.loads(row[17]) if row[17] else [],
+                "actual_output_files": json.loads(row[18]) if row[18] else [],
             },
         }
         conn.close()
