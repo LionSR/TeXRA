@@ -14,7 +14,7 @@ class ReplyPRLBase:
             self.args.output_files = ["replies/reply_to_editor.tex", "replies/reply_to_referees.tex", "replies/list_of_major_changes.tex"]
 
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
 
         # Ensure all file paths are provided before reading
         required_files = [

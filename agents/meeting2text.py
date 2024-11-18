@@ -6,7 +6,7 @@ agent_path = coa.get_agent_path(coa, "meeting2text")
 
 class Meeting2Text(DirectWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
         # user_vars.update(
         #     {
         #         "TRANSCRIPT": coa.read_file(self.args.input_file),
@@ -33,7 +33,7 @@ class Meeting2Text(DirectWrite):
 
 class Text2Tex(ThinkAndWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
         user_vars.update(
             {
                 "INPUT_CONTENT": coa.read_file(self.args.input_file),

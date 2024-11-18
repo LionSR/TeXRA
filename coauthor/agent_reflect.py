@@ -1,7 +1,7 @@
 import os
 import re
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict
+from typing import Optional, List
 
 from .logging_utils import logger
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
@@ -14,7 +14,7 @@ from .output_utils import (
 )
 from .logdb_utils import log_start, log_and_print_statistics, log_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
-from .model_config import MODEL_CONFIGS, ModelConfig
+from .model_config import MODEL_CONFIGS
 from .file_utils import read_file
 from .state import State
 from .config import TaskConfig, AgentSettings, PromptTemplate
@@ -34,30 +34,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
     logger.debug(f"Output file: {output_file}")
     return output_file
-
-
-def get_user_vars_basic(args):
-    user_vars = {
-        "INSTRUCTION": args.instruction if args.instruction else None,
-        "INPUT_FILE": args.input_file,
-        "INPUT_CONTENT": read_file(args.input_file),
-        "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
-        "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
-        "SAMPLES": get_xml_format_from_files(args.sample_files),
-        "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
-        "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
-    }
-    return user_vars
-
-
-def update_user_vars_multiple_output(args, user_vars):
-    all_input_files = [args.input_file] + (args.input_files or [])
-    if not args.output_files:
-        raise ValueError("Output files are required for multiple output agents.")
-    if len(args.output_files) > len(all_input_files):
-        raise ValueError("Number of output files must not be greater than the number of input files.")
-
-    user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
 
 class BaseReflectChainAgent(ABC):
@@ -93,6 +69,25 @@ class BaseReflectChainAgent(ABC):
         self.tex_count_stats = None
         self.first_k_tex_document = None
 
+    def get_user_vars(self):
+        """Get the basic user variables that are common across all agents."""
+        args = self.args
+
+        user_vars = {
+            "INSTRUCTION": args.instruction if args.instruction else None,
+            "INPUT_FILE": args.input_file,
+            "INPUT_CONTENT": read_file(args.input_file),
+            "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
+            "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
+            "SAMPLES": get_xml_format_from_files(args.sample_files),
+            "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
+            "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
+        }
+        if args.output_files:
+            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
+
+        return user_vars
+
     def setup(self):
         """Set up the agent for processing."""
         # Initialize base files
@@ -127,11 +122,7 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_file = log_start(self.task_config, self.agent_settings)  # Keep args here as it's used in log_start
-
-    @abstractmethod
-    def get_user_vars(self):
-        pass
+        self.log_file = log_start(self.task_config)
 
     @abstractmethod
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:

@@ -6,7 +6,7 @@ agent_path = coa.get_agent_path(coa, "application")
 
 class ReviseApplicationDocument(ThinkAndWrite):
     def get_user_vars(self):
-        user_vars = coa.get_user_vars_basic(self.args)
+        user_vars = super().get_user_vars()
 
         if self.args.original_file:
             user_vars["INPUT_CONTENT"] = coa.read_file(self.args.original_file)
