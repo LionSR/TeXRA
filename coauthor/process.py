@@ -1,6 +1,5 @@
 import os
 import time
-from typing import Optional
 
 from .logging_utils import logger
 from .file_utils import read_file, write_file
