@@ -110,6 +110,7 @@ def initialize_output_and_prefill(
     first_k_tex_document: Optional[str] = None,
 ):
     if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
+        # try to get prefill from existing file
         file_content = read_file(output_file)
         if has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
             logger.debug("End tag detected - skipping continuation")
@@ -126,7 +127,7 @@ def initialize_output_and_prefill(
                 messages.append({"role": "assistant", "content": file_content})
             logger.debug(f"Using existing content as prefill: {output_file}")
             if model_config.is_openai_compatible:
-                handle_openai_continuation(messages, file_content, agent_settings.end_tag, agent_settings.K)
+                handle_openai_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
     else:
         if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
             prefill += first_k_tex_document
@@ -177,8 +178,7 @@ def process_first_round(
     user_request = render_prompt(agent_prompts.user_request, user_vars)
 
     # Initialize messages
-    messages = initialize_messages(
-        model_config,
+    messages = model_config.initialize_messages(
         agent_prompts.system_prompt,
         user_prefix,
         user_request,
@@ -247,31 +247,20 @@ def process_reflection_round(
     if tex_count_stats:
         user_message = f"{tex_count_stats}{user_message}"
 
-    # Create a new message for the reflection round
-    reflection_message = {"role": "user", "content": []}
-
-    # Add figure inputs to the message if available
-    if figure_inputs:
-        print(f"Creating image message with {len(figure_inputs)} figures")
-        image_content = create_image_message(model_config, figure_inputs)
-        reflection_message["content"].extend(image_content)
-
-    # Add the user message text
-    if model_config.supports_prompt_caching:
-        reflection_message["content"].append({"type": "text", "text": user_message})
-        # Make sure the number of cache control is fewer than 4
-        if isinstance(messages[-1]["content"], list):
-            if len(messages[-1]["content"]) == 1:
-                messages[0]["content"][-1].pop("cache_control", None)
-            elif len(messages[-1]["content"]) >= 2:
-                messages[-1]["content"][-2].pop("cache_control", None)
-    else:
-        reflection_message["content"].append({"type": "text", "text": user_message})
+    # Create a new message for the reflection round using model-specific implementation
+    reflection_message = model_config.create_reflection_message(user_message, figure_inputs)
 
     messages.append(reflection_message)
 
+    # Make sure the number of cache control is fewer than 4 for Anthropic models
+    if model_config.supports_prompt_caching and isinstance(messages[-1]["content"], list):
+        if len(messages[-1]["content"]) == 1:
+            messages[0]["content"][-1].pop("cache_control", None)
+        elif len(messages[-1]["content"]) >= 2:
+            messages[-1]["content"][-2].pop("cache_control", None)
+
     accumulated_output = None
-    prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > 1 else agent_settings.prefills[0]
+    prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
 
     accumulated_output = prefill
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
