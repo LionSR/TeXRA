@@ -34,10 +34,15 @@ def create_image_message(model_config: ModelConfig, figure_inputs):
 
         try:
             img_data, media_type = _process_image_file(figure_input, file_extension, model_config)
+            logger.debug(f"Processed image: {figure_input}, type: {media_type}")
+            logger.debug(f"length of img_data: {len(img_data)}")
             _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
         except Exception as e:
             logger.error(f"Failed to process image {figure_input}: {e}")
             continue
+    
+    logger.info(f"Using images: {figure_inputs}")
+    logger.info(f"Successfully added: {added_figures}")
 
     return model_config.create_image_content(image_contents)
 
@@ -46,7 +51,7 @@ def _process_image_file(figure_input: str, file_extension: str, model_config: Mo
     """Process the image file and return the image data and media type."""
     if file_extension.lower() == ".pdf":
         # For PDFs, use native PDF support for latest Anthropic models and convert to PNG for others
-        if model_config.name in ["sonnet++"] and page_count_pdf(figure_input) > 1:
+        if model_config.supports_native_pdf and page_count_pdf(figure_input) > 1:
             with open(figure_input, "rb") as f:
                 img_data = base64.standard_b64encode(f.read()).decode("utf-8")
             media_type = "application/pdf"
@@ -76,58 +81,6 @@ def _add_image_content(image_contents: list, added_figures: list, figure_input: 
         logger.debug(f"Adding single page to the image contents: {figure_input}")
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
         added_figures.append(figure_input)
-
-
-def extract_response_statistics(response_object, model_config: ModelConfig, end_tag: str = None):
-    """Extract statistics from the response object."""
-    if model_config.is_anthropic:
-        return _extract_anthropic_statistics(response_object, end_tag)
-    else:
-        return _extract_openai_statistics(response_object, end_tag)
-
-
-def _extract_openai_statistics(response_object, end_tag: str):
-    """Extract statistics from OpenAI response object."""
-    stop_reason = response_object.choices[0].finish_reason
-    new_response = response_object.choices[0].message.content.strip()
-
-    if response_object.usage is None:
-        logger.error("No usage information in response object")
-        input_tokens, output_tokens = 0, 0
-    else:
-        input_tokens = response_object.usage.prompt_tokens
-        output_tokens = response_object.usage.completion_tokens
-
-    if "stop" in stop_reason and "\\end{document}" not in new_response:
-        new_response += f"\n{end_tag}"
-
-    return new_response, input_tokens, output_tokens, stop_reason
-
-
-def _extract_anthropic_statistics(response_object, end_tag: str):
-    """Extract statistics from Anthropic response object."""
-    input_tokens = response_object.usage.input_tokens
-    output_tokens = response_object.usage.output_tokens
-    stop_reason = response_object.stop_reason
-
-    if output_tokens == 3:
-        logger.error("No output generated - API returned empty response")
-        logger.debug(f"response_object: {response_object}")
-        logger.debug(f"response_object.content: {response_object.content}")
-        raise ValueError("No output generated")
-
-    if response_object.type == "error":
-        logger.error("API error")
-        logger.debug(f"output_tokens: {output_tokens}")
-        logger.debug(f"error: {response_object.error}")
-        raise ValueError("API error")
-
-    new_response = response_object.content[0].text.strip()
-
-    if "stop" in stop_reason and "\\end{document}" not in new_response:
-        new_response += f"\n{end_tag}"
-
-    return new_response, input_tokens, output_tokens, stop_reason
 
 
 def handle_openai_continuation(messages, new_response: str, end_tag: str, K: int):
@@ -162,12 +115,14 @@ def check_stop_conditions(
 
 def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool, K: int = 200):
     """Print the flags indicating why the conversation stopped."""
-    logger.debug("Printing the flags")
-    logger.debug(f"end_turn: {end_turn}")
-    document_tag = agent_settings.document_tag
-    logger.debug(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
-    logger.debug(f"continuation_limit: {state.continuation_count > 10}")
-    logger.debug(f"input_token_limit: {state.total_input_tokens > 100000}")
-    logger.debug(f"massive_repetition_detected: {massive_repetition_detected}")
-    logger.debug(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
-    logger.debug(f"{state.last_response[-K:]}")
+    logger.debug(
+        f"end_turn: {end_turn}, "
+        f"end_tag: {agent_settings.end_tag in new_response}, "
+        f"has_end_tag: {has_end_tag(new_response, agent_settings.end_tag, agent_settings.document_tag)}, "
+        f"continuation_limit: {state.continuation_count > 10}, "
+        f"input_token_limit: {state.total_input_tokens > 100000}, "
+        f"len(new_response): {len(new_response)}, "
+        f"massive_repetition_detected: {massive_repetition_detected}, "
+        f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}, "
+        f"{state.last_response[-K:]}"
+    )
