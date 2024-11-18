@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import os
 from dotenv import load_dotenv
+from .logging_utils import logger
 
 load_dotenv()
-
 
 class ModelProvider(Enum):
     ANTHROPIC = "anthropic"
@@ -25,6 +25,7 @@ class ModelConfig(ABC):
     output_price: float
     supports_prompt_caching: bool = False
     supports_vision: bool = True
+    supports_native_pdf: bool = False
     base_url: Optional[str] = None
 
     @property
@@ -78,6 +79,13 @@ class ModelConfig(ABC):
     @abstractmethod
     def create_image_content(self, image_contents: list) -> List[Dict]:
         """Create image content for the model."""
+        pass
+
+    @abstractmethod
+    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+        """Extract statistics from the response object.
+        Returns: (new_response, input_tokens, output_tokens, stop_reason)
+        """
         pass
 
     def compute_price(
@@ -145,8 +153,8 @@ class AnthropicModelConfig(ModelConfig):
 
         if self.supports_prompt_caching:
             messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-
-        messages[-1]["content"].append({"type": "text", "text": user_request})
+        else:
+            messages[-1]["content"].append({"type": "text", "text": user_request})
 
         return messages
 
@@ -161,8 +169,8 @@ class AnthropicModelConfig(ModelConfig):
 
         if self.supports_prompt_caching:
             reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
-
-        reflection_message["content"].append({"type": "text", "text": user_message})
+        else:
+            reflection_message["content"].append({"type": "text", "text": user_message})
 
         return reflection_message
 
@@ -170,7 +178,7 @@ class AnthropicModelConfig(ModelConfig):
         """Create image content for Anthropic models."""
         content = []
         for image in image_contents:
-            if image["media_type"] == "application/pdf":
+            if self.supports_native_pdf and image["media_type"] == "application/pdf":
                 content.extend([
                     {"type": "text", "text": f"Document: {image['file_name']}"},
                     {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": image["data"]}},
@@ -188,6 +196,31 @@ class AnthropicModelConfig(ModelConfig):
                     },
                 ])
         return content
+
+    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+        """Extract statistics from Anthropic response object."""
+        input_tokens = response_object.usage.input_tokens
+        output_tokens = response_object.usage.output_tokens
+        stop_reason = response_object.stop_reason
+    
+        if output_tokens == 3:
+            logger.error("No output generated - API returned empty response")
+            logger.debug(f"response_object: {response_object}")
+            logger.debug(f"response_object.content: {response_object.content}")
+            raise ValueError("No output generated")
+        
+        if response_object.type == "error":
+            logger.error("API error")
+            logger.debug(f"output_tokens: {output_tokens}")
+            logger.debug(f"error: {response_object.error}")
+            raise ValueError("API error")
+
+        new_response = response_object.content[0].text.strip()
+
+        if stop_reason == "stop_sequence" and "\\end{document}" not in new_response:
+            new_response += f"\n{end_tag}"
+
+        return new_response, input_tokens, output_tokens, stop_reason
 
 
 @dataclass
@@ -232,12 +265,10 @@ class OpenAICompatibleModelConfig(ModelConfig):
 
     def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
         """Initialize messages for the conversation."""
-        messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
-
         if "o1" in self.name:
-            messages.insert(0, {"role": "user", "content": [{"type": "text", "text": system_prompt}]})
+            messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
         else:
-            messages.insert(0, {"role": "system", "content": system_prompt})
+            messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
         if figure_inputs:
             from .message_utils import create_image_message
@@ -278,6 +309,23 @@ class OpenAICompatibleModelConfig(ModelConfig):
             ])
         return content
 
+    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+        """Extract statistics from OpenAI response object."""
+        stop_reason = response_object.choices[0].finish_reason
+        new_response = response_object.choices[0].message.content.strip()
+
+        if response_object.usage is None:
+            logger.error("No usage information in response object")
+            input_tokens, output_tokens = 0, 0
+        else:
+            input_tokens = response_object.usage.prompt_tokens
+            output_tokens = response_object.usage.completion_tokens
+
+        if "stop" in stop_reason and "\\end{document}" not in new_response:
+            new_response += f"\n{end_tag}"
+
+        return new_response, input_tokens, output_tokens, stop_reason
+
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
     # Anthropic Claude models
@@ -289,6 +337,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=3.0,
         output_price=15.0,
         supports_prompt_caching=True,
+        supports_native_pdf=True,
     ),
     "sonnet+": AnthropicModelConfig(
         name="sonnet+",
@@ -315,7 +364,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         max_tokens=8192,
         input_price=3.0,
         output_price=15.0,
-        supports_prompt_caching=True,
+        supports_prompt_caching=False,
     ),
     "haiku+": AnthropicModelConfig(
         name="haiku+",
