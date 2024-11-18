@@ -9,13 +9,7 @@ from .file_utils import read_file, write_file, append_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
 
 
-def get_output_file_name(
-    input_file: str,
-    agent: str,
-    model: str,
-    output_ext: str,
-    round: int
-) -> str:
+def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int) -> str:
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
     output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_ext}"
@@ -23,12 +17,7 @@ def get_output_file_name(
     return output_file
 
 
-def write_to_output_file(
-    file_exists: bool,
-    best_connector: str,
-    new_response: str,
-    output_file: str
-) -> bool:
+def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
     if not file_exists:
         logger.debug("Creating new file")
         write_file(output_file, new_response)
@@ -40,10 +29,7 @@ def write_to_output_file(
     return file_exists
 
 
-def check_for_massive_repetition(
-    last_response: str,
-    new_response: str
-) -> tuple[bool, float]:
+def check_for_massive_repetition(last_response: str, new_response: str) -> tuple[bool, float]:
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
     longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
@@ -92,12 +78,7 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
 
 
 # this and the next function needs to have a better mechanism for giving the post-fix tho the names of the multiple outputs
-def split_scratchpad_output_xml(
-    output_file: str,
-    document_tag: str,
-    thinking_tag: str = "scratchpad",
-    split_and_save_thinking: bool = False
-) -> str:
+def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
     logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
     if document_tag in ["latex_documents", "rebuttal_letter"]:
@@ -152,10 +133,7 @@ def split_scratchpad_output_xml(
 
 
 def split_multiple_scratchpad_output_xml(
-    output_file: str,
-    document_tag: str,
-    thinking_tag: str = "scratchpad",
-    split_and_save_thinking: bool = False
+    output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
 ) -> list[str]:
     logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
 
