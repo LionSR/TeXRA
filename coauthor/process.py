@@ -21,16 +21,17 @@ from .state import State
 from .replacement_utils import get_all_replacements, apply_replacements
 from .config import TaskConfig, AgentSettings, PromptTemplate
 
+
 def process_response_cycle(
-    client, 
-    state: State, 
-    accumulated_output, 
-    messages, 
-    output_file, 
-    model_config: ModelConfig, 
+    client,
+    state: State,
+    accumulated_output,
+    messages,
+    output_file,
+    model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
-    agent_prompts: PromptTemplate
+    agent_prompts: PromptTemplate,
 ):
     end_turn = False
 
@@ -60,7 +61,7 @@ def process_response_cycle(
             getattr(response_object.usage, "cache_creation_input_tokens", 0),
         )
 
-        best_connector, _ = best_connection_method(state.last_response[-task_config.K:], new_response[:task_config.K])
+        best_connector, _ = best_connection_method(state.last_response[-task_config.K :], new_response[: task_config.K])
 
         massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
         if not massive_repetition_detected:
@@ -99,6 +100,7 @@ def process_response_cycle(
 def initialize_output_and_prefill(
     output_file,
     model_config: ModelConfig,
+    task_config: TaskConfig,
     agent_settings: AgentSettings,
     agent_prompts: PromptTemplate,
     messages,
@@ -125,7 +127,7 @@ def initialize_output_and_prefill(
             if model_config.is_openai_compatible:
                 handle_openai_continuation(messages, file_content, agent_settings.end_tag, agent_settings.K)
     else:
-        if agent_settings.use_prefill_from_input and agent_settings.get("output_ext") == "tex" and first_k_tex_document:
+        if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
             prefill += first_k_tex_document
             if model_config.is_anthropic:
                 accumulated_output = first_k_tex_document
@@ -143,7 +145,7 @@ def initialize_output_and_prefill(
 
         if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and model_config.is_anthropic:
             write_file(output_file, prefill)
-        elif agent_settings.get("output_ext") == "xml" and model_config.is_anthropic:
+        elif agent_settings.output_ext == "xml" and model_config.is_anthropic:
             write_file(output_file, prefill + "\n")
 
     return accumulated_output, False, messages
@@ -189,6 +191,7 @@ def process_first_round(
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         model_config,
+        task_config,
         agent_settings,
         agent_prompts,
         messages,
@@ -212,7 +215,6 @@ def process_first_round(
         task_config,
         agent_settings,
         agent_prompts,
-        
     )
 
     logger.info(f"Completed round {round}")
@@ -274,6 +276,7 @@ def process_reflection_round(
     accumulated_output, end_turn, messages = initialize_output_and_prefill(
         output_file,
         model_config,
+        task_config,
         agent_settings,
         agent_prompts,
         messages,
