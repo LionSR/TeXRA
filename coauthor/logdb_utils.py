@@ -4,10 +4,10 @@ from datetime import datetime
 import json
 from typing import Optional, List
 
-from .model_config import ModelConfig
 from .state import State
 from .logging_utils import logger
-from .config import TaskConfig, AgentSettings
+from .model_config import ModelConfig
+from .config import TaskConfig
 
 
 def get_db_path():
@@ -52,7 +52,7 @@ def init_db():
     conn.close()
 
 
-def log_start(task_config, agent_settings):
+def log_start(task_config: TaskConfig):
     """Initialize a new log entry and return its ID
 
     Args:
