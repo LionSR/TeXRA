@@ -14,27 +14,6 @@ def has_end_tag(file_content: str, end_tag: str, document_tag: str) -> bool:
     return end_tag in file_content or f"</{document_tag}>" in file_content
 
 
-def initialize_messages(model_config: ModelConfig, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None):
-    """Initialize messages for the conversation."""
-    messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
-
-    if model_config.is_openai:
-        if "o1" in model_config.name:
-            messages.insert(0, {"role": "user", "content": [{"type": "text", "text": system_prompt}]})
-        else:
-            messages.insert(0, {"role": "system", "content": system_prompt})
-
-    if figure_inputs:
-        image_content = create_image_message(model_config, figure_inputs)
-        messages[-1]["content"].extend(image_content)
-
-    if model_config.supports_prompt_caching:
-        messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-
-    messages[-1]["content"].append({"type": "text", "text": user_request})
-
-    return messages
-
 
 def create_image_message(model_config: ModelConfig, figure_inputs):
     """Create image messages for the conversation."""
@@ -51,28 +30,23 @@ def create_image_message(model_config: ModelConfig, figure_inputs):
             logger.error(f"File not found or empty: {figure_input}")
             continue
 
-        _, file_extension = os.path.splitext(figure_input)
-        img_data, media_type = _process_image_file(figure_input, file_extension, model_config)
-        logger.debug(f"Processed image: {figure_input}, type: {media_type}")
-        logger.debug(f"length of img_data: {len(img_data)}")
-        if img_data is not None:
+        file_extension = os.path.splitext(figure_input)[1].lower()
+
+        try:
+            img_data, media_type = _process_image_file(figure_input, file_extension, model_config)
             _add_image_content(image_contents, added_figures, figure_input, img_data, media_type)
-        else:
-            logger.error(f"Failed to process {figure_input}")
+        except Exception as e:
+            logger.error(f"Failed to process image {figure_input}: {e}")
+            continue
 
-    content = _create_image_content(image_contents, model_config)
-
-    logger.info(f"Using images: {figure_inputs}")
-    logger.info(f"Successfully added: {added_figures}")
-
-    return content
+    return model_config.create_image_content(image_contents)
 
 
 def _process_image_file(figure_input: str, file_extension: str, model_config: ModelConfig):
     """Process the image file and return the image data and media type."""
     if file_extension.lower() == ".pdf":
-        # For PDFs, use document type for Anthropic models and convert to PNG for others
-        if model_config.name in ["claude-3-5-sonnet-20241022", "sonnet++"] and page_count_pdf(figure_input) > 1:
+        # For PDFs, use native PDF support for latest Anthropic models and convert to PNG for others
+        if model_config.name in ["sonnet++"] and page_count_pdf(figure_input) > 1:
             with open(figure_input, "rb") as f:
                 img_data = base64.standard_b64encode(f.read()).decode("utf-8")
             media_type = "application/pdf"
@@ -102,36 +76,6 @@ def _add_image_content(image_contents: list, added_figures: list, figure_input: 
         logger.debug(f"Adding single page to the image contents: {figure_input}")
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
         added_figures.append(figure_input)
-
-
-def _create_image_content(image_contents: list, model_config: ModelConfig):
-    """Create the image content for the message."""
-    content = []
-    for image in image_contents:
-        if model_config.is_anthropic and image["media_type"] == "application/pdf":
-            content.extend(
-                [
-                    {"type": "text", "text": f"Document: {image['file_name']}"},
-                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": image["data"]}},
-                ]
-            )
-        else:
-            content.extend(
-                [
-                    {"type": "text", "text": f"Image: {image['file_name']}"},
-                    {
-                        "type": "image" if model_config.is_anthropic else "image_url",
-                        "source" if model_config.is_anthropic else "image_url": {
-                            "type" if model_config.is_anthropic else "url": (
-                                "base64" if model_config.is_anthropic else f"data:{image['media_type']};base64,{image['data']}"
-                            ),
-                            "media_type": image["media_type"],
-                            "data": image["data"],
-                        },
-                    },
-                ]
-            )
-    return content
 
 
 def extract_response_statistics(response_object, model_config: ModelConfig, end_tag: str = None):

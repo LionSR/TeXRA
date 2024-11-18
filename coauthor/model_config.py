@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Any
@@ -15,7 +16,7 @@ class ModelProvider(Enum):
 
 
 @dataclass
-class ModelConfig:
+class ModelConfig(ABC):
     name: str  # Short name (e.g., "sonnet++")
     full_name: str  # Full model name (e.g., "claude-3-5-sonnet-20241022")
     provider: ModelProvider
@@ -46,22 +47,12 @@ class ModelConfig:
     def is_openai_compatible(self) -> bool:
         return self.is_openai or self.is_openrouter or self.is_google
 
+    @abstractmethod
     def get_client(self):
         """Get the appropriate client for this model."""
-        if self.is_anthropic:
-            from anthropic import Anthropic
+        pass
 
-            return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
-        from openai import OpenAI
-
-        if self.is_openrouter:
-            return OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
-        elif self.is_openai:
-            return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        else:
-            return OpenAI(api_key=os.getenv("GOOGLE_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta")
-
+    @abstractmethod
     def create_response(
         self,
         client: Any,
@@ -72,13 +63,45 @@ class ModelConfig:
         extra_kwargs: Optional[Dict] = None,
     ) -> Any:
         """Create a response using the appropriate API call for this model."""
-        if self.is_anthropic:
-            return self._create_anthropic_response(client, messages, temperature, system_prompt, end_tag)
-        else:
-            return self._create_openai_response(client, messages, temperature, end_tag, extra_kwargs)
+        pass
 
-    def _create_anthropic_response(self, client, messages, temperature, system_prompt, end_tag):
-        """Create a response using Anthropic's API."""
+    @abstractmethod
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+        """Initialize messages for the conversation."""
+        pass
+
+    @abstractmethod
+    def create_reflection_message(self, user_message: str, figure_inputs=None) -> Dict:
+        """Create a reflection message for the model."""
+        pass
+
+    @abstractmethod
+    def create_image_content(self, image_contents: list) -> List[Dict]:
+        """Create image content for the model."""
+        pass
+
+    def compute_price(
+        self, input_tokens: int, output_tokens: int, cache_creation_tokens: Optional[int] = None, cache_read_tokens: Optional[int] = None
+    ) -> float:
+        """Compute the price for token usage."""
+        return (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
+
+
+@dataclass
+class AnthropicModelConfig(ModelConfig):
+    def get_client(self):
+        from anthropic import Anthropic
+        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+    def create_response(
+        self,
+        client: Any,
+        messages: List[Dict],
+        temperature: float,
+        system_prompt: str,
+        end_tag: Optional[str] = None,
+        extra_kwargs: Optional[Dict] = None,
+    ) -> Any:
         extra_headers = []
         if self.supports_prompt_caching:
             extra_headers.append("prompt-caching-2024-07-31")
@@ -95,8 +118,98 @@ class ModelConfig:
             betas=extra_headers if extra_headers else None,
         )
 
-    def _create_openai_response(self, client, messages, temperature, end_tag, extra_kwargs):
-        """Create a response using OpenAI-compatible API."""
+    def compute_price(
+        self, input_tokens: int, output_tokens: int, cache_creation_tokens: Optional[int] = None, cache_read_tokens: Optional[int] = None
+    ) -> float:
+        """Compute the price for token usage with prompt caching support."""
+        base_price = super().compute_price(input_tokens, output_tokens)
+
+        if not self.supports_prompt_caching:
+            return base_price
+
+        if cache_creation_tokens:
+            base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6
+        if cache_read_tokens:
+            base_price += (cache_read_tokens * self.input_price * 0.1) / 1e6
+
+        return base_price
+
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+        """Initialize messages for the conversation."""
+        messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
+
+        if figure_inputs:
+            from .message_utils import create_image_message
+            image_content = create_image_message(self, figure_inputs)
+            messages[-1]["content"].extend(image_content)
+
+        if self.supports_prompt_caching:
+            messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
+
+        messages[-1]["content"].append({"type": "text", "text": user_request})
+
+        return messages
+
+    def create_reflection_message(self, user_message: str, figure_inputs=None) -> Dict:
+        """Create a reflection message for Anthropic models."""
+        reflection_message = {"role": "user", "content": []}
+
+        if figure_inputs:
+            from .message_utils import create_image_message
+            image_content = create_image_message(self, figure_inputs)
+            reflection_message["content"].extend(image_content)
+
+        if self.supports_prompt_caching:
+            reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
+
+        reflection_message["content"].append({"type": "text", "text": user_message})
+
+        return reflection_message
+
+    def create_image_content(self, image_contents: list) -> List[Dict]:
+        """Create image content for Anthropic models."""
+        content = []
+        for image in image_contents:
+            if image["media_type"] == "application/pdf":
+                content.extend([
+                    {"type": "text", "text": f"Document: {image['file_name']}"},
+                    {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": image["data"]}},
+                ])
+            else:
+                content.extend([
+                    {"type": "text", "text": f"Image: {image['file_name']}"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image["media_type"],
+                            "data": image["data"],
+                        },
+                    },
+                ])
+        return content
+
+
+@dataclass
+class OpenAICompatibleModelConfig(ModelConfig):
+    def get_client(self):
+        from openai import OpenAI
+        if self.is_openrouter:
+            return OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
+        elif self.is_openai:
+            return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        else:  # Google
+            return OpenAI(api_key=os.getenv("GOOGLE_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta")
+
+    def create_response(
+        self,
+        client: Any,
+        messages: List[Dict],
+        temperature: float,
+        system_prompt: str,
+        end_tag: Optional[str] = None,
+        extra_kwargs: Optional[Dict] = None,
+    ) -> Any:
         kwargs = {
             "model": self.full_name,
             "messages": messages,
@@ -117,26 +230,58 @@ class ModelConfig:
 
         return client.chat.completions.create(**kwargs)
 
-    def compute_price(
-        self, input_tokens: int, output_tokens: int, cache_creation_tokens: Optional[int] = None, cache_read_tokens: Optional[int] = None
-    ) -> float:
-        """Compute the price for token usage."""
-        base_price = (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+        """Initialize messages for the conversation."""
+        messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-        if not self.supports_prompt_caching:
-            return base_price
+        if "o1" in self.name:
+            messages.insert(0, {"role": "user", "content": [{"type": "text", "text": system_prompt}]})
+        else:
+            messages.insert(0, {"role": "system", "content": system_prompt})
 
-        if cache_creation_tokens:
-            base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6
-        if cache_read_tokens:
-            base_price += (cache_read_tokens * self.input_price * 0.1) / 1e6
+        if figure_inputs:
+            from .message_utils import create_image_message
+            image_content = create_image_message(self, figure_inputs)
+            messages[-1]["content"].extend(image_content)
 
-        return base_price
+        messages[-1]["content"].append({"type": "text", "text": user_request})
+
+        return messages
+
+    def create_reflection_message(self, user_message: str, figure_inputs=None) -> Dict:
+        """Create a reflection message for OpenAI-compatible models."""
+        reflection_message = {"role": "user", "content": []}
+
+        if figure_inputs:
+            from .message_utils import create_image_message
+            image_content = create_image_message(self, figure_inputs)
+            reflection_message["content"].extend(image_content)
+
+        reflection_message["content"].append({"type": "text", "text": user_message})
+
+        return reflection_message
+
+    def create_image_content(self, image_contents: list) -> List[Dict]:
+        """Create image content for OpenAI-compatible models."""
+        content = []
+        for image in image_contents:
+            content.extend([
+                {"type": "text", "text": f"Image: {image['file_name']}"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image['media_type']};base64,{image['data']}",
+                        "media_type": image["media_type"],
+                        "data": image["data"],
+                    },
+                },
+            ])
+        return content
 
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
     # Anthropic Claude models
-    "sonnet++": ModelConfig(
+    "sonnet++": AnthropicModelConfig(
         name="sonnet++",
         full_name="claude-3-5-sonnet-20241022",
         provider=ModelProvider.ANTHROPIC,
@@ -145,7 +290,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=15.0,
         supports_prompt_caching=True,
     ),
-    "sonnet+": ModelConfig(
+    "sonnet+": AnthropicModelConfig(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
         provider=ModelProvider.ANTHROPIC,
@@ -154,7 +299,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=15.0,
         supports_prompt_caching=True,
     ),
-    "opus": ModelConfig(
+    "opus": AnthropicModelConfig(
         name="opus",
         full_name="claude-3-opus-20240229",
         provider=ModelProvider.ANTHROPIC,
@@ -163,7 +308,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=75.0,
         supports_prompt_caching=True,
     ),
-    "sonnet": ModelConfig(
+    "sonnet": AnthropicModelConfig(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
         provider=ModelProvider.ANTHROPIC,
@@ -172,7 +317,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=15.0,
         supports_prompt_caching=True,
     ),
-    "haiku+": ModelConfig(
+    "haiku+": AnthropicModelConfig(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
         provider=ModelProvider.ANTHROPIC,
@@ -182,7 +327,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_prompt_caching=True,
         supports_vision=False,
     ),
-    "haiku": ModelConfig(
+    "haiku": AnthropicModelConfig(
         name="haiku",
         full_name="claude-3-haiku-20240307",
         provider=ModelProvider.ANTHROPIC,
@@ -192,7 +337,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_prompt_caching=True,
     ),
     # OpenAI models
-    "gpto1": ModelConfig(
+    "gpto1": OpenAICompatibleModelConfig(
         name="gpto1",
         full_name="o1-preview-2024-09-12",
         provider=ModelProvider.OPENAI,
@@ -201,7 +346,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=60.0,
         supports_vision=False,
     ),
-    "gpto1-": ModelConfig(
+    "gpto1-": OpenAICompatibleModelConfig(
         name="gpto1-",
         full_name="o1-mini-2024-09-12",
         provider=ModelProvider.OPENAI,
@@ -210,7 +355,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=12.0,
         supports_vision=False,
     ),
-    "gpt4o": ModelConfig(
+    "gpt4o": OpenAICompatibleModelConfig(
         name="gpt4o",
         full_name="gpt-4o-2024-08-06",
         provider=ModelProvider.OPENAI,
@@ -218,7 +363,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=2.5,
         output_price=10.0,
     ),
-    "gpt4t": ModelConfig(
+    "gpt4t": OpenAICompatibleModelConfig(
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
         provider=ModelProvider.OPENAI,
@@ -226,7 +371,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=10.0,
         output_price=30.0,
     ),
-    "gpt4o-": ModelConfig(
+    "gpt4o-": OpenAICompatibleModelConfig(
         name="gpt4o-",
         full_name="gpt-4o-mini-2024-07-18",
         provider=ModelProvider.OPENAI,
@@ -234,7 +379,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=0.15,
         output_price=0.6,
     ),
-    "gpt4ol": ModelConfig(
+    "gpt4ol": OpenAICompatibleModelConfig(
         name="gpt4ol",
         full_name="chatgpt-4o-latest",
         provider=ModelProvider.OPENAI,
@@ -243,7 +388,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=15.0,
     ),
     # Google Gemini models
-    "gemini1p+": ModelConfig(
+    "gemini1p+": OpenAICompatibleModelConfig(
         name="gemini1p+",
         full_name="gemini-1.5-pro-latest",
         provider=ModelProvider.GOOGLE,
@@ -251,7 +396,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=1.25,
         output_price=5.0,
     ),
-    "gemini1f+": ModelConfig(
+    "gemini1f+": OpenAICompatibleModelConfig(
         name="gemini1f+",
         full_name="gemini-1.5-fresh-latest",
         provider=ModelProvider.GOOGLE,
@@ -260,7 +405,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=0.3,
     ),
     # OpenRouter models
-    "gpt4oOR": ModelConfig(
+    "gpt4oOR": OpenAICompatibleModelConfig(
         name="gpt4oOR",
         full_name="openai/gpt-4o:extended",
         provider=ModelProvider.OPENROUTER,
@@ -268,7 +413,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=6.0,
         output_price=18.0,
     ),
-    "gemini1p+OR": ModelConfig(
+    "gemini1p+OR": OpenAICompatibleModelConfig(
         name="gemini1p+OR",
         full_name="google/gemini-pro-1.5",
         provider=ModelProvider.OPENROUTER,
@@ -276,7 +421,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=2.5,
         output_price=7.5,
     ),
-    "gemini1f+OR": ModelConfig(
+    "gemini1f+OR": OpenAICompatibleModelConfig(
         name="gemini1f+OR",
         full_name="google/gemini-flash-1.5",
         provider=ModelProvider.OPENROUTER,
@@ -284,7 +429,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=0.075,
         output_price=0.3,
     ),
-    "llama3+OR": ModelConfig(
+    "llama3+OR": OpenAICompatibleModelConfig(
         name="llama3+OR",
         full_name="meta-llama/llama-3.1-405b-instruct",
         provider=ModelProvider.OPENROUTER,
