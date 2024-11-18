@@ -135,7 +135,7 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
 
 def get_all_replacements() -> Dict[str, str]:
     """Get all replacement patterns combined into a single dictionary."""
-    all_replacements = {}
+    all_replacements: Dict[str, str] = {}
     categories = [
         # STYLE CHOICES
         EQUATION_REPLACEMENTS,

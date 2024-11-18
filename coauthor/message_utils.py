@@ -9,12 +9,12 @@ from .state import State
 from .config import AgentSettings
 
 
-def has_end_tag(file_content, end_tag, document_tag):
+def has_end_tag(file_content: str, end_tag: str, document_tag: str) -> bool:
     """Check if the file content contains the end tag or document tag."""
     return end_tag in file_content or f"</{document_tag}>" in file_content
 
 
-def initialize_messages(model_config: ModelConfig, system_prompt, user_prefix, user_request, figure_inputs):
+def initialize_messages(model_config: ModelConfig, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None):
     """Initialize messages for the conversation."""
     messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
@@ -47,8 +47,8 @@ def create_image_message(model_config: ModelConfig, figure_inputs):
     figure_inputs = [str(fig) for fig in figure_inputs]
 
     for figure_input in figure_inputs:
-        if not os.path.exists(figure_input):
-            logger.error(f"File not found: {figure_input}")
+        if not os.path.exists(figure_input) or os.path.getsize(figure_input) == 0:
+            logger.error(f"File not found or empty: {figure_input}")
             continue
 
         _, file_extension = os.path.splitext(figure_input)
@@ -68,7 +68,7 @@ def create_image_message(model_config: ModelConfig, figure_inputs):
     return content
 
 
-def _process_image_file(figure_input, file_extension, model_config: ModelConfig):
+def _process_image_file(figure_input: str, file_extension: str, model_config: ModelConfig):
     """Process the image file and return the image data and media type."""
     if file_extension.lower() == ".pdf":
         # For PDFs, use document type for Anthropic models and convert to PNG for others
@@ -91,7 +91,7 @@ def _process_image_file(figure_input, file_extension, model_config: ModelConfig)
     return img_data, media_type
 
 
-def _add_image_content(image_contents, added_figures, figure_input, img_data, media_type):
+def _add_image_content(image_contents: list, added_figures: list, figure_input: str, img_data: str, media_type: str):
     """Add image content to the lists."""
     if isinstance(img_data, list):
         logger.debug(f"Adding {len(img_data)} pages to the image contents")
@@ -104,7 +104,7 @@ def _add_image_content(image_contents, added_figures, figure_input, img_data, me
         added_figures.append(figure_input)
 
 
-def _create_image_content(image_contents, model_config):
+def _create_image_content(image_contents: list, model_config: ModelConfig):
     """Create the image content for the message."""
     content = []
     for image in image_contents:
@@ -134,7 +134,7 @@ def _create_image_content(image_contents, model_config):
     return content
 
 
-def extract_response_statistics(response_object, model_config: ModelConfig, end_tag=None):
+def extract_response_statistics(response_object, model_config: ModelConfig, end_tag: str = None):
     """Extract statistics from the response object."""
     if model_config.is_anthropic:
         return _extract_anthropic_statistics(response_object, end_tag)
@@ -142,7 +142,7 @@ def extract_response_statistics(response_object, model_config: ModelConfig, end_
         return _extract_openai_statistics(response_object, end_tag)
 
 
-def _extract_openai_statistics(response_object, end_tag):
+def _extract_openai_statistics(response_object, end_tag: str):
     """Extract statistics from OpenAI response object."""
     stop_reason = response_object.choices[0].finish_reason
     new_response = response_object.choices[0].message.content.strip()
@@ -160,7 +160,7 @@ def _extract_openai_statistics(response_object, end_tag):
     return new_response, input_tokens, output_tokens, stop_reason
 
 
-def _extract_anthropic_statistics(response_object, end_tag):
+def _extract_anthropic_statistics(response_object, end_tag: str):
     """Extract statistics from Anthropic response object."""
     input_tokens = response_object.usage.input_tokens
     output_tokens = response_object.usage.output_tokens
@@ -186,7 +186,7 @@ def _extract_anthropic_statistics(response_object, end_tag):
     return new_response, input_tokens, output_tokens, stop_reason
 
 
-def handle_openai_continuation(messages, new_response, end_tag, K):
+def handle_openai_continuation(messages, new_response: str, end_tag: str, K: int):
     """Handle continuation for OpenAI models."""
     prefill_tokens = new_response[-K:]
     user_message_continuation = (
@@ -199,7 +199,11 @@ def handle_openai_continuation(messages, new_response, end_tag, K):
 
 
 def check_stop_conditions(
-    stop_reason: str, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool
+    stop_reason: str,
+    new_response: str,
+    state: State,
+    agent_settings: AgentSettings,
+    massive_repetition_detected: bool
 ) -> tuple[bool, bool]:
     """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
@@ -216,7 +220,14 @@ def check_stop_conditions(
     return end_turn, should_stop
 
 
-def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool, K=200) -> None:
+def print_stop_flags(
+    end_turn: bool,
+    new_response: str,
+    state: State,
+    agent_settings: AgentSettings,
+    massive_repetition_detected: bool,
+    K: int = 200
+):
     """Print the flags indicating why the conversation stopped."""
     logger.debug("Printing the flags")
     logger.debug(f"end_turn: {end_turn}")
