@@ -10,12 +10,12 @@ from .model_config import ModelConfig
 from .config import TaskConfig
 
 
-def get_db_path():
+def get_db_path() -> str:
     """Get path to SQLite database in current working directory"""
     return os.path.join(os.getcwd(), ".coauthor_logs.db")
 
 
-def init_db():
+def init_db() -> None:
     """Initialize SQLite database with a single comprehensive table"""
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
@@ -52,7 +52,7 @@ def init_db():
     conn.close()
 
 
-def log_start(task_config: TaskConfig):
+def log_db_start(task_config: TaskConfig) -> int:
     """Initialize a new log entry and return its ID
 
     Args:
@@ -69,7 +69,7 @@ def log_start(task_config: TaskConfig):
     figure_inputs = json.dumps(task_config.figure_inputs) if task_config.figure_inputs else None
     sample_files = json.dumps(task_config.sample_files) if task_config.sample_files else None
     output_files = json.dumps(task_config.output_files) if task_config.output_files else None
-    actual_output_files = json.dumps([])  # Initialize as empty, will be updated by log_output_files
+    actual_output_files = json.dumps([])  # Initialize as empty, will be updated by log_db_output_files
 
     # Initialize empty array for round stats
     round_stats = json.dumps([])
@@ -93,7 +93,7 @@ def log_start(task_config: TaskConfig):
             auxiliary_files,
             figure_inputs,
             sample_files,
-            None,  # output_file - will be updated later by log_output_files
+            None,  # output_file - will be updated later by log_db_output_files
             output_files,
             actual_output_files,
             False,  # is_reflection - will be updated during reflection
@@ -115,7 +115,12 @@ def log_start(task_config: TaskConfig):
     return log_id
 
 
-def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=None, prompt_caching=False):
+def log_db_and_print_statistics(
+    state: State,
+    model_config: ModelConfig,
+    log_id: Optional[int] = None,
+    prompt_caching: bool = False
+) -> None:
     """Log statistics to SQLite and print them to console"""
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
@@ -185,7 +190,11 @@ def log_and_print_statistics(state: State, model_config: ModelConfig, log_id=Non
         conn.close()
 
 
-def log_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None):
+def log_db_output_files(
+    output_file: str,
+    log_id: int,
+    all_output_files: Optional[List[str]] = None
+) -> None:
     """
     Args:
         output_file: The current output file
@@ -230,7 +239,7 @@ def log_output_files(output_file: str, log_id: int, all_output_files: Optional[L
     conn.close()
 
 
-def get_task_info(log_id):
+def get_task_info_from_db(log_id: int):
     """Retrieve task information for VS Code frontend"""
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
