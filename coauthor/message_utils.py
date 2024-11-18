@@ -99,7 +99,7 @@ def _add_image_content(image_contents: list, added_figures: list, figure_input: 
             image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
         added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
     else:
-        logger.debug(f"Adding single page to the image contents")
+        logger.debug(f"Adding single page to the image contents: {figure_input}")
         image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
         added_figures.append(figure_input)
 

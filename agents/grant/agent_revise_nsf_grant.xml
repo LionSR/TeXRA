@@ -95,7 +95,7 @@ Then, following your plan in the scratchpad, please output updated versions of a
 
 <nsf_grant_documents>
 <document name="{OUTPUT_FILES_ORDER[0]}">
-{{ 1ST_UPDATED_LATEX_DOCUMENT }}
+% 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
 </document>
 <document name="{OUTPUT_FILES_ORDER[1]}">
 % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
