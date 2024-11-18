@@ -199,11 +199,7 @@ def handle_openai_continuation(messages, new_response: str, end_tag: str, K: int
 
 
 def check_stop_conditions(
-    stop_reason: str,
-    new_response: str,
-    state: State,
-    agent_settings: AgentSettings,
-    massive_repetition_detected: bool
+    stop_reason: str, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool
 ) -> tuple[bool, bool]:
     """Check if the conversation should stop."""
     end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
@@ -220,14 +216,7 @@ def check_stop_conditions(
     return end_turn, should_stop
 
 
-def print_stop_flags(
-    end_turn: bool,
-    new_response: str,
-    state: State,
-    agent_settings: AgentSettings,
-    massive_repetition_detected: bool,
-    K: int = 200
-):
+def print_stop_flags(end_turn: bool, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool, K: int = 200):
     """Print the flags indicating why the conversation stopped."""
     logger.debug("Printing the flags")
     logger.debug(f"end_turn: {end_turn}")
