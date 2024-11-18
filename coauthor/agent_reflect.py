@@ -120,14 +120,14 @@ class BaseReflectChainAgent(ABC):
         # logger.debug(f"Agent settings: {self.agent_settings}")
         # logger.debug(f"Agent prompts: {self.agent_prompts}")
 
-        # Initialize logging
-        self.log_file = log_start(self.args)  # Keep args here as it's used in log_start
-
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
         self.output_file[1] = self.get_output_file(round=1)
         self.tex_count_stats = None
         self.first_k_tex_document = None
+
+        # Initialize logging
+        self.log_file = log_start(self.task_config, self.agent_settings)  # Keep args here as it's used in log_start
 
     @abstractmethod
     def get_user_vars(self):
@@ -304,7 +304,9 @@ class ThinkAndWrite(BaseReflectChainAgent):
         else:
             file_extension = self.agent_settings.output_ext
 
-        return get_output_file_name(base_output_file, self.task_config.agent, self.model_config.name, file_extension, round, self.task_config.edited_file)
+        return get_output_file_name(
+            base_output_file, self.task_config.agent, self.model_config.name, file_extension, round, self.task_config.edited_file
+        )
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
         """Handle the output for the given round."""
@@ -325,7 +327,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_output_files(output_file, self.log_file)
+        log_output_files(output_file, self.log_file, self.output_files[round])
         log_and_print_statistics(state, self.model_config, self.log_file)
         return self.output_files[round]
 
@@ -360,7 +362,7 @@ class DirectWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_output_files(output_file, self.log_file)
+        log_output_files(output_file, self.log_file, self.output_files[round])
         log_and_print_statistics(state, self.model_config, self.log_file)
-        
+
         return self.output_files[round]
