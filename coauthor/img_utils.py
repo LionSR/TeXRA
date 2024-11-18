@@ -1,12 +1,13 @@
 import base64
 from PIL import Image
+import os
 import io
 import fitz
 
-from typing import Union, List
+from typing import List
 
 
-def get_base64_encoded_image(image_path):
+def get_base64_encoded_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         binary_data = image_file.read()
         base_64_encoded_data = base64.b64encode(binary_data)
@@ -69,7 +70,7 @@ def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (
     """
     doc = fitz.open(pdf_path)
 
-    base64_encoded_pngs: List[str] = []
+    base64_encoded_pngs = []
 
     for page_num in range(min(doc.page_count, max_pages)):
         base64_encoded = single_page_pdf_to_png(pdf_path, page_num, quality, max_size)
@@ -80,7 +81,7 @@ def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (
     return base64_encoded_pngs
 
 
-def process_pdf_input(pdf_path: str, is_openai_compatible: bool = False, **kwargs) -> Union[str, List[str], None]:
+def process_pdf_input(pdf_path: str, is_openai_compatible: bool = False, **kwargs):
     """
     Process a PDF file and return base64 encoded PNG image(s).
 
@@ -117,5 +118,8 @@ def page_count_pdf(pdf_path: str) -> int:
     Returns:
         int: Number of pages in the PDF.
     """
-    doc = fitz.open(pdf_path)
-    return doc.page_count
+    if os.path.exists(pdf_path):
+        doc = fitz.open(pdf_path)
+        return doc.page_count
+    else:
+        return 0

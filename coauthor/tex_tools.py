@@ -7,7 +7,12 @@ from .file_utils import write_file, read_file
 from .replacement_utils import get_replacements_by_category, apply_replacement_regex
 
 
-def run_external_command(command, output_file=None, encoding="utf-8", capture_output=True):
+def run_external_command(
+    command: list[str],
+    output_file: str = None,
+    encoding: str = "utf-8",
+    capture_output: bool = True
+) -> tuple[bool, str | None, str | None]:
     """Run an external command and handle its output.
 
     Args:
@@ -56,7 +61,7 @@ def run_external_command(command, output_file=None, encoding="utf-8", capture_ou
         return False, None, error_message
 
 
-def get_tex_count(file_paths):
+def get_tex_count(file_paths: list[str]) -> str | None:
     """
     Get full statistics for LaTeX documents using the texcount Perl script.
 
@@ -92,7 +97,7 @@ def get_tex_count(file_paths):
     return None
 
 
-def handle_tex_count(kwargs, input_files):
+def handle_tex_count(kwargs: dict, input_files: list[str]) -> str | None:
     if kwargs.get("include_tex_count"):
         if isinstance(input_files, str):
             input_files = [input_files]
@@ -102,7 +107,7 @@ def handle_tex_count(kwargs, input_files):
             kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
 
 
-def process_tikzpicture_endings(file_path):
+def process_tikzpicture_endings(file_path: str) -> None:
     """
     Process the file to fix tikzpicture endings with proper indentation.
 
@@ -121,7 +126,7 @@ def process_tikzpicture_endings(file_path):
     logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
-def compile_latex_to_pdf(tex_file):
+def compile_latex_to_pdf(tex_file: str) -> bool:
     output_directory = os.path.dirname(tex_file)
     command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, tex_file]
 
@@ -138,7 +143,7 @@ def compile_latex_to_pdf(tex_file):
         return False
 
 
-def run_latexindent(file_path):
+def run_latexindent(file_path: str) -> bool:
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
     command = ["latexindent", file_path, "-w", "-s"]
     if latexindent_config:
@@ -172,7 +177,13 @@ def run_latexindent(file_path):
         return False
 
 
-def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_indent=False):
+def run_latexdiff(
+    input_file: str,
+    output_file: str,
+    agent: str | None = None,
+    suffix: str = "_diff",
+    run_indent: bool = False
+) -> str | None:
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
@@ -186,11 +197,8 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
             logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    with open(input_file) as f:
-        input_content = f.read()
-    with open(output_file) as f:
-        output_content = f.read()
-
+    input_content = read_file(input_file)
+    output_content = read_file(output_file)
     if (
         "\\begin{document}" not in input_content
         or "\\end{document}" not in input_content
@@ -221,15 +229,13 @@ def run_latexdiff(input_file, output_file, agent=None, suffix="_diff", run_inden
     process_tikzpicture_endings(diff_file_name)
 
 
-def run_latexdiff_vc(input_file, commit_hash):
+def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
-
+    
     # Check if the input file contains \begin{document} and \end{document}
-    with open(input_file) as f:
-        input_content = f.read()
-
+    input_content = read_file(input_file)
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
         logger.warning("Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.")
         return None
@@ -257,64 +263,68 @@ def run_latexdiff_vc(input_file, commit_hash):
     process_tikzpicture_endings(diff_file_name)
 
 
-def run_latexdiff_multiple(input_files, edited_files):
+def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> None:
     if len(input_files) != len(edited_files):
-        raise ValueError("The number of input files must match the number of edited files.")
+        logger.error("The number of input files must match the number of edited files. Stopping latexdiff.")
+        return None
 
     for input_file, edited_file in zip(input_files, edited_files):
         run_latexdiff(input_file, edited_file)
 
 
-def run_latexdiff_vc_multiple(input_files, commit_hash):
+def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
     for input_file in input_files:
         run_latexdiff_vc(input_file, commit_hash)
 
 
-def process_diff_file(diff_file_name):
-    with open(diff_file_name, encoding="utf-8") as diff_file:
-        lines = diff_file.readlines()
+def process_diff_file(diff_file_name: str) -> None:
+    """Process the LaTeX diff file to fix formatting issues."""
+    if not os.path.exists(diff_file_name):
+        logger.warning(f"File {diff_file_name} does not exist. Skipping.")
+        return None
 
-    with open(diff_file_name, "w", encoding="utf-8") as diff_file:
-        add_block = False
-        packages_to_add_newline = [
-            "\\usepackage{tikz}",
-            "\\usepackage{pgfplots}",
-            "\\providecommand{\\DIFaddbegin}",
-            "\\RequirePackage[normalem]{ulem}",
-            "\\usetikzlibrary",
-            "\\RequirePackage{color}",
-        ]
-        document_started = False
-        for line in lines:
-            if line.startswith("%!TEX root") or line.startswith("% !TEX root") or line.startswith("%! TEX root"):
-                continue
+    content = read_file(diff_file_name)
+    lines = content.splitlines()
 
-            if any(pkg in line for pkg in packages_to_add_newline):
-                diff_file.write("\n")
+    add_block = False
+    PACKAGES_TO_ADD_NEWLINE = [
+        "\\usepackage{tikz}",
+        "\\usepackage{pgfplots}",
+        "\\providecommand{\\DIFaddbegin}",
+        "\\RequirePackage[normalem]{ulem}",
+        "\\usetikzlibrary",
+        "\\RequirePackage{color}",
+    ]
 
-            if "\\documentclass" in line or "\\input" in line:
-                add_block = False
-                document_started = True
-            elif ("%DIF ADD" in line or "Here is" in line) and not document_started:
-                add_block = True
+    document_started = False
+    processed_lines = []
+    for line in lines:
+        if line.startswith("%!TEX root") or line.startswith("% !TEX root") or line.startswith("%! TEX root"):
+            continue
 
-            if not add_block:
-                diff_file.write(line)
+        if any(pkg in line for pkg in PACKAGES_TO_ADD_NEWLINE):
+            processed_lines.append("")
 
-            if "\\RequirePackage{color}" in line:
-                diff_file.write("\n")
+        if "\\documentclass" in line or "\\input" in line:
+            add_block = False
+            document_started = True
+        elif ("%DIF ADD" in line or "Here is" in line) and not document_started:
+            add_block = True
 
-    logger.info(f"Line breaks added to {diff_file_name}")
+        if not add_block:
+            processed_lines.append(line)
+
+    write_file(diff_file_name, "\n".join(processed_lines))
 
 
-def run_latexdiff_for_round(base_file, output_file, agent, round):
+def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round: int) -> str | None:
     if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
         run_latexdiff(base_file, output_file, agent, suffix="_diff")
     else:
         logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
 
 
-def run_latexdiff_between_rounds(output_file1, output_file2, agent):
+def run_latexdiff_between_rounds(output_file1: str, output_file2: str, agent: str) -> str | None:
     if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
         first_round = re.search(r"_r(\d+)_", output_file1).group(1)
         second_round = re.search(r"_r(\d+)_", output_file2).group(1)

@@ -2,7 +2,7 @@ from coauthor.agent_reflect import DirectWrite
 import coauthor as coa
 import os
 import re
-from .state import State
+from coauthor import State
 from coauthor.logging_utils import logger
 
 agent_path = coa.get_agent_path(coa, "merge")
@@ -34,22 +34,23 @@ def get_output_file_name_merge(input_file, edited_file, round):
 class Merge(DirectWrite):
     def __init__(self, args, agent_path):
         super().__init__(args, agent_path)
-        self.input_file = args.input_file
-        self.edited_file = args.edited_file
-        self.output_file = [get_output_file_name_merge(self.input_file, self.edited_file, r) for r in range(2)]
+        self.task_config.input_file = args.input_file
+        self.task_config.edited_file = args.edited_file
+        self.output_file = [get_output_file_name_merge(self.task_config.input_file, self.task_config.edited_file, r) for r in range(2)]
 
     def get_user_vars(self):
         user_vars = super().get_user_vars()
+        # print(f"User vars: {user_vars}")
         user_vars.update(
             {
-                "ORIGINAL_LATEX": coa.read_file(self.input_file),
-                "EDITED_LATEX": coa.read_file(self.edited_file),
+                "ORIGINAL_LATEX": coa.read_file(self.task_config.input_file),
+                "EDITED_LATEX": coa.read_file(self.task_config.edited_file),
             }
         )
         return user_vars
 
     def get_output_file(self, round):
-        return get_output_file_name_merge(self.args.input_file, self.args.edited_file, round)
+        return get_output_file_name_merge(self.task_config.input_file, self.task_config.edited_file, round)
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> None:
         if end_turn:
@@ -63,6 +64,7 @@ def main():
     args = parser.parse_args()
 
     merge = Merge(args, agent_path)
+    print(f"Merge args: {args}")
     merge.run()
 
 
