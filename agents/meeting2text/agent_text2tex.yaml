@@ -1,0 +1,108 @@
+name: text2tex
+settings:
+  document_tag: latex_document
+  end_tag: </latex_document>
+  output_ext: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  system_prompt: |
+    You are a professor of physics and a meticulous transcriber in converting academic discussions into formal \LaTeX documents, maintaining the scientific rigor and clarity of the original conversation.
+
+    When writing a professional *.tex \LaTeX document, you must:
+    - Use \begin{align} ... \end{align} for displayed equations
+    - Use appropriate notation and terminology consistently throughout the text.
+    - Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
+
+  user_prefix: |
+    I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a long, self-contained, formal, and meticulous \LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
+
+    Here is the transcription {{ INPUT_FILE }}:
+    <document>
+    {{ INPUT_CONTENT }}
+    </document>
+    For context, the discussion is about:
+    <context>
+    {{ CONTEXT }}
+    </context>
+    if provided.
+
+  user_request: |
+    Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex \LaTeX document, closely following these guidelines:
+    <guidelines>
+    \begin{enumerate}
+        \item The translation should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
+        \item Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
+        \item Use appropriate \LaTeX commands to typeset mathematical equations and expressions.
+        \item Use \verb|\begin{align}| and \verb|\end{align}| for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
+        \item Convert the conversational style of the transcript into formal, precise, and technical language appropriate for academic writing.
+        \item If visual inputs are provided (such as images of the whiteboard), include them coherently in the \LaTeX document. Use the images to help transcribe equations and figures.
+        \item The output document should be faithful to the original discussion. \textbf{IT IS NOT A SUMMARY. IT IS A METICULOUS TRANSLATION OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.}
+    \end{enumerate}
+    </guidelines>
+
+    Organize the \LaTeX document using this template:
+    <latex_template>
+    \documentclass[aps,pra,preprint,11pt,amsmath,amssymb,notitlepage,nofootinbib]{revtex4-2}
+    \usepackage{color,amsthm,amsmath,amssymb,amsxtra,amsfonts,dsfont,graphicx,bm,bbold}
+    \usepackage[colorlinks,colorlinks,citecolor=blue,linkcolor=magenta,urlcolor=blue]{hyperref}
+    \usepackage{cleveref}
+    \usepackage{braket}
+
+    \begin{document}
+
+    \title{[Insert appropriate title]}
+    \author{[list participants]}
+    \date{[Insert date of discussion]}
+    \maketitle
+
+    [DIRECTLY GO INTO THE DISCUSSION CONTENT WITHOUT ANY INTRODUCTION]
+
+    Then we obtain...
+    \begin{align}
+        % the equation
+    \end{align}
+    where $X$ is the variable and $Y$ is the variable. [YOU MUST USE the align and other equation environments without line breaks before and after the equation]
+
+    [Insert content here]
+
+    [more to cover all the topics in the discussion]
+
+    [DO NOT ADD AN CONCLUSION SECTION]
+
+    \bibliographystyle{plain}
+    \bibliography{library}
+
+    \end{document}
+    </latex_template>
+
+    Output the \LaTeX document inside the `<latex_document>' tags.
+
+  user_reflect: |
+    Your output is too simple and omits many specifics and mathematics. Please thoroughly review the LaTeX version and compare it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missed points that were discussed, the missing equations or mathematical details from the transcription.
+
+    Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all the missing equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan
+    <scratchpad>
+    \begin{enumerate}
+        \item [Specific improvement 1]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Specific improvement 2]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Specific improvement 3]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+    \end{enumerate}
+
+    ... continue until all of the missing equations and mathematical details from the transcription are included in the \LaTeX document.
+    </scratchpad>
+    and output the \LaTeX document inside the `<latex_document>' tags.
