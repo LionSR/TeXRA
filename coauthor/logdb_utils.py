@@ -115,12 +115,7 @@ def log_db_start(task_config: TaskConfig) -> int:
     return log_id
 
 
-def log_db_and_print_statistics(
-    state: State,
-    model_config: ModelConfig,
-    log_id: Optional[int] = None,
-    prompt_caching: bool = False
-) -> None:
+def log_db_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None, prompt_caching: bool = False) -> None:
     """Log statistics to SQLite and print them to console"""
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
@@ -190,11 +185,7 @@ def log_db_and_print_statistics(
         conn.close()
 
 
-def log_db_output_files(
-    output_file: str,
-    log_id: int,
-    all_output_files: Optional[List[str]] = None
-) -> None:
+def log_db_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None) -> None:
     """
     Args:
         output_file: The current output file

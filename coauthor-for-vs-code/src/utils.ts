@@ -134,7 +134,7 @@ export async function listFigureFiles(): Promise<string[]> {
 export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
-  
+
   const ignoredExtensions = getNestedConfig<string[]>(
     'files.ignored.fileExtensions',
     [],
