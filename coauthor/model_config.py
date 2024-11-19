@@ -557,12 +557,12 @@ class OpenAICompatibleModelConfig(ModelConfig):
                 prefill += first_k_tex_document
                 accumulated_output = ""
 
-            if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
-                messages.append({"role": "assistant", "content": "```latex\n"})
-            else:
-                openai_prefill = f"Start your response with\n{prefill}"
-                messages[-1]["content"].append({"type": "text", "text": openai_prefill})
-                logger.debug(f"OpenAI prefill: {openai_prefill}")
+                if agent_settings.output_ext == "tex" and first_k_tex_document:
+                    prefill = f"<latex_document>{first_k_tex_document}"
+
+            openai_prefill = f"Start your response with\n{prefill}"
+            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
+            logger.debug(f"OpenAI prefill: {openai_prefill}")
 
         return accumulated_output, False, messages
 
