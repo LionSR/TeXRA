@@ -7,6 +7,8 @@ settings:
     - |
       Here is the faithfully and correctly edited transcript:
       <edited_transcript>
+  required_files:
+    OTTER_INPUT_FILE: otter_transcript.txt
 
 prompts:
   system_prompt: |

@@ -7,6 +7,9 @@ settings:
   prefills:
     - <latex_document> \chapter
     - <latex_document>
+  required_files:
+  - DOCUMENT_CLS: lecture.cls
+  - COMMANDS_FILE: command.tex
 
 prompts:
   system_prompt: |
@@ -49,7 +52,6 @@ prompts:
     <document_class>
     {{ DOCUMENT_CLS_CONTENT }}
     </document_class>
-
     <command>
     {{ COMMAND_CONTENT }}
     </command>

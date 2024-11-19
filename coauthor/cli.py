@@ -202,16 +202,12 @@ def draw_qi(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
-@click.option("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
-def meeting2text(model, input_file, example_transcript=None, example_edited_transcript=None, agent="transcribe_dual", **kwargs):
+def meeting2text(model, input_file, agent="transcribe_dual", **kwargs):
     execute_agent(
         "meeting2text",
         agent,
         model,
         input_file,
-        example_transcript=example_transcript,
-        example_edited_transcript=example_edited_transcript,
         **kwargs,
     )
 
@@ -242,12 +238,8 @@ def paper2note(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--sample_tex", type=str, help="Path to a sample LaTeX file in the desired style.")
-@click.option("--document_cls", type=str, default="lecture.cls", help="Path to the document class file.")
-@click.option("--commands_file", type=str, default="command.tex", help="Path to the file containing custom LaTeX commands.")
-@click.option("--instruction", type=str, default=None, help="Instruction for processing")
-def adapt(model, input_file, sample_tex, document_cls="lecture.cls", commands_file="command.tex", **kwargs):
-    execute_agent("adapt", "adapt", model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
+def adapt(model, input_file, **kwargs):
+    execute_agent("adapt", "adapt", model, input_file, **kwargs)
 
 
 @click.command()
@@ -273,21 +265,9 @@ def correct_supp_prl(model, input_file, **kwargs):
 @shared_arguments
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
-    _, _, prompt_dir = get_common_env(model)
-    execute_agent(
-        "rebuttal_prl",
-        "reply_letter",
-        model,
-        input_file,
-        supp_file=supp_file,
-        cover_letter="rebuttal/cover_letter.txt",
-        instruction="rebuttal/instruction.txt",
-        editor_letter="rebuttal/editor_letter.txt",
-        report_a="rebuttal/report_a.txt",
-        report_b="rebuttal/report_b.txt",
-        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
-        **kwargs,
-    )
+    # _, _, prompt_dir = get_common_env(model)
+    # use example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt" if we want to use local resources
+    execute_agent("rebuttal_prl", "reply_letter", model, input_file, supp_file=supp_file, **kwargs)
 
 
 @click.command()
@@ -295,22 +275,7 @@ def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 @click.option("--draft_reply_letter", type=str, help="Path to the draft reply letter.")
 def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
-    _, _, prompt_dir = get_common_env(model)
-    execute_agent(
-        "rebuttal_prl",
-        "revise_main",
-        model,
-        input_file,
-        supp_file=supp_file,
-        draft_reply_letter=draft_reply_letter,
-        cover_letter="rebuttal/cover_letter.txt",
-        instruction="rebuttal/instruction.txt",
-        editor_letter="rebuttal/editor_letter.txt",
-        report_a="rebuttal/report_a.txt",
-        report_b="rebuttal/report_b.txt",
-        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
-        **kwargs,
-    )
+    execute_agent("rebuttal_prl", "revise_main", model, input_file, supp_file=supp_file, draft_reply_letter=draft_reply_letter, **kwargs)
 
 
 @click.command()
@@ -320,7 +285,6 @@ def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=
 @click.option("--draft_main_content", type=str, help="Path to the draft main content file.")
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
-    _, _, prompt_dir = get_common_env(model)
     execute_agent(
         "rebuttal_prl",
         "revise_supp",
@@ -330,12 +294,6 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
         draft_reply_letter=draft_reply_letter,
         draft_main_content=draft_main_content,
         supp_file=supp_file,
-        cover_letter="rebuttal/cover_letter.txt",
-        instruction="rebuttal/instruction.txt",
-        editor_letter="rebuttal/editor_letter.txt",
-        report_a="rebuttal/report_a.txt",
-        report_b="rebuttal/report_b.txt",
-        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -345,7 +303,6 @@ def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_m
 @click.option("--main_content", type=str, help="Path to the main content file.")
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kwargs):
-    _, _, prompt_dir = get_common_env(model)
     execute_agent(
         "rebuttal_prl",
         "polish_reply",
@@ -353,13 +310,6 @@ def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kw
         input_file,
         main_content=main_content,
         supp_file=supp_file,
-        draft_reply_letter=input_file,
-        cover_letter="rebuttal/cover_letter.txt",
-        instruction="rebuttal/instruction.txt",
-        editor_letter="rebuttal/editor_letter.txt",
-        report_a="rebuttal/report_a.txt",
-        report_b="rebuttal/report_b.txt",
-        example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt",
         **kwargs,
     )
 
@@ -421,11 +371,6 @@ def clean_output():
 @click.command()
 def clean_build():
     run_clean_build()
-
-
-@click.command()
-def indent_tex():
-    run_indent_tex()
 
 
 @click.command()
@@ -592,7 +537,6 @@ def revise_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def draft_rebuttal_prl(model, input_file, **kwargs):
     execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
 

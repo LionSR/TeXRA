@@ -12,8 +12,8 @@ class Meeting2Text(DirectWrite):
             user_vars.update(
                 {
                     "TRANSCRIPT": coa.read_file(self.args.input_file),
-                    "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript),
-                    "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
+                    "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.sample_files[0]) if self.args.sample_files else None,
+                    "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.sample_files[1]) if len(self.args.sample_files) > 1 else None,
                 }
             )
         elif self.args.agent == "transcribe_dual":
@@ -34,7 +34,6 @@ class Text2Tex(ThinkAndWrite):
         user_vars = super().get_user_vars()
         user_vars.update(
             {
-                "INPUT_CONTENT": coa.read_file(self.args.input_file),
                 "RESEARCH_NOTE": coa.read_file(self.args.sample_files[0]) if self.args.sample_files else None,
             }
         )
@@ -46,7 +45,6 @@ class Text2TexDraft(Text2Tex):
         user_vars = super().get_user_vars()
         user_vars.update(
             {
-                "DRAFT_CONTENT": coa.read_file(self.args.input_file),
                 "TRANSCRIPT_CONTENT": coa.read_file(self.args.sample_files[0]) if self.args.sample_files else None,
             }
         )
@@ -55,8 +53,6 @@ class Text2TexDraft(Text2Tex):
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--example_transcript", type=str, default=None, help="Path to the example transcript file.")
-    parser.add_argument("--example_edited_transcript", type=str, default=None, help="Path to the example edited transcript file.")
     parser.add_argument(
         "--agent",
         type=str,

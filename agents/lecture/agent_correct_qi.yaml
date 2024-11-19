@@ -5,7 +5,6 @@ settings:
   output_ext: tex
   prefills:
     - Here is the revised \LaTeX document. <latex_document>
-    - <scratchpad>
   required_files:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex

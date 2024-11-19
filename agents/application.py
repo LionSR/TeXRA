@@ -7,10 +7,6 @@ agent_path = coa.get_agent_path(coa, "application")
 class ReviseApplicationDocument(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = super().get_user_vars()
-
-        if self.args.original_file:
-            user_vars["INPUT_CONTENT"] = coa.read_file(self.args.original_file)
-
         return user_vars
 
 
@@ -22,7 +18,6 @@ def main():
         default="statement_teaching",
         choices=["statement_teaching", "statement_diversity", "statement_research"],
     )
-    parser.add_argument("--original_file", type=str, help="Path to the original application document file")
     args = parser.parse_args()
 
     revise_document = ReviseApplicationDocument(args, agent_path)

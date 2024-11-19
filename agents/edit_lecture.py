@@ -7,8 +7,9 @@ agent_path = coa.get_agent_path(coa, "lecture")
 class EditLectureBase:
     def get_user_vars(self):
         user_vars = super().get_user_vars()
-        if hasattr(self.args, "edit_file") and self.args.edit_file:
-            user_vars["EDITED_CONTENT"] = coa.read_file(self.args.edit_file)
+        # this can be turned into a conditional statement in the yaml file
+        if hasattr(self.args, "edited_file") and self.args.edited_file:
+            user_vars["EDITED_CONTENT"] = coa.read_file(self.args.edited_file)
             user_vars[
                 "EDITED_CONTENT_SECTION"
             ] = f"""

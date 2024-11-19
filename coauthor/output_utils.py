@@ -17,7 +17,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     return output_file
 
 
-
 def check_for_massive_repetition(last_response: str, new_response: str) -> tuple[bool, float]:
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
