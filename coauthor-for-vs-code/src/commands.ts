@@ -629,6 +629,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         outputFiles: string[],
         outputNameOverride: string,
       ) => {
+        // at some point, here we should distinguish between sampleFile/sampleFiles and auxFile/auxFiles like we do for inputFile/inputFiles
         const terminalName = `${agent}@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
