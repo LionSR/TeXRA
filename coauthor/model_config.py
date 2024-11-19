@@ -5,7 +5,9 @@ from typing import Dict, List, Optional, Any, Tuple
 import os
 import base64
 from dotenv import load_dotenv
+
 from .logging_utils import logger
+from .file_utils import read_file, write_file
 
 load_dotenv()
 
@@ -28,7 +30,7 @@ class ModelConfig(ABC):
     supports_prompt_caching: bool = False
     supports_vision: bool = True
     supports_native_pdf: bool = False
-    supports_prefill: bool = False,
+    supports_prefill: bool = (False,)
     base_url: Optional[str] = None
 
     @property
@@ -62,7 +64,7 @@ class ModelConfig(ABC):
         client: Any,
         messages: List[Dict],
         temperature: float,
-        system_prompt: str,
+        system_prompt: Optional[str] = None,
         end_tag: Optional[str] = None,
         extra_kwargs: Optional[Dict] = None,
     ) -> Any:
@@ -101,6 +103,20 @@ class ModelConfig(ABC):
     @abstractmethod
     def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
         """Handle continuation for a model when response is truncated."""
+        pass
+
+    @abstractmethod
+    def initialize_output_and_prefill(
+        self,
+        output_file: str,
+        task_config: Any,
+        agent_settings: Any,
+        messages: List[Dict],
+        prefill: str,
+        accumulated_output: str,
+        first_k_tex_document: Optional[str] = None,
+    ) -> Tuple[str, bool, List[Dict]]:
+        """Initialize output and handle prefill based on model requirements."""
         pass
 
     def compute_price(
@@ -192,9 +208,8 @@ class AnthropicModelConfig(ModelConfig):
         client: Any,
         messages: List[Dict],
         temperature: float,
-        system_prompt: str,
+        system_prompt: Optional[str] = None,
         end_tag: Optional[str] = None,
-        extra_kwargs: Optional[Dict] = None,
     ) -> Any:
         extra_headers = []
         if self.supports_prompt_caching:
@@ -321,6 +336,7 @@ class AnthropicModelConfig(ModelConfig):
         """Process image for Anthropic models."""
         if file_extension.lower() == ".pdf":
             from .img_utils import page_count_pdf, process_pdf_input
+
             # For PDFs, use native PDF support if available and multi-page
             if self.supports_native_pdf and page_count_pdf(figure_input) > 1:
                 with open(figure_input, "rb") as f:
@@ -338,6 +354,49 @@ class AnthropicModelConfig(ModelConfig):
     def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
         """Anthropic models don't need continuation handling."""
         pass
+
+    def initialize_output_and_prefill(
+        self,
+        output_file: str,
+        task_config: Any,
+        agent_settings: Any,
+        messages: List[Dict],
+        prefill: str,
+        accumulated_output: str,
+        first_k_tex_document: Optional[str] = None,
+    ) -> Tuple[str, bool, List[Dict]]:
+        """Initialize output and handle prefill for Anthropic models."""
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
+            # try to get prefill from existing file
+            file_content = read_file(output_file)
+            if self.has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
+                logger.debug("End tag detected - skipping continuation")
+                if messages[-1]["content"][-1].get("cache_control"):
+                    messages[-1]["content"][-1].pop("cache_control")
+                messages.append({"role": "assistant", "content": file_content})
+                return None, True, messages
+            else:
+                logger.warning("Output file exists but no end tag found - continuing from file")
+                accumulated_output = file_content
+                if self.supports_prompt_caching:
+                    messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
+                else:
+                    messages.append({"role": "assistant", "content": file_content})
+                logger.debug(f"Using existing content as prefill: {output_file}")
+        else:
+            if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
+                prefill += first_k_tex_document
+                accumulated_output = first_k_tex_document
+
+            messages.append({"role": "assistant", "content": prefill})
+            logger.debug(f"Anthropic prefill: {prefill}")
+
+            if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
+                write_file(output_file, prefill)
+            elif agent_settings.output_ext == "xml":
+                write_file(output_file, prefill + "\n")
+
+        return accumulated_output, False, messages
 
 
 @dataclass
@@ -448,6 +507,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
         """Process image for OpenAI-compatible models."""
         if file_extension.lower() == ".pdf":
             from .img_utils import process_pdf_input
+
             img_data = process_pdf_input(figure_input, is_openai_compatible=True)
             media_type = "image/png"
         else:
@@ -466,6 +526,42 @@ class OpenAICompatibleModelConfig(ModelConfig):
         )
         logger.info("User message: " + user_message_continuation)
         messages.append({"role": "user", "content": user_message_continuation})
+
+    def initialize_output_and_prefill(
+        self,
+        output_file: str,
+        task_config: Any,
+        agent_settings: Any,
+        messages: List[Dict],
+        prefill: str,
+        accumulated_output: str,
+        first_k_tex_document: Optional[str] = None,
+    ) -> Tuple[str, bool, List[Dict]]:
+        """Initialize output and handle prefill for OpenAI-compatible models."""
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
+            # try to get prefill from existing file
+            file_content = read_file(output_file)
+            if self.has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
+                logger.debug("End tag detected - skipping continuation")
+                messages.append({"role": "assistant", "content": file_content})
+                return None, True, messages
+            else:
+                logger.warning("Output file exists but no end tag found - continuing from file")
+                accumulated_output = file_content
+                messages.append({"role": "assistant", "content": file_content})
+                logger.debug(f"Using existing content as prefill: {output_file}")
+                self.handle_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
+        else:
+            if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
+                prefill += first_k_tex_document
+                accumulated_output = ""
+                messages.append({"role": "assistant", "content": "```latex\n"})
+
+            openai_prefill = f"Start your response with\n{prefill}"
+            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
+            logger.debug(f"OpenAI prefill: {openai_prefill}")
+
+        return accumulated_output, False, messages
 
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
