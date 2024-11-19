@@ -8,10 +8,7 @@ from .replacement_utils import get_replacements_by_category, apply_replacement_r
 
 
 def run_external_command(
-    command: list[str],
-    output_file: str = None,
-    encoding: str = "utf-8",
-    capture_output: bool = True
+    command: list[str], output_file: str = None, encoding: str = "utf-8", capture_output: bool = True
 ) -> tuple[bool, str | None, str | None]:
     """Run an external command and handle its output.
 
@@ -177,13 +174,7 @@ def run_latexindent(file_path: str) -> bool:
         return False
 
 
-def run_latexdiff(
-    input_file: str,
-    output_file: str,
-    agent: str | None = None,
-    suffix: str = "_diff",
-    run_indent: bool = False
-) -> str | None:
+def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, suffix: str = "_diff", run_indent: bool = False) -> str | None:
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
@@ -233,7 +224,7 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
-    
+
     # Check if the input file contains \begin{document} and \end{document}
     input_content = read_file(input_file)
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:

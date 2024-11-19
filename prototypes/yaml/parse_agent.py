@@ -1,5 +1,5 @@
 import yaml
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class PolishAgentConfig:
