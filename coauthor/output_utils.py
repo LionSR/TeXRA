@@ -5,7 +5,7 @@ import difflib
 import xml.etree.ElementTree as ET
 
 
-from .file_utils import read_file, write_file, append_file, write_to_output_file
+from .file_utils import read_file, write_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
 
 
