@@ -72,6 +72,8 @@ class BaseReflectChainAgent(ABC):
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
         args = self.args
+        settings_dict = load_agent_settings_and_prompts(self.agent_path)[0]
+        agent_settings = AgentSettings.from_dict(settings_dict)
 
         user_vars = {
             "INSTRUCTION": args.instruction if args.instruction else None,
@@ -83,6 +85,14 @@ class BaseReflectChainAgent(ABC):
             "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
             "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
         }
+
+        # Add variables for required files
+        if agent_settings.required_files:
+            for var_name, file_path in agent_settings.required_files.items():
+                file_content = read_file(file_path) if os.path.exists(file_path) else None
+                user_vars[f"{var_name}_FILE"] = file_path
+                user_vars[f"{var_name}_CONTENT"] = file_content
+
         if args.output_files:
             user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
