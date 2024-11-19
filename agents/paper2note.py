@@ -9,11 +9,11 @@ class Paper2Note(DirectWrite):
         user_vars = super().get_user_vars()
         user_vars.update(
             {
-                "SAMPLE_TEX_CONTENT": "\n".join([coa.read_file(ch) for ch in self.args.sample_chapters]) if self.args.sample_chapters else None,
+                "SAMPLE_CONTENT": "\n".join([coa.read_file(ch) for ch in self.args.sample_chapters]) if self.args.sample_chapters else None,
                 "DOCUMENT_CLS_CONTENT": coa.read_file("lecture.cls"),
                 "COMMAND_CONTENT": coa.read_file("command.tex"),
-                "{{ EXAMPLE_PAPER_FILE }}": self.args.example_paper,
-                "{{ EXAMPLE_LECTURE_NOTE_FILE }}": self.args.example_lecture_note,
+                "EXAMPLE_PAPER_FILE": self.args.example_paper,
+                "EXAMPLE_LECTURE_NOTE_FILE": self.args.example_lecture_note,
                 "EXAMPLE_PAPER_CONTENT": coa.read_file(self.args.example_paper),
                 "EXAMPLE_LECTURE_NOTE_CONTENT": coa.read_file(self.args.example_lecture_note),
             }

@@ -26,7 +26,7 @@ prompts:
     {{ TRANSCRIPT }}
     </document>
     <document name="context">
-    {{ CONTEXT }}
+    {{ INSTRUCTION }}
     </document>
     </documents>
 
