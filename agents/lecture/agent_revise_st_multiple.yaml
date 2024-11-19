@@ -4,10 +4,6 @@ inherits: revise_st
 settings:
   document_tag: latex_documents
   end_tag: </latex_documents>
-  output_ext: tex
-  prefills:
-    - <scratchpad>
-    - <scratchpad>
 
 prompts:
   system_prompt: |
@@ -19,13 +15,13 @@ prompts:
         \item Use consistent and appropriate mathematical notation and terminology throughout all chapters.
         \item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
         \item Use $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
-        \item Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in thte output.
+        \item Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in the output.
         \item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
         \item For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
         \item Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the author name, the year of publication, and the first word of the paper name.
         \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
         \item Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
-        \item Use ``\\'' sparingly for paragraph breaks. Do not remove any exisiting ``\\''. 
+        \item Use ``\\'' sparingly for paragraph breaks. Do not remove any existing ``\\''. 
         \item Using ``,..,'' rather than ``,\ldots,'' is a feature of Prof. Welling's writing style. Keep them.
     \end{itemize}
 

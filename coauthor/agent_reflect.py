@@ -51,11 +51,6 @@ class BaseReflectChainAgent(ABC):
         self.output_file = ["", ""]
         self.output_files = {0: [], 1: []}
         self.base_files = []
-        self.user_vars = self.get_user_vars()
-
-        # Initialize configurations
-        self.task_config = TaskConfig.from_args(args)
-        self.edited_file = self.task_config.edited_file
 
         # These will be initialized in setup()
         self.settings_dict = None
@@ -68,6 +63,13 @@ class BaseReflectChainAgent(ABC):
         self.use_scratchpad = False
         self.tex_count_stats = None
         self.first_k_tex_document = None
+
+        # Initialize configurations
+        self.task_config = TaskConfig.from_args(args)
+        self.edited_file = self.task_config.edited_file
+
+        self.setup()
+        self.user_vars = self.get_user_vars()
 
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
@@ -83,6 +85,14 @@ class BaseReflectChainAgent(ABC):
             "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
             "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
         }
+
+        # Add variables for required files
+        if self.agent_settings.required_files:
+            for var_name, file_path in self.agent_settings.required_files.items():
+                file_content = read_file(file_path) if os.path.exists(file_path) else None
+                user_vars[f"{var_name}_FILE"] = file_path
+                user_vars[f"{var_name}_CONTENT"] = file_content
+
         if args.output_files:
             user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
 
@@ -194,7 +204,7 @@ class BaseReflectChainAgent(ABC):
         input_files = [self.task_config.input_file] + (self.task_config.input_files or [])
         if self.task_config.include_tex_count:
             self.tex_count_stats = self._get_tex_count_stats(input_files)
-        if self.task_config.auto_extract_figure:
+        if self.task_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
 
         # Initialize state and messages
@@ -275,7 +285,6 @@ class BaseReflectChainAgent(ABC):
         return state, messages, end_turn
 
     def run(self):
-        self.setup()
         state, messages, end_turn = self.process()
         if self.task_config.reflect and end_turn:
             state, messages, end_turn = self.reflect(state, messages)

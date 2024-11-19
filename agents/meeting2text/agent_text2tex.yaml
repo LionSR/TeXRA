@@ -25,7 +25,7 @@ prompts:
     </document>
     For context, the discussion is about:
     <context>
-    {{ CONTEXT }}
+    {{ INSTRUCTION }}
     </context>
     if provided.
 

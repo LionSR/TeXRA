@@ -30,7 +30,8 @@ class ModelConfig(ABC):
     supports_prompt_caching: bool = False
     supports_vision: bool = True
     supports_native_pdf: bool = False
-    supports_prefill: bool = (False,)
+    supports_prefill: bool = False
+    supports_predictive_output: bool = False
     base_url: Optional[str] = None
 
     @property
@@ -552,10 +553,12 @@ class OpenAICompatibleModelConfig(ModelConfig):
                 logger.debug(f"Using existing content as prefill: {output_file}")
                 self.handle_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
         else:
-            if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
+            if task_config.use_prefill_from_input:
                 prefill += first_k_tex_document
                 accumulated_output = ""
-                messages.append({"role": "assistant", "content": "```latex\n"})
+
+                if agent_settings.output_ext == "tex" and first_k_tex_document:
+                    prefill = f"<latex_document>{first_k_tex_document}"
 
             openai_prefill = f"Start your response with\n{prefill}"
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
@@ -654,6 +657,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         max_tokens=16384,
         input_price=2.5,
         output_price=10.0,
+        supports_predictive_output=True,
     ),
     "gpt4t": OpenAICompatibleModelConfig(
         name="gpt4t",
@@ -670,6 +674,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         max_tokens=16384,
         input_price=0.15,
         output_price=0.6,
+        supports_predictive_output=True,
     ),
     "gpt4ol": OpenAICompatibleModelConfig(
         name="gpt4ol",
