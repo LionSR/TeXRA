@@ -194,7 +194,7 @@ class BaseReflectChainAgent(ABC):
         input_files = [self.task_config.input_file] + (self.task_config.input_files or [])
         if self.task_config.include_tex_count:
             self.tex_count_stats = self._get_tex_count_stats(input_files)
-        if self.task_config.auto_extract_figure:
+        if self.task_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
 
         # Initialize state and messages
