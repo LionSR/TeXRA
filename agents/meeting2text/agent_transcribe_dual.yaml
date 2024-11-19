@@ -30,7 +30,7 @@ prompts:
 
     For context, the discussion is
     <context>
-    {{ CONTEXT }}
+    {{ INSTRUCTION }}
     </context>
 
   user_request: |

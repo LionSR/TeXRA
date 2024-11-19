@@ -14,7 +14,6 @@ class Meeting2Text(DirectWrite):
                     "TRANSCRIPT": coa.read_file(self.args.input_file),
                     "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript),
                     "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
-                    "CONTEXT": self.args.instruction,
                 }
             )
         elif self.args.agent == "transcribe_dual":
@@ -24,7 +23,6 @@ class Meeting2Text(DirectWrite):
                     "WHISPER_INPUT_CONTENT": coa.read_file(self.args.input_file),
                     "OTTER_INPUT_FILE": self.args.sample_files[0],
                     "OTTER_INPUT_CONTENT": coa.read_file(self.args.sample_files[0]),
-                    "CONTEXT": self.args.instruction,
                 }
             )
 
@@ -37,7 +35,6 @@ class Text2Tex(ThinkAndWrite):
         user_vars.update(
             {
                 "INPUT_CONTENT": coa.read_file(self.args.input_file),
-                "CONTEXT": self.args.instruction,
                 "RESEARCH_NOTE": coa.read_file(self.args.sample_files[0]) if self.args.sample_files else None,
             }
         )
