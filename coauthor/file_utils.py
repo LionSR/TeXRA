@@ -2,6 +2,8 @@ import os
 import re
 import warnings
 
+from .logging_utils import logger
+
 
 def get_agent_path(library, prompt_name: str) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
@@ -28,6 +30,18 @@ def write_file(file_path: str, content: str) -> None:
 def append_file(file_path: str, content: str) -> None:
     with open(file_path, "a", encoding="utf-8") as file:
         file.write(content)
+
+
+def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
+    if not file_exists:
+        logger.debug("Creating new file")
+        write_file(output_file, new_response)
+        file_exists = True
+    else:
+        logger.debug("Appending to existing file")
+        append_file(output_file, best_connector + new_response)
+
+    return file_exists
 
 
 def extract_text_from_tags(input_content: str, document_tag: str) -> str:

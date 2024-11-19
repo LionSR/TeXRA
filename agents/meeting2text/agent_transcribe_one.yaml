@@ -7,6 +7,9 @@ settings:
     - |
       Here is the faithfully and correctly edited transcript:
       <edited_transcript>
+  required_files:
+    EXAMPLE_TRANSCRIPT: example_transcript.txt
+    EXAMPLE_EDITED_TRANSCRIPT: example_edited.txt
 
 prompts:
   system_prompt: |
@@ -26,7 +29,7 @@ prompts:
     {{ TRANSCRIPT }}
     </document>
     <document name="context">
-    {{ CONTEXT }}
+    {{ INSTRUCTION }}
     </document>
     </documents>
 

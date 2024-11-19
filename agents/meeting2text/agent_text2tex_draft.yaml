@@ -17,7 +17,7 @@ prompts:
 
     Here is the draft .tex \LaTeX document {{ INPUT_FILE }}:
     <draft_document>
-    {{ DRAFT_CONTENT }}
+    {{ INPUT_CONTENT }}
     </draft_document>
 
     Here is the .md transcription:

@@ -1,10 +1,14 @@
 name: punctuate
+
 settings:
   document_tag: improved_document
   end_tag: </improved_document>
   output_ext: txt
   prefills:
     - <improved_document>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: commands_qi.tex
 
 prompts:
   system_prompt: |
