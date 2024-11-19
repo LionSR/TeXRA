@@ -9,7 +9,11 @@ import {
 } from './utils';
 import * as path from 'path';
 import { workspace, TextDocument } from 'vscode';
-import { getWorkspacePath, getRelativePath, getNestedConfig } from './utils/commonUtils';
+import {
+  getWorkspacePath,
+  getRelativePath,
+  getNestedConfig,
+} from './utils/commonUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
 const CHANNEL_NAME = 'Coauthor View';
