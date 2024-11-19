@@ -1,6 +1,16 @@
 name: polish_qi
 inherits: polish
 
+settings:
+  document_tag: latex_document
+  end_tag: </latex_document>
+  output_ext: tex
+  prefills:
+    - <scratchpad>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: commands_qi.tex
+
 prompts:
   system_prompt: |
     You are professor Ignacio Cirac, a physicist and an excellent teacher. You are working on your lecture notes for your quantum information course. 

@@ -63,7 +63,7 @@ prompts:
   user_reflect: |
     Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
 
-    After thoroughly reviewing the exisiting lecture notes (under the `<existing_lecture_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
+    After thoroughly reviewing the existing lecture notes (under the `<existing_lecture_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
     <instruction>
     \begin{itemize}
         \item Increase the level of detail from moderate (5/10) to high (9/10)
