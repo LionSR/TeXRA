@@ -51,11 +51,6 @@ class BaseReflectChainAgent(ABC):
         self.output_file = ["", ""]
         self.output_files = {0: [], 1: []}
         self.base_files = []
-        self.user_vars = self.get_user_vars()
-
-        # Initialize configurations
-        self.task_config = TaskConfig.from_args(args)
-        self.edited_file = self.task_config.edited_file
 
         # These will be initialized in setup()
         self.settings_dict = None
@@ -69,11 +64,16 @@ class BaseReflectChainAgent(ABC):
         self.tex_count_stats = None
         self.first_k_tex_document = None
 
+        # Initialize configurations
+        self.task_config = TaskConfig.from_args(args)
+        self.edited_file = self.task_config.edited_file
+
+        self.setup()
+        self.user_vars = self.get_user_vars()
+
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
         args = self.args
-        settings_dict = load_agent_settings_and_prompts(self.agent_path)[0]
-        agent_settings = AgentSettings.from_dict(settings_dict)
 
         user_vars = {
             "INSTRUCTION": args.instruction if args.instruction else None,
@@ -87,8 +87,8 @@ class BaseReflectChainAgent(ABC):
         }
 
         # Add variables for required files
-        if agent_settings.required_files:
-            for var_name, file_path in agent_settings.required_files.items():
+        if self.agent_settings.required_files:
+            for var_name, file_path in self.agent_settings.required_files.items():
                 file_content = read_file(file_path) if os.path.exists(file_path) else None
                 user_vars[f"{var_name}_FILE"] = file_path
                 user_vars[f"{var_name}_CONTENT"] = file_content
@@ -285,7 +285,6 @@ class BaseReflectChainAgent(ABC):
         return state, messages, end_turn
 
     def run(self):
-        self.setup()
         state, messages, end_turn = self.process()
         if self.task_config.reflect and end_turn:
             state, messages, end_turn = self.reflect(state, messages)

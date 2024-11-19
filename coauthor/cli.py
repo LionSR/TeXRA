@@ -214,17 +214,14 @@ def meeting2text(model, input_file, agent="transcribe_dual", **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--sample_tex", type=str, help="Path to a sample LaTeX file in the desired style.")
-@click.option("--document_cls", type=str, help="Path to the document class file.")
-@click.option("--commands_file", type=str, help="Path to the file containing custom LaTeX commands.")
-def txt2tex(model, input_file, sample_tex=None, document_cls=None, commands_file=None, agent="txt2tex", **kwargs):
+def txt2tex(model, input_file, agent="txt2tex", **kwargs):
     if "article" in input_file.lower():
         agent = f"{agent}_article"
     elif "paper" in input_file.lower():
         agent = f"{agent}_paper"
     elif "example" in input_file.lower():
         agent = f"{agent}_example"
-    execute_agent("txt2tex", agent, model, input_file, sample_tex=sample_tex, document_cls=document_cls, commands_file=commands_file, **kwargs)
+    execute_agent("txt2tex", agent, model, input_file, **kwargs)
 
 
 @click.command()
@@ -371,6 +368,11 @@ def clean_output():
 @click.command()
 def clean_build():
     run_clean_build()
+
+
+@click.command()
+def indent_tex():
+    run_indent_tex()
 
 
 @click.command()
