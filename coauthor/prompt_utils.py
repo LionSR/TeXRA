@@ -57,15 +57,15 @@ def load_agent_settings_and_prompts(agent_path: str, agent: str):
     return load_agent_from_yaml(agent_path, agent)
 
 
+def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
+    """Render a prompt string using Jinja2 templating."""
+    template = Template(prompt)
+    return template.render(**variables)
+
+
 def get_xml_format_from_file(file: str) -> str:
     return f'<document name="{file}">\n' f"{read_file(file)}\n" f"</document>"
 
 
 def get_xml_format_from_files(files: list[str]) -> str:
     return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
-
-
-def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
-    """Render a prompt string using Jinja2 templating."""
-    template = Template(prompt)
-    return template.render(**variables)
