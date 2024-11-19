@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional
 
 from .logging_utils import logger
 from .openai_utils import best_connection_method
-from .output_utils import check_for_massive_repetition, write_to_output_file
+from .file_utils import write_to_output_file
+from .output_utils import check_for_massive_repetition
 from .prompt_utils import render_prompt
 from .model_config import ModelConfig
 from .state import State
