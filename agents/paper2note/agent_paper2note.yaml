@@ -10,11 +10,9 @@ settings:
       \documentclass{lecture}
       \input{command}
       \course
-    - |
-      Here is the output lecture note <lecture_note>.
-      \documentclass{lecture}
-      \input{command}
-      \course
+  required_files:
+    - DOCUMENT_CLS: lecture.cls
+    - COMMAND: command.tex
 
 prompts:
   system_prompt: |

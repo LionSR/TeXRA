@@ -8,17 +8,6 @@ class Lecture2Text(DirectWrite):
     def get_user_vars(self):
         user_vars = super().get_user_vars()
 
-        document_cls_file = "lecture.cls"
-        command_file = "commands_qi.tex"
-
-        user_vars.update(
-            {
-                "DOCUMENT_CLS_FILE": document_cls_file,
-                "DOCUMENT_CLS_CONTENT": coa.read_file(document_cls_file),
-                "COMMAND_FILE": command_file,
-                "COMMAND_CONTENT": coa.read_file(command_file),
-            }
-        )
         if self.args.agent in ["2tex", "reflect"]:
             user_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document")
             user_vars.update(
@@ -28,8 +17,6 @@ class Lecture2Text(DirectWrite):
                     "CONVERTED_TEX_CONTENT": coa.read_file(self.args.input_file.replace(".txt", ".tex")),
                 }
             )
-        elif self.args.agent in ["transcribe", "punctuate"]:
-            user_vars["INPUT_CONTENT"] = coa.read_file(self.args.input_file)
         return user_vars
 
 

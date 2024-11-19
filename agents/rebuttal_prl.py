@@ -16,54 +16,29 @@ class ReplyPRLBase:
     def get_user_vars(self):
         user_vars = super().get_user_vars()
 
-        # Ensure all file paths are provided before reading
-        required_files = [
-            "preamble",
-            "input_file",
-            "supp_file",
-            "cover_letter",
-            "editor_letter",
-            "referee_report_a",
-            "referee_report_b",
-            "example_rebuttal_letter",
-            "instruction_file",
-        ]
-        for file_arg in required_files:
-            file_path = getattr(self.args, file_arg, None)
-            if file_path and os.path.exists(file_path):
-                if "file" not in file_arg:
-                    user_vars[file_arg.upper() + "_FILE"] = file_path
-                else:
-                    user_vars[file_arg.upper()] = file_path
+        # Handle main and supplementary files
+        if self.args.input_file:
+            user_vars["MAIN_FILE"] = self.args.input_file
+            user_vars["MAIN_CONTENT"] = coa.read_file(self.args.input_file)
 
-                content = coa.read_file(file_path)
-                if file_arg == "input_file":
-                    user_vars["MAIN_FILE"] = file_path
-                    user_vars["MAIN_CONTENT"] = content
-                elif file_arg == "supp_file":
-                    user_vars["SUPP_FILE"] = file_path
-                    user_vars["SUPP_CONTENT"] = content
-                elif file_arg == "cover_letter":
-                    user_vars["COVER_LETTER_FILE"] = file_path
-                    user_vars["COVER_LETTER_CONTENT"] = content
-                elif file_arg == "editor_letter":
-                    user_vars["EDITOR_LETTER_FILE"] = file_path
-                    user_vars["EDITOR_LETTER_CONTENT"] = content
-                elif file_arg == "referee_report_a":
-                    user_vars["REFEREE_REPORT_A_FILE"] = file_path
-                    user_vars["REFEREE_REPORT_A_CONTENT"] = content
-                elif file_arg == "referee_report_b":
-                    user_vars["REFEREE_REPORT_B_FILE"] = file_path
-                    user_vars["REFEREE_REPORT_B_CONTENT"] = content
-                elif file_arg == "example_rebuttal_letter":
-                    user_vars["EXAMPLE_REBUTTAL_LETTER_FILE"] = file_path
-                    user_vars["EXAMPLE_REBUTTAL_LETTER_CONTENT"] = content
-                elif file_arg == "instruction_file":
-                    # user_vars["INSTRUCTION"] = content
-                    if user_vars["INSTRUCTION"] is not None:
-                        user_vars["INSTRUCTION"] = content + "\n\n" + user_vars["INSTRUCTION"]
-                else:
-                    user_vars[file_arg.upper() + "_CONTENT"] = content
+        if self.args.supp_file and os.path.exists(self.args.supp_file):
+            user_vars["SUPP_FILE"] = self.args.supp_file
+            user_vars["SUPP_CONTENT"] = coa.read_file(self.args.supp_file)
+
+        # Special handling for instruction file - append to existing instruction if any
+        if self.args.instruction_file and os.path.exists(self.args.instruction_file):
+            instruction_content = coa.read_file(self.args.instruction_file)
+            user_vars["FILE_INSTRUCTION_FILE"] = self.args.instruction_file
+            user_vars["FILE_INSTRUCTION_CONTENT"] = instruction_content
+            if user_vars.get("INSTRUCTION"):
+                user_vars["INSTRUCTION"] = instruction_content + "\n\n" + user_vars["INSTRUCTION"]
+            else:
+                user_vars["INSTRUCTION"] = instruction_content
+
+        # Handle example rebuttal letter
+        if self.args.example_rebuttal_letter and os.path.exists(self.args.example_rebuttal_letter):
+            user_vars["EXAMPLE_REBUTTAL_LETTER_FILE"] = self.args.example_rebuttal_letter
+            user_vars["EXAMPLE_REBUTTAL_LETTER"] = coa.read_file(self.args.example_rebuttal_letter)
 
         # Handle specific agent-related file reads
         if "revise" in self.args.agent or "polish" in self.args.agent:
@@ -105,16 +80,10 @@ def main():
         help="Mode of operation.",
         choices=["draft_rebuttal", "reply_letter", "revise_rebuttal", "revise_main", "revise_supp", "polish_reply", "revise_prl"],
     )
-    parser.add_argument("--preamble_file", type=str, default="preamble.tex", help="Path to the LaTeX preamble file.")
-    parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
     parser.add_argument("--supp_file", type=str, default="supp.tex", help="Path to the supplementary TeX file.")
-
-    parser.add_argument("--cover_letter", type=str, default="replies/cover_letter.txt", help="Path to the cover letter file.")
-    parser.add_argument("--editor_letter", type=str, default="replies/editor_letter.txt", help="Path to the editor decision letter file.")
-    parser.add_argument("--referee_report_a", type=str, default="replies/report_a.txt", help="Path to the first referee report file.")
-    parser.add_argument("--referee_report_b", type=str, default="replies/report_b.txt", help="Path to the second referee report file.")
+    parser.add_argument("--main_content", type=str, help="Path to the main content TeX file, if different from input_file.")
     parser.add_argument(
-        "--example_rebuttal_letter", type=str, default=f"{agent_path}/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
+        "--example_rebuttal_letter", type=str, default="replies/example_rebuttal_letter.txt", help="Path to an example rebuttal letter file."
     )
     parser.add_argument("--instruction_file", type=str, default="replies/instruction_prl.txt", help="Path to the instruction file.")
 
@@ -137,12 +106,11 @@ def main():
         elif "instruction" in f:
             args.instruction_file = f
 
-    if args.agent in ["reply_letter", "draft_rebuttal", "revise_rebuttal"]:
-        reply_prl = ReplyPRLThink(args, agent_path)
+    if args.agent == "draft_rebuttal" or args.agent == "reply_letter":
+        rebuttal = ReplyPRLThink(args, agent_path)
     else:
-        reply_prl = ReplyPRLDirect(args, agent_path)
-
-    reply_prl.run()
+        rebuttal = ReplyPRLDirect(args, agent_path)
+    rebuttal.run()
 
 
 if __name__ == "__main__":
