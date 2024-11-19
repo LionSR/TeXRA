@@ -7,6 +7,13 @@ settings:
   prefills:
     - <rebuttal_letter><scratchpad>
     - <rebuttal_letter><scratchpad>
+  required_files:
+    COVER_LETTER: rebuttal/cover_letter.txt
+    INSTRUCTION_FILE: rebuttal/instruction.txt
+    EDITOR_LETTER: rebuttal/editor_letter.txt
+    REPORT_A: rebuttal/report_a.txt
+    REPORT_B: rebuttal/report_b.txt
+    EXAMPLE_REBUTTAL_LETTER: example_rebuttal_letter.txt
 
 prompts:
   system_prompt: |
@@ -54,8 +61,8 @@ prompts:
     <document name="{EXAMPLE_REBUTTAL_LETTER_FILE}">
     {{ EXAMPLE_REBUTTAL_LETTER }}
     </document>
-    <document name="{INSTRUCTION_FILE}">
-    {{ INSTRUCTION }}
+    <document name="{FILE_INSTRUCTION_FILE}">
+    {{ FILE_INSTRUCTION_CONTENT }}
     </document>
     </documents>
 
@@ -88,6 +95,13 @@ prompts:
         \item A list of major changes you made to the paper. Write this inside the <document name="replies/list_of_major_changes.tex"></document> tag. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
         \item A revised version of the paper that addresses the referee comments and implements all the proposed changes mentioned in the reply letter. Include the main paper and the supplementary materials.
     \end{enumerate}
+
+    {% if INSTRUCTION %}
+    Specific instructions (if provided) that you must follow:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
 
     Write the full reply letter in the following format:
 

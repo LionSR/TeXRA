@@ -21,6 +21,10 @@ class AgentPrompts:
             user_reflect=prompt_dict.get("user_reflect", ""),
         )
 
+    def __getitem__(self, key: str) -> Any:
+        """Enable dictionary-style access (config['input_file'])"""
+        return getattr(self, key)
+
 
 @dataclass
 class TaskConfig:
@@ -51,6 +55,14 @@ class TaskConfig:
 
     # Processing configuration
     K: int = 200
+
+    def __getitem__(self, key: str) -> Any:
+        """Enable dictionary-style access (config['input_file'])"""
+        return getattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dictionary-style get with default value"""
+        return getattr(self, key, default)
 
     @classmethod
     def from_args(cls, args) -> "TaskConfig":

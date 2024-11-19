@@ -2,11 +2,6 @@ name: polish_qi
 inherits: polish
 
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
-  prefills:
-    - <scratchpad>
   required_files:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex

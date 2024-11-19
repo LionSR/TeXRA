@@ -51,7 +51,7 @@ def process_response_cycle(
             getattr(response_object.usage, "cache_creation_input_tokens", 0),
         )
 
-        best_connector, _ = best_connection_method(state.last_response[-task_config.K:], new_response[:task_config.K])
+        best_connector, _ = best_connection_method(state.last_response[-task_config.K :], new_response[: task_config.K])
 
         massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
         if not massive_repetition_detected:

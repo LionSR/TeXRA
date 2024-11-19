@@ -7,6 +7,16 @@ settings:
   prefills:
     - <rebuttal_letter><scratchpad>
     - <rebuttal_letter><scratchpad>
+  required_files:
+    COVER_LETTER: rebuttal/cover_letter.txt
+    INSTRUCTION: rebuttal/instruction.txt
+    EDITOR_LETTER: rebuttal/editor_letter.txt
+    REPORT_A: rebuttal/report_a.txt
+    REPORT_B: rebuttal/report_b.txt
+  default_output_files:
+    - replies/reply_to_editor.tex
+    - replies/reply_to_referees.tex
+    - replies/list_of_major_changes.tex
 
 prompts:
   system_prompt: |
@@ -60,8 +70,8 @@ prompts:
     <document name="{{ REFEREE_REPORT_B_FILE }}">
     {{ REFEREE_REPORT_B_CONTENT }}
     </document>
-    <document name="{{ INSTRUCTION_FILE }}">
-    {{ INSTRUCTION }}
+    <document name="{FILE_INSTRUCTION_FILE}">
+    {{ FILE_INSTRUCTION_CONTENT }}
     </document>
     </documents>
 
@@ -74,11 +84,10 @@ prompts:
     (6) Editor Decision Letter: The full text of the editor's decision and comments.
     (7) Referee Report A: The full text of the first referee's report.
     (8) Referee Report B: The full text of the second referee's report.
-    (9) Example Reply Letter: A sample reply letter for reference.
-    (10) Instructions: Guidelines on how to revise the reply letter.
+    (9) Instructions: Guidelines on how to revise the reply letter.
 
   user_request: |
-    Please carefully review all the provided documents, including the current rebuttal package, referee reports, and example reply. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.
+    Please carefully review all the provided documents, including the current rebuttal package and thereferee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.
 
     After your planning, revise the rebuttal package to include the following improvements:
 
@@ -93,6 +102,13 @@ prompts:
     (3) Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
     (4) An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{LIST_OF_MAJOR_CHANGES_FILE}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
     (5) Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
+
+    {% if INSTRUCTION %}
+    Specific instructions (if provided) that you must follow:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
 
     The whole rebuttal package should be written in LaTeX format, coherent with each other and the original paper.
     Write the revised rebuttal package in the following format:
