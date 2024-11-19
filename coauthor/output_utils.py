@@ -5,7 +5,7 @@ import difflib
 import xml.etree.ElementTree as ET
 
 
-from .file_utils import read_file, write_file, append_file
+from .file_utils import read_file, write_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
 
 
@@ -15,18 +15,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     output_file = f"{file_name}_{agent_first_name_chunk}_r{round}_{model}.{output_ext}"
     logger.debug(f"Output file: {output_file}")
     return output_file
-
-
-def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
-    if not file_exists:
-        logger.debug("Creating new file")
-        write_file(output_file, new_response)
-        file_exists = True
-    else:
-        logger.debug("Appending to existing file")
-        append_file(output_file, best_connector + new_response)
-
-    return file_exists
 
 
 def check_for_massive_repetition(last_response: str, new_response: str) -> tuple[bool, float]:
@@ -85,10 +73,10 @@ def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_ta
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
     tex_file = f"{base_name}.tex"
     logger.debug(f"TeX file: {tex_file}")
     if split_and_save_thinking:
+        log_file_thinking = f"{base_name}_thinking.xml"
         logger.debug(f"Thinking file: {log_file_thinking}")
 
     # Read the content of the output file
@@ -138,9 +126,9 @@ def split_multiple_scratchpad_output_xml(
     logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
 
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
 
     if split_and_save_thinking:
+        log_file_thinking = f"{base_name}_thinking.xml"
         logger.debug(f"Log file: {log_file_thinking}")
 
     # Read the content of the output file
