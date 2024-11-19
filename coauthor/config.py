@@ -99,14 +99,16 @@ class AgentSettings:
     prefills: List[str] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
+    required_files: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
-        """Create AgentSettings from settings dictionary."""
-        return cls(
-            # Document settings
-            prefills=settings_dict.get("prefills", []),
+        """Create an AgentSettings from a dictionary."""
+        settings = cls(
             document_tag=settings_dict.get("document_tag"),
+            prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),
             end_tag=settings_dict.get("end_tag", "\\end{document}"),
+            required_files=settings_dict.get("required_files", {}),
         )
+        return settings
