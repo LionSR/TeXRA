@@ -6,6 +6,9 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: command.tex
 
 prompts:
   system_prompt: |

@@ -1,10 +1,14 @@
 name: correct_st
+
 settings:
   document_tag: latex_document
   end_tag: </latex_document>
   output_ext: tex
   prefills:
     - Here is the revised \LaTeX document. <latex_document>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: command.tex
 
 prompts:
   system_prompt: |
@@ -15,10 +19,10 @@ prompts:
     - Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
     - Use appropriate mathematical notation and terminology consistently throughout the text.
     - Use $\bt$ for $\beta$, $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
-    - Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in thte output.
+    - Keep the comments that starts with % in the document. For example, do not delete "% By using the standard equation to transform densities we can transform $\rho(\bze^*)$ back to $\bze$,\n" in the output.
     - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
     - Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
-    - Use ``\\'' sparingly for paragraph breaks. Do not remove any exisiting ``\\''.
+    - Use ``\\'' sparingly for paragraph breaks. Do not remove any existing ``\\''.
 
   user_prefix: |
     I am going to give you a long \LaTeX document of a chapter on stochastic thermodynamics and machine learning. You are about to correct the typos and mistakes in the document. So please read the document carefully.

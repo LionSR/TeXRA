@@ -2,6 +2,8 @@ import os
 import re
 import warnings
 
+from .logging_utils import logger
+
 
 def get_agent_path(library, prompt_name: str) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
