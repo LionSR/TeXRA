@@ -5,7 +5,7 @@ import difflib
 import xml.etree.ElementTree as ET
 
 
-from .file_utils import read_file, write_file, append_file
+from .file_utils import read_file, write_file, append_file, write_to_output_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
 
 
@@ -16,17 +16,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     logger.debug(f"Output file: {output_file}")
     return output_file
 
-
-def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
-    if not file_exists:
-        logger.debug("Creating new file")
-        write_file(output_file, new_response)
-        file_exists = True
-    else:
-        logger.debug("Appending to existing file")
-        append_file(output_file, best_connector + new_response)
-
-    return file_exists
 
 
 def check_for_massive_repetition(last_response: str, new_response: str) -> tuple[bool, float]:

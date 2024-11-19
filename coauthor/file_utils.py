@@ -30,6 +30,18 @@ def append_file(file_path: str, content: str) -> None:
         file.write(content)
 
 
+def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
+    if not file_exists:
+        logger.debug("Creating new file")
+        write_file(output_file, new_response)
+        file_exists = True
+    else:
+        logger.debug("Appending to existing file")
+        append_file(output_file, best_connector + new_response)
+
+    return file_exists
+
+
 def extract_text_from_tags(input_content: str, document_tag: str) -> str:
     match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
     return match.group(1) if match else input_content
