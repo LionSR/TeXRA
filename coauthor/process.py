@@ -59,7 +59,7 @@ def process_response_cycle(
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
             logger.debug(f"Last {task_config.K} characters of the response: {new_response[-task_config.K:]}")
             state.last_response = new_response
-            
+
             # should be wrapped in ModelConfig as some append message functions
             if messages[-1]["role"] == "assistant":
                 if model_config.supports_prompt_caching:
@@ -75,7 +75,6 @@ def process_response_cycle(
 
         # Check stop conditions
         end_turn, should_stop = model_config.check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
-        
         if should_stop:
             model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected, task_config.K)
             break
@@ -116,6 +115,7 @@ def process_first_round(
     user_request = render_prompt(agent_prompts.user_request, user_vars)
 
     # Initialize messages
+    # getting tex_count_stats and getting first_k_tex_document should go into initialize_messages function
     messages = model_config.initialize_messages(
         agent_prompts.system_prompt,
         user_prefix,
@@ -178,12 +178,11 @@ def process_reflection_round(
 
     user_request_reflect = render_prompt(agent_prompts.user_reflect, user_vars)
     user_message = f"{user_request_reflect}\n"
-
-    # Add tex count stats if provided
     if tex_count_stats:
         user_message = f"{tex_count_stats}{user_message}"
 
     # Create a new message for the reflection round using model-specific implementation
+    # getting tex_count_stats should go into create_reflection_message function?
     messages = model_config.create_reflection_message(messages, user_message, figure_inputs)
 
     accumulated_output = None
