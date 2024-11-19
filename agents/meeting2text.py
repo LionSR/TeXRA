@@ -7,17 +7,17 @@ agent_path = coa.get_agent_path(coa, "meeting2text")
 class Meeting2Text(DirectWrite):
     def get_user_vars(self):
         user_vars = super().get_user_vars()
-        # user_vars.update(
-        #     {
-        #         "TRANSCRIPT": coa.read_file(self.args.input_file),
-        #         "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript),
-        #         "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
-        #         "CONTEXT": self.args.instruction,
-        #     }
-        # )
 
-        # Add support for dual transcription
-        if self.args.agent == "transcribe_dual":
+        if self.args.agent == "transcribe_one":
+            user_vars.update(
+                {
+                    "TRANSCRIPT": coa.read_file(self.args.input_file),
+                    "EXAMPLE_TRANSCRIPT": coa.read_file(self.args.example_transcript),
+                    "EXAMPLE_EDITED_TRANSCRIPT": coa.read_file(self.args.example_edited_transcript),
+                    "CONTEXT": self.args.instruction,
+                }
+            )
+        elif self.args.agent == "transcribe_dual":
             user_vars.update(
                 {
                     "WHISPER_INPUT_FILE": self.args.input_file,

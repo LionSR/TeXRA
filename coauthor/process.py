@@ -1,18 +1,8 @@
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from .logging_utils import logger
-from .file_utils import read_file, write_file
-from .message_utils import (
-    create_image_message,
-    initialize_messages,
-    extract_response_statistics,
-    check_stop_conditions,
-    print_stop_flags,
-    handle_openai_continuation,
-    has_end_tag,
-)
 from .openai_utils import best_connection_method
 from .output_utils import check_for_massive_repetition, write_to_output_file
 from .prompt_utils import render_prompt
@@ -48,7 +38,7 @@ def process_response_cycle(
         response_time = time.time() - start_time
         state.update_response_time(response_time)
         logger.info(f"Response time: {response_time:.2f}s")
-        new_response, input_tokens, output_tokens, stop_reason = extract_response_statistics(response_object, model_config, agent_settings.end_tag)
+        new_response, input_tokens, output_tokens, stop_reason = model_config.extract_response_statistics(response_object, agent_settings.end_tag)
         logger.info(f"Stop reason: {stop_reason}")
         logger.info(f"Token usage: {response_object.usage}")
 
@@ -69,7 +59,8 @@ def process_response_cycle(
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
             logger.debug(f"Last {task_config.K} characters of the response: {new_response[-task_config.K:]}")
             state.last_response = new_response
-
+            
+            # should be wrapped in ModelConfig as some append message functions
             if messages[-1]["role"] == "assistant":
                 if model_config.supports_prompt_caching:
                     if isinstance(messages[-1]["content"], list):
@@ -82,74 +73,22 @@ def process_response_cycle(
                 else:
                     messages[-1]["content"] = accumulated_output
 
-        end_turn, should_stop = check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
-
+        # Check stop conditions
+        end_turn, should_stop = model_config.check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
+        
         if should_stop:
-            # these reasons should be enum in the future
-            print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
+            model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected, task_config.K)
             break
 
         state.increment_continuation()
         logger.info(f"Starting continuation #{state.continuation_count}")
 
-        if model_config.is_openai_compatible:
-            handle_openai_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
+        # Check if we need to continue due to truncation
+        if not end_turn and not model_config.has_end_tag(new_response, agent_settings.end_tag, agent_settings.document_tag):
+            model_config.handle_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
+            continue
 
     return state, accumulated_output, end_turn
-
-
-def initialize_output_and_prefill(
-    output_file: str,
-    model_config: ModelConfig,
-    task_config: TaskConfig,
-    agent_settings: AgentSettings,
-    agent_prompts: AgentPrompts,
-    messages,
-    prefill: str,
-    accumulated_output: str,
-    first_k_tex_document: Optional[str] = None,
-):
-    if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
-        file_content = read_file(output_file)
-        if has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
-            logger.debug("End tag detected - skipping continuation")
-            if messages[-1]["content"][-1].get("cache_control"):
-                messages[-1]["content"][-1].pop("cache_control")
-            messages.append({"role": "assistant", "content": file_content})
-            return None, True, messages
-        else:
-            logger.warning("Output file exists but no end tag found - continuing from file")
-            accumulated_output = file_content
-            if model_config.supports_prompt_caching:
-                messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
-            else:
-                messages.append({"role": "assistant", "content": file_content})
-            logger.debug(f"Using existing content as prefill: {output_file}")
-            if model_config.is_openai_compatible:
-                handle_openai_continuation(messages, file_content, agent_settings.end_tag, agent_settings.K)
-    else:
-        if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
-            prefill += first_k_tex_document
-            if model_config.is_anthropic:
-                accumulated_output = first_k_tex_document
-            elif model_config.is_openai_compatible:
-                accumulated_output = ""
-                messages.append({"role": "assistant", "content": "```latex\n"})
-
-        if model_config.is_anthropic:
-            messages.append({"role": "assistant", "content": prefill})
-            logger.debug(f"Anthropic prefill: {prefill}")
-        elif model_config.is_openai_compatible:
-            openai_prefill = f"Start your response with\n{prefill}"
-            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
-            logger.debug(f"OpenAI prefill: {openai_prefill}")
-
-        if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>" and model_config.is_anthropic:
-            write_file(output_file, prefill)
-        elif agent_settings.output_ext == "xml" and model_config.is_anthropic:
-            write_file(output_file, prefill + "\n")
-
-    return accumulated_output, False, messages
 
 
 def process_first_round(
@@ -157,7 +96,7 @@ def process_first_round(
     output_file: str,
     user_vars: Dict[str, str],
     state: State,
-    messages: List[Dict[str, Any]],
+    messages,
     model_config: ModelConfig,
     task_config: TaskConfig,
     agent_settings: AgentSettings,
@@ -177,8 +116,7 @@ def process_first_round(
     user_request = render_prompt(agent_prompts.user_request, user_vars)
 
     # Initialize messages
-    messages = initialize_messages(
-        model_config,
+    messages = model_config.initialize_messages(
         agent_prompts.system_prompt,
         user_prefix,
         user_request,
@@ -189,12 +127,10 @@ def process_first_round(
     prefill = agent_settings.prefills[0] if agent_settings.prefills else ""
 
     accumulated_output = prefill
-    accumulated_output, end_turn, messages = initialize_output_and_prefill(
+    accumulated_output, end_turn, messages = model_config.initialize_output_and_prefill(
         output_file,
-        model_config,
         task_config,
         agent_settings,
-        agent_prompts,
         messages,
         prefill,
         accumulated_output,
@@ -247,39 +183,17 @@ def process_reflection_round(
     if tex_count_stats:
         user_message = f"{tex_count_stats}{user_message}"
 
-    # Create a new message for the reflection round
-    reflection_message = {"role": "user", "content": []}
-
-    # Add figure inputs to the message if available
-    if figure_inputs:
-        print(f"Creating image message with {len(figure_inputs)} figures")
-        image_content = create_image_message(model_config, figure_inputs)
-        reflection_message["content"].extend(image_content)
-
-    # Add the user message text
-    if model_config.supports_prompt_caching:
-        reflection_message["content"].append({"type": "text", "text": user_message})
-        # Make sure the number of cache control is fewer than 4
-        if isinstance(messages[-1]["content"], list):
-            if len(messages[-1]["content"]) == 1:
-                messages[0]["content"][-1].pop("cache_control", None)
-            elif len(messages[-1]["content"]) >= 2:
-                messages[-1]["content"][-2].pop("cache_control", None)
-    else:
-        reflection_message["content"].append({"type": "text", "text": user_message})
-
-    messages.append(reflection_message)
+    # Create a new message for the reflection round using model-specific implementation
+    messages = model_config.create_reflection_message(messages, user_message, figure_inputs)
 
     accumulated_output = None
-    prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > 1 else agent_settings.prefills[0]
+    prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
 
     accumulated_output = prefill
-    accumulated_output, end_turn, messages = initialize_output_and_prefill(
+    accumulated_output, end_turn, messages = model_config.initialize_output_and_prefill(
         output_file,
-        model_config,
         task_config,
         agent_settings,
-        agent_prompts,
         messages,
         prefill,
         accumulated_output,
