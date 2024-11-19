@@ -11,7 +11,7 @@ prompts:
     You are an expert LaTeX formatter specializing in academic conference paper formats. Your task is to convert a NeurIPS paper format to the ICLR conference format, ensuring all content is preserved and properly formatted according to ICLR guidelines. Today is October 7th, 2024, the most productive day of the year.
 
   user_prefix: |
-    I will provide you with the content of a NeurIPS paper (neurips_main.tex) and the ICLR conference template (iclr2025_conference.tex). Your task is to reformat the NeurIPS paper into the ICLR format. An exisiting outline is already provided in the ICLR conference template (iclr2025_conference.tex) and you must follow it. YOU MUST ALSO FOLLOW THE LATEX SYNTAX OF THE ICLR TEMPLATE.
+    I will provide you with the content of a NeurIPS paper (neurips_main.tex) and the ICLR conference template (iclr2025_conference.tex). Your task is to reformat the NeurIPS paper into the ICLR format. An existing outline is already provided in the ICLR conference template (iclr2025_conference.tex) and you must follow it. YOU MUST ALSO FOLLOW THE LATEX SYNTAX OF THE ICLR TEMPLATE.
 
     Here are the files:
 
@@ -26,7 +26,7 @@ prompts:
     </document>
     </documents>
 
-    An exisiting outline is already provided in the ICLR conference template (iclr2025_conference.tex) and you must follow it to structure the paper.
+    An existing outline is already provided in the ICLR conference template (iclr2025_conference.tex) and you must follow it to structure the paper.
 
     Please carefully analyze both documents before proceeding with the conversion.
 

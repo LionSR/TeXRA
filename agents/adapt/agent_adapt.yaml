@@ -1,4 +1,5 @@
 name: adapt
+
 settings:
   document_tag: latex_document
   end_tag: </latex_document>
@@ -6,6 +7,9 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: command.tex
 
 prompts:
   system_prompt: |
@@ -32,11 +36,10 @@ prompts:
     {{ COMMAND_CONTENT }}
     </document>
     <document name="existing_lecture_notes">
-    {{ EXISTING_LECTURE_NOTES }}
+    {{ SAMPLE_CONTENT }}
     </document>
     <document name="new_lecture_notes">
-    {{ NEW_LECTURE_NOTES }}
-    </document>
+    {{ INPUT_CONTENT }}
     </documents>
 
   user_request: |
@@ -59,11 +62,15 @@ prompts:
     \end{itemize}
 
     After showing your work, please output the fully adapted content inside `<adapted_lecture_notes>' tag, ready to be integrated with your existing lecture notes.
+    Use the following format for your output:
+    <adapted_lecture_notes>
+    % Updated LaTeX source here
+    </adapted_lecture_notes>
 
   user_reflect: |
     Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
 
-    After thoroughly reviewing the exisiting lecture notes (under the `<existing_lecture_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
+    After thoroughly reviewing the existing lecture notes (under the `<existing_lecture_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
     <instruction>
     \begin{itemize}
         \item Increase the level of detail from moderate (5/10) to high (9/10)

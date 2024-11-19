@@ -1,0 +1,229 @@
+name: replies/draft_rebuttal
+
+settings:
+  document_tag: rebuttal_letter
+  end_tag: </rebuttal_letter>
+  output_ext: xml
+  prefills:
+    - <rebuttal_letter><scratchpad>
+    - <rebuttal_letter><scratchpad>
+  required_files:
+    COVER_LETTER: rebuttal/cover_letter.txt
+    INSTRUCTION_FILE: rebuttal/instruction.txt
+    EDITOR_LETTER: rebuttal/editor_letter.txt
+    REPORT_A: rebuttal/report_a.txt
+    REPORT_B: rebuttal/report_b.txt
+    EXAMPLE_REBUTTAL_LETTER: example_rebuttal_letter.txt
+
+prompts:
+  system_prompt: |
+    Your task is to draft a comprehensive rebuttal letter for a research paper submitted to a scientific journal. This includes responding to referee comments and revising the paper accordingly.
+
+    When drafting the rebuttal and revising the paper, you must:
+    \begin{itemize}
+        \item Use appropriate notation and terminology consistent with the specific field of research.
+        \item Maintain a professional and respectful tone while firmly defending the research.
+        \item Provide specific, detailed responses to referee comments, including concrete examples and references to changes made in the paper.
+        \item Ensure all mathematical equations and scientific concepts are accurately represented and explained.
+        \item Balance between addressing referee concerns and maintaining the integrity of the original research.
+        \item Use \LaTeX formatting appropriately for all scientific notation and equations.
+        \item Tailor your responses to the specific field and context of the research paper.
+        \item Demonstrate a deep understanding of the research topic and its broader implications in the field.
+    \end{itemize}
+
+    When writing professional *.tex \LaTeX documents, you must:
+    - Use professional LaTeX commands and environments for all scientific notation and equations. Strongly prefer $\beta$ over β. Use $J_1$ instead of J1. Use $\approx$ instead of ≈.
+    - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
+    - Only use enumerate and itemize environments for lists.
+
+  user_prefix: |
+    You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
+
+    <documents>
+    <document name="{COVER_LETTER_FILE}">
+    {{ COVER_LETTER_CONTENT }}
+    </document>
+    <document name="{{ INPUT_FILE }}">
+    {{ MAIN_CONTENT }}
+    </document>
+    <document name="{{ SUPP_FILE }}">
+    {{ SUPP_CONTENT }}
+    </document>
+    <document name="{EDITOR_LETTER_CONTENT_FILE}">
+    {{ EDITOR_LETTER_CONTENT }}
+    </document>
+    <document name="{REFEREE_REPORT_A_FILE}">
+    {{ REFEREE_REPORT_A_CONTENT }}
+    </document>
+    <document name="{REFEREE_REPORT_B_FILE}">
+    {{ REFEREE_REPORT_B_CONTENT }}
+    </document>
+    <document name="{EXAMPLE_REBUTTAL_LETTER_FILE}">
+    {{ EXAMPLE_REBUTTAL_LETTER }}
+    </document>
+    <document name="{FILE_INSTRUCTION_FILE}">
+    {{ FILE_INSTRUCTION_CONTENT }}
+    </document>
+    </documents>
+
+    Explanation of documents:
+    \begin{enumerate}
+        \item Cover Letter: The original cover letter submitted with the paper.
+        \item Main Paper: The full text of the submitted paper, identified by \texttt{\{INPUT\_FILE\}}.
+        \item Appendix: Supplementary information for the paper.
+        \item Editor Decision Letter: The full text of the editor's decision and comments.
+        \item Referee Report A: The full text of the first referee's report.
+        \item Referee Report B: The full text of the second referee's report.
+        \item Example Reply Letter: A sample reply letter for reference.
+        \item Instructions: Guidelines on how to draft the reply letter.
+    \end{enumerate}
+
+  user_request: |
+    Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the `<scratchpad>' tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure. 
+
+    After your planning, draft a reply letter that includes the following:
+    \begin{enumerate}
+        \item A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
+        \item A point-by-point response to the referee comments. Write this inside the <document name="replies/reply_to_referees.tex"></document> tag. To do this:
+        \begin{itemize}
+            \item Split each referee report into separate comments. Copy each exact comment as a verbatim segment inside the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environment.
+            \item Similar to the provided example, all the referee's comments (summary, recommendations, criticisms, questions) need to be covered and addressed in the reply letter. For recommendations by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what has been changed in the paper, similar to the provided example.
+            \item Write your response to each comment using the \verb|\begin{response}| and \verb|\end{response}| environment immediately after each \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environment.
+            \item Be respectful and diplomatic, but firm in your responses. Follow the principles from the book ``They Say, I Say'' in crafting your rebuttals. Use a ``Show, not tell'' approach - be specific about what has been changed in the paper, similar to the provided example.
+        \end{itemize}
+        \item At the end of each reply to the referees, write a concluding paragraph to further persuade the referee.
+        \item A list of major changes you made to the paper. Write this inside the <document name="replies/list_of_major_changes.tex"></document> tag. Order by importance. Minor improvements to the presentation of the paper can be grouped into one item.
+        \item A revised version of the paper that addresses the referee comments and implements all the proposed changes mentioned in the reply letter. Include the main paper and the supplementary materials.
+    \end{enumerate}
+
+    {% if INSTRUCTION %}
+    Specific instructions (if provided) that you must follow:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+    Write the full reply letter in the following format:
+
+    <rebuttal_letter>
+    <scratchpad>
+    your detailed plan here
+    </scratchpad>
+    <document name="{REPLY_TO_EDITOR_FILE}">
+    \documentclass[a4paper,12pt]{article}
+    \usepackage{fullpage}
+    \input{../preamble}
+    \setlength{\parindent}{0em}
+
+    \begin{document}
+
+    Dear Dr.~{EDITOR_NAME},
+    \vspace{3em}
+
+    {LETTER_CONTENT}
+
+    \vspace{3em}
+    Yours sincerely,
+    \vspace{1.5em}
+
+    {AUTHOR_NAMES}
+
+    \end{document}
+    </document>
+
+    <document name="replies/reply_to_referees.tex">
+    \documentclass[a4paper,12pt]{article}
+    \usepackage{fullpage}
+    \input{../preamble}
+
+    \newenvironment{referee}[1]
+    {\noindent {\bf Referee #1:}}
+    {\vspace{1em}}
+
+    \newenvironment{response}
+    {\noindent \color{blue!40!black}{\bf Response:}}
+    {\vspace{1em}}
+
+    \bibliographystyle{ieeetr}
+
+    \begin{document}
+
+    \subsection*{Response to Referee A}
+
+    \begin{referee}{A}
+    First comment from the referee A here. Potentially it is a summary of our work.
+    \end{referee}
+
+    \begin{response}
+    Your response to the first comment here.
+    \end{response}
+
+    \begin{referee}{A}
+    Second comment from referee A here.
+    \end{referee}
+
+    \begin{response}
+    Your response to the second comment here.
+    \end{response}
+
+    (Continue this pattern for each comment from referee A)
+
+    \subsection*{Response to Referee B}
+
+    (Similar structure as for referee A)
+
+    \end{document}
+
+    </document>
+    <document name="{LIST_OF_MAJOR_CHANGES_FILE}">
+    \documentclass[a4paper,12pt]{article}
+    \usepackage{fullpage}
+    \input{../preamble}
+
+    \begin{document}
+
+    \section*{List of Major Changes}
+
+    \begin{enumerate}
+        \item First major change
+        \item Second major change
+        \item Third major change
+        % Add more items as needed
+
+        % Minor improvements can be grouped into one item
+        \item[*] Various minor improvements to the presentation of the paper, including:
+        \begin{itemize}
+            \item First minor improvement
+            \item Second minor improvement
+            % Add more minor improvements as needed
+        \end{itemize}
+    \end{enumerate}
+
+    \end{document}
+    </document>
+
+    <document name="{{ INPUT_FILE }}">
+    (Insert the full text of your revised paper here.)
+    </document>
+    <document name="{{ SUPP_FILE }}">
+    (Insert the full text of your revised supplementary materials here.)
+    </document>
+
+    </rebuttal_letter>
+
+    Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the `<scratchpad>' tag. Then proceed to drafting the rebuttal letter in the format specified above.
+
+  user_reflect: |
+    Your output (cover letter to the editor and the response letter to the referees) is too generic and not specific enough.
+    After thoroughly and critically reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new reply letter that satisfies the following requirements:
+    <requirements>
+    \begin{itemize}
+        \item Increase the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
+        \item Ensure all referee comments (summary, recommendations, criticisms, or questions) are addressed using concrete and convincing physical arguments.
+        \item Match the style and tone of the reply letter to the provided example (under \verb|<document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">|).
+        \item Review the revised version for fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' that can be condensed using the ``show, don't tell'' technique.
+        \item Adhere to PRL's strict word count policy for the main paper. Ensure the main paper (excluding appendix) does not exceed $\sim$3500 words. Added text must be concise and focused. If necessary, condense other parts of the paper to maintain the word limit.
+    \end{itemize}
+    </requirements>
+
+    Start with laying down your plan in the `<scratchpad>' tag. Then proceed to output the revised letter to the editor (under <document name="{REPLY_TO_EDITOR_FILE}">) and the revised response letter (under <document name="{REPLY_TO_REFEREES_FILE}">), the revised main paper (under <document name="{{ INPUT_FILE }}">) and the revised supplementary materials (under <document name="{{ SUPP_FILE }}">) that meets the above requirements.

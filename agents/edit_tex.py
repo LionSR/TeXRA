@@ -9,6 +9,7 @@ class EditTexBase:
         user_vars = super().get_user_vars()
 
         if self.args.agent == "convert":
+            # needs a contain specifications in the settings of the agent yaml files
             if "iclr" in self.args.input_file:
                 user_vars["ICLR_TEMPLATE"] = coa.read_file(self.args.input_file)
             if "neurips" in self.args.input_file:

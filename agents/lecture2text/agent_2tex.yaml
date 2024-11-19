@@ -1,4 +1,5 @@
 name: 2tex
+
 settings:
   document_tag: latex_document
   end_tag: </latex_document>
@@ -6,6 +7,9 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  required_files:
+    DOCUMENT_CLS: lecture.cls
+    COMMAND: commands_qi.tex
 
 prompts:
   system_prompt: |
