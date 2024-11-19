@@ -8,11 +8,6 @@ class WriteTex(ThinkAndWrite):
     def get_user_vars(self):
         user_vars = super().get_user_vars()
 
-        if self.args.sample_files:
-            user_vars["SAMPLES"] = "\n".join([coa.read_file(sample) for sample in self.args.sample_files])
-        else:
-            user_vars["SAMPLES"] = ""
-
         if self.args.input_files:
             for file in self.args.input_files:
                 if "main" in file.lower():
