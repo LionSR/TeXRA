@@ -85,10 +85,10 @@ def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_ta
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
     tex_file = f"{base_name}.tex"
     logger.debug(f"TeX file: {tex_file}")
     if split_and_save_thinking:
+        log_file_thinking = f"{base_name}_thinking.xml"
         logger.debug(f"Thinking file: {log_file_thinking}")
 
     # Read the content of the output file
@@ -138,9 +138,9 @@ def split_multiple_scratchpad_output_xml(
     logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
 
     base_name, extension = os.path.splitext(output_file)
-    log_file_thinking = f"{base_name}_thinking.xml" if split_and_save_thinking else None
 
     if split_and_save_thinking:
+        log_file_thinking = f"{base_name}_thinking.xml"
         logger.debug(f"Log file: {log_file_thinking}")
 
     # Read the content of the output file
