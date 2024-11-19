@@ -5,6 +5,7 @@ from .file_utils import (
     read_file,
     write_file,
     append_file,
+    write_to_output_file,
     extract_text_from_tags,
     get_agent_path,
 )
