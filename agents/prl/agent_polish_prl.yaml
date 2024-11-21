@@ -7,6 +7,16 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  file_patterns_contain:
+    - pattern: "preamble"
+      var_name: "PREAMBLE"
+      categories: ["auxiliary_file", "auxiliary_files"]
+    - pattern: "main"
+      var_name: "MAIN"
+      categories: ["input_file", "input_files"]
+    - pattern: "supp"
+      var_name: "SUPP"
+      categories: ["input_file", "input_files"]
 
 prompts:
   system_prompt: |
@@ -19,7 +29,7 @@ prompts:
         \item Ensure proper referencing between the main text and supplementary materials.
         \item Follow best practices for \LaTeX writing, including proper use of environments, equations, and citations.
         \item Preserve the overall structure of both documents while making improvements.
-        \item When making references in the replies to the paper, use \verb|\cref{...}| instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
+        \item When making references in the replies to the paper, use |\cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
     \end{itemize}
 
   user_prefix: |

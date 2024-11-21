@@ -3,6 +3,36 @@ from typing import Optional, List, Dict, Any
 
 
 @dataclass
+class AgentSettings:
+    """Configuration for agent behavior and generation settings."""
+
+    # Document settings
+    type: Optional[str] = "think_and_write"
+    document_tag: Optional[str]
+    prefills: List[str] = field(default_factory=list)
+    output_ext: str = "txt"
+    end_tag: str = "\\end{document}"
+    required_files: Dict[str, str] = field(default_factory=dict)
+    required_files_internal: Dict[str, str] = field(default_factory=dict)
+    default_output_files: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
+        """Create an AgentSettings from a dictionary."""
+        settings = cls(
+            type=settings_dict.get("type", "think_and_write"),
+            document_tag=settings_dict.get("document_tag"),
+            prefills=settings_dict.get("prefills", []),
+            output_ext=settings_dict.get("output_ext", "txt"),
+            end_tag=settings_dict.get("end_tag", "\\end{document}"),
+            required_files=settings_dict.get("required_files", {}),
+            required_files_internal=settings_dict.get("required_files_internal", {}),
+            default_output_files=settings_dict.get("default_output_files", []),
+        )
+        return settings
+
+
+@dataclass
 class AgentPrompts:
     """Configuration for agent prompts."""
 
@@ -100,27 +130,3 @@ class TaskConfig:
             all_input_files = [self.input_file] + (self.input_files or [])
             if len(self.output_files) > len(all_input_files):
                 raise ValueError("Number of output files must not be greater than the number of input files.")
-
-
-@dataclass
-class AgentSettings:
-    """Configuration for agent behavior and generation settings."""
-
-    # Document settings
-    document_tag: Optional[str]
-    prefills: List[str] = field(default_factory=list)
-    output_ext: str = "txt"
-    end_tag: str = "\\end{document}"
-    required_files: Dict[str, str] = field(default_factory=dict)
-
-    @classmethod
-    def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
-        """Create an AgentSettings from a dictionary."""
-        settings = cls(
-            document_tag=settings_dict.get("document_tag"),
-            prefills=settings_dict.get("prefills", []),
-            output_ext=settings_dict.get("output_ext", "txt"),
-            end_tag=settings_dict.get("end_tag", "\\end{document}"),
-            required_files=settings_dict.get("required_files", {}),
-        )
-        return settings

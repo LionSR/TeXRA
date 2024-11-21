@@ -4,12 +4,6 @@ import coauthor as coa
 agent_path = coa.get_agent_path(coa, "grant")
 
 
-class ReviseGrant(ThinkAndWrite):
-    def get_user_vars(self):
-        user_vars = super().get_user_vars()
-        return user_vars
-
-
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument(
@@ -20,7 +14,7 @@ def main():
     )
     args = parser.parse_args()
 
-    revise_document = ReviseGrant(args, agent_path)
+    revise_document = ThinkAndWrite(args, agent_path)
     revise_document.run()
 
 

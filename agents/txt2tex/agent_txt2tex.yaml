@@ -8,8 +8,8 @@ settings:
     - <latex_document> \chapter
     - <latex_document>
   required_files:
-  - DOCUMENT_CLS: lecture.cls
-  - COMMANDS_FILE: command.tex
+    - DOCUMENT_CLS: lecture.cls
+    - COMMANDS_FILE: command.tex
 
 prompts:
   system_prompt: |
