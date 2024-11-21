@@ -24,7 +24,7 @@ In the case where there is a lack of information about our system, we don't know
 We use the concept of density operator to describe the state of the systems.
 
 As you will see later on, it will be very important.
-<output>
+</output>
 </example>
 
 <example id=2>
@@ -45,5 +45,5 @@ There were many theories behind that, that together then they are building this 
 So, you can imagine that in the same way that classical information theory has been developed since the 40s until now, and they are the basis of classical computer devices, communications, and many other things as I mentioned before.
 
 Then, this quantum information theory is the theory that is behind it, is the basis of quantum computation, quantum cryptography measurements, quantum simulations, and all these applications that I mentioned before.
-<output>
+</output>
 </example>

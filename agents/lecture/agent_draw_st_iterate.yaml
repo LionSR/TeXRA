@@ -39,7 +39,14 @@ prompts:
     </document>
     </documents>
 
-    {EDITED_VERSION}
+    {{% if EDITED_FILE %}}
+    If you are iterating on a previous version, here is the content of the previously edited file:
+    <previous_edit>
+    {{ EDITED_CONTENT }}
+    </previous_edit>
+
+    Please analyze both the original input and this previous edit, focusing on further improvements and refinements.
+    {{% endif %}}
 
     Please thoroughly analyze the entire draft chapter above, focusing on:
     1. The overall context and subject matter of the chapter
