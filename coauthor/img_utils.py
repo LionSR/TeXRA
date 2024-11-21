@@ -1,9 +1,9 @@
 import base64
-from PIL import Image
 import os
 import io
 import fitz
 
+from PIL import Image
 from typing import List
 
 
