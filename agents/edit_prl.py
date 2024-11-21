@@ -1,7 +1,8 @@
-from coauthor.agent_reflect import ThinkAndWrite, DirectWrite
 import coauthor as coa
+from coauthor.agent_reflect import ThinkAndWrite, DirectWrite
 
 agent_path = coa.get_agent_path(coa, "prl")
+
 
 def main():
     parser = coa.get_common_argparser()

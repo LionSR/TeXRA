@@ -6,6 +6,11 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  file_patterns_contain:
+    - pattern: "main"
+    - var_name: "PAPER"
+    - categories: ["input_file", "input_files"]
+
 
 prompts:
   system_prompt: |
@@ -30,7 +35,7 @@ prompts:
     You are tasked with revising and improving a drafted referee report for the following research paper submitted to PRX Quantum:
 
     <research_paper>
-    {PAPER_CONTENT}
+    {{ PAPER_CONTENT }}
     </research_paper>
 
     Here is the drafted referee report that needs revision:
