@@ -1,7 +1,7 @@
 import os
 import re
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 import time
 
 from .logging_utils import logger
@@ -11,20 +11,17 @@ from .output_utils import (
     ensure_correct_xml_structure,
     split_scratchpad_output_xml,
     split_multiple_scratchpad_output_xml,
+    check_for_massive_repetition,
 )
 from .logdb_utils import log_db_start, log_db_and_print_statistics, log_db_output_files
-from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files
-from .model_config import MODEL_CONFIGS
-from .file_utils import read_file
-from .state import State
-from .config import TaskConfig, AgentSettings, AgentPrompts
+from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt
+from .file_utils import read_file, write_to_output_file
 from .openai_utils import best_connection_method
-from .file_utils import write_to_output_file
-from .output_utils import check_for_massive_repetition
-from .prompt_utils import render_prompt
-from .model_config import ModelConfig
-from .state import State
 from .replacement_utils import get_all_replacements, apply_replacements
+
+from .state import State
+from .model_config import MODEL_CONFIGS
+from .config import TaskConfig, AgentSettings, AgentPrompts
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:

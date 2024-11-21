@@ -53,10 +53,12 @@ prompts:
         \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
     \end{itemize}
 
-    Additionally, if provided, focus on the following specific instruction:
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
   user_request: |
     Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a physics audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.

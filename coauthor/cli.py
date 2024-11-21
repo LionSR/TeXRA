@@ -361,6 +361,110 @@ def paper2slide(model, input_file, **kwargs):
 
 
 @click.command()
+@shared_arguments
+@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
+def statement(model, input_file, document_type, **kwargs):
+    if document_type is None:
+        if "teaching" in input_file.lower():
+            agent_sub = "teaching"
+        elif "diversity" in input_file.lower():
+            agent_sub = "diversity"
+        elif "research" in input_file.lower():
+            agent_sub = "research"
+        else:
+            raise ValueError("Document type not recognized")
+    else:
+        agent_sub = document_type
+
+    print(f"Agent: statement_{agent_sub}")
+
+    execute_agent("application", f"statement_{agent_sub}", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_nsf_grant(model, input_file, **kwargs):
+    execute_agent("grant", "revise_nsf_grant", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_marie_curie(model, input_file, **kwargs):
+    execute_agent("grant", "revise_marie_curie", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def text2tex(model, input_file, **kwargs):
+    agent_sub = "text2tex"
+    if ".tex" in input_file:
+        agent_sub = "text2tex_draft"
+    print(f"Agent sub: {agent_sub}")
+    execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_prl(model, input_file, **kwargs):
+    # _, _, prompt_dir = get_common_env(model)
+    execute_agent(
+        "rebuttal_prl",
+        "revise_prl",
+        model,
+        input_file,
+        **kwargs,
+    )
+
+
+@click.command()
+@shared_arguments
+def draft_rebuttal_prl(model, input_file, **kwargs):
+    execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_rebuttal_prl(model, input_file, **kwargs):
+    execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def paper2referee(model, input_file, **kwargs):
+    execute_agent("write_tex", "paper2referee", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def revise_referee(model, input_file, **kwargs):
+    execute_agent("write_tex", "revise_referee", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def convert_tex(model, input_file, **kwargs):
+    agent = "convert"
+    if kwargs.get("output_files"):
+        agent = f"{agent}_multiple"
+    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def translate2chn(model, input_file, **kwargs):
+    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+@click.option("--insertion-point", type=str, help="Location in the document where OCR content should be inserted")
+def ocr_tex(model, input_file, **kwargs):
+    execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
+
+
+
+
+@click.command()
 def clean_output():
     run_clean_output()
 
@@ -471,117 +575,6 @@ def extract_figure_path(latex_file):
 def extract_tikzpictures(latex_file):
     compiled_files = extract_and_compile_tikzpictures_with_labels(latex_file)
     print(f"Compiled TikZ pictures: {compiled_files}")
-
-
-@click.command()
-@shared_arguments
-@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
-def statement(model, input_file, document_type, **kwargs):
-    if document_type is None:
-        if "teaching" in input_file.lower():
-            agent_sub = "teaching"
-        elif "diversity" in input_file.lower():
-            agent_sub = "diversity"
-        elif "research" in input_file.lower():
-            agent_sub = "research"
-        else:
-            raise ValueError("Document type not recognized")
-    else:
-        agent_sub = document_type
-
-    print(f"Agent: statement_{agent_sub}")
-
-    execute_agent("application", f"statement_{agent_sub}", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_nsf_grant(model, input_file, **kwargs):
-    execute_agent("grant", "revise_nsf_grant", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_marie_curie(model, input_file, **kwargs):
-    execute_agent("grant", "revise_marie_curie", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def text2tex(model, input_file, **kwargs):
-    agent_sub = "text2tex"
-    if ".tex" in input_file:
-        agent_sub = "text2tex_draft"
-    print(f"Agent sub: {agent_sub}")
-    execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_prl(model, input_file, **kwargs):
-    _, _, prompt_dir = get_common_env(model)
-    execute_agent(
-        "rebuttal_prl",
-        "revise_prl",
-        model,
-        input_file,
-        supp_file="supp.tex",
-        cover_letter="replies/cover_letter.txt",
-        # instruction="replies/instruction.txt",
-        editor_letter="replies/editor_letter.txt",
-        report_a="replies/report_a.txt",
-        report_b="replies/report_b.txt",
-        example_rebuttal_letter="replies/reply_to_referees.tex",
-        draft_reply_letter="replies/reply_to_referees.tex",
-        **kwargs,
-    )
-
-
-@click.command()
-@shared_arguments
-def draft_rebuttal_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_rebuttal_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2referee(model, input_file, **kwargs):
-    execute_agent("write_tex", "paper2referee", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_referee(model, input_file, **kwargs):
-    execute_agent("write_tex", "revise_referee", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def convert_tex(model, input_file, **kwargs):
-    agent = "convert"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("edit_tex", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def translate2chn(model, input_file, **kwargs):
-    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-@click.option("--insertion-point", type=str, help="Location in the document where OCR content should be inserted")
-def ocr_tex(model, input_file, **kwargs):
-    """Convert handwritten mathematical content to LaTeX and insert it into the document."""
-    execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
 
 
 if __name__ == "__main__":

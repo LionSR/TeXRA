@@ -651,6 +651,9 @@ document.addEventListener('DOMContentLoaded', function () {
         'multipleInputFilesSelect',
         'inputFileSelect',
       ).filter((file) => file !== inputFile);
+
+      // in the future maybe we want to split sampleFile vs SampleFiles, AuxFile vs AuxFiles, FigureFile vs Figures. 
+      // but for now we'll just keep it for now
       const sampleFiles = getFiles(
         'multipleSampleFilesSelect',
         'sampleFileSelect',

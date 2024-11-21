@@ -27,7 +27,7 @@ prompts:
     - Keep comments such as ``% alive or dead?'' in the output.
     - Keep the section separators ``% ----------------------------------------------''
     - Keep the paragraph separators ``\\''
-    - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+    - When in doubt, follow the best practice that will result in zero warning when checked by chktex.
     - Each sentence should be on a single line. For example, ``Show that the singlet state is the only one for which this probability is $0$ for all $\vec{a}$.'' should be on one line.
     - For Problems, name them condensedly, e.g, \begin{problem}[Pauli Matrices]\label{prob:pauli} ... \end{problem}
 

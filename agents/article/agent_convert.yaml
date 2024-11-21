@@ -18,7 +18,7 @@ prompts:
     <documents>
     {{ AUXILIARY_FILES }}
     <document name="neurips_main.tex">
-    {{ NeurIPS_TEX }}
+    {{ NeurIPS_CONTENT }}
     </document> 
 
     <document name="iclr2025_conference.tex">
