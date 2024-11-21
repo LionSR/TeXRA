@@ -112,6 +112,8 @@ class AgentSettings:
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
     required_files: Dict[str, str] = field(default_factory=dict)
+    required_files_internal: Dict[str, str] = field(default_factory=dict)
+    default_output_files: List[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
@@ -122,5 +124,7 @@ class AgentSettings:
             output_ext=settings_dict.get("output_ext", "txt"),
             end_tag=settings_dict.get("end_tag", "\\end{document}"),
             required_files=settings_dict.get("required_files", {}),
+            required_files_internal=settings_dict.get("required_files_internal", {}),
+            default_output_files=settings_dict.get("default_output_files", []),
         )
         return settings

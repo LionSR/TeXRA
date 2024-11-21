@@ -652,7 +652,9 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     ),
     "gpt4o": OpenAICompatibleModelConfig(
         name="gpt4o",
-        full_name="gpt-4o-2024-08-06",
+        # full_name="gpt-4o-2024-08-06",
+        # gpt-4o,
+        full_name="gpt-4o-2024-11-20",
         provider=ModelProvider.OPENAI,
         max_tokens=16384,
         input_price=2.5,
