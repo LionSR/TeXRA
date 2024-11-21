@@ -16,12 +16,12 @@ prompts:
 
     Here is the original \LaTeX document {{ INPUT_FILE }}:
     <original_latex>
-    {{ ORIGINAL_LATEX }}
+    {{ INPUT_CONTENT }}
     </original_latex>
 
-    Here is the edited version of the \LaTeX document:  
+    Here is the edited version of the \LaTeX document {{ EDITED_FILE }}:  
     <edited_latex>
-    {{ EDITED_LATEX }}
+    {{ EDITED_CONTENT }}
     </edited_latex>
 
   user_request: |

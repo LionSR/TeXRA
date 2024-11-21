@@ -6,6 +6,8 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  required_files_internal:
+    - template_proposal.tex
 
 prompts:
   system_prompt: |
@@ -64,29 +66,9 @@ prompts:
     - Include citations for all relevant background information and techniques.
 
     Use the following latex template to structure your proposal if not provided with a draft:
-    <research_proposal_template>
-    \documentclass[aps, pra, preprint, 11pt, amsmath, amssymb, notitlepage, nofootinbib]{revtex4-2}
-    \usepackage[utf8]{inputenc}
-    \usepackage{graphicx} 
-    \usepackage{natbib}
-    \usepackage{xcolor}
-    \usepackage{braket}
-    \usepackage{tikz}
-    \usetikzlibrary{shapes,arrows,positioning,decorations.pathmorphing}
+    {{ TEMPLATE_PROPOSAL_CONTENT }}
 
-    \begin{document}
-    \title{Your Proposal Title}
-    \author{Your Institution}
-    \date{\today}
-    \maketitle
-
-    ... [Your proposal content here] ...
-
-    \bibliography{biblio}
-    \end{document}
-    </research_proposal_template>
-
-    Please output your complete LaTeX proposal within the <research_proposal> tags.
+    Please output your complete LaTeX proposal within the `<research_proposal>' tags.
 
   user_reflect: |
     Please review your draft experimental proposal critically, focusing on the following points:
@@ -119,4 +101,4 @@ prompts:
 
     Based on this reflection, please revise the proposal to enhance its mathematical content, technical precision, and overall rigor. Eliminate any remaining verbal fluff and replace it with precise, equation-based descriptions where possible. Ensure that the proposal matches or exceeds the level of detail and mathematical content seen in the reference proposal.
 
-    Output your revised proposal within the <research_proposal> tags.
+    Output your revised proposal within the `<research_proposal>' tags.

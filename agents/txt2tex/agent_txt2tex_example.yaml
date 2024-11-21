@@ -32,8 +32,8 @@ prompts:
     {{ EXAMPLE_PAPER_CONTENT }}
     </example_paper>
 
-    <example_lecture_note>
-    {{ EXAMPLE_LECTURE_NOTE_CONTENT }}
-    </example_lecture_note>
+    <example_note>
+    {{ EXAMPLE_NOTE_CONTENT }}
+    </example_note>
 
     Use this example to guide your conversion from the research paper to lecture notes format.

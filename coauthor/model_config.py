@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple
 import os
 import base64
 from dotenv import load_dotenv
+from typing import Dict, List, Optional, Any, Tuple
 
 from .logging_utils import logger
 from .file_utils import read_file, write_file
@@ -652,7 +652,9 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     ),
     "gpt4o": OpenAICompatibleModelConfig(
         name="gpt4o",
-        full_name="gpt-4o-2024-08-06",
+        # full_name="gpt-4o-2024-08-06",
+        # gpt-4o,
+        full_name="gpt-4o-2024-11-20",
         provider=ModelProvider.OPENAI,
         max_tokens=16384,
         input_price=2.5,
@@ -700,6 +702,14 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         max_tokens=8192,
         input_price=0.075,
         output_price=0.3,
+    ),
+    "geminiexp": OpenAICompatibleModelConfig(
+        name="geminiexp",
+        full_name="gemini-exp-1121",
+        provider=ModelProvider.GOOGLE,
+        max_tokens=8192,
+        input_price=1.25,
+        output_price=5.0,
     ),
     # OpenRouter models
     "gpt4oOR": OpenAICompatibleModelConfig(

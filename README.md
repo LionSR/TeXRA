@@ -71,9 +71,9 @@ For detailed frontend information, see the [CoAuthor Frontend README](coauthor-f
 
 1. Open VS Code.
 2. Download the newest release (`.vsix` file, e.g., `coauthor-0.5.6.vsix`) from the release page of the Github repo.
-4. Find the newest `.vsix` file in the vs code file explorer.
-5. Right-click on the `.vsix` file.
-6. From the context menu, select "Install Extension VSIX".
+3. Find the newest `.vsix` file in the vs code file explorer.
+4. Right-click on the `.vsix` file.
+5. From the context menu, select "Install Extension VSIX".
 
 For manual installation or development setup, refer to the [CoAuthor Frontend README](coauthor-for-vs-code/README.md).
 
@@ -148,7 +148,6 @@ This directs all LaTeX output files to a `build` subdirectory. Works with relati
   "-f"
 ]
 ```
-
 
 ## Syncing Across Computers
 
