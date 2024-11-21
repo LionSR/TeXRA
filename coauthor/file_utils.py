@@ -5,6 +5,14 @@ import warnings
 from .logging_utils import logger
 
 
+def get_common_env(model):
+    if model is None:
+        model = os.getenv("MODEL", "sonnet+")
+    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/agents")
+    return model, script_dir, prompt_dir
+
+
 def get_agent_path(library, prompt_name: str) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(library.__file__)), "agents", prompt_name)
 
