@@ -219,9 +219,6 @@ def txt2tex(model, input_file, agent="txt2tex", **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--sample_chapters", type=str, help="Path to a sample LaTeX file in the desired style.")
-@click.option("--sample_paper", type=str, help="Path to a sample LaTeX file in the desired style.")
-@click.option("--sample_note", type=str, help="Path to a sample LaTeX file in the desired style.")
 def paper2note(model, input_file, **kwargs):
     execute_agent("paper2note", "paper2note", model, input_file, **kwargs)
 
@@ -255,49 +252,36 @@ def correct_supp_prl(model, input_file, **kwargs):
 @shared_arguments
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
-    execute_agent("rebuttal_prl", "reply_letter", model, input_file, supp_file=supp_file, **kwargs)
+    execute_agent("rebuttal_prl", "reply_letter", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
-@click.option("--draft_reply_letter", type=str, help="Path to the draft reply letter.")
-def revise_main_prl(model, input_file, supp_file="supp.tex", draft_reply_letter=None, **kwargs):
-    execute_agent("rebuttal_prl", "revise_main", model, input_file, supp_file=supp_file, draft_reply_letter=draft_reply_letter, **kwargs)
+@click.option("--supp_file", type=str, help="Path to the supplementary file.")
+def revise_main_prl(model, input_file, **kwargs):
+    execute_agent("rebuttal_prl", "revise_main", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-@click.option("--main_content", type=str, help="Path to the main content file.")
-@click.option("--draft_reply_letter", type=str, help="Path to the draft reply letter.")
-@click.option("--draft_main_content", type=str, help="Path to the draft main content file.")
-@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
-def revise_supp_prl(model, input_file, main_content, draft_reply_letter, draft_main_content, supp_file="supp.tex", **kwargs):
+def revise_supp_prl(model, input_file, **kwargs):
     execute_agent(
         "rebuttal_prl",
         "revise_supp",
         model,
         input_file,
-        main_content=main_content,
-        draft_reply_letter=draft_reply_letter,
-        draft_main_content=draft_main_content,
-        supp_file=supp_file,
         **kwargs,
     )
 
 
 @click.command()
 @shared_arguments
-@click.option("--main_content", type=str, help="Path to the main content file.")
-@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
-def polish_reply_prl(model, input_file, main_content, supp_file="supp.tex", **kwargs):
+def polish_reply_prl(model, input_file, **kwargs):
     execute_agent(
         "rebuttal_prl",
         "polish_reply",
         model,
         input_file,
-        main_content=main_content,
-        supp_file=supp_file,
         **kwargs,
     )
 
@@ -389,7 +373,7 @@ def revise_marie_curie(model, input_file, **kwargs):
 def text2tex(model, input_file, **kwargs):
     agent_sub = "text2tex"
     if ".tex" in input_file:
-        agent_sub = "text2tex_draft"
+        agent_sub = agent_sub + "_tex"
     print(f"Agent sub: {agent_sub}")
     execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
 
