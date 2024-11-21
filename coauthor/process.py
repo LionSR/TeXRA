@@ -1,12 +1,11 @@
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .logging_utils import logger
 from .openai_utils import best_connection_method
 from .file_utils import write_to_output_file
 from .output_utils import check_for_massive_repetition
-from .prompt_utils import render_prompt
 from .replacement_utils import get_all_replacements, apply_replacements
 
 from .model_config import ModelConfig

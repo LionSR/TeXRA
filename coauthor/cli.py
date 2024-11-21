@@ -24,19 +24,12 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc,
     run_pack_latexdiff_vc_multiple,
 )
+from coauthor.file_utils import get_common_env
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
-
-
-def get_common_env(model):
-    if model is None:
-        model = os.getenv("MODEL", "sonnet+")
-    script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/agents")
-    return model, script_dir, prompt_dir
 
 
 def shared_arguments(func):
@@ -262,8 +255,6 @@ def correct_supp_prl(model, input_file, **kwargs):
 @shared_arguments
 @click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
 def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
-    # _, _, prompt_dir = get_common_env(model)
-    # use example_rebuttal_letter=f"{prompt_dir}/prl/example_rebuttal_letter.txt" if we want to use local resources
     execute_agent("rebuttal_prl", "reply_letter", model, input_file, supp_file=supp_file, **kwargs)
 
 
@@ -406,7 +397,6 @@ def text2tex(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def revise_prl(model, input_file, **kwargs):
-    # _, _, prompt_dir = get_common_env(model)
     execute_agent(
         "rebuttal_prl",
         "revise_prl",
@@ -460,8 +450,6 @@ def translate2chn(model, input_file, **kwargs):
 @click.option("--insertion-point", type=str, help="Location in the document where OCR content should be inserted")
 def ocr_tex(model, input_file, **kwargs):
     execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
-
-
 
 
 @click.command()
