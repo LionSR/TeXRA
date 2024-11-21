@@ -8,13 +8,12 @@ class Lecture2Text(DirectWrite):
     def get_user_vars(self):
         user_vars = super().get_user_vars()
 
-        if self.args.agent in ["2tex", "reflect"]:
-            user_vars["INPUT_CONTENT"] = coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document")
+        if self.task_config.agent in ["2tex", "reflect"]:
+            converted_tex_file = self.task_config.input_file.replace(".txt", ".tex")
             user_vars.update(
                 {
-                    "CORRECTED_TRANSCRIPTION_CONTENT": coa.extract_text_from_tags(coa.read_file(self.args.input_file), "improved_document"),
-                    "CONVERTED_TEX_FILE": self.args.input_file.replace(".txt", ".tex"),
-                    "CONVERTED_TEX_CONTENT": coa.read_file(self.args.input_file.replace(".txt", ".tex")),
+                    "CONVERTED_TEX_FILE": converted_tex_file,
+                    "CONVERTED_TEX_CONTENT": coa.read_file(converted_tex_file),
                 }
             )
         return user_vars

@@ -98,7 +98,7 @@ prompts:
     <document name="{{ REFEREE_REPORT_B_FILE }}">
     {{ REFEREE_REPORT_B_CONTENT }}
     </document>
-    {% if FILE_INSTRUCTION_FILE }
+    {% if FILE_INSTRUCTION_FILE %}
     <document name="{FILE_INSTRUCTION_FILE}">
     {{ FILE_INSTRUCTION_CONTENT }}
     </document>
