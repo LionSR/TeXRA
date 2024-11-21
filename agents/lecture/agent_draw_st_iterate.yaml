@@ -39,7 +39,7 @@ prompts:
     </document>
     </documents>
 
-    {EDITED_CONTENT_SECTION}
+    {EDITED_VERSION}
 
     Please thoroughly analyze the entire draft chapter above, focusing on:
     1. The overall context and subject matter of the chapter

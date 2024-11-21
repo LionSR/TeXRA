@@ -34,10 +34,12 @@ prompts:
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details. Your task is to write a cover letter for this paper.
 
-    Additonally, if provided, focus on the following specific instruction:
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
   user_request: |
     Based on the research paper provided, please write a compelling cover letter for submission to a Physical Review journal. In the scratchpad below, outline the key points you plan to include in the cover letter.

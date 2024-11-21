@@ -9,9 +9,10 @@ class EditLectureBase:
         user_vars = super().get_user_vars()
         # this can be turned into a conditional statement in the yaml file
         if hasattr(self.args, "edited_file") and self.args.edited_file:
+            # in the future maybe it is better to also include the reasoning/scratchpad for this edited version
             user_vars["EDITED_CONTENT"] = coa.read_file(self.args.edited_file)
             user_vars[
-                "EDITED_CONTENT_SECTION"
+                "EDITED_VERSION"
             ] = f"""
 If you are iterating on a previous version, here is the content of the previously edited file:
 
@@ -22,7 +23,7 @@ If you are iterating on a previous version, here is the content of the previousl
 Please analyze both the original input and this previous edit, focusing on further improvements and refinements.
 """
         else:
-            user_vars["EDITED_CONTENT_SECTION"] = ""
+            user_vars["EDITED_VERSION"] = ""
         return user_vars
 
 

@@ -18,7 +18,7 @@ prompts:
   user_prefix: |
     I am going to give you a transcribed txt from a lecture of a graduate quantum information course. You are about to rewrite it line by line into formal graduate textbook language using LaTeX, so read extremely carefully.
 
-    Here is the transcription {{ INPUT_FILE }}with additional \LaTeX document class and commands (where has defined the math commands you should use):
+    Here is the transcription {{ INPUT_FILE }} with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
     <documents>
     <document name="{{ DOCUMENT_CLS_FILE }}">
@@ -41,7 +41,7 @@ prompts:
         \item Organize the document into well-structured sections and subsections using \verb|\section{}| and \verb|\subsection{}|. Use at most three \verb|\section| in each lecture.
         \item In all the sections and subsections, make extensive use of \verb|\paragraph{}| to explain each concept.
         \item Utilize math commands from \texttt{commands\_qi.tex} and the document class \texttt{lecture.cls} to typeset mathematical equations and expressions.
-        \item Use \verb|\be| and \verb|\ee| for displayed equations, and \verb|\begin{align}| and \verb|\end{align}| for multi-line equations. The text should be technical, with all key equations prominently displayed.
+        \item Use \verb|\begin{equation}| and \verb|\end{equation}| and \verb|\ee| for displayed equations, and \verb|\begin{align}| and \verb|\end{align}| for multi-line equations. The text should be technical, with all key equations prominently displayed.
         \item Employ \verb|\begin{example}...\end{example}| to present examples, ensuring they are thoroughly explained and connected to the main content.
         \item Ignore administrative information about the course such as exam date in the rewrite.
         \item Use an introduction section at the beginning, but never add a conclusion section at the end.

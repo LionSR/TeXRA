@@ -52,10 +52,12 @@ prompts:
     - Apply consistent indentation, spacing, and line breaks. For example, '\item [(a)]Show that...' should be corrected to '\item [(a)] Show that...'.
     - Make sure the captions correctly reflect the figure (if provided as an image input or the tikz figure is present).
 
-    Specific instructions (if provided):
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
     Use the following format for your output:
     <latex_document>
