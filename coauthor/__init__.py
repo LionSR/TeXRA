@@ -8,6 +8,7 @@ from .file_utils import (
     write_to_output_file,
     extract_text_from_tags,
     get_agent_path,
+    get_common_env,
 )
 from .tex_tools import run_latexdiff, run_latexdiff_vc, get_tex_count
 from .output_utils import (

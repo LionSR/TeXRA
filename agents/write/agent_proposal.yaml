@@ -6,6 +6,8 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  required_files_internal:
+    - template_proposal.tex
 
 prompts:
   system_prompt: |
@@ -64,27 +66,7 @@ prompts:
     - Include citations for all relevant background information and techniques.
 
     Use the following latex template to structure your proposal if not provided with a draft:
-    <research_proposal_template>
-    \documentclass[aps, pra, preprint, 11pt, amsmath, amssymb, notitlepage, nofootinbib]{revtex4-2}
-    \usepackage[utf8]{inputenc}
-    \usepackage{graphicx} 
-    \usepackage{natbib}
-    \usepackage{xcolor}
-    \usepackage{braket}
-    \usepackage{tikz}
-    \usetikzlibrary{shapes,arrows,positioning,decorations.pathmorphing}
-
-    \begin{document}
-    \title{Your Proposal Title}
-    \author{Your Institution}
-    \date{\today}
-    \maketitle
-
-    ... [Your proposal content here] ...
-
-    \bibliography{biblio}
-    \end{document}
-    </research_proposal_template>
+    {{ TEMPLATE_PROPOSAL_CONTENT }}
 
     Please output your complete LaTeX proposal within the `<research_proposal>' tags.
 
