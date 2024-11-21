@@ -70,7 +70,6 @@ class BaseReflectChainAgent(ABC):
 
         # Initialize configurations
         self.task_config = TaskConfig.from_args(args)
-        self.edited_file = self.task_config.edited_file
 
         self.setup()
         self.user_vars = self.get_user_vars()
@@ -82,11 +81,14 @@ class BaseReflectChainAgent(ABC):
             "INSTRUCTION": self.task_config.instruction if self.task_config.instruction else None,
             "INPUT_FILE": self.task_config.input_file,
             "INPUT_CONTENT": read_file(self.task_config.input_file),
+            # this sample pair needs to be updated in the future when we separate completely sample_file and sample_files
             "SAMPLE_FILE": self.task_config.sample_files[0] if self.task_config.sample_files else None,
             "SAMPLE_CONTENT": read_file(self.task_config.sample_files[0]) if self.task_config.sample_files else None,
             "SAMPLES": get_xml_format_from_files(self.task_config.sample_files),
             "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
             "AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
+            "EDITED_FILE": self.task_config.edited_file if self.task_config.edited_file else None,
+            "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,
         }
 
         # Add variables for required files
