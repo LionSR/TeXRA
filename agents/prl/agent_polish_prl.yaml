@@ -7,6 +7,16 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
+  file_patterns_contain:
+    - pattern: "preamble"
+      var_name: "PREAMBLE"
+      categories: ["auxiliary_file", "auxiliary_files"]
+    - pattern: "main"
+      var_name: "MAIN"
+      categories: ["input_file", "input_files"]
+    - pattern: "supp"
+      var_name: "SUPP"
+      categories: ["input_file", "input_files"]
 
 prompts:
   system_prompt: |

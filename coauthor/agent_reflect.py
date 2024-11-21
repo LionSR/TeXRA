@@ -15,7 +15,7 @@ from .output_utils import (
 )
 from .logdb_utils import log_db_start, log_db_and_print_statistics, log_db_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt
-from .file_utils import read_file, write_to_output_file
+from .file_utils import read_file, write_to_output_file, get_common_env
 from .openai_utils import best_connection_method
 from .replacement_utils import get_all_replacements, apply_replacements
 
@@ -77,17 +77,16 @@ class BaseReflectChainAgent(ABC):
 
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
-        args = self.args
 
         user_vars = {
-            "INSTRUCTION": args.instruction if args.instruction else None,
-            "INPUT_FILE": args.input_file,
-            "INPUT_CONTENT": read_file(args.input_file),
-            "SAMPLE_FILE": args.sample_files[0] if args.sample_files else None,
-            "SAMPLE_CONTENT": read_file(args.sample_files[0]) if args.sample_files else None,
-            "SAMPLES": get_xml_format_from_files(args.sample_files),
-            "ADDITIONAL_INPUTS": get_xml_format_from_files(args.input_files),
-            "AUXILIARY_FILES": get_xml_format_from_files(args.auxiliary_files),
+            "INSTRUCTION": self.task_config.instruction if self.task_config.instruction else None,
+            "INPUT_FILE": self.task_config.input_file,
+            "INPUT_CONTENT": read_file(self.task_config.input_file),
+            "SAMPLE_FILE": self.task_config.sample_files[0] if self.task_config.sample_files else None,
+            "SAMPLE_CONTENT": read_file(self.task_config.sample_files[0]) if self.task_config.sample_files else None,
+            "SAMPLES": get_xml_format_from_files(self.task_config.sample_files),
+            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
+            "AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
         }
 
         # Add variables for required files
@@ -97,8 +96,61 @@ class BaseReflectChainAgent(ABC):
                 user_vars[f"{var_name}_FILE"] = file_path
                 user_vars[f"{var_name}_CONTENT"] = file_content
 
-        if args.output_files:
-            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(args.output_files)
+        # Add variables for internal required files (from prompt directory)
+        if hasattr(self.agent_settings, "required_files_internal"):
+            _, _, prompt_dir = get_common_env(self.task_config.model)
+            # Get the agent-specific directory (e.g., 'agents/prl' for PRL agents)
+            agent_dir = os.path.dirname(os.path.join(prompt_dir, self.task_config.agent))
+
+            for var_name, file_name in self.agent_settings.required_files_internal.items():
+                internal_file_path = os.path.join(agent_dir, file_name)
+                if os.path.exists(internal_file_path):
+                    file_content = read_file(internal_file_path)
+                    user_vars[f"{var_name}_FILE"] = internal_file_path
+                    user_vars[f"{var_name}_CONTENT"] = file_content
+                else:
+                    logger.warning(f"Internal required file not found: {internal_file_path}")
+
+        # Handle pattern-based file mappings if defined in settings
+        if hasattr(self.agent_settings, "file_patterns_contain"):
+            for pattern_config in self.agent_settings.file_patterns_contain:
+                pattern = pattern_config["pattern"].lower()
+                var_name = pattern_config["var_name"]
+                categories = pattern_config["categories"]
+
+                # Search in specified categories
+                for category in categories:
+                    # Get the value from TaskConfig using dictionary-style access
+                    category_value = self.task_config[category]
+
+                    if category.endswith("_file"):  # Single file categories
+                        if category_value and pattern in category_value.lower():
+                            file_content = read_file(category_value)
+                            if file_content and os.path.exists(category_value):
+                                user_vars[var_name + "_FILE"] = category_value
+                                user_vars[var_name + "_CONTENT"] = file_content
+                            else:
+                                logger.warning(f"File not found: {category_value}")
+
+                    elif category.endswith("_files"):  # Multiple file categories
+                        if category_value:
+                            for file in category_value:
+                                if pattern in file.lower():
+                                    file_content = read_file(file)
+                                    if file_content and os.path.exists(file):
+                                        user_vars[var_name + "_FILE"] = file
+                                        user_vars[var_name + "_CONTENT"] = file_content
+                                    else:
+                                        logger.warning(f"File not found: {file}")
+                                    break  # Stop after first match
+
+        # Handle output files order - use default_output_files if no output_files specified
+        if self.task_config.output_files:
+            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.task_config.output_files)
+        elif hasattr(self.agent_settings, "default_output_files"):
+            # If no output_files specified but default_output_files exists in settings
+            self.task_config.output_files = self.agent_settings.default_output_files
+            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.agent_settings.default_output_files)
 
         return user_vars
 
