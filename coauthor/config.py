@@ -7,6 +7,7 @@ class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
     # Document settings
+    type: Optional[str] = "think_and_write"
     document_tag: Optional[str]
     prefills: List[str] = field(default_factory=list)
     output_ext: str = "txt"
@@ -19,6 +20,7 @@ class AgentSettings:
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
         settings = cls(
+            type=settings_dict.get("type", "think_and_write"),
             document_tag=settings_dict.get("document_tag"),
             prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),
