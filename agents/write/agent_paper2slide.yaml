@@ -46,10 +46,12 @@ prompts:
         \item End with a conclusion slide summarizing the main findings and potential future work.
     \end{enumerate}
 
-    Additonally, if provided, focus on the following specific instruction:
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
   user_request: |
     Based on the research paper provided, please create a professional LaTeX Beamer presentation for a physics audience. In the scratchpad below, outline the key points and structure you plan to include in the presentation.

@@ -5,8 +5,8 @@ settings:
   end_tag: </rebuttal_letter>
   output_ext: xml
   prefills:
-    - <rebuttal_letter><scratchpad>
-    - <rebuttal_letter><scratchpad>
+    - <rebuttal_letter>\n<scratchpad>
+    - <rebuttal_letter>\n<scratchpad>
   required_files:
     COVER_LETTER: rebuttal/cover_letter.txt
     INSTRUCTION: rebuttal/instruction.txt
@@ -104,7 +104,7 @@ prompts:
     (5) Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
 
     {% if INSTRUCTION %}
-    Specific instructions (if provided) that you must follow:
+    Specific instructions that you must follow:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>

@@ -23,11 +23,11 @@ prompts:
     <document>
     {{ INPUT_CONTENT }}
     </document>
+
     For context, the discussion is about:
     <context>
     {{ INSTRUCTION }}
     </context>
-    if provided.
 
   user_request: |
     Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex \LaTeX document, closely following these guidelines:

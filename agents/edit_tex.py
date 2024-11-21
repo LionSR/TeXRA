@@ -13,12 +13,12 @@ class EditTexBase:
             if "iclr" in self.args.input_file:
                 user_vars["ICLR_TEMPLATE"] = coa.read_file(self.args.input_file)
             if "neurips" in self.args.input_file:
-                user_vars["NeurIPS_TEX"] = coa.read_file(self.args.input_file)
+                user_vars["NeurIPS_CONTENT"] = coa.read_file(self.args.input_file)
             for file in self.args.input_files:
                 if "iclr" in file.lower():
                     user_vars["ICLR_TEMPLATE"] = coa.read_file(file)
                 if "neurips" in file.lower():
-                    user_vars["NeurIPS_TEX"] = coa.read_file(file)
+                    user_vars["NeurIPS_CONTENT"] = coa.read_file(file)
         elif self.args.agent == "ocr":
             # OCR-specific variables will be handled by the image processing pipeline
             user_vars["IMAGE_CONTENT"] = ""  # Placeholder, will be populated externally
