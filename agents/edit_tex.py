@@ -11,18 +11,14 @@ class EditTexBase:
         if self.args.agent == "convert":
             # needs a contain specifications in the settings of the agent yaml files
             if "iclr" in self.args.input_file:
-                user_vars["ICLR_TEMPLATE"] = coa.read_file(self.args.input_file)
+                user_vars["ICLR_TEMPLATE_CONTENT"] = coa.read_file(self.args.input_file)
             if "neurips" in self.args.input_file:
-                user_vars["NeurIPS_CONTENT"] = coa.read_file(self.args.input_file)
+                user_vars["NeurIPS_PAPER_CONTENT"] = coa.read_file(self.args.input_file)
             for file in self.args.input_files:
                 if "iclr" in file.lower():
-                    user_vars["ICLR_TEMPLATE"] = coa.read_file(file)
+                    user_vars["ICLR_TEMPLATE_CONTENT"] = coa.read_file(file)
                 if "neurips" in file.lower():
-                    user_vars["NeurIPS_CONTENT"] = coa.read_file(file)
-        elif self.args.agent == "ocr":
-            # OCR-specific variables will be handled by the image processing pipeline
-            user_vars["IMAGE_CONTENT"] = ""  # Placeholder, will be populated externally
-            user_vars["INSERTION_LOCATION"] = self.args.insertion_point if hasattr(self.args, "insertion_point") else ""
+                    user_vars["NeurIPS_PAPER_CONTENT"] = coa.read_file(file)
         return user_vars
 
 

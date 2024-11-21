@@ -7,6 +7,9 @@ settings:
     - <scratchpad>
     - <scratchpad>
 
+required_files_internal:
+  TEMPLATE_COVER_LETTER: template_cover_letter.txt
+
 prompts:
   system_prompt: |
     You are an experienced physicist and scientific writer. Your task is to write a compelling cover letter for a research paper to be submitted to a Physical Review journal. The cover letter should highlight the significance and novelty of the research, and explain why it is suitable for the chosen journal.
@@ -46,39 +49,21 @@ prompts:
 
     <scratchpad>
     \begin{enumerate}
-        \item [Key point 1 to highlight in the cover letter]
-        \item [Key point 2 to highlight in the cover letter]
-        \item [Key point 3 to highlight in the cover letter]
-        \item [Explanation of why the paper is suitable for the chosen Physical Review journal]
+        \item [Key findings and their significance]
+        \item [Novelty and impact of the research]
+        \item [Suitability for the journal]
+        \item [Technical highlights]
     \end{enumerate}
     </scratchpad>
-    Then, please write the cover letter, incorporating the key points outlined in the scratchpad. The cover letter should be professional, condensed, and effectively highlight the significance and novelty of the research.
 
-    The cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\`` at the end of each paragraph for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. Use the following format:
+    Now, please write the cover letter incorporating these key points. The cover letter should be professional, concise, and effectively highlight the significance of the research.
+
+    The cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\`` at the end of each paragraph for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists.
+
+    Please use the following template for the cover letter:
 
     <cover_letter>
-    \documentclass[a4paper,12pt]{letter}
-    \usepackage{fullpage}
-    \setlength{\parindent}{0em}
-
-    \signature{The names of the authors}
-    \address{The address of the authors}
-
-    \begin{document}
-
-    \begin{letter}{Editor}
-
-    \opening{Dear Editor,}
-
-    {COVER_LETTER_CONTENT}
-
-    \closing{Yours sincerely,}
-
-    \vspace{1.5em}
-
-    \end{letter}
-
-    \end{document}
+    {{ TEMPLATE_COVER_LETTER_CONTENT }}
     </cover_letter>
 
   user_reflect: |
@@ -123,26 +108,5 @@ prompts:
     Use the following latex format:
 
     <cover_letter>
-    \documentclass[a4paper,12pt]{letter}
-    \usepackage{fullpage}
-    \setlength{\parindent}{0em}
-
-    \signature{The names of the authors}
-    \address{The address of the authors}
-
-    \begin{document}
-
-    \begin{letter}{Editor}
-
-    \opening{Dear Editor,}
-
-    % IMPROVED_COVER_LETTER_CONTENT HERE
-
-    \closing{Yours sincerely,}
-
-    \vspace{1.5em}
-
-    \end{letter}
-
-    \end{document}
+    {{ TEMPLATE_COVER_LETTER_CONTENT }}
     </cover_letter>

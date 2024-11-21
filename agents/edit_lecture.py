@@ -7,6 +7,7 @@ agent_path = coa.get_agent_path(coa, "lecture")
 class EditLectureBase:
     def get_user_vars(self):
         user_vars = super().get_user_vars()
+
         # this can be turned into a conditional statement in the yaml file
         if hasattr(self.args, "edited_file") and self.args.edited_file:
             # in the future maybe it is better to also include the reasoning/scratchpad for this edited version
@@ -40,17 +41,17 @@ def main():
     parser.add_argument(
         "--agent",
         type=str,
-        default="correct_qi",
+        default="correct_st",
         choices=[
             "correct_qi",
             "correct_st",
+            "correct_st_multiple",
             "polish_qi",
             "polish_st",
-            "draw_st",
-            "draw_qi",
             "polish_st_multiple",
+            "draw_qi",
+            "draw_st",
             "draw_st_multiple",
-            "correct_st_multiple",
             "revise_st",
             "revise_st_multiple",
         ],
