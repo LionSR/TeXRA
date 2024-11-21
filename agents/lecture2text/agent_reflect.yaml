@@ -42,9 +42,9 @@ prompts:
     {{ INPUT_CONTENT }}
     </transcription>
 
-    Here is the converted \LaTeX document {{ CONVERTED_TEX_FILE }}:
+    Here is the converted \LaTeX document {{ CONVERTED_FILE }}:
     <latex>
-    {{ CONVERTED_TEX_CONTENT }}
+    {{ CONVERTED_FILE_CONTENT }}
     </latex>
 
   user_request: |

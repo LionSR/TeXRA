@@ -1,5 +1,6 @@
 name: correct_qi
 settings:
+  type: direct_write
   document_tag: latex_document
   end_tag: </latex_document>
   output_ext: tex
@@ -57,11 +58,11 @@ prompts:
     \item Ensure that all mathematical equations are correct and all statements are factually accurate.
     \item Use consistent mathematical symbols and notations throughout the document.
     \item Improve the quality and formatting of the \LaTeX formulas where needed.
-    \item Apply consistent indentation, spacing, and line breaks. For example, `\verb|\item [(a)]Show that...| should be corrected to `\verb|\item [(a)] Show that...|'.
+    \item Apply consistent indentation, spacing, and line breaks. For example, `\item [(a)]Show that... should be corrected to `|\item [(a)] Show that...'.
     \item Capitalize the first letter of each word in section titles and headings.
-    \item Identify key equations and figures that are referenced later in the document (look for phrases like ``mentioned below'', ``as shown below'', etc.). Label these equations and figures using \verb|\label{eq:...}| and \verb|\label{fig:...}| commands, choosing condensed and descriptive labels. Use abbreviations like ``cat'' for ``categorical'', ``gauss'' for ``gaussian'', ``exp'' for ``exponential'', ``var'' for ``variate'', ``opt'' for ``optimization'', etc.\ in the labels consistently.
-    \item When an equation or figure is used in a later derivation, reference it using the \verb|\cref{}| command with the appropriate label you created.
-    \item Create cross-references to sections using \LaTeX commands like \verb|\label{sec:...}| and \verb|\cref{}| to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
+    \item Identify key equations and figures that are referenced later in the document (look for phrases like ``mentioned below'', ``as shown below'', etc.). Label these equations and figures using \label{eq:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like ``cat'' for ``categorical'', ``gauss'' for ``gaussian'', ``exp'' for ``exponential'', ``var'' for ``variate'', ``opt'' for ``optimization'', etc.\ in the labels consistently.
+    \item When an equation or figure is used in a later derivation, reference it using the \cref{} command with the appropriate label you created.
+    \item Create cross-references to sections using \LaTeX commands like \label{sec:...} and \cref{} to improve the coherence and navigability of the document. Ensure that all figures are referenced in the text.
     \end{itemize}
 
     Use the following format for your output:

@@ -117,9 +117,9 @@ prompts:
         \item A 1-page cover letter to the editor. Summarize the key comments you will make in your reply. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
         \item A point-by-point response to the referee comments. Write this inside the <document name="replies/reply_to_referees.tex"></document> tag. To do this:
         \begin{itemize}
-            \item Split each referee report into separate comments. Copy each exact comment as a verbatim segment inside the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environment.
+            \item Split each referee report into separate comments. Copy each exact comment as a verbatim segment inside the \begin{referee}{A} (or B) and \end{referee} environment.
             \item Similar to the provided example, all the referee's comments (summary, recommendations, criticisms, questions) need to be covered and addressed in the reply letter. For recommendations by the referee, we thank the referee politely and use it as an opportunity to amplify our main points. For criticisms, we also thank the referee, but address the criticisms firmly and be specific about what has been changed in the paper, similar to the provided example.
-            \item Write your response to each comment using the \verb|\begin{response}| and \verb|\end{response}| environment immediately after each \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environment.
+            \item Write your response to each comment using the \begin{response} and \end{response} environment immediately after each \begin{referee}{A} (or B) and \end{referee} environment.
             \item Be respectful and diplomatic, but firm in your responses. Follow the principles from the book ``They Say, I Say'' in crafting your rebuttals. Use a ``Show, not tell'' approach - be specific about what has been changed in the paper, similar to the provided example.
         \end{itemize}
         \item At the end of each reply to the referees, write a concluding paragraph to further persuade the referee.
@@ -169,7 +169,7 @@ prompts:
     \begin{itemize}
         \item Increase the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
         \item Ensure all referee comments (summary, recommendations, criticisms, or questions) are addressed using concrete and convincing physical arguments.
-        \item Match the style and tone of the reply letter to the provided example (under \verb|<document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">|).
+        \item Match the style and tone of the reply letter to the provided example (under <document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">).
         \item Review the revised version for fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' that can be condensed using the ``show, don't tell'' technique.
         \item Adhere to PRL's strict word count policy for the main paper. Ensure the main paper (excluding appendix) does not exceed $\sim$3500 words. Added text must be concise and focused. If necessary, condense other parts of the paper to maintain the word limit.
     \end{itemize}
