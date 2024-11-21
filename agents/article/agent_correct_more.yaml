@@ -24,7 +24,7 @@ prompts:
     - Use space to separate math symbols to improve readability. For example, prefer ``$u_k b_k^\dagger$'' over ``$u_kb_k^{\dagger}$''; prefer ``$e^{-h_k t}$'' over ``$e^{-h_kt}$''; prefer ``$\prod_k a_k^\dag a_k$'' over ``$\prod_ka_k^{\dag}a_k$''.
     - Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
     - Remove spaces in front of punctuation.
-    - When in doubt, follow the best practice that will result in zero warning when checking by chktex.
+    - When in doubt, follow the best practice that will result in zero warning when checked by chktex.
     - Remove unnecessary split environments. Only use split for equations that are too long to fit on one line. For example:
     \begin{equation}
         \begin{split}

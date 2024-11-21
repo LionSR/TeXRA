@@ -651,6 +651,9 @@ document.addEventListener('DOMContentLoaded', function () {
         'multipleInputFilesSelect',
         'inputFileSelect',
       ).filter((file) => file !== inputFile);
+
+      // in the future maybe we want to split sampleFile vs SampleFiles, AuxFile vs AuxFiles, FigureFile vs Figures.
+      // but for now we'll just keep it for now
       const sampleFiles = getFiles(
         'multipleSampleFilesSelect',
         'sampleFileSelect',
@@ -665,9 +668,12 @@ document.addEventListener('DOMContentLoaded', function () {
         outputFilesContainer.style.display === 'block'
           ? getSelectedFiles(document.getElementById('outputFilesList'))
           : null;
-      const outputNameOverride = document
-        .getElementById('outputNameOverride')
-        .value.trim();
+      const outputNameOverrideElement =
+        document.getElementById('outputNameOverride');
+      const outputNameOverride =
+        outputNameOverrideElement.style.display !== 'none'
+          ? outputNameOverrideElement.value.trim()
+          : null;
 
       vscode.postMessage({
         command: 'execute',
@@ -685,7 +691,7 @@ document.addEventListener('DOMContentLoaded', function () {
         includeTikzReflection: includeTikzReflection,
         includeTexCount: includeTexCount,
         outputFiles: outputFiles,
-        outputNameOverride: outputNameOverride || null,
+        outputNameOverride: outputNameOverride,
       });
     });
   document
@@ -694,8 +700,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const inputFile = document.getElementById('inputFileSelect').value;
       const agent = document.getElementById('agentSelect').value;
       const model = document.getElementById('modelSelect').value;
+      const outputNameOverrideElement =
+        document.getElementById('outputNameOverride');
       const outputNameOverride =
-        document.getElementById('outputNameOverride').value.trim() || null;
+        outputNameOverrideElement.style.display !== 'none'
+          ? outputNameOverrideElement.value.trim()
+          : null;
 
       console.log('Sending packSingle command with:', {
         inputFile,
@@ -732,8 +742,12 @@ document.addEventListener('DOMContentLoaded', function () {
       const agent = document.getElementById('agentSelect').value;
       // const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
+      const outputNameOverrideElement =
+        document.getElementById('outputNameOverride');
       const outputNameOverride =
-        document.getElementById('outputNameOverride').value.trim() || null;
+        outputNameOverrideElement.style.display !== 'none'
+          ? outputNameOverrideElement.value.trim()
+          : null;
 
       vscode.postMessage({
         command: 'cleanSingle',
@@ -953,10 +967,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const agent = document.getElementById('agentSelect').value;
       const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
-      const outputNameOverride = document.getElementById('outputNameOverride');
-      const outputNameOverrideValue =
-        outputNameOverride.style.display !== 'none'
-          ? outputNameOverride.value
+      const outputNameOverrideElement =
+        document.getElementById('outputNameOverride');
+      const outputNameOverride =
+        outputNameOverrideElement.style.display !== 'none'
+          ? outputNameOverrideElement.value.trim()
           : null;
       const outputFiles = getSelectedFiles(
         document.getElementById('outputFilesList'),
@@ -968,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function () {
         inputFiles: inputFiles,
         agent: agent,
         model: model,
-        outputNameOverride: outputNameOverrideValue,
+        outputNameOverride: outputNameOverride,
         outputFiles: outputFiles,
       });
 

@@ -1,10 +1,9 @@
 import os
 import re
-from .logging_utils import logger
 import difflib
 import xml.etree.ElementTree as ET
 
-
+from .logging_utils import logger
 from .file_utils import read_file, write_file
 from .replacement_utils import get_replacements_by_category, apply_replacements
 
@@ -37,7 +36,7 @@ def ensure_correct_xml_structure(file_path: str, document_tag: str) -> None:
     content = read_file(file_path)
     if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
         if not content.endswith(f"</{document_tag}>"):
-            if "</{document_tag}>" not in content:
+            if "</{document_tag}>" not in content and f"<{document_tag}>" in content:
                 content += f"\n</{document_tag}>"
             else:
                 # Move the closing tag to the end

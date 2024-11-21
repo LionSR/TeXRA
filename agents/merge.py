@@ -40,11 +40,10 @@ class Merge(DirectWrite):
 
     def get_user_vars(self):
         user_vars = super().get_user_vars()
-        # print(f"User vars: {user_vars}")
         user_vars.update(
             {
-                "ORIGINAL_LATEX": coa.read_file(self.task_config.input_file),
-                "EDITED_LATEX": coa.read_file(self.task_config.edited_file),
+                "INPUT_CONTENT": coa.read_file(self.task_config.input_file),
+                "EDITED_CONTENT": coa.read_file(self.task_config.edited_file),
             }
         )
         return user_vars

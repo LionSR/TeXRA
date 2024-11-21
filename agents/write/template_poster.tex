@@ -1,0 +1,60 @@
+\documentclass[final,a5paper]{beamer}
+\usepackage[orientation=portrait,size=a5,scale=1.4,debug]{beamerposter}
+
+\usetheme{confposter}
+\usecolortheme{mpq}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{physics}
+\usepackage{hyperref}
+\usepackage{soul}
+\usepackage[backend=bibtex,style=numeric,sorting=none]{biblatex}
+
+% Color definitions
+\definecolor{lightgray}{HTML}{faf9f8}
+\definecolor{blue}{HTML}{017e74}
+\definecolor{darkblue}{HTML}{28495d}
+
+% Font settings
+\usefonttheme{professionalfonts}
+\setbeamerfont{headline title}{size=\huge,series=\bfseries}
+\setbeamerfont{headline author}{size=\large}
+\setbeamerfont{headline institute}{size=\normalsize}
+\setbeamerfont{block title}{size=\large,series=\bfseries}
+\setbeamerfont{heading}{series=\bfseries}
+\setbeamerfont{caption}{size=\small}
+
+% Custom commands
+\newcommand{\highlight}[1]{{\color{white}\hl{#1}}}
+\newcommand{\samelineand}{\qquad}
+
+% Itemize settings
+\setbeamertemplate{itemize item}{\raise0.5ex \hbox{\vrule width 0.5ex height 0.5ex}}
+\setbeamertemplate{itemize subitem}{\raise0.3ex \hbox{\vrule width 0.5ex height 0.5ex}}
+\setbeamertemplate{itemize subsubitem}{\raise0.2ex \hbox{\vrule width 0.5ex height 0.5ex}}
+
+% Title and author information
+\title{Your Detailed Poster Title}
+\author{Authors of the Paper}
+\institute{Your Institution}
+
+\begin{document}
+
+\begin{frame}[t]
+\begin{columns}[t]
+\begin{column}{.48\linewidth}
+
+% POSTER_CONTENT_LEFT
+
+\end{column}
+\begin{column}{.48\linewidth}
+
+% POSTER_CONTENT_RIGHT
+
+\end{column}
+\end{columns}
+\end{frame}
+
+\end{document}

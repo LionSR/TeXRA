@@ -7,6 +7,9 @@ settings:
     - <scratchpad>
     - <scratchpad>
 
+required_files_internal:
+  TEMPLATE_REFEREE: template_referee.tex
+
 prompts:
   system_prompt: |
     You are an expert physicist and experienced peer reviewer. Your task is to write a dense, critical referee report for a research paper submitted to PRX Quantum. The report should rigorously evaluate the paper's novelty, importance, technical aspects, and quality of presentation. Maintain a professional yet critical tone throughout the report.
@@ -41,10 +44,12 @@ prompts:
     {{ SAMPLES }}
     </reference_report>
 
-    Additionally, if provided, focus on the following specific instruction:
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
   user_request: |
     Based on the research paper provided and the example referee report, please write a concise, critical referee report for PRX Quantum. In the scratchpad below, outline the key points you plan to address in your report, focusing on potential weaknesses and areas for improvement.
@@ -63,22 +68,7 @@ prompts:
     Then, please write the full latex referee report, incorporating the key points outlined in the scratchpad. The report should be dense, critical, and provide a thorough evaluation of the paper. Use the following format:
 
     <latex_document>
-    \documentclass[a4paper,12pt]{article}
-    \usepackage{fullpage}
-    \usepackage{amsmath}
-    \usepackage{amssymb}
-    \usepackage{graphicx}
-    \usepackage[margin=1in]{geometry}
-
-    \begin{document}
-
-    \noindent\textbf{Referee Report for [Title of the Paper]}
-
-    \vspace{1em}
-
-    % LATEX_DOCUMENT_CONTENT here
-
-    \end{document}
+    {{ TEMPLATE_REFEREE_CONTENT }}
     </latex_document>
 
   user_reflect: |
@@ -119,12 +109,8 @@ prompts:
     </improvements>
     </scratchpad>
 
-    Then, please output an significantly improved version of the referee report, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional yet critical tone while providing a thorough evaluation of the paper. Use the following format:
+    Based on this reflection, please revise your referee report to be more specific and technical. Focus on providing detailed, technical feedback supported by concrete examples from the paper. Use the following format:
 
     <latex_document>
-    \documentclass[a4paper,12pt]{article}
-    ...
-    % IMPROVED_LATEX_DOCUMENT_CONTENT here
-    ...
-    \end{document}
+    {{ TEMPLATE_REFEREE_CONTENT }}
     </latex_document>

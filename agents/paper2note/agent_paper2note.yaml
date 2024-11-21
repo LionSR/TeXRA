@@ -37,8 +37,6 @@ prompts:
     </command>
     You are also provided with a sample LaTeX file in the desired style:
     {{ SAMPLES }}
-
-
     Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
 
     Here is the research paper:

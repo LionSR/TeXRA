@@ -13,16 +13,20 @@ prompts:
     \begin{itemize}
         \item Follow best practices to ensure zero warnings when checked by chktex.
         \item Use consistent and appropriate mathematical notation and terminology throughout all chapters.
-        \item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
+        \item Use \begin{align} ... \end{align} for displayed equations without line breaks before and after the equation. Use $...$ for inline equations.
         \item Use $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\boldsymbol{x}$ etc following command.tex.
         \item Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in the output.
         \item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
         \item For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
         \item Cite relevant papers in the field using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the author name, the year of publication, and the first word of the paper name.
-        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
-        \item Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
         \item Use ``\\'' sparingly for paragraph breaks. Do not remove any existing ``\\''. 
         \item Using ``,..,'' rather than ``,\ldots,'' is a feature of Prof. Welling's writing style. Keep them.
+    \end{itemize}
+
+    In addition, since you will be revising multiple chapters, you must:
+    \begin{itemize}
+        \item IMPORTANT: You must give the complete output containing all the sections in the order they are given in each input file.
+        \item Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
     \end{itemize}
 
   user_prefix: |
@@ -50,7 +54,9 @@ prompts:
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A in all chapters, do not modify section B in any chapter unless absolutely necessary for consistency.
 
+    {% if OUTPUT_FILES_ORDER %}
     The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
+    {% endif %}
 
   user_request: |
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of all chapters that are directly relevant to the instruction above. Do not consider any other aspects of the chapters. Be as concrete as to change what in which section of which chapter in what ways. Use the scratchpad as an opportunity to formulate as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change, and the concrete steps to be taken to implement the changes starting from the beginning of each document.

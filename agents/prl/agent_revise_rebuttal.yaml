@@ -5,11 +5,11 @@ settings:
   end_tag: </rebuttal_letter>
   output_ext: xml
   prefills:
-    - <rebuttal_letter><scratchpad>
-    - <rebuttal_letter><scratchpad>
+    - <rebuttal_letter>\n<scratchpad>
+    - <rebuttal_letter>\n<scratchpad>
   required_files:
     COVER_LETTER: rebuttal/cover_letter.txt
-    INSTRUCTION: rebuttal/instruction.txt
+    INSTRUCTION_FILE: rebuttal/instruction.txt
     EDITOR_LETTER: rebuttal/editor_letter.txt
     REPORT_A: rebuttal/report_a.txt
     REPORT_B: rebuttal/report_b.txt
@@ -17,6 +17,34 @@ settings:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
     - replies/list_of_major_changes.tex
+  file_patterns_contain:
+    - pattern: "main"
+      var_name: "MAIN"
+      categories: ["input_file", "input_files"]
+    - pattern: "supp"
+      var_name: "SUPP"
+      categories: ["input_file", "input_files"]
+    - pattern: "instruction"
+      var_name: "INSTRUCTION_FILE"
+      categories: ["auxiliary_file", "auxiliary_files"]
+    - pattern: "reply_to_editor"
+      var_name: "REPLY_TO_EDITOR"
+      categories: ["input_files"]
+    - pattern: "reply_to_referees"
+      var_name: "REPLY_TO_REFEREES"
+      categories: ["input_files"]
+    - pattern: "list_of_major_changes"
+      var_name: "LIST_OF_MAJOR_CHANGES"
+      categories: ["input_files"]
+    - pattern: "editor_letter"
+      var_name: "EDITOR_LETTER_CONTENT"
+      categories: ["input_files"]
+    - pattern: "report_a"
+      var_name: "REFEREE_REPORT_A_CONTENT"
+      categories: ["input_files"]
+    - pattern: "report_b"
+      var_name: "REFEREE_REPORT_B_CONTENT"
+      categories: ["input_files"]
 
 prompts:
   system_prompt: |
@@ -70,9 +98,11 @@ prompts:
     <document name="{{ REFEREE_REPORT_B_FILE }}">
     {{ REFEREE_REPORT_B_CONTENT }}
     </document>
+    {% if FILE_INSTRUCTION_FILE %}
     <document name="{FILE_INSTRUCTION_FILE}">
     {{ FILE_INSTRUCTION_CONTENT }}
     </document>
+    {% endif %}
     </documents>
 
     Explanation of documents:
@@ -104,7 +134,7 @@ prompts:
     (5) Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
 
     {% if INSTRUCTION %}
-    Specific instructions (if provided) that you must follow:
+    Specific instructions that you must follow:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>

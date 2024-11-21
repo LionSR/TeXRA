@@ -4,26 +4,9 @@ import coauthor as coa
 agent_path = coa.get_agent_path(coa, "paper2note")
 
 
-class Paper2Note(DirectWrite):
-    def get_user_vars(self):
-        user_vars = super().get_user_vars()
-        user_vars.update(
-            {
-                "SAMPLE_CONTENT": "\n".join([coa.read_file(ch) for ch in self.args.sample_chapters]) if self.args.sample_chapters else None,
-                "EXAMPLE_PAPER_FILE": self.args.example_paper,
-                "EXAMPLE_LECTURE_NOTE_FILE": self.args.example_lecture_note,
-                "EXAMPLE_PAPER_CONTENT": coa.read_file(self.args.example_paper),
-                "EXAMPLE_LECTURE_NOTE_CONTENT": coa.read_file(self.args.example_lecture_note),
-            }
-        )
-        return user_vars
-
-
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument("--sample_chapters", type=str, nargs="+", help="Paths to the sample chapter TeX files.")
-    parser.add_argument("--example_paper", type=str, help="Path to an example research paper.")
-    parser.add_argument("--example_lecture_note", type=str, help="Path to an example lecture note corresponding to the example paper.")
     parser.add_argument(
         "--agent",
         type=str,
@@ -33,7 +16,7 @@ def main():
     )
     args = parser.parse_args()
 
-    paper2note = Paper2Note(args, agent_path)
+    paper2note = DirectWrite(args, agent_path)
     paper2note.run()
 
 

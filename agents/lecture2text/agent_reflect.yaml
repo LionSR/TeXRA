@@ -10,6 +10,10 @@ settings:
   required_files:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
+  file_patterns_contain:
+    - pattern: "converted"
+      var_name: "CONVERTED_TEX"
+      categories: ["input_file", "input_files"]
 
 prompts:
   system_prompt: |
@@ -35,12 +39,12 @@ prompts:
 
     Here is the transcription {{ INPUT_FILE }}:
     <transcription>
-    {{ CORRECTED_TRANSCRIPTION_CONTENT }}
+    {{ INPUT_CONTENT }}
     </transcription>
 
-    Here is the converted \LaTeX document {{ CONVERTED_TEX_FILE }}:
+    Here is the converted \LaTeX document {{ CONVERTED_FILE }}:
     <latex>
-    {{ CONVERTED_TEX_CONTENT }}
+    {{ CONVERTED_FILE_CONTENT }}
     </latex>
 
   user_request: |

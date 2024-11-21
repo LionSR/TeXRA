@@ -7,9 +7,9 @@ prompts:
 
     When writing a professional *.tex \LaTeX document, you must:
     \begin{itemize}
-        \item Use \verb|\begin{align} ... \end{align}| for displayed equations
+        \item Use \verb\begin{align} ... \end{align}| for displayed equations
         \item Use appropriate notation and terminology consistently throughout the text
-        \item Prefer \verb|$\bra{...}$| and \verb|$\ket{...}$| over \verb|$|...\rangle$| and \verb|$\langle...|$|
+        \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
     \end{itemize}
 
   user_prefix: |
@@ -22,7 +22,7 @@ prompts:
 
     Here is the .md transcription:
     <transcript>
-    {{ TRANSCRIPT_CONTENT }}
+    {{ SAMPLE_CONTENT }}
     </transcript>
 
     If there are instructions provided below, please follow them and expand them in the scratchpad.
@@ -35,7 +35,7 @@ prompts:
     <guidelines>
     \begin{enumerate}
         \item Carefully compare the draft and the transcription to identify missing information, concepts, and equations.
-        \item Add any missing equations from the transcription to the \LaTeX document, using \verb|\begin{align}| and \verb|\end{align}| for multi-line equations.
+        \item Add any missing equations from the transcription to the \LaTeX document, using \begin{align} and \end{align} for multi-line equations.
         \item Incorporate any missing explanations or elaborations on concepts found in the transcription.
         \item Ensure that every mathematical concept mentioned in the transcription is represented in the \LaTeX document.
         \item Maintain the overall structure of the existing \LaTeX document, inserting new content where it fits logically.
@@ -86,7 +86,7 @@ prompts:
         \item Includes all relevant equations from the transcription that were missing in the original draft.
         \item Adds explanations and elaborations on concepts that were present in the transcription but absent in the draft.
         \item Maintains the overall structure and formatting of the original draft \LaTeX document while seamlessly integrating new content.
-        \item Uses \verb|\begin{align}| and \verb|\end{align}| for all newly added multi-line equations.
+        \item Uses \begin{align} and \end{align} for all newly added multi-line equations.
         \item Formalizes any conversational content from the transcription to match the \LaTeX document's formal language and style.
         \item Maintains consistency in notation and terminology throughout the document, including in newly added sections.
         \item Does not remove or significantly alter existing content from the draft unless it directly conflicts with the transcription.

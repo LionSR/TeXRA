@@ -7,6 +7,9 @@ settings:
     - <scratchpad>
     - <scratchpad>
 
+required_files_internal:
+  TEMPLATE_POSTER: template_poster.tex
+
 prompts:
   system_prompt: |
     You are an expert physicist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a physics audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
@@ -53,10 +56,12 @@ prompts:
         \item Use the provided color scheme and design elements from the template to enhance readability and visual appeal.
     \end{itemize}
 
-    Additionally, if provided, focus on the following specific instruction:
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
   user_request: |
     Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a physics audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
@@ -77,72 +82,11 @@ prompts:
     Then, please create the LaTeX Beamer poster, incorporating the key points outlined in the scratchpad. The poster should be professional, mathematically detailed, and effectively highlight the main aspects of the research paper. Use the following format:
 
     <beamer_poster>
-    \documentclass[final,a5paper]{beamer}
-    \usepackage[orientation=portrait,size=a5,scale=1.4,debug]{beamerposter}
-
-    \usetheme{confposter}
-    \usecolortheme{mpq}
-
-    \usepackage{amsmath}
-    \usepackage{amssymb}
-    \usepackage{graphicx}
-    \usepackage{physics}
-    \usepackage{hyperref}
-    \usepackage[backend=bibtex,style=numeric,sorting=none]{biblatex}
-
-    % Color definitions
-    \definecolor{lightgray}{HTML}{faf9f8}
-    \definecolor{blue}{HTML}{017e74}
-    \definecolor{darkblue}{HTML}{28495d}
-
-    % Font settings
-    \usefonttheme{professionalfonts}
-    \setbeamerfont{headline title}{size=\huge,series=\bfseries}
-    \setbeamerfont{headline author}{size=\large}
-    \setbeamerfont{headline institute}{size=\normalsize}
-    \setbeamerfont{block title}{size=\large,series=\bfseries}
-    \setbeamerfont{heading}{series=\bfseries}
-    \setbeamerfont{caption}{size=\small}
-
-    % Custom commands
-    \newcommand{\highlight}[1]{{\color{white}\hl{#1}}}
-    \newcommand{\samelineand}{\qquad}
-
-    % Itemize settings
-    \setbeamertemplate{itemize item}{\raise0.5ex \hbox{\vrule width 0.5ex height 0.5ex}}
-    \setbeamertemplate{itemize subitem}{\raise0.3ex \hbox{\vrule width 0.5ex height 0.5ex}}
-    \setbeamertemplate{itemize subsubitem}{\raise0.2ex \hbox{\vrule width 0.5ex height 0.5ex}}
-
-    % Title and author information
-    \title{Your Detailed Poster Title}
-    \author{Authors of the Paper}
-    \institute{Your Institution}
-
-    \begin{document}
-
-    \begin{frame}[t]
-    \begin{columns}[t]
-    \begin{column}{.48\linewidth}
-
-    % Left column content
-    % Include detailed mathematical equations and explanations here
-
-    \end{column}
-    \begin{column}{.48\linewidth}
-
-    % Right column content
-    % Include figures, tables, and additional mathematical content here
-
-    \end{column}
-    \end{columns}
-    \end{frame}
-
-    \end{document}
+    {{ TEMPLATE_POSTER_CONTENT }}
     </beamer_poster>
 
   user_reflect: |
     Please review your draft LaTeX Beamer poster critically, focusing on the following points:
-
     <scratchpad>
     <reflection>
     1. Mathematical Depth: Have you included sufficient mathematical detail, including key equations, derivations, and explanations?
