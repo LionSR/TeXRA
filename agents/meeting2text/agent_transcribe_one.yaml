@@ -10,6 +10,13 @@ settings:
   required_files:
     EXAMPLE_TRANSCRIPT: example_transcript.txt
     EXAMPLE_EDITED_TRANSCRIPT: example_edited.txt
+  file_patterns_contain:
+    - pattern: "example"
+      var_name: "EXAMPLE_TRANSCRIPT"
+      categories: ["sample_file", "sample_files"]
+    - pattern: "edited"
+      var_name: "EXAMPLE_EDITED_TRANSCRIPT"
+      categories: ["sample_file", "sample_files"]
 
 prompts:
   system_prompt: |
@@ -20,13 +27,13 @@ prompts:
 
     <documents>
     <document name="example_transcript">
-    {{ EXAMPLE_TRANSCRIPT }}
+    {{ EXAMPLE_TRANSCRIPT_CONTENT }}
     </document>
     <document name="example_edited_transcript">
-    {{ EXAMPLE_EDITED_TRANSCRIPT }}
+    {{ EXAMPLE_EDITED_TRANSCRIPT_CONTENT }}
     </document>
     <document name="transcript_to_edit">
-    {{ TRANSCRIPT }}
+    {{ INPUT_CONTENT }}
     </document>
     <document name="context">
     {{ INSTRUCTION }}

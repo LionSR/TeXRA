@@ -38,7 +38,7 @@ prompts:
         \item The translation should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
         \item Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
         \item Use appropriate \LaTeX commands to typeset mathematical equations and expressions.
-        \item Use \verb|\begin{align}| and \verb|\end{align}| for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
+        \item Use \begin{align} and \end{align} for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
         \item Convert the conversational style of the transcript into formal, precise, and technical language appropriate for academic writing.
         \item If visual inputs are provided (such as images of the whiteboard), include them coherently in the \LaTeX document. Use the images to help transcribe equations and figures.
         \item The output document should be faithful to the original discussion. \textbf{IT IS NOT A SUMMARY. IT IS A METICULOUS TRANSLATION OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.}

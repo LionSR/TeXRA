@@ -1,5 +1,5 @@
 import coauthor as coa
-from coauthor.agent_reflect import ThinkAndWrite, DirectWrite
+from coauthor.agent_reflect import ThinkAndWrite
 
 agent_path = coa.get_agent_path(coa, "prl")
 
