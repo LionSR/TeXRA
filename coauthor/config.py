@@ -7,20 +7,20 @@ class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
     # Document settings
-    type: Optional[str] = "think_and_write"
-    document_tag: Optional[str]
-    prefills: List[str] = field(default_factory=list)
+    document_tag: Optional[str] = None
+    agent_type: Optional[str] = "think_and_write"
+    prefills: Optional[List[str]] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
-    required_files: Dict[str, str] = field(default_factory=dict)
-    required_files_internal: Dict[str, str] = field(default_factory=dict)
-    default_output_files: List[str] = field(default_factory=list)
+    required_files: Optional[Dict[str, str]] = field(default_factory=dict)
+    required_files_internal: Optional[Dict[str, str]] = field(default_factory=dict)
+    default_output_files: Optional[List[str]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
         settings = cls(
-            type=settings_dict.get("type", "think_and_write"),
+            agent_type=settings_dict.get("agent_type", "think_and_write"),
             document_tag=settings_dict.get("document_tag"),
             prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),

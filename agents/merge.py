@@ -13,9 +13,11 @@ def get_output_file_name_merge(input_file, edited_file, round):
     input_base, _ = os.path.splitext(os.path.basename(input_file))
     edited_base, _ = os.path.splitext(os.path.basename(edited_file))
 
+    # Assuming the agent name is always the second part
+    # this is not true for example for "MutualInfo_restructured_polish_r1_sonnet++"
     parts = edited_base.split("_")
     edited_base_override = parts[0]
-    agent = parts[1]  # Assuming the agent name is always the second part
+    agent = parts[1]
 
     base = input_base
     if input_base != edited_base_override:
