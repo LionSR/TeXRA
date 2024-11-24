@@ -137,7 +137,7 @@ prompts:
     </improvements>
     </scratchpad>
 
-    Then, please output a final version of the revised referee report, incorporating the reflections and further improvements discussed in the scratchpad. Remember to maintain a professional yet critical tone while providing a thorough, detailed evaluation of the paper. Use a similar format in the provided draft report and output the revised referee report in LaTeX format in <revised_referee_report> tag.
+    Then, please output a final version of the revised referee report based on the previous version you just wrote, incorporating the reflections and further improvements discussed in the scratchpad. Remember to maintain a professional yet critical tone while providing a thorough, detailed evaluation of the paper. Use a similar format in the provided draft report and output the revised referee report in LaTeX format in <revised_referee_report> tag.
 
     <revised_referee_report>
     {FINAL_REVISED_REFEREE_REPORT_CONTENT}
