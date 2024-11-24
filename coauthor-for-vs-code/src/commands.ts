@@ -825,7 +825,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       'coauthor.merge',
       async (inputFile: string, baseFile: string, editedFile: string) => {
         const model = getNestedConfig('merge.defaultModel', 'sonnet+');
-        const terminalName = `$Merge@${model}`;
+        const terminalName = `Merge@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
         const reflect = getNestedConfig('merge.defaultReflect', 'False');
