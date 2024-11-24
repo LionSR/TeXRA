@@ -13,7 +13,7 @@ from .config import TaskConfig
 def get_db_path() -> str:
     """Get path to SQLite database in current working directory"""
     if not os.path.exists(".coauthor"):
-        os.makedirs(".coauthor")
+        os.makedirs(".coauthor", exist_ok=True)
     return os.path.join(os.getcwd(), ".coauthor/logs.db")
 
 
