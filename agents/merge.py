@@ -13,11 +13,25 @@ def get_output_file_name_merge(input_file, edited_file, round):
     input_base, _ = os.path.splitext(os.path.basename(input_file))
     edited_base, _ = os.path.splitext(os.path.basename(edited_file))
 
-    # Assuming the agent name is always the second part
-    # this is not true for example for "MutualInfo_restructured_polish_r1_sonnet++"
+    # Count number of underscores in edited_base
+    underscore_count = edited_base.count("_")
+    
     parts = edited_base.split("_")
-    edited_base_override = parts[0]
-    agent = parts[1]
+    if underscore_count == 3:
+        # For cases like "base_agent_r1_model"
+        edited_base_override = parts[0]
+        agent = parts[1]
+    else:
+        # For cases like "MutualInfo_restructured_polish_r1_sonnet++"
+        # Combine all parts before _r{N}_ as the agent name
+        round_prefix = "_r"
+        agent_parts = []
+        edited_base_override = parts[0]
+        for i, part in enumerate(parts[1:], 1):
+            if part.startswith("r") and part[1:].isdigit():
+                agent = "_".join(agent_parts)
+                break
+            agent_parts.append(part)
 
     base = input_base
     if input_base != edited_base_override:
