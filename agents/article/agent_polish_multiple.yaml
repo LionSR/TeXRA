@@ -122,6 +122,6 @@ prompts:
     \end{itemize}
     </scratchpad>
 
-    Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+    Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 
     Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}

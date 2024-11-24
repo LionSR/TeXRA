@@ -145,7 +145,7 @@ prompts:
     \end{itemize}
     </scratchpad>
 
-    Based on this reflection, please output further enhanced versions of both the main text and supplementary materials. Ensure that your revisions maintain consistency between the two documents and adhere to Physical Review Letters guidelines.
+    Based on this reflection, please output further enhanced versions of both the main text and supplementary materials. Ensure that your revisions maintain consistency between the two documents and adhere to Physical Review Letters guidelines. Include all the changes you added in the previous step.
 
     <latex_documents>
     <document name="{MAIN_FILE}">
