@@ -190,8 +190,6 @@ You can customize the list of available agents in your VS Code settings:
   "correct-tex",
   "polish-tex",
   "draw-tex",
-  "adapt-tex",
-  "write-tex",
   "meeting2text",
   "paper2note",
   "txt2tex",
