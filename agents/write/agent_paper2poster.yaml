@@ -115,6 +115,6 @@ prompts:
     </improvements>
     </scratchpad>
 
-    Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a physics audience in an A5 format, balancing detailed mathematical content with visual appeal.
+    Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a physics audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the new version based on the previous version you just wrote.
 
-    Output your revised poster within the <beamer_poster> tags.
+    Output your revised poster within the <beamer_poster> tags. Include  

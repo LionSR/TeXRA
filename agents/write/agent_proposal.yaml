@@ -99,6 +99,6 @@ prompts:
     </idea>
     </scratchpad>
 
-    Based on this reflection, please revise the proposal to enhance its mathematical content, technical precision, and overall rigor. Eliminate any remaining verbal fluff and replace it with precise, equation-based descriptions where possible. Ensure that the proposal matches or exceeds the level of detail and mathematical content seen in the reference proposal.
+    Based on this reflection, please revise the proposal to enhance its mathematical content, technical precision, and overall rigor. Eliminate any remaining verbal fluff and replace it with precise, equation-based descriptions where possible. Ensure that the proposal matches or exceeds the level of detail and mathematical content seen in the reference proposal. Output the new version based on the previous version you just wrote.
 
     Output your revised proposal within the `<research_proposal>' tags.
