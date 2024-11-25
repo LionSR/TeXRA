@@ -13,7 +13,7 @@ from .output_utils import (
     split_multiple_scratchpad_output_xml,
     check_for_massive_repetition,
 )
-from .logdb_utils import log_db_start, log_db_and_print_statistics, log_db_output_files
+from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt
 from .file_utils import read_file, write_to_output_file, get_common_env
 from .openai_utils import best_connection_method
@@ -78,22 +78,24 @@ class BaseReflectChainAgent(ABC):
         """Get the basic user variables that are common across all agents."""
 
         user_vars = {
-            "INSTRUCTION": self.task_config.instruction if self.task_config.instruction else None,
+            "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
             "INPUT_CONTENT": read_file(self.task_config.input_file),
             "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
             # reference files
-            "REFERENCE_FILE": self.task_config.reference_files[0] if self.task_config.reference_files else None,
-            "REFERENCE_CONTENT": read_file(self.task_config.reference_files[0]) if self.task_config.reference_files else None,
-            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files[1:]),
-            "ALL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            "REFERENCE_FILE": self.task_config.reference_file,
+            "REFERENCE_CONTENT": read_file(self.task_config.reference_file),
+            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            # "ALL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
             # auxiliary files
-            "AUXILIARY_FILE": self.task_config.auxiliary_file if self.task_config.auxiliary_file else None,
-            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file) if self.task_config.auxiliary_file else None,
-            "AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
-            "EDITED_FILE": self.task_config.edited_file if self.task_config.edited_file else None,
-            "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,
+            "AUXILIARY_FILE": self.task_config.auxiliary_file,
+            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file),
+            "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_file),
+            # "ALL_AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
+            # edited file
+            "EDITED_FILE": self.task_config.edited_file,
+            "EDITED_CONTENT": read_file(self.task_config.edited_file),
         }
 
         # Add variables for required files
@@ -195,7 +197,7 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_file = log_db_start(self.task_config)
+        self.log_file = logdb_start(self.task_config, self.agent_settings)
 
     @abstractmethod
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
@@ -211,7 +213,7 @@ class BaseReflectChainAgent(ABC):
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         for input_file, output_file in zip(self.task_config.output_files, output_files):
-            log_db_output_files(output_file, self.log_file)
+            logdb_output_files(output_file, self.log_file)
             if self.agent_settings.output_ext == "tex":
                 run_latexdiff(input_file, output_file, self.task_config.agent)
 
@@ -283,7 +285,7 @@ class BaseReflectChainAgent(ABC):
             response_object = model_config.create_response(
                 client=client,
                 messages=messages,
-                temperature=task_config.temperature,
+                temperature=agent_settings.temperature,
                 system_prompt=agent_prompts.system_prompt,
                 end_tag=agent_settings.end_tag,
             )
@@ -594,8 +596,8 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_db_output_files(output_file, self.log_file, self.output_files[round])
-        log_db_and_print_statistics(state, self.model_config, self.log_file)
+        logdb_output_files(output_file, self.log_file, self.output_files[round])
+        logdb_and_print_statistics(state, self.model_config, self.log_file)
         return self.output_files[round]
 
 
@@ -629,7 +631,7 @@ class DirectWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_db_output_files(output_file, self.log_file, self.output_files[round])
-        log_db_and_print_statistics(state, self.model_config, self.log_file)
+        logdb_output_files(output_file, self.log_file, self.output_files[round])
+        logdb_and_print_statistics(state, self.model_config, self.log_file)
 
         return self.output_files[round]
