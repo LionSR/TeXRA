@@ -116,7 +116,7 @@ prompts:
     </improvements>
     </scratchpad>
 
-    Based on this reflection, please revise your presentation to address any identified issues while maintaining its professional quality and technical accuracy. Use the following format:
+    Based on this reflection, please revise your presentation to address any identified issues while maintaining its professional quality and technical accuracy. Output the new version based on the previous version you just wrote. Use the following format:
 
     <beamer_presentation>
     {{ TEMPLATE_SLIDE_CONTENT }}

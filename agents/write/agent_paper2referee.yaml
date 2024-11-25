@@ -73,7 +73,7 @@ prompts:
 
   user_reflect: |
     Let's critically reflect on the referee report we've written. 
-    Your draft referee report is way too generic (specficness score is 3/10) and less technical (technical score is 3/10). Increase the specficness score to 8/10 and the technical score to 8/10.
+    Your draft referee report is way too generic (specficness score is 3/10) and less technical (technical score is 3/10). Increase the specficness score to 8/10 and the technical score to 8/10. Output the new version based on the previous version you just wrote.
     Consider these points and brainstorm potential improvements in the scratchpad below:
 
     <scratchpad>

@@ -824,12 +824,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.merge',
       async (inputFile: string, baseFile: string, editedFile: string) => {
-        const terminal = ensureTerminal();
-        terminal.show();
         const model = getNestedConfig('merge.defaultModel', 'sonnet+');
+        const terminalName = `Merge@${model}`;
+        const terminal_new = vscode.window.createTerminal(terminalName);
+        terminal_new.show();
         const reflect = getNestedConfig('merge.defaultReflect', 'False');
         const fileToUse = baseFile || inputFile;
-        terminal.sendText(
+        terminal_new.sendText(
           `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`,
         );
       },
