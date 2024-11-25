@@ -64,14 +64,14 @@ def add_common_arguments(parser):
     )
 
     # Auxiliary file arguments
-    aux_group = parser.add_argument_group("Auxiliary Files")
-    aux_group.add_argument(
+    auxiliary_group = parser.add_argument_group("Auxiliary Files")
+    auxiliary_group.add_argument(
         "--auxiliary_file",
         type=str,
         default=None,
         help="Path to the auxiliary file.",
     )
-    aux_group.add_argument(
+    auxiliary_group.add_argument(
         "--auxiliary_files",
         type=comma_separated_list,
         default=[],
