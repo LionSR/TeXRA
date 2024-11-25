@@ -27,6 +27,7 @@ TEMP_EXTENSIONS = [
     ".snm",
     ".toc",
     "-blx.bib",
+    "Notes.bib",
 ]
 MODELS = list(MODEL_CONFIGS.keys())
 
