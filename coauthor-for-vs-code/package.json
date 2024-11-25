@@ -273,6 +273,10 @@
         "title": "Select Input File"
       },
       {
+        "command": "coauthor.selectReferenceFile",
+        "title": "Select Reference File"
+      },
+      {
         "command": "coauthor.selectAuxFile",
         "title": "Select Auxiliary File"
       },
