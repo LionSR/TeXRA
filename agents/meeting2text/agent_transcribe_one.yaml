@@ -13,10 +13,10 @@ settings:
   file_patterns_contain:
     - pattern: "example"
       var_name: "EXAMPLE_TRANSCRIPT"
-      categories: ["sample_file", "sample_files"]
+      categories: ["reference_file", "reference_files"]
     - pattern: "edited"
       var_name: "EXAMPLE_EDITED_TRANSCRIPT"
-      categories: ["sample_file", "sample_files"]
+      categories: ["reference_file", "reference_files"]
 
 prompts:
   system_prompt: |

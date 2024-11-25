@@ -36,7 +36,7 @@ prompts:
     {{ COMMAND_CONTENT }}
     </document>
     <document name="existing_notes">
-    {{ SAMPLE_CONTENT }}
+    {{ REFERENCE_CONTENT }}
     </document>
     <document name="new_lecture_notes">
     {{ INPUT_CONTENT }}

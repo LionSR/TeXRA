@@ -38,11 +38,13 @@ prompts:
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details before writing your report.
 
+    {% if REFERENCE_FILE %}
     Here is an example of a referee report for another paper, which you can use as a reference for style and structure:
+    <referee_report>
+    {{ ALL_REFERENCES }}
+    </referee_report>
+    {% endif %}
 
-    <reference_report>
-    {{ SAMPLES }}
-    </reference_report>
 
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
