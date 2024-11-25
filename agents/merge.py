@@ -15,7 +15,7 @@ def get_output_file_name_merge(input_file, edited_file, round):
 
     # Count number of underscores in edited_base
     underscore_count = edited_base.count("_")
-    
+
     parts = edited_base.split("_")
     if underscore_count == 3:
         # For cases like "base_agent_r1_model"

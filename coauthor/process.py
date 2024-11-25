@@ -32,7 +32,7 @@ def process_response_cycle(
         response_object = model_config.create_response(
             client=client,
             messages=messages,
-            temperature=task_config.temperature,
+            temperature=agent_settings.temperature,
             system_prompt=agent_prompts.system_prompt,
             end_tag=agent_settings.end_tag,
         )
