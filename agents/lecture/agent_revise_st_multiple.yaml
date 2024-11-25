@@ -130,15 +130,9 @@ prompts:
     \end{enumerate}
 
     Consider these points:
-    1. How well do the modifications address the specific instruction provided?
-    2. Are the enhancements clear and effective in improving the quality of the \LaTeX documents?
-    3. Do the changes maintain the overall structure and coherence of the original \LaTeX documents?
-    4. Have the added/revised parts been coherently and logically incorporated, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them? Equations and mathematical reasoning are exempted from this.
-    5. Is any mathematical reasoning and derivations from the original versions now missing in the new versions?
-    6. Are all notations and quantities properly defined before use?
-    7. Are there any proof or mathematical reasonings that can be expanded using more equations?
+    (i) How well do the modifications address the specific instruction provided? (ii) Are the enhancements clear and effective in improving the quality of the \LaTeX documents? (iii) Do the changes maintain the overall structure and coherence of the original \LaTeX documents? (iv) Have the added/revised parts been coherently and logically incorporated, improving global and paragraph coherence, cohesion, and flow? Can you gently make the added/revised parts more condensed and getting rid of fluffy by reflecting on them? Equations and mathematical reasoning are exempted from this. (v) Is any mathematical reasoning and derivations from the original versions now missing in the new versions? (vi) Are all notations and quantities properly defined before use? (vii) Are there any proof or mathematical reasonings that can be expanded using more equations?
     </scratchpad>
 
-    Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+    Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above.  Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
 
     Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}

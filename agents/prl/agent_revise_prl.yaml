@@ -108,7 +108,7 @@ prompts:
     \end{enumerate}
     </scratchpad>
 
-    Then, output further enhanced and complete versions of all the \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay focused on addressing the referees' comments and concerns while maintaining the quality and coherence of all documents.
+    Then, output further enhanced and complete versions of all the \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Remember to stay focused on addressing the referees' comments and concerns while maintaining the quality and coherence of all documents. Include all the changes you added in the previous step.
 
     Use the following format for the output:
     <latex_documents>

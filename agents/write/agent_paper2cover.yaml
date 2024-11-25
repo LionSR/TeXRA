@@ -103,7 +103,7 @@ prompts:
 
     Then, based on the first version of the cover letter, please output an improved version of the cover letter, incorporating the reflections and improvements discussed in the scratchpad. Remember to maintain a professional tone and focus on effectively presenting the research to the journal editor. 
 
-    Again, the cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\``for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. 
+    Again, the cover letter should use professional latex format, such as ``name'' for double quotes, and ``\\``for paragraph breaks. Use \begin{enumerate} and \end{enumerate} for lists. Output the new version based on the previous version you just wrote.
 
     Use the following latex format:
 

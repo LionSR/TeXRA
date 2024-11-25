@@ -117,9 +117,9 @@ prompts:
     (9) Instructions: Guidelines on how to revise the reply letter.
 
   user_request: |
-    Please carefully review all the provided documents, including the current rebuttal package and thereferee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.
+    Please carefully review all the provided documents, including the current rebuttal package and thereferee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.  You should include all the changes you added in the previous step.
 
-    After your planning, revise the rebuttal package to include the following improvements:
+    After your planning, revise the rebuttal package further to include the following improvements:
 
     (1) An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="replies/reply_to_editor.tex"></document> tag.
     (2) An improved point-by-point response to the referee comments. Write this inside the <document name="{REPLY_TO_REFEREES_FILE}"></document> tag. To do this:
