@@ -244,18 +244,23 @@ function restoreState() {
     };
 
     const valueElements = [
-      'modelSelect',
+      // parameters
       'agentSelect',
+      'modelSelect',
+      'reflectSelect',
+      // files
       'inputFileSelect',
       'auxiliaryFileSelect',
       'figureFileSelect',
       'referenceFileSelect',
       'editedFileSelect',
       'baseFileSelect',
+      // instructions
       'instructionInput',
-      'reflectSelect',
-      'commitSelect',
+      // output
       'outputNameOverride',
+      // git
+      'commitSelect',
     ];
 
     valueElements.forEach((id) => {
@@ -357,6 +362,12 @@ function emptyMultipleFiles(containerId, toggleId) {
 window.addEventListener('message', (event) => {
   const message = event.data;
   switch (message.command) {
+    case 'setTheme':
+      document.body.className = message.theme;
+      break;
+    case 'modelSelected':
+      document.getElementById('modelSelect').value = message.model;
+      break;
     case 'setInputFile':
     case 'setReferenceFile':
     case 'setAuxiliaryFile':
@@ -365,6 +376,15 @@ window.addEventListener('message', (event) => {
         `${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`,
         message.files,
       );
+      break;
+    case 'inputFileSelected':
+    case 'referenceFileSelected':
+    case 'auxiliaryFileSelected':
+    case 'figureFileSelected':
+    case 'editedFileSelected':
+      document.getElementById(
+        `${message.command.replace('Selected', 'Select')}`,
+      ).value = message.filePath;
       break;
     case 'setMultipleInputFiles':
     case 'setMultipleReferenceFiles':
@@ -385,18 +405,6 @@ window.addEventListener('message', (event) => {
       break;
     case 'setEditedFiles':
       updateFileSelect('editedFileSelect', message.files);
-      break;
-    case 'inputFileSelected':
-    case 'referenceFileSelected':
-    case 'auxiliaryFileSelected':
-    case 'figureFileSelected':
-    case 'editedFileSelected':
-      document.getElementById(
-        `${message.command.replace('Selected', 'Select')}`,
-      ).value = message.filePath;
-      break;
-    case 'modelSelected':
-      document.getElementById('modelSelect').value = message.model;
       break;
     case 'setRecentCommits':
       handleRecentCommits(message);
@@ -419,9 +427,6 @@ window.addEventListener('message', (event) => {
           text: `The current file is not in the ${message.fileType} file list: ${message.filePath}`,
         });
       }
-      break;
-    case 'setTheme':
-      document.body.className = message.theme;
       break;
     case 'setOpenedFiles':
       updateMultipleFileSelect(
@@ -459,9 +464,9 @@ window.addEventListener('message', (event) => {
 document.addEventListener('DOMContentLoaded', function () {
   const sortableElements = [
     'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
     'multipleAuxiliaryFilesSelect',
     'multipleFiguresSelect',
-    'multipleReferenceFilesSelect',
     'outputFilesList',
   ];
 
@@ -623,47 +628,39 @@ document.addEventListener('DOMContentLoaded', function () {
     .getElementById('executeButton')
     .addEventListener('click', function () {
       const agent = document.getElementById('agentSelect').value;
-      const inputFile = document.getElementById('inputFileSelect').value;
-      const instructions = document.getElementById('instructionInput').value;
-      const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
-      const autoExtractFigure =
-        document.getElementById('autoExtractFigure').checked;
-      const autoExtractTikzFigure = document.getElementById(
-        'autoExtractTikzFigure',
-      ).checked;
-      const includeTikzReflection = document.getElementById(
-        'includeTikzReflection',
-      ).checked;
-      const includeTexCount =
-        document.getElementById('includeTexCount').checked;
+      const reflect = document.getElementById('reflectSelect').value;
 
-      const getFiles = (selectId, singleFileId) => {
+      // Get single files
+      const inputFile = document.getElementById('inputFileSelect').value;
+      const referenceFile = document.getElementById(
+        'referenceFileSelect',
+      ).value;
+      const auxiliaryFile = document.getElementById(
+        'auxiliaryFileSelect',
+      ).value;
+      const figureFile = document.getElementById('figureFileSelect').value;
+
+      // Get multiple files
+      const getMultipleFiles = (selectId) => {
         const selectDiv = document.getElementById(selectId);
-        const singleFile = document.getElementById(singleFileId).value;
         return selectDiv.style.display === 'block'
           ? getSelectedFiles(selectDiv)
-          : singleFile
-            ? [singleFile]
-            : [];
+          : [];
       };
 
-      const inputFiles = getFiles(
-        'multipleInputFilesSelect',
-        'inputFileSelect',
-      ).filter((file) => file !== inputFile);
-
-      // in the future maybe we want to split referenceFile vs ReferenceFiles, AuxiliaryFile vs AuxiliaryFiles, FigureFile vs Figures.
-      // but for now we'll just keep it for now
-      const referenceFiles = getFiles(
+      const inputFiles = getMultipleFiles('multipleInputFilesSelect').filter(
+        (file) => file !== inputFile,
+      );
+      const referenceFiles = getMultipleFiles(
         'multipleReferenceFilesSelect',
-        'referenceFileSelect',
-      );
-      const auxiliaryFiles = getFiles(
+      ).filter((file) => file !== referenceFile);
+      const auxiliaryFiles = getMultipleFiles(
         'multipleAuxiliaryFilesSelect',
-        'auxiliaryFileSelect',
+      ).filter((file) => file !== auxiliaryFile);
+      const figureFiles = getMultipleFiles('multipleFiguresSelect').filter(
+        (file) => file !== figureFile,
       );
-      const figureFiles = getFiles('multipleFiguresSelect', 'figureFileSelect');
 
       const outputFilesContainer = document.getElementById(
         'outputFilesContainer',
@@ -679,22 +676,42 @@ document.addEventListener('DOMContentLoaded', function () {
           ? outputNameOverrideElement.value.trim()
           : null;
 
+      const instructions = document.getElementById('instructionInput').value;
+
+      const autoExtractFigure =
+        document.getElementById('autoExtractFigure').checked;
+      const autoExtractTikzFigure = document.getElementById(
+        'autoExtractTikzFigure',
+      ).checked;
+      const includeTikzReflection = document.getElementById(
+        'includeTikzReflection',
+      ).checked;
+      const includeTexCount =
+        document.getElementById('includeTexCount').checked;
+
       vscode.postMessage({
         command: 'execute',
+        // parameters
         agent: agent,
+        model: model,
+        reflect: reflect,
+        // files
         inputFile: inputFile,
         inputFiles: inputFiles,
+        referenceFile: referenceFile,
         referenceFiles: referenceFiles,
+        auxiliaryFile: auxiliaryFile,
         auxiliaryFiles: auxiliaryFiles,
+        figureFile: figureFile,
         figureFiles: figureFiles,
+        // instructions
         instructions: instructions,
-        reflect: reflect,
-        model: model,
+        // options
         autoExtractFigure: autoExtractFigure,
         autoExtractTikzFigure: autoExtractTikzFigure,
         includeTikzReflection: includeTikzReflection,
         includeTexCount: includeTexCount,
-        outputFiles: outputFiles,
+        // output
         outputNameOverride: outputNameOverride,
       });
     });
@@ -884,19 +901,19 @@ document.addEventListener('DOMContentLoaded', function () {
   const elementsToWatch = [
     'modelSelect',
     'agentSelect',
+    'reflectSelect',
     'inputFileSelect',
     'referenceFileSelect',
     'auxiliaryFileSelect',
     'figureFileSelect',
-    'reflectSelect',
-    'commitSelect',
     'autoExtractFigure',
     'autoExtractTikzFigure',
     'includeTikzReflection',
     'includeTexCount',
+    'outputNameOverride',
     'baseFileSelect',
     'editedFileSelect',
-    'outputNameOverride',
+    'commitSelect',
   ];
 
   elementsToWatch.forEach((id) => {
