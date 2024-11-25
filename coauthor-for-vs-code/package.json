@@ -39,9 +39,10 @@
               "paper2slide",
               "paper2poster",
               "slide2paper",
-              "write-proposal",
+              "write_proposal",
               "txt2tex",
-              "translate2chn"
+              "translate2chn",
+              "polish_cover"
             ],
             "description": "List of available agents",
             "scope": "resource"
