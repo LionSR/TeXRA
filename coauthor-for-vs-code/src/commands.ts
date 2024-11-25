@@ -160,7 +160,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
-          openLabel: 'Select Auxiliaryiliary Files',
+          openLabel: 'Select Auxiliary Files',
           canSelectFiles: true,
           canSelectFolders: false,
           defaultUri: defaultUri,
@@ -615,23 +615,30 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.execute',
       async (
+        // parameters
         agent: string,
-        inputFile: string,
-        auxiliaryFiles: string | string[] | null,
-        instructions: string,
-        reflect: string,
         model: string,
-        figureFiles: string | string[] | null,
+        reflect: string,
+        // files
+        inputFile: string,
         inputFiles: string[] | null,
-        referenceFiles: string | string[] | null,
+        referenceFile: string | null,
+        referenceFiles: string[] | null,
+        auxiliaryFile: string | null,
+        auxiliaryFiles: string[] | null,
+        figureFile: string | null,
+        figureFiles: string[] | null,
+        // instructions
+        instructions: string,
+        // tools
         autoExtractFigure: boolean,
         autoExtractTikzFigure: boolean,
         includeTikzReflection: boolean,
         includeTexCount: boolean,
+        // output options
         outputFiles: string[],
         outputNameOverride: string,
       ) => {
-        // at some point, here we should distinguish between referenceFile/referenceFiles and auxiliaryFile/auxiliaryFiles like we do for inputFile/inputFiles
         const terminalName = `${agent}@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
@@ -663,6 +670,18 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
         let command = `coauthor ${agent} --input_file="${inputFile}"`;
 
+        // Add single files if they exist
+        if (referenceFile) {
+          command += ` --reference_file="${referenceFile}"`;
+        }
+        if (auxiliaryFile) {
+          command += ` --auxiliary_file="${auxiliaryFile}"`;
+        }
+        if (figureFile) {
+          command += ` --figure_file="${figureFile}"`;
+        }
+
+        // Add multiple files if they exist
         const addFilesToCommand = (files: string[] | null, flag: string) => {
           if (files && files.length > 0) {
             command += ` ${flag}="${files.join(',')}"`;
@@ -671,8 +690,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
         addFilesToCommand(ensureArray(inputFiles), '--input_files');
         addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
-        addFilesToCommand(ensureArray(figureFiles), '--figure_inputs');
         addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
+        addFilesToCommand(ensureArray(figureFiles), '--figure_files');
 
         if (instructions) {
           const escapedInstructions = instructions
@@ -834,9 +853,16 @@ export function registerCommands(context: vscode.ExtensionContext) {
         terminal_new.show();
         const reflect = getNestedConfig('merge.defaultReflect', 'False');
         const fileToUse = baseFile || inputFile;
-        terminal_new.sendText(
-          `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`,
-        );
+
+        if (editedFile && fileToUse) {
+          terminal_new.sendText(
+            `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`,
+          );
+        } else {
+          vscode.window.showErrorMessage(
+            'Both input file and edited file must be specified for merge operation',
+          );
+        }
       },
     ),
     vscode.commands.registerCommand(

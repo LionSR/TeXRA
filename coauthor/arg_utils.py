@@ -81,16 +81,16 @@ def add_common_arguments(parser):
     # Figure input arguments
     figure_group = parser.add_argument_group("Figure Files")
     figure_group.add_argument(
-        "--figure_input",
+        "--figure_file",
         type=str,
         default=None,
-        help="Path to the figure input file.",
+        help="Path to the figure file.",
     )
     figure_group.add_argument(
-        "--figure_inputs",
+        "--figure_files",
         type=comma_separated_list,
         default=[],
-        help="Path to the figure input file(s). Multiple files can be specified.",
+        help="Path to the figure file(s). Multiple files can be specified.",
     )
 
     # Tool usage arguments
