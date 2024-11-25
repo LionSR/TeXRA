@@ -276,7 +276,7 @@ CoAuthor's Agent execution follows a sophisticated process inspired by advanced 
 
 ### Basic Execution Flow
 
-1. **Input Processing**: The program reads the input file and any additional files specified (e.g., auxiliary files, figure inputs).
+1. **Input Processing**: The program reads the input file and any additional files specified (e.g., reference files, auxiliary files, figure inputs).
 
 2. **Initial Generation**: Based on the Agent type and input, the AI model generates an initial output. This output is saved as the first version of the result.
 

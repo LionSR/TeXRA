@@ -54,7 +54,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const agent_val = message.agent;
           const model_val = message.model;
           const reflect_val = message.reflect;
+          // Get single files
           const inputFile_val = message.inputFile;
+          const referenceFile_val = message.referenceFile || null;
+          const auxiliaryFile_val = message.auxiliaryFile || null;
+          const figureFile_val = message.figureFile || null;
+
+          // Get multiple files
           const inputFiles_val =
             message.inputFiles && message.inputFiles.length > 0
               ? message.inputFiles
@@ -71,6 +77,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             message.figureFiles && message.figureFiles.length > 0
               ? message.figureFiles
               : null;
+
           const instructions_val = message.instructions;
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
@@ -82,19 +89,27 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           if (inputFile_val || outputNameOverride_val) {
             vscode.commands.executeCommand(
               'coauthor.execute',
+              // parameters
               agent_val,
-              inputFile_val,
-              auxiliaryFiles_val,
-              instructions_val,
-              reflect_val,
               model_val,
-              figureFiles_val,
+              reflect_val,
+              // files
+              inputFile_val,
               inputFiles_val,
+              referenceFile_val,
               referenceFiles_val,
+              auxiliaryFile_val,
+              auxiliaryFiles_val,
+              figureFile_val,
+              figureFiles_val,
+              // instructions
+              instructions_val,
+              // tools options
               autoExtractFigure_val,
               autoExtractTikzFigure_val,
               includeTikzReflection_val,
               includeTexCount_val,
+              // output options
               outputFiles_val,
               outputNameOverride_val,
             );

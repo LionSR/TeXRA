@@ -35,8 +35,8 @@ def init_db() -> None:
         input_files TEXT,  -- JSON array of additional input files
         auxiliary_file TEXT,  -- Added to match TaskConfig
         auxiliary_files TEXT,  -- JSON array of auxiliary files
-        figure_input TEXT,  -- Added to match TaskConfig
-        figure_inputs TEXT,  -- JSON array of figure inputs
+        figure_file TEXT,  -- Added to match TaskConfig
+        figure_files TEXT,  -- JSON array of figure files
         reference_file TEXT,  -- Added to match TaskConfig
         reference_files TEXT,  -- JSON array of reference files
         edited_file TEXT,  -- Added to match TaskConfig
@@ -69,7 +69,7 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
     # Convert lists to JSON strings for storage
     input_files = json.dumps(task_config.input_files) if task_config.input_files else None
     auxiliary_files = json.dumps(task_config.auxiliary_files) if task_config.auxiliary_files else None
-    figure_inputs = json.dumps(task_config.figure_inputs) if task_config.figure_inputs else None
+    figure_files = json.dumps(task_config.figure_files) if task_config.figure_files else None
     reference_files = json.dumps(task_config.reference_files) if task_config.reference_files else None
     output_files = json.dumps(task_config.output_files) if task_config.output_files else None
     actual_output_files = json.dumps([])  # Initialize as empty
@@ -81,7 +81,7 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
         """INSERT INTO coauthor_logs (
         timestamp, agent, model, temperature,
         input_file, input_files, auxiliary_file, auxiliary_files,
-        figure_input, figure_inputs, reference_file, reference_files,
+        figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
         actual_output_files, is_reflection, instruction, round_stats,
         reflect, auto_extract_figure, auto_extract_tikz_figure,
@@ -97,8 +97,8 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
             input_files,
             task_config.auxiliary_file,
             auxiliary_files,
-            task_config.figure_input,
-            figure_inputs,
+            task_config.figure_file,
+            figure_files,
             task_config.reference_file,
             reference_files,
             task_config.edited_file,
@@ -252,7 +252,7 @@ def get_task_info_from_db(log_id: int):
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
         input_files, auxiliary_file, auxiliary_files,
-        figure_input, figure_inputs, reference_file, reference_files,
+        figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
         actual_output_files
         FROM coauthor_logs WHERE id = ?""",
@@ -290,8 +290,8 @@ def get_task_info_from_db(log_id: int):
                 "input_files": json.loads(row[14]) if row[14] else [],
                 "auxiliary_file": row[15],
                 "auxiliary_files": json.loads(row[16]) if row[16] else [],
-                "figure_input": row[17],
-                "figure_inputs": json.loads(row[18]) if row[18] else [],
+                "figure_file": row[17],
+                "figure_files": json.loads(row[18]) if row[18] else [],
                 "reference_file": row[19],
                 "reference_files": json.loads(row[20]) if row[20] else [],
                 "edited_file": row[21],

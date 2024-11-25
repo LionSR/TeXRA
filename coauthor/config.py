@@ -73,8 +73,8 @@ class TaskConfig:
     reference_files: Optional[List[str]]
     auxiliary_file: Optional[str]
     auxiliary_files: Optional[List[str]]
-    figure_input: Optional[str]
-    figure_inputs: Optional[List[str]]
+    figure_file: Optional[str]
+    figure_files: Optional[List[str]]
     output_files: Optional[List[str]]
     output_name_override: Optional[str]
     edited_file: Optional[str]
@@ -109,8 +109,8 @@ class TaskConfig:
             reference_files=args.reference_files,
             auxiliary_file=args.auxiliary_file,
             auxiliary_files=args.auxiliary_files,
-            figure_input=args.figure_input,
-            figure_inputs=args.figure_inputs,
+            figure_file=args.figure_file,
+            figure_files=args.figure_files,
             edited_file=args.edited_file,
             output_files=args.output_files,
             output_name_override=args.output_name_override,
