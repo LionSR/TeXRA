@@ -1,7 +1,7 @@
 name: correct_st
 
 settings:
-  agent_type: direct_write
+  agent_type: direct
   document_tag: latex_document
   end_tag: </latex_document>
   output_ext: tex
