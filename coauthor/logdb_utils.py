@@ -34,7 +34,7 @@ def init_db() -> None:
         input_files TEXT,  -- JSON array of additional input files
         auxiliary_files TEXT,  -- JSON array of auxiliary files
         figure_inputs TEXT,  -- JSON array of figure inputs
-        sample_files TEXT,  -- JSON array of sample files
+        reference_files TEXT,  -- JSON array of sample files
         output_files TEXT,  -- JSON array of target output files from task_config
         actual_output_files TEXT,  -- JSON array of actual output files from agent
         output_file TEXT,  -- Main output file
@@ -69,7 +69,7 @@ def log_db_start(task_config: TaskConfig) -> int:
     input_files = json.dumps(task_config.input_files) if task_config.input_files else None
     auxiliary_files = json.dumps(task_config.auxiliary_files) if task_config.auxiliary_files else None
     figure_inputs = json.dumps(task_config.figure_inputs) if task_config.figure_inputs else None
-    sample_files = json.dumps(task_config.sample_files) if task_config.sample_files else None
+    reference_files = json.dumps(task_config.reference_files) if task_config.reference_files else None
     output_files = json.dumps(task_config.output_files) if task_config.output_files else None
     actual_output_files = json.dumps([])  # Initialize as empty, will be updated by log_db_output_files
 
@@ -79,7 +79,7 @@ def log_db_start(task_config: TaskConfig) -> int:
     c.execute(
         """INSERT INTO coauthor_logs (
         timestamp, agent, model, input_file, input_files,
-        auxiliary_files, figure_inputs, sample_files, output_file, output_files,
+        auxiliary_files, figure_inputs, reference_files, output_file, output_files,
         actual_output_files, is_reflection,
         instruction, round_stats, reflect,
         auto_extract_figure, auto_extract_tikz_figure,
@@ -94,7 +94,7 @@ def log_db_start(task_config: TaskConfig) -> int:
             input_files,
             auxiliary_files,
             figure_inputs,
-            sample_files,
+            reference_files,
             None,  # output_file - will be updated later by log_db_output_files
             output_files,
             actual_output_files,
@@ -244,7 +244,7 @@ def get_task_info_from_db(log_id: int):
         auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
-        input_files, auxiliary_files, figure_inputs, sample_files,
+        input_files, auxiliary_files, figure_inputs, reference_files,
         output_files, actual_output_files
         FROM coauthor_logs WHERE id = ?""",
         (log_id,),
@@ -280,7 +280,7 @@ def get_task_info_from_db(log_id: int):
                 "input_files": json.loads(row[13]) if row[13] else [],
                 "auxiliary_files": json.loads(row[14]) if row[14] else [],
                 "figure_inputs": json.loads(row[15]) if row[15] else [],
-                "sample_files": json.loads(row[16]) if row[16] else [],
+                "reference_files": json.loads(row[16]) if row[16] else [],
                 "target_output_files": json.loads(row[17]) if row[17] else [],
                 "actual_output_files": json.loads(row[18]) if row[18] else [],
             },

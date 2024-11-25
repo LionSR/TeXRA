@@ -68,7 +68,7 @@ class TaskConfig:
     # Input/Output configuration
     input_file: str
     input_files: Optional[List[str]]
-    sample_files: Optional[List[str]]
+    reference_files: Optional[List[str]]
     auxiliary_files: Optional[List[str]]
     figure_inputs: Optional[List[str]]
     output_files: Optional[List[str]]
@@ -101,7 +101,7 @@ class TaskConfig:
             # Input/Output configuration
             input_file=args.input_file,
             input_files=args.input_files,
-            sample_files=args.sample_files,
+            reference_files=args.reference_files,
             auxiliary_files=args.auxiliary_files,
             edited_file=args.edited_file,
             figure_inputs=args.figure_inputs,

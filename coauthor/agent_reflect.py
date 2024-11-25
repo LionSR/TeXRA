@@ -79,13 +79,18 @@ class BaseReflectChainAgent(ABC):
 
         user_vars = {
             "INSTRUCTION": self.task_config.instruction if self.task_config.instruction else None,
+            # input file
             "INPUT_FILE": self.task_config.input_file,
             "INPUT_CONTENT": read_file(self.task_config.input_file),
-            # this sample pair needs to be updated in the future when we separate completely sample_file and sample_files
-            "SAMPLE_FILE": self.task_config.sample_files[0] if self.task_config.sample_files else None,
-            "SAMPLE_CONTENT": read_file(self.task_config.sample_files[0]) if self.task_config.sample_files else None,
-            "SAMPLES": get_xml_format_from_files(self.task_config.sample_files),
             "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
+            # reference files
+            "REFERENCE_FILE": self.task_config.reference_files[0] if self.task_config.reference_files else None,
+            "REFERENCE_CONTENT": read_file(self.task_config.reference_files[0]) if self.task_config.reference_files else None,
+            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files[1:]),
+            "ALL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            # auxiliary files
+            "AUXILIARY_FILE": self.task_config.auxiliary_file if self.task_config.auxiliary_file else None,
+            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file) if self.task_config.auxiliary_file else None,
             "AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
             "EDITED_FILE": self.task_config.edited_file if self.task_config.edited_file else None,
             "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,

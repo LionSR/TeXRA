@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import {
   listInputFiles,
-  listSampleFiles,
-  listAuxFiles,
+  listReferenceFiles,
+  listAuxiliaryFiles,
   listFigureFiles,
   listEditedFiles,
 } from './utils';
@@ -59,13 +59,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             message.inputFiles && message.inputFiles.length > 0
               ? message.inputFiles
               : null;
-          const sampleFiles_val =
-            message.sampleFiles && message.sampleFiles.length > 0
-              ? message.sampleFiles
+          const referenceFiles_val =
+            message.referenceFiles && message.referenceFiles.length > 0
+              ? message.referenceFiles
               : null;
-          const auxFiles_val =
-            message.auxFiles && message.auxFiles.length > 0
-              ? message.auxFiles
+          const auxiliaryFiles_val =
+            message.auxiliaryFiles && message.auxiliaryFiles.length > 0
+              ? message.auxiliaryFiles
               : null;
           const figureFiles_val =
             message.figureFiles && message.figureFiles.length > 0
@@ -84,13 +84,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               'coauthor.execute',
               agent_val,
               inputFile_val,
-              auxFiles_val,
+              auxiliaryFiles_val,
               instructions_val,
               reflect_val,
               model_val,
               figureFiles_val,
               inputFiles_val,
-              sampleFiles_val,
+              referenceFiles_val,
               autoExtractFigure_val,
               autoExtractTikzFigure_val,
               includeTikzReflection_val,
@@ -106,8 +106,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
 
         case 'selectInputFile':
-        case 'selectSampleFile':
-        case 'selectAuxFile':
+        case 'selectReferenceFile':
+        case 'selectAuxiliaryFile':
         case 'selectFigureFile':
           const singleFileType = message.command.replace('select', '');
           log(CHANNEL_NAME, category, `Selecting ${singleFileType}`);
@@ -168,21 +168,21 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             });
           }
           break;
-        case 'requestSampleFile':
+        case 'requestReferenceFile':
           {
-            const sampleFiles = await listSampleFiles();
+            const referenceFiles = await listReferenceFiles();
             webviewView.webview.postMessage({
-              command: 'setSampleFile',
-              files: sampleFiles,
+              command: 'setReferenceFile',
+              files: referenceFiles,
             });
           }
           break;
-        case 'requestAuxFile':
+        case 'requestAuxiliaryFile':
           {
-            const auxFiles = await listAuxFiles();
+            const auxiliaryFiles = await listAuxiliaryFiles();
             webviewView.webview.postMessage({
-              command: 'setAuxFile',
-              files: auxFiles,
+              command: 'setAuxiliaryFile',
+              files: auxiliaryFiles,
             });
           }
           break;
@@ -218,8 +218,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           {
             const refreshedFiles = {
               input: await listInputFiles(),
-              sample: await listSampleFiles(),
-              aux: await listAuxFiles(),
+              reference: await listReferenceFiles(),
+              auxiliary: await listAuxiliaryFiles(),
               figure: await listFigureFiles(),
             };
             webviewView.webview.postMessage({
@@ -227,12 +227,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               files: refreshedFiles.input,
             });
             webviewView.webview.postMessage({
-              command: 'setSampleFile',
-              files: refreshedFiles.sample,
+              command: 'setReferenceFile',
+              files: refreshedFiles.reference,
             });
             webviewView.webview.postMessage({
-              command: 'setAuxFile',
-              files: refreshedFiles.aux,
+              command: 'setAuxiliaryFile',
+              files: refreshedFiles.auxiliary,
             });
             webviewView.webview.postMessage({
               command: 'setFigureFile',
@@ -256,8 +256,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             files: filteredEditedFiles,
           });
           break;
-        case 'sampleFileSelected':
-        case 'auxFileSelected':
+        case 'referenceFileSelected':
+        case 'auxiliaryFileSelected':
         case 'figureFileSelected':
         case 'editedFileSelected':
           vscode.window.showInformationMessage(
@@ -450,8 +450,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           webviewView.webview.postMessage({ command: 'setTheme', theme });
           break;
         case 'setMultipleInputFiles':
-        case 'setMultipleSampleFiles':
-        case 'setMultipleAuxFiles':
+        case 'setMultipleReferenceFiles':
+        case 'setMultipleAuxiliaryFiles':
         case 'setMultipleFigures':
           if (message.files && message.files.length > 0) {
             webviewView.webview.postMessage({
