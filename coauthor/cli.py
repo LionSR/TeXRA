@@ -171,6 +171,12 @@ def draw_tex(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def adapt(model, input_file, **kwargs):
+    execute_agent("edit_lecture", "adapt", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def correct_qi(model, input_file, **kwargs):
     execute_agent("edit_lecture", "correct_qi", model, input_file, **kwargs)
 
@@ -250,12 +256,6 @@ def txt2tex(model, input_file, agent="txt2tex", **kwargs):
 @shared_arguments
 def paper2note(model, input_file, **kwargs):
     execute_agent("paper2note", "paper2note", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def adapt(model, input_file, **kwargs):
-    execute_agent("adapt", "adapt", model, input_file, **kwargs)
 
 
 @click.command()
@@ -511,7 +511,6 @@ def extract_tikzpictures(latex_file):
 
 if __name__ == "__main__":
     cli()
-
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
