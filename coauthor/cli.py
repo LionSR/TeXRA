@@ -87,6 +87,7 @@ def execute_agent(script, agent, model, input_file, **kwargs):
             figure_files.extend(kwargs["figure_files"].split(","))
         elif isinstance(kwargs["figure_files"], list):
             figure_files.extend(kwargs["figure_files"])
+        kwargs["figure_files"] = figure_files
 
     if kwargs.get("auto_extract_figure"):
         handle_auto_extract_figure(kwargs, input_file)
@@ -116,6 +117,7 @@ def execute_agent(script, agent, model, input_file, **kwargs):
                 command.append(shlex.quote(str(value)).strip("'"))
 
     subprocess.run(command)
+
 
 @click.group()
 def cli():
