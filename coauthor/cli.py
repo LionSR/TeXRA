@@ -126,6 +126,22 @@ def cli():
 
 
 @click.command()
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--edited_file", required=True, help="Path to the edited file")
+def merge(model, input_file, edited_file):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/agents/merge.py",
+        f"--input_file={input_file}",
+        f"--edited_file={edited_file}",
+        f"--model={model}",
+    ]
+    subprocess.run(command)
+
+
+@click.command()
 @shared_arguments
 def correct_tex(model, input_file, **kwargs):
     agent = "correct"
@@ -256,64 +272,6 @@ def polish_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-def correct_supp_prl(model, input_file, **kwargs):
-    execute_agent("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def reply_letter_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "reply_letter", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_main_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "revise_main", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_supp_prl(model, input_file, **kwargs):
-    execute_agent(
-        "rebuttal_prl",
-        "revise_supp",
-        model,
-        input_file,
-        **kwargs,
-    )
-
-
-@click.command()
-@shared_arguments
-def polish_reply_prl(model, input_file, **kwargs):
-    execute_agent(
-        "rebuttal_prl",
-        "polish_reply",
-        model,
-        input_file,
-        **kwargs,
-    )
-
-
-@click.command()
-@click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--edited_file", required=True, help="Path to the edited file")
-def merge(model, input_file, edited_file):
-    model, script_dir, _ = get_common_env(model)
-    command = [
-        "python",
-        f"{script_dir}/agents/merge.py",
-        f"--input_file={input_file}",
-        f"--edited_file={edited_file}",
-        f"--model={model}",
-    ]
-    subprocess.run(command)
-
-
-@click.command()
-@shared_arguments
 def paper2cover(model, input_file, **kwargs):
     execute_agent("write_tex", "paper2cover", model, input_file, **kwargs)
 
@@ -344,24 +302,20 @@ def paper2slide(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
-def statement(model, input_file, document_type, **kwargs):
+def statement(model, input_file, **kwargs):
     # maybe handle with agent_postfix setting
-    if document_type is None:
-        if "teaching" in input_file.lower():
-            agent_sub = "teaching"
-        elif "diversity" in input_file.lower():
-            agent_sub = "diversity"
-        elif "research" in input_file.lower():
-            agent_sub = "research"
-        else:
-            raise ValueError("Document type not recognized")
+    if "teaching" in input_file.lower():
+        agent = "teaching"
+    elif "diversity" in input_file.lower():
+        agent = "diversity"
+    elif "research" in input_file.lower():
+        agent = "research"
     else:
-        agent_sub = document_type
+        raise ValueError("Document type not recognized")
 
-    print(f"Agent: statement_{agent_sub}")
+    print(f"Agent: statement_{agent}")
 
-    execute_agent("application", f"statement_{agent_sub}", model, input_file, **kwargs)
+    execute_agent("application", f"statement_{agent}", model, input_file, **kwargs)
 
 
 @click.command()
@@ -379,11 +333,7 @@ def revise_marie_curie(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def text2tex(model, input_file, **kwargs):
-    agent_sub = "text2tex"
-    if ".tex" in input_file:
-        agent_sub = agent_sub + "_tex"
-    print(f"Agent sub: {agent_sub}")
-    execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
+    execute_agent("meeting2text", "text2tex", model, input_file, **kwargs)
 
 
 @click.command()
@@ -424,6 +374,12 @@ def revise_referee(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def translate2chn(model, input_file, **kwargs):
+    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def convert_tex(model, input_file, **kwargs):
     agent = "convert"
     if kwargs.get("output_files"):
@@ -433,14 +389,11 @@ def convert_tex(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-def translate2chn(model, input_file, **kwargs):
-    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
 def ocr_tex(model, input_file, **kwargs):
     execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
+
+
+# Housekeeping
 
 
 @click.command()
