@@ -12,7 +12,7 @@ def main():
         default="paper2cover",
         choices=[
             "paper2cover",
-            "proposal",
+            "write_proposal",
             "slide2paper",
             "paper2slide",
             "paper2referee",

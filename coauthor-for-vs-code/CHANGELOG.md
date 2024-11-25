@@ -235,7 +235,7 @@
 
 ## [0.6.0]
 
-- Added support for new write-cover and write-proposal agents
+- Added support for new write-cover and write_proposal agents
 - Updated package.json to include new agents in VS Code extension
 - Enhanced UI to accommodate new writing agents
 - Improved file handling for sample/reference files in the extension

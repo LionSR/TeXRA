@@ -107,7 +107,6 @@ CoAuthor provides various CLI commands for different tasks:
 
 - Writing Tools:
 
-  - `coauthor write-proposal`: Write research proposals
   - `coauthor paper2referee`: Write referee reports
   - `coauthor revise-referee`: Revise referee reports
 
