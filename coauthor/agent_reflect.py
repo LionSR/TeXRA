@@ -353,7 +353,7 @@ class BaseReflectChainAgent(ABC):
         task_config: TaskConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
-        figure_inputs: Optional[List[str]] = None,
+        figure_files: Optional[List[str]] = None,
         round: int = 0,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -371,7 +371,7 @@ class BaseReflectChainAgent(ABC):
             agent_prompts.system_prompt,
             user_prefix,
             user_request,
-            figure_inputs,
+            figure_files,
         )
 
         accumulated_output = None
@@ -419,7 +419,7 @@ class BaseReflectChainAgent(ABC):
         task_config: TaskConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
-        figure_inputs: Optional[List[str]] = None,
+        figure_files: Optional[List[str]] = None,
         round: int = 1,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -432,7 +432,7 @@ class BaseReflectChainAgent(ABC):
         if tex_count_stats:
             user_message = f"{tex_count_stats}{user_message}"
 
-        messages = model_config.create_reflection_message(messages, user_message, figure_inputs)
+        messages = model_config.create_reflection_message(messages, user_message, figure_files)
 
         accumulated_output = None
         prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
@@ -490,7 +490,7 @@ class BaseReflectChainAgent(ABC):
             self.task_config,
             self.agent_settings,
             self.agent_prompts,
-            figure_inputs=self.task_config.figure_inputs,
+            figure_files=self.task_config.figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
@@ -502,7 +502,7 @@ class BaseReflectChainAgent(ABC):
         return state, messages, end_turn
 
     def reflect(self, state: State, messages, round: int = 1):
-        reflection_figure_inputs = []
+        reflection_figure_files = []
         if self.task_config.output_files:
             # Handle multiple output files
             if self.task_config.include_tex_count:
@@ -513,7 +513,7 @@ class BaseReflectChainAgent(ABC):
                     logger.debug(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
-                        reflection_figure_inputs.extend(extracted_tikz_figures)
+                        reflection_figure_files.extend(extracted_tikz_figures)
         else:
             # Handle single output file
             logger.debug(f"Output files: {self.output_files}")
@@ -524,7 +524,7 @@ class BaseReflectChainAgent(ABC):
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
-                    reflection_figure_inputs.extend(extracted_tikz_figures)
+                    reflection_figure_files.extend(extracted_tikz_figures)
 
         if self.task_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
@@ -539,7 +539,7 @@ class BaseReflectChainAgent(ABC):
             self.task_config,
             self.agent_settings,
             self.agent_prompts,
-            figure_inputs=reflection_figure_inputs,
+            figure_files=reflection_figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
