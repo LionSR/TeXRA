@@ -40,7 +40,11 @@ prompts:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    Important: Focus solely on the given instruction. Make changes only where necessary to address the instruction while maintaining the letter's overall structure and purpose.
+    Important: Focus solely on the given instruction. Make changes only where necessary to address the instruction while maintaining the letter's overall structure and purpose. Use the following format to output the revised cover letter:
+
+    <cover_letter>
+    % REVISED COVER LETTER HERE
+    </cover_letter>
 
   user_request: |
     In the scratchpad below, brainstorm concrete ways to improve the cover letter that are directly relevant to the instruction above. Use the scratchpad to formulate detailed action plans.

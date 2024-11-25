@@ -11,6 +11,7 @@ def main():
         type=str,
         default="paper2cover",
         choices=[
+            "polish_cover",
             "paper2cover",
             "write_proposal",
             "slide2paper",
