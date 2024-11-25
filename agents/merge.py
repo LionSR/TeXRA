@@ -24,7 +24,6 @@ def get_output_file_name_merge(input_file, edited_file, round):
     else:
         # For cases like "MutualInfo_restructured_polish_r1_sonnet++"
         # Combine all parts before _r{N}_ as the agent name
-        round_prefix = "_r"
         agent_parts = []
         edited_base_override = parts[0]
         for i, part in enumerate(parts[1:], 1):

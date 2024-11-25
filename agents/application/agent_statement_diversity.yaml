@@ -23,9 +23,9 @@ prompts:
     - Respect and work with the existing experiences provided in the input document; do not invent or add any new information
 
   user_prefix: |
-    Another document from the application package: {{ SAMPLE_FILE }}
+    Another document from the application package: {{ REFERENCE_FILE }}
     <sample_document>
-    {{ SAMPLE_CONTENT }}
+    {{ REFERENCE_CONTENT }}
     </sample_document>
 
     Revise the following diversity statement for an academic position in a US institution:

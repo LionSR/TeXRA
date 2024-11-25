@@ -48,19 +48,19 @@ def add_common_arguments(parser):
         help="Path to input files. Multiple files can be specified.",
     )
 
-    # Sample file arguments
-    sample_group = parser.add_argument_group("Sample Files")
-    sample_group.add_argument(
-        "--sample_file",
+    # Reference file arguments
+    reference_group = parser.add_argument_group("Reference Files")
+    reference_group.add_argument(
+        "--reference_file",
         type=str,
         default=None,
-        help="Path to the sample file.",
+        help="Path to the reference file.",
     )
-    sample_group.add_argument(
-        "--sample_files",
+    reference_group.add_argument(
+        "--reference_files",
         type=comma_separated_list,
         default=[],
-        help="Path to the sample file(s). Multiple files can be specified.",
+        help="Path to the reference file(s). Multiple files can be specified.",
     )
 
     # Auxiliary file arguments
