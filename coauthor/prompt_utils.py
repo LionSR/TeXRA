@@ -68,4 +68,4 @@ def get_xml_format_from_file(file: str) -> str:
 
 
 def get_xml_format_from_files(files: list[str]) -> str:
-    return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
+    return "\n".join(get_xml_format_from_file(file) for file in files) if files else None
