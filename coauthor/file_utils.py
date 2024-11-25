@@ -20,11 +20,11 @@ def get_agent_path(library, prompt_name: str) -> str:
 def read_file(file_path: str, raise_warning: bool = True) -> str:
     if file_path is None:
         if raise_warning:
-            warnings.warn(f"File not provided: {file_path}")
+            logger.warning(f"File not provided: {file_path}")
         return ""
     elif not os.path.exists(file_path):
         if raise_warning:
-            warnings.warn(f"File not found: {file_path}")
+            logger.warning(f"File not found: {file_path}")
         return ""
     with open(file_path, "r+", encoding="utf-8") as file:
         return file.read().strip()
