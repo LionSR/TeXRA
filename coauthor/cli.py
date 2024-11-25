@@ -559,6 +559,7 @@ cli.add_command(draft_rebuttal_prl)
 cli.add_command(revise_rebuttal_prl)
 
 # write_tex.py
+cli.add_command(polish_cover)
 cli.add_command(paper2cover)
 cli.add_command(write_proposal)
 cli.add_command(slide2paper)
