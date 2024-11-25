@@ -89,28 +89,28 @@ export function registerCommands(context: vscode.ExtensionContext) {
       },
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleSampleFiles',
-      async (currentSampleFile: string) => {
+      'coauthor.selectMultipleReferenceFiles',
+      async (currentReferenceFile: string) => {
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {
           showErrorMessage('No workspace folder open');
           return null;
         }
 
-        const defaultUri = currentSampleFile
+        const defaultUri = currentReferenceFile
           ? vscode.Uri.file(
-              path.dirname(path.join(workspacePath, currentSampleFile)),
+              path.dirname(path.join(workspacePath, currentReferenceFile)),
             )
           : vscode.Uri.file(workspacePath);
 
-        const includedSampleDirectories = getNestedConfig<string[]>(
-          'files.included.sampleDirectories',
+        const includedReferenceDirectories = getNestedConfig<string[]>(
+          'files.included.referenceDirectories',
           [],
         );
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
-          openLabel: 'Select Sample Files',
+          openLabel: 'Select Ref Files',
           canSelectFiles: true,
           canSelectFolders: false,
           defaultUri: defaultUri,
@@ -124,41 +124,43 @@ export function registerCommands(context: vscode.ExtensionContext) {
             const relativePath = getRelativePath(uri.fsPath);
             const pathParts = relativePath.split(path.sep);
             const startIndex = pathParts.findIndex((part) =>
-              includedSampleDirectories.includes(part),
+              includedReferenceDirectories.includes(part),
             );
             return startIndex !== -1
               ? pathParts.slice(startIndex).join(path.sep)
               : relativePath;
           });
-          showInfoMessage(`Selected sample files: ${relativePaths.join(', ')}`);
+          showInfoMessage(
+            `Selected reference files: ${relativePaths.join(', ')}`,
+          );
           return relativePaths;
         }
         return null;
       },
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleAuxFiles',
-      async (currentAuxFile: string) => {
+      'coauthor.selectMultipleAuxiliaryFiles',
+      async (currentAuxiliaryFile: string) => {
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {
           showErrorMessage('No workspace folder open');
           return null;
         }
 
-        const defaultUri = currentAuxFile
+        const defaultUri = currentAuxiliaryFile
           ? vscode.Uri.file(
-              path.dirname(path.join(workspacePath, currentAuxFile)),
+              path.dirname(path.join(workspacePath, currentAuxiliaryFile)),
             )
           : vscode.Uri.file(workspacePath);
 
-        const includedAuxDirectories = getNestedConfig<string[]>(
-          'files.included.auxDirectories',
+        const includedAuxiliaryDirectories = getNestedConfig<string[]>(
+          'files.included.auxiliaryDirectories',
           [],
         );
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: true,
-          openLabel: 'Select Auxiliary Files',
+          openLabel: 'Select Auxiliaryiliary Files',
           canSelectFiles: true,
           canSelectFolders: false,
           defaultUri: defaultUri,
@@ -172,7 +174,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
             const relativePath = getRelativePath(uri.fsPath);
             const pathParts = relativePath.split(path.sep);
             const startIndex = pathParts.findIndex((part) =>
-              includedAuxDirectories.includes(part),
+              includedAuxiliaryDirectories.includes(part),
             );
             return startIndex !== -1
               ? pathParts.slice(startIndex).join(path.sep)
@@ -615,13 +617,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
       async (
         agent: string,
         inputFile: string,
-        auxFiles: string | string[] | null,
+        auxiliaryFiles: string | string[] | null,
         instructions: string,
         reflect: string,
         model: string,
         figureFiles: string | string[] | null,
         inputFiles: string[] | null,
-        sampleFiles: string | string[] | null,
+        referenceFiles: string | string[] | null,
         autoExtractFigure: boolean,
         autoExtractTikzFigure: boolean,
         includeTikzReflection: boolean,
@@ -629,7 +631,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         outputFiles: string[],
         outputNameOverride: string,
       ) => {
-        // at some point, here we should distinguish between sampleFile/sampleFiles and auxFile/auxFiles like we do for inputFile/inputFiles
+        // at some point, here we should distinguish between referenceFile/referenceFiles and auxiliaryFile/auxiliaryFiles like we do for inputFile/inputFiles
         const terminalName = `${agent}@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
@@ -668,9 +670,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
         };
 
         addFilesToCommand(ensureArray(inputFiles), '--input_files');
-        addFilesToCommand(ensureArray(auxFiles), '--auxiliary_files');
+        addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
         addFilesToCommand(ensureArray(figureFiles), '--figure_inputs');
-        addFilesToCommand(ensureArray(sampleFiles), '--sample_files');
+        addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
 
         if (instructions) {
           const escapedInstructions = instructions
@@ -749,23 +751,23 @@ export function registerCommands(context: vscode.ExtensionContext) {
       },
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleSampleFile',
-      async (currentSampleFile: string) => {
+      'coauthor.selectMultipleReferenceFile',
+      async (currentReferenceFile: string) => {
         const workspacePath = getWorkspacePath();
         if (!workspacePath) {
           showErrorMessage('No workspace folder open');
           return null;
         }
 
-        const defaultUri = currentSampleFile
+        const defaultUri = currentReferenceFile
           ? vscode.Uri.file(
-              path.dirname(path.join(workspacePath, currentSampleFile)),
+              path.dirname(path.join(workspacePath, currentReferenceFile)),
             )
           : vscode.Uri.file(workspacePath);
 
         const fileUris = await vscode.window.showOpenDialog({
           canSelectMany: false,
-          openLabel: 'Select Sample File',
+          openLabel: 'Select Ref File',
           canSelectFiles: true,
           canSelectFolders: false,
           defaultUri: defaultUri,
@@ -777,7 +779,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
           const relativePaths = fileUris.map((uri) =>
             getRelativePath(uri.fsPath),
           );
-          showInfoMessage(`Selected sample file: ${relativePaths.join(', ')}`);
+          showInfoMessage(
+            `Selected reference file: ${relativePaths.join(', ')}`,
+          );
           return relativePaths;
         }
         return null;

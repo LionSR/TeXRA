@@ -8,10 +8,10 @@ settings:
   file_patterns_contain:
     - pattern: "example_paper"
       var_name: "EXAMPLE_PAPER"
-      categories: ["sample_file", "sample_files"]
+      categories: ["reference_file", "reference_files"]
     - pattern: "example_note"
       var_name: "EXAMPLE_NOTE"
-      categories: ["sample_file", "sample_files"]
+      categories: ["reference_file", "reference_files"]
 
 prompts:
   user_prefix: |

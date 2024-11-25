@@ -15,8 +15,8 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.agent == "transcribe_dual" and args.sample_files is None:
-        parser.error("The transcribe_dual agent requires --sample_files to be specified.")
+    if args.agent == "transcribe_dual" and args.reference_files is None:
+        parser.error("The transcribe_dual agent requires --reference_files to be specified.")
 
     if args.agent == "text2tex":
         text2tex = ThinkAndWrite(args, agent_path)
