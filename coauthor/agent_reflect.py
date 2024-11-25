@@ -83,16 +83,17 @@ class BaseReflectChainAgent(ABC):
             "INPUT_FILE": self.task_config.input_file,
             "INPUT_CONTENT": read_file(self.task_config.input_file),
             "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
+            "ALL_INPUTS": get_xml_format_from_files([self.task_config.input_file] + self.task_config.input_files),
             # reference files
             "REFERENCE_FILE": self.task_config.reference_file,
             "REFERENCE_CONTENT": read_file(self.task_config.reference_file),
             "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
-            # "ALL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            "ALL_REFERENCES": get_xml_format_from_files([self.task_config.reference_file] + self.task_config.reference_files),
             # auxiliary files
             "AUXILIARY_FILE": self.task_config.auxiliary_file,
             "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file),
-            "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_file),
-            # "ALL_AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
+            "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_files),
+            "ALL_AUXILIARY_FILES": get_xml_format_from_files([self.task_config.auxiliary_file] + self.task_config.auxiliary_files),
             # edited file
             "EDITED_FILE": self.task_config.edited_file,
             "EDITED_CONTENT": read_file(self.task_config.edited_file),
