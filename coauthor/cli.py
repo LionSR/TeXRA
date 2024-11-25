@@ -272,6 +272,12 @@ def polish_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def polish_cover(model, input_file, **kwargs):
+    execute_agent("write_tex", "polish_cover", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def paper2cover(model, input_file, **kwargs):
     execute_agent("write_tex", "paper2cover", model, input_file, **kwargs)
 
@@ -285,7 +291,7 @@ def paper2poster(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def write_proposal(model, input_file, **kwargs):
-    execute_agent("write_tex", "proposal", model, input_file, **kwargs)
+    execute_agent("write_tex", "write_proposal", model, input_file, **kwargs)
 
 
 @click.command()
@@ -511,6 +517,11 @@ def extract_tikzpictures(latex_file):
 
 if __name__ == "__main__":
     cli()
+
+
+# merge
+cli.add_command(merge)
+
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
@@ -519,6 +530,7 @@ cli.add_command(convert_tex)
 cli.add_command(ocr_tex)
 
 # edit_lecture.py
+cli.add_command(adapt)
 cli.add_command(correct_st)
 cli.add_command(correct_qi)
 cli.add_command(polish_st)
@@ -537,12 +549,6 @@ cli.add_command(txt2tex)
 # paper2note.py
 cli.add_command(paper2note)
 
-# adapt.py
-cli.add_command(adapt)
-
-# merge
-cli.add_command(merge)
-
 # edit_prl.py
 cli.add_command(correct_prl)
 cli.add_command(polish_prl)
@@ -551,6 +557,26 @@ cli.add_command(revise_prl)
 # reply_prl.py
 cli.add_command(draft_rebuttal_prl)
 cli.add_command(revise_rebuttal_prl)
+
+# write_tex.py
+cli.add_command(paper2cover)
+cli.add_command(write_proposal)
+cli.add_command(slide2paper)
+cli.add_command(paper2slide)
+cli.add_command(paper2referee)
+cli.add_command(revise_referee)
+cli.add_command(paper2poster)
+cli.add_command(translate2chn)
+
+# application.py
+cli.add_command(statement)
+
+# grant.py
+cli.add_command(revise_nsf_grant)
+cli.add_command(revise_marie_curie)
+
+
+# Housekeepings
 
 # clean up
 cli.add_command(clean_output)
@@ -576,30 +602,6 @@ cli.add_command(pack_latexdiff_vc_multiple)
 cli.add_command(tex_count)
 cli.add_command(extract_figure_path)
 cli.add_command(extract_tikzpictures)
-
-# write_tex.py
-cli.add_command(paper2cover)
-cli.add_command(write_proposal)
-cli.add_command(slide2paper)
-cli.add_command(paper2slide)
-cli.add_command(paper2referee)
-cli.add_command(revise_referee)
-cli.add_command(paper2poster)
-
-# application.py
-cli.add_command(statement)
-
-# grant.py
-cli.add_command(revise_nsf_grant)
-cli.add_command(revise_marie_curie)
-
-# convert_tex.py
-
-
-# translate_to_chinese.py
-cli.add_command(translate2chn)
-
-# ocr_tex.py
 
 
 if __name__ == "__main__":
