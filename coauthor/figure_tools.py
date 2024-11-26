@@ -1,9 +1,11 @@
 import re
 import os
 from jinja2 import Template
+
 from .file_utils import read_file, write_file
 from .tex_tools import compile_latex_to_pdf
 from .logging_utils import logger
+from .prompt_utils import get_list_of_files
 
 TIKZ_TEMPLATE = Template(
     r"""
@@ -65,7 +67,7 @@ def extract_figure_paths(latex_file_path):
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
 
-    logger.debug("Found figure paths: " + ", ".join(figure_paths))
+    logger.debug("Found figures: " + get_list_of_files(figure_paths))
     return figure_paths
 
 
@@ -132,7 +134,7 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
 
 def handle_auto_extract_figure(kwargs, input_file):
     extracted_figure_paths = extract_figure_paths(input_file)
-    logger.debug("Extracting figure paths: " + ", ".join(extracted_figure_paths))
+    logger.debug("Extracting the list of figures: " + ", ".join(extracted_figure_paths))
     if extracted_figure_paths:
         if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:
             kwargs["figure_files"] = extracted_figure_paths

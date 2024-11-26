@@ -1,17 +1,19 @@
 name: revise_rebuttal
 
 settings:
-  document_tag: rebuttal_letter
-  end_tag: </rebuttal_letter>
+  document_tag: rebuttal_package
+  end_tag: </rebuttal_package>
   output_ext: xml
   prefills:
-    - <rebuttal_letter>\n<scratchpad>
-    - <rebuttal_letter>\n<scratchpad>
+    - <rebuttal_package>\n<scratchpad>
+    - <rebuttal_package>\n<scratchpad>
   required_files:
     COVER_LETTER: replies/cover_letter.txt
     EDITOR_LETTER: replies/editor_letter.txt
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
+  required_files_internal:
+    EXAMPLE_REBUTTAL_PACKAGE: prl/example_rebuttal_package.txt
   default_output_files:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
@@ -80,17 +82,23 @@ prompts:
     You will be revising a rebuttal package for a paper submitted to Physical Review Letters. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
 
     <documents>
+    {% if EXAMPLE_REBUTTAL_PACKAGE %}
+    <documents>
+    % The example rebuttal package.
+    {{ EXAMPLE_REBUTTAL_PACKAGE }}
+    </documents>
+    {% endif %}
     <document name="{{ REPLY_TO_EDITOR_FILE }}">
     % The current version of the letter to the editor.
-    {{ REPLY_TO_EDITOR }}
+    {{ REPLY_TO_EDITOR_CONTENT }}
     </document>
     <document name="{{ REPLY_TO_REFEREES_FILE }}">
     % The current version of the point-by-point response to referee comments.
-    {{ REPLY_TO_REFEREES }}
+    {{ REPLY_TO_REFEREES_CONTENT }}
     </document>
     <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
     % The current version of the list of major changes.
-    {{ LIST_OF_MAJOR_CHANGES }}
+    {{ LIST_OF_MAJOR_CHANGES_CONTENT }}
     </document>
     <document name="{{ MAIN_FILE }}">
     % The current version of the main paper.
@@ -127,13 +135,13 @@ prompts:
     </documents>
 
   user_request: |
-    Please carefully review all the provided documents, including the current rebuttal package and thereferee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.  You should include all the changes you added in the previous step.
+    Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.  You should include all the changes you added in the previous step.
 
     After your planning, revise the rebuttal package further to include the following improvements:
 
     \begin{enumerate}
-        \item An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the \texttt{<document name="replies/reply\_to\_editor.tex"></document>} tag.
-        \item An improved point-by-point response to the referee comments. Write this inside the \texttt{<document name="\{REPLY\_TO\_REFEREES\_FILE\}"></document>} tag. To do this:
+        \item An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="{{ REPLY_TO_EDITOR_FILE }}"></document> tag.
+        \item An improved point-by-point response to the referee comments. Write this inside the <document name="{{ REPLY_TO_REFEREES_FILE }}"></document> tag. To do this:
         \begin{itemize}
             \item Ensure all referee comments are accurately represented in the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environments.
             \item Enhance each response in the \verb|\begin{response}| and \verb|\end{response}| environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
@@ -143,7 +151,7 @@ prompts:
             \item If there are indicated TODOs left in the draft responses, do your best efforts to address them based on the instructions and the context.
         \end{itemize}
         \item Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
-        \item An updated and more detailed list of major changes made to the paper. Write this inside the \texttt{<document name="\{LIST\_OF\_MAJOR\_CHANGES\_FILE\}"></document>} tag. Ensure changes are clearly explained and their importance is emphasized.
+        \item An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
         \item Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
     \end{enumerate}
 
@@ -157,20 +165,20 @@ prompts:
     The whole rebuttal package should be written in LaTeX format, coherent with each other and the original paper.
     Write the revised rebuttal package in the following format:
 
-    <rebuttal_letter>
+    <rebuttal_package>
     <scratchpad>
     your detailed plan here
     </scratchpad>
     <document name="{{ REPLY_TO_EDITOR_FILE }}">
-    % Insert the revised letter to the editor here, maintaining the LaTeX structure
+    % Insert the revised letter to the editor here
     </document>
 
     <document name="{{ REPLY_TO_REFEREES_FILE }}">
-    % Insert the revised point-by-point response to referees here, maintaining the LaTeX structure and environments
+    % Insert the revised point-by-point response to referees here
     </document>
 
     <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
-    % Insert the revised list of major changes here, maintaining the LaTeX structure
+    % Insert the revised list of major changes here
     </document>
 
     <document name="{{ MAIN_FILE }}">
@@ -183,7 +191,7 @@ prompts:
     </document>
     {% endif %}
 
-    </rebuttal_letter>
+    </rebuttal_package>
 
     Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Letters. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
 

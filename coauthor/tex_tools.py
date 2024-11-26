@@ -120,7 +120,7 @@ def process_tikzpicture_endings(file_path: str) -> None:
     content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
 
     write_file(file_path, content)
-    logger.info(f"Tikzpicture endings fixed in {file_path}")
+    # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
 def compile_latex_to_pdf(tex_file: str) -> bool:
