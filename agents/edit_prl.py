@@ -7,7 +7,10 @@ agent_path = coa.get_agent_path(coa, "prl")
 def main():
     parser = coa.get_common_argparser()
     parser.add_argument(
-        "--agent", type=str, default="correct_prl", choices=["correct_prl", "polish_prl"], 
+        "--agent",
+        type=str,
+        default="correct_prl",
+        choices=["correct_prl", "polish_prl"],
     )
     args = parser.parse_args()
 
