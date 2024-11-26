@@ -2,6 +2,8 @@ import os
 from openai import OpenAI
 from typing import Optional
 
+from .logging_utils import logger
+
 
 def best_connection_method(str1: str, str2: str, openai_api_key: Optional[str] = None) -> tuple[str, str]:
     """
@@ -58,5 +60,5 @@ def best_connection_method(str1: str, str2: str, openai_api_key: Optional[str] =
     if majority_choice in case_dict:
         return case_dict[majority_choice], majority_choice
     else:
-        print(f"Invalid choice: {majority_choice}. Defaulting to adding a space.")
+        logger.warning(f"Invalid choice: {majority_choice}. Defaulting to adding a space.")
         return " ", "B"
