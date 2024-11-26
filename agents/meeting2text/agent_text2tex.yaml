@@ -7,7 +7,7 @@ settings:
     - <scratchpad>
     - <scratchpad>
   required_files_internal:
-    - template_text2tex.tex
+    TEMPLATE_TEXT2TEX: meeting2text/template_text2tex.tex
 
 prompts:
   system_prompt: |

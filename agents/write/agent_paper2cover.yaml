@@ -8,7 +8,7 @@ settings:
     - <scratchpad>
 
 required_files_internal:
-  TEMPLATE_COVER_LETTER: template_cover_letter.txt
+  TEMPLATE_COVER_LETTER: write/template_cover_letter.txt
 
 prompts:
   system_prompt: |
