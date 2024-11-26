@@ -13,7 +13,7 @@ from .output_utils import (
     split_multiple_scratchpad_output_xml,
     check_for_massive_repetition,
 )
-from .logdb_utils import log_db_start, log_db_and_print_statistics, log_db_output_files
+from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt
 from .file_utils import read_file, write_to_output_file, get_common_env
 from .openai_utils import best_connection_method
@@ -78,17 +78,25 @@ class BaseReflectChainAgent(ABC):
         """Get the basic user variables that are common across all agents."""
 
         user_vars = {
-            "INSTRUCTION": self.task_config.instruction if self.task_config.instruction else None,
+            "INSTRUCTION": self.task_config.instruction,
+            # input file
             "INPUT_FILE": self.task_config.input_file,
             "INPUT_CONTENT": read_file(self.task_config.input_file),
-            # this sample pair needs to be updated in the future when we separate completely sample_file and sample_files
-            "SAMPLE_FILE": self.task_config.sample_files[0] if self.task_config.sample_files else None,
-            "SAMPLE_CONTENT": read_file(self.task_config.sample_files[0]) if self.task_config.sample_files else None,
-            "SAMPLES": get_xml_format_from_files(self.task_config.sample_files),
             "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
-            "AUXILIARY_FILES": get_xml_format_from_files(self.task_config.auxiliary_files),
-            "EDITED_FILE": self.task_config.edited_file if self.task_config.edited_file else None,
-            "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,
+            "ALL_INPUTS": get_xml_format_from_files([self.task_config.input_file] + self.task_config.input_files),
+            # reference files
+            "REFERENCE_FILE": self.task_config.reference_file,
+            "REFERENCE_CONTENT": read_file(self.task_config.reference_file),
+            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            "ALL_REFERENCES": get_xml_format_from_files([self.task_config.reference_file] + self.task_config.reference_files),
+            # auxiliary files
+            "AUXILIARY_FILE": self.task_config.auxiliary_file,
+            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file),
+            "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_files),
+            "ALL_AUXILIARY_FILES": get_xml_format_from_files([self.task_config.auxiliary_file] + self.task_config.auxiliary_files),
+            # edited file
+            "EDITED_FILE": self.task_config.edited_file,
+            "EDITED_CONTENT": read_file(self.task_config.edited_file),
         }
 
         # Add variables for required files
@@ -190,7 +198,7 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_file = log_db_start(self.task_config)
+        self.log_file = logdb_start(self.task_config, self.agent_settings)
 
     @abstractmethod
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
@@ -206,7 +214,7 @@ class BaseReflectChainAgent(ABC):
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         for input_file, output_file in zip(self.task_config.output_files, output_files):
-            log_db_output_files(output_file, self.log_file)
+            logdb_output_files(output_file, self.log_file)
             if self.agent_settings.output_ext == "tex":
                 run_latexdiff(input_file, output_file, self.task_config.agent)
 
@@ -278,7 +286,7 @@ class BaseReflectChainAgent(ABC):
             response_object = model_config.create_response(
                 client=client,
                 messages=messages,
-                temperature=task_config.temperature,
+                temperature=agent_settings.temperature,
                 system_prompt=agent_prompts.system_prompt,
                 end_tag=agent_settings.end_tag,
             )
@@ -346,7 +354,7 @@ class BaseReflectChainAgent(ABC):
         task_config: TaskConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
-        figure_inputs: Optional[List[str]] = None,
+        figure_files: Optional[List[str]] = None,
         round: int = 0,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -364,7 +372,7 @@ class BaseReflectChainAgent(ABC):
             agent_prompts.system_prompt,
             user_prefix,
             user_request,
-            figure_inputs,
+            figure_files,
         )
 
         accumulated_output = None
@@ -412,7 +420,7 @@ class BaseReflectChainAgent(ABC):
         task_config: TaskConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
-        figure_inputs: Optional[List[str]] = None,
+        figure_files: Optional[List[str]] = None,
         round: int = 1,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -425,7 +433,7 @@ class BaseReflectChainAgent(ABC):
         if tex_count_stats:
             user_message = f"{tex_count_stats}{user_message}"
 
-        messages = model_config.create_reflection_message(messages, user_message, figure_inputs)
+        messages = model_config.create_reflection_message(messages, user_message, figure_files)
 
         accumulated_output = None
         prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
@@ -483,7 +491,7 @@ class BaseReflectChainAgent(ABC):
             self.task_config,
             self.agent_settings,
             self.agent_prompts,
-            figure_inputs=self.task_config.figure_inputs,
+            figure_files=self.task_config.figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
@@ -495,7 +503,7 @@ class BaseReflectChainAgent(ABC):
         return state, messages, end_turn
 
     def reflect(self, state: State, messages, round: int = 1):
-        reflection_figure_inputs = []
+        reflection_figure_files = []
         if self.task_config.output_files:
             # Handle multiple output files
             if self.task_config.include_tex_count:
@@ -506,7 +514,7 @@ class BaseReflectChainAgent(ABC):
                     logger.debug(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
-                        reflection_figure_inputs.extend(extracted_tikz_figures)
+                        reflection_figure_files.extend(extracted_tikz_figures)
         else:
             # Handle single output file
             logger.debug(f"Output files: {self.output_files}")
@@ -517,7 +525,7 @@ class BaseReflectChainAgent(ABC):
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
-                    reflection_figure_inputs.extend(extracted_tikz_figures)
+                    reflection_figure_files.extend(extracted_tikz_figures)
 
         if self.task_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
@@ -532,7 +540,7 @@ class BaseReflectChainAgent(ABC):
             self.task_config,
             self.agent_settings,
             self.agent_prompts,
-            figure_inputs=reflection_figure_inputs,
+            figure_files=reflection_figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
@@ -589,8 +597,8 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_db_output_files(output_file, self.log_file, self.output_files[round])
-        log_db_and_print_statistics(state, self.model_config, self.log_file)
+        logdb_output_files(output_file, self.log_file, self.output_files[round])
+        logdb_and_print_statistics(state, self.model_config, self.log_file)
         return self.output_files[round]
 
 
@@ -624,7 +632,7 @@ class DirectWrite(BaseReflectChainAgent):
 
             self._handle_latexdiff(round)
 
-        log_db_output_files(output_file, self.log_file, self.output_files[round])
-        log_db_and_print_statistics(state, self.model_config, self.log_file)
+        logdb_output_files(output_file, self.log_file, self.output_files[round])
+        logdb_and_print_statistics(state, self.model_config, self.log_file)
 
         return self.output_files[round]

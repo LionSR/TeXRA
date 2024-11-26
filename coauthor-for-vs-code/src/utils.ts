@@ -65,9 +65,9 @@ export async function listInputFiles(): Promise<string[]> {
   );
 }
 
-export const listSampleFiles = listInputFiles;
+export const listReferenceFiles = listInputFiles;
 
-export async function listAuxFiles(): Promise<string[]> {
+export async function listAuxiliaryFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
@@ -79,8 +79,8 @@ export async function listAuxFiles(): Promise<string[]> {
     'files.ignored.keywords',
     [],
   );
-  const additionalIgnoredAuxKeywords = getNestedConfig<string[]>(
-    'files.ignored.auxKeywords',
+  const additionalIgnoredAuxiliaryKeywords = getNestedConfig<string[]>(
+    'files.ignored.auxiliaryKeywords',
     [],
   );
   const ignoredDirectories = getNestedConfig<string[]>(
@@ -89,10 +89,10 @@ export async function listAuxFiles(): Promise<string[]> {
   );
 
   const safeIgnoredKeywords = ignoredKeywords || [];
-  const safeAuxKeywords = additionalIgnoredAuxKeywords || [];
+  const safeAuxiliaryKeywords = additionalIgnoredAuxiliaryKeywords || [];
 
   const combinedIgnoredKeywords = [
-    ...new Set([...safeIgnoredKeywords, ...safeAuxKeywords]),
+    ...new Set([...safeIgnoredKeywords, ...safeAuxiliaryKeywords]),
   ];
 
   return getFilesInDirectory(

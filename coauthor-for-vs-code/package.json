@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.8",
+  "version": "0.10.9",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -31,7 +31,6 @@
               "correct-tex",
               "polish-tex",
               "draw-tex",
-              "adapt-tex",
               "write-tex",
               "meeting2text",
               "text2tex",
@@ -40,9 +39,10 @@
               "paper2slide",
               "paper2poster",
               "slide2paper",
-              "write-proposal",
+              "write_proposal",
               "txt2tex",
-              "translate2chn"
+              "translate2chn",
+              "polish_cover"
             ],
             "description": "List of available agents",
             "scope": "resource"
@@ -271,6 +271,10 @@
       {
         "command": "coauthor.selectInputFile",
         "title": "Select Input File"
+      },
+      {
+        "command": "coauthor.selectReferenceFile",
+        "title": "Select Reference File"
       },
       {
         "command": "coauthor.selectAuxFile",

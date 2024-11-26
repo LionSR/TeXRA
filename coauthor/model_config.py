@@ -73,12 +73,12 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
         """Initialize messages for the conversation."""
         pass
 
     @abstractmethod
-    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_inputs=None) -> List[Dict]:
+    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
         """Create a reflection message and handle prompt caching."""
         pass
 
@@ -95,7 +95,7 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def process_image(self, figure_input: str, file_extension: str) -> Tuple[str, str]:
+    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
         """Process an image file according to model requirements.
         Returns: (img_data, media_type)
         """
@@ -159,39 +159,39 @@ class ModelConfig(ABC):
         logger.debug(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
         logger.debug(f"{state.last_response[-K:]}")
 
-    def create_image_message(self, figure_inputs):
+    def create_image_message(self, figure_files):
         """Create image messages for the conversation."""
         image_contents = []
         added_figures = []
 
-        for figure_input in figure_inputs:
-            if not os.path.exists(figure_input) or os.path.getsize(figure_input) == 0:
-                logger.error(f"File not found or empty: {figure_input}")
+        for figure_file in figure_files:
+            if not os.path.exists(figure_file) or os.path.getsize(figure_file) == 0:
+                logger.error(f"File not found or empty: {figure_file}")
                 continue
 
-            file_extension = os.path.splitext(figure_input)[1].lower()
+            file_extension = os.path.splitext(figure_file)[1].lower()
 
             try:
                 # Use model-specific image processing
-                img_data, media_type = self.process_image(figure_input, file_extension)
-                logger.debug(f"Processed image: {figure_input}, type: {media_type}")
+                img_data, media_type = self.process_image(figure_file, file_extension)
+                logger.debug(f"Processed image: {figure_file}, type: {media_type}")
                 logger.debug(f"length of img_data: {len(img_data)}")
 
                 # Handle multi-page PDFs
                 if isinstance(img_data, list):
                     logger.debug(f"Adding {len(img_data)} pages to the image contents")
                     for i, data in enumerate(img_data):
-                        image_contents.append({"file_name": f"{os.path.basename(figure_input)}_page_{i+1}", "data": data, "media_type": media_type})
-                    added_figures.extend([f"{figure_input}_page_{i+1}" for i in range(len(img_data))])
+                        image_contents.append({"file_name": f"{os.path.basename(figure_file)}_page_{i+1}", "data": data, "media_type": media_type})
+                    added_figures.extend([f"{figure_file}_page_{i+1}" for i in range(len(img_data))])
                 else:
-                    logger.debug(f"Adding single page to the image contents: {figure_input}")
-                    image_contents.append({"file_name": os.path.basename(figure_input), "data": img_data, "media_type": media_type})
-                    added_figures.append(figure_input)
+                    logger.debug(f"Adding single page to the image contents: {figure_file}")
+                    image_contents.append({"file_name": os.path.basename(figure_file), "data": img_data, "media_type": media_type})
+                    added_figures.append(figure_file)
             except Exception as e:
-                logger.error(f"Failed to process image {figure_input}: {e}")
+                logger.error(f"Failed to process image {figure_file}: {e}")
                 continue
 
-        logger.info(f"Using images: {figure_inputs}")
+        logger.info(f"Using images: {figure_files}")
         logger.info(f"Successfully added: {added_figures}")
 
         return self.create_image_content(image_contents)
@@ -244,12 +244,12 @@ class AnthropicModelConfig(ModelConfig):
 
         return base_price
 
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
         """Initialize messages for the conversation."""
         messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-        if figure_inputs:
-            image_content = self.create_image_message(figure_inputs)
+        if figure_files:
+            image_content = self.create_image_message(figure_files)
             messages[-1]["content"].extend(image_content)
 
         if self.supports_prompt_caching:
@@ -259,12 +259,12 @@ class AnthropicModelConfig(ModelConfig):
 
         return messages
 
-    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_inputs=None) -> List[Dict]:
+    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
         """Create a reflection message for Anthropic models."""
         reflection_message = {"role": "user", "content": []}
 
-        if figure_inputs:
-            image_content = self.create_image_message(figure_inputs)
+        if figure_files:
+            image_content = self.create_image_message(figure_files)
             reflection_message["content"].extend(image_content)
 
         if self.supports_prompt_caching:
@@ -333,21 +333,21 @@ class AnthropicModelConfig(ModelConfig):
 
         return new_response, input_tokens, output_tokens, stop_reason
 
-    def process_image(self, figure_input: str, file_extension: str) -> Tuple[str, str]:
+    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
         """Process image for Anthropic models."""
         if file_extension.lower() == ".pdf":
             from .img_utils import page_count_pdf, process_pdf_input
 
             # For PDFs, use native PDF support if available and multi-page
-            if self.supports_native_pdf and page_count_pdf(figure_input) > 1:
-                with open(figure_input, "rb") as f:
+            if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
+                with open(figure_file, "rb") as f:
                     img_data = base64.b64encode(f.read()).decode("utf-8")
                 media_type = "application/pdf"
             else:
-                img_data = process_pdf_input(figure_input, is_openai_compatible=False)
+                img_data = process_pdf_input(figure_file, is_openai_compatible=False)
                 media_type = "image/png"
         else:
-            with open(figure_input, "rb") as f:
+            with open(figure_file, "rb") as f:
                 img_data = base64.b64encode(f.read()).decode("utf-8")
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
@@ -441,27 +441,27 @@ class OpenAICompatibleModelConfig(ModelConfig):
 
         return client.chat.completions.create(**kwargs)
 
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_inputs=None) -> List[Dict]:
+    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
         """Initialize messages for the conversation."""
         if "o1" in self.name:
             messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
         else:
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
-        if figure_inputs:
-            image_content = self.create_image_message(figure_inputs)
+        if figure_files:
+            image_content = self.create_image_message(figure_files)
             messages[-1]["content"].extend(image_content)
 
         messages[-1]["content"].append({"type": "text", "text": user_request})
 
         return messages
 
-    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_inputs=None) -> List[Dict]:
+    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
         """Create a reflection message for OpenAI-compatible models."""
         reflection_message = {"role": "user", "content": []}
 
-        if figure_inputs:
-            image_content = self.create_image_message(figure_inputs)
+        if figure_files:
+            image_content = self.create_image_message(figure_files)
             reflection_message["content"].extend(image_content)
 
         reflection_message["content"].append({"type": "text", "text": user_message})
@@ -504,15 +504,15 @@ class OpenAICompatibleModelConfig(ModelConfig):
 
         return new_response, input_tokens, output_tokens, stop_reason
 
-    def process_image(self, figure_input: str, file_extension: str) -> Tuple[str, str]:
+    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
         """Process image for OpenAI-compatible models."""
         if file_extension.lower() == ".pdf":
             from .img_utils import process_pdf_input
 
-            img_data = process_pdf_input(figure_input, is_openai_compatible=True)
+            img_data = process_pdf_input(figure_file, is_openai_compatible=True)
             media_type = "image/png"
         else:
-            with open(figure_input, "rb") as f:
+            with open(figure_file, "rb") as f:
                 img_data = base64.b64encode(f.read()).decode("utf-8")
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type

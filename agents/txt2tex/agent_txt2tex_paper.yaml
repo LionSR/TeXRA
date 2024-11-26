@@ -28,7 +28,7 @@ prompts:
 
     You are also provided with a sample LaTeX file in the desired style:
     <sample_tex>
-    {{ SAMPLE_CONTENT }}
+    {{ REFERENCE_CONTENT }}
     </sample_tex>
 
     Use this sample as a reference for the formatting, style, and structure of the LaTeX code you will generate.
