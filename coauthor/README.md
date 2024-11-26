@@ -126,7 +126,7 @@ CoAuthor provides various CLI commands for different tasks:
   - `coauthor latexdiff`: Compare LaTeX files
   - `coauthor latexdiff-vc`: Compare with git versions
   - `coauthor tex-count`: Count LaTeX statistics
-  - `coauthor extract-figure-path`: Extract figure paths
+  - `coauthor extract-figure-path`: Extract the list of figures
   - `coauthor extract-tikzpictures`: Extract TikZ pictures
 
 Use `coauthor --help` for a full list of commands and their options.
@@ -329,7 +329,7 @@ This design allows CoAuthor to produce more thoughtful, accurate, and refined ou
 
 CoAuthor can automatically extract and process figures from your LaTeX documents:
 
-- Use `--auto_extract_figure` to automatically extract figure paths from the input file.
+- Use `--auto_extract_figure` to automatically extract the list of figures from the input file.
 - Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file.
 
 Example:
