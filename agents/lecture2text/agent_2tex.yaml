@@ -40,7 +40,7 @@ prompts:
         \item Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
         \item Organize the document into well-structured sections and subsections using \section{} and \subsection{}. Use at most three \section{} in each lecture.
         \item In all the sections and subsections, make extensive use of |\paragraph{} to explain each concept.
-        \item Utilize math commands from \texttt{commands\_qi.tex} and the document class \texttt{lecture.cls} to typeset mathematical equations and expressions.
+        \item Utilize math commands from commands_qi.tex and the document class lecture.cls to typeset mathematical equations and expressions.
         \item Use \begin{equation} and \end{equation} and \ee for displayed equations, and \begin{align} and \end{align} for multi-line equations. The text should be technical, with all key equations prominently displayed.
         \item Employ \begin{example}...\end{example} to present examples, ensuring they are thoroughly explained and connected to the main content.
         \item Ignore administrative information about the course such as exam date in the rewrite.

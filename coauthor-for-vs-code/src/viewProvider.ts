@@ -79,10 +79,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               : null;
 
           const instructions_val = message.instructions;
+
+          // tools options
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
           const includeTikzReflection_val = message.includeTikzReflection;
           const includeTexCount_val = message.includeTexCount;
+          // output options
           const outputFiles_val = message.outputFiles;
           const outputNameOverride_val = message.outputNameOverride;
 

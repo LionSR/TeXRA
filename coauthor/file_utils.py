@@ -1,6 +1,5 @@
 import os
 import re
-import warnings
 
 from .logging_utils import logger
 

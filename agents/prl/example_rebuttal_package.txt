@@ -1,4 +1,4 @@
-<rebuttal_letter>
+<rebuttal_package>
 <document name="replies/reply_to_editor.tex">
 \documentclass[a4paper,12pt]{article}
 
@@ -177,4 +177,4 @@ In summary, I thank the referee for his/her valuable suggestions/comments.  Foll
 
 <!- the revised paper and the revised supplementary materials are not included here in this example, but are included in the final submission ->
 
-</rebuttal_letter>
+</rebuttal_package>
