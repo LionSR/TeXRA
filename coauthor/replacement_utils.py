@@ -67,6 +67,7 @@ STYLE_REPLACEMENTS = ReplacementCategory(
         "embark": "start",
         "realm": "area",
         "intricate": "complex",
+        "\"exact\"": "``exact''",
     },
 )
 
@@ -97,6 +98,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{document}\n<document name": "\\end{document}\n</document>\n<document name",
         "</latex_document>\n</latex_document>": "</latex_document>\n",
         "</latex_document>\n\n</latex_document>": "</latex_document>\n",
+        "\\end{document}\n</rebuttal_package>": "\\end{document}\n</document>\n</rebuttal_package>",
+        # new sonnet 3.5 problems
         "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\\makeheader[Previous",
     },
 )
@@ -127,7 +130,7 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
         "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
         "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
-        "<rebuttal_letter><scratchpad>\n\n<rebuttal_letter><scratchpad>": "<rebuttal_letter><scratchpad>",
+        "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
         r"\end{scratchpad>": "</scratchpad>",
     },
 )

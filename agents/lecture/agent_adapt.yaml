@@ -55,7 +55,7 @@ prompts:
     In `<scratchpad>' tag, show your work and thought process as you paraphrase and adapt the content from the new lecture notes to match the notation, style, and level of detail in your existing lecture notes under. Be sure to:
 
     \begin{itemize}
-        \item Use the same document class (\texttt{lecture.cls}) and auxiliary command files (\texttt{command.tex}) as your existing notes
+        \item Use the same document class (lecture.cls) and auxiliary command files (command.tex) as your existing notes
         \item Maintain a consistent set of notations throughout 
         \item Match the tone and style of writing in your existing notes
         \item Provide the same level of detail in explanations and derivations as your existing notes, using multi-line \begin{align} ... \end{align}environments for detailed derivations where appropriate

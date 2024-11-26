@@ -8,7 +8,7 @@ settings:
     - <scratchpad>
 
 required_files_internal:
-  TEMPLATE_POSTER: template_poster.tex
+  TEMPLATE_POSTER: write/template_poster.tex
 
 prompts:
   system_prompt: |

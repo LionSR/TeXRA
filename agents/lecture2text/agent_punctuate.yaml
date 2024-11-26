@@ -10,7 +10,7 @@ settings:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
   required_files_internal:
-    EXAMPLES: examples_qi_punctuate.txt
+    EXAMPLES: lecture2text/examples_qi_punctuate.txt
 
 prompts:
   system_prompt: |

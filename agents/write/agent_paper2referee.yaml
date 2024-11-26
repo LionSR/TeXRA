@@ -8,7 +8,7 @@ settings:
     - <scratchpad>
 
 required_files_internal:
-  TEMPLATE_REFEREE: template_referee.tex
+  TEMPLATE_REFEREE: write/template_referee.tex
 
 prompts:
   system_prompt: |

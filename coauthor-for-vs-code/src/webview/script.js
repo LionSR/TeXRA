@@ -712,6 +712,7 @@ document.addEventListener('DOMContentLoaded', function () {
         includeTikzReflection: includeTikzReflection,
         includeTexCount: includeTexCount,
         // output
+        outputFiles: outputFiles,
         outputNameOverride: outputNameOverride,
       });
     });

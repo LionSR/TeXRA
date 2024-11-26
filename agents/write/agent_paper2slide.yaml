@@ -8,7 +8,7 @@ settings:
     - <scratchpad>
 
 required_files_internal:
-  TEMPLATE_SLIDE: template_slide.tex
+  TEMPLATE_SLIDE: write/template_slide.tex
 
 prompts:
   system_prompt: |
