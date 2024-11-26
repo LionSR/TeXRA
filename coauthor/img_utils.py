@@ -5,6 +5,7 @@ import fitz
 
 from PIL import Image
 from typing import List
+from .logging_utils import logger
 
 
 def get_base64_encoded_image(image_path: str) -> str:
@@ -104,7 +105,7 @@ def process_pdf_input(pdf_path: str, is_openai_compatible: bool = False, **kwarg
             max_pages = kwargs.get("max_pages", 100 if not is_openai_compatible else float("inf"))
             return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)
     except (fitz.FileDataError, fitz.EmptyFileError):
-        print(f"Warning: The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")
+        logger.warning(f"The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")
         return None
 
 

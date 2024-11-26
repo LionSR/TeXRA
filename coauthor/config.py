@@ -16,6 +16,7 @@ class AgentSettings:
     required_files: Optional[Dict[str, str]] = field(default_factory=dict)
     required_files_internal: Optional[Dict[str, str]] = field(default_factory=dict)
     default_output_files: Optional[List[str]] = field(default_factory=list)
+    file_patterns_contain: Optional[List[Dict[str, str]]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
@@ -30,6 +31,7 @@ class AgentSettings:
             required_files=settings_dict.get("required_files", {}),
             required_files_internal=settings_dict.get("required_files_internal", {}),
             default_output_files=settings_dict.get("default_output_files", []),
+            file_patterns_contain=settings_dict.get("file_patterns_contain", []),
         )
         return settings
 
