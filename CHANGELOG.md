@@ -438,7 +438,7 @@
 
 - Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
 - Added regular expression to match `\graphicspath` and extract paths.
-- Updated logic to normalize and check figure paths within the specified graphicspaths.
+- Updated logic to normalize and check the list of figures within the specified graphicspaths.
 - Added logging to `create_image_message` in `message_utils.py` for used images.
 - Removed unused import in `adapt.py`, `paper2note.py`, and `txt2tex.py`.
 
@@ -530,7 +530,7 @@
   - Added comprehensive type hints throughout the file
   - Reorganized and optimized import statements
   - Created new helper functions to reduce code duplication
-- Added --auto_extract_figure option to automatically extract figure paths from input files
+- Added --auto_extract_figure option to automatically extract the list of figures from input files
 - Added --include_tex_count option to include tex count statistics in user messages
 - Updated CLI commands to support new options
 - Improved error handling and logging for better user feedback and debugging
