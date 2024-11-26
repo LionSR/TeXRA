@@ -7,7 +7,7 @@ from typing import Optional, List
 from .state import State
 from .logging_utils import logger
 from .model_config import ModelConfig
-from .config import TaskConfig
+from .config import TaskConfig, AgentSettings
 
 
 def get_db_path() -> str:
@@ -23,29 +23,35 @@ def init_db() -> None:
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
 
-    # Single table containing all necessary information
+    # Update table schema to match all possible fields from TaskConfig and agent settings
     c.execute(
         """CREATE TABLE IF NOT EXISTS coauthor_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME,
         agent TEXT,
         model TEXT,
+        temperature FLOAT,  -- Added to match TaskConfig
         input_file TEXT,
         input_files TEXT,  -- JSON array of additional input files
+        auxiliary_file TEXT,  -- Added to match TaskConfig
         auxiliary_files TEXT,  -- JSON array of auxiliary files
-        figure_inputs TEXT,  -- JSON array of figure inputs
-        sample_files TEXT,  -- JSON array of sample files
-        output_files TEXT,  -- JSON array of target output files from task_config
-        actual_output_files TEXT,  -- JSON array of actual output files from agent
+        figure_file TEXT,  -- Added to match TaskConfig
+        figure_files TEXT,  -- JSON array of figure files
+        reference_file TEXT,  -- Added to match TaskConfig
+        reference_files TEXT,  -- JSON array of reference files
+        edited_file TEXT,  -- Added to match TaskConfig
+        output_files TEXT,  -- JSON array of target output files
+        output_name_override TEXT,  -- Added to match TaskConfig
+        actual_output_files TEXT,  -- JSON array of actual output files
         output_file TEXT,  -- Main output file
         is_reflection BOOLEAN,
         instruction TEXT,
-        reflect BOOLEAN,  -- From args.reflect
-        auto_extract_figure BOOLEAN,  -- Flag
-        auto_extract_tikz_figure BOOLEAN,  -- Flag
-        auto_extract_tikz_figure_reflect BOOLEAN,  -- Flag
-        include_tex_count BOOLEAN,  -- Flag
-        use_prefill_from_input BOOLEAN,  -- Flag
+        reflect BOOLEAN,
+        auto_extract_figure BOOLEAN,
+        auto_extract_tikz_figure BOOLEAN,
+        auto_extract_tikz_figure_reflect BOOLEAN,
+        include_tex_count BOOLEAN,
+        use_prefill_from_input BOOLEAN,
         round_stats TEXT  -- JSON array of stats per round
     )"""
     )
@@ -54,13 +60,8 @@ def init_db() -> None:
     conn.close()
 
 
-def log_db_start(task_config: TaskConfig) -> int:
-    """Initialize a new log entry and return its ID
-
-    Args:
-        task_config (TaskConfig): Configuration for task execution
-        agent_settings (AgentSettings): Configuration for agent behavior
-    """
+def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
+    """Initialize a new log entry and return its ID"""
     init_db()
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
@@ -68,37 +69,43 @@ def log_db_start(task_config: TaskConfig) -> int:
     # Convert lists to JSON strings for storage
     input_files = json.dumps(task_config.input_files) if task_config.input_files else None
     auxiliary_files = json.dumps(task_config.auxiliary_files) if task_config.auxiliary_files else None
-    figure_inputs = json.dumps(task_config.figure_inputs) if task_config.figure_inputs else None
-    sample_files = json.dumps(task_config.sample_files) if task_config.sample_files else None
+    figure_files = json.dumps(task_config.figure_files) if task_config.figure_files else None
+    reference_files = json.dumps(task_config.reference_files) if task_config.reference_files else None
     output_files = json.dumps(task_config.output_files) if task_config.output_files else None
-    actual_output_files = json.dumps([])  # Initialize as empty, will be updated by log_db_output_files
+    actual_output_files = json.dumps([])  # Initialize as empty
 
     # Initialize empty array for round stats
     round_stats = json.dumps([])
 
     c.execute(
         """INSERT INTO coauthor_logs (
-        timestamp, agent, model, input_file, input_files,
-        auxiliary_files, figure_inputs, sample_files, output_file, output_files,
-        actual_output_files, is_reflection,
-        instruction, round_stats, reflect,
-        auto_extract_figure, auto_extract_tikz_figure,
+        timestamp, agent, model, temperature,
+        input_file, input_files, auxiliary_file, auxiliary_files,
+        figure_file, figure_files, reference_file, reference_files,
+        edited_file, output_files, output_name_override,
+        actual_output_files, is_reflection, instruction, round_stats,
+        reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now(),
             task_config.agent,
             task_config.model,
+            agent_settings.temperature,
             task_config.input_file,
             input_files,
+            task_config.auxiliary_file,
             auxiliary_files,
-            figure_inputs,
-            sample_files,
-            None,  # output_file - will be updated later by log_db_output_files
+            task_config.figure_file,
+            figure_files,
+            task_config.reference_file,
+            reference_files,
+            task_config.edited_file,
             output_files,
+            task_config.output_name_override,
             actual_output_files,
-            False,  # is_reflection - will be updated during reflection
+            False,  # is_reflection
             task_config.instruction,
             round_stats,
             task_config.reflect,
@@ -117,7 +124,7 @@ def log_db_start(task_config: TaskConfig) -> int:
     return log_id
 
 
-def log_db_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None, prompt_caching: bool = False) -> None:
+def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None, prompt_caching: bool = False) -> None:
     """Log statistics to SQLite and print them to console"""
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
@@ -187,7 +194,7 @@ def log_db_and_print_statistics(state: State, model_config: ModelConfig, log_id:
         conn.close()
 
 
-def log_db_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None) -> None:
+def logdb_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None) -> None:
     """
     Args:
         output_file: The current output file
@@ -239,50 +246,58 @@ def get_task_info_from_db(log_id: int):
 
     c.execute(
         """SELECT 
-        timestamp, agent, model, input_file, output_file,
-        instruction, round_stats, reflect,
-        auto_extract_figure, auto_extract_tikz_figure,
+        timestamp, agent, model, temperature,
+        input_file, output_file, instruction, round_stats,
+        reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
-        input_files, auxiliary_files, figure_inputs, sample_files,
-        output_files, actual_output_files
+        input_files, auxiliary_file, auxiliary_files,
+        figure_file, figure_files, reference_file, reference_files,
+        edited_file, output_files, output_name_override,
+        actual_output_files
         FROM coauthor_logs WHERE id = ?""",
         (log_id,),
     )
 
     row = c.fetchone()
     if row:
-        round_stats = json.loads(row[6])
+        round_stats = json.loads(row[7])
         latest_stats = round_stats[-1] if round_stats else {}
 
         info = {
             "timestamp": row[0],
             "agent": row[1],
             "model": row[2],
-            "input_file": row[3],
-            "output_file": row[4],
-            "instruction": row[5],
+            "temperature": row[3],
+            "input_file": row[4],
+            "output_file": row[5],
+            "instruction": row[6],
             "total_input_tokens": latest_stats.get("input_tokens", 0),
             "total_output_tokens": latest_stats.get("output_tokens", 0),
             "total_response_time": latest_stats.get("response_time", 0),
             "total_cost": latest_stats.get("cost", 0),
             "percentage_cached": latest_stats.get("percentage_cached", 0),
-            "round_stats": round_stats,  # Include all rounds' stats
+            "round_stats": round_stats,
             "flags": {
-                "reflect": row[7],
-                "auto_extract_figure": row[8],
-                "auto_extract_tikz_figure": row[9],
-                "auto_extract_tikz_figure_reflect": row[10],
-                "include_tex_count": row[11],
-                "use_prefill_from_input": row[12],
+                "reflect": row[8],
+                "auto_extract_figure": row[9],
+                "auto_extract_tikz_figure": row[10],
+                "auto_extract_tikz_figure_reflect": row[11],
+                "include_tex_count": row[12],
+                "use_prefill_from_input": row[13],
             },
             "files": {
-                "input_files": json.loads(row[13]) if row[13] else [],
-                "auxiliary_files": json.loads(row[14]) if row[14] else [],
-                "figure_inputs": json.loads(row[15]) if row[15] else [],
-                "sample_files": json.loads(row[16]) if row[16] else [],
-                "target_output_files": json.loads(row[17]) if row[17] else [],
-                "actual_output_files": json.loads(row[18]) if row[18] else [],
+                "input_files": json.loads(row[14]) if row[14] else [],
+                "auxiliary_file": row[15],
+                "auxiliary_files": json.loads(row[16]) if row[16] else [],
+                "figure_file": row[17],
+                "figure_files": json.loads(row[18]) if row[18] else [],
+                "reference_file": row[19],
+                "reference_files": json.loads(row[20]) if row[20] else [],
+                "edited_file": row[21],
+                "output_files": json.loads(row[22]) if row[22] else [],
+                "output_name_override": row[23],
+                "actual_output_files": json.loads(row[24]) if row[24] else [],
             },
         }
         conn.close()

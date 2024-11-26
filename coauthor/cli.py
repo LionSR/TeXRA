@@ -34,18 +34,26 @@ load_dotenv()
 
 def shared_arguments(func):
     options = [
-        click.option("--input_file", required=True, help="Path to the input file"),
         click.option("--model", required=False, default="sonnet+", help="Model to use"),
         click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
+        click.option("--input_file", required=True, help="Path to the input file"),
         click.option("--input_files", default=None, help="Path to the multiple input files"),
-        click.option("--sample_files", default=None, help="Path to the multiple sample files"),
-        click.option("--auxiliary_files", default=None, help="Path to the auxiliary file"),
+        click.option("--reference_file", default=None, help="Path to the reference file"),
+        click.option("--reference_files", default=None, help="Path to the multiple reference files"),
+        click.option("--auxiliary_file", default=None, help="Path to the auxiliary file"),
+        click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files"),
         click.option(
-            "--figure_inputs",
+            "--figure_file",
             required=False,
             default=None,
-            help="Path to the figure input file(s). Multiple files can be specified as a comma-separated list.",
+            help="Path to the figure file",
+        ),
+        click.option(
+            "--figure_files",
+            required=False,
+            default=None,
+            help="Path to the figure file(s). Multiple files can be specified as a comma-separated list.",
         ),
         click.option("--edited_file", default=None, help="Path to the file that are already edited"),
         click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file"),
@@ -70,9 +78,16 @@ def execute_agent(script, agent, model, input_file, **kwargs):
         f"--input_file={input_file}",
     ]
 
-    # Convert figure_inputs to a list if it's a string
-    if "figure_inputs" in kwargs and isinstance(kwargs["figure_inputs"], str):
-        kwargs["figure_inputs"] = kwargs["figure_inputs"].split(",")
+    # Handle figure files - merge figure_file into figure_files if either exists
+    figure_files = []
+    if kwargs.get("figure_file"):
+        figure_files.append(kwargs.get("figure_file"))
+    if kwargs.get("figure_files"):
+        if isinstance(kwargs["figure_files"], str):
+            figure_files.extend(kwargs["figure_files"].split(","))
+        elif isinstance(kwargs["figure_files"], list):
+            figure_files.extend(kwargs["figure_files"])
+        kwargs["figure_files"] = figure_files
 
     if kwargs.get("auto_extract_figure"):
         handle_auto_extract_figure(kwargs, input_file)
@@ -82,8 +97,6 @@ def execute_agent(script, agent, model, input_file, **kwargs):
     if kwargs.get("input_files"):
         if isinstance(kwargs["input_files"], str):
             all_input_files.extend(kwargs["input_files"].split(","))
-        elif isinstance(kwargs["input_files"], list):
-            all_input_files.extend(kwargs["input_files"])
 
     if kwargs.get("auto_extract_tikz_figure"):
         handle_auto_extract_tikz_figure(kwargs, all_input_files)
@@ -93,7 +106,7 @@ def execute_agent(script, agent, model, input_file, **kwargs):
             if isinstance(value, bool):
                 if value:
                     command.append(f"--{key}")
-            elif key in ["input_files", "figure_inputs", "auxiliary_files", "output_files"]:
+            elif key in ["input_files", "reference_files", "auxiliary_files", "figure_files", "output_files"]:
                 if isinstance(value, str):
                     value = [value]
                 # Convert all elements to strings before joining
@@ -110,6 +123,22 @@ def execute_agent(script, agent, model, input_file, **kwargs):
 def cli():
     """Main CLI group for coauthor commands."""
     pass
+
+
+@click.command()
+@click.option("--model", required=False, default="sonnet+", help="Model to use")
+@click.option("--input_file", required=True, help="Path to the input file")
+@click.option("--edited_file", required=True, help="Path to the edited file")
+def merge(model, input_file, edited_file):
+    model, script_dir, _ = get_common_env(model)
+    command = [
+        "python",
+        f"{script_dir}/agents/merge.py",
+        f"--input_file={input_file}",
+        f"--edited_file={edited_file}",
+        f"--model={model}",
+    ]
+    subprocess.run(command)
 
 
 @click.command()
@@ -138,6 +167,12 @@ def draw_tex(model, input_file, **kwargs):
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
     execute_agent("edit_tex", agent, model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def adapt(model, input_file, **kwargs):
+    execute_agent("edit_lecture", "adapt", model, input_file, **kwargs)
 
 
 @click.command()
@@ -225,12 +260,6 @@ def paper2note(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-def adapt(model, input_file, **kwargs):
-    execute_agent("adapt", "adapt", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
 def correct_prl(model, input_file, **kwargs):
     execute_agent("edit_prl", "correct_prl", model, input_file, **kwargs)
 
@@ -243,66 +272,8 @@ def polish_prl(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--auxiliary_files", default=None)
-def correct_supp_prl(model, input_file, **kwargs):
-    execute_agent("edit_prl", "correct_supp_prl", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-@click.option("--supp_file", type=str, default="supp.tex", help="Path to the supplementary file.")
-def reply_letter_prl(model, input_file, supp_file="supp.tex", **kwargs):
-    execute_agent("rebuttal_prl", "reply_letter", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-@click.option("--supp_file", type=str, help="Path to the supplementary file.")
-def revise_main_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "revise_main", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_supp_prl(model, input_file, **kwargs):
-    execute_agent(
-        "rebuttal_prl",
-        "revise_supp",
-        model,
-        input_file,
-        **kwargs,
-    )
-
-
-@click.command()
-@shared_arguments
-def polish_reply_prl(model, input_file, **kwargs):
-    execute_agent(
-        "rebuttal_prl",
-        "polish_reply",
-        model,
-        input_file,
-        **kwargs,
-    )
-
-
-@click.command()
-@click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--edited_file", required=True, help="Path to the edited file")
-@click.option("--reflect", default=False, help="Reflect the changes")
-def merge(model, input_file, edited_file, reflect):
-    model, script_dir, _ = get_common_env(model)
-    command = [
-        "python",
-        f"{script_dir}/agents/merge.py",
-        f"--input_file={input_file}",
-        f"--edited_file={edited_file}",
-        f"--model={model}",
-    ]
-    if reflect:
-        command.append("--reflect=True")
-    subprocess.run(command)
+def polish_cover(model, input_file, **kwargs):
+    execute_agent("write_tex", "polish_cover", model, input_file, **kwargs)
 
 
 @click.command()
@@ -320,7 +291,7 @@ def paper2poster(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def write_proposal(model, input_file, **kwargs):
-    execute_agent("write_tex", "proposal", model, input_file, **kwargs)
+    execute_agent("write_tex", "write_proposal", model, input_file, **kwargs)
 
 
 @click.command()
@@ -337,23 +308,20 @@ def paper2slide(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-@click.option("--document_type", type=click.Choice(["research", "teaching", "diversity", "cover_letter"]), help="Type of document being revised")
-def statement(model, input_file, document_type, **kwargs):
-    if document_type is None:
-        if "teaching" in input_file.lower():
-            agent_sub = "teaching"
-        elif "diversity" in input_file.lower():
-            agent_sub = "diversity"
-        elif "research" in input_file.lower():
-            agent_sub = "research"
-        else:
-            raise ValueError("Document type not recognized")
+def statement(model, input_file, **kwargs):
+    # maybe handle with agent_postfix setting
+    if "teaching" in input_file.lower():
+        agent = "teaching"
+    elif "diversity" in input_file.lower():
+        agent = "diversity"
+    elif "research" in input_file.lower():
+        agent = "research"
     else:
-        agent_sub = document_type
+        raise ValueError("Document type not recognized")
 
-    print(f"Agent: statement_{agent_sub}")
+    print(f"Agent: statement_{agent}")
 
-    execute_agent("application", f"statement_{agent_sub}", model, input_file, **kwargs)
+    execute_agent("application", f"statement_{agent}", model, input_file, **kwargs)
 
 
 @click.command()
@@ -371,11 +339,7 @@ def revise_marie_curie(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def text2tex(model, input_file, **kwargs):
-    agent_sub = "text2tex"
-    if ".tex" in input_file:
-        agent_sub = agent_sub + "_tex"
-    print(f"Agent sub: {agent_sub}")
-    execute_agent("meeting2text", agent_sub, model, input_file, **kwargs)
+    execute_agent("meeting2text", "text2tex", model, input_file, **kwargs)
 
 
 @click.command()
@@ -416,6 +380,12 @@ def revise_referee(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
+def translate2chn(model, input_file, **kwargs):
+    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
 def convert_tex(model, input_file, **kwargs):
     agent = "convert"
     if kwargs.get("output_files"):
@@ -425,15 +395,11 @@ def convert_tex(model, input_file, **kwargs):
 
 @click.command()
 @shared_arguments
-def translate2chn(model, input_file, **kwargs):
-    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-@click.option("--insertion-point", type=str, help="Location in the document where OCR content should be inserted")
 def ocr_tex(model, input_file, **kwargs):
     execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
+
+
+# Housekeeping
 
 
 @click.command()
@@ -452,36 +418,36 @@ def indent_tex():
 
 
 @click.command()
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--agent", required=True, help="Agent to choose")
 def clean_single(model, input_file, agent):
     run_clean_single(model, input_file, agent)
 
 
 @click.command()
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
 def pack_single(model, input_file, agent, output_name_override):
     run_pack_single(model, input_file, agent, output_name_override)
 
 
 @click.command()
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--agent", required=True, help="Agent to choose")
 def clean_multiple(model, input_file, input_files, agent):
     run_clean_multiple(model, input_file, input_files, agent)
 
 
 @click.command()
+@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--agent", required=True, help="Agent to choose")
 @click.option("--output_name_override", type=str, default=None, help="Override base output name")
 def pack_multiple(model, input_file, input_files, agent, output_name_override):
     run_pack_multiple(model, input_file, input_files, agent, output_name_override)
@@ -552,6 +518,10 @@ def extract_tikzpictures(latex_file):
 if __name__ == "__main__":
     cli()
 
+
+# merge
+cli.add_command(merge)
+
 # edit_tex.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
@@ -560,6 +530,7 @@ cli.add_command(convert_tex)
 cli.add_command(ocr_tex)
 
 # edit_lecture.py
+cli.add_command(adapt)
 cli.add_command(correct_st)
 cli.add_command(correct_qi)
 cli.add_command(polish_st)
@@ -578,12 +549,6 @@ cli.add_command(txt2tex)
 # paper2note.py
 cli.add_command(paper2note)
 
-# adapt.py
-cli.add_command(adapt)
-
-# merge
-cli.add_command(merge)
-
 # edit_prl.py
 cli.add_command(correct_prl)
 cli.add_command(polish_prl)
@@ -592,6 +557,27 @@ cli.add_command(revise_prl)
 # reply_prl.py
 cli.add_command(draft_rebuttal_prl)
 cli.add_command(revise_rebuttal_prl)
+
+# write_tex.py
+cli.add_command(polish_cover)
+cli.add_command(paper2cover)
+cli.add_command(write_proposal)
+cli.add_command(slide2paper)
+cli.add_command(paper2slide)
+cli.add_command(paper2referee)
+cli.add_command(revise_referee)
+cli.add_command(paper2poster)
+cli.add_command(translate2chn)
+
+# application.py
+cli.add_command(statement)
+
+# grant.py
+cli.add_command(revise_nsf_grant)
+cli.add_command(revise_marie_curie)
+
+
+# Housekeepings
 
 # clean up
 cli.add_command(clean_output)
@@ -617,30 +603,6 @@ cli.add_command(pack_latexdiff_vc_multiple)
 cli.add_command(tex_count)
 cli.add_command(extract_figure_path)
 cli.add_command(extract_tikzpictures)
-
-# write_tex.py
-cli.add_command(paper2cover)
-cli.add_command(write_proposal)
-cli.add_command(slide2paper)
-cli.add_command(paper2slide)
-cli.add_command(paper2referee)
-cli.add_command(revise_referee)
-cli.add_command(paper2poster)
-
-# application.py
-cli.add_command(statement)
-
-# grant.py
-cli.add_command(revise_nsf_grant)
-cli.add_command(revise_marie_curie)
-
-# convert_tex.py
-
-
-# translate_to_chinese.py
-cli.add_command(translate2chn)
-
-# ocr_tex.py
 
 
 if __name__ == "__main__":
