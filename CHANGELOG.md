@@ -205,7 +205,7 @@
 
 ## [0.10.5]
 
-- Refactored user prefix templates for various agents (write-proposal, slide2paper, paper2slide)
+- Refactored user prefix templates for various agents (write_proposal, slide2paper, paper2slide)
 - Updated CLI commands to use consistent input file options
 - Enhanced LaTeX Beamer presentation template with improved structure and packages
 - Improved file handling and error messages in multiple agents
@@ -311,7 +311,7 @@
 
 ## [0.9.3]
 
-- Added new write-cover and write-proposal agents
+- Added new write-cover and write_proposal agents
 - Implemented write_tex.py for handling new writing agents
 - Fixed bug in scratchpad output handling in output_utils.py
 - Enhanced agent handling with get_agent_first_name_chunk function in cli.py
