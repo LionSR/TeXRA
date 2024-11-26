@@ -114,9 +114,9 @@ class BaseReflectChainAgent(ABC):
                     file_content = read_file(file_path)
                     user_vars[f"{var_name}_FILE"] = file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
-                    logger.info(f"Found from Required Files the file {var_name}: {file_path}")
+                    logger.info(f"Found from [Required Files] the FILE {var_name}: {file_path}")
                 else:
-                    logger.warning(f"Required file {file_path} not found")
+                    logger.warning(f"[Required file] {file_path} not found from {var_name}")
 
         # Add variables for internal required files (from prompt directory)
         if self.agent_settings.required_files_internal:
@@ -131,9 +131,9 @@ class BaseReflectChainAgent(ABC):
                     file_content = read_file(internal_file_path)
                     user_vars[f"{var_name}_FILE"] = internal_file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
-                    logger.info(f"Found from Required Files Internal the file {var_name}: {internal_file_path}")
+                    logger.info(f"Found from [Required Files Internal] the FILE {var_name}: {internal_file_path}")
                 else:
-                    logger.warning(f"Internal required file {internal_file_path} not found")
+                    logger.warning(f"[Internal required file] {internal_file_path} not found from {var_name}")
 
         # Handle pattern-based file mappings if defined in settings
         if self.agent_settings.file_patterns_contain:
@@ -154,9 +154,9 @@ class BaseReflectChainAgent(ABC):
                             if file_content and os.path.exists(category_value):
                                 user_vars[var_name + "_FILE"] = category_value
                                 user_vars[var_name + "_CONTENT"] = file_content
-                                logger.info(f"Found from Pattern {pattern} the file {var_name}: {category_value}")
+                                logger.info(f"Found from [Pattern '{pattern}'] the FILE {var_name}: {category_value}")
                             else:
-                                logger.warning(f"File {category_value} not found from Pattern {pattern}")
+                                logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
 
                     elif category.endswith("_files"):  # Multiple file categories
                         if category_value:
@@ -166,9 +166,9 @@ class BaseReflectChainAgent(ABC):
                                     if file_content and os.path.exists(file):
                                         user_vars[var_name + "_FILE"] = file
                                         user_vars[var_name + "_CONTENT"] = file_content
-                                        logger.info(f"Found from Pattern {pattern} the file {var_name}: {file}")
+                                        logger.info(f"Found from [Pattern '{pattern}'] the FILE {var_name}: {file}")
                                     else:
-                                        logger.warning(f"File {file} not found from Pattern {pattern}")
+                                        logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
 
         # Handle output files order - use default_output_files if no output_files specified

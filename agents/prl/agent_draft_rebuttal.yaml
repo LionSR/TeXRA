@@ -30,7 +30,7 @@ settings:
       categories: ["input_file", "input_files"]
     - pattern: "instruction"
       var_name: "FILE_INSTRUCTION"
-      categories: ["input_file", "input_files","auxiliary_file", "auxiliary_files"]
+      categories: ["input_files","auxiliary_file", "auxiliary_files"]
     - pattern: "editor_letter"
       var_name: "EDITOR_LETTER_CONTENT"
       categories: ["input_files"]
@@ -67,46 +67,48 @@ prompts:
 
     <documents>
     <document name="{{ COVER_LETTER_FILE }}">
+    The original cover letter submitted with the paper.
     {{ COVER_LETTER_CONTENT }}
     </document>
-    <document name="{{ INPUT_FILE }}">
+    <document name="{{ MAIN_FILE }}">
+    # The full text of the submitted paper
     {{ MAIN_CONTENT }}
     </document>
+    {% if SUPP_FILE %}
     <document name="{{ SUPP_FILE }}">
+    # The full text of the supplementary materials
     {{ SUPP_CONTENT }}
     </document>
+    {% endif %}
     <document name="{{ EDITOR_LETTER_CONTENT_FILE }}">
+    # The full text of the editor's decision and comments.
     {{ EDITOR_LETTER_CONTENT }}
     </document>
+    {% if REFEREE_REPORT_A_FILE %}
     <document name="{{ REFEREE_REPORT_A_FILE }}">
+    # The full text of the first referee's report.
     {{ REFEREE_REPORT_A_CONTENT }}
     </document>
+    {% endif %}
+    {% if REFEREE_REPORT_B_FILE %}
     <document name="{{ REFEREE_REPORT_B_FILE }}">
+    # The full text of the second referee's report.
     {{ REFEREE_REPORT_B_CONTENT }}
     </document>
+    {% endif %}
     {% if EXAMPLE_REBUTTAL_LETTER_FILE %}
     <document name="{{ EXAMPLE_REBUTTAL_LETTER_FILE }}">
+    # A sample reply letter for reference.
     {{ EXAMPLE_REBUTTAL_LETTER_CONTENT }}
     </document>
     {% endif %}
-    {% if FILE_FILE_INSTRUCTION }
+    {% if FILE_INSTRUCTION_FILE %}
     <document name="{{ FILE_INSTRUCTION_FILE }}">
+    # Guidelines on how to draft the reply letter.
     {{ FILE_INSTRUCTION_CONTENT }}
     </document>
     {% endif %}
     </documents>
-
-    Explanation of documents:
-    \begin{enumerate}
-        \item Cover Letter: The original cover letter submitted with the paper.
-        \item Main Paper: The full text of the submitted paper, identified by \texttt{\{INPUT\_FILE\}}.
-        \item Appendix: Supplementary information for the paper.
-        \item Editor Decision Letter: The full text of the editor's decision and comments.
-        \item Referee Report A: The full text of the first referee's report.
-        \item Referee Report B: The full text of the second referee's report.
-        \item Example Reply Letter: A sample reply letter for reference.
-        \item Instructions: Guidelines on how to draft the reply letter.
-    \end{enumerate}
 
   user_request: |
     Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the `<scratchpad>' tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure. 
@@ -150,13 +152,14 @@ prompts:
     {{ TEMPLATE_LIST_OF_CHANGES_CONTENT }}
     </document>
 
-    <document name="{{ INPUT_FILE }}">
+    <document name="{{ MAIN_FILE }}">
     (Insert the full text of your revised paper here.)
     </document>
+    {% if SUPP_FILE %}
     <document name="{{ SUPP_FILE }}">
     (Insert the full text of your revised supplementary materials here.)
     </document>
-
+    {% endif %}
     </rebuttal_letter>
 
     Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the `<scratchpad>' tag. Then proceed to drafting the rebuttal letter in the format specified above.
