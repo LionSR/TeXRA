@@ -8,11 +8,10 @@ settings:
     - <rebuttal_letter>\n<scratchpad>
     - <rebuttal_letter>\n<scratchpad>
   required_files:
-    COVER_LETTER: rebuttal/cover_letter.txt
-    INSTRUCTION_FILE: rebuttal/instruction.txt
-    EDITOR_LETTER: rebuttal/editor_letter.txt
-    REPORT_A: rebuttal/report_a.txt
-    REPORT_B: rebuttal/report_b.txt
+    COVER_LETTER: replies/cover_letter.txt
+    EDITOR_LETTER: replies/editor_letter.txt
+    REFEREE_REPORT_A: replies/report_a.txt
+    REFEREE_REPORT_B: replies/report_b.txt
   default_output_files:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
@@ -21,12 +20,15 @@ settings:
     - pattern: "main"
       var_name: "MAIN"
       categories: ["input_file", "input_files"]
+    - pattern: "Paper"
+      var_name: "MAIN"
+      categories: ["input_file", "input_files"]
     - pattern: "supp"
       var_name: "SUPP"
       categories: ["input_file", "input_files"]
     - pattern: "instruction"
-      var_name: "INSTRUCTION_FILE"
-      categories: ["auxiliary_file", "auxiliary_files"]
+      var_name: "FILE_INSTRUCTION"
+      categories: ["input_files", "auxiliary_file", "auxiliary_files"]
     - pattern: "reply_to_editor"
       var_name: "REPLY_TO_EDITOR"
       categories: ["input_files"]
@@ -83,7 +85,7 @@ prompts:
     <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
     {{ LIST_OF_MAJOR_CHANGES }}
     </document>
-    <document name="{{ INPUT_FILE }}">
+    <document name="{{ MAIN_FILE }}">
     {{ MAIN_CONTENT }}
     </document>
     <document name="{{ SUPP_FILE }}">
