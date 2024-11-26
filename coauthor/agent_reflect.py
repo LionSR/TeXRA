@@ -81,22 +81,24 @@ class BaseReflectChainAgent(ABC):
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
-            "INPUT_CONTENT": read_file(self.task_config.input_file),
-            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
-            "ALL_INPUTS": get_xml_format_from_files([self.task_config.input_file] + self.task_config.input_files),
+            "INPUT_CONTENT": read_file(self.task_config.input_file) if self.task_config.input_file else None,
+            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files) if self.task_config.input_files else None,
+            "ALL_INPUTS": (
+                get_xml_format_from_files([self.task_config.input_file] + self.task_config.input_files) if self.task_config.input_files else None
+            ),
             # reference files
             "REFERENCE_FILE": self.task_config.reference_file,
-            "REFERENCE_CONTENT": read_file(self.task_config.reference_file),
-            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
+            "REFERENCE_CONTENT": read_file(self.task_config.reference_file) if self.task_config.reference_file else None,
+            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files) if self.task_config.reference_files else None,
             "ALL_REFERENCES": get_xml_format_from_files([self.task_config.reference_file] + self.task_config.reference_files),
             # auxiliary files
             "AUXILIARY_FILE": self.task_config.auxiliary_file,
-            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file),
+            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file) if self.task_config.auxiliary_file else None,
             "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_files),
             "ALL_AUXILIARY_FILES": get_xml_format_from_files([self.task_config.auxiliary_file] + self.task_config.auxiliary_files),
             # edited file
             "EDITED_FILE": self.task_config.edited_file,
-            "EDITED_CONTENT": read_file(self.task_config.edited_file),
+            "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,
         }
 
         # Add variables for required files
