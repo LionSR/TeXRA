@@ -7,8 +7,9 @@ class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
     # Document settings
+    agent_type: Optional[str] = "think"
     document_tag: Optional[str] = None
-    agent_type: Optional[str] = "think_and_write"
+    temperature: Optional[float] = 0.0
     prefills: Optional[List[str]] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
@@ -20,8 +21,9 @@ class AgentSettings:
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
         settings = cls(
-            agent_type=settings_dict.get("agent_type", "think_and_write"),
+            agent_type=settings_dict.get("agent_type", "think"),  # or "direct"
             document_tag=settings_dict.get("document_tag"),
+            temperature=settings_dict.get("temperature", 0.0),
             prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),
             end_tag=settings_dict.get("end_tag", "\\end{document}"),
@@ -61,16 +63,18 @@ class TaskConfig:
     """Configuration for task execution and tool usage."""
 
     model: str
-    temperature: float
     reflect: bool
     agent: str
 
     # Input/Output configuration
     input_file: str
     input_files: Optional[List[str]]
-    sample_files: Optional[List[str]]
+    reference_file: Optional[str]
+    reference_files: Optional[List[str]]
+    auxiliary_file: Optional[str]
     auxiliary_files: Optional[List[str]]
-    figure_inputs: Optional[List[str]]
+    figure_file: Optional[str]
+    figure_files: Optional[List[str]]
     output_files: Optional[List[str]]
     output_name_override: Optional[str]
     edited_file: Optional[str]
@@ -101,17 +105,19 @@ class TaskConfig:
             # Input/Output configuration
             input_file=args.input_file,
             input_files=args.input_files,
-            sample_files=args.sample_files,
+            reference_file=args.reference_file,
+            reference_files=args.reference_files,
+            auxiliary_file=args.auxiliary_file,
             auxiliary_files=args.auxiliary_files,
+            figure_file=args.figure_file,
+            figure_files=args.figure_files,
             edited_file=args.edited_file,
-            figure_inputs=args.figure_inputs,
             output_files=args.output_files,
             output_name_override=args.output_name_override,
             instruction=args.instruction,
             # Processing configuration
             reflect=args.reflect,
             use_prefill_from_input=args.use_prefill_from_input,
-            temperature=args.temperature,
             model=args.model,
             agent=args.agent,
             # Tool usage configuration

@@ -47,6 +47,7 @@ const TEMP_EXTENSIONS = [
   '.snm',
   '.toc',
   '-blx.bib',
+  'Notes.bib',
 ];
 const MODELS = [
   'opus',

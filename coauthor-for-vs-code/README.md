@@ -1,18 +1,43 @@
 # CoAuthor Frontend (VS Code Extension)
 
-This is the frontend component of the CoAuthor project, a Visual Studio Code extension that provides a user-friendly interface for interacting with the CoAuthor backend.
+This is the frontend component of the CoAuthor project, a Visual Studio Code extension that provides a user-friendly interface for interacting with the CoAuthor backend for academic writing assistance.
 
 ## Features
 
-- File selection for input, auxiliary, and figure files
-- agent and model selection
-- Execution of CoAuthor commands directly from VS Code
-- LaTeX diff visualization
-- Housekeeping operations (clean output, clean build, indent TeX)
-- Customizable settings
-- **Adaptive Theming**: CoAuthor now automatically adapts to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience.
+- Seamless integration with VS Code for academic writing assistance
+- File selection and management for various document types
+- Agent and model selection with customizable parameters
+- Real-time LaTeX diff visualization and merge capabilities
+- Comprehensive housekeeping operations
+- Adaptive theming that matches VS Code's appearance
+- Robust logging system for debugging and monitoring
+- Modular architecture for future extensibility
+
+## Project Structure
+
+The extension is organized into several key components:
+
+```
+src/
+├── commands.ts        # Command registration and handlers
+├── extension.ts       # Extension entry point and lifecycle
+├── housekeeping.ts   # File management operations
+├── terminal.ts       # Terminal integration
+├── utils/
+│   ├── commonUtils.ts # Shared utility functions
+│   ├── fileUtils.ts   # File operation utilities
+│   ├── logUtils.ts    # Logging system
+│   └── texUtils.ts    # LaTeX-specific utilities
+├── viewProvider.ts   # WebView management
+└── webview/         # Frontend UI components
+    ├── index.html
+    ├── script.js
+    └── styles.css
+```
 
 ## Installation
+
+### For Users
 
 For quick installation, refer to the [main README](../README.md), which allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
 
@@ -41,13 +66,10 @@ If you want to customize or contribute to the extension, follow these steps:
    ```
 
 5. **Compile and Package**: Finally, compile your project and package it with the following command:
-
    ```bash
    npm run compile && vsce package
    ```
-
    or
-
    ```bash
    npm run build
    ```
@@ -61,7 +83,7 @@ CoAuthor frontend provides several commands that can be accessed via the command
 CoAuthor supports multiple file inputs for various file types:
 
 1. **Input Files**: You can select multiple input files for agents that require it.
-2. **Sample Files**: For agents that use reference or sample files.
+2. **Reference Files**: For agents that use reference or sample files.
 3. **Auxiliary Files**: Additional files needed for the agent.
 4. **Figure Files**: Image files to be included in the document.
 
@@ -88,7 +110,7 @@ This process ensures that your instructions are carried out thoroughly and intel
 
 The CoAuthor sidebar provides several buttons and controls for easy interaction:
 
-1. **agent Selection**: Choose the specific agent you want to perform (e.g., correct-tex, polish-tex, draw-tex).
+1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct-tex, polish-tex, draw-tex).
 2. **Model Selection**: Select the AI model to use for the agent (e.g., Sonnet+, Opus, GPT-4).
 3. **Reflect**: Toggle whether the AI should perform a reflection step after the initial agent.
 4. **Execute**: Run the selected agent with the chosen settings and files.
@@ -96,7 +118,65 @@ The CoAuthor sidebar provides several buttons and controls for easy interaction:
 6. **Empty**: Clear the current selection for multiple files.
 7. **Multiple**: Open a file picker to select multiple files.
 
-### Customizing agents
+## Core Components
+
+### Command System
+
+The extension provides various commands through `commands.ts`, including:
+
+- Document processing commands
+- File management operations
+- Configuration commands
+- Housekeeping utilities
+
+### Utility Modules
+
+#### Common Utilities (`commonUtils.ts`)
+
+- Workspace path management
+- Configuration handling
+- Message display functions
+- Array and data structure utilities
+
+#### File Utilities (`fileUtils.ts`)
+
+- File system operations
+- Path management
+- File type detection
+
+#### Logging System (`logUtils.ts`)
+
+- Structured logging with timestamps
+- Multiple output channels
+- Error and success logging
+- Debug information tracking
+
+#### TeX Utilities (`texUtils.ts`)
+
+- LaTeX-specific operations
+- Document processing
+- TeX file manipulation
+
+### Terminal Integration
+
+The extension provides integrated terminal support through `terminal.ts`:
+
+- Dedicated terminal instance management
+- Command execution
+- Process handling
+
+### WebView Interface
+
+The UI is implemented as a WebView (`viewProvider.ts` and `webview/` directory):
+
+- Modern, responsive design
+- Real-time updates
+- Theme-aware styling
+- Two-way communication with extension
+
+## Configuration
+
+### Extension Settings
 
 You can customize the list of available agents in your VS Code settings:
 
@@ -105,15 +185,11 @@ You can customize the list of available agents in your VS Code settings:
 3. Look for the "Coauthor: agents" setting.
 4. Edit the agent list to add, remove, or modify agents.
 
-Example custom agent list:
-
 ```json
 "coauthor.agents": [
   "correct-tex",
   "polish-tex",
   "draw-tex",
-  "adapt-tex",
-  "write-tex",
   "meeting2text",
   "paper2note",
   "txt2tex",
@@ -125,18 +201,49 @@ Example custom agent list:
 ]
 ```
 
-### Extension Settings
-
-Users can customize the included directories by modifying their VS Code settings:
+Customize the extension through VS Code settings:
 
 ```json
 {
+  "coauthor.agents": ["correct-tex", "polish-tex", "draw-tex"],
   "coauthor.includedDirectories": [
     "Discrete-Time",
     "FiguresEx",
     "AnotherDirectory"
-  ]
+  ],
+  "coauthor.logging.level": "info"
 }
+```
+
+### Workspace Setup
+
+For optimal usage:
+
+1. Place the extension in the secondary sidebar
+2. Configure your workspace settings
+3. Set up any required authentication
+4. Initialize your project structure
+
+## Development
+
+### Building
+
+```bash
+# Development build with watch mode
+npm run watch
+
+# Production build
+npm run compile && vsce package
+```
+
+### Testing
+
+```bash
+# Run test suite
+npm test
+
+# Run specific tests
+npm test -- --grep "test name"
 ```
 
 ## Housekeeping Operations
@@ -189,14 +296,16 @@ The "Merge" button allows you to intelligently merge changes from an edited file
 
 All these operations use a flexible file pattern system to ensure they catch all relevant files, including those generated by the intelligent merge feature. This ensures that your working directory remains clean and organized, regardless of the complexity of your LaTeX project or the number of merge operations performed.
 
-These features can be particularly useful when working with complex projects or after performing multiple intelligent merge operations, helping you maintain a clean and efficient workspace.
+These features can be particularly useful when working with complex projects or after performing multiple intelligent merge
+operations, helping you maintain a clean and efficient workspace.
 
 ## Recommended Setup
 
-For optimal use with VS Code or Cursor, we recommend placing the CoAuthor extension in the right (secondary) sidebar. This setup allows for a more efficient workflow, especially when working with documents. To achieve this:
+For optimal use with VS Code or Cursor, we recommend placing the CoAuthor extension in the right (secondary) sidebar. This setup
+allows for a more efficient workflow, especially when working with documents. To achieve this:
 
 1. Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS).
 2. Run the command "View: Toggle Secondary Side Bar Visibility" (or use the shortcut ⌥⌘B on macOS).
 3. Drag the CoAuthor view from the primary sidebar to the newly opened secondary sidebar on the right.
 
-This configuration keeps your document in focus while providing easy access to CoAuthor's features.
+This configuration keeps your document in focus while providing easy access to CoAuthor's features.`npm run watch

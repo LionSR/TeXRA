@@ -134,10 +134,10 @@ def handle_auto_extract_figure(kwargs, input_file):
     extracted_figure_paths = extract_figure_paths(input_file)
     logger.debug("Extracting figure paths: " + ", ".join(extracted_figure_paths))
     if extracted_figure_paths:
-        if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
-            kwargs["figure_inputs"] = extracted_figure_paths
+        if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:
+            kwargs["figure_files"] = extracted_figure_paths
         else:
-            kwargs["figure_inputs"].extend(extracted_figure_paths)
+            kwargs["figure_files"].extend(extracted_figure_paths)
 
 
 def handle_auto_extract_tikz_figure(kwargs, input_files):
@@ -147,7 +147,7 @@ def handle_auto_extract_tikz_figure(kwargs, input_files):
     for input_file in input_files:
         extracted_tikz_figure_paths.extend(extract_and_compile_tikzpictures_with_labels(input_file))
     if extracted_tikz_figure_paths:
-        if kwargs.get("figure_inputs") is None or kwargs.get("figure_inputs") == []:
-            kwargs["figure_inputs"] = extracted_tikz_figure_paths
+        if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:
+            kwargs["figure_files"] = extracted_tikz_figure_paths
         else:
-            kwargs["figure_inputs"].extend(extracted_tikz_figure_paths)
+            kwargs["figure_files"].extend(extracted_tikz_figure_paths)

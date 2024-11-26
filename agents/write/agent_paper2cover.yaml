@@ -32,7 +32,7 @@ prompts:
 
     If a sample cover letter has been provided, it is enclosed in the following tags:
     <sample_cover_letter>
-    {{ SAMPLES }}
+    {{ ALL_REFERENCES }}
     </sample_cover_letter>
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details. Your task is to write a cover letter for this paper.

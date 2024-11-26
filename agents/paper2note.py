@@ -6,7 +6,6 @@ agent_path = coa.get_agent_path(coa, "paper2note")
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--sample_chapters", type=str, nargs="+", help="Paths to the sample chapter TeX files.")
     parser.add_argument(
         "--agent",
         type=str,

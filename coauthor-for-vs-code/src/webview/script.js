@@ -181,8 +181,8 @@ window.onload = function () {
   const dataRequests = [
     'getTheme',
     'requestInputFile',
-    'requestSampleFile',
-    'requestAuxFile',
+    'requestReferenceFile',
+    'requestAuxiliaryFile',
     'requestFigureFile',
     'requestRecentCommits',
     'requestBaseFile',
@@ -217,8 +217,8 @@ function setDefaultState() {
   // Hide all multiple file select containers
   const multipleSelections = [
     'multipleInputFilesSelect',
-    'multipleSampleFilesSelect',
-    'multipleAuxFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
     'multipleFiguresSelect',
   ];
 
@@ -244,18 +244,23 @@ function restoreState() {
     };
 
     const valueElements = [
-      'modelSelect',
+      // parameters
       'agentSelect',
+      'modelSelect',
+      'reflectSelect',
+      // files
       'inputFileSelect',
-      'auxFileSelect',
+      'auxiliaryFileSelect',
       'figureFileSelect',
-      'sampleFileSelect',
+      'referenceFileSelect',
       'editedFileSelect',
       'baseFileSelect',
+      // instructions
       'instructionInput',
-      'reflectSelect',
-      'commitSelect',
+      // output
       'outputNameOverride',
+      // git
+      'commitSelect',
     ];
 
     valueElements.forEach((id) => {
@@ -276,10 +281,13 @@ function restoreState() {
     const multipleSelections = [
       { id: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
       {
-        id: 'multipleSampleFilesSelect',
-        toggleId: 'toggleMultipleSampleFiles',
+        id: 'multipleReferenceFilesSelect',
+        toggleId: 'toggleMultipleReferenceFiles',
       },
-      { id: 'multipleAuxFilesSelect', toggleId: 'toggleMultipleAuxFiles' },
+      {
+        id: 'multipleAuxiliaryFilesSelect',
+        toggleId: 'toggleMultipleAuxiliaryFiles',
+      },
       { id: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' },
     ];
 
@@ -354,18 +362,33 @@ function emptyMultipleFiles(containerId, toggleId) {
 window.addEventListener('message', (event) => {
   const message = event.data;
   switch (message.command) {
+    case 'setTheme':
+      document.body.className = message.theme;
+      break;
+    case 'modelSelected':
+      document.getElementById('modelSelect').value = message.model;
+      break;
     case 'setInputFile':
-    case 'setSampleFile':
-    case 'setAuxFile':
+    case 'setReferenceFile':
+    case 'setAuxiliaryFile':
     case 'setFigureFile':
       updateFileSelect(
         `${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`,
         message.files,
       );
       break;
+    case 'inputFileSelected':
+    case 'referenceFileSelected':
+    case 'auxiliaryFileSelected':
+    case 'figureFileSelected':
+    case 'editedFileSelected':
+      document.getElementById(
+        `${message.command.replace('Selected', 'Select')}`,
+      ).value = message.filePath;
+      break;
     case 'setMultipleInputFiles':
-    case 'setMultipleSampleFiles':
-    case 'setMultipleAuxFiles':
+    case 'setMultipleReferenceFiles':
+    case 'setMultipleAuxiliaryFiles':
     case 'setMultipleFigures':
       updateMultipleFileSelect(
         `${message.command.replace('setMultiple', 'multiple')}Select`,
@@ -382,20 +405,6 @@ window.addEventListener('message', (event) => {
       break;
     case 'setEditedFiles':
       updateFileSelect('editedFileSelect', message.files);
-      break;
-    case 'inputFileSelected':
-      document.getElementById('inputFileSelect').value = message.filePath;
-      break;
-    case 'sampleFileSelected':
-    case 'auxFileSelected':
-    case 'figureFileSelected':
-    case 'editedFileSelected':
-      document.getElementById(
-        `${message.command.replace('Selected', 'Select')}`,
-      ).value = message.filePath;
-      break;
-    case 'modelSelected':
-      document.getElementById('modelSelect').value = message.model;
       break;
     case 'setRecentCommits':
       handleRecentCommits(message);
@@ -419,9 +428,6 @@ window.addEventListener('message', (event) => {
         });
       }
       break;
-    case 'setTheme':
-      document.body.className = message.theme;
-      break;
     case 'setOpenedFiles':
       updateMultipleFileSelect(
         'multipleInputFilesSelect',
@@ -429,13 +435,13 @@ window.addEventListener('message', (event) => {
         message.files,
       );
       updateMultipleFileSelect(
-        'multipleSampleFilesSelect',
-        'toggleMultipleSampleFiles',
+        'multipleReferenceFilesSelect',
+        'toggleMultipleReferenceFiles',
         message.files,
       );
       updateMultipleFileSelect(
-        'multipleAuxFilesSelect',
-        'toggleMultipleAuxFiles',
+        'multipleAuxiliaryFilesSelect',
+        'toggleMultipleAuxiliaryFiles',
         message.files,
       );
       updateMultipleFileSelect(
@@ -458,9 +464,9 @@ window.addEventListener('message', (event) => {
 document.addEventListener('DOMContentLoaded', function () {
   const sortableElements = [
     'multipleInputFilesSelect',
-    'multipleAuxFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
     'multipleFiguresSelect',
-    'multipleSampleFilesSelect',
     'outputFilesList',
   ];
 
@@ -479,7 +485,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Add event listeners for the new empty buttons
-  ['Input', 'Sample', 'Aux', 'Figure'].forEach((type) => {
+  ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
     document
       .getElementById(`empty${type}FileButton`)
       .addEventListener('click', () => {
@@ -523,18 +529,18 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   document
-    .getElementById('sampleFileSelect')
+    .getElementById('referenceFileSelect')
     .addEventListener('change', function () {
-      const sampleFile = this.value;
+      const referenceFile = this.value;
       vscode.postMessage({
-        command: 'sampleFileSelected',
-        filePath: sampleFile,
+        command: 'referenceFileSelected',
+        filePath: referenceFile,
       });
     });
   const multipleFileSelectors = [
     { id: 'InputFiles', selectId: 'inputFileSelect' },
-    { id: 'SampleFiles', selectId: 'sampleFileSelect' },
-    { id: 'AuxFiles', selectId: 'auxFileSelect' },
+    { id: 'ReferenceFiles', selectId: 'referenceFileSelect' },
+    { id: 'AuxiliaryFiles', selectId: 'auxiliaryFileSelect' },
     { id: 'Figures', selectId: 'figureFileSelect' },
   ];
 
@@ -558,14 +564,14 @@ document.addEventListener('DOMContentLoaded', function () {
       toggleId: 'toggleMultipleInputFiles',
     },
     {
-      id: 'emptyMultipleSampleFilesButton',
-      selectId: 'multipleSampleFilesSelect',
-      toggleId: 'toggleMultipleSampleFiles',
+      id: 'emptyMultipleReferenceFilesButton',
+      selectId: 'multipleReferenceFilesSelect',
+      toggleId: 'toggleMultipleReferenceFiles',
     },
     {
-      id: 'emptyMultipleAuxFilesButton',
-      selectId: 'multipleAuxFilesSelect',
-      toggleId: 'toggleMultipleAuxFiles',
+      id: 'emptyMultipleAuxiliaryFilesButton',
+      selectId: 'multipleAuxiliaryFilesSelect',
+      toggleId: 'toggleMultipleAuxiliaryFiles',
     },
     {
       id: 'emptyMultipleFiguresButton',
@@ -622,44 +628,39 @@ document.addEventListener('DOMContentLoaded', function () {
     .getElementById('executeButton')
     .addEventListener('click', function () {
       const agent = document.getElementById('agentSelect').value;
-      const inputFile = document.getElementById('inputFileSelect').value;
-      const instructions = document.getElementById('instructionInput').value;
-      const reflect = document.getElementById('reflectSelect').value;
       const model = document.getElementById('modelSelect').value;
-      const autoExtractFigure =
-        document.getElementById('autoExtractFigure').checked;
-      const autoExtractTikzFigure = document.getElementById(
-        'autoExtractTikzFigure',
-      ).checked;
-      const includeTikzReflection = document.getElementById(
-        'includeTikzReflection',
-      ).checked;
-      const includeTexCount =
-        document.getElementById('includeTexCount').checked;
+      const reflect = document.getElementById('reflectSelect').value;
 
-      const getFiles = (selectId, singleFileId) => {
+      // Get single files
+      const inputFile = document.getElementById('inputFileSelect').value;
+      const referenceFile = document.getElementById(
+        'referenceFileSelect',
+      ).value;
+      const auxiliaryFile = document.getElementById(
+        'auxiliaryFileSelect',
+      ).value;
+      const figureFile = document.getElementById('figureFileSelect').value;
+
+      // Get multiple files
+      const getMultipleFiles = (selectId) => {
         const selectDiv = document.getElementById(selectId);
-        const singleFile = document.getElementById(singleFileId).value;
         return selectDiv.style.display === 'block'
           ? getSelectedFiles(selectDiv)
-          : singleFile
-            ? [singleFile]
-            : [];
+          : [];
       };
 
-      const inputFiles = getFiles(
-        'multipleInputFilesSelect',
-        'inputFileSelect',
-      ).filter((file) => file !== inputFile);
-
-      // in the future maybe we want to split sampleFile vs SampleFiles, AuxFile vs AuxFiles, FigureFile vs Figures.
-      // but for now we'll just keep it for now
-      const sampleFiles = getFiles(
-        'multipleSampleFilesSelect',
-        'sampleFileSelect',
+      const inputFiles = getMultipleFiles('multipleInputFilesSelect').filter(
+        (file) => file !== inputFile,
       );
-      const auxFiles = getFiles('multipleAuxFilesSelect', 'auxFileSelect');
-      const figureFiles = getFiles('multipleFiguresSelect', 'figureFileSelect');
+      const referenceFiles = getMultipleFiles(
+        'multipleReferenceFilesSelect',
+      ).filter((file) => file !== referenceFile);
+      const auxiliaryFiles = getMultipleFiles(
+        'multipleAuxiliaryFilesSelect',
+      ).filter((file) => file !== auxiliaryFile);
+      const figureFiles = getMultipleFiles('multipleFiguresSelect').filter(
+        (file) => file !== figureFile,
+      );
 
       const outputFilesContainer = document.getElementById(
         'outputFilesContainer',
@@ -675,22 +676,42 @@ document.addEventListener('DOMContentLoaded', function () {
           ? outputNameOverrideElement.value.trim()
           : null;
 
+      const instructions = document.getElementById('instructionInput').value;
+
+      const autoExtractFigure =
+        document.getElementById('autoExtractFigure').checked;
+      const autoExtractTikzFigure = document.getElementById(
+        'autoExtractTikzFigure',
+      ).checked;
+      const includeTikzReflection = document.getElementById(
+        'includeTikzReflection',
+      ).checked;
+      const includeTexCount =
+        document.getElementById('includeTexCount').checked;
+
       vscode.postMessage({
         command: 'execute',
+        // parameters
         agent: agent,
+        model: model,
+        reflect: reflect,
+        // files
         inputFile: inputFile,
         inputFiles: inputFiles,
-        sampleFiles: sampleFiles,
-        auxFiles: auxFiles,
+        referenceFile: referenceFile,
+        referenceFiles: referenceFiles,
+        auxiliaryFile: auxiliaryFile,
+        auxiliaryFiles: auxiliaryFiles,
+        figureFile: figureFile,
         figureFiles: figureFiles,
+        // instructions
         instructions: instructions,
-        reflect: reflect,
-        model: model,
+        // options
         autoExtractFigure: autoExtractFigure,
         autoExtractTikzFigure: autoExtractTikzFigure,
         includeTikzReflection: includeTikzReflection,
         includeTexCount: includeTexCount,
-        outputFiles: outputFiles,
+        // output
         outputNameOverride: outputNameOverride,
       });
     });
@@ -880,19 +901,19 @@ document.addEventListener('DOMContentLoaded', function () {
   const elementsToWatch = [
     'modelSelect',
     'agentSelect',
-    'inputFileSelect',
-    'sampleFileSelect',
-    'auxFileSelect',
-    'figureFileSelect',
     'reflectSelect',
-    'commitSelect',
+    'inputFileSelect',
+    'referenceFileSelect',
+    'auxiliaryFileSelect',
+    'figureFileSelect',
     'autoExtractFigure',
     'autoExtractTikzFigure',
     'includeTikzReflection',
     'includeTexCount',
+    'outputNameOverride',
     'baseFileSelect',
     'editedFileSelect',
-    'outputNameOverride',
+    'commitSelect',
   ];
 
   elementsToWatch.forEach((id) => {
@@ -999,12 +1020,12 @@ document.addEventListener('DOMContentLoaded', function () {
       toggleId: 'toggleMultipleInputFiles',
     },
     {
-      containerId: 'multipleSampleFilesSelect',
-      toggleId: 'toggleMultipleSampleFiles',
+      containerId: 'multipleReferenceFilesSelect',
+      toggleId: 'toggleMultipleReferenceFiles',
     },
     {
-      containerId: 'multipleAuxFilesSelect',
-      toggleId: 'toggleMultipleAuxFiles',
+      containerId: 'multipleAuxiliaryFilesSelect',
+      toggleId: 'toggleMultipleAuxiliaryFiles',
     },
     { containerId: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' },
   ];
@@ -1027,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
   // Add event listeners for current file buttons
-  ['Input', 'Sample', 'Aux', 'Figure'].forEach((type) => {
+  ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
     document
       .getElementById(`current${type}FileButton`)
       .addEventListener('click', () => {
@@ -1115,8 +1136,8 @@ function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
 function hideEmptyMultipleFileSelects() {
   const multipleSelections = [
     'multipleInputFilesSelect',
-    'multipleSampleFilesSelect',
-    'multipleAuxFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
     'multipleFiguresSelect',
   ];
 
@@ -1135,8 +1156,8 @@ function saveState() {
     'modelSelect',
     'agentSelect',
     'inputFileSelect',
-    'sampleFileSelect',
-    'auxFileSelect',
+    'referenceFileSelect',
+    'auxiliaryFileSelect',
     'figureFileSelect',
     'reflectSelect',
     'commitSelect',
@@ -1157,8 +1178,8 @@ function saveState() {
 
   const multipleSelects = [
     'multipleInputFilesSelect',
-    'multipleSampleFilesSelect',
-    'multipleAuxFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
     'multipleFiguresSelect',
   ];
 

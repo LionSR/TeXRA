@@ -10,7 +10,17 @@ def main():
         "--agent",
         type=str,
         default="paper2cover",
-        choices=["paper2cover", "proposal", "slide2paper", "paper2slide", "paper2referee", "revise_referee", "paper2poster", "translate2chn"],
+        choices=[
+            "polish_cover",
+            "paper2cover",
+            "write_proposal",
+            "slide2paper",
+            "paper2slide",
+            "paper2referee",
+            "revise_referee",
+            "paper2poster",
+            "translate2chn",
+        ],
     )
     args = parser.parse_args()
 
