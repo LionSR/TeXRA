@@ -22,7 +22,7 @@ prompts:
 
     Here is the .md transcription:
     <transcript>
-    {{ SAMPLE_CONTENT }}
+    {{ REFERENCE_CONTENT }}
     </transcript>
 
     If there are instructions provided below, please follow them and expand them in the scratchpad.

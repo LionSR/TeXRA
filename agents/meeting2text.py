@@ -15,15 +15,12 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.agent == "transcribe_dual" and args.sample_files is None:
-        parser.error("The transcribe_dual agent requires --sample_files to be specified.")
+    if args.agent == "transcribe_dual" and args.reference_files is None:
+        parser.error("The transcribe_dual agent requires --reference_files to be specified.")
 
-    if args.agent == "text2tex":
+    if args.agent in ["text2tex", "text2tex_draft"]:
         text2tex = ThinkAndWrite(args, agent_path)
         text2tex.run()
-    elif args.agent == "text2tex_draft":
-        text2tex_draft = ThinkAndWrite(args, agent_path)
-        text2tex_draft.run()
     else:
         meeting2text = DirectWrite(args, agent_path)
         meeting2text.run()

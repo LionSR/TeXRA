@@ -67,17 +67,69 @@ This will ensure that the files and patterns listed in `.gitignore.sample` are i
 
 ### CLI Commands
 
-CoAuthor provides various CLI commands for different agents. Here are some examples:
+CoAuthor provides various CLI commands for different tasks:
 
-- `coauthor correct-tex`: Correct LaTeX documents
-- `coauthor polish-tex`: Polish LaTeX documents
-- `coauthor draw-tex`: Generate LaTeX drawings
-- `coauthor meeting2text`: Convert meeting transcripts to text
-- `coauthor txt2tex`: Convert plain text to LaTeX
-- `coauthor paper2note`: Convert research papers to lecture notes
-- `coauthor merge`: Merge LaTeX documents
+- Document Editing:
 
-Use `coauthor --help` for a full list of commands and options.
+  - `coauthor correct-tex`: Correct LaTeX documents
+  - `coauthor polish-tex`: Polish LaTeX documents
+  - `coauthor draw-tex`: Generate LaTeX drawings
+  - `coauthor convert-tex`: Convert LaTeX documents
+  - `coauthor ocr-tex`: OCR processing for LaTeX
+
+- Lecture Notes:
+
+  - `coauthor correct-st/qi`: Correct student/QI lecture notes
+  - `coauthor polish-st/qi`: Polish student/QI lecture notes
+  - `coauthor revise-st`: Revise student lecture notes
+  - `coauthor draw-st/qi`: Draw figures for lecture notes
+
+- Document Conversion:
+
+  - `coauthor meeting2text`: Convert meeting transcripts to text
+  - `coauthor text2tex`: Convert text to LaTeX
+  - `coauthor txt2tex`: Convert text to LaTeX with templates
+  - `coauthor paper2note`: Convert papers to lecture notes
+  - `coauthor adapt`: Adapt text to different contexts
+  - `coauthor paper2poster`: Convert paper to poster
+  - `coauthor slide2paper`: Convert slides to paper
+  - `coauthor paper2slide`: Convert paper to slides
+  - `coauthor paper2cover`: Convert paper to cover letter
+  - `coauthor translate2chn`: Translate to Chinese
+
+- PRL Paper Tools:
+
+  - `coauthor correct-prl`: Correct PRL papers
+  - `coauthor polish-prl`: Polish PRL papers
+  - `coauthor revise-prl`: Revise PRL papers
+  - `coauthor draft-rebuttal-prl`: Draft PRL rebuttals
+  - `coauthor revise-rebuttal-prl`: Revise PRL rebuttals
+
+- Writing Tools:
+
+  - `coauthor paper2referee`: Write referee reports
+  - `coauthor revise-referee`: Revise referee reports
+
+  - `coauthor statement`: Write academic statements
+  - `coauthor revise-nsf-grant`: Revise NSF grants
+  - `coauthor revise-marie-curie`: Revise Marie Curie grants
+
+- Utility Tools:
+  - `coauthor merge`: Merge LaTeX documents
+  - `coauthor clean-output`: Clean output files
+  - `coauthor clean-build`: Clean build directories
+  - `coauthor clean-single`: Clean single agent output
+  - `coauthor clean-multiple`: Clean multiple agent output
+  - `coauthor pack-single`: Pack single agent output
+  - `coauthor pack-multiple`: Pack multiple agent output
+  - `coauthor indent-tex`: Indent LaTeX files
+  - `coauthor latexdiff`: Compare LaTeX files
+  - `coauthor latexdiff-vc`: Compare with git versions
+  - `coauthor tex-count`: Count LaTeX statistics
+  - `coauthor extract-figure-path`: Extract figure paths
+  - `coauthor extract-tikzpictures`: Extract TikZ pictures
+
+Use `coauthor --help` for a full list of commands and their options.
 
 ## Customization
 
@@ -119,18 +171,19 @@ CoAuthor's agents are defined in the `agents` directory. Each Agent typically ha
 
 ### Agent Structure
 
-- Each Agent is usually defined in a separate Python file in the `agents` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
+- Each Agent is defined in a separate Python file in the `agents` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
 - These Python files define the main logic for each Agent, including argument parsing, file handling, and interaction with the AI model.
-- Associated prompt files (e.g., system prompts, user prompts) are stored in XML format in subdirectories within the `agents` directory, named after the Agent (e.g., `agents/article`, `agents/lecture`). These XML files contain the prompts that guide the AI model in generating outputs for the Agent.
+- Associated prompt files are stored in YAML format in subdirectories within the `agents` directory, named after the Agent (e.g., `agents/article`, `agents/lecture`).
+- Each agent directory contains YAML files that define the prompts and configurations for different modes of operation.
 
-### Adding New agents
+### Adding New Agents
 
 To add a new Agent:
 
 1. Create a new Python file in the `agents` directory (e.g., `new_agent.py`).
 2. Define the Agent logic, following the structure of existing agents.
 3. Create a new subdirectory in `agents` for your Agent's prompt files (e.g., `agents/new_agent`).
-4. Add necessary prompt files in XML format (e.g., `prompts.xml`).
+4. Add necessary prompt files in YAML format (e.g., `prompts.yaml`, `config.yaml`).
 5. Update the CLI interface in `coauthor/cli.py` to include your new Agent.
 
 ### Modifying Prompts
@@ -138,58 +191,83 @@ To add a new Agent:
 To modify existing prompts:
 
 1. Navigate to the appropriate subdirectory in `agents` (e.g., `agents/article` for article-related agents).
-2. Edit the relevant XML prompt files (e.g., `prompts.xml`).
+2. Edit the relevant YAML prompt files.
 3. Your changes will be automatically picked up by the Agent scripts when they load the prompts.
 
-Remember to follow the existing XML structure and conventions when adding new agents or modifying prompts. This ensures consistency and makes it easier for others to understand and maintain the codebase.
+The YAML files typically contain:
+
+- System prompts that define the agent's role and capabilities
+- User message templates
+- Configuration settings for the agent
+- Any additional instructions or context needed by the agent
+
+Example YAML structure:
+
+```yaml
+name: paper2cover
+settings:
+  document_tag: cover_letter
+  end_tag: </cover_letter>
+  output_ext: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+required_files_internal:
+  TEMPLATE_COVER_LETTER: template_cover_letter.txt
+
+prompts:
+  system_prompt: |
+    You are an expert academic writer. Your task is to...
+
+  user_prefix: |
+    I am going to give you a LaTeX document...
+
+  user_request: |
+    Based on the document provided, please...
+
+  user_reflect: |
+    Let's critically reflect on what we've written...
+```
 
 ### Prompt Inheritance
 
-CoAuthor supports a hierarchical structure for prompts, allowing child prompts to inherit from parent prompts. This feature promotes code reuse and makes it easier to create specialized versions of existing agents. Here's how it works:
+CoAuthor supports a hierarchical structure for prompts, allowing child prompts to inherit from parent prompts. Here's how it works:
 
-1. In the child XML file, use the `inherits` attribute in the `<Agent>` tag to specify the parent Agent.
+1. In the child YAML file, use the `inherits` field to specify the parent agent.
 2. The child prompt will inherit all settings and prompts from the parent.
 3. You can override or add to the inherited content in the child prompt file.
 
-For example, let's look at how `prompts_polish_physics.xml` inherits from `prompts_polish.xml`:
+Example:
 
-Parent prompt (`prompts_polish.xml`):
+Parent prompt (`agent_polish.yaml`):
 
-```xml
-<agent name="polish">
-  <settings>
-    <!-- Parent settings -->
-  </settings>
-  <prompts>
-    <system_prompt>
-      <!-- Parent system prompt -->
-      You are a computer scientist
-    </system_prompt>
-    <user_prefix>
-      <!-- Parent user prefix -->
-    </user_prefix>
-    ...
-  </prompts>
-</agent>
+```yaml
+name: polish
+settings:
+  document_tag: polish
+  output_ext: tex
+prompts:
+  system_prompt: |
+    You are a computer scientist and expert writer.
+  user_prefix: |
+    Polish this text:
 ```
 
-Child prompt (`prompts_polish_physics.xml`):
+Child prompt (`agent_polish_physics.yaml`):
 
-```xml
-<agent name="polish_physics" inherits="polish">
-  <settings>
-    <!-- Child settings -->
-  </settings>
-  <prompts>
-    <system_prompt>
-      <!-- Child system prompt -->
-      You are a physicist.
-    </system_prompt>
-  </prompts>
-</agent>
+```yaml
+name: polish_physics
+inherits: polish
+settings:
+  document_tag: polish_physics # Override parent setting
+prompts:
+  system_prompt: |
+    You are a physicist and expert writer.
+    # Other prompts are inherited from parent
 ```
 
-In this example, `prompts_polish_physics.xml` inherits the settings and prompts from `prompts_polish.xml` but uses its own sysmtem prompts. This inheritance mechanism allows you to create specialized versions of agents while reusing most of the existing prompt structure.
+This inheritance mechanism allows you to create specialized versions of agents while reusing most of the existing prompt structure.
 
 ## Agent Execution Logic
 
@@ -197,7 +275,7 @@ CoAuthor's Agent execution follows a sophisticated process inspired by advanced 
 
 ### Basic Execution Flow
 
-1. **Input Processing**: The program reads the input file and any additional files specified (e.g., auxiliary files, figure inputs).
+1. **Input Processing**: The program reads the input file and any additional files specified (e.g., reference files, auxiliary files, figure inputs).
 
 2. **Initial Generation**: Based on the Agent type and input, the AI model generates an initial output. This output is saved as the first version of the result.
 
@@ -278,50 +356,6 @@ coauthor tex-count your_file.tex
 
 This command will output statistics like word count, number of headers, number of floats, etc.
 
-## Agent-Specific Features
-
-### Meeting Transcription (meeting2text)
-
-CoAuthor can improve and structure meeting transcripts:
-
-```bash
-coauthor meeting2text --input_file transcript.txt --context_file context.txt
-```
-
-The `context_file` should contain information about the meeting participants and topic.
-
-### Paper to Lecture Notes Conversion (paper2note)
-
-Convert research papers into lecture notes:
-
-```bash
-coauthor paper2note --input_file paper.tex --sample_chapters chapter1.tex,chapter2.tex --sample_paper sample_paper.tex --sample_note sample_note.tex
-```
-
-### Slide to Paper Conversion (slide2paper)
-
-Convert presentation slides into a research paper format:
-
-```bash
-coauthor slide2paper --input_file draft.tex --figure_inputs slides.pdf
-```
-
-This Agent takes slide images or a PDF of a presentation (specified by `--figure_inputs`) and generates a comprehensive LaTeX research paper. The `--input_file` can be an existing draft of the paper or an empty file. It expands on key points from the slides, incorporating additional details, explanations, and mathematical formulations. The output is a well-structured, publication-ready LaTeX document.
-
-Additional specific instructions for this Agent can be found in the `prompts_slide2paper.xml` file in the appropriate Agent directory.
-
-### Paper to Slide Conversion (paper2slide)
-
-Convert research paper into a LaTeX Beamer presentation:
-
-```bash
-coauthor paper2slide --input_file paper.tex
-```
-
-This Agent takes a LaTeX research paper as input and creates a professional LaTeX Beamer presentation. It condenses the paper's content into a series of slides, focusing on key points, methodology, results, and conclusions. The output is a LaTeX Beamer document ready for academic presentations.
-
-Additional specific instructions for this Agent can be found in the `prompts_paper2slide.xml` file in the appropriate Agent directory.
-
 ## Version Control Integration
 
 CoAuthor integrates with version control systems:
@@ -367,7 +401,7 @@ To add a new Agent to CoAuthor:
 
 1. Create a new Python file in the `agents/` directory
 2. Define your Agent logic, following the pattern in existing Agent files
-3. Add necessary prompt files in XML format in a subdirectory of `agents/`
+3. Add necessary prompt files in YAML format in a subdirectory of `agents/`
 
 ## Known Issues
 

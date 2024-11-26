@@ -48,30 +48,30 @@ def add_common_arguments(parser):
         help="Path to input files. Multiple files can be specified.",
     )
 
-    # Sample file arguments
-    sample_group = parser.add_argument_group("Sample Files")
-    sample_group.add_argument(
-        "--sample_file",
+    # Reference file arguments
+    reference_group = parser.add_argument_group("Reference Files")
+    reference_group.add_argument(
+        "--reference_file",
         type=str,
         default=None,
-        help="Path to the sample file.",
+        help="Path to the reference file.",
     )
-    sample_group.add_argument(
-        "--sample_files",
+    reference_group.add_argument(
+        "--reference_files",
         type=comma_separated_list,
         default=[],
-        help="Path to the sample file(s). Multiple files can be specified.",
+        help="Path to the reference file(s). Multiple files can be specified.",
     )
 
     # Auxiliary file arguments
-    aux_group = parser.add_argument_group("Auxiliary Files")
-    aux_group.add_argument(
+    auxiliary_group = parser.add_argument_group("Auxiliary Files")
+    auxiliary_group.add_argument(
         "--auxiliary_file",
         type=str,
         default=None,
         help="Path to the auxiliary file.",
     )
-    aux_group.add_argument(
+    auxiliary_group.add_argument(
         "--auxiliary_files",
         type=comma_separated_list,
         default=[],
@@ -81,16 +81,16 @@ def add_common_arguments(parser):
     # Figure input arguments
     figure_group = parser.add_argument_group("Figure Files")
     figure_group.add_argument(
-        "--figure_input",
+        "--figure_file",
         type=str,
         default=None,
-        help="Path to the figure input file.",
+        help="Path to the figure file.",
     )
     figure_group.add_argument(
-        "--figure_inputs",
+        "--figure_files",
         type=comma_separated_list,
         default=[],
-        help="Path to the figure input file(s). Multiple files can be specified.",
+        help="Path to the figure file(s). Multiple files can be specified.",
     )
 
     # Tool usage arguments
