@@ -34,7 +34,7 @@ def check_for_massive_repetition(last_response: str, new_response: str) -> tuple
 def ensure_correct_xml_structure(file_path: str, document_tag: str) -> None:
     logger.debug(f"Ensuring correct XML structure: {file_path}")
     content = read_file(file_path)
-    if content.startswith("<scratchpad>") or content.startswith("<rebuttal_letter>"):
+    if content.startswith("<scratchpad>") or content.startswith("<rebuttal_package>"):
         if not content.endswith(f"</{document_tag}>"):
             if "</{document_tag}>" not in content and f"<{document_tag}>" in content:
                 content += f"\n</{document_tag}>"
@@ -68,7 +68,7 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
 def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
     logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
-    if document_tag in ["latex_documents", "rebuttal_letter"]:
+    if document_tag in ["latex_documents", "rebuttal_package"]:
         return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)

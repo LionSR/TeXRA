@@ -25,6 +25,7 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc_multiple,
 )
 from coauthor.file_utils import get_common_env
+from coauthor.logging_utils import logger
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -56,8 +57,8 @@ def shared_arguments(func):
             help="Path to the figure file(s). Multiple files can be specified as a comma-separated list.",
         ),
         click.option("--edited_file", default=None, help="Path to the file that are already edited"),
-        click.option("--auto_extract_figure", is_flag=True, help="Automatically extract figure paths from the input file"),
-        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figure paths from the input file"),
+        click.option("--auto_extract_figure", is_flag=True, help="Automatically extract the list of figures from the input file"),
+        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ the list of figures from the input file"),
         click.option("--auto_extract_tikz_figure_reflect", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
         click.option("--output_files", type=comma_separated_list, default=None, help="Paths to the output files"),
@@ -319,7 +320,7 @@ def statement(model, input_file, **kwargs):
     else:
         raise ValueError("Document type not recognized")
 
-    print(f"Agent: statement_{agent}")
+    logger.info(f"Agent: statement_{agent}")
 
     execute_agent("application", f"statement_{agent}", model, input_file, **kwargs)
 
@@ -498,21 +499,21 @@ def pack_latexdiff_vc_multiple(input_files, commit_hash, clean):
 def tex_count(latex_file):
     stats = get_tex_count(latex_file)
     if stats is not None:
-        print(f"Statistics for {latex_file}:\n {stats}")
+        logger.info(f"Statistics for {latex_file}:\n {stats}")
 
 
 @click.command()
 @click.argument("latex_file")
 def extract_figure_path(latex_file):
     figure_paths = extract_figure_paths(latex_file)
-    print(f"Extracted figure file paths: {figure_paths}")
+    logger.info(f"Extracted figure file paths: {figure_paths}")
 
 
 @click.command()
 @click.argument("latex_file")
 def extract_tikzpictures(latex_file):
     compiled_files = extract_and_compile_tikzpictures_with_labels(latex_file)
-    print(f"Compiled TikZ pictures: {compiled_files}")
+    logger.info(f"Compiled TikZ pictures: {compiled_files}")
 
 
 if __name__ == "__main__":
