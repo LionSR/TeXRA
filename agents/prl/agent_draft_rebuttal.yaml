@@ -1,23 +1,22 @@
 name: replies/draft_rebuttal
 
 settings:
-  document_tag: rebuttal_letter
-  end_tag: </rebuttal_letter>
+  document_tag: rebuttal_package
+  end_tag: </rebuttal_package>
   output_ext: xml
   prefills:
-    - <rebuttal_letter><scratchpad>
-    - <rebuttal_letter><scratchpad>
+    - <rebuttal_package><scratchpad>
+    - <rebuttal_package><scratchpad>
   required_files:
-    COVER_LETTER: rebuttal/cover_letter.txt
-    INSTRUCTION_FILE: rebuttal/instruction.txt
-    EDITOR_LETTER: rebuttal/editor_letter.txt
-    REPORT_A: rebuttal/report_a.txt
-    REPORT_B: rebuttal/report_b.txt
+    COVER_LETTER: replies/cover_letter.txt
+    EDITOR_LETTER: replies/editor_letter.txt
+    REFEREE_REPORT_A: replies/report_a.txt
+    REFEREE_REPORT_B: replies/report_b.txt
   required_files_internal:
-    EXAMPLE_REBUTTAL_LETTER: example_rebuttal_letter.txt
-    TEMPLATE_REPLY_TO_EDITOR: template_reply_to_editor.tex
-    TEMPLATE_REPLY_TO_REFEREES: template_reply_to_referees.tex
-    TEMPLATE_LIST_OF_CHANGES: template_list_of_changes.tex
+    EXAMPLE_REBUTTAL_PACKAGE: prl/example_rebuttal_package.txt
+    TEMPLATE_REPLY_TO_EDITOR: prl/template_reply_to_editor.tex
+    TEMPLATE_REPLY_TO_REFEREES: prl/template_reply_to_referees.tex
+    TEMPLATE_LIST_OF_CHANGES: prl/template_list_of_changes.tex
   default_output_files:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
@@ -30,8 +29,8 @@ settings:
       var_name: "SUPP"
       categories: ["input_file", "input_files"]
     - pattern: "instruction"
-      var_name: "INSTRUCTION_FILE"
-      categories: ["auxiliary_file", "auxiliary_files"]
+      var_name: "FILE_INSTRUCTION"
+      categories: ["input_files","auxiliary_file", "auxiliary_files"]
     - pattern: "editor_letter"
       var_name: "EDITOR_LETTER_CONTENT"
       categories: ["input_files"]
@@ -66,48 +65,51 @@ prompts:
   user_prefix: |
     You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
+    {% if EXAMPLE_REBUTTAL_PACKAGE_FILE %}
+    <documents name="{{ EXAMPLE_REBUTTAL_PACKAGE_FILE }}">
+    # A sample reply packagefor reference.
+    {{ EXAMPLE_REBUTTAL_PACKAGE_CONTENT }}
+    </documents>
+    {% endif %}
+
     <documents>
     <document name="{{ COVER_LETTER_FILE }}">
+    The original cover letter submitted with the paper.
     {{ COVER_LETTER_CONTENT }}
     </document>
-    <document name="{{ INPUT_FILE }}">
+    <document name="{{ MAIN_FILE }}">
+    # The full text of the submitted paper
     {{ MAIN_CONTENT }}
     </document>
+    {% if SUPP_FILE %}
     <document name="{{ SUPP_FILE }}">
+    # The full text of the supplementary materials
     {{ SUPP_CONTENT }}
     </document>
+    {% endif %}
     <document name="{{ EDITOR_LETTER_CONTENT_FILE }}">
+    # The full text of the editor's decision and comments.
     {{ EDITOR_LETTER_CONTENT }}
     </document>
+    {% if REFEREE_REPORT_A_FILE %}
     <document name="{{ REFEREE_REPORT_A_FILE }}">
+    # The full text of the first referee's report.
     {{ REFEREE_REPORT_A_CONTENT }}
     </document>
+    {% endif %}
+    {% if REFEREE_REPORT_B_FILE %}
     <document name="{{ REFEREE_REPORT_B_FILE }}">
+    # The full text of the second referee's report.
     {{ REFEREE_REPORT_B_CONTENT }}
     </document>
-    {% if EXAMPLE_REBUTTAL_LETTER_FILE %}
-    <document name="{{ EXAMPLE_REBUTTAL_LETTER_FILE }}">
-    {{ EXAMPLE_REBUTTAL_LETTER_CONTENT }}
-    </document>
     {% endif %}
-    {% if FILE_INSTRUCTION_FILE }
+    {% if FILE_INSTRUCTION_FILE %}
     <document name="{{ FILE_INSTRUCTION_FILE }}">
+    # Guidelines on how to draft the reply letter.
     {{ FILE_INSTRUCTION_CONTENT }}
     </document>
     {% endif %}
     </documents>
-
-    Explanation of documents:
-    \begin{enumerate}
-        \item Cover Letter: The original cover letter submitted with the paper.
-        \item Main Paper: The full text of the submitted paper, identified by \texttt{\{INPUT\_FILE\}}.
-        \item Appendix: Supplementary information for the paper.
-        \item Editor Decision Letter: The full text of the editor's decision and comments.
-        \item Referee Report A: The full text of the first referee's report.
-        \item Referee Report B: The full text of the second referee's report.
-        \item Example Reply Letter: A sample reply letter for reference.
-        \item Instructions: Guidelines on how to draft the reply letter.
-    \end{enumerate}
 
   user_request: |
     Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the `<scratchpad>' tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure. 
@@ -136,7 +138,7 @@ prompts:
 
     Write the full reply letter in the following format:
 
-    <rebuttal_letter>
+    <rebuttal_package>
     <scratchpad>
     your detailed plan here
     </scratchpad>
@@ -151,14 +153,15 @@ prompts:
     {{ TEMPLATE_LIST_OF_CHANGES_CONTENT }}
     </document>
 
-    <document name="{{ INPUT_FILE }}">
+    <document name="{{ MAIN_FILE }}">
     (Insert the full text of your revised paper here.)
     </document>
+    {% if SUPP_FILE %}
     <document name="{{ SUPP_FILE }}">
     (Insert the full text of your revised supplementary materials here.)
     </document>
-
-    </rebuttal_letter>
+    {% endif %}
+    </rebuttal_package>
 
     Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the `<scratchpad>' tag. Then proceed to drafting the rebuttal letter in the format specified above.
 
@@ -169,7 +172,7 @@ prompts:
     \begin{itemize}
         \item Increase the level of details from moderate (6/10) to high (9/10), with specific references to the changes in the new version of the paper.
         \item Ensure all referee comments (summary, recommendations, criticisms, or questions) are addressed using concrete and convincing physical arguments.
-        \item Match the style and tone of the reply letter to the provided example (under <document name="replies/{EXAMPLE_REBUTTAL_LETTER_FILE}">).
+        \item Match the style and tone of the reply letter to the provided example (under <document name="replies/{EXAMPLE_REBUTTAL_PACKAGE_FILE}">).
         \item Review the revised version for fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' that can be condensed using the ``show, don't tell'' technique.
         \item Adhere to PRL's strict word count policy for the main paper. Ensure the main paper (excluding appendix) does not exceed $\sim$3500 words. Added text must be concise and focused. If necessary, condense other parts of the paper to maintain the word limit.
     \end{itemize}

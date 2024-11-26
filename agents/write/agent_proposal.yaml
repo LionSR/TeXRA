@@ -7,7 +7,7 @@ settings:
     - <scratchpad>
     - <scratchpad>
   required_files_internal:
-    - template_proposal.tex
+    TEMPLATE_PROPOSAL: write/template_proposal.tex
 
 prompts:
   system_prompt: |

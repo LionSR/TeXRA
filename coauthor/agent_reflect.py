@@ -14,7 +14,7 @@ from .output_utils import (
     check_for_massive_repetition,
 )
 from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
-from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt
+from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
 from .file_utils import read_file, write_to_output_file, get_common_env
 from .openai_utils import best_connection_method
 from .replacement_utils import get_all_replacements, apply_replacements
@@ -77,37 +77,50 @@ class BaseReflectChainAgent(ABC):
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
 
+        all_input_files = [self.task_config.input_file] + self.task_config.input_files
+        all_reference_files = [self.task_config.reference_file] + self.task_config.reference_files
+        all_auxiliary_files = [self.task_config.auxiliary_file] + self.task_config.auxiliary_files
+
         user_vars = {
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
-            "INPUT_CONTENT": read_file(self.task_config.input_file),
-            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files),
-            "ALL_INPUTS": get_xml_format_from_files([self.task_config.input_file] + self.task_config.input_files),
+            "INPUT_CONTENT": read_file(self.task_config.input_file) if self.task_config.input_file else None,
+            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.task_config.input_files) if self.task_config.input_files else None,
+            "ALL_INPUTS": get_xml_format_from_files(all_input_files) if all_input_files else None,
+            "LIST_OF_ALL_INPUTS": get_list_of_files(all_input_files),
             # reference files
             "REFERENCE_FILE": self.task_config.reference_file,
-            "REFERENCE_CONTENT": read_file(self.task_config.reference_file),
-            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files),
-            "ALL_REFERENCES": get_xml_format_from_files([self.task_config.reference_file] + self.task_config.reference_files),
+            "REFERENCE_CONTENT": read_file(self.task_config.reference_file) if self.task_config.reference_file else None,
+            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.task_config.reference_files) if self.task_config.reference_files else None,
+            "ALL_REFERENCES": get_xml_format_from_files(all_reference_files),
+            "LIST_OF_ALL_REFERENCES": get_list_of_files(all_reference_files),
             # auxiliary files
             "AUXILIARY_FILE": self.task_config.auxiliary_file,
-            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file),
+            "AUXILIARY_CONTENT": read_file(self.task_config.auxiliary_file) if self.task_config.auxiliary_file else None,
             "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.task_config.auxiliary_files),
-            "ALL_AUXILIARY_FILES": get_xml_format_from_files([self.task_config.auxiliary_file] + self.task_config.auxiliary_files),
+            "ALL_AUXILIARY_FILES": get_xml_format_from_files(all_auxiliary_files),
+            "LIST_OF_ALL_AUXILIARIES": get_list_of_files(all_auxiliary_files),
             # edited file
             "EDITED_FILE": self.task_config.edited_file,
-            "EDITED_CONTENT": read_file(self.task_config.edited_file),
+            "EDITED_CONTENT": read_file(self.task_config.edited_file) if self.task_config.edited_file else None,
         }
 
         # Add variables for required files
         if self.agent_settings.required_files:
+            # logger.debug(f"Required files: {self.agent_settings.required_files}")
             for var_name, file_path in self.agent_settings.required_files.items():
-                file_content = read_file(file_path) if os.path.exists(file_path) else None
-                user_vars[f"{var_name}_FILE"] = file_path
-                user_vars[f"{var_name}_CONTENT"] = file_content
+                if os.path.exists(file_path):
+                    file_content = read_file(file_path)
+                    user_vars[f"{var_name}_FILE"] = file_path
+                    user_vars[f"{var_name}_CONTENT"] = file_content
+                    logger.info(f"Found from [Required Files] the [VAR '{var_name}']: {file_path}")
+                else:
+                    logger.warning(f"[Required file] {file_path} not found from [VAR '{var_name}']")
 
         # Add variables for internal required files (from prompt directory)
-        if hasattr(self.agent_settings, "required_files_internal"):
+        if self.agent_settings.required_files_internal:
+            # logger.debug(f"Required files internal: {self.agent_settings.required_files_internal}")
             _, _, prompt_dir = get_common_env(self.task_config.model)
             # Get the agent-specific directory (e.g., 'agents/prl' for PRL agents)
             agent_dir = os.path.dirname(os.path.join(prompt_dir, self.task_config.agent))
@@ -118,11 +131,13 @@ class BaseReflectChainAgent(ABC):
                     file_content = read_file(internal_file_path)
                     user_vars[f"{var_name}_FILE"] = internal_file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
+                    logger.info(f"Found from [Required Files Internal] the [VAR '{var_name}']: {internal_file_path}")
                 else:
-                    logger.warning(f"Internal required file not found: {internal_file_path}")
+                    logger.warning(f"[Internal required file] {internal_file_path} not found from [VAR '{var_name}']")
 
         # Handle pattern-based file mappings if defined in settings
-        if hasattr(self.agent_settings, "file_patterns_contain"):
+        if self.agent_settings.file_patterns_contain:
+            # logger.debug(f"File patterns contain: {self.agent_settings.file_patterns_contain}")
             for pattern_config in self.agent_settings.file_patterns_contain:
                 pattern = pattern_config["pattern"].lower()
                 var_name = pattern_config["var_name"]
@@ -139,8 +154,9 @@ class BaseReflectChainAgent(ABC):
                             if file_content and os.path.exists(category_value):
                                 user_vars[var_name + "_FILE"] = category_value
                                 user_vars[var_name + "_CONTENT"] = file_content
+                                logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {category_value}")
                             else:
-                                logger.warning(f"File not found: {category_value}")
+                                logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
 
                     elif category.endswith("_files"):  # Multiple file categories
                         if category_value:
@@ -150,8 +166,9 @@ class BaseReflectChainAgent(ABC):
                                     if file_content and os.path.exists(file):
                                         user_vars[var_name + "_FILE"] = file
                                         user_vars[var_name + "_CONTENT"] = file_content
+                                        logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {file}")
                                     else:
-                                        logger.warning(f"File not found: {file}")
+                                        logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
 
         # Handle output files order - use default_output_files if no output_files specified
@@ -209,13 +226,14 @@ class BaseReflectChainAgent(ABC):
         pass
 
     def _handle_single_output(self, output_file: str) -> None:
-        if self.agent_settings.output_ext == "tex":
+        if ".tex" in self.task_config.input_file and ".tex" in output_file:
             run_latexdiff(self.task_config.input_file, output_file, self.task_config.agent)
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
+        logger.debug(f"Handling multiple outputs: tasked output_files: {self.task_config.output_files}; actual output_files: {output_files}")
         for input_file, output_file in zip(self.task_config.output_files, output_files):
             logdb_output_files(output_file, self.log_file)
-            if self.agent_settings.output_ext == "tex":
+            if ".tex" in input_file and ".tex" in output_file:
                 run_latexdiff(input_file, output_file, self.task_config.agent)
 
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
@@ -498,7 +516,7 @@ class BaseReflectChainAgent(ABC):
 
         self.handle_output(state, end_turn, self.output_file[0], round=0)
 
-        logger.info(f"\n\nProcessed input files {', '.join(input_files)}. The output was saved as {self.output_file[0]}")
+        logger.info(f"\n\nProcessed input files {get_list_of_files(input_files)}. The output was saved as {self.output_file[0]}")
 
         return state, messages, end_turn
 
