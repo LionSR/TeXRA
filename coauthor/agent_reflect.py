@@ -114,9 +114,9 @@ class BaseReflectChainAgent(ABC):
                     file_content = read_file(file_path)
                     user_vars[f"{var_name}_FILE"] = file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
-                    logger.info(f"Found from [Required Files] the FILE {var_name}: {file_path}")
+                    logger.info(f"Found from [Required Files] the [VAR '{var_name}']: {file_path}")
                 else:
-                    logger.warning(f"[Required file] {file_path} not found from {var_name}")
+                    logger.warning(f"[Required file] {file_path} not found from [VAR '{var_name}']")
 
         # Add variables for internal required files (from prompt directory)
         if self.agent_settings.required_files_internal:
@@ -131,9 +131,9 @@ class BaseReflectChainAgent(ABC):
                     file_content = read_file(internal_file_path)
                     user_vars[f"{var_name}_FILE"] = internal_file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
-                    logger.info(f"Found from [Required Files Internal] the FILE {var_name}: {internal_file_path}")
+                    logger.info(f"Found from [Required Files Internal] the [VAR '{var_name}']: {internal_file_path}")
                 else:
-                    logger.warning(f"[Internal required file] {internal_file_path} not found from {var_name}")
+                    logger.warning(f"[Internal required file] {internal_file_path} not found from [VAR '{var_name}']")
 
         # Handle pattern-based file mappings if defined in settings
         if self.agent_settings.file_patterns_contain:
@@ -154,7 +154,7 @@ class BaseReflectChainAgent(ABC):
                             if file_content and os.path.exists(category_value):
                                 user_vars[var_name + "_FILE"] = category_value
                                 user_vars[var_name + "_CONTENT"] = file_content
-                                logger.info(f"Found from [Pattern '{pattern}'] the FILE {var_name}: {category_value}")
+                                logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {category_value}")
                             else:
                                 logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
 
@@ -166,7 +166,7 @@ class BaseReflectChainAgent(ABC):
                                     if file_content and os.path.exists(file):
                                         user_vars[var_name + "_FILE"] = file
                                         user_vars[var_name + "_CONTENT"] = file_content
-                                        logger.info(f"Found from [Pattern '{pattern}'] the FILE {var_name}: {file}")
+                                        logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {file}")
                                     else:
                                         logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
@@ -226,13 +226,14 @@ class BaseReflectChainAgent(ABC):
         pass
 
     def _handle_single_output(self, output_file: str) -> None:
-        if self.agent_settings.output_ext == "tex":
+        if ".tex" in self.task_config.input_file and ".tex" in output_file:
             run_latexdiff(self.task_config.input_file, output_file, self.task_config.agent)
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
+        logger.debug(f"Handling multiple outputs: tasked output_files: {self.task_config.output_files}; actual output_files: {output_files}")
         for input_file, output_file in zip(self.task_config.output_files, output_files):
             logdb_output_files(output_file, self.log_file)
-            if self.agent_settings.output_ext == "tex":
+            if ".tex" in input_file and ".tex" in output_file:
                 run_latexdiff(input_file, output_file, self.task_config.agent)
 
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
@@ -515,7 +516,7 @@ class BaseReflectChainAgent(ABC):
 
         self.handle_output(state, end_turn, self.output_file[0], round=0)
 
-        logger.info(f"\n\nProcessed input files {', '.join(input_files)}. The output was saved as {self.output_file[0]}")
+        logger.info(f"\n\nProcessed input files {get_list_of_files(input_files)}. The output was saved as {self.output_file[0]}")
 
         return state, messages, end_turn
 
