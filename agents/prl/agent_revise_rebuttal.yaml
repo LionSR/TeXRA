@@ -13,7 +13,7 @@ settings:
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
   required_files_internal:
-    EXAMPLE_REBUTTAL_PACKAGE: prl/example_rebuttal_package.txt
+    EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
   default_output_files:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
