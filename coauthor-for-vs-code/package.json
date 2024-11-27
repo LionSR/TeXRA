@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.9",
+  "version": "0.10.10",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -103,7 +103,9 @@
               "node_modules",
               "__pycache__",
               "Versions",
-              "versions"
+              "versions",
+              "History",
+              "history"
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
@@ -122,6 +124,8 @@
               "figs",
               "versions",
               "Versions",
+              "History",
+              "history",
               "stuff",
               "draft",
               "exercises"
@@ -145,6 +149,8 @@
               "draw",
               "Versions",
               "versions",
+              "History",
+              "history",
               ".egg-info"
             ],
             "description": "Keywords to ignore when selecting files",
