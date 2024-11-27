@@ -131,7 +131,7 @@ def cli():
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--edited_file", required=True, help="Path to the edited file")
 def merge(model, input_file, edited_file):
-    agents_dir = get_agent_dir_from_env(model)
+    agents_dir = get_agent_dir_from_env()
     command = [
         "python",
         f"{agents_dir}/merge.py",
@@ -459,7 +459,9 @@ def pack_multiple(model, input_file, input_files, agent, output_name_override):
 @click.option("--edited_file", required=True, help="Path to the edited file")
 def latexdiff(input_file, edited_file):
     """Run latexdiff on the given input and edited files."""
-    run_latexdiff(input_file, edited_file)
+    diff_file = run_latexdiff(input_file, edited_file)
+    if diff_file is None:
+        logger.error("Failed to generate diff file")
 
 
 @click.command()
@@ -467,7 +469,9 @@ def latexdiff(input_file, edited_file):
 @click.option("--commit_hash", required=True, help="Commit hash to compare against")
 def latexdiff_vc(input_file, commit_hash):
     """Run latexdiff-vc on the given input file and commit hash."""
-    run_latexdiff_vc(input_file, commit_hash)
+    diff_file = run_latexdiff_vc(input_file, commit_hash)
+    if diff_file is None:
+        logger.error("Failed to generate diff file")
 
 
 @click.command()
