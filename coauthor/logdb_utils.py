@@ -9,12 +9,14 @@ from .logging_utils import logger
 from .model_config import ModelConfig
 from .config import TaskConfig, AgentSettings
 
+HISTORY_DIR = "History"
+
 
 def get_db_path() -> str:
     """Get path to SQLite database in current working directory"""
-    if not os.path.exists("Versions"):
-        os.makedirs("Versions", exist_ok=True)
-    return os.path.join(os.getcwd(), "Versions/logs.db")
+    if not os.path.exists(HISTORY_DIR):
+        os.makedirs(HISTORY_DIR, exist_ok=True)
+    return os.path.join(os.getcwd(), f"{HISTORY_DIR}/logs.db")
 
 
 def init_db() -> None:

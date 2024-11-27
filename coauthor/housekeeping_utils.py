@@ -9,7 +9,7 @@ from .model_config import MODEL_CONFIGS
 
 # MUST BE EXTREMELY careful with the subtle differences and edge cases
 
-EXCLUDED_DIRS = ["Figs", "Figures", "build", "Versions", "versions", "figs", "figures", "Notes"]
+EXCLUDED_DIRS = ["Figs", "Figures", "build", "Versions", "versions", "History", "history", "figs", "figures", "Notes"]
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
 TEMP_EXTENSIONS = [
     ".pdf",
@@ -30,6 +30,8 @@ TEMP_EXTENSIONS = [
     "Notes.bib",
 ]
 MODELS = list(MODEL_CONFIGS.keys())
+
+HISTORY_DIR = "History"
 
 
 def get_agent_first_name_chunk(agent):
@@ -151,7 +153,7 @@ def run_pack_single(model, input_file, agent, output_folder=None):
     if moved_files or copied_files:
         now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
         if output_folder is None:
-            output_folder = os.path.join(input_dir, "Versions", f"{now}_{base_name}_{agent}_{model}")
+            output_folder = os.path.join(input_dir, HISTORY_DIR, f"{now}_{base_name}_{agent}_{model}")
         os.makedirs(output_folder, exist_ok=True)
         for file_path in moved_files:
             move_file(file_path, output_folder)
@@ -194,7 +196,7 @@ def run_pack_multiple(model, input_file, input_files, agent, output_name_overrid
     file_patterns.extend(additional_patterns)
 
     now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
-    common_output_folder = os.path.join(output_dir, "Versions", f"{now}_{base_name}_multiple_{agent}_{model}")
+    common_output_folder = os.path.join(output_dir, HISTORY_DIR, f"{now}_{base_name}_multiple_{agent}_{model}")
 
     # Ensure the output folder exists
     os.makedirs(common_output_folder, exist_ok=True)

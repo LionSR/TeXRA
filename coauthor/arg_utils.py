@@ -97,7 +97,9 @@ def add_common_arguments(parser):
     tool_group = parser.add_argument_group("Tool Usage")
     tool_group.add_argument("--use_prefill_from_input", action="store_true", help="Use the prefill from the input file")
     tool_group.add_argument("--auto_extract_figure", action="store_true", help="Automatically extract the list of figures from the input file")
-    tool_group.add_argument("--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ the list of figures from the input file")
+    tool_group.add_argument(
+        "--auto_extract_tikz_figure", action="store_true", help="Automatically extract TikZ the list of figures from the input file"
+    )
     tool_group.add_argument("--auto_extract_tikz_figure_reflect", action="store_true", help="Include TikZ reflection in the output")
     tool_group.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
 
