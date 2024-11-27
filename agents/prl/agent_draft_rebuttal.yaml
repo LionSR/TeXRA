@@ -13,10 +13,10 @@ settings:
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
   required_files_internal:
-    EXAMPLE_REBUTTAL_PACKAGE: prl/example_rebuttal_package.txt
-    TEMPLATE_REPLY_TO_EDITOR: prl/template_reply_to_editor.tex
-    TEMPLATE_REPLY_TO_REFEREES: prl/template_reply_to_referees.tex
-    TEMPLATE_LIST_OF_CHANGES: prl/template_list_of_changes.tex
+    EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
+    TEMPLATE_REPLY_TO_EDITOR: template_reply_to_editor.tex
+    TEMPLATE_REPLY_TO_REFEREES: template_reply_to_referees.tex
+    TEMPLATE_LIST_OF_CHANGES: template_list_of_changes.tex
   default_output_files:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
