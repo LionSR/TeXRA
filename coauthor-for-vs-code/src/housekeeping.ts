@@ -24,6 +24,8 @@ const EXCLUDED_DIRS = new Set([
   'build',
   'Versions',
   'versions',
+  'History',
+  'history',
   'figs',
   'figures',
   'Notes',
@@ -68,6 +70,7 @@ const MODELS = [
   'gemini1f+OR',
   'llama3+OR',
 ];
+const HISTORY_DIR = 'History';
 
 function getAgentFirstNameChunk(agent: string): string {
   log(CHANNEL_NAME, 'Agent', `Getting agent first name chunk for: ${agent}`);
@@ -251,7 +254,7 @@ export async function runPackSingle(
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
     outputFolder =
       outputFolder ||
-      path.join(inputDir, 'Versions', `${now}_${baseName}_${agent}_${model}`);
+      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
     log(CHANNEL_NAME, category, `Output folder: ${outputFolder}`);
 
     try {
@@ -365,7 +368,7 @@ export async function runPackMultiple(
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
   const commonOutputFolder = path.join(
     outputDir,
-    'Versions',
+    HISTORY_DIR,
     `${now}_${baseName}_multiple_${agent}_${model}`,
   );
   log(CHANNEL_NAME, category, `Common output folder: ${commonOutputFolder}`);

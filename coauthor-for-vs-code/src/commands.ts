@@ -454,19 +454,43 @@ export function registerCommands(context: vscode.ExtensionContext) {
         // Add new implementation
         const fileToUse = baseFile || inputFile;
         try {
-          await runLatexDiff(fileToUse, editedFile);
+          // Get the diff filename from runLatexDiff
+          const diffFileName = await runLatexDiff(fileToUse, editedFile);
+          if (!diffFileName) {
+            throw new Error('Failed to generate diff file');
+          }
 
           // Open the diff file and build it
-          const diffFileName = `${path.parse(path.basename(editedFile)).name}_diff.tex`;
           const workspacePath = getWorkspacePath();
           if (!workspacePath) {
             throw new Error('No workspace path found');
           }
+
+          // Use the returned diff filename to construct the full path
           const fullPath = vscode.Uri.file(
             path.join(workspacePath, path.dirname(fileToUse), diffFileName),
           );
 
-          await vscode.window.showTextDocument(fullPath);
+          // Verify the file exists
+          try {
+            await vscode.workspace.fs.stat(fullPath);
+          } catch (error) {
+            if (
+              error instanceof vscode.FileSystemError &&
+              error.code === 'FileNotFound'
+            ) {
+              throw new Error(
+                `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+              );
+            }
+            throw error;
+          }
+
+          const doc = await vscode.window.showTextDocument(fullPath);
+          await vscode.window.showTextDocument(doc.document, {
+            preview: false,
+            preserveFocus: true,
+          });
           await vscode.commands.executeCommand(
             'workbench.view.extension.latex-workshop-activitybar',
           );
@@ -541,18 +565,42 @@ export function registerCommands(context: vscode.ExtensionContext) {
         // }, 2000); // Adjust delay as needed based on expected command execution time
         const fileToUse = baseFile || inputFile;
         try {
-          await runLatexDiffVC(fileToUse, commitHash);
+          // Get the diff filename from runLatexDiffVC
+          const diffFileName = await runLatexDiffVC(fileToUse, commitHash);
+          if (!diffFileName) {
+            throw new Error('Failed to generate diff file');
+          }
 
-          const diffFileName = `${path.parse(path.basename(fileToUse)).name}-diff${commitHash}.tex`;
           const workspacePath = getWorkspacePath();
           if (!workspacePath) {
             throw new Error('No workspace path found');
           }
+
+          // Use the returned diff filename to construct the full path
           const fullPath = vscode.Uri.file(
             path.join(workspacePath, path.dirname(fileToUse), diffFileName),
           );
 
-          await vscode.window.showTextDocument(fullPath);
+          // Verify the file exists
+          try {
+            await vscode.workspace.fs.stat(fullPath);
+          } catch (error) {
+            if (
+              error instanceof vscode.FileSystemError &&
+              error.code === 'FileNotFound'
+            ) {
+              throw new Error(
+                `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+              );
+            }
+            throw error;
+          }
+
+          const doc = await vscode.window.showTextDocument(fullPath);
+          await vscode.window.showTextDocument(doc.document, {
+            preview: false,
+            preserveFocus: true,
+          });
           await vscode.commands.executeCommand('latex-workshop.build');
 
           // Wait for build to complete before viewing
