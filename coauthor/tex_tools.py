@@ -200,7 +200,36 @@ def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, s
         logger.warning(f"Input file: {input_file}, Output file: {output_file}")
         return None
 
-    diff_file_name = output_file.replace(".tex", f"{suffix}.tex")
+    # Check if both files have round numbers and model names
+    input_match = re.search(r"_r(\d+)_([^.]+)\.tex$", input_file)
+    output_match = re.search(r"_r(\d+)_([^.]+)\.tex$", output_file)
+
+    if input_match and output_match:
+        first_round = input_match.group(1)
+        second_round = output_match.group(1)
+        first_model = input_match.group(2)
+        second_model = output_match.group(2)
+
+        # If models match, include it in the diff filename
+        if first_model == second_model:
+            # Get the base name up to the round number (inclusive)
+            base_match = re.match(r"^(.*?_r\d+)", os.path.splitext(output_file)[0])
+            if base_match:
+                diff_file_name = f"{base_match.group(1)}_{second_model}_diffr{second_round}r{first_round}.tex"
+            else:
+                logger.warning("Failed to extract base name with round number")
+                return None
+        else:
+            # Models don't match, use standard pattern
+            base_match = re.match(r"^(.*?)_r\d+", os.path.splitext(output_file)[0])
+            if base_match:
+                diff_file_name = f"{base_match.group(1)}_diffr{second_round}r{first_round}.tex"
+            else:
+                logger.warning("Failed to extract base name")
+                return None
+    else:
+        # Use default naming convention
+        diff_file_name = output_file.replace(".tex", f"{suffix}.tex")
 
     latexdiff_command = [
         "latexdiff",
@@ -218,6 +247,8 @@ def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, s
 
     process_diff_file(diff_file_name)
     process_tikzpicture_endings(diff_file_name)
+
+    return diff_file_name
 
 
 def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
@@ -253,6 +284,8 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
     process_diff_file(diff_file_name)
     process_tikzpicture_endings(diff_file_name)
 
+    return diff_file_name
+
 
 def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> None:
     if len(input_files) != len(edited_files):
@@ -260,12 +293,12 @@ def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> N
         return None
 
     for input_file, edited_file in zip(input_files, edited_files):
-        run_latexdiff(input_file, edited_file)
+        _ = run_latexdiff(input_file, edited_file)
 
 
 def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
     for input_file in input_files:
-        run_latexdiff_vc(input_file, commit_hash)
+        _ = run_latexdiff_vc(input_file, commit_hash)
 
 
 def process_diff_file(diff_file_name: str) -> None:
@@ -310,7 +343,7 @@ def process_diff_file(diff_file_name: str) -> None:
 
 def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round: int) -> str | None:
     if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
-        run_latexdiff(base_file, output_file, agent, suffix="_diff")
+        _ = run_latexdiff(base_file, output_file, agent, suffix="_diff")
     else:
         logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
 
@@ -320,6 +353,6 @@ def run_latexdiff_between_rounds(output_file1: str, output_file2: str, agent: st
         first_round = re.search(r"_r(\d+)_", output_file1).group(1)
         second_round = re.search(r"_r(\d+)_", output_file2).group(1)
         diff_suffix = f"_diffr{second_round}r{first_round}"
-        run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
+        _ = run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
     else:
         logger.warning(f"Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
