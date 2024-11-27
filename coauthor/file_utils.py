@@ -4,12 +4,10 @@ import re
 from .logging_utils import logger
 
 
-def get_common_env(model):
-    if model is None:
-        model = os.getenv("MODEL", "sonnet+")
+def get_agent_dir_from_env():
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_dir = os.getenv("PROMPT_DIR", f"{script_dir}/agents")
-    return model, script_dir, prompt_dir
+    agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/agents")
+    return agents_dir
 
 
 def get_agent_path(library, prompt_name: str) -> str:
