@@ -10,7 +10,7 @@ const execAsync = promisify(cp.exec);
 const CHANNEL_NAME = 'Coauthor TeX Utils';
 initializeLogging(CHANNEL_NAME);
 
-async function processFile(filePath: string): Promise<string> {
+export async function processFile(filePath: string): Promise<string> {
   const uri = vscode.Uri.file(filePath);
   const content = await vscode.workspace.fs.readFile(uri);
   return Buffer.from(content).toString('utf-8');
@@ -116,7 +116,7 @@ async function processTikzpictureEndings(filePath: string): Promise<void> {
 export async function runLatexDiff(
   inputFile: string,
   editedFile: string,
-): Promise<void> {
+): Promise<string> {
   const category = 'LaTeX-Diff';
   try {
     const workspacePath = getWorkspacePath();
@@ -142,11 +142,48 @@ export async function runLatexDiff(
       vscode.window.showWarningMessage(
         'Files must contain \\begin{document} and \\end{document}',
       );
-      return;
+      throw new Error('Files missing document environment');
     }
 
     const editedFileName = path.basename(editedFile);
-    const diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
+    let diffFileName: string;
+
+    // Check if both files have round numbers and possibly model names
+    const inputRoundMatch = path.basename(inputFile).match(/_r(\d+)_([^.]+)/);
+    const editedRoundMatch = editedFileName.match(/_r(\d+)_([^.]+)/);
+
+    if (inputRoundMatch && editedRoundMatch) {
+      // Extract round numbers and model names
+      const firstRound = inputRoundMatch[1];
+      const secondRound = editedRoundMatch[1];
+      const firstModel = inputRoundMatch[2];
+      const secondModel = editedRoundMatch[2];
+
+      // Check if model names match
+      if (firstModel === secondModel) {
+        // Get the base name up to the round number (inclusive)
+        const baseNameMatch = path
+          .parse(editedFileName)
+          .name.match(/^(.*?_r\d+)/);
+        if (!baseNameMatch) {
+          throw new Error('Failed to extract base name from edited file');
+        }
+        diffFileName = `${baseNameMatch[1]}_${secondModel}_diffr${secondRound}r${firstRound}.tex`;
+      } else {
+        // Models don't match, use the standard pattern
+        const baseNameMatch = path
+          .parse(editedFileName)
+          .name.match(/^(.*?)_r\d+/);
+        if (!baseNameMatch) {
+          throw new Error('Failed to extract base name from edited file');
+        }
+        diffFileName = `${baseNameMatch[1]}_diffr${secondRound}r${firstRound}.tex`;
+      }
+    } else {
+      // Use the default naming convention
+      diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
+    }
+
     const outputPath = path.join(
       workspacePath,
       path.dirname(inputFile),
@@ -173,6 +210,7 @@ export async function runLatexDiff(
     await processTikzpictureEndings(outputPath);
 
     log(CHANNEL_NAME, category, 'LaTeX diff completed successfully');
+    return diffFileName;
   } catch (error) {
     log(CHANNEL_NAME, category, `Error running LaTeX diff: ${error}`, true);
     throw error;
@@ -182,7 +220,7 @@ export async function runLatexDiff(
 export async function runLatexDiffVC(
   inputFile: string,
   commitHash: string,
-): Promise<void> {
+): Promise<string> {
   const category = 'LaTeX-Diff-VC';
   try {
     const workspacePath = getWorkspacePath();
@@ -203,7 +241,7 @@ export async function runLatexDiffVC(
       vscode.window.showWarningMessage(
         'File must contain \\begin{document} and \\end{document}',
       );
-      return;
+      throw new Error('File missing document environment');
     }
 
     const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
@@ -233,6 +271,7 @@ export async function runLatexDiffVC(
     await processTikzpictureEndings(outputPath);
 
     log(CHANNEL_NAME, category, 'LaTeX diff VC completed successfully');
+    return path.basename(diffFileName);
   } catch (error) {
     log(CHANNEL_NAME, category, `Error running LaTeX diff VC: ${error}`, true);
     throw error;

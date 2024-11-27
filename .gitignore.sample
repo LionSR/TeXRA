@@ -1,6 +1,7 @@
 build/
 build/*
 Versions/
+History/
 
 *.bak0
 recordings/

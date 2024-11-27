@@ -161,10 +161,19 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
     ignoredInputFiles,
   );
 
+  // Extract the base name before any round number
+  const baseNameMatch = baseFileName.match(/^(.*?)(?:_r\d+|$)/);
+  const baseNameBeforeRound = baseNameMatch ? baseNameMatch[1] : baseFileName;
+
   return files.filter((file) => {
     const fileBaseName = path.basename(file, path.extname(file));
+    // Check if it's either a direct match with baseFileName
+    // or if it starts with the same base name and contains a different round number
     return (
-      fileBaseName.startsWith(baseFileName) && fileBaseName !== baseFileName
+      fileBaseName === baseFileName ||
+      (fileBaseName.startsWith(baseNameBeforeRound) &&
+        fileBaseName.match(/_r\d+/) &&
+        fileBaseName !== baseFileName)
     );
   });
 }
