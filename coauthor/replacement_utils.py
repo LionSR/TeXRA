@@ -67,7 +67,7 @@ STYLE_REPLACEMENTS = ReplacementCategory(
         "embark": "start",
         "realm": "area",
         "intricate": "complex",
-        "\"exact\"": "``exact''",
+        '"exact"': "``exact''",
     },
 )
 
