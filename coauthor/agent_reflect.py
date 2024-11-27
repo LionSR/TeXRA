@@ -15,7 +15,7 @@ from .output_utils import (
 )
 from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
-from .file_utils import read_file, write_to_output_file
+from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
 from .openai_utils import best_connection_method
 from .replacement_utils import get_all_replacements, apply_replacements
 
@@ -50,6 +50,8 @@ class BaseReflectChainAgent(ABC):
         """Initialize the agent with command line arguments and agent path."""
         self.args = args
         self.agent_path = agent_path
+        if not agent_path:
+            self.agent_path = get_agent_dir_from_env()
 
         # Initialize basic attributes
         self.output_file = ["", ""]
@@ -223,14 +225,14 @@ class BaseReflectChainAgent(ABC):
 
     def _handle_single_output(self, output_file: str) -> None:
         if ".tex" in self.task_config.input_file and ".tex" in output_file:
-            run_latexdiff(self.task_config.input_file, output_file, self.task_config.agent)
+            _ = run_latexdiff(self.task_config.input_file, output_file, self.task_config.agent)
 
     def _handle_multiple_outputs(self, output_files: List[str]) -> None:
         logger.debug(f"Handling multiple outputs: tasked output_files: {self.task_config.output_files}; actual output_files: {output_files}")
         for input_file, output_file in zip(self.task_config.output_files, output_files):
             logdb_output_files(output_file, self.log_file)
             if ".tex" in input_file and ".tex" in output_file:
-                run_latexdiff(input_file, output_file, self.task_config.agent)
+                _ = run_latexdiff(input_file, output_file, self.task_config.agent)
 
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
         if isinstance(input_files, str):
