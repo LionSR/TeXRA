@@ -24,7 +24,7 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc,
     run_pack_latexdiff_vc_multiple,
 )
-from coauthor.file_utils import get_common_env
+from coauthor.file_utils import get_agent_dir_from_env
 from coauthor.logging_utils import logger
 
 # Add the parent directory to the system path for the windows users
@@ -70,10 +70,10 @@ def shared_arguments(func):
 
 
 def execute_agent(script, agent, model, input_file, **kwargs):
-    model, script_dir, _ = get_common_env(model)
+    agents_dir = get_agent_dir_from_env()
     command = [
         "python",
-        f"{script_dir}/agents/{script}.py",
+        f"{agents_dir}/{script}.py",
         f"--agent={agent}",
         f"--model={model}",
         f"--input_file={input_file}",
@@ -131,10 +131,10 @@ def cli():
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--edited_file", required=True, help="Path to the edited file")
 def merge(model, input_file, edited_file):
-    model, script_dir, _ = get_common_env(model)
+    agents_dir = get_agent_dir_from_env(model)
     command = [
         "python",
-        f"{script_dir}/agents/merge.py",
+        f"{agents_dir}/merge.py",
         f"--input_file={input_file}",
         f"--edited_file={edited_file}",
         f"--model={model}",
