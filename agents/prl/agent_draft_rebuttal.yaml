@@ -178,4 +178,4 @@ prompts:
     \end{itemize}
     </requirements>
 
-    Start with laying down your plan in the `<scratchpad>' tag. Then proceed to output the revised letter to the editor (under <document name="{{ REPLY_TO_EDITOR_FILE }}">) and the revised response letter (under <document name="{{ REPLY_TO_REFEREES_FILE }}">), the revised main paper (under <document name="{{ INPUT_FILE }}">) and the revised supplementary materials (under <document name="{{ SUPP_FILE }}">) that meets the above requirements.  Include all the changes you added in the previous step.
+    Start with laying down your plan in the `<scratchpad>' tag. Then proceed to output the revised letter to the editor (under <document name="{{ REPLY_TO_EDITOR_FILE }}">) and the revised response letter (under <document name="{{ REPLY_TO_REFEREES_FILE }}">), the revised main paper (under <document name="{{ INPUT_FILE }}">) and the revised supplementary materials (under <document name="{{ SUPP_FILE }}">) that meets the above requirements. Include all the changes you added in the previous step.
