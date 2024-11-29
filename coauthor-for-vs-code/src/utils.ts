@@ -1,67 +1,60 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import {
-  getWorkspacePath,
-  getRelativePath,
-  ensureArray,
-  getNestedConfig,
-} from './utils/commonUtils';
+import { getWorkspacePath, getConfig } from './utils/commonUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
 const CHANNEL_NAME = 'Coauthor Utils';
 initializeLogging(CHANNEL_NAME);
 
+const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
+  'files.ignored.fileExtensions',
+);
+const IGNORED_DIRECTORIES = getConfig<string[]>(
+  'files.ignored.directories',
+);
+const IGNORED_KEYWORDS = getConfig<string[]>('files.ignored.keywords');
+const IGNORED_INPUT_FILES = getConfig<string[]>(
+  'files.ignored.inputFiles',
+);
+const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
+  'files.ignored.figureDirectories',
+);
+const IGNORED_AUXILIARY_KEYWORDS = getConfig<string[]>(
+  'files.ignored.auxiliaryKeywords',
+);
+
+const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(
+  'files.included.figureExtensions',
+);
+const INCLUDED_INPUT_EXTENSIONS = getConfig<string[]>(
+  'files.included.inputExtensions',
+);
+const INCLUDED_REFERENCE_EXTENSIONS = getConfig<string[]>(
+  'files.included.referenceExtensions',
+);
+const INCLUDED_AUXILIARY_EXTENSIONS = getConfig<string[]>(
+  'files.included.auxiliaryExtensions',
+);
+const INCLUDED_EDITED_EXTENSIONS = getConfig<string[]>(
+  'files.included.editedExtensions',
+);
+
+export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
+  return files && files.length > 0 ? files : null;
+}
+
 export async function listInputFiles(): Promise<string[]> {
-  const category = 'List-Input-Files';
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
-
-  const ignoredFileExtensions = getNestedConfig<string[]>(
-    'files.ignored.fileExtensions',
-    [],
-  );
-  const ignoredDirectories = getNestedConfig<string[]>(
-    'files.ignored.directories',
-    [],
-  );
-  const ignoredKeywords = getNestedConfig<string[]>(
-    'files.ignored.keywords',
-    [],
-  );
-  const ignoredInputFiles = getNestedConfig<string[]>(
-    'files.ignored.inputFiles',
-    [],
-  );
-
-  log(
-    CHANNEL_NAME,
-    category,
-    `Ignored Extensions: ${JSON.stringify(ignoredFileExtensions)}`,
-  );
-  log(
-    CHANNEL_NAME,
-    category,
-    `Ignored Directories: ${JSON.stringify(ignoredDirectories)}`,
-  );
-  log(
-    CHANNEL_NAME,
-    category,
-    `Ignored Keywords: ${JSON.stringify(ignoredKeywords)}`,
-  );
-  log(
-    CHANNEL_NAME,
-    category,
-    `Ignored Input Files: ${JSON.stringify(ignoredInputFiles)}`,
-  );
 
   return getFilesRecursively(
     workspacePath,
     workspacePath,
-    ['.txt', '.tex', '.md'],
-    ignoredFileExtensions,
-    ignoredDirectories,
-    ignoredKeywords,
-    ignoredInputFiles,
+    INCLUDED_INPUT_EXTENSIONS,
+    IGNORED_FILE_EXTENSIONS,
+    IGNORED_DIRECTORIES,
+    IGNORED_KEYWORDS,
+    IGNORED_INPUT_FILES,
   );
 }
 
@@ -71,36 +64,12 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
-  const ignoredExtensions = getNestedConfig<string[]>(
-    'files.ignored.fileExtensions',
-    [],
-  );
-  const ignoredKeywords = getNestedConfig<string[]>(
-    'files.ignored.keywords',
-    [],
-  );
-  const additionalIgnoredAuxiliaryKeywords = getNestedConfig<string[]>(
-    'files.ignored.auxiliaryKeywords',
-    [],
-  );
-  const ignoredDirectories = getNestedConfig<string[]>(
-    'files.ignored.directories',
-    [],
-  );
-
-  const safeIgnoredKeywords = ignoredKeywords || [];
-  const safeAuxiliaryKeywords = additionalIgnoredAuxiliaryKeywords || [];
-
-  const combinedIgnoredKeywords = [
-    ...new Set([...safeIgnoredKeywords, ...safeAuxiliaryKeywords]),
-  ];
-
   return getFilesInDirectory(
     workspacePath,
-    ['.txt', '.tex', '.cls', '.md'],
-    ignoredExtensions || [],
-    ignoredDirectories || [],
-    combinedIgnoredKeywords,
+    INCLUDED_AUXILIARY_EXTENSIONS,
+    IGNORED_FILE_EXTENSIONS,
+    IGNORED_DIRECTORIES,
+    [...IGNORED_KEYWORDS, ...IGNORED_AUXILIARY_KEYWORDS],
   );
 }
 
@@ -108,26 +77,13 @@ export async function listFigureFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
-  const includedFigureExtensions = getNestedConfig<string[]>(
-    'files.included.figureExtensions',
-    ['.png', '.pdf', '.jpeg', '.jpg', '.svg'],
-  );
-  const ignoredFigureDirectories = getNestedConfig<string[]>(
-    'files.ignored.figureDirectories',
-    [],
-  );
-  const ignoredKeywords = getNestedConfig<string[]>(
-    'files.ignored.keywords',
-    [],
-  );
-
   return getFilesRecursively(
     workspacePath,
     workspacePath,
-    includedFigureExtensions,
+    INCLUDED_FIGURE_EXTENSIONS,
     [],
-    ignoredFigureDirectories,
-    ignoredKeywords,
+    IGNORED_FIGURE_DIRECTORIES,
+    IGNORED_KEYWORDS,
   );
 }
 
@@ -135,30 +91,14 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
-  const ignoredExtensions = getNestedConfig<string[]>(
-    'files.ignored.fileExtensions',
-    [],
-  );
-  const ignoredKeywords = getNestedConfig<string[]>(
-    'files.ignored.keywords',
-    [],
-  );
-  const ignoredInputFiles = getNestedConfig<string[]>(
-    'files.ignored.inputFiles',
-    [],
-  );
-  const ignoredDirectories = getNestedConfig<string[]>(
-    'files.ignored.directories',
-    [],
-  );
   const files = await getFilesRecursively(
     workspacePath,
     workspacePath,
-    ['.txt', '.tex'],
-    ignoredExtensions,
-    [...ignoredDirectories, 'Diffs', 'PapersEx'],
-    ignoredKeywords,
-    ignoredInputFiles,
+    INCLUDED_EDITED_EXTENSIONS,
+    IGNORED_FILE_EXTENSIONS,
+    [...IGNORED_DIRECTORIES, 'PapersEx'],
+    IGNORED_KEYWORDS,
+    IGNORED_INPUT_FILES,
   );
 
   // Extract the base name before any round number
@@ -167,10 +107,10 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
 
   return files.filter((file) => {
     const fileBaseName = path.basename(file, path.extname(file));
-    // Check if it's either a direct match with baseFileName
-    // or if it starts with the same base name and contains a different round number
+    // Check if it starts with the same base name and or has a different round number
     return (
-      fileBaseName === baseFileName ||
+      (fileBaseName.startsWith(baseFileName) &&
+        fileBaseName !== baseFileName) ||
       (fileBaseName.startsWith(baseNameBeforeRound) &&
         fileBaseName.match(/_r\d+/) &&
         fileBaseName !== baseFileName)
