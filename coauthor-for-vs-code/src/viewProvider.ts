@@ -166,7 +166,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             message.filePath,
             path.extname(message.filePath),
           );
-          const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
+          const filteredEditedFiles =
+            await listEditedFiles(baseFileNameForInput);
           this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
           break;
         case 'referenceFileSelected':
@@ -180,22 +181,29 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         // Request File
         case 'requestInputFile':
           {
-            const refreshedInputFiles = await vscode.commands.executeCommand<string[]>(
-              'coauthor.refreshInputFiles',
-            ) || [];
+            const refreshedInputFiles =
+              (await vscode.commands.executeCommand<string[]>(
+                'coauthor.refreshInputFiles',
+              )) || [];
             this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
           }
           break;
         case 'requestReferenceFile':
         case 'requestAuxiliaryFile':
         case 'requestFigureFile': {
-          const fileType = message.command.replace('request', '').replace('File', '');
+          const fileType = message.command
+            .replace('request', '')
+            .replace('File', '');
           const files = await (async () => {
             switch (fileType) {
-              case 'Reference': return await listReferenceFiles();
-              case 'Auxiliary': return await listAuxiliaryFiles();
-              case 'Figure': return await listFigureFiles();
-              default: return [];
+              case 'Reference':
+                return await listReferenceFiles();
+              case 'Auxiliary':
+                return await listAuxiliaryFiles();
+              case 'Figure':
+                return await listFigureFiles();
+              default:
+                return [];
             }
           })();
           this.postFileUpdate(webviewView, fileType, files);
@@ -216,7 +224,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'requestBaseFile':
           this.postFileUpdate(webviewView, 'Base', await listInputFiles());
           break;
-                
+
         // Multiple file selection
         case 'setMultipleInputFiles':
         case 'setMultipleReferenceFiles':
@@ -261,11 +269,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               auxiliary: await listAuxiliaryFiles(),
               figure: await listFigureFiles(),
             };
-            
+
             Object.entries(refreshedFiles).forEach(([type, files]) => {
-              this.postFileUpdate(webviewView, type.charAt(0).toUpperCase() + type.slice(1), files);
+              this.postFileUpdate(
+                webviewView,
+                type.charAt(0).toUpperCase() + type.slice(1),
+                files,
+              );
             });
-            
+
             await this.updateBaseFileSelect(webviewView);
           }
           break;
@@ -278,7 +290,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'cleanSingle':
         case 'packSingle':
-          vscode.commands.executeCommand(            `coauthor.${message.command}`,
+          vscode.commands.executeCommand(
+            `coauthor.${message.command}`,
             message.inputFile,
             message.agent,
             message.model,
@@ -319,7 +332,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             'coauthor.isGitRepository',
           );
           const commits = isGitRepo
-            ? await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits')
+            ? await vscode.commands.executeCommand<string[]>(
+                'coauthor.getRecentCommits',
+              )
             : [];
           webviewView.webview.postMessage({
             command: 'setRecentCommits',
@@ -421,7 +436,11 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.postMessage({ command: 'requestBaseFile' });
   }
 
-  private postFileUpdate(webviewView: vscode.WebviewView, fileType: string, files: string[]) {
+  private postFileUpdate(
+    webviewView: vscode.WebviewView,
+    fileType: string,
+    files: string[],
+  ) {
     webviewView.webview.postMessage({
       command: `set${fileType}File`,
       files,
