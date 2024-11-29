@@ -401,7 +401,6 @@
           <button id="executeButton">
             <i class="fas fa-play"></i> Execute
           </button>
-
         </div>
       </div>
       <div class="section">
@@ -448,6 +447,13 @@
             </div>
             <div class="file-select-actions">
               <button
+                id="emptyBaseFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
                 id="currentBaseFileButton"
                 class="action-button"
                 title="Set current file as base"
@@ -479,18 +485,25 @@
             </div>
             <div class="file-select-actions">
               <button
-                id="currentEditedFileButton"
-                class="action-button"
-                title="Set current file as edited"
-              >
-                <i class="fas fa-file-code"></i>
-              </button>
-              <button
                 id="refreshEditedFileButton"
                 class="action-button"
                 title="Refresh edited files"
               >
                 <i class="fas fa-sync-alt"></i>
+              </button>
+              <button
+                id="emptyEditedFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentEditedFileButton"
+                class="action-button"
+                title="Set current file as edited"
+              >
+                <i class="fas fa-file-code"></i>
               </button>
             </div>
           </div>
