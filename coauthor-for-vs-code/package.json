@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.10",
+  "version": "0.10.11",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -93,6 +93,132 @@
             "editPresentation": "multilineText",
             "order": 3
           },
+          "coauthor.files.included.figureExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".png",
+              ".pdf",
+              ".jpeg",
+              ".jpg",
+              ".svg",
+              ".gif",
+              ".bmp"
+            ],
+            "description": "File extensions to include when searching for figures",
+            "editPresentation": "multilineText",
+            "order": 4
+          },
+          "coauthor.files.included.inputExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".md"
+            ],
+            "description": "File extensions to include when searching for input files",
+            "editPresentation": "multilineText",
+            "order": 5
+          },
+          "coauthor.files.included.referenceExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".md"
+            ],
+            "description": "File extensions to include when searching for reference files",
+            "editPresentation": "multilineText",
+            "order": 6
+          },
+          "coauthor.files.included.auxiliaryExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex",
+              ".cls",
+              ".md"
+            ],
+            "description": "File extensions to include when searching for auxiliary files",
+            "editPresentation": "multilineText",
+            "order": 7
+          },
+          "coauthor.files.included.editedExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".txt",
+              ".tex"
+            ],
+            "description": "File extensions to include when searching for edited files",
+            "editPresentation": "multilineText",
+            "order": 8
+          },
+          "coauthor.files.ignored.fileExtensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              ".pdf",
+              ".bst",
+              ".bib",
+              ".cls",
+              ".json",
+              ".py",
+              ".ipynb",
+              ".png",
+              ".vsix",
+              ".ts",
+              ".js"
+            ],
+            "description": "File extensions to ignore when listing text files",
+            "editPresentation": "multilineText",
+            "order": 9
+          },
+          "coauthor.files.ignored.inputFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "command.tex",
+              "preamble.tex"
+            ],
+            "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",
+            "editPresentation": "multilineText",
+            "order": 10
+          },
+          "coauthor.files.ignored.auxiliaryKeywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "gpt",
+              "sonnet",
+              "haiku",
+              "opus",
+              "gemini",
+              "llama"
+            ],
+            "description": "Additional keywords to ignore when listing auxiliary files, including model names",
+            "editPresentation": "multilineText",
+            "order": 11
+          },
           "coauthor.files.ignored.figureDirectories": {
             "type": "array",
             "items": {
@@ -102,14 +228,12 @@
               "build",
               "node_modules",
               "__pycache__",
-              "Versions",
               "versions",
-              "History",
               "history"
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
-            "order": 4
+            "order": 12
           },
           "coauthor.files.ignored.directories": {
             "type": "array",
@@ -123,16 +247,14 @@
               "figures",
               "figs",
               "versions",
-              "Versions",
-              "History",
               "history",
               "stuff",
               "draft",
-              "exercises"
+              "diff"
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",
-            "order": 5
+            "order": 13
           },
           "coauthor.files.ignored.keywords": {
             "type": "array",
@@ -147,15 +269,13 @@
               "_diff",
               "diff",
               "draw",
-              "Versions",
               "versions",
-              "History",
               "history",
               ".egg-info"
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",
-            "order": 6
+            "order": 14
           }
         }
       },
@@ -164,7 +284,7 @@
         "properties": {
           "coauthor.latex.latexindentConfig": {
             "type": "string",
-            "default": "/Users/siruilu/Local/TEX/latexindent.yaml",
+            "default": "",
             "description": "Path to latexindent configuration file",
             "editPresentation": "singlelineText",
             "order": 1
@@ -204,7 +324,6 @@
             "enum": [
               "opus",
               "sonnet+",
-              "sonnet",
               "gpt4t",
               "gpt4o",
               "gpt4o-"
@@ -212,7 +331,6 @@
             "enumDescriptions": [
               "Claude 3 Opus",
               "Claude 3 Sonnet+",
-              "Claude 3 Sonnet",
               "GPT-4 Turbo",
               "GPT-4O",
               "GPT-4O Mini"
