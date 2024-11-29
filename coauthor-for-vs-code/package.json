@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.12",
+  "version": "0.10.13",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -350,6 +350,17 @@
             "order": 2
           }
         }
+      },
+      {
+        "title": "CoAuthor: File Explorer",
+        "properties": {
+          "coauthor.explorer.rootPath": {
+            "type": "string",
+            "default": "",
+            "description": "Root path for the CoAuthor file explorer view. Can be absolute or relative to workspace root.",
+            "scope": "resource"
+          }
+        }
       }
     ],
     "commands": [
@@ -418,6 +429,7 @@
         "title": "CoAuthor: Merge Files"
       }
     ],
+
     "viewsContainers": {
       "activitybar": [
         {
@@ -433,6 +445,11 @@
           "type": "webview",
           "id": "coauthor.chatView",
           "name": "Your Favourite CoAuthor "
+        },
+        {
+          "id": "coauthor.folderExplorer",
+          "name": "CoAuthor Agents",
+          "when": "workbenchState != empty"
         }
       ]
     }
