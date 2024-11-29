@@ -398,7 +398,7 @@ window.addEventListener('message', (event) => {
         message.files,
       );
       break;
-    case 'setEditedFiles':
+    case 'setEditedFile':
       updateFileSelect('editedFileSelect', message.files);
       break;
     case 'setRecentCommits':
@@ -480,14 +480,16 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Add event listeners for the new empty buttons
-  ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
-    document
-      .getElementById(`empty${type}FileButton`)
-      .addEventListener('click', () => {
-        document.getElementById(`${type.toLowerCase()}FileSelect`).value = '';
-        saveState();
-      });
-  });
+  ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
+    (type) => {
+      document
+        .getElementById(`empty${type}FileButton`)
+        .addEventListener('click', () => {
+          document.getElementById(`${type.toLowerCase()}FileSelect`).value = '';
+          saveState();
+        });
+    },
+  );
 
   document
     .getElementById('agentSelect')
@@ -1042,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Add event listener for the new refresh button
   document
-    .getElementById('refreshEditedFilesButton')
+    .getElementById('refreshEditedFileButton')
     .addEventListener('click', function () {
       const baseFile = document.getElementById('baseFileSelect').value;
       if (baseFile) {

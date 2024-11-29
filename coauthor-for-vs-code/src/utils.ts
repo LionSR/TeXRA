@@ -31,7 +31,7 @@ export async function listInputFiles(): Promise<string[]> {
     IGNORED_FILE_EXTENSIONS,
     IGNORED_DIRECTORIES,
     IGNORED_KEYWORDS,
-    getConfig<string[]>('files.ignored.inputFiles')
+    getConfig<string[]>('files.ignored.inputFiles'),
   );
 }
 
