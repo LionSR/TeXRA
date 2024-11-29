@@ -398,7 +398,7 @@ window.addEventListener('message', (event) => {
         message.files,
       );
       break;
-    case 'setEditedFiles':
+    case 'setEditedFile':
       updateFileSelect('editedFileSelect', message.files);
       break;
     case 'setRecentCommits':
@@ -1042,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Add event listener for the new refresh button
   document
-    .getElementById('refreshEditedFilesButton')
+    .getElementById('refreshEditedFileButton')
     .addEventListener('click', function () {
       const baseFile = document.getElementById('baseFileSelect').value;
       if (baseFile) {
