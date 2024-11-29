@@ -1,8 +1,45 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { FolderExplorer } from './folderExplorer';
+import * as fs from 'fs';
+import * as path from 'path';
+
+async function copyDefaultAgents(context: vscode.ExtensionContext) {
+  const resourcesPath = path.join(context.extensionPath, 'resources', 'agents');
+  const globalStoragePath = path.join(context.globalStorageUri.fsPath, 'agents');
+
+  try {
+    // Ensure the global storage agents directory exists
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(globalStoragePath));
+
+    // Read all files from resources/agents
+    const files = await fs.promises.readdir(resourcesPath);
+    
+    for (const file of files) {
+      const sourcePath = path.join(resourcesPath, file);
+      const targetPath = path.join(globalStoragePath, file);
+
+      // Only copy if target doesn't exist
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(targetPath));
+      } catch {
+        // File doesn't exist, copy it
+        const content = await fs.promises.readFile(sourcePath);
+        await vscode.workspace.fs.writeFile(
+          vscode.Uri.file(targetPath),
+          content
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error copying default agents:', error);
+  }
+}
 
 export function activate(context: vscode.ExtensionContext) {
+  // Copy default agents first
+  copyDefaultAgents(context);
+
   registerCommands(context);
 
   // Register the folder explorer with context
