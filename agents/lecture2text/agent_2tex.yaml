@@ -94,7 +94,7 @@ prompts:
     </input>
     <output>
     \begin{example}[Spectral decomposition of a degenerate matrix] For the matrix $M$ given by
-        \be
+        \begin{equation}
             M =
             \begin{pmatrix}
                 2 & 1 & 0 \\
@@ -108,7 +108,7 @@ prompts:
             \lambda_2 & = 3, \ket{v_{2,1}} = \frac{1}{\sqrt{2}}\begin{pmatrix}1 \\1 \\0\end{pmatrix}.
         \end{align}
         The eigenvectors $\ket{v_{1,1}}$ and $\ket{v_{1,2}}$ are said to be degenerate because they are orthogonal eigenvectors of $M$ with the same eigenvalue $\lambda_1=1$. We can henceforth write down the spectral decomposition of $M$ in terms of projectors onto each eigenspace
-        \be
+        \begin{equation}
             M = \ket{v_{1,1}}\bra{v_{1,1}}+\ket{v_{1,2}}\bra{v_{1,2}}+3\ket{v_{2,1}}\bra{v_{2,1}}={P}_{\lambda_1}+3{P}_{\lambda_2}.
         \ee
     \end{example}
@@ -121,24 +121,24 @@ prompts:
 
     So if I have this state $\ket{\psi} = \sum_{nm} c_{nm} \ket{nm}$, and if I have another one, $\ket{\phi} = \sum_{n'm'} d_{n'm'} \ket{n'm'}$, then how do I define the inner product? Well, it would be
     $$
-    \braket{\phi|\psi} = \sum_{nmn'm'} d_{n'm'}^* c_{nm} \braket{n'm'|nm}
+        \braket{\phi|\psi} = \sum_{nmn'm'} d_{n'm'}^* c_{nm} \braket{n'm'|nm}
     $$
     And I would have the inner product of $\ket{n'm'}$ and $\ket{nm}$, but this is an orthonormal basis. So this $n'$ should be equal to $n$, and $m'$ should be equal to $m$. So what I get is an inner product:
     $$
-    \braket{\phi|\psi} = \sum_{nm} d_{nm}^* c_{nm}
+        \braket{\phi|\psi} = \sum_{nm} d_{nm}^* c_{nm}
     $$
     And with that, everything is defined. Here, what we are using is that by definition, $\braket{nm|n'm'} = \delta_{nn'} \delta_{mm'}$. It's an orthonormal basis.
     </input>
     <output>
     \paragraph{Inner product} In order to specify the Hilbert space, we have to define the inner product. This is readily established by using the fact that $\ket{n,m}$ forms an ONB, i.e. $\langle n,m|n',m'\rangle= \delta_{n,n'}\delta_{m,m'}$. Trivially, if
-    \be
+    \begin{equation}
         \label{eq:cnmdnm}
         \ket{\Psi} = \sum_{n,m} c_{n,m} \ket{n,m}\in \mathcal{H}, \quad \ket{\Phi} = \sum_{n,m} d_{n,m} \ket{n,m}\in \mathcal{H},
-    \ee
+    \end{equation}
     we have
-    \be
+    \begin{equation}
         \langle \Phi\ket{\Psi}= \sum_{n,m} \overline{d_{nm}}c_{nm}.
-    \ee
+    \end{equation}
     </output>
     </example>
 
@@ -147,9 +147,9 @@ prompts:
     \paragraph{Diagonalization} Given a normal matrix $M$, we can always write
     $M=UDU^\dagger$, where $U$ is a unitary matrix and $D$ is a diagonal matrix. Indeed, using
     (\ref{specdec}), we can write $D_{i,i}=\lambda_i$ and $U_{i,j} = \bra{i}v_j\rangle$, where $\ket{i}$ is the vector with zero entries except for a one at the $i$-th position. It is clear that $U$ defined in this way is unitary, since
-    \be
+    \begin{equation}
         \sum_{j=1}^d U_{i,j} \overline{U}_{k,j} = \sum_{j=1} \bra{i}v_j\rangle\langle v_j\ket{k} = \delta_{i,k}
-    \ee
+    \end{equation}
     and thus $U U^\dagger = \Id$.
     </example_paragraph>
 
