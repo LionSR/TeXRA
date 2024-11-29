@@ -250,7 +250,8 @@
               "history",
               "stuff",
               "draft",
-              "diff"
+              "diff",
+              "miscellaneous"
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",

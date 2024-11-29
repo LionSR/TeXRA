@@ -391,6 +391,7 @@
               title="Toggle Output Name Override"
               >▼</span
             >
+            <br />
             <input
               type="text"
               id="outputNameOverride"
@@ -409,26 +410,26 @@
         <div class="button-group">
           <span>For the Selected Agent and Files:</span>
           <button id="packButton" class="icon-button" title="Pack Files">
-            <i class="fas fa-box"></i>
+            <i class="fas fa-box"></i>Pack
           </button>
           <button id="cleanButton" class="icon-button" title="Clean Files">
-            <i class="fas fa-trash-alt"></i>
+            <i class="fas fa-trash-alt"></i>Clean
           </button>
         </div>
         <div class="button-group">
           <span>For All the Files:</span>
           <button id="indentTexButton" class="icon-button" title="Indent TeX">
-            <i class="fas fa-indent"></i>
+            <i class="fas fa-indent"></i>Indent TeX
           </button>
           <button
             id="cleanOutputButton"
             class="icon-button"
             title="Clean Output"
           >
-            <i class="fas fa-broom"></i>
+            <i class="fas fa-broom"></i>Clean Output
           </button>
           <button id="cleanBuildButton" class="icon-button" title="Clean Build">
-            <i class="fas fa-recycle"></i>
+            <i class="fas fa-recycle"></i>Clean Build
           </button>
         </div>
       </div>
@@ -443,6 +444,15 @@
               <label for="baseFileSelect"
                 ><i class="fas fa-file-alt"></i> Select Base File:</label
               >
+            </div>
+            <div class="file-select-actions">
+              <button
+                id="emptyBaseFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
               <button
                 id="currentBaseFileButton"
                 class="action-button"
@@ -462,31 +472,38 @@
               <label for="editedFileSelect"
                 ><i class="fas fa-file-edit"></i> Select Edited File:</label
               >
-              <button
-                id="currentEditedFileButton"
-                class="action-button"
-                title="Set current file as edited"
-              >
-                <i class="fas fa-file-code"></i>
-              </button>
-              <button
-                id="refreshEditedFilesButton"
-                class="action-button"
-                title="Refresh edited files"
-              >
-                <i class="fas fa-sync-alt"></i>
-              </button>
-            </div>
-            <div class="file-select-actions">
               <button id="mergeButton" class="icon-button" title="Merge">
                 <i class="fas fa-code-merge"></i>Merge
               </button>
               <button
                 id="latexDiffButton"
                 class="icon-button"
-                title="latexdiff the edited file with the base file"
+                title="LaTeXDiff the edited file with the base file"
               >
-                <i class="fas fa-file-diff"></i>latexdiff
+                <i class="fas fa-file-medical-alt"></i>latexdiff
+              </button>
+            </div>
+            <div class="file-select-actions">
+              <button
+                id="refreshEditedFileButton"
+                class="action-button"
+                title="Refresh edited files"
+              >
+                <i class="fas fa-sync-alt"></i>
+              </button>
+              <button
+                id="emptyEditedFileButton"
+                class="icon-button"
+                title="Empty"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+              <button
+                id="currentEditedFileButton"
+                class="action-button"
+                title="Set current file as edited"
+              >
+                <i class="fas fa-file-code"></i>
               </button>
             </div>
           </div>
@@ -501,34 +518,34 @@
                 ><i class="fas fa-code-commit"></i> Select Commit:</label
               >
               <button
-                id="refreshCommitsButton"
+                id="latexDiffVCButton"
                 class="icon-button"
-                title="Refresh"
+                title="LaTeXDiff with another git commit"
               >
-                <i class="fas fa-sync"></i>
+                <i class="fas fa-file-medical-alt"></i>latexdiff-vc
               </button>
               <button
                 id="packLatexDiffVCButton"
                 class="icon-button"
                 title="Pack"
               >
-                <i class="fas fa-box"></i>
+                <i class="fas fa-box"></i>Pack
               </button>
               <button
                 id="cleanLatexDiffVCButton"
                 class="icon-button"
                 title="Clean"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="fas fa-trash-alt"></i>Clean
               </button>
             </div>
             <div class="file-select-actions">
               <button
-                id="latexDiffVCButton"
+                id="refreshCommitsButton"
                 class="icon-button"
-                title="latexdiff-vc with another git commit"
+                title="Refresh"
               >
-                <i class="fas fa-file-diff"></i>latexdiff-vc
+                <i class="fas fa-sync"></i>
               </button>
             </div>
           </div>
