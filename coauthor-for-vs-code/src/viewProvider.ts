@@ -6,13 +6,14 @@ import {
   listAuxiliaryFiles,
   listFigureFiles,
   listEditedFiles,
+  getFilesIfNotEmpty,
 } from './utils';
 import * as path from 'path';
-import { workspace, TextDocument } from 'vscode';
+import { workspace } from 'vscode';
 import {
   getWorkspacePath,
   getRelativePath,
-  getNestedConfig,
+  getConfig,
 } from './utils/commonUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
@@ -41,15 +42,23 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.window.showInformationMessage(message.text);
           log(CHANNEL_NAME, category, `Information message: ${message.text}`);
           break;
-        case 'cleanOutput':
-          vscode.commands.executeCommand('coauthor.cleanOutput');
+        // VS Code Logic
+        case 'getTheme':
+          const theme =
+            vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+              ? 'dark'
+              : 'light';
+          webviewView.webview.postMessage({ command: 'setTheme', theme });
           break;
-        case 'cleanBuild':
-          vscode.commands.executeCommand('coauthor.cleanBuild');
+        case 'modelSelected':
+          if (message.model) {
+            webviewView.webview.postMessage({
+              command: 'modelSelected',
+              model: message.model,
+            });
+          }
           break;
-        case 'indentTex':
-          vscode.commands.executeCommand('coauthor.indentTex');
-          break;
+        // Executions
         case 'execute':
           const agent_val = message.agent;
           const model_val = message.model;
@@ -61,22 +70,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFile_val = message.figureFile || null;
 
           // Get multiple files
-          const inputFiles_val =
-            message.inputFiles && message.inputFiles.length > 0
-              ? message.inputFiles
-              : null;
-          const referenceFiles_val =
-            message.referenceFiles && message.referenceFiles.length > 0
-              ? message.referenceFiles
-              : null;
-          const auxiliaryFiles_val =
-            message.auxiliaryFiles && message.auxiliaryFiles.length > 0
-              ? message.auxiliaryFiles
-              : null;
-          const figureFiles_val =
-            message.figureFiles && message.figureFiles.length > 0
-              ? message.figureFiles
-              : null;
+          const inputFiles_val = getFilesIfNotEmpty(message.inputFiles);
+          const referenceFiles_val = getFilesIfNotEmpty(message.referenceFiles);
+          const auxiliaryFiles_val = getFilesIfNotEmpty(message.auxiliaryFiles);
+          const figureFiles_val = getFilesIfNotEmpty(message.figureFiles);
 
           const instructions_val = message.instructions;
 
@@ -122,7 +119,15 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             );
           }
           break;
-
+        case 'merge':
+          vscode.commands.executeCommand(
+            `coauthor.${message.command}`,
+            message.inputFile,
+            message.baseFile,
+            message.editedFile,
+          );
+          break;
+        // File selection
         case 'selectInputFile':
         case 'selectReferenceFile':
         case 'selectAuxiliaryFile':
@@ -138,6 +143,89 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             webviewView.webview.postMessage({
               command: `${singleFileType.charAt(0).toLowerCase() + singleFileType.slice(1)}Selected`,
               filePath: file,
+            });
+          }
+          break;
+        case 'selectEditedFile':
+          const editedFile = await vscode.commands.executeCommand<string>(
+            'coauthor.selectEditedFile',
+          );
+          if (editedFile) {
+            webviewView.webview.postMessage({
+              command: 'editedFileSelected',
+              filePath: editedFile,
+            });
+          }
+          break;
+        // File Selected
+        case 'inputFileSelected':
+          vscode.window.showInformationMessage(
+            `Selected file: ${message.filePath}`,
+          );
+          const baseFileNameForInput = path.basename(
+            message.filePath,
+            path.extname(message.filePath),
+          );
+          const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
+          this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
+          break;
+        case 'referenceFileSelected':
+        case 'auxiliaryFileSelected':
+        case 'figureFileSelected':
+        case 'editedFileSelected':
+          vscode.window.showInformationMessage(
+            `${message.command}: ${message.filePath}`,
+          );
+          break;
+        // Request File
+        case 'requestInputFile':
+          {
+            const refreshedInputFiles = await vscode.commands.executeCommand<string[]>(
+              'coauthor.refreshInputFiles',
+            ) || [];
+            this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
+          }
+          break;
+        case 'requestReferenceFile':
+        case 'requestAuxiliaryFile':
+        case 'requestFigureFile': {
+          const fileType = message.command.replace('request', '').replace('File', '');
+          const files = await (async () => {
+            switch (fileType) {
+              case 'Reference': return await listReferenceFiles();
+              case 'Auxiliary': return await listAuxiliaryFiles();
+              case 'Figure': return await listFigureFiles();
+              default: return [];
+            }
+          })();
+          this.postFileUpdate(webviewView, fileType, files);
+          break;
+        }
+        case 'requestEditedFile':
+          let allEditedFiles: string[] = [];
+          if (message.baseFile) {
+            const baseFileNameForEdited = path.basename(
+              message.baseFile,
+              path.extname(message.baseFile),
+            );
+            allEditedFiles = await listEditedFiles(baseFileNameForEdited);
+            console.log('Sending edited files:', allEditedFiles);
+          }
+          this.postFileUpdate(webviewView, 'Edited', allEditedFiles);
+          break;
+        case 'requestBaseFile':
+          this.postFileUpdate(webviewView, 'Base', await listInputFiles());
+          break;
+                
+        // Multiple file selection
+        case 'setMultipleInputFiles':
+        case 'setMultipleReferenceFiles':
+        case 'setMultipleAuxiliaryFiles':
+        case 'setMultipleFigures':
+          if (message.files?.length > 0) {
+            webviewView.webview.postMessage({
+              command: message.command,
+              files: message.files,
             });
           }
           break;
@@ -164,74 +252,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             });
           }
           break;
-        case 'selectEditedFile':
-          const editedFile = await vscode.commands.executeCommand<string>(
-            'coauthor.selectEditedFile',
-          );
-          if (editedFile) {
-            webviewView.webview.postMessage({
-              command: 'editedFileSelected',
-              filePath: editedFile,
-            });
-          }
-          break;
-        case 'requestInputFile':
-          {
-            const refreshedInputFiles = await vscode.commands.executeCommand(
-              'coauthor.refreshInputFiles',
-            );
-            webviewView.webview.postMessage({
-              command: 'setInputFile',
-              files: refreshedInputFiles,
-            });
-          }
-          break;
-        case 'requestReferenceFile':
-          {
-            const referenceFiles = await listReferenceFiles();
-            webviewView.webview.postMessage({
-              command: 'setReferenceFile',
-              files: referenceFiles,
-            });
-          }
-          break;
-        case 'requestAuxiliaryFile':
-          {
-            const auxiliaryFiles = await listAuxiliaryFiles();
-            webviewView.webview.postMessage({
-              command: 'setAuxiliaryFile',
-              files: auxiliaryFiles,
-            });
-          }
-          break;
-        case 'requestFigureFile':
-          {
-            const figureFiles = await listFigureFiles();
-            webviewView.webview.postMessage({
-              command: 'setFigureFile',
-              files: figureFiles,
-            });
-          }
-          break;
-        case 'requestEditedFile':
-          if (message.baseFile) {
-            const baseFileNameForEdited = path.basename(
-              message.baseFile,
-              path.extname(message.baseFile),
-            );
-            const allEditedFiles = await listEditedFiles(baseFileNameForEdited);
-            console.log('Sending edited files:', allEditedFiles);
-            webviewView.webview.postMessage({
-              command: 'setEditedFiles',
-              files: allEditedFiles,
-            });
-          } else {
-            webviewView.webview.postMessage({
-              command: 'setEditedFiles',
-              files: [],
-            });
-          }
-          break;
+
         case 'refreshAllFiles':
           {
             const refreshedFiles = {
@@ -240,68 +261,24 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               auxiliary: await listAuxiliaryFiles(),
               figure: await listFigureFiles(),
             };
-            webviewView.webview.postMessage({
-              command: 'setInputFile',
-              files: refreshedFiles.input,
+            
+            Object.entries(refreshedFiles).forEach(([type, files]) => {
+              this.postFileUpdate(webviewView, type.charAt(0).toUpperCase() + type.slice(1), files);
             });
-            webviewView.webview.postMessage({
-              command: 'setReferenceFile',
-              files: refreshedFiles.reference,
-            });
-            webviewView.webview.postMessage({
-              command: 'setAuxiliaryFile',
-              files: refreshedFiles.auxiliary,
-            });
-            webviewView.webview.postMessage({
-              command: 'setFigureFile',
-              files: refreshedFiles.figure,
-            });
+            
             await this.updateBaseFileSelect(webviewView);
           }
           break;
-        case 'inputFileSelected':
-          vscode.window.showInformationMessage(
-            `Selected file: ${message.filePath}`,
-          );
-          const baseFileNameForInput = path.basename(
-            message.filePath,
-            path.extname(message.filePath),
-          );
-          const filteredEditedFiles =
-            await listEditedFiles(baseFileNameForInput);
-          webviewView.webview.postMessage({
-            command: 'setEditedFiles',
-            files: filteredEditedFiles,
-          });
-          break;
-        case 'referenceFileSelected':
-        case 'auxiliaryFileSelected':
-        case 'figureFileSelected':
-        case 'editedFileSelected':
-          vscode.window.showInformationMessage(
-            `${message.command}: ${message.filePath}`,
-          );
-          break;
-        case 'modelSelected':
-          if (message.model) {
-            webviewView.webview.postMessage({
-              command: 'modelSelected',
-              model: message.model,
-            });
-          }
+
+        // Housekeeping
+        case 'cleanOutput':
+        case 'cleanBuild':
+        case 'indentTex':
+          vscode.commands.executeCommand(`coauthor.${message.command}`);
           break;
         case 'cleanSingle':
-          vscode.commands.executeCommand(
-            'coauthor.cleanSingle',
-            message.inputFile,
-            message.agent,
-            message.model,
-            message.outputNameOverride,
-          );
-          break;
         case 'packSingle':
-          vscode.commands.executeCommand(
-            'coauthor.packSingle',
+          vscode.commands.executeCommand(            `coauthor.${message.command}`,
             message.inputFile,
             message.agent,
             message.model,
@@ -309,19 +286,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           );
           break;
         case 'packMultiple':
-          vscode.commands.executeCommand(
-            'coauthor.packMultiple',
-            message.inputFile,
-            message.inputFiles,
-            message.agent,
-            message.model,
-            message.outputNameOverride,
-            message.outputFiles,
-          );
-          break;
         case 'cleanMultiple':
           vscode.commands.executeCommand(
-            'coauthor.cleanMultiple',
+            `coauthor.${message.command}`,
             message.inputFile,
             message.inputFiles,
             message.agent,
@@ -330,6 +297,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             message.outputFiles,
           );
           break;
+        // Latex Diff
         case 'latexDiff':
           vscode.commands.executeCommand(
             'coauthor.latexDiff',
@@ -350,20 +318,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const isGitRepo = await vscode.commands.executeCommand<boolean>(
             'coauthor.isGitRepository',
           );
-          if (isGitRepo) {
-            const commits = await vscode.commands.executeCommand<string[]>(
-              'coauthor.getRecentCommits',
-            );
-            webviewView.webview.postMessage({
-              command: 'setRecentCommits',
-              commits: commits,
-            });
-          } else {
-            webviewView.webview.postMessage({
-              command: 'setRecentCommits',
-              isGitRepo: false,
-            });
-          }
+          const commits = isGitRepo
+            ? await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits')
+            : [];
+          webviewView.webview.postMessage({
+            command: 'setRecentCommits',
+            commits,
+            isGitRepo,
+          });
           break;
         case 'refreshCommits':
           const isGitRepoRefresh =
@@ -386,23 +348,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           }
           break;
         case 'packLatexDiffVC':
-          vscode.commands.executeCommand(
-            'coauthor.packLatexDiffVC',
-            message.inputFile,
-            message.baseFile,
-            message.commitHash,
-            message.clean,
-          );
-          break;
         case 'cleanLatexDiffVC':
           vscode.commands.executeCommand(
-            'coauthor.cleanLatexDiffVC',
+            `coauthor.${message.command}`,
             message.inputFile,
             message.baseFile,
             message.commitHash,
             message.clean,
           );
           break;
+        // VS Code Logics
         case 'getCurrentFile':
           const fileType = message.fileType || 'input';
           const currentOpenFile = await vscode.commands.executeCommand<string>(
@@ -452,32 +407,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             );
           }
           break;
-        case 'merge':
-          vscode.commands.executeCommand(
-            'coauthor.merge',
-            message.inputFile,
-            message.baseFile,
-            message.editedFile,
-          );
-          break;
-        case 'getTheme':
-          const theme =
-            vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-              ? 'dark'
-              : 'light';
-          webviewView.webview.postMessage({ command: 'setTheme', theme });
-          break;
-        case 'setMultipleInputFiles':
-        case 'setMultipleReferenceFiles':
-        case 'setMultipleAuxiliaryFiles':
-        case 'setMultipleFigures':
-          if (message.files && message.files.length > 0) {
-            webviewView.webview.postMessage({
-              command: message.command,
-              files: message.files,
-            });
-          }
-          break;
+
         case 'addOpenedFiles':
           const openedFiles = await this.getOpenedFiles();
           webviewView.webview.postMessage({
@@ -485,19 +415,17 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
             files: openedFiles,
           });
           break;
-        case 'requestBaseFile':
-          {
-            const baseFiles = await listInputFiles();
-            webviewView.webview.postMessage({
-              command: 'setBaseFile',
-              files: baseFiles,
-            });
-          }
-          break;
       }
     });
 
     webviewView.webview.postMessage({ command: 'requestBaseFile' });
+  }
+
+  private postFileUpdate(webviewView: vscode.WebviewView, fileType: string, files: string[]) {
+    webviewView.webview.postMessage({
+      command: `set${fileType}File`,
+      files,
+    });
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
@@ -527,9 +455,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       const styleUri = webview.asWebviewUri(cssPath);
       const scriptUri = webview.asWebviewUri(jsPath);
 
-      // const config = vscode.workspace.getConfiguration('coauthor');
-      // const agents = config.get<string[]>('agents') || [];
-      const agents = getNestedConfig<string[]>('agents', []);
+      const agents = getConfig<string[]>('agents', []);
       const agentOptions = agents
         .map((agent) => `<option value="${agent}">${agent}</option>`)
         .join('\n');

@@ -135,7 +135,7 @@ prompts:
     </documents>
 
   user_request: |
-    Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated.  You should include all the changes you added in the previous step.
+    Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated. You should include all the changes you added in the previous step.
 
     After your planning, revise the rebuttal package further to include the following improvements:
 
@@ -143,12 +143,13 @@ prompts:
         \item An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="{{ REPLY_TO_EDITOR_FILE }}"></document> tag.
         \item An improved point-by-point response to the referee comments. Write this inside the <document name="{{ REPLY_TO_REFEREES_FILE }}"></document> tag. To do this:
         \begin{itemize}
-            \item Ensure all referee comments are accurately represented in the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environments.
+            \item Ensure all referee comments are accurately represented in the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environments. Do not correct the referee's grammar or wording.
             \item Enhance each response in the \verb|\begin{response}| and \verb|\end{response}| environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
             \item Improve the tone to be more respectful and diplomatic while maintaining firmness in your responses.
             \item Strengthen the use of ``They Say, I Say'' principles and the ``Show, not tell'' approach in your rebuttals.
             \item If there are incoherent draft points in the responses, you must do your best efforts to understand their logic and find a logical way to embed them into the responses.
             \item If there are indicated TODOs left in the draft responses, do your best efforts to address them based on the instructions and the context.
+            \item Be clear about what needs to be changed in the paper and its supplementary materials (or appendices).
         \end{itemize}
         \item Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
         \item An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
@@ -182,7 +183,7 @@ prompts:
     </document>
 
     <document name="{{ MAIN_FILE }}">
-    % Insert the further revised text of the main paper here. Present the full text.    
+    % Insert the further revised text of the main paper here. Present the full text.   
     </document>
 
     {% if SUPP_FILE %}
