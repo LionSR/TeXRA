@@ -30,7 +30,7 @@ settings:
       categories: ["input_file", "input_files"]
     - pattern: "instruction"
       var_name: "FILE_INSTRUCTION"
-      categories: ["input_files","auxiliary_file", "auxiliary_files"]
+      categories: ["input_files", "auxiliary_file", "auxiliary_files"]
     - pattern: "editor_letter"
       var_name: "EDITOR_LETTER_CONTENT"
       categories: ["input_files"]
