@@ -13,25 +13,26 @@ export function getRelativePath(filePath: string): string {
 export const showInfoMessage = vscode.window.showInformationMessage;
 export const showErrorMessage = vscode.window.showErrorMessage;
 
-export function getConfig(section?: string): vscode.WorkspaceConfiguration {
-  return section
-    ? vscode.workspace.getConfiguration(section)
-    : vscode.workspace.getConfiguration('coauthor');
-}
-
-export function getNestedConfig<T>(path: string, defaultValue?: T): T {
-  const config = getConfig();
+export function getConfig<T>(path: string, defaultValue?: T): T {
   const parts = path.split('.');
+  
+  // First try getting the config as is (e.g., for latex.latexindentConfig)
+  let result: any = vscode.workspace
+    .getConfiguration(parts[0])
+    .get(parts.slice(1).join('.'));
 
-  // For nested configs in package.json, we need to check both with and without 'coauthor.' prefix
-  let result: any = config.get(parts.join('.'));
-
-  // If not found, try with explicit section paths
+  // If not found, try under coauthor namespace
   if (result === undefined) {
-    // Try getting from the full path including 'coauthor'
+    result = vscode.workspace
+      .getConfiguration('coauthor')
+      .get(path);
+  }
+
+  // If still not found, try with explicit coauthor prefix
+  if (result === undefined) {
     result = vscode.workspace
       .getConfiguration()
-      .get(`coauthor.${parts.join('.')}`);
+      .get(`coauthor.${path}`);
   }
 
   // Return default value if still undefined

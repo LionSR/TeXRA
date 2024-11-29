@@ -6,13 +6,14 @@ import {
   listAuxiliaryFiles,
   listFigureFiles,
   listEditedFiles,
+  getFilesIfNotEmpty,
 } from './utils';
 import * as path from 'path';
-import { workspace, TextDocument } from 'vscode';
+import { workspace } from 'vscode';
 import {
   getWorkspacePath,
   getRelativePath,
-  getNestedConfig,
+  getConfig,
 } from './utils/commonUtils';
 import { log, initializeLogging } from './utils/logUtils';
 
@@ -61,22 +62,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const figureFile_val = message.figureFile || null;
 
           // Get multiple files
-          const inputFiles_val =
-            message.inputFiles && message.inputFiles.length > 0
-              ? message.inputFiles
-              : null;
-          const referenceFiles_val =
-            message.referenceFiles && message.referenceFiles.length > 0
-              ? message.referenceFiles
-              : null;
-          const auxiliaryFiles_val =
-            message.auxiliaryFiles && message.auxiliaryFiles.length > 0
-              ? message.auxiliaryFiles
-              : null;
-          const figureFiles_val =
-            message.figureFiles && message.figureFiles.length > 0
-              ? message.figureFiles
-              : null;
+          const inputFiles_val = getFilesIfNotEmpty(message.inputFiles);
+          const referenceFiles_val = getFilesIfNotEmpty(message.referenceFiles);
+          const auxiliaryFiles_val = getFilesIfNotEmpty(message.auxiliaryFiles);
+          const figureFiles_val = getFilesIfNotEmpty(message.figureFiles);
 
           const instructions_val = message.instructions;
 
@@ -527,9 +516,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       const styleUri = webview.asWebviewUri(cssPath);
       const scriptUri = webview.asWebviewUri(jsPath);
 
-      // const config = vscode.workspace.getConfiguration('coauthor');
-      // const agents = config.get<string[]>('agents') || [];
-      const agents = getNestedConfig<string[]>('agents', []);
+      const agents = getConfig<string[]>('agents', []);
       const agentOptions = agents
         .map((agent) => `<option value="${agent}">${agent}</option>`)
         .join('\n');
