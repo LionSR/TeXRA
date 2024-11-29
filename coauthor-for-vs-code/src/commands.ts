@@ -501,10 +501,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
       const workspacePath = getWorkspacePath();
       if (workspacePath) {
-        const numberOfCommits = getConfig(
-          'git.numberOfCommitsToShow',
-          20,
-        );
+        const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
         return new Promise<string[]>((resolve, reject) => {
           exec(
             `git log -n ${numberOfCommits} --pretty=format:"%h: %s (%cr)"`,
@@ -727,9 +724,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
         canSelectFiles: true,
         canSelectFolders: false,
         filters: {
-          Images: getConfig<string[]>(
-            'files.included.figureExtensions',
-          ).map((ext) => ext.replace('.', '')),
+          Images: getConfig<string[]>('files.included.figureExtensions').map(
+            (ext) => ext.replace('.', ''),
+          ),
         },
       });
       if (fileUri && fileUri[0]) {
