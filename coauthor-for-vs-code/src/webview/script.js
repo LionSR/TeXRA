@@ -480,14 +480,16 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Add event listeners for the new empty buttons
-  ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
-    document
-      .getElementById(`empty${type}FileButton`)
-      .addEventListener('click', () => {
-        document.getElementById(`${type.toLowerCase()}FileSelect`).value = '';
-        saveState();
-      });
-  });
+  ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
+    (type) => {
+      document
+        .getElementById(`empty${type}FileButton`)
+        .addEventListener('click', () => {
+          document.getElementById(`${type.toLowerCase()}FileSelect`).value = '';
+          saveState();
+        });
+    },
+  );
 
   document
     .getElementById('agentSelect')
