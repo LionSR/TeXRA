@@ -356,7 +356,7 @@
         "properties": {
           "coauthor.explorer.rootPath": {
             "type": "string",
-            "default": "",
+            "default": "agents",
             "description": "Root path for the CoAuthor file explorer view. Can be absolute or relative to workspace root.",
             "scope": "resource"
           }
