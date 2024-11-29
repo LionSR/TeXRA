@@ -354,12 +354,14 @@ function restoreState() {
 window.addEventListener('message', (event) => {
   const message = event.data;
   switch (message.command) {
+    // VS Code Logic
     case 'setTheme':
       document.body.className = message.theme;
       break;
     case 'modelSelected':
       document.getElementById('modelSelect').value = message.model;
       break;
+    // File selection
     case 'setInputFile':
     case 'setReferenceFile':
     case 'setAuxiliaryFile':
@@ -378,6 +380,7 @@ window.addEventListener('message', (event) => {
         `${message.command.replace('Selected', 'Select')}`,
       ).value = message.filePath;
       break;
+    // Multiple file selection
     case 'setMultipleInputFiles':
     case 'setMultipleReferenceFiles':
     case 'setMultipleAuxiliaryFiles':
@@ -703,6 +706,22 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
+  document.getElementById('mergeButton').addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    const editedFile = document.getElementById('editedFileSelect').value;
+
+    vscode.postMessage({
+      command: 'merge',
+      inputFile: inputFile,
+      editedFile: editedFile,
+    });
+
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Merging files: ${inputFile} and ${editedFile}`,
+    });
+  });
+
   document
     .getElementById('refreshAllFilesButton')
     .addEventListener('click', function () {
@@ -925,21 +944,6 @@ document.addEventListener('DOMContentLoaded', function () {
         baseFile: baseFile,
       });
     });
-  document.getElementById('mergeButton').addEventListener('click', function () {
-    const inputFile = document.getElementById('inputFileSelect').value;
-    const editedFile = document.getElementById('editedFileSelect').value;
-
-    vscode.postMessage({
-      command: 'merge',
-      inputFile: inputFile,
-      editedFile: editedFile,
-    });
-
-    vscode.postMessage({
-      command: 'showInformationMessage',
-      text: `Merging files: ${inputFile} and ${editedFile}`,
-    });
-  });
 
   // Save state on input changes
   const elementsToWatch = [

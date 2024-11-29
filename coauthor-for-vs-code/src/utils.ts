@@ -11,29 +11,6 @@ const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
 );
 const IGNORED_DIRECTORIES = getConfig<string[]>('files.ignored.directories');
 const IGNORED_KEYWORDS = getConfig<string[]>('files.ignored.keywords');
-const IGNORED_INPUT_FILES = getConfig<string[]>('files.ignored.inputFiles');
-const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
-  'files.ignored.figureDirectories',
-);
-const IGNORED_AUXILIARY_KEYWORDS = getConfig<string[]>(
-  'files.ignored.auxiliaryKeywords',
-);
-
-const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(
-  'files.included.figureExtensions',
-);
-const INCLUDED_INPUT_EXTENSIONS = getConfig<string[]>(
-  'files.included.inputExtensions',
-);
-const INCLUDED_REFERENCE_EXTENSIONS = getConfig<string[]>(
-  'files.included.referenceExtensions',
-);
-const INCLUDED_AUXILIARY_EXTENSIONS = getConfig<string[]>(
-  'files.included.auxiliaryExtensions',
-);
-const INCLUDED_EDITED_EXTENSIONS = getConfig<string[]>(
-  'files.included.editedExtensions',
-);
 
 export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
   return files && files.length > 0 ? files : null;
@@ -43,6 +20,10 @@ export async function listInputFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
+  const INCLUDED_INPUT_EXTENSIONS = getConfig<string[]>(
+    'files.included.inputExtensions',
+  );
+
   return getFilesRecursively(
     workspacePath,
     workspacePath,
@@ -50,7 +31,7 @@ export async function listInputFiles(): Promise<string[]> {
     IGNORED_FILE_EXTENSIONS,
     IGNORED_DIRECTORIES,
     IGNORED_KEYWORDS,
-    IGNORED_INPUT_FILES,
+    getConfig<string[]>('files.ignored.inputFiles')
   );
 }
 
@@ -59,6 +40,14 @@ export const listReferenceFiles = listInputFiles;
 export async function listAuxiliaryFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
+
+  const IGNORED_AUXILIARY_KEYWORDS = getConfig<string[]>(
+    'files.ignored.auxiliaryKeywords',
+  );
+
+  const INCLUDED_AUXILIARY_EXTENSIONS = getConfig<string[]>(
+    'files.included.auxiliaryExtensions',
+  );
 
   return getFilesInDirectory(
     workspacePath,
@@ -72,6 +61,14 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
 export async function listFigureFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
+
+  const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
+    'files.ignored.figureDirectories',
+  );
+
+  const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(
+    'files.included.figureExtensions',
+  );
 
   return getFilesRecursively(
     workspacePath,
@@ -87,6 +84,10 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) return [];
 
+  const INCLUDED_EDITED_EXTENSIONS = getConfig<string[]>(
+    'files.included.editedExtensions',
+  );
+
   const files = await getFilesRecursively(
     workspacePath,
     workspacePath,
@@ -94,7 +95,7 @@ export async function listEditedFiles(baseFileName: string): Promise<string[]> {
     IGNORED_FILE_EXTENSIONS,
     [...IGNORED_DIRECTORIES, 'PapersEx'],
     IGNORED_KEYWORDS,
-    IGNORED_INPUT_FILES,
+    getConfig<string[]>('files.ignored.inputFiles'),
   );
 
   // Extract the base name before any round number
