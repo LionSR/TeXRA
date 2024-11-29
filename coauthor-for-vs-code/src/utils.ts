@@ -9,13 +9,9 @@ initializeLogging(CHANNEL_NAME);
 const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
   'files.ignored.fileExtensions',
 );
-const IGNORED_DIRECTORIES = getConfig<string[]>(
-  'files.ignored.directories',
-);
+const IGNORED_DIRECTORIES = getConfig<string[]>('files.ignored.directories');
 const IGNORED_KEYWORDS = getConfig<string[]>('files.ignored.keywords');
-const IGNORED_INPUT_FILES = getConfig<string[]>(
-  'files.ignored.inputFiles',
-);
+const IGNORED_INPUT_FILES = getConfig<string[]>('files.ignored.inputFiles');
 const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
   'files.ignored.figureDirectories',
 );
