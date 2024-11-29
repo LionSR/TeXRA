@@ -339,20 +339,16 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           const isGitRepo = await vscode.commands.executeCommand<boolean>(
             'coauthor.isGitRepository',
           );
-          if (isGitRepo) {
-            const commits = await vscode.commands.executeCommand<string[]>(
-              'coauthor.getRecentCommits',
-            );
-            webviewView.webview.postMessage({
-              command: 'setRecentCommits',
-              commits: commits,
-            });
-          } else {
-            webviewView.webview.postMessage({
-              command: 'setRecentCommits',
-              isGitRepo: false,
-            });
-          }
+          const commits = isGitRepo
+            ? await vscode.commands.executeCommand<string[]>(
+                'coauthor.getRecentCommits',
+              )
+            : [];
+          webviewView.webview.postMessage({
+            command: 'setRecentCommits',
+            commits,
+            isGitRepo,
+          });
           break;
         case 'refreshCommits':
           const isGitRepoRefresh =
