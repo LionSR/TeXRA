@@ -27,11 +27,11 @@ def load_agent_settings_and_prompts(agent_path: str, agent: str):
     """Load agent settings and prompts from YAML files."""
 
     def load_agent_from_yaml(agent_path, agent_name):
-        agent_prompt_file = f"{agent_path}/agent_{agent_name}.yaml"
-        if not os.path.exists(agent_prompt_file):
-            raise FileNotFoundError(f"Task prompt file not found: {agent_prompt_file}")
+        agent_file = f"{agent_path}/{agent_name}.yaml"
+        if not os.path.exists(agent_file):
+            raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
 
-        config = load_yaml(agent_prompt_file)
+        config = load_yaml(agent_file)
         parent = config.get("inherits")
 
         if parent:
