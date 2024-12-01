@@ -15,8 +15,8 @@ def main():
     )
     args = parser.parse_args()
 
-    paper2note = DirectWrite(args, agent_path)
-    paper2note.run()
+    agent = DirectWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import re
 from coauthor import State
 from coauthor.logging_utils import logger
 
-agent_path = coa.get_agent_path(coa, "merge")
+agent_path = coa.get_agent_path(coa, ".")
 
 
 def get_output_file_name_merge(input_file, edited_file, round):

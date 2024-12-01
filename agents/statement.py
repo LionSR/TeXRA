@@ -1,7 +1,7 @@
 from coauthor.agent_reflect import ThinkAndWrite
 import coauthor as coa
 
-agent_path = coa.get_agent_path(coa, "application")
+agent_path = coa.get_agent_path(coa, "statement")
 
 
 def main():
@@ -14,8 +14,8 @@ def main():
     )
     args = parser.parse_args()
 
-    revise_document = ThinkAndWrite(args, agent_path)
-    revise_document.run()
+    agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

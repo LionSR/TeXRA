@@ -1,4 +1,4 @@
-name: draw
+name: draw_note
 settings:
   document_tag: latex_document
   end_tag: </latex_document>

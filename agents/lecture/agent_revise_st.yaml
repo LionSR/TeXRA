@@ -1,5 +1,5 @@
 name: revise_st
-inherits: revise
+inherits: revise_note
 
 settings:
   required_files:

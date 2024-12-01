@@ -15,8 +15,8 @@ def main():
     )
     args = parser.parse_args()
 
-    lecture2text = DirectWrite(args, agent_path)
-    lecture2text.run()
+    agent = DirectWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

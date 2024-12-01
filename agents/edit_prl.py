@@ -15,10 +15,10 @@ def main():
     args = parser.parse_args()
 
     if args.agent.startswith("correct"):
-        edit_prl = DirectWrite(args, agent_path)
+        agent = DirectWrite(args, agent_path)
     else:
-        edit_prl = ThinkAndWrite(args, agent_path)
-    edit_prl.run()
+        agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":
