@@ -16,10 +16,8 @@ def main():
 
     args = parser.parse_args()
 
-    rebuttal = ThinkAndWrite(args, agent_path)
-    # rebuttal = DirectWrite(args, agent_path)
-
-    rebuttal.run()
+    agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

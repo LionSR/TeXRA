@@ -1,5 +1,5 @@
-name: correct_more
-inherits: correct
+name: correct_tex_more
+inherits: correct_tex
 
 prompts:
   system_prompt: |

@@ -213,7 +213,8 @@
               "haiku",
               "opus",
               "gemini",
-              "llama"
+              "llama",
+              "egg-info"
             ],
             "description": "Additional keywords to ignore when listing auxiliary files, including model names",
             "editPresentation": "multilineText",

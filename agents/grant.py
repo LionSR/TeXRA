@@ -14,8 +14,8 @@ def main():
     )
     args = parser.parse_args()
 
-    revise_document = ThinkAndWrite(args, agent_path)
-    revise_document.run()
+    agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

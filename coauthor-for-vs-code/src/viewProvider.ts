@@ -303,7 +303,6 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           vscode.commands.executeCommand(
             `coauthor.${message.command}`,
             message.inputFile,
-            message.inputFiles,
             message.agent,
             message.model,
             message.outputNameOverride,

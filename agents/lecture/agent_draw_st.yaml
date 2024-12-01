@@ -1,5 +1,5 @@
 name: draw_st
-inherits: draw
+inherits: draw_note
 settings:
   required_files:
     DOCUMENT_CLS: lecture.cls
