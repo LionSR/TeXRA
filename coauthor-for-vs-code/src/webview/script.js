@@ -238,7 +238,7 @@ function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
     const defaultValues = {
-      agentSelect: 'correct-tex',
+      agentSelect: 'correct_tex',
       reflectSelect: 'True',
       commitSelect: 'HEAD',
     };
