@@ -1,4 +1,4 @@
-name: revise_referee
+name: revise_referee_report
 settings:
   document_tag: revised_referee_report
   end_tag: </revised_referee_report>

@@ -17,7 +17,7 @@ def main():
             "slide2paper",
             "paper2slide",
             "paper2referee",
-            "revise_referee",
+            "revise_referee_report",
             "paper2poster",
             "translate2chn",
         ],
