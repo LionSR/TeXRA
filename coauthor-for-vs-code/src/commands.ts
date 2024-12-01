@@ -575,7 +575,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           }
         }
 
-        let command = `coauthor ${agent} --input_file="${inputFile}"`;
+        let command = `coauthor run ${agent} --input_file="${inputFile}"`;
 
         // Add single files if they exist
         if (referenceFile) {
