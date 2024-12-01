@@ -3,7 +3,9 @@ import os
 import click
 import shlex
 import subprocess
+
 from dotenv import load_dotenv
+from pathlib import Path
 
 from coauthor.arg_utils import comma_separated_list
 from coauthor.figure_tools import (
@@ -69,15 +71,26 @@ def shared_arguments(func):
     return func
 
 
-def execute_agent(script, agent, model, input_file, **kwargs):
+def execute_agent(script, agent, **kwargs):
     agents_dir = get_agent_dir_from_env()
+
+    # Check if multiple agent exists and output_files is specified
+    multiple_agent = f"{agent}_multiple"
+    multiple_yaml_exists = any((Path(agents_dir) / script).rglob(f"{multiple_agent}.yaml"))
+
+    # Use multiple agent only if both conditions are met
+    if kwargs.get("output_files") and multiple_yaml_exists:
+        agent = multiple_agent
+
     command = [
         "python",
         f"{agents_dir}/{script}.py",
         f"--agent={agent}",
-        f"--model={model}",
-        f"--input_file={input_file}",
     ]
+    if kwargs.get("model"):
+        command.append(f"--model={kwargs.get('model')}")
+    if kwargs.get("input_file"):
+        command.append(f"--input_file={kwargs.get('input_file')}")
 
     # Handle figure files - merge figure_file into figure_files if either exists
     figure_files = []
@@ -91,10 +104,10 @@ def execute_agent(script, agent, model, input_file, **kwargs):
         kwargs["figure_files"] = figure_files
 
     if kwargs.get("auto_extract_figure"):
-        handle_auto_extract_figure(kwargs, input_file)
+        handle_auto_extract_figure(kwargs, kwargs.get("input_file"))
 
     # Prepare all input files
-    all_input_files = [input_file]
+    all_input_files = [kwargs.get("input_file")]
     if kwargs.get("input_files"):
         if isinstance(kwargs["input_files"], str):
             all_input_files.extend(kwargs["input_files"].split(","))
@@ -145,267 +158,12 @@ def merge(model, input_file, edited_file):
 # Agents
 
 
-@click.command()
+@cli.command()
 @shared_arguments
-def correct_tex(model, input_file, **kwargs):
-    agent = "correct_tex"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-
-    execute_agent("article", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_tex(model, input_file, **kwargs):
-    agent = "polish_tex"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("article", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def draw_tex(model, input_file, **kwargs):
-    agent = "draw_tex"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("article", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def adapt_note(model, input_file, **kwargs):
-    execute_agent("lecture", "adapt_note", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def correct_qi(model, input_file, **kwargs):
-    execute_agent("lecture", "correct_qi", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def correct_st(model, input_file, **kwargs):
-    execute_agent("lecture", "correct_st", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_st(model, input_file, **kwargs):
-    agent = "polish_st"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("lecture", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_qi(model, input_file, **kwargs):
-    agent = "polish_qi"
-    execute_agent("lecture", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_st(model, input_file, **kwargs):
-    agent = "revise_st"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("lecture", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def draw_st(model, input_file, **kwargs):
-    agent = "draw_st"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("lecture", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def draw_qi(model, input_file, **kwargs):
-    execute_agent("lecture", "draw_qi", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def meeting2text(model, input_file, **kwargs):
-    execute_agent("meeting2text", "transcribe_dual", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def txt2tex(model, input_file, **kwargs):
-    execute_agent("txt2tex", "txt2tex", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def txt2tex_article(model, input_file, **kwargs):
-    execute_agent("txt2tex", "txt2tex_article", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def txt2tex_paper(model, input_file, **kwargs):
-    execute_agent("txt2tex", "txt2tex_paper", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def txt2tex_example(model, input_file, **kwargs):
-    execute_agent("txt2tex", "txt2tex_example", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2note(model, input_file, **kwargs):
-    execute_agent("paper2note", "paper2note", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def correct_prl(model, input_file, **kwargs):
-    execute_agent("edit_prl", "correct_prl", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_prl(model, input_file, **kwargs):
-    execute_agent("edit_prl", "polish_prl", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def polish_cover(model, input_file, **kwargs):
-    execute_agent("write", "polish_cover", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2cover(model, input_file, **kwargs):
-    execute_agent("write", "paper2cover", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2poster(model, input_file, **kwargs):
-    execute_agent("write", "paper2poster", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def write_proposal(model, input_file, **kwargs):
-    execute_agent("write", "write_proposal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def slide2paper(model, input_file, **kwargs):
-    execute_agent("write", "slide2paper", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2slide(model, input_file, **kwargs):
-    execute_agent("write", "paper2slide", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def statement_diversity(model, input_file, **kwargs):
-    execute_agent("statement", "statement_diversity", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def statement_research(model, input_file, **kwargs):
-    execute_agent("statement", "statement_research", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def statement_teaching(model, input_file, **kwargs):
-    execute_agent("statement", "statement_teaching", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_nsf_grant(model, input_file, **kwargs):
-    execute_agent("grant", "revise_nsf_grant", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_marie_curie(model, input_file, **kwargs):
-    execute_agent("grant", "revise_marie_curie", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def text2tex(model, input_file, **kwargs):
-    execute_agent("meeting2text", "text2tex", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_prl(model, input_file, **kwargs):
-    execute_agent(
-        "rebuttal_prl",
-        "revise_prl",
-        model,
-        input_file,
-        **kwargs,
-    )
-
-
-@click.command()
-@shared_arguments
-def draft_rebuttal_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "draft_rebuttal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_rebuttal_prl(model, input_file, **kwargs):
-    execute_agent("rebuttal_prl", "revise_rebuttal", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def paper2referee(model, input_file, **kwargs):
-    execute_agent("write", "paper2referee", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def revise_referee(model, input_file, **kwargs):
-    execute_agent("write", "revise_referee", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def translate2chn(model, input_file, **kwargs):
-    execute_agent("write", "translate2chn", model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def convert_tex(model, input_file, **kwargs):
-    agent = "convert"
-    if kwargs.get("output_files"):
-        agent = f"{agent}_multiple"
-    execute_agent("article", agent, model, input_file, **kwargs)
-
-
-@click.command()
-@shared_arguments
-def ocr_tex(model, input_file, **kwargs):
-    execute_agent("article", "ocr", model, input_file, **kwargs)
+@click.argument("agent")
+def run(agent: str, **kwargs):
+    """Run any agent except merge using execute_agent"""
+    execute_agent("run", agent, **kwargs)
 
 
 # Housekeeping operations
@@ -535,64 +293,6 @@ if __name__ == "__main__":
 # merge
 cli.add_command(merge)
 
-# article.py
-cli.add_command(correct_tex)
-cli.add_command(polish_tex)
-cli.add_command(draw_tex)
-cli.add_command(convert_tex)
-cli.add_command(ocr_tex)
-
-# lecture.py
-cli.add_command(adapt_note)
-cli.add_command(correct_st)
-cli.add_command(correct_qi)
-cli.add_command(polish_st)
-cli.add_command(polish_qi)
-cli.add_command(revise_st)
-cli.add_command(draw_st)
-cli.add_command(draw_qi)
-
-# meeting2text.py
-cli.add_command(meeting2text)
-cli.add_command(text2tex)
-
-# txt2tex.py
-cli.add_command(txt2tex)
-cli.add_command(txt2tex_article)
-cli.add_command(txt2tex_paper)
-cli.add_command(txt2tex_example)
-
-# paper2note.py
-cli.add_command(paper2note)
-
-# edit_prl.py
-cli.add_command(correct_prl)
-cli.add_command(polish_prl)
-cli.add_command(revise_prl)
-
-# reply_prl.py
-cli.add_command(draft_rebuttal_prl)
-cli.add_command(revise_rebuttal_prl)
-
-# write_tex.py
-cli.add_command(polish_cover)
-cli.add_command(paper2cover)
-cli.add_command(write_proposal)
-cli.add_command(slide2paper)
-cli.add_command(paper2slide)
-cli.add_command(paper2referee)
-cli.add_command(revise_referee)
-cli.add_command(paper2poster)
-cli.add_command(translate2chn)
-
-# application.py
-cli.add_command(statement_diversity)
-cli.add_command(statement_research)
-cli.add_command(statement_teaching)
-
-# grant.py
-cli.add_command(revise_nsf_grant)
-cli.add_command(revise_marie_curie)
 
 # Housekeepings
 
