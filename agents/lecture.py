@@ -27,10 +27,10 @@ def main():
     args = parser.parse_args()
 
     if args.agent.startswith("correct"):
-        edit_lecture = DirectWrite(args, agent_path)
+        agent = DirectWrite(args, agent_path)
     else:
-        edit_lecture = ThinkAndWrite(args, agent_path)
-    edit_lecture.run()
+        agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

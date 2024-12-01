@@ -24,8 +24,8 @@ def main():
     )
     args = parser.parse_args()
 
-    write_tex = ThinkAndWrite(args, agent_path)
-    write_tex.run()
+    agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

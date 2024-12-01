@@ -11,14 +11,14 @@ def main():
         type=str,
         default="correct",
         choices=[
-            "correct",
-            "polish",
-            "draw",
-            "correct_multiple",
-            "polish_multiple",
-            "draw_multiple",
-            "convert",
-            "ocr",
+            "correct_tex",
+            "polish_tex",
+            "draw_tex",
+            "correct_tex_multiple",
+            "polish_tex_multiple",
+            "draw_tex_multiple",
+            "convert_tex",
+            "ocr_tex",
         ],
     )
 
@@ -26,10 +26,10 @@ def main():
 
     # OCR agent should use ThinkAndWrite to analyze notation and ensure consistency
     if args.agent.startswith("correct"):
-        edit_tex = DirectWrite(args, agent_path)
+        agent = DirectWrite(args, agent_path)
     else:
-        edit_tex = ThinkAndWrite(args, agent_path)
-    edit_tex.run()
+        agent = ThinkAndWrite(args, agent_path)
+    agent.run()
 
 
 if __name__ == "__main__":

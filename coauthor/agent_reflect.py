@@ -84,6 +84,7 @@ class BaseReflectChainAgent(ABC):
         all_auxiliary_files = [self.task_config.auxiliary_file] + self.task_config.auxiliary_files
 
         user_vars = {
+            "MODEL": self.task_config.model,
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
