@@ -171,7 +171,7 @@ CoAuthor's agents are defined in the `agents` directory. Each Agent typically ha
 
 ### Agent Structure
 
-- Each Agent is defined in a separate Python file in the `agents` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
+- Each Agent is defined in a separate Python file in the `agents` directory (e.g., `article.py`, `lecture.py`, `merge.py`).
 - These Python files define the main logic for each Agent, including argument parsing, file handling, and interaction with the AI model.
 - Associated prompt files are stored in YAML format in subdirectories within the `agents` directory, named after the Agent (e.g., `agents/article`, `agents/lecture`).
 - Each agent directory contains YAML files that define the prompts and configurations for different modes of operation.
@@ -393,7 +393,7 @@ The main logic for CoAuthor is distributed across several Python files:
 - `coauthor/file_utils.py`: File handling utilities
 - `coauthor/tex_tools.py`: LaTeX-specific utilities
 
-Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/edit_tex.py`, `agents/reply_prl.py`, etc.
+Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/article.py`, `agents/lecture.py`, etc.
 
 ## Extending CoAuthor
 

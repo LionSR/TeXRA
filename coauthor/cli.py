@@ -142,50 +142,53 @@ def merge(model, input_file, edited_file):
     subprocess.run(command)
 
 
+# Agents
+
+
 @click.command()
 @shared_arguments
 def correct_tex(model, input_file, **kwargs):
-    agent = "correct"
+    agent = "correct_tex"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
 
-    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+    execute_agent("article", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_tex(model, input_file, **kwargs):
-    agent = "polish"
+    agent = "polish_tex"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+    execute_agent("article", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_tex(model, input_file, **kwargs):
-    agent = "draw"
+    agent = "draw_tex"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+    execute_agent("article", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-def adapt(model, input_file, **kwargs):
-    execute_agent("edit_lecture", "adapt", model, input_file, **kwargs)
+def adapt_note(model, input_file, **kwargs):
+    execute_agent("lecture", "adapt_note", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def correct_qi(model, input_file, **kwargs):
-    execute_agent("edit_lecture", "correct_qi", model, input_file, **kwargs)
+    execute_agent("lecture", "correct_qi", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def correct_st(model, input_file, **kwargs):
-    execute_agent("edit_lecture", "correct_st", model, input_file, **kwargs)
+    execute_agent("lecture", "correct_st", model, input_file, **kwargs)
 
 
 @click.command()
@@ -194,14 +197,14 @@ def polish_st(model, input_file, **kwargs):
     agent = "polish_st"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+    execute_agent("lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def polish_qi(model, input_file, **kwargs):
     agent = "polish_qi"
-    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+    execute_agent("lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
@@ -210,7 +213,7 @@ def revise_st(model, input_file, **kwargs):
     agent = "revise_st"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+    execute_agent("lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
@@ -219,38 +222,43 @@ def draw_st(model, input_file, **kwargs):
     agent = "draw_st"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+    execute_agent("lecture", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def draw_qi(model, input_file, **kwargs):
-    agent = "draw_qi"
-    execute_agent("edit_lecture", agent, model, input_file, **kwargs)
+    execute_agent("lecture", "draw_qi", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-def meeting2text(model, input_file, agent="transcribe_dual", **kwargs):
-    execute_agent(
-        "meeting2text",
-        agent,
-        model,
-        input_file,
-        **kwargs,
-    )
+def meeting2text(model, input_file, **kwargs):
+    execute_agent("meeting2text", "transcribe_dual", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-def txt2tex(model, input_file, agent="txt2tex", **kwargs):
-    if "article" in input_file.lower():
-        agent = f"{agent}_article"
-    elif "paper" in input_file.lower():
-        agent = f"{agent}_paper"
-    elif "example" in input_file.lower():
-        agent = f"{agent}_example"
-    execute_agent("txt2tex", agent, model, input_file, **kwargs)
+def txt2tex(model, input_file, **kwargs):
+    execute_agent("txt2tex", "txt2tex", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def txt2tex_article(model, input_file, **kwargs):
+    execute_agent("txt2tex", "txt2tex_article", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def txt2tex_paper(model, input_file, **kwargs):
+    execute_agent("txt2tex", "txt2tex_paper", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def txt2tex_example(model, input_file, **kwargs):
+    execute_agent("txt2tex", "txt2tex_example", model, input_file, **kwargs)
 
 
 @click.command()
@@ -274,55 +282,55 @@ def polish_prl(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def polish_cover(model, input_file, **kwargs):
-    execute_agent("write_tex", "polish_cover", model, input_file, **kwargs)
+    execute_agent("write", "polish_cover", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def paper2cover(model, input_file, **kwargs):
-    execute_agent("write_tex", "paper2cover", model, input_file, **kwargs)
+    execute_agent("write", "paper2cover", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def paper2poster(model, input_file, **kwargs):
-    execute_agent("write_tex", "paper2poster", model, input_file, **kwargs)
+    execute_agent("write", "paper2poster", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def write_proposal(model, input_file, **kwargs):
-    execute_agent("write_tex", "write_proposal", model, input_file, **kwargs)
+    execute_agent("write", "write_proposal", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def slide2paper(model, input_file, **kwargs):
-    execute_agent("write_tex", "slide2paper", model, input_file, **kwargs)
+    execute_agent("write", "slide2paper", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def paper2slide(model, input_file, **kwargs):
-    execute_agent("write_tex", "paper2slide", model, input_file, **kwargs)
+    execute_agent("write", "paper2slide", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
-def statement(model, input_file, **kwargs):
-    # maybe handle with agent_postfix setting
-    if "teaching" in input_file.lower():
-        agent = "teaching"
-    elif "diversity" in input_file.lower():
-        agent = "diversity"
-    elif "research" in input_file.lower():
-        agent = "research"
-    else:
-        raise ValueError("Document type not recognized")
+def statement_diversity(model, input_file, **kwargs):
+    execute_agent("statement", "statement_diversity", model, input_file, **kwargs)
 
-    logger.info(f"Agent: statement_{agent}")
 
-    execute_agent("application", f"statement_{agent}", model, input_file, **kwargs)
+@click.command()
+@shared_arguments
+def statement_research(model, input_file, **kwargs):
+    execute_agent("statement", "statement_research", model, input_file, **kwargs)
+
+
+@click.command()
+@shared_arguments
+def statement_teaching(model, input_file, **kwargs):
+    execute_agent("statement", "statement_teaching", model, input_file, **kwargs)
 
 
 @click.command()
@@ -370,19 +378,19 @@ def revise_rebuttal_prl(model, input_file, **kwargs):
 @click.command()
 @shared_arguments
 def paper2referee(model, input_file, **kwargs):
-    execute_agent("write_tex", "paper2referee", model, input_file, **kwargs)
+    execute_agent("write", "paper2referee", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def revise_referee(model, input_file, **kwargs):
-    execute_agent("write_tex", "revise_referee", model, input_file, **kwargs)
+    execute_agent("write", "revise_referee", model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def translate2chn(model, input_file, **kwargs):
-    execute_agent("write_tex", "translate2chn", model, input_file, **kwargs)
+    execute_agent("write", "translate2chn", model, input_file, **kwargs)
 
 
 @click.command()
@@ -391,16 +399,16 @@ def convert_tex(model, input_file, **kwargs):
     agent = "convert"
     if kwargs.get("output_files"):
         agent = f"{agent}_multiple"
-    execute_agent("edit_tex", agent, model, input_file, **kwargs)
+    execute_agent("article", agent, model, input_file, **kwargs)
 
 
 @click.command()
 @shared_arguments
 def ocr_tex(model, input_file, **kwargs):
-    execute_agent("edit_tex", "ocr", model, input_file, **kwargs)
+    execute_agent("article", "ocr", model, input_file, **kwargs)
 
 
-# Housekeeping
+# Housekeeping operations
 
 
 @click.command()
@@ -527,15 +535,15 @@ if __name__ == "__main__":
 # merge
 cli.add_command(merge)
 
-# edit_tex.py
+# article.py
 cli.add_command(correct_tex)
 cli.add_command(polish_tex)
 cli.add_command(draw_tex)
 cli.add_command(convert_tex)
 cli.add_command(ocr_tex)
 
-# edit_lecture.py
-cli.add_command(adapt)
+# lecture.py
+cli.add_command(adapt_note)
 cli.add_command(correct_st)
 cli.add_command(correct_qi)
 cli.add_command(polish_st)
@@ -550,6 +558,9 @@ cli.add_command(text2tex)
 
 # txt2tex.py
 cli.add_command(txt2tex)
+cli.add_command(txt2tex_article)
+cli.add_command(txt2tex_paper)
+cli.add_command(txt2tex_example)
 
 # paper2note.py
 cli.add_command(paper2note)
@@ -575,12 +586,13 @@ cli.add_command(paper2poster)
 cli.add_command(translate2chn)
 
 # application.py
-cli.add_command(statement)
+cli.add_command(statement_diversity)
+cli.add_command(statement_research)
+cli.add_command(statement_teaching)
 
 # grant.py
 cli.add_command(revise_nsf_grant)
 cli.add_command(revise_marie_curie)
-
 
 # Housekeepings
 
