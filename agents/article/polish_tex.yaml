@@ -23,12 +23,15 @@ prompts:
         \item When you are referring to equations or figures, you should always use \cref{...} instead of a pure number, because for latex documents, the numbering are only generated after compiliation and can change.
     \end{itemize}
 
-    {% if MODEL is 'sonnet++' %}
-    \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
+    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
     <monologue>Would you like me to proceed with the complete revision?</monologue>
     <monologue>Would you like me to continue with the next section?</monologue>
-    Use <monologue> tags for all your monologues.
-    \textbf{IMPORTANT:} In <latex_document> tags, you must output the entire document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
+    <monologue>[I'll continue with the section and then move to the next section.]</monologue>
+    Use <monologue> tags for all your monologues. Use
+    <monologue>I will now proceed with the next major section...</monologue>
+    in favour of barely using ``[I will now proceed with the next major section...]''.
+    \item \textbf{IMPORTANT:} In <latex_document> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_document> to wrap your monologue.
     {% endif %}
 
   user_prefix: |
@@ -73,9 +76,9 @@ prompts:
     \end{enumerate}
     </scratchpad>
 
-    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format for your output:
     <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
+    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. As mentioned previously in the system prompt, you should not wrap any monologue here.
     </latex_document>
 
   user_reflect: |

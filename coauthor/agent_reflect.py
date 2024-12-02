@@ -353,8 +353,8 @@ class BaseReflectChainAgent(ABC):
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
-            new_response = apply_replacements(new_response, get_all_replacements())
             new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
+            new_response = apply_replacements(new_response, get_all_replacements())
 
             state.update_token_counts(
                 input_tokens,
@@ -708,7 +708,7 @@ class DirectWrite(BaseReflectChainAgent):
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
                 # Filter monologue tags from single output file
                 content = read_file(processed_output_file)
-                filtered_content = filter_monologue_tags(content)
+                filtered_content = filter_monologue_tags(content).strip()
                 write_file(processed_output_file, filtered_content)
 
                 self._handle_single_output(processed_output_file)
