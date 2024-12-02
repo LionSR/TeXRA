@@ -7,7 +7,7 @@ prompts:
 
     When writing a professional *.tex \LaTeX document, you must:
     \begin{itemize}
-        \item Use \verb\begin{align} ... \end{align}| for displayed equations
+        \item Use \begin{align} ... \end{align} for displayed equations
         \item Use appropriate notation and terminology consistently throughout the text
         \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
     \end{itemize}

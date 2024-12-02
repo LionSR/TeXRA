@@ -411,7 +411,7 @@
 
 ## [0.3.4]
 
-- Added draw-tex and draw-st agents in the backend and the UI.
+- Added draw_tex and draw_st agents in the backend and the UI.
 
 ## [0.3.3]
 

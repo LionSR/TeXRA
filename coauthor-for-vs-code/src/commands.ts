@@ -575,7 +575,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           }
         }
 
-        let command = `coauthor ${agent} --input_file="${inputFile}"`;
+        let command = `coauthor run ${agent} --input_file="${inputFile}"`;
 
         // Add single files if they exist
         if (referenceFile) {
@@ -764,12 +764,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
         const terminalName = `Merge@${model}`;
         const terminal_new = vscode.window.createTerminal(terminalName);
         terminal_new.show();
-        const reflect = getConfig('merge.defaultReflect', 'False');
+        // const reflect = getConfig('merge.defaultReflect', 'False');
         const fileToUse = baseFile || inputFile;
 
         if (editedFile && fileToUse) {
           terminal_new.sendText(
-            `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model} --reflect=${reflect}`,
+            `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model}`,
           );
         } else {
           vscode.window.showErrorMessage(
@@ -820,7 +820,6 @@ export function registerCommands(context: vscode.ExtensionContext) {
       'coauthor.cleanMultiple',
       async (
         inputFile: string,
-        inputFiles: string[],
         agent: string,
         model: string,
         outputNameOverride: string,
