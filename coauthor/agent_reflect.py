@@ -19,7 +19,7 @@ from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_f
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
 from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
 from .openai_utils import best_connection_method
-from .replacement_utils import get_all_replacements, apply_replacements
+from .replacement_utils import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 
 from .state import State
 from .model_config import MODEL_CONFIGS
@@ -354,6 +354,7 @@ class BaseReflectChainAgent(ABC):
             logger.info(f"Token usage: {response_object.usage}")
 
             new_response = apply_replacements(new_response, get_all_replacements())
+            new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
 
             state.update_token_counts(
                 input_tokens,
@@ -371,6 +372,7 @@ class BaseReflectChainAgent(ABC):
                 logger.debug(f"Last {task_config.K} characters of the response: {new_response[-task_config.K:]}")
                 state.last_response = new_response
 
+                # anthropic models with prefills, so we need to update the messages
                 if messages[-1]["role"] == "assistant":
                     if model_config.supports_prompt_caching:
                         if isinstance(messages[-1]["content"], list):
@@ -395,12 +397,13 @@ class BaseReflectChainAgent(ABC):
 
             if model_config.is_openai_compatible:
                 if stop_reason == "length" and not agent_settings.has_end_tag(new_response):
-                    model_config.handle_continuation(messages, new_response, state.continuation_count, agent_settings, task_config)
+                    model_config.handle_continuation(messages, state, agent_settings, task_config)
                     continue
-            elif model_config.like_to_ask_for_confirmation:
+
+            if model_config.like_to_ask_for_confirmation:
                 if stop_reason != "stop_sequence" and not agent_settings.has_end_tag(new_response):
                     end_turn = False
-                    model_config.handle_continuation(messages, new_response, state.continuation_count, agent_settings, task_config)
+                    model_config.handle_continuation(messages, state, agent_settings, task_config)
                     continue
 
         return state, accumulated_output, end_turn

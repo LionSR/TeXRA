@@ -42,11 +42,11 @@ def append_file(file_path: str, content: str) -> None:
 
 def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
     if not file_exists:
-        logger.debug("Creating new file")
+        logger.debug(f"Creating new file: {output_file}")
         write_file(output_file, new_response)
         file_exists = True
     else:
-        logger.debug("Appending to existing file")
+        logger.debug(f"Appending to existing file: {output_file}")
         append_file(output_file, best_connector + new_response)
 
     return file_exists
