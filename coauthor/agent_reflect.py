@@ -12,6 +12,8 @@ from .output_utils import (
     split_scratchpad_output_xml,
     split_multiple_scratchpad_output_xml,
     check_for_massive_repetition,
+    filter_monologue_tags,
+    write_file,
 )
 from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
@@ -385,15 +387,21 @@ class BaseReflectChainAgent(ABC):
 
             end_turn, should_stop = model_config.check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
             if should_stop:
-                model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected, task_config.K)
+                model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected)
                 break
 
             state.increment_continuation()
             logger.info(f"Starting continuation #{state.continuation_count}")
 
-            if not end_turn and not model_config.has_end_tag(new_response, agent_settings.end_tag, agent_settings.document_tag):
-                model_config.handle_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
-                continue
+            if model_config.is_openai_compatible:
+                if stop_reason == "length" and not agent_settings.has_end_tag(new_response):
+                    model_config.handle_continuation(messages, new_response, state.continuation_count, agent_settings, task_config)
+                    continue
+            elif model_config.like_to_ask_for_confirmation:
+                if stop_reason != "stop_sequence" and not agent_settings.has_end_tag(new_response):
+                    end_turn = False
+                    model_config.handle_continuation(messages, new_response, state.continuation_count, agent_settings, task_config)
+                    continue
 
         return state, accumulated_output, end_turn
 
@@ -638,13 +646,22 @@ class ThinkAndWrite(BaseReflectChainAgent):
             ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
 
             if self.task_config.output_files:
-                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
-                self._handle_multiple_outputs(output_files)
-                self.output_files[round] = output_files
+                processed_output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from each output file
+                for processed_output_file in processed_output_files:
+                    content = read_file(processed_output_file)
+                    filtered_content = filter_monologue_tags(content)
+                    write_file(processed_output_file, filtered_content)
 
-                self._replace_input_commands(self.base_files, output_files)
+                self._handle_multiple_outputs(processed_output_files)
+                self.output_files[round] = processed_output_files
+                self._replace_input_commands(self.base_files, processed_output_files)
             else:
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from single output file
+                content = read_file(processed_output_file)
+                filtered_content = filter_monologue_tags(content)
+                write_file(processed_output_file, filtered_content)
 
                 self._handle_single_output(processed_output_file)
                 self.output_files[round] = [processed_output_file]
@@ -673,6 +690,12 @@ class DirectWrite(BaseReflectChainAgent):
         if end_turn:
             if self.task_config.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from each output file
+                for output_file in output_files:
+                    content = read_file(output_file)
+                    filtered_content = filter_monologue_tags(content)
+                    write_file(output_file, filtered_content)
+
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
                 self.output_file[round] = output_files[0]  # Set the first file as the singular output
@@ -680,6 +703,11 @@ class DirectWrite(BaseReflectChainAgent):
                 self._replace_input_commands(self.base_files, output_files)
             else:  # Single output file
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from single output file
+                content = read_file(processed_output_file)
+                filtered_content = filter_monologue_tags(content)
+                write_file(processed_output_file, filtered_content)
+
                 self._handle_single_output(processed_output_file)
                 self.output_file[round] = processed_output_file
                 self.output_files[round] = [processed_output_file]
