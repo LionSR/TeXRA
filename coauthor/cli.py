@@ -101,6 +101,7 @@ def execute_agent(script, agent, **kwargs):
         command.append(f"--input_file={kwargs.get('input_file')}")
 
     # Handle figure files - merge figure_file into figure_files if either exists
+    # may to use all_figure_files
     figure_files = []
     if kwargs.get("figure_file"):
         figure_files.append(kwargs.get("figure_file"))
@@ -111,6 +112,7 @@ def execute_agent(script, agent, **kwargs):
             figure_files.extend(kwargs["figure_files"])
         kwargs["figure_files"] = figure_files
 
+    # this auto extract figure logic should be handled in the agent script
     if kwargs.get("auto_extract_figure"):
         handle_auto_extract_figure(kwargs, kwargs.get("input_file"))
 
@@ -120,6 +122,8 @@ def execute_agent(script, agent, **kwargs):
         if isinstance(kwargs["input_files"], str):
             all_input_files.extend(kwargs["input_files"].split(","))
 
+    # here only tikz figure are extracted from all the input files but not the normal figure
+    # this auto extract tikz figure logic should be handled in the agent script
     if kwargs.get("auto_extract_tikz_figure"):
         handle_auto_extract_tikz_figure(kwargs, all_input_files)
 
