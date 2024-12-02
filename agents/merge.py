@@ -1,56 +1,15 @@
-from coauthor.agent_reflect import DirectWrite
 import coauthor as coa
-import os
-import re
 from coauthor import State
+from coauthor.agent_reflect import DirectWrite
 from coauthor.logging_utils import logger
+from coauthor.agent_reflect import get_output_file_name_merge
 
 agent_path = coa.get_agent_path(coa, ".")
-
-
-def get_output_file_name_merge(input_file, edited_file, round):
-    input_dir = os.path.dirname(input_file)
-    input_base, _ = os.path.splitext(os.path.basename(input_file))
-    edited_base, _ = os.path.splitext(os.path.basename(edited_file))
-
-    # Count number of underscores in edited_base
-    underscore_count = edited_base.count("_")
-
-    parts = edited_base.split("_")
-    if underscore_count == 3:
-        # For cases like "base_agent_r1_model"
-        edited_base_override = parts[0]
-        agent = parts[1]
-    else:
-        # For cases like "MutualInfo_restructured_polish_r1_sonnet++"
-        # Combine all parts before _r{N}_ as the agent name
-        agent_parts = []
-        edited_base_override = parts[0]
-        for i, part in enumerate(parts[1:], 1):
-            if part.startswith("r") and part[1:].isdigit():
-                agent = "_".join(agent_parts)
-                break
-            agent_parts.append(part)
-
-    base = input_base
-    if input_base != edited_base_override:
-        base = edited_base_override
-
-    round_match = re.search(r"_r(\d+)_", edited_base)
-    round = int(round_match.group(1)) if round_match else round
-    model = parts[-1]
-    output = f"{base}_{agent}_r{round}_full_{model}.tex"
-
-    output = os.path.join(input_dir, output)
-    logger.info(f"Merge output file: {output}")
-    return output
 
 
 class Merge(DirectWrite):
     def __init__(self, args, agent_path):
         super().__init__(args, agent_path)
-        self.task_config.input_file = args.input_file
-        self.task_config.edited_file = args.edited_file
         self.output_file = [get_output_file_name_merge(self.task_config.input_file, self.task_config.edited_file, r) for r in range(2)]
 
     def get_user_vars(self):
