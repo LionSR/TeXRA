@@ -55,6 +55,19 @@ CHARACTER_REPLACEMENTS = ReplacementCategory(
     },
 )
 
+LAZY_REPLACEMENTS = ReplacementCategory(
+    name="lazy",
+    description="Fixes for lazy writing with regex patterns",
+    patterns={
+        # Match the entire confirmation message block
+        r"<latex_document>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>[Due to length limits,\1</monologue>",
+        # Also handle case where it might be split across multiple monologue tags
+        # r"<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>\s*<monologue>(.*?)</monologue>": r"<monologue>[Due to length limits,\1\2</monologue>",
+        # Handle case where latex_document tag precedes the monologue
+        r"<latex_document>\s*(<monologue>\[Due to length limits,.*?</monologue>)": r"\1",
+    },
+)
+
 # Style improvements
 STYLE_REPLACEMENTS = ReplacementCategory(
     name="style",
@@ -144,6 +157,7 @@ def get_all_replacements() -> Dict[str, str]:
         EQUATION_REPLACEMENTS,
         SECTION_REPLACEMENTS,
         CHARACTER_REPLACEMENTS,
+        LAZY_REPLACEMENTS,
         STYLE_REPLACEMENTS,
         # FORMAT
         LATEX_XML_REPLACEMENTS,
@@ -173,6 +187,7 @@ def get_replacements_by_category(category_name: str) -> Optional[Dict[str, str]]
         "latex_xml": LATEX_XML_REPLACEMENTS,
         "tikz": TIKZ_REPLACEMENTS,
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
+        "lazy": LAZY_REPLACEMENTS,
     }
 
     category = categories.get(category_name)

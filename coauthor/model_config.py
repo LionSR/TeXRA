@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 import os
+import re
 import base64
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any, Tuple
@@ -10,6 +11,9 @@ from .logging_utils import logger
 from .file_utils import read_file, write_file
 from .config import AgentSettings, TaskConfig
 from .output_utils import filter_monologue_tags
+from .state import State
+from .replacement_utils import apply_replacement_regex, get_replacements_by_category
+
 
 load_dotenv()
 
@@ -32,6 +36,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "[Continue with the rest of",
     "[Continue with corrections for",
     "[Continue with the next",
+    "[Continue with next",
 ]
 
 
@@ -127,7 +132,7 @@ class ModelConfig(ABC):
 
     @abstractmethod
     def handle_continuation(
-        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
     ):
         """Handle continuation for a model when response is truncated."""
         pass
@@ -401,7 +406,7 @@ class AnthropicModelConfig(ModelConfig):
         return img_data, media_type
 
     def handle_continuation(
-        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
     ):
         """
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
@@ -411,10 +416,11 @@ class AnthropicModelConfig(ModelConfig):
             logger.warning("Handling model_config.like_to_ask_for_confirmation")
 
             # there should be a state variable including accumulated output
-            if continuation_count == 0 or continuation_count == 1:
+            if state.continuation_count == 0 or state.continuation_count == 1:
                 user_message_continuation = (
                     "Proceed. "
-                    "If no previous revised output of the document is provided, please start from the very beginning of the document and work through the full document systematically. "
+                    "If no previous revised output of the document is provided, "
+                    "please start from the very beginning of the document and work through the full document systematically. "
                     # "Output as much as possible in each turn. Maximizing the output length is preferred."
                 )
                 # set a document_tag started flag?
@@ -428,24 +434,24 @@ class AnthropicModelConfig(ModelConfig):
                 )
                 # this should also consider what if continue from existing output of a document
                 document_tag_start_string = f"<{agent_settings.document_tag}>"
-                first_lines = new_response.split("\n")[:10]
+                first_lines = state.last_response.split("\n")[:10]
                 for line in first_lines:
                     if line.strip().startswith(document_tag_start_string):
                         logger.warning(f"Removing document tag prefix {document_tag_start_string} from response")
-                        new_response = new_response.replace(line, "", 1).strip()
+                        state.last_response = state.last_response.replace(line, "", 1).strip()
                         break
 
             logger.info("User message: " + user_message_continuation)
 
-            new_response = filter_monologue_tags(new_response)
+            state.last_response = filter_monologue_tags(state.last_response)
 
             if messages[-1]["role"] == "user":
                 if messages[-2]["role"] == "assistant":
                     logger.warning("Appending new response to the previous assistant message")
                     if isinstance(messages[-2]["content"], list):
-                        messages[-2]["content"].append({"type": "text", "text": "\n" + new_response})
+                        messages[-2]["content"].append({"type": "text", "text": "\n" + state.last_response})
                     elif isinstance(messages[-2]["content"], str):
-                        messages[-2]["content"] += "\n" + new_response
+                        messages[-2]["content"] += "\n" + state.last_response
                 messages[-1]["content"] = user_message_continuation
             elif messages[-1]["role"] == "assistant":
                 messages.append({"role": "user", "content": user_message_continuation})
@@ -468,6 +474,10 @@ class AnthropicModelConfig(ModelConfig):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
+            
+            file_content = filter_monologue_tags(file_content)
+            file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL)
+
             if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
                 if messages[-1]["content"][-1].get("cache_control"):
@@ -626,10 +636,10 @@ class OpenAICompatibleModelConfig(ModelConfig):
         return img_data, media_type
 
     def handle_continuation(
-        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
     ):
         """Handle continuation for OpenAI-compatible models."""
-        prefill_tokens = new_response[-task_config.K :]
+        prefill_tokens = state.last_response[-task_config.K :]
         user_message_continuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
@@ -663,7 +673,8 @@ class OpenAICompatibleModelConfig(ModelConfig):
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
-                self.handle_continuation(messages, file_content, 0, agent_settings, task_config)
+                state = State.initialize(accumulated_output)
+                self.handle_continuation(messages, state, agent_settings, task_config)
         else:
             if task_config.use_prefill_from_input:
                 prefill += first_k_tex_document
