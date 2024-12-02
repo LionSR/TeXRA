@@ -353,7 +353,7 @@ class AnthropicModelConfig(ModelConfig):
         return img_data, media_type
 
     def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
-        """Anthropic models don't need continuation handling."""
+        """Normal Anthropic models don't need continuation handling. However, for sonnet++/haiku++ we need to handle the continuation because they have been hard-coded to ask for confirmation."""
         pass
 
     def initialize_output_and_prefill(

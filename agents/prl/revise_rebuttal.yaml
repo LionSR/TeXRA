@@ -143,8 +143,8 @@ prompts:
         \item An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="{{ REPLY_TO_EDITOR_FILE }}"></document> tag.
         \item An improved point-by-point response to the referee comments. Write this inside the <document name="{{ REPLY_TO_REFEREES_FILE }}"></document> tag. To do this:
         \begin{itemize}
-            \item Ensure all referee comments are accurately represented in the \verb|\begin{referee}{A}| (or B) and \verb|\end{referee}| environments. Do not correct the referee's grammar or wording.
-            \item Enhance each response in the \verb|\begin{response}| and \verb|\end{response}| environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
+            \item Ensure all referee comments are accurately represented in the \begin{referee}{A} (or B) and \end{referee} environments. Do not correct the referee's grammar or wording.
+            \item Enhance each response in the \begin{response} and \end{response} environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
             \item Improve the tone to be more respectful and diplomatic while maintaining firmness in your responses.
             \item Strengthen the use of ``They Say, I Say'' principles and the ``Show, not tell'' approach in your rebuttals.
             \item If there are incoherent draft points in the responses, you must do your best efforts to understand their logic and find a logical way to embed them into the responses.

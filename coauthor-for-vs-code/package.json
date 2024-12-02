@@ -28,10 +28,10 @@
               "type": "string"
             },
             "default": [
-              "correct-tex",
-              "polish-tex",
-              "draw-tex",
-              "write-tex",
+              "correct_tex",
+              "polish_tex",
+              "draw_tex",
+              "write_tex",
               "meeting2text",
               "text2tex",
               "paper2note",
@@ -213,7 +213,8 @@
               "haiku",
               "opus",
               "gemini",
-              "llama"
+              "llama",
+              "egg-info"
             ],
             "description": "Additional keywords to ignore when listing auxiliary files, including model names",
             "editPresentation": "multilineText",
@@ -429,7 +430,6 @@
         "title": "CoAuthor: Merge Files"
       }
     ],
-
     "viewsContainers": {
       "activitybar": [
         {

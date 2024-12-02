@@ -1,5 +1,5 @@
-name: correct_multiple
-inherits: correct
+name: correct_tex_multiple
+inherits: correct_tex
 settings:
   document_tag: latex_documents
   end_tag: </latex_documents>
