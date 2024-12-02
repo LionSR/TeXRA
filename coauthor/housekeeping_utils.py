@@ -150,6 +150,7 @@ def run_pack_single(model, input_file, agent, output_folder=None):
                 else:
                     moved_files.append(file_path)
 
+    # this includes the original input file, f"{base}_{agent}_r{round}_{model}", so even if no output file from llm is genereated, the output folder will still be created
     if moved_files or copied_files:
         now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
         if output_folder is None:
