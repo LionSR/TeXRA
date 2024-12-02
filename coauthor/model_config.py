@@ -35,8 +35,17 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "Please let me know if you'd like me to proceed",
     "[Continue with the rest of",
     "[Continue with corrections for",
-    "[Continue with the next",
+    "[Continue with the",
     "[Continue with next",
+    "[Continue with Section",
+    "[Continue with similar improvements",
+    "Shall I begin with",
+    "Let me continue with",
+    "Continuing from where we left off",
+    "I'll continue with the next",
+    "[Rest of document continues...]",
+    "[Rest of the document continues with similar",
+    # "[Previous sections remain unchanged",
 ]
 
 
@@ -131,9 +140,7 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def handle_continuation(
-        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
-    ):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
         """Handle continuation for a model when response is truncated."""
         pass
 
@@ -405,9 +412,7 @@ class AnthropicModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(
-        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
-    ):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
         """
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
@@ -426,10 +431,11 @@ class AnthropicModelConfig(ModelConfig):
                 # set a document_tag started flag?
             else:
                 user_message_continuation = (
-                    "Proceed to write fully the next part/section (not just a subsection). Continue writing exactly from where you left off. "
+                    "Proceed to write fully the next part/section (not just a subsection, which is not enough). "
+                    "Continue writing exactly from where you left off until the end of the document. "
                     # "Output as much as possible in each turn."
                     "Aim for double the length of output as previous turns. "
-                    "Remember to stay professional and write latex code."
+                    "Remember to stay professional and write latex code all the time. "
                     # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
                 )
                 # this should also consider what if continue from existing output of a document
@@ -445,6 +451,7 @@ class AnthropicModelConfig(ModelConfig):
 
             state.last_response = filter_monologue_tags(state.last_response)
 
+            # solution 1: keep updating the last assistant message
             if messages[-1]["role"] == "user":
                 if messages[-2]["role"] == "assistant":
                     logger.warning("Appending new response to the previous assistant message")
@@ -455,6 +462,18 @@ class AnthropicModelConfig(ModelConfig):
                 messages[-1]["content"] = user_message_continuation
             elif messages[-1]["role"] == "assistant":
                 messages.append({"role": "user", "content": user_message_continuation})
+
+            # solution 2: keep alternating between user and assistant messages
+            # seems to be working poorly
+            # if messages[-1]["role"] == "user":
+            #     messages.append({"role": "assistant", "content": state.last_response})
+            #     messages.append({"role": "user", "content": user_message_continuation})
+            # elif messages[-1]["role"] == "assistant":
+            #     if isinstance(messages[-2]["content"], list):
+            #         messages[-1]["content"].append({"type": "text", "text": "\n" + state.last_response})
+            #     elif isinstance(messages[-2]["content"], str):
+            #         messages[-2]["content"] += "\n" + state.last_response
+            #     messages.append({"role": "user", "content": user_message_continuation})
 
             # are there any prompt caching issues here?
         else:
@@ -474,9 +493,9 @@ class AnthropicModelConfig(ModelConfig):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            
-            file_content = filter_monologue_tags(file_content)
-            file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL)
+
+            file_content = filter_monologue_tags(file_content).strip()
+            file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
 
             if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
@@ -635,9 +654,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(
-        self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig
-    ):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
         """Handle continuation for OpenAI-compatible models."""
         prefill_tokens = state.last_response[-task_config.K :]
         user_message_continuation = (

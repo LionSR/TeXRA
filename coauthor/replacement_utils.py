@@ -60,11 +60,10 @@ LAZY_REPLACEMENTS = ReplacementCategory(
     description="Fixes for lazy writing with regex patterns",
     patterns={
         # Match the entire confirmation message block
-        r"<latex_document>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>[Due to length limits,\1</monologue>",
-        # Also handle case where it might be split across multiple monologue tags
-        # r"<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>\s*<monologue>(.*?)</monologue>": r"<monologue>[Due to length limits,\1\2</monologue>",
+        r"<latex_document>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>",
         # Handle case where latex_document tag precedes the monologue
         r"<latex_document>\s*(<monologue>\[Due to length limits,.*?</monologue>)": r"\1",
+        r"<latex_document>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>\[I apologize, but I notice this is a very long document\1</monologue>",
     },
 )
 
@@ -114,6 +113,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{document}\n</rebuttal_package>": "\\end{document}\n</document>\n</rebuttal_package>",
         # new sonnet 3.5 problems
         "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\\makeheader[Previous",
+        "</monologue><monologue>": "</monologue>\n<monologue>",
+        "<latex_document>\n[Previous sections": "[Previous sections",
     },
 )
 
@@ -157,7 +158,7 @@ def get_all_replacements() -> Dict[str, str]:
         EQUATION_REPLACEMENTS,
         SECTION_REPLACEMENTS,
         CHARACTER_REPLACEMENTS,
-        LAZY_REPLACEMENTS,
+        # LAZY_REPLACEMENTS,
         STYLE_REPLACEMENTS,
         # FORMAT
         LATEX_XML_REPLACEMENTS,
