@@ -110,7 +110,7 @@ This process ensures that your instructions are carried out thoroughly and intel
 
 The CoAuthor sidebar provides several buttons and controls for easy interaction:
 
-1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct-tex, polish-tex, draw-tex).
+1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct_tex, polish_tex, draw_tex).
 2. **Model Selection**: Select the AI model to use for the agent (e.g., Sonnet+, Opus, GPT-4).
 3. **Reflect**: Toggle whether the AI should perform a reflection step after the initial agent.
 4. **Execute**: Run the selected agent with the chosen settings and files.
@@ -187,15 +187,15 @@ You can customize the list of available agents in your VS Code settings:
 
 ```json
 "coauthor.agents": [
-  "correct-tex",
-  "polish-tex",
-  "draw-tex",
+  "correct_tex",
+  "polish_tex",
+  "draw_tex",
   "meeting2text",
   "paper2note",
   "txt2tex",
-  "correct-st",
-  "polish-st",
-  "draw-st",
+  "correct_st",
+  "polish_st",
+  "draw_st",
   "paper2slide",
   "slide2paper"
 ]
@@ -205,7 +205,7 @@ Customize the extension through VS Code settings:
 
 ```json
 {
-  "coauthor.agents": ["correct-tex", "polish-tex", "draw-tex"],
+  "coauthor.agents": ["correct_tex", "polish_tex", "draw_tex"],
   "coauthor.includedDirectories": [
     "Discrete-Time",
     "FiguresEx",

@@ -238,7 +238,7 @@ function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
     const defaultValues = {
-      agentSelect: 'correct-tex',
+      agentSelect: 'correct_tex',
       reflectSelect: 'True',
       commitSelect: 'HEAD',
     };
@@ -444,11 +444,11 @@ window.addEventListener('message', (event) => {
         'toggleMultipleFigures',
         message.files,
       );
-      // sus
       break;
     case 'setBaseFile':
       updateFileSelect('baseFileSelect', message.files);
       updateEditedFileSelect(document.getElementById('baseFileSelect').value);
+      // sus
       break;
   }
 
@@ -758,7 +758,6 @@ document.addEventListener('DOMContentLoaded', function () {
       vscode.postMessage({
         command: 'packMultiple',
         inputFile: inputFile,
-        inputFiles: inputFiles,
         agent: agent,
         model: model,
         outputNameOverride: outputNameOverride,
@@ -821,7 +820,6 @@ document.addEventListener('DOMContentLoaded', function () {
       vscode.postMessage({
         command: 'cleanMultiple',
         inputFile: inputFile,
-        inputFiles: inputFiles,
         agent: agent,
         model: model,
         outputNameOverride: outputNameOverride,
@@ -1040,6 +1038,7 @@ document.addEventListener('DOMContentLoaded', function () {
         baseFile: baseFile,
       });
       updateEditedFileSelect(baseFile);
+      // sus
     });
 
   // Add event listener for the new refresh button

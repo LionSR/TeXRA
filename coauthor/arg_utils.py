@@ -21,12 +21,6 @@ def add_common_arguments(parser):
         choices=list(MODEL_CONFIGS.keys()),
     )
     parser.add_argument(
-        "--temperature",
-        type=float,
-        default=0.0,
-        help="Temperature for the model.",
-    )
-    parser.add_argument(
         "--reflect",
         type=lambda x: (str(x).lower() in ["true", "1", "yes"]),
         default=False,
