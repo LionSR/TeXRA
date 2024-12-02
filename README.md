@@ -94,9 +94,9 @@ Although many models are supported, we recommend using Anthropic sonnet+/opus or
 
 CoAuthor supports a variety of agentic agents, including but not limited to:
 
-- `correct-tex`: Fix typos and minor errors in LaTeX documents
-- `polish-tex`: Improve the writing style and clarity of LaTeX documents
-- `draw-tex`: Create or enhance TikZ figures in LaTeX documents
+- `correct_tex`: Fix typos and minor errors in LaTeX documents
+- `polish_tex`: Improve the writing style and clarity of LaTeX documents
+- `draw_tex`: Create or enhance TikZ figures in LaTeX documents
 - `write-tex`: Generate new LaTeX content based on instructions
 - `meeting2text`: Convert meeting transcripts into structured text
 - `paper2note`: Transform research papers into lecture notes
