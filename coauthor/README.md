@@ -331,6 +331,8 @@ CoAuthor can automatically extract and process figures from your LaTeX documents
 
 - Use `--auto_extract_figure` to automatically extract the list of figures from the input file.
 - Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file.
+- Use `--auto_extract_tikz_figure_reflect` to include TikZ reflection in the output.
+- Use `--include_tex_count` to include the tex count statistics in the user message.
 
 Example:
 
