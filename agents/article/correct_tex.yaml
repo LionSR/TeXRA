@@ -28,6 +28,19 @@ prompts:
         \item Use the math commands defined in the auxiliary file command.tex if provided.
     \end{itemize}
 
+    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
+    <monologue>Would you like me to proceed with the complete revision?</monologue>
+    <monologue>Would you like me to continue with the next section?</monologue>
+    <monologue>[I'll continue with the section and then move to the next section.]</monologue>
+    Use <monologue> tags for all your monologues. Use
+    <monologue>I will now proceed with the next major section...</monologue>
+    in favour of barely using ``[I will now proceed with the next major section...]''.
+    \item \textbf{IMPORTANT:} In <latex_document> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_document> to wrap your monologue.
+    {% endif %}
+
+
+
   user_prefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
@@ -58,5 +71,5 @@ prompts:
 
     Use the following format for your output
     <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE
+    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
     </latex_document>
