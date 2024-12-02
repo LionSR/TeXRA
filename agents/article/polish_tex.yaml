@@ -1,4 +1,4 @@
-name: polish
+name: polish_tex
 settings:
   document_tag: latex_document
   end_tag: </latex_document>

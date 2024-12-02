@@ -71,48 +71,48 @@ CoAuthor provides various CLI commands for different tasks:
 
 - Document Editing:
 
-  - `coauthor correct-tex`: Correct LaTeX documents
-  - `coauthor polish-tex`: Polish LaTeX documents
-  - `coauthor draw-tex`: Generate LaTeX drawings
-  - `coauthor convert-tex`: Convert LaTeX documents
-  - `coauthor ocr-tex`: OCR processing for LaTeX
+  - `coauthor run correct_tex`: Correct LaTeX documents
+  - `coauthor run polish_tex`: Polish LaTeX documents
+  - `coauthor run draw_tex`: Generate LaTeX drawings
+  - `coauthor run convert_tex`: Convert LaTeX documents
+  - `coauthor run ocr_tex`: OCR processing for LaTeX
 
 - Lecture Notes:
 
-  - `coauthor correct-st/qi`: Correct student/QI lecture notes
-  - `coauthor polish-st/qi`: Polish student/QI lecture notes
-  - `coauthor revise-st`: Revise student lecture notes
-  - `coauthor draw-st/qi`: Draw figures for lecture notes
+  - `coauthor run correct_qi`: Correct QI lecture notes
+  - `coauthor run polish_qi`: Polish QI lecture notes
+  - `coauthor run revise_qi`: Revise QI lecture notes
+  - `coauthor run draw_qi`: Draw figures for QI lecture notes
 
 - Document Conversion:
 
-  - `coauthor meeting2text`: Convert meeting transcripts to text
-  - `coauthor text2tex`: Convert text to LaTeX
-  - `coauthor txt2tex`: Convert text to LaTeX with templates
-  - `coauthor paper2note`: Convert papers to lecture notes
-  - `coauthor adapt`: Adapt text to different contexts
-  - `coauthor paper2poster`: Convert paper to poster
-  - `coauthor slide2paper`: Convert slides to paper
-  - `coauthor paper2slide`: Convert paper to slides
-  - `coauthor paper2cover`: Convert paper to cover letter
-  - `coauthor translate2chn`: Translate to Chinese
+  - `coauthor run meeting2text`: Convert meeting transcripts to text
+  - `coauthor run text2tex`: Convert text to LaTeX
+  - `coauthor run txt2tex`: Convert text to LaTeX with templates
+  - `coauthor run paper2note`: Convert papers to lecture notes
+  - `coauthor run adapt`: Adapt text to different contexts
+  - `coauthor run paper2poster`: Convert paper to poster
+  - `coauthor run slide2paper`: Convert slides to paper
+  - `coauthor run paper2slide`: Convert paper to slides
+  - `coauthor run paper2cover`: Convert paper to cover letter
+  - `coauthor run translate2chn`: Translate to Chinese
 
 - PRL Paper Tools:
 
-  - `coauthor correct-prl`: Correct PRL papers
-  - `coauthor polish-prl`: Polish PRL papers
-  - `coauthor revise-prl`: Revise PRL papers
-  - `coauthor draft-rebuttal-prl`: Draft PRL rebuttals
-  - `coauthor revise-rebuttal-prl`: Revise PRL rebuttals
+  - `coauthor run correct_prl`: Correct PRL papers
+  - `coauthor run polish_prl`: Polish PRL papers
+  - `coauthor run revise_prl`: Revise PRL papers
+  - `coauthor run draft_rebuttal_prl`: Draft PRL rebuttals
+  - `coauthor run revise_rebuttal_prl`: Revise PRL rebuttals
 
 - Writing Tools:
 
-  - `coauthor paper2referee`: Write referee reports
-  - `coauthor revise-referee`: Revise referee reports
+  - `coauthor run paper2referee`: Write referee reports
+  - `coauthor run revise_referee_report`: Revise referee reports
 
-  - `coauthor statement`: Write academic statements
-  - `coauthor revise-nsf-grant`: Revise NSF grants
-  - `coauthor revise-marie-curie`: Revise Marie Curie grants
+  - `coauthor run statement`: Write academic statements
+  - `coauthor run revise_nsf_grant`: Revise NSF grants
+  - `coauthor run revise_marie_curie`: Revise Marie Curie grants
 
 - Utility Tools:
   - `coauthor merge`: Merge LaTeX documents
@@ -171,7 +171,7 @@ CoAuthor's agents are defined in the `agents` directory. Each Agent typically ha
 
 ### Agent Structure
 
-- Each Agent is defined in a separate Python file in the `agents` directory (e.g., `edit_tex.py`, `edit_lecture.py`, `merge.py`).
+- Each Agent is defined in a separate Python file in the `agents` directory (e.g., `article.py`, `lecture.py`, `merge.py`).
 - These Python files define the main logic for each Agent, including argument parsing, file handling, and interaction with the AI model.
 - Associated prompt files are stored in YAML format in subdirectories within the `agents` directory, named after the Agent (e.g., `agents/article`, `agents/lecture`).
 - Each agent directory contains YAML files that define the prompts and configurations for different modes of operation.
@@ -331,11 +331,13 @@ CoAuthor can automatically extract and process figures from your LaTeX documents
 
 - Use `--auto_extract_figure` to automatically extract the list of figures from the input file.
 - Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file.
+- Use `--auto_extract_tikz_figure_reflect` to include TikZ reflection in the output.
+- Use `--include_tex_count` to include the tex count statistics in the user message.
 
 Example:
 
 ```bash
-coauthor polish-tex --input_file your_file.tex --auto_extract_figure --auto_extract_tikz_figure
+coauthor run polish_tex --input_file your_file.tex --auto_extract_figure --auto_extract_tikz_figure
 ```
 
 ### Multiple Input Files
@@ -343,7 +345,7 @@ coauthor polish-tex --input_file your_file.tex --auto_extract_figure --auto_extr
 For complex projects, CoAuthor supports processing multiple input files:
 
 ```bash
-coauthor polish-tex --input_file main.tex --input_files chapter1.tex,chapter2.tex
+coauthor run polish_tex --input_file main.tex --input_files chapter1.tex,chapter2.tex
 ```
 
 ### Tex Count Integration
@@ -393,7 +395,7 @@ The main logic for CoAuthor is distributed across several Python files:
 - `coauthor/file_utils.py`: File handling utilities
 - `coauthor/tex_tools.py`: LaTeX-specific utilities
 
-Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/edit_tex.py`, `agents/reply_prl.py`, etc.
+Agent-specific logic is contained in individual files in the `agents/` directory, such as `agents/article.py`, `agents/lecture.py`, etc.
 
 ## Extending CoAuthor
 

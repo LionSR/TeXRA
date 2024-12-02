@@ -1,5 +1,5 @@
 name: polish_st
-inherits: polish
+inherits: polish_note
 
 settings:
   required_files:

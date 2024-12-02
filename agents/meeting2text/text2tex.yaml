@@ -1,5 +1,6 @@
 name: text2tex
 settings:
+  agent_type: direct
   document_tag: latex_document
   end_tag: </latex_document>
   output_ext: tex
