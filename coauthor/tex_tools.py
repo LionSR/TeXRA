@@ -151,7 +151,7 @@ def run_latexindent(file_path: str) -> bool:
         logger.info(f"Indented {file_path}")
 
         # Clean up backup files
-        backup_files = glob.glob(f"{file_path}.bak[0-9]*")
+        backup_files = glob.glob(f"{file_path}.bak[0-9]*") + glob.glob(f"{file_path}.bak")
         for backup_file in backup_files:
             try:
                 os.remove(backup_file)
