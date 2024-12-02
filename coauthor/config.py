@@ -35,6 +35,10 @@ class AgentSettings:
         )
         return settings
 
+    def has_end_tag(self, file_content: str) -> bool:
+        """Check if the file content contains the end tag or document tag."""
+        return self.end_tag in file_content or f"</{self.document_tag}>" in file_content
+
 
 @dataclass
 class AgentPrompts:
