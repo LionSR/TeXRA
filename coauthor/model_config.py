@@ -8,8 +8,31 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from .logging_utils import logger
 from .file_utils import read_file, write_file
+from .config import AgentSettings, TaskConfig
+from .output_utils import filter_monologue_tags
 
 load_dotenv()
+
+CONFIRMATION_PROMPT_PATTERNS = [
+    "Would you like me to",
+    "[Would you like me",
+    "I will now proceed",
+    "[Due to length limits,",
+    "I notice that",
+    "Would you like me to continue?",
+    "I'll start from",
+    # "Previous content",
+    "Since this is a large document,",
+    "I'll start reviewing",
+    "[Note: The corrections would be applied throughout",
+    "% Note: The full corrected document would be too long",
+    "Should I proceed with",
+    "[Continue with corrections...]",
+    "Please let me know if you'd like me to proceed",
+    "[Continue with the rest of",
+    "[Continue with corrections for",
+    "[Continue with the next",
+]
 
 
 class ModelProvider(Enum):
@@ -32,6 +55,7 @@ class ModelConfig(ABC):
     supports_native_pdf: bool = False
     supports_prefill: bool = False
     supports_predictive_output: bool = False
+    like_to_ask_for_confirmation: bool = False
     base_url: Optional[str] = None
 
     @property
@@ -102,7 +126,9 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
+    def handle_continuation(
+        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+    ):
         """Handle continuation for a model when response is truncated."""
         pass
 
@@ -126,10 +152,6 @@ class ModelConfig(ABC):
         """Compute the price for token usage."""
         return (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
 
-    def has_end_tag(self, file_content: str, end_tag: str, document_tag: str) -> bool:
-        """Check if the file content contains the end tag or document tag."""
-        return end_tag in file_content or f"</{document_tag}>" in file_content
-
     def check_stop_conditions(
         self, stop_reason: str, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool
     ) -> tuple[bool, bool]:
@@ -147,17 +169,23 @@ class ModelConfig(ABC):
 
         return end_turn, should_stop
 
-    def print_stop_flags(self, end_turn: bool, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool, K: int = 200):
+    def print_stop_flags(self, end_turn: bool, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool):
         """Print the flags indicating why the conversation stopped."""
-        logger.debug("Printing the flags")
-        logger.debug(f"end_turn: {end_turn}")
+
+        CONTINUE_LIMIT = 20 if self.like_to_ask_for_confirmation else 10
+        INPUT_TOKEN_LIMIT = 100000
+        OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
+
         document_tag = agent_settings.document_tag
-        logger.debug(f"encounter_document_tag: {f'</{document_tag}>' in new_response}")
-        logger.debug(f"continuation_limit: {state.continuation_count > 10}")
-        logger.debug(f"input_token_limit: {state.total_input_tokens > 100000}")
-        logger.debug(f"massive_repetition_detected: {massive_repetition_detected}")
-        logger.debug(f"output_token_limit: {state.total_output_tokens > 2.5 * state.first_input_tokens}")
-        logger.debug(f"{state.last_response[-K:]}")
+        logger.debug(
+            f"Stop flags:\n"
+            f"end_turn: {end_turn}\n"
+            f"encounter_document_tag: {'</'+document_tag+'>' in new_response}\n"
+            f"continuation_limit: {state.continuation_count > CONTINUE_LIMIT}\n"
+            f"input_token_limit: {state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
+            f"massive_repetition_detected: {massive_repetition_detected}\n"
+            f"output_token_limit: {state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * state.first_input_tokens}\n"
+        )
 
     def create_image_message(self, figure_files):
         """Create image messages for the conversation."""
@@ -328,7 +356,27 @@ class AnthropicModelConfig(ModelConfig):
 
         new_response = response_object.content[0].text.strip()
 
-        if stop_reason == "stop_sequence" and "\\end{document}" not in new_response:
+        # Process each line to wrap confirmation prompts in monologue tags
+        lines = new_response.split("\n")
+        for i, line in enumerate(lines):
+            line = line.strip()
+            # Skip if line is already wrapped in monologue tags
+            if line.startswith("<monologue>") and line.endswith("</monologue>"):
+                continue
+            # Check if line contains confirmation prompt
+            if any(pattern in line for pattern in CONFIRMATION_PROMPT_PATTERNS):
+                stop_reason = "ask_for_confirmation"
+                if lines[i - 1].strip() == "<monologue>" and lines[i + 1].strip() == "</monologue>":
+                    pass
+                else:
+                    lines[i] = f"<monologue>{line}</monologue>"
+
+        new_response = "\n".join(lines)
+
+        # Only append end_tag if it's a stop sequence and not a confirmation prompt
+        # maybe in some cases, we need to use \\end{document} instead of end_tag
+        if stop_reason == "stop_sequence" and f"{end_tag}" not in new_response:
+            logger.warning(f"Stop reason: {stop_reason}. Appending {end_tag} to the response.")
             new_response += f"\n{end_tag}"
 
         return new_response, input_tokens, output_tokens, stop_reason
@@ -352,9 +400,59 @@ class AnthropicModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
-        """Normal Anthropic models don't need continuation handling. However, for sonnet++/haiku++ we need to handle the continuation because they have been hard-coded to ask for confirmation."""
-        pass
+    def handle_continuation(
+        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+    ):
+        """
+        Anthropic models before sonnet++/haiku+ don't need continuation handling.
+        However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
+        """
+        if self.like_to_ask_for_confirmation:
+            logger.warning("Handling model_config.like_to_ask_for_confirmation")
+
+            # there should be a state variable including accumulated output
+            if continuation_count == 0 or continuation_count == 1:
+                user_message_continuation = (
+                    "Proceed. "
+                    "If no previous revised output of the document is provided, please start from the very beginning of the document and work through the full document systematically. "
+                    # "Output as much as possible in each turn. Maximizing the output length is preferred."
+                )
+                # set a document_tag started flag?
+            else:
+                user_message_continuation = (
+                    "Proceed to write fully the next part/section (not just a subsection). Continue writing exactly from where you left off. "
+                    # "Output as much as possible in each turn."
+                    "Aim for double the length of output as previous turns. "
+                    "Remember to stay professional and write latex code."
+                    # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
+                )
+                # this should also consider what if continue from existing output of a document
+                document_tag_start_string = f"<{agent_settings.document_tag}>"
+                first_lines = new_response.split("\n")[:10]
+                for line in first_lines:
+                    if line.strip().startswith(document_tag_start_string):
+                        logger.warning(f"Removing document tag prefix {document_tag_start_string} from response")
+                        new_response = new_response.replace(line, "", 1).strip()
+                        break
+
+            logger.info("User message: " + user_message_continuation)
+
+            new_response = filter_monologue_tags(new_response)
+
+            if messages[-1]["role"] == "user":
+                if messages[-2]["role"] == "assistant":
+                    logger.warning("Appending new response to the previous assistant message")
+                    if isinstance(messages[-2]["content"], list):
+                        messages[-2]["content"].append({"type": "text", "text": "\n" + new_response})
+                    elif isinstance(messages[-2]["content"], str):
+                        messages[-2]["content"] += "\n" + new_response
+                messages[-1]["content"] = user_message_continuation
+            elif messages[-1]["role"] == "assistant":
+                messages.append({"role": "user", "content": user_message_continuation})
+
+            # are there any prompt caching issues here?
+        else:
+            pass
 
     def initialize_output_and_prefill(
         self,
@@ -370,7 +468,7 @@ class AnthropicModelConfig(ModelConfig):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            if self.has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
+            if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
                 if messages[-1]["content"][-1].get("cache_control"):
                     messages[-1]["content"][-1].pop("cache_control")
@@ -425,6 +523,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
             "model": self.full_name,
             "messages": messages,
             "temperature": temperature,
+            # For openai model, this value is now in favor of max_tokens, and max_tokens not compatible with o1 series models.
             "max_completion_tokens": self.max_tokens,
         }
 
@@ -492,14 +591,23 @@ class OpenAICompatibleModelConfig(ModelConfig):
         stop_reason = response_object.choices[0].finish_reason
         new_response = response_object.choices[0].message.content.strip()
 
-        if response_object.usage is None:
+        response_usage = response_object.usage
+
+        if response_usage is None:
             logger.error("No usage information in response object")
             input_tokens, output_tokens = 0, 0
         else:
-            input_tokens = response_object.usage.prompt_tokens
-            output_tokens = response_object.usage.completion_tokens
+            input_tokens = response_usage.prompt_tokens
+            output_tokens = response_usage.completion_tokens
 
-        if "stop" in stop_reason and "\\end{document}" not in new_response:
+            # for openai models, we can get more detailed usage information
+            # cached_tokens = response_usage.prompt_tokens_details.cached_tokens
+            # reasoning_tokens = response_usage.completion_tokens_details.reasoning_tokens
+            # accepted_prediction_tokens = response_usage.completion_tokens_details.accepted_prediction_tokens
+            # rejected_prediction_tokens = response_usage.completion_tokens_details.rejected_prediction_tokens
+
+        # maybe in some cases, we need to use \\end{document} instead of end_tag
+        if "stop" in stop_reason and f"{end_tag}" not in new_response:
             new_response += f"\n{end_tag}"
 
         return new_response, input_tokens, output_tokens, stop_reason
@@ -517,13 +625,17 @@ class OpenAICompatibleModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(self, messages: List[Dict], new_response: str, end_tag: str, K: int):
+    def handle_continuation(
+        self, messages: List[Dict], new_response: str, continuation_count: int, agent_settings: AgentSettings, task_config: TaskConfig
+    ):
         """Handle continuation for OpenAI-compatible models."""
-        prefill_tokens = new_response[-K:]
+        prefill_tokens = new_response[-task_config.K :]
         user_message_continuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
-            f'marked by {end_tag}. Avoid repeat yourself and avoid starting over. Start your response at the next token after: "{prefill_tokens}"'
+            f"marked by {agent_settings.end_tag}. "
+            "Avoid repeat yourself and avoid starting over. "
+            f'Start your response at the next token after: "{prefill_tokens}"'
         )
         logger.info("User message: " + user_message_continuation)
         messages.append({"role": "user", "content": user_message_continuation})
@@ -542,7 +654,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            if self.has_end_tag(file_content, agent_settings.end_tag, agent_settings.document_tag):
+            if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
                 messages.append({"role": "assistant", "content": file_content})
                 return None, True, messages
@@ -551,7 +663,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
-                self.handle_continuation(messages, file_content, agent_settings.end_tag, task_config.K)
+                self.handle_continuation(messages, file_content, 0, agent_settings, task_config)
         else:
             if task_config.use_prefill_from_input:
                 prefill += first_k_tex_document
@@ -579,6 +691,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_prompt_caching=True,
         supports_native_pdf=True,
         supports_prefill=True,
+        like_to_ask_for_confirmation=True,
     ),
     "sonnet+": AnthropicModelConfig(
         name="sonnet+",
@@ -620,6 +733,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_prompt_caching=True,
         supports_vision=False,
         supports_prefill=True,
+        like_to_ask_for_confirmation=True,
     ),
     "haiku": AnthropicModelConfig(
         name="haiku",
@@ -665,7 +779,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
         provider=ModelProvider.OPENAI,
-        max_tokens=16384,
+        max_tokens=4096,
         input_price=10.0,
         output_price=30.0,
     ),
