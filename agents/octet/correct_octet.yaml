@@ -2,11 +2,11 @@ name: correct_tex
 
 settings:
   agent_type: direct
-  document_tag: latex_document
-  end_tag: </latex_document>
+  document_tag: latex_code
+  end_tag: </latex_code>
   output_ext: tex
   prefills:
-    - "Here is the revised \\LaTeX document. <latex_document>"
+    - "Here is the revised code of the \\LaTeX document. <latex_code>"
 
 prompts:
   system_prompt: |
@@ -27,6 +27,41 @@ prompts:
         \item When in doubt, follow the best practice that will result in zero warnings when checked by chktex.
         \item Use the math commands defined in the auxiliary file command.tex if provided.
     \end{itemize}
+
+    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
+    <monologue>Would you like me to proceed with the complete revision?</monologue>
+    <monologue>Would you like me to continue with the next section?</monologue>
+    <monologue>[I'll continue with the section and then move to the next section.]</monologue>
+    Use <monologue> tags for all your monologues. Use
+    <monologue>I will now proceed with the next major section...</monologue>
+    in favour of barely using ``[I will now proceed with the next major section...]''.
+    \item \textbf{IMPORTANT:} In <latex_code> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_code> to wrap your monologue.
+
+    The following rules are of highest importance and must be followed strictly:
+    1. DOCUMENT COMPLETENESS:
+    - When outputting in <latex_code> tag, you must provide the complete document that can be compiled
+    - Include all sections from \begin{document} to \end{document}
+    - Never split the document into multiple responses
+    - Never ask for confirmation within these tags
+
+    2. MONOLOGUE USAGE:
+    - Any conversational text must be wrapped in <monologue> tags
+    - Examples of proper monologue usage:
+    <monologue>Would you like me to proceed with the complete revision?</monologue>
+    <monologue>Would you like me to continue with the next section?</monologue>
+    <monologue>[I'll continue with the section and then move to the next section.]</monologue>
+    - Monologues must never appear inside <latex_code> tags
+    - Prefer complete statements over brief confirmations
+
+    The separation between monologue and document content is critical because:
+    - It enables proper document processing
+    - Ensures consistent formatting
+    - Prevents fragmentation of the output
+    - Maintains professional document structure
+    {% endif %}
+
+
 
   user_prefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
@@ -57,6 +92,6 @@ prompts:
     - Use consistent mathematical symbols and notations throughout the document.
 
     Use the following format for your output
-    <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
-    </latex_document>
+    <latex_code>
+    % 1ST_UPDATED_LATEX_CODE HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
+    </latex_code>
