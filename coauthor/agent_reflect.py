@@ -343,7 +343,8 @@ class BaseReflectChainAgent(ABC):
                 client=client,
                 messages=messages,
                 temperature=agent_settings.temperature,
-                system_prompt=agent_prompts.system_prompt,
+                # system_prompt=agent_prompts.system_prompt,
+                system_prompt=render_prompt(agent_prompts.system_prompt, self.user_vars),
                 end_tag=agent_settings.end_tag,
             )
             response_time = time.time() - start_time
