@@ -39,12 +39,13 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "[Continue with next",
     "[Continue with Section",
     "[Continue with similar improvements",
+    "[Continuing with the",
     "Shall I begin with",
     "Let me continue with",
     "Continuing from where we left off",
     "I'll continue with the next",
     "[Rest of document continues...]",
-    "[Rest of the document continues with similar",
+    "[Rest of the document continues",
     # "[Previous sections remain unchanged",
 ]
 
@@ -432,7 +433,8 @@ class AnthropicModelConfig(ModelConfig):
             else:
                 user_message_continuation = (
                     "Proceed to write fully the next part/section (not just a subsection, which is not enough). "
-                    "Continue writing exactly from where you left off until the end of the document. "
+                    # "Continue writing exactly from where you left off until the end of the document. "
+                    "Continue writing exactly from where you left off until the whole document has been systematically revised. "
                     # "Output as much as possible in each turn."
                     "Aim for double the length of output as previous turns. "
                     "Remember to stay professional and write latex code all the time. "
