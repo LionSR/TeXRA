@@ -402,7 +402,7 @@ class BaseReflectChainAgent(ABC):
                     continue
 
             if model_config.like_to_ask_for_confirmation:
-                if stop_reason != "stop_sequence" and not agent_settings.has_end_tag(new_response):
+                if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not agent_settings.has_end_tag(new_response):
                     end_turn = False
                     model_config.handle_continuation(messages, state, agent_settings, task_config)
                     continue
