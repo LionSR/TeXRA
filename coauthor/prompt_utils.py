@@ -4,6 +4,7 @@ from jinja2 import Template
 from typing import Dict, Any
 
 from .file_utils import read_file
+from .logging_utils import logger
 
 
 def load_yaml(file_path: str) -> dict:
@@ -60,7 +61,9 @@ def load_agent_settings_and_prompts(agent_path: str, agent: str):
 def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
     """Render a prompt string using Jinja2 templating."""
     template = Template(prompt)
-    return template.render(**variables)
+    rendered_prompt = template.render(**variables)
+    # logger.info(f"Rendered prompt: {rendered_prompt}")
+    return rendered_prompt
 
 
 def get_xml_format_from_file(file: str) -> str:
