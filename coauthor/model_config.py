@@ -427,6 +427,7 @@ class AnthropicModelConfig(ModelConfig):
                     "Proceed. "
                     "If no previous revised output of the document is provided, "
                     "please start from the very beginning of the document and work through the full document systematically. "
+                    "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
                     # "Output as much as possible in each turn. Maximizing the output length is preferred."
                 )
                 # set a document_tag started flag?
@@ -438,6 +439,7 @@ class AnthropicModelConfig(ModelConfig):
                     # "Output as much as possible in each turn."
                     "Aim for double the length of output as previous turns. "
                     "Remember to stay professional and write latex code all the time. "
+                    "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
                     # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
                 )
                 # this should also consider what if continue from existing output of a document

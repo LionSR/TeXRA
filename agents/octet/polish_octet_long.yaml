@@ -1,4 +1,4 @@
-name: polish_tex
+name: polish_octet_long
 settings:
   document_tag: latex_code
   end_tag: </latex_code>
