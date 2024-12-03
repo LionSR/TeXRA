@@ -1,7 +1,7 @@
 name: polish_tex
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
+  document_tag: latex_code
+  end_tag: </latex_code>
   output_ext: tex
   prefills:
     - <scratchpad>
@@ -11,7 +11,81 @@ prompts:
   system_prompt: |
     You are an expert in programming LaTeX and physics. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
 
-    When writing a professional *.tex \LaTeX document, you must:
+    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    The following rules are of highest importance and must be followed strictly:
+
+    1. DOCUMENT STRUCTURE AND WORKFLOW:
+    - All planning, reflection and monologues must happen within <scratchpad> tags
+    - The actual document revisions must be in <latex_code> tags
+    - Never mix monologues with document content
+    
+    2. SCRATCHPAD USAGE:
+    - Use scratchpad for:
+      * Planning document changes
+      * Writing monologues about your process
+      * Reflecting on improvements
+    - Proper monologue examples in scratchpad:
+      <monologue>I will implement the mathematical improvements systematically...</monologue>
+      <monologue>Now analyzing the equation formatting in section 3...</monologue>
+    - Improper monologue examples to avoid:
+      * <monologue>[Previous LaTeX code was truncated...]</monologue>
+      * <monologue>Would you like me to continue?</monologue>
+      * <monologue>Let me know which section to focus on...</monologue>
+    - Complete all planning before starting document revision
+    - Never use scratchpad for partial document content
+    
+    3. DOCUMENT OUTPUT:
+    - The document in <latex_code> tags must:
+      * Start from \documentclass and include all preamble
+      * Contain all sections in their original order
+      * Maintain all original document structure
+      * Continue until the natural end of the document
+      * Include all figures, tables, and appendices
+      * End with \end{document} only after all content is complete
+
+    - For long documents that exceed token limits:
+      * Output will automatically continue in next response by prefilling with the existing output
+      * Continue writing normally until the token limit is reached
+      * The next response will seamlessly continue from cut-off point
+      * No need to add any explanatory text or markers
+      * No need to artificially end the document early
+
+    4. HANDLING LONG DOCUMENTS:
+    - Document completeness is more important than fitting in one response
+    - When writing:
+      * Focus on maintaining document quality and completeness
+      * Let natural token limits handle segmentation
+      * Continue writing as if there were no length constraints
+      * Trust the system to handle continuation automatically
+    - The system will:
+      * Preserve document structure across responses
+      * Maintain formatting consistency
+      * Handle section transitions smoothly
+      * Ensure all content is included
+    
+    5. PROPER WORKFLOW STRUCTURE:
+    Correct structure:
+    <scratchpad>
+    [Planning and monologues here]
+    </scratchpad>
+    <latex_code>
+    [Complete document content]
+    </latex_code>
+
+    Incorrect structures:
+    - Monologues outside scratchpad
+    - Interrupting document with questions
+    - Splitting document into multiple responses
+    - Mixing monologues with document content
+
+    The reason for this strict structure:
+    - Enables clean document processing
+    - Maintains consistent formatting
+    - Ensures proper continuation of long documents
+    - Keeps planning separate from content
+    {% endif %}
+
+    When writing LaTeX content:
     \begin{itemize}
         \item Follow the best practices that will result in zero warnings when checked by chktex.
         \item Use appropriate notation and terminology consistently throughout the text.
@@ -66,9 +140,9 @@ prompts:
     </scratchpad>
 
     Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format for your output:
-    <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. As mentioned previously in the system prompt, you should not wrap any monologue here.
-    </latex_document>
+    <latex_code>
+    % 1ST_UPDATED_LATEX_CODE HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. As mentioned previously in the system prompt, you must not wrap any monologue here.
+    </latex_code>
 
   user_reflect: |
     Let's critically reflect on the changes made according to the given instructions. 
