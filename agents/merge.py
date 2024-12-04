@@ -11,7 +11,6 @@ def main():
     args = parser.parse_args()
 
     merge = AgentMerge(args, agent_path)
-    print(f"Merge args: {args}")
     merge.run()
 
 
