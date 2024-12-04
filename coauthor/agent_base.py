@@ -52,6 +52,13 @@ class BaseReflectChainAgent(ABC):
         # Initialize configurations
         self.agent_config = AgentConfig.from_args(args)
 
+        # Load agent settings and prompts
+        self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
+        self.agent_settings = AgentSettings.from_dict(self.settings_dict)
+        self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
+        # logger.debug(f"Agent settings: {self.agent_settings}")
+        # logger.debug(f"Agent prompts: {self.agent_prompts}")
+
         self.setup()
         self.user_vars = self.get_user_vars()
 
@@ -183,13 +190,6 @@ class BaseReflectChainAgent(ABC):
             raise ValueError(f"Model {self.agent_config.model} not found in MODEL_CONFIGS")
 
         self.client = self.model_config.get_client()
-
-        # Load agent settings and prompts
-        self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
-        self.agent_settings = AgentSettings.from_dict(self.settings_dict)
-        self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
-        # logger.debug(f"Agent settings: {self.agent_settings}")
-        # logger.debug(f"Agent prompts: {self.agent_prompts}")
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
