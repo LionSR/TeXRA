@@ -38,23 +38,3 @@ prompts:
     </documents>
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details.
-
-  user_request: |
-    {% if INSTRUCTION %}
-    Specific instructions that you must follow during the adaptation:
-    <instruction>
-    {{ INSTRUCTION }}
-    </instruction>
-
-    Follow these instructions closely while adapting the paper into lecture notes.
-    {% endif %}
-
-    Based on the provided research paper and example materials, please create a lecture note that follows the style and structure of the example note. The note should:
-
-    \begin{enumerate}
-        \item Present the key concepts and derivations in a pedagogical manner
-        \item Include detailed mathematical explanations and step-by-step derivations
-        \item Add insightful comments and interpretations to help students understand the material
-        \item Use consistent notation as defined in the command.tex file
-        \item Follow the style and formatting of the example note
-    \end{enumerate}
