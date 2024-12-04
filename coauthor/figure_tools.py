@@ -1,11 +1,12 @@
 import re
 import os
+
 from jinja2 import Template
 
 from .file_utils import read_file, write_file
-from .tex_tools import compile_latex_to_pdf
 from .logging_utils import logger
 from .prompt_utils import get_list_of_files
+from .tex_tools import compile_latex_to_pdf
 
 TIKZ_TEMPLATE = Template(
     r"""
