@@ -128,7 +128,11 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
 
 
 def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None) -> None:
-    """Log statistics to SQLite and print them to console"""
+    """
+    Log statistics to SQLite and print them to console
+    To be more maintainable I think we should separate the extracting/printing of statistics from the logging.
+    """
+
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
     total_response_time = state.total_response_time
