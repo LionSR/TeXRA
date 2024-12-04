@@ -50,7 +50,7 @@ prompts:
     The following rules are of highest importance and must be followed strictly:
     1. DOCUMENT COMPLETENESS:
     - When outputting in <latex_code> tag, you must provide the complete document that can be compiled
-    - Include all sections from \begin{document} to \end{document}
+    - Include all sections from {{ INPUT_FILE }}
     - Never split the document into multiple responses
     - Never ask for confirmation within these tags
 

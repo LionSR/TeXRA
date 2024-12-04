@@ -38,6 +38,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "[Continue with the",
     "[Continue with next",
     "[Continue with Section",
+    "[Continue with subsections",
     "[Continue with similar improvements",
     "[Continuing with the",
     "Shall I begin with",
@@ -46,6 +47,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "I'll continue with the next",
     "[Rest of document continues...]",
     "[Rest of the document continues",
+    "[Note: At this point, I would proceed",
     # "[Previous sections remain unchanged",
 ]
 
@@ -66,6 +68,7 @@ class ModelConfig(ABC):
     input_price: float
     output_price: float
     supports_prompt_caching: bool = False
+    supports_reasoning: bool = False
     supports_vision: bool = True
     supports_native_pdf: bool = False
     supports_prefill: bool = False
@@ -106,13 +109,12 @@ class ModelConfig(ABC):
         temperature: float,
         system_prompt: Optional[str] = None,
         end_tag: Optional[str] = None,
-        extra_kwargs: Optional[Dict] = None,
     ) -> Any:
         """Create a response using the appropriate API call for this model."""
         pass
 
     @abstractmethod
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
+    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
         """Initialize messages for the conversation."""
         pass
 
@@ -160,23 +162,40 @@ class ModelConfig(ABC):
         pass
 
     def compute_price(
-        self, input_tokens: int, output_tokens: int, cache_creation_tokens: Optional[int] = None, cache_read_tokens: Optional[int] = None
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        # for openai models with prompt caching support
+        cache_tokens: Optional[int] = None,
+        # for openai models with reasoning tokens support
+        reasoning_tokens: Optional[int] = None,
+        # for anthropic models with prompt caching support
+        cache_creation_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
     ) -> float:
-        """Compute the price for token usage."""
+        """
+        Compute the price for token usage.
+        In the future this should just take response_object.usage as input.
+        """
         return (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
 
     def check_stop_conditions(
         self, stop_reason: str, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop."""
+
+        CONTINUE_LIMIT = 20 if self.like_to_ask_for_confirmation else 10
+        INPUT_TOKEN_LIMIT = 1500000
+        OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
+
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
-        continuation_limit = state.continuation_count > 10
-        input_token_limit = state.total_input_tokens > 1500000
-        output_token_limit = state.total_output_tokens > 2.5 * state.first_input_tokens
+        continuation_limit = state.continuation_count > CONTINUE_LIMIT
+        input_token_limit = state.total_input_tokens > INPUT_TOKEN_LIMIT
+        output_token_limit = state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * state.first_input_tokens
 
         if output_token_limit:
-            logger.error("Output tokens exceed 2.5x input tokens - halting process")
+            logger.error(f"Output tokens exceed {OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
 
         should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
 
@@ -256,8 +275,8 @@ class AnthropicModelConfig(ModelConfig):
         extra_headers = []
         if self.supports_prompt_caching:
             extra_headers.append("prompt-caching-2024-07-31")
-            if self.name == "sonnet++":
-                extra_headers.append("pdfs-2024-09-25")
+        if self.supports_native_pdf:
+            extra_headers.append("pdfs-2024-09-25")
 
         return client.beta.messages.create(
             model=self.full_name,
@@ -270,9 +289,15 @@ class AnthropicModelConfig(ModelConfig):
         )
 
     def compute_price(
-        self, input_tokens: int, output_tokens: int, cache_creation_tokens: Optional[int] = None, cache_read_tokens: Optional[int] = None
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cache_tokens: Optional[int] = None,
+        reasoning_tokens: Optional[int] = None,
+        cache_creation_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
     ) -> float:
-        """Compute the price for token usage with prompt caching support."""
+        """Compute the price for token usage for anthropic models with prompt caching support."""
         base_price = super().compute_price(input_tokens, output_tokens)
 
         if not self.supports_prompt_caching:
@@ -285,7 +310,7 @@ class AnthropicModelConfig(ModelConfig):
 
         return base_price
 
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
+    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
         """Initialize messages for the conversation."""
         messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
@@ -309,6 +334,7 @@ class AnthropicModelConfig(ModelConfig):
             reflection_message["content"].extend(image_content)
 
         if self.supports_prompt_caching:
+            # A better and more maintainable way is required for managing cache control.
             reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
             # Make sure the number of cache control is fewer than 4 for Anthropic models
             if isinstance(messages[-1]["content"], list):
@@ -350,7 +376,21 @@ class AnthropicModelConfig(ModelConfig):
         return content
 
     def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
-        """Extract statistics from Anthropic response object."""
+        """
+        Extract statistics from Anthropic response object.
+        stop_reason: The reason that we stopped. This may be one the following values:
+        - "end_turn": the model reached a natural stopping point
+        - "max_tokens": we exceeded the requested max_tokens or the model's maximum
+        - "stop_sequence": the model reached a stop sequence
+        - "tool_use": the model invoked one or more tools
+        and we also use a customized stop reason:
+        - "ask_for_confirmation": the model asked for confirmation
+        """
+
+        # this function needs to be split
+        # one part for statistics
+        # one part for response extraction
+
         input_tokens = response_object.usage.input_tokens
         output_tokens = response_object.usage.output_tokens
         stop_reason = response_object.stop_reason
@@ -386,12 +426,23 @@ class AnthropicModelConfig(ModelConfig):
 
         new_response = "\n".join(lines)
 
+        if "<output>" in new_response:
+            # logic for when the model likes to ask for confirmation
+            logger.warning("Output tag detected - extracting latex code from <output> tags")
+            # new_response = extract what is inside <output> ... </output>
+            match = re.search(r"<output>(.*?)</output>", new_response, re.DOTALL)
+            if match:
+                new_response = match.group(1)
+            else:
+                logger.warning("No <output> tags found in response")
+
         # Only append end_tag if it's a stop sequence and not a confirmation prompt
         # maybe in some cases, we need to use \\end{document} instead of end_tag
         if stop_reason == "stop_sequence" and f"{end_tag}" not in new_response:
             logger.warning(f"Stop reason: {stop_reason}. Appending {end_tag} to the response.")
             new_response += f"\n{end_tag}"
 
+        # in the future let us just return response_object.usage
         return new_response, input_tokens, output_tokens, stop_reason
 
     def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
@@ -428,7 +479,9 @@ class AnthropicModelConfig(ModelConfig):
                     "If no previous revised output of the document is provided, "
                     "please start from the very beginning of the document and work through the full document systematically. "
                     "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
+                    f"The total number of tokens you output in the last turn is {state.output_tokens}, but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
                     # "Output as much as possible in each turn. Maximizing the output length is preferred."
+                    "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
                 # set a document_tag started flag?
             else:
@@ -441,6 +494,8 @@ class AnthropicModelConfig(ModelConfig):
                     "Remember to stay professional and write latex code all the time. "
                     "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
                     # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
+                    f"The total number of tokens you output in the last turn is {state.output_tokens}, but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
+                    "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
                 # this should also consider what if continue from existing output of a document
                 document_tag_start_string = f"<{agent_settings.document_tag}>"
@@ -548,9 +603,8 @@ class OpenAICompatibleModelConfig(ModelConfig):
         client: Any,
         messages: List[Dict],
         temperature: float,
-        system_prompt: str,
+        system_prompt: Optional[str] = None,
         end_tag: Optional[str] = None,
-        extra_kwargs: Optional[Dict] = None,
     ) -> Any:
         kwargs = {
             "model": self.full_name,
@@ -568,12 +622,9 @@ class OpenAICompatibleModelConfig(ModelConfig):
         if self.is_openrouter:
             kwargs["extra_headers"] = {"X-Title": "CoA"}
 
-        if extra_kwargs:
-            kwargs.update(extra_kwargs)
-
         return client.chat.completions.create(**kwargs)
 
-    def initialize_messages(self, system_prompt: str, user_prefix: str, user_request: str, figure_files=None) -> List[Dict]:
+    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
         """Initialize messages for the conversation."""
         if "o1" in self.name:
             messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
@@ -619,8 +670,48 @@ class OpenAICompatibleModelConfig(ModelConfig):
             )
         return content
 
+    def compute_price(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        # for openai models with prompt caching support
+        cache_tokens: Optional[int] = None,
+        # for openai models with reasoning tokens support
+        reasoning_tokens: Optional[int] = None,
+        # for anthropic models with prompt caching support
+        cache_creation_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
+    ) -> float:
+        """
+        Compute the price for token usage.
+        In the future this should just take response_object.usage as input.
+        """
+        if reasoning_tokens:
+            total_output_tokens = output_tokens + reasoning_tokens
+        else:
+            total_output_tokens = output_tokens
+
+        if cache_tokens:
+            total_input_tokens = (input_tokens - cache_tokens) + cache_tokens * 0.5
+        else:
+            total_input_tokens = input_tokens
+
+        return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
+
     def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
-        """Extract statistics from OpenAI response object."""
+        """
+        Extract statistics from OpenAI response object.
+        finish_reason: The reason the model stopped generating tokens.
+        This will be "stop" if the model hit a natural stop point or a provided stop sequence,
+        "length" if the maximum number of tokens specified in the request was reached,
+        "content_filter" if content was omitted due to a flag from our content filters,
+        "tool_calls" if the model called a tool, or "function_call" (deprecated) if the model called a function.
+        """
+
+        # this function needs to be split
+        # one part for statistics
+        # one part for response extraction
+
         stop_reason = response_object.choices[0].finish_reason
         new_response = response_object.choices[0].message.content.strip()
 
@@ -786,6 +877,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=15.0,
         output_price=60.0,
         supports_vision=False,
+        supports_reasoning=True,
     ),
     "gpto1-": OpenAICompatibleModelConfig(
         name="gpto1-",
@@ -795,6 +887,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=3.0,
         output_price=12.0,
         supports_vision=False,
+        supports_reasoning=True,
     ),
     "gpt4o": OpenAICompatibleModelConfig(
         name="gpt4o",
