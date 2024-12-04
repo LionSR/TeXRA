@@ -3,9 +3,9 @@ import re
 import difflib
 import xml.etree.ElementTree as ET
 
-from .logging_utils import logger
 from .file_utils import read_file, write_file
-from .replacement_utils import get_replacements_by_category, apply_replacements
+from .logging_utils import logger
+from .replacement_utils import apply_replacements, get_replacements_by_category
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int) -> str:
@@ -80,6 +80,9 @@ def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_ta
 
     # Read the content of the output file
     output_content = read_file(output_file)
+
+    # Filter monologue tags first
+    output_content = filter_monologue_tags(output_content)
 
     # Apply replacements
     output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
@@ -198,3 +201,15 @@ def split_multiple_scratchpad_output_xml(
     except ET.ParseError as e:
         logger.error(f"Failed to parse XML content: {str(e)}")
         return []
+
+
+def filter_monologue_tags(content: str) -> str:
+    """Filter out content wrapped in monologue tags including the tags themselves.
+
+    Args:
+        content: String content that may contain monologue tags
+
+    Returns:
+        String with monologue sections removed
+    """
+    return re.sub(r"<monologue>.*?</monologue>\s*", "", content, flags=re.DOTALL)

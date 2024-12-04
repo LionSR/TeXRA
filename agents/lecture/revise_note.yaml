@@ -44,13 +44,14 @@ prompts:
     </documents>
 
     Please carefully read through the entire chapter and ensure you fully understand all the details.
+
+  user_request: |
     Your task is to enhance this chapter focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  user_request: |
     First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the revisions independently):
 
     <scratchpad>
