@@ -1,7 +1,7 @@
 from .agent_merge import AgentMerge
 from .agent_reflect import ThinkAndWrite, DirectWrite
 from .arg_utils import comma_separated_list, get_common_argparser
-from .config import AgentConfig, AgentPrompts, AgentSettings
+from .agent_dataclass import AgentConfig, AgentPrompts, AgentSettings
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths
 from .file_utils import (
     append_file,
