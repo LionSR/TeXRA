@@ -72,7 +72,7 @@ class AgentPrompts:
 
 
 @dataclass
-class TaskConfig:
+class AgentConfig:
     """Configuration for task execution and tool usage."""
 
     model: str
@@ -112,8 +112,8 @@ class TaskConfig:
         return getattr(self, key, default)
 
     @classmethod
-    def from_args(cls, args) -> "TaskConfig":
-        """Create a TaskConfig from command line arguments."""
+    def from_args(cls, args) -> "AgentConfig":
+        """Create a AgentConfig from command line arguments."""
         config = cls(
             # Processing configuration
             reflect=args.reflect,
