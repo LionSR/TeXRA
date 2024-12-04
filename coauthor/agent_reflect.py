@@ -124,7 +124,7 @@ class BaseReflectChainAgent(ABC):
 
         user_vars = {
             "MODEL": self.task_config.model,
-            "MODEL_LIKE_TO_ASK_FOR_CONFIRMATION": self.model_config.like_to_ask_for_confirmation,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_config.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
@@ -402,7 +402,7 @@ class BaseReflectChainAgent(ABC):
                     model_config.handle_continuation(messages, state, agent_settings, task_config)
                     continue
 
-            if model_config.like_to_ask_for_confirmation:
+            if model_config.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not agent_settings.has_end_tag(new_response):
                     end_turn = False
                     model_config.handle_continuation(messages, state, agent_settings, task_config)
