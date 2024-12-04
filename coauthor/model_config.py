@@ -8,7 +8,7 @@ from enum import Enum
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any, Tuple
 
-from .config import AgentSettings, AgentConfig
+from .agent_dataclass import AgentSettings, AgentConfig
 from .file_utils import read_file, write_file
 from .logging_utils import logger
 from .output_utils import filter_monologue_tags
