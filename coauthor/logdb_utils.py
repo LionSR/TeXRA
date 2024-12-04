@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Optional, List
 
-from .config import AgentConfig, AgentSettings
+from .agent_dataclass import AgentConfig, AgentSettings
 from .logging_utils import logger
 from .model_config import ModelConfig
 from .state import State
