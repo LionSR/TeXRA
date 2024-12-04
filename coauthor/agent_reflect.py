@@ -85,32 +85,38 @@ class BaseReflectChainAgent(ABC):
         all_reference_files = [self.agent_config.reference_file] + self.agent_config.reference_files
         all_auxiliary_files = [self.agent_config.auxiliary_file] + self.agent_config.auxiliary_files
 
+        # Start with basic model and instruction vars
         user_vars = {
             "MODEL": self.agent_config.model,
             "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_config.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
-            # input file
-            "INPUT_FILE": self.agent_config.input_file,
-            "INPUT_CONTENT": read_file(self.agent_config.input_file) if self.agent_config.input_file else None,
-            "ADDITIONAL_INPUTS": get_xml_format_from_files(self.agent_config.input_files) if self.agent_config.input_files else None,
-            "ALL_INPUTS": get_xml_format_from_files(all_input_files) if all_input_files else None,
-            "LIST_OF_ALL_INPUTS": get_list_of_files(all_input_files),
-            # reference files
-            "REFERENCE_FILE": self.agent_config.reference_file,
-            "REFERENCE_CONTENT": read_file(self.agent_config.reference_file) if self.agent_config.reference_file else None,
-            "ADDITIONAL_REFERENCES": get_xml_format_from_files(self.agent_config.reference_files) if self.agent_config.reference_files else None,
-            "ALL_REFERENCES": get_xml_format_from_files(all_reference_files),
-            "LIST_OF_ALL_REFERENCES": get_list_of_files(all_reference_files),
-            # auxiliary files
-            "AUXILIARY_FILE": self.agent_config.auxiliary_file,
-            "AUXILIARY_CONTENT": read_file(self.agent_config.auxiliary_file) if self.agent_config.auxiliary_file else None,
-            "ADDITIONAL_AUXILIARIES": get_xml_format_from_files(self.agent_config.auxiliary_files),
-            "ALL_AUXILIARY_FILES": get_xml_format_from_files(all_auxiliary_files),
-            "LIST_OF_ALL_AUXILIARIES": get_list_of_files(all_auxiliary_files),
-            # edited file
-            "EDITED_FILE": self.agent_config.edited_file,
-            "EDITED_CONTENT": read_file(self.agent_config.edited_file) if self.agent_config.edited_file else None,
         }
+
+        # Handle single files
+        single_file_mappings = {
+            "INPUT": self.agent_config.input_file,
+            "REFERENCE": self.agent_config.reference_file,
+            "AUXILIARY": self.agent_config.auxiliary_file,
+            "EDITED": self.agent_config.edited_file
+        }
+
+        for prefix, file_path in single_file_mappings.items():
+            user_vars[f"{prefix}_FILE"] = file_path
+            user_vars[f"{prefix}_CONTENT"] = read_file(file_path) if file_path else None
+
+        # Handle file collections
+        collection_mappings = {
+            "INPUT": (self.agent_config.input_files, all_input_files),
+            "REFERENCE": (self.agent_config.reference_files, all_reference_files),
+            "AUXILIARY": (self.agent_config.auxiliary_files, all_auxiliary_files)
+        }
+
+        for prefix, (additional_files, all_files) in collection_mappings.items():
+            user_vars[f"ADDITIONAL_{prefix}S"] = (
+                get_xml_format_from_files(additional_files) if additional_files else None
+            )
+            user_vars[f"ALL_{prefix}S"] = get_xml_format_from_files(all_files) if all_files else None
+            user_vars[f"LIST_OF_ALL_{prefix}S"] = get_list_of_files(all_files)
 
         # Add variables for required files
         if self.agent_settings.required_files:
