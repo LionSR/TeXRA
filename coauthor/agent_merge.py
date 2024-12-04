@@ -1,6 +1,7 @@
 import os
 import re
 
+from .agent_dataclass import AgentConfig
 from .state import State
 from .agent_reflect import DirectWrite
 from .logging_utils import logger
@@ -44,8 +45,8 @@ def get_output_file_name_merge(input_file, edited_file, round):
 
 
 class AgentMerge(DirectWrite):
-    def __init__(self, args, agent_path):
-        super().__init__(args, agent_path)
+    def __init__(self, config: AgentConfig, agent_path):
+        super().__init__(config, agent_path)
         self.output_file = [get_output_file_name_merge(self.agent_config.input_file, self.agent_config.edited_file, r) for r in range(2)]
 
     def get_output_file(self, round):
