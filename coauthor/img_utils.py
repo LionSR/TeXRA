@@ -5,6 +5,7 @@ import fitz
 
 from PIL import Image
 from typing import List
+
 from .logging_utils import logger
 
 

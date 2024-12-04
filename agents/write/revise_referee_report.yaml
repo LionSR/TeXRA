@@ -45,6 +45,7 @@ prompts:
 
     Please carefully read through the entire research paper and the drafted report above. Ensure you fully understand all the details before revising the report.
 
+  user_request: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -52,8 +53,7 @@ prompts:
     </instruction>
     {% endif %}
 
-  user_request: |
-    Based on the research paper and the drafted referee report provided, please revise and improve the referee report for Nature Commucanition. In the scratchpad below, outline the key points you plan to address in your revised report, focusing on areas that need more critical analysis, elaboration, or specific examples.
+    Based on the research paper and the drafted report provided, please revise and improve the referee report for PRX Quantum. In the scratchpad below, outline the key points you plan to address in your revised report, focusing on areas that need more critical analysis, elaboration, or specific examples.
 
     <scratchpad>
     \begin{enumerate}
