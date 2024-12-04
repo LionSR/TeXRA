@@ -35,14 +35,16 @@ prompts:
 
     Review the document carefully before revising. Respect and work with the existing experiences provided; do not invent new experiences or add any information not present in the original document.
 
+  user_request: |
     {% if INSTRUCTION %}
-    Specific instructions that you must follow closely during the revision:
+    Specific instructions that you must follow during the revision:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+
+    Follow these instructions closely during revision.
     {% endif %}
 
-  user_request: |
     Revise and improve the diversity statement based on these guidelines:
 
     \begin{enumerate}

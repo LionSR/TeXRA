@@ -41,6 +41,13 @@ prompts:
     </document>
     </documents>
 
+  user_request: |
+    Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
+
+    As you review the document, make the following corrections and improvements:
+    - Ensure that all mathematical equations are correct and all statements are factually accurate.
+    - Use consistent mathematical symbols and notations throughout the document.
+
     {% if INSTRUCTION %}
     Specific instructions that you must follow closely:
     <instruction>
@@ -48,13 +55,6 @@ prompts:
     </instruction>
     For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
     {% endif %}
-
-  user_request: |
-    Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
-
-    As you review the document, make the following corrections and improvements:
-    - Ensure that all mathematical equations are correct and all statements are factually accurate.
-    - Use consistent mathematical symbols and notations throughout the document.
 
     Use the following format for your output
     <latex_document>

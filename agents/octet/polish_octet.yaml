@@ -84,7 +84,7 @@ prompts:
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document. 
 
     Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. 
-    
+
     Use the following style for your output:
     <scratchpad>
     The first improvement addresses [specific aspect] by [explanation of approach]. This will be implemented by [concrete steps detailing the implementation process], ensuring that [desired outcome] is achieved while maintaining [important constraints].
