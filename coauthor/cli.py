@@ -9,7 +9,7 @@ from pathlib import Path
 
 from coauthor.arg_utils import comma_separated_list
 from coauthor.figure_tools import (
-    extract_figure_paths,
+    extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
     handle_auto_extract_figure,
     handle_auto_extract_tikz_figure,
@@ -287,7 +287,7 @@ def tex_count(latex_file):
 @cli.command()
 @click.argument("latex_file")
 def extract_figure_path(latex_file):
-    figure_paths = extract_figure_paths(latex_file)
+    figure_paths = extract_figure_paths_from_latex(latex_file)
     logger.info(f"Extracted figure file paths: {figure_paths}")
 
 
