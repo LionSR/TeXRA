@@ -1,29 +1,29 @@
 import os
 import re
-from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
 import time
 
-from .logging_utils import logger
+from abc import ABC, abstractmethod
+from typing import Optional, List, Dict, Any
+
+from .config import TaskConfig, AgentSettings, AgentPrompts
 from .figure_tools import extract_and_compile_tikzpictures_with_labels
-from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
+from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
+from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
+from .logging_utils import logger
+from .model_config import MODEL_CONFIGS
+from .openai_utils import best_connection_method
 from .output_utils import (
-    ensure_correct_xml_structure,
-    split_scratchpad_output_xml,
-    split_multiple_scratchpad_output_xml,
     check_for_massive_repetition,
+    ensure_correct_xml_structure,
     filter_monologue_tags,
+    split_multiple_scratchpad_output_xml,
+    split_scratchpad_output_xml,
     write_file,
 )
-from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
-from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
-from .openai_utils import best_connection_method
 from .replacement_utils import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
-
 from .state import State
-from .model_config import MODEL_CONFIGS
-from .config import TaskConfig, AgentSettings, AgentPrompts
+from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -429,6 +429,7 @@ class BaseReflectChainAgent(ABC):
         """Process the first round."""
         logger.info(f"Processing round {round}")
 
+        system_prompt = render_prompt(agent_prompts.system_prompt, user_vars)
         user_request = render_prompt(agent_prompts.user_request, user_vars)
         user_prefix = render_prompt(agent_prompts.user_prefix, user_vars)
         if tex_count_stats:
@@ -439,7 +440,7 @@ class BaseReflectChainAgent(ABC):
             user_prefix,
             user_request,
             figure_files,
-            agent_prompts.system_prompt,
+            system_prompt,
         )
 
         accumulated_output = None

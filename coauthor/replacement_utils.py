@@ -4,9 +4,10 @@ This module centralizes the management of text replacement patterns used through
 the application for cleaning and normalizing text content.
 """
 
+import re
+
 from typing import Dict, Optional
 from dataclasses import dataclass
-import re
 
 
 @dataclass
@@ -100,6 +101,7 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end\n": "\\end{document}\n",
         "\\end{output>": "\\end{output}",
         "\\end{response>": "\\end{response}",
+        "\\end{scratchpad>": "</scratchpad>",
         "</figure>\n": "\\end{figure}\n",
         "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
         "\\end{document}\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
@@ -147,7 +149,6 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
         "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
         "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
-        r"\end{scratchpad>": "</scratchpad>",
     },
 )
 
