@@ -1,7 +1,7 @@
 import re
 
 
-def extract_figure_paths(latex_file_path):
+def extract_figure_paths_from_latex(latex_file_path):
     figure_paths = []
 
     # Regular expression to match figure inclusion commands
@@ -28,7 +28,7 @@ def extract_figure_paths(latex_file_path):
 # Example usage
 if __name__ == "__main__":
     latex_file = "path/to/your/latex/document.tex"
-    figures = extract_figure_paths(latex_file)
+    figures = extract_figure_paths_from_latex(latex_file)
 
     print("Extracted figure file paths:")
     for figure in figures:
