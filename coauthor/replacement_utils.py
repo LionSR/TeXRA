@@ -4,9 +4,10 @@ This module centralizes the management of text replacement patterns used through
 the application for cleaning and normalizing text content.
 """
 
+import re
+
 from typing import Dict, Optional
 from dataclasses import dataclass
-import re
 
 
 @dataclass
@@ -55,6 +56,19 @@ CHARACTER_REPLACEMENTS = ReplacementCategory(
     },
 )
 
+LAZY_REPLACEMENTS = ReplacementCategory(
+    name="lazy",
+    description="Fixes for lazy writing with regex patterns",
+    patterns={
+        # Match the entire confirmation message block
+        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>\n<latex_code>",
+        # Handle case where latex_document tag precedes the monologue
+        # r"<latex_code>\s*(<monologue>\[Due to length limits,.*?</monologue>)": r"\1",
+        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>\[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
+        r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
+    },
+)
+
 # Style improvements
 STYLE_REPLACEMENTS = ReplacementCategory(
     name="style",
@@ -85,7 +99,9 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{latex_document>": "</latex_document>\n",
         "\\end{scratchpad}": "</scratchpad>",
         "\\end\n": "\\end{document}\n",
+        "\\end{output>": "\\end{output}",
         "\\end{response>": "\\end{response}",
+        "\\end{scratchpad>": "</scratchpad>",
         "</figure>\n": "\\end{figure}\n",
         "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
         "\\end{document}\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
@@ -101,6 +117,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{document}\n</rebuttal_package>": "\\end{document}\n</document>\n</rebuttal_package>",
         # new sonnet 3.5 problems
         "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\\makeheader[Previous",
+        "</monologue><monologue>": "</monologue>\n<monologue>",
+        "<latex_document>\n[Previous sections": "[Previous sections",
     },
 )
 
@@ -131,7 +149,6 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
         "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
         "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
-        r"\end{scratchpad>": "</scratchpad>",
     },
 )
 
@@ -144,6 +161,7 @@ def get_all_replacements() -> Dict[str, str]:
         EQUATION_REPLACEMENTS,
         SECTION_REPLACEMENTS,
         CHARACTER_REPLACEMENTS,
+        # LAZY_REPLACEMENTS,
         STYLE_REPLACEMENTS,
         # FORMAT
         LATEX_XML_REPLACEMENTS,
@@ -173,6 +191,7 @@ def get_replacements_by_category(category_name: str) -> Optional[Dict[str, str]]
         "latex_xml": LATEX_XML_REPLACEMENTS,
         "tikz": TIKZ_REPLACEMENTS,
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
+        "lazy": LAZY_REPLACEMENTS,
     }
 
     category = categories.get(category_name)
