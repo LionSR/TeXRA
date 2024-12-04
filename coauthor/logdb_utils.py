@@ -126,7 +126,7 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
     return log_id
 
 
-def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None, prompt_caching: bool = False) -> None:
+def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: Optional[int] = None) -> None:
     """Log statistics to SQLite and print them to console"""
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
@@ -141,7 +141,7 @@ def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: 
     cache_creation_tokens = state.total_cache_creation_input_tokens
     percentage_cached = 0
 
-    if prompt_caching:
+    if model_config.supports_prompt_caching:
         logger.info(f"Total input tokens (cache read): {cache_read_tokens}")
         logger.info(f"Total input tokens (cache create): {cache_creation_tokens}")
 
@@ -149,6 +149,9 @@ def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: 
         percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         logger.info(f"Percentage cached: {percentage_cached}%")
         cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_creation_tokens, cache_read_tokens)
+    elif model_config.supports_reasoning_tokens:
+        logger.info(f"Total reasoning tokens: {state.total_reasoning_tokens}")
+        cost = model_config.compute_price(total_input_tokens, total_output_tokens, reasoning_tokens=state.total_reasoning_tokens)
     else:
         cost = model_config.compute_price(total_input_tokens, total_output_tokens)
 

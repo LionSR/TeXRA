@@ -23,7 +23,7 @@ prompts:
         \item When you are referring to equations or figures, you should always use \cref{...} instead of a pure number, because for latex documents, the numbering are only generated after compiliation and can change.
     \end{itemize}
 
-    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    {% if MODEL_LIKE_TO_ASK_FOR_CONFIRMATION %}
     \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
     <monologue>Would you like me to proceed with the complete revision?</monologue>
     <monologue>Would you like me to continue with the next section?</monologue>
