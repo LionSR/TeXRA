@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Optional, List
 
-from .config import TaskConfig, AgentSettings
+from .config import AgentConfig, AgentSettings
 from .logging_utils import logger
 from .model_config import ModelConfig
 from .state import State
@@ -26,25 +26,25 @@ def init_db() -> None:
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
 
-    # Update table schema to match all possible fields from TaskConfig and agent settings
+    # Update table schema to match all possible fields from AgentConfig and agent settings
     c.execute(
         """CREATE TABLE IF NOT EXISTS coauthor_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME,
         agent TEXT,
         model TEXT,
-        temperature FLOAT,  -- Added to match TaskConfig
+        temperature FLOAT,  -- Added to match AgentConfig
         input_file TEXT,
         input_files TEXT,  -- JSON array of additional input files
-        auxiliary_file TEXT,  -- Added to match TaskConfig
+        auxiliary_file TEXT,  -- Added to match AgentConfig
         auxiliary_files TEXT,  -- JSON array of auxiliary files
-        figure_file TEXT,  -- Added to match TaskConfig
+        figure_file TEXT,  -- Added to match AgentConfig
         figure_files TEXT,  -- JSON array of figure files
-        reference_file TEXT,  -- Added to match TaskConfig
+        reference_file TEXT,  -- Added to match AgentConfig
         reference_files TEXT,  -- JSON array of reference files
-        edited_file TEXT,  -- Added to match TaskConfig
+        edited_file TEXT,  -- Added to match AgentConfig
         output_files TEXT,  -- JSON array of target output files
-        output_name_override TEXT,  -- Added to match TaskConfig
+        output_name_override TEXT,  -- Added to match AgentConfig
         actual_output_files TEXT,  -- JSON array of actual output files
         output_file TEXT,  -- Main output file
         is_reflection BOOLEAN,
@@ -63,18 +63,18 @@ def init_db() -> None:
     conn.close()
 
 
-def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
+def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int:
     """Initialize a new log entry and return its ID"""
     init_db()
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
 
     # Convert lists to JSON strings for storage
-    input_files = json.dumps(task_config.input_files) if task_config.input_files else None
-    auxiliary_files = json.dumps(task_config.auxiliary_files) if task_config.auxiliary_files else None
-    figure_files = json.dumps(task_config.figure_files) if task_config.figure_files else None
-    reference_files = json.dumps(task_config.reference_files) if task_config.reference_files else None
-    output_files = json.dumps(task_config.output_files) if task_config.output_files else None
+    input_files = json.dumps(agent_config.input_files) if agent_config.input_files else None
+    auxiliary_files = json.dumps(agent_config.auxiliary_files) if agent_config.auxiliary_files else None
+    figure_files = json.dumps(agent_config.figure_files) if agent_config.figure_files else None
+    reference_files = json.dumps(agent_config.reference_files) if agent_config.reference_files else None
+    output_files = json.dumps(agent_config.output_files) if agent_config.output_files else None
     actual_output_files = json.dumps([])  # Initialize as empty
 
     # Initialize empty array for round stats
@@ -93,30 +93,30 @@ def logdb_start(task_config: TaskConfig, agent_settings: AgentSettings) -> int:
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now(),
-            task_config.agent,
-            task_config.model,
+            agent_config.agent,
+            agent_config.model,
             agent_settings.temperature,
-            task_config.input_file,
+            agent_config.input_file,
             input_files,
-            task_config.auxiliary_file,
+            agent_config.auxiliary_file,
             auxiliary_files,
-            task_config.figure_file,
+            agent_config.figure_file,
             figure_files,
-            task_config.reference_file,
+            agent_config.reference_file,
             reference_files,
-            task_config.edited_file,
+            agent_config.edited_file,
             output_files,
-            task_config.output_name_override,
+            agent_config.output_name_override,
             actual_output_files,
             False,  # is_reflection
-            task_config.instruction,
+            agent_config.instruction,
             round_stats,
-            task_config.reflect,
-            task_config.auto_extract_figure,
-            task_config.auto_extract_tikz_figure,
-            task_config.auto_extract_tikz_figure_reflect,
-            task_config.include_tex_count,
-            task_config.use_prefill_from_input,
+            agent_config.reflect,
+            agent_config.auto_extract_figure,
+            agent_config.auto_extract_tikz_figure,
+            agent_config.auto_extract_tikz_figure_reflect,
+            agent_config.include_tex_count,
+            agent_config.use_prefill_from_input,
         ),
     )
 
