@@ -112,34 +112,33 @@ class AgentConfig:
         return getattr(self, key, default)
 
     @classmethod
-    def from_args(cls, args) -> "AgentConfig":
-        """Create a AgentConfig from command line arguments."""
+    def from_kwargs(cls, **kwargs) -> "AgentConfig":
+        """Create AgentConfig from keyword arguments"""
+        # Handle defaults and conversions
         config = cls(
             # Processing configuration
-            reflect=args.reflect,
-            model=args.model,
-            agent=args.agent,
-            
+            model=kwargs.get("model", "sonnet+"),
+            reflect=kwargs.get("reflect", False),
+            agent=kwargs.get("agent"),
+            instruction=kwargs.get("instruction"),
             # Input/Output configuration
-            input_file=args.input_file,
-            input_files=args.input_files,
-            reference_file=args.reference_file,
-            reference_files=args.reference_files,
-            auxiliary_file=args.auxiliary_file,
-            auxiliary_files=args.auxiliary_files,
-            figure_file=args.figure_file,
-            figure_files=args.figure_files,
-            edited_file=args.edited_file,
-            output_files=args.output_files,
-            output_name_override=args.output_name_override,
-            instruction=args.instruction,
-
+            input_file=kwargs.get("input_file"),
+            input_files=kwargs.get("input_files", []),
+            reference_file=kwargs.get("reference_file"),
+            reference_files=kwargs.get("reference_files", []),
+            auxiliary_file=kwargs.get("auxiliary_file"),
+            auxiliary_files=kwargs.get("auxiliary_files", []),
+            figure_file=kwargs.get("figure_file"),
+            figure_files=kwargs.get("figure_files", []),
+            output_files=kwargs.get("output_files"),
+            output_name_override=kwargs.get("output_name_override"),
+            edited_file=kwargs.get("edited_file"),
             # Tool usage configuration
-            use_prefill_from_input=args.use_prefill_from_input,
-            include_tex_count=args.include_tex_count,
-            auto_extract_figure=args.auto_extract_figure,
-            auto_extract_tikz_figure=args.auto_extract_tikz_figure,
-            auto_extract_tikz_figure_reflect=args.auto_extract_tikz_figure_reflect,
+            use_prefill_from_input=kwargs.get("use_prefill_from_input", False),
+            include_tex_count=kwargs.get("include_tex_count", False),
+            auto_extract_figure=kwargs.get("auto_extract_figure", False),
+            auto_extract_tikz_figure=kwargs.get("auto_extract_tikz_figure", False),
+            auto_extract_tikz_figure_reflect=kwargs.get("auto_extract_tikz_figure_reflect", False),
         )
         config.validate()
         return config

@@ -1,17 +1,13 @@
 import coauthor as coa
-
-from coauthor import AgentMerge
-
-agent_path = coa.get_agent_path(coa, ".")
+from coauthor.logging_utils import logger
 
 
 def main():
     parser = coa.get_common_argparser()
-    parser.add_argument("--agent", type=str, default="merge", help="Agent to choose.")
     args = parser.parse_args()
+    logger.debug(f"Args: {args}")
 
-    merge = AgentMerge(args, agent_path)
-    merge.run()
+    coa.run_merge(model=args.model, input_file=args.input_file, edited_file=args.edited_file)
 
 
 if __name__ == "__main__":
