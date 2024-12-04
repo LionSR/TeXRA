@@ -10,20 +10,10 @@ agent_path = coa.get_agent_path(coa, ".")
 class Merge(DirectWrite):
     def __init__(self, args, agent_path):
         super().__init__(args, agent_path)
-        self.output_file = [get_output_file_name_merge(self.task_config.input_file, self.task_config.edited_file, r) for r in range(2)]
-
-    def get_user_vars(self):
-        user_vars = super().get_user_vars()
-        user_vars.update(
-            {
-                "INPUT_CONTENT": coa.read_file(self.task_config.input_file),
-                "EDITED_CONTENT": coa.read_file(self.task_config.edited_file),
-            }
-        )
-        return user_vars
+        self.output_file = [get_output_file_name_merge(self.agent_config.input_file, self.agent_config.edited_file, r) for r in range(2)]
 
     def get_output_file(self, round):
-        return get_output_file_name_merge(self.task_config.input_file, self.task_config.edited_file, round)
+        return get_output_file_name_merge(self.agent_config.input_file, self.agent_config.edited_file, round)
 
     def handle_output(self, state: State, end_turn: bool, output_file: str, round: int = 0) -> None:
         if end_turn:
