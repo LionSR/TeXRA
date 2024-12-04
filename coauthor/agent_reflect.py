@@ -42,43 +42,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     return output_file
 
 
-def get_output_file_name_merge(input_file, edited_file, round):
-    input_dir = os.path.dirname(input_file)
-    input_base, _ = os.path.splitext(os.path.basename(input_file))
-    edited_base, _ = os.path.splitext(os.path.basename(edited_file))
-
-    # Count number of underscores in edited_base
-    underscore_count = edited_base.count("_")
-
-    parts = edited_base.split("_")
-    if underscore_count == 3:
-        # For cases like "base_agent_r1_model"
-        edited_base_override = parts[0]
-        agent = parts[1]
-    else:
-        # For cases like "MutualInfo_restructured_polish_r1_sonnet++"
-        # Combine all parts before _r{N}_ as the agent name
-        agent_parts = []
-        edited_base_override = parts[0]
-        for i, part in enumerate(parts[1:], 1):
-            if part.startswith("r") and part[1:].isdigit():
-                agent = "_".join(agent_parts)
-                break
-            agent_parts.append(part)
-
-    base = input_base
-    if input_base != edited_base_override:
-        base = edited_base_override
-
-    round_match = re.search(r"_r(\d+)_", edited_base)
-    round = int(round_match.group(1)) if round_match else round
-    model = parts[-1]
-    output_file = f"{base}_{agent}_r{round}_full_{model}.tex"
-    output_file = os.path.join(input_dir, output_file)
-    logger.info(f"Merge output file: {output_file}")
-    return output_file
-
-
 class BaseReflectChainAgent(ABC):
     """
     Abstract base class for reflect chain agents.
@@ -346,7 +309,9 @@ class BaseReflectChainAgent(ABC):
             response_time = time.time() - start_time
             state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
-            new_response, input_tokens, output_tokens, stop_reason = self.model_config.extract_response_statistics(response_object, self.agent_settings.end_tag)
+            new_response, input_tokens, output_tokens, stop_reason = self.model_config.extract_response_statistics(
+                response_object, self.agent_settings.end_tag
+            )
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
@@ -384,7 +349,9 @@ class BaseReflectChainAgent(ABC):
                     else:
                         messages[-1]["content"] = accumulated_output
 
-            end_turn, should_stop = self.model_config.check_stop_conditions(stop_reason, new_response, state, self.agent_settings, massive_repetition_detected)
+            end_turn, should_stop = self.model_config.check_stop_conditions(
+                stop_reason, new_response, state, self.agent_settings, massive_repetition_detected
+            )
             if should_stop:
                 self.model_config.print_stop_flags(end_turn, new_response, state, self.agent_settings, massive_repetition_detected)
                 break
