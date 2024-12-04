@@ -1,10 +1,10 @@
 import os
 import yaml
+
 from jinja2 import Template
 from typing import Dict, Any
 
 from .file_utils import read_file
-from .logging_utils import logger
 
 
 def load_yaml(file_path: str) -> dict:

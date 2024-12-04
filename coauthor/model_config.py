@@ -1,18 +1,19 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from enum import Enum
 import os
 import re
 import base64
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any, Tuple
 
-from .logging_utils import logger
-from .file_utils import read_file, write_file
 from .config import AgentSettings, TaskConfig
+from .file_utils import read_file, write_file
+from .logging_utils import logger
 from .output_utils import filter_monologue_tags
-from .state import State
 from .replacement_utils import apply_replacement_regex, get_replacements_by_category
+from .state import State
 
 
 load_dotenv()
@@ -67,6 +68,7 @@ class ModelConfig(ABC):
     max_tokens: int
     input_price: float
     output_price: float
+    context_length: int = 8192
     supports_prompt_caching: bool = False
     supports_reasoning: bool = False
     supports_vision: bool = True
@@ -208,11 +210,10 @@ class ModelConfig(ABC):
         INPUT_TOKEN_LIMIT = 100000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 
-        document_tag = agent_settings.document_tag
         logger.debug(
             f"Stop flags:\n"
             f"end_turn: {end_turn}\n"
-            f"encounter_document_tag: {'</'+document_tag+'>' in new_response}\n"
+            f"encounter_document_tag: {'</'+agent_settings.document_tag+'>' in new_response}\n"
             f"continuation_limit: {state.continuation_count > CONTINUE_LIMIT}\n"
             f"input_token_limit: {state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
             f"massive_repetition_detected: {massive_repetition_detected}\n"
@@ -287,28 +288,6 @@ class AnthropicModelConfig(ModelConfig):
             system=system_prompt,
             betas=extra_headers if extra_headers else None,
         )
-
-    def compute_price(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cache_tokens: Optional[int] = None,
-        reasoning_tokens: Optional[int] = None,
-        cache_creation_tokens: Optional[int] = None,
-        cache_read_tokens: Optional[int] = None,
-    ) -> float:
-        """Compute the price for token usage for anthropic models with prompt caching support."""
-        base_price = super().compute_price(input_tokens, output_tokens)
-
-        if not self.supports_prompt_caching:
-            return base_price
-
-        if cache_creation_tokens:
-            base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6
-        if cache_read_tokens:
-            base_price += (cache_read_tokens * self.input_price * 0.1) / 1e6
-
-        return base_price
 
     def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
         """Initialize messages for the conversation."""
@@ -473,13 +452,15 @@ class AnthropicModelConfig(ModelConfig):
             logger.warning("Handling model_config.like_to_ask_for_confirmation")
 
             # there should be a state variable including accumulated output
-            if state.continuation_count == 0 or state.continuation_count == 1:
+            if state.continuation_count <= 1:
                 user_message_continuation = (
                     "Proceed. "
                     "If no previous revised output of the document is provided, "
                     "please start from the very beginning of the document and work through the full document systematically. "
-                    "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
-                    f"The total number of tokens you output in the last turn is {state.output_tokens}, but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
+                    "Note that you have an effectively infinite token response limit"
+                    "because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
+                    f"The total number of tokens you output in the last turn is {state.output_tokens},"
+                    "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
                     # "Output as much as possible in each turn. Maximizing the output length is preferred."
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
@@ -492,9 +473,11 @@ class AnthropicModelConfig(ModelConfig):
                     # "Output as much as possible in each turn."
                     "Aim for double the length of output as previous turns. "
                     "Remember to stay professional and write latex code all the time. "
-                    "Note that you have an effectively infinite token response limit because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
+                    "Note that you have an effectively infinite token response limit"
+                    "because the system that you are part of handles continuations automatically. Therefore, just output the complete document."
                     # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
-                    f"The total number of tokens you output in the last turn is {state.output_tokens}, but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
+                    f"The total number of tokens you output in the last turn is {state.output_tokens},"
+                    "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn."
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
                 # this should also consider what if continue from existing output of a document
@@ -585,6 +568,28 @@ class AnthropicModelConfig(ModelConfig):
 
         return accumulated_output, False, messages
 
+    def compute_price(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cache_tokens: Optional[int] = None,
+        reasoning_tokens: Optional[int] = None,
+        cache_creation_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
+    ) -> float:
+        """Compute the price for token usage for anthropic models with prompt caching support."""
+        base_price = super().compute_price(input_tokens, output_tokens)
+
+        if not self.supports_prompt_caching:
+            return base_price
+
+        if cache_creation_tokens:
+            base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6
+        if cache_read_tokens:
+            base_price += (cache_read_tokens * self.input_price * 0.1) / 1e6
+
+        return base_price
+
 
 @dataclass
 class OpenAICompatibleModelConfig(ModelConfig):
@@ -595,7 +600,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
             return OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
         elif self.is_openai:
             return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        else:  # Google
+        elif self.is_google:
             return OpenAI(api_key=os.getenv("GOOGLE_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta")
 
     def create_response(
@@ -683,7 +688,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
         cache_read_tokens: Optional[int] = None,
     ) -> float:
         """
-        Compute the price for token usage.
+        Compute the price for token usage for OpenAI-compatible models.
         In the future this should just take response_object.usage as input.
         """
         if reasoning_tokens:

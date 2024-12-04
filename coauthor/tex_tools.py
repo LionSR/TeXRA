@@ -2,8 +2,9 @@ import os
 import subprocess
 import re
 import glob
-from .logging_utils import logger
+
 from .file_utils import write_file, read_file
+from .logging_utils import logger
 from .replacement_utils import get_replacements_by_category, apply_replacement_regex
 
 
