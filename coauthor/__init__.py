@@ -1,5 +1,6 @@
 from .agent_merge import AgentMerge
 from .agent_reflect import ThinkAndWrite, DirectWrite
+from .agent_run import run_agent, run_merge
 from .arg_utils import comma_separated_list, get_common_argparser
 from .agent_dataclass import AgentConfig, AgentPrompts, AgentSettings
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex
