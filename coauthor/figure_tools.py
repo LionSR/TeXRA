@@ -25,7 +25,7 @@ TIKZ_TEMPLATE = Template(
 )
 
 
-def extract_figure_paths(latex_file_path):
+def extract_figure_paths_from_latex(latex_file_path):
     figure_paths = []
     latex_dir = os.path.dirname(latex_file_path)
     graphicspaths = [latex_dir]  # Start with the directory of the LaTeX file
@@ -134,7 +134,7 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
 
 
 def handle_auto_extract_figure(kwargs, input_file):
-    extracted_figure_paths = extract_figure_paths(input_file)
+    extracted_figure_paths = extract_figure_paths_from_latex(input_file)
     logger.debug("Extracting the list of figures: " + ", ".join(extracted_figure_paths))
     if extracted_figure_paths:
         if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:

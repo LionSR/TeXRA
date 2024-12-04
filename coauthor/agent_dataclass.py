@@ -119,6 +119,7 @@ class AgentConfig:
             reflect=args.reflect,
             model=args.model,
             agent=args.agent,
+            
             # Input/Output configuration
             input_file=args.input_file,
             input_files=args.input_files,
@@ -132,6 +133,7 @@ class AgentConfig:
             output_files=args.output_files,
             output_name_override=args.output_name_override,
             instruction=args.instruction,
+
             # Tool usage configuration
             use_prefill_from_input=args.use_prefill_from_input,
             include_tex_count=args.include_tex_count,
