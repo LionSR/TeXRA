@@ -3,9 +3,9 @@ import re
 import difflib
 import xml.etree.ElementTree as ET
 
-from .logging_utils import logger
 from .file_utils import read_file, write_file
-from .replacement_utils import get_replacements_by_category, apply_replacements
+from .logging_utils import logger
+from .replacement_utils import apply_replacements, get_replacements_by_category
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int) -> str:

@@ -1,13 +1,14 @@
 import os
 import sqlite3
 import json
+
 from datetime import datetime
 from typing import Optional, List
 
-from .state import State
+from .config import TaskConfig, AgentSettings
 from .logging_utils import logger
 from .model_config import ModelConfig
-from .config import TaskConfig, AgentSettings
+from .state import State
 
 HISTORY_DIR = "History"
 
@@ -149,7 +150,7 @@ def logdb_and_print_statistics(state: State, model_config: ModelConfig, log_id: 
         percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         logger.info(f"Percentage cached: {percentage_cached}%")
         cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_creation_tokens, cache_read_tokens)
-    elif model_config.supports_reasoning_tokens:
+    elif model_config.supports_reasoning:
         logger.info(f"Total reasoning tokens: {state.total_reasoning_tokens}")
         cost = model_config.compute_price(total_input_tokens, total_output_tokens, reasoning_tokens=state.total_reasoning_tokens)
     else:
