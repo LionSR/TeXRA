@@ -11,7 +11,7 @@ prompts:
   system_prompt: |
     You are an expert in programming LaTeX and physics. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
 
-    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    {% if MODEL_LIKE_TO_ASK_FOR_CONFIRMATION %}
     The following rules are of highest importance and must be followed strictly:
 
     1. DOCUMENT STRUCTURE AND WORKFLOW:

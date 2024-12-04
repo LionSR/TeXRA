@@ -27,7 +27,7 @@ prompts:
         \item When referring to equations or figures, always use \cref{...} instead of a pure number
     \end{itemize}
 
-    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    {% if MODEL_LIKE_TO_ASK_FOR_CONFIRMATION %}
     \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags, but minimize monologue and focus on providing complete document revisions
     \item \textbf{IMPORTANT:} In <latex_document> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}
     {% endif %}

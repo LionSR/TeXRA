@@ -26,7 +26,7 @@ prompts:
         \item Use the math commands defined in the auxiliary file command.tex if provided.
     \end{itemize}
 
-    {% if MODEL in ['sonnet++', 'haiku+'] %}
+    {% if MODEL_LIKE_TO_ASK_FOR_CONFIRMATION %}
     \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
     <monologue>Would you like me to proceed with the complete revision?</monologue>
     <monologue>Would you like me to continue with the next section?</monologue>
@@ -34,12 +34,13 @@ prompts:
     Use <monologue> tags for all your monologues. Use
     <monologue>I will now proceed with the next major section...</monologue>
     in favour of barely using ``[I will now proceed with the next major section...]''.
-    \item \textbf{IMPORTANT:} In <latex_code> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_code> to wrap your monologue.
+    \item \textbf{IMPORTANT:} In <latex_code> tags, you must output the entire latex code of the document. Include all the sections following the order and the format of {{ INPUT_FILE }}. You should not use <latex_code> to wrap your monologue.
+    \item \textbf{IMPORTANT:} In <output> tags, you must output the latex code of the each section. You should not use <output> to wrap your monologue.
 
     The following rules are of highest importance and must be followed strictly:
     1. DOCUMENT COMPLETENESS:
-    - When outputting in <latex_code> tag, you must provide the complete document that can be compiled
-    - Include all sections from \begin{document} to \end{document}
+    - When outputting in <latex_code> or <output> tags, you must provide the complete document that can be compiled
+    - Include all sections following the order and the format of {{ INPUT_FILE }}
     - Never split the document into multiple responses
     - Never ask for confirmation within these tags
 
@@ -49,7 +50,7 @@ prompts:
     <monologue>Would you like me to proceed with the complete revision?</monologue>
     <monologue>Would you like me to continue with the next section?</monologue>
     <monologue>[I'll continue with the section and then move to the next section.]</monologue>
-    - Monologues must never appear inside <latex_code> tags
+    - Monologues must never appear inside <latex_code> or <output> tags
     - Prefer complete statements over brief confirmations
 
     The separation between monologue and document content is critical because:
@@ -80,7 +81,11 @@ prompts:
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
   user_request: |
-    In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document. Use the following research paper writing style to write the scratchpad:
+    In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document. 
+
+    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. 
+    
+    Use the following style for your output:
     <scratchpad>
     The first improvement addresses [specific aspect] by [explanation of approach]. This will be implemented by [concrete steps detailing the implementation process], ensuring that [desired outcome] is achieved while maintaining [important constraints].
 
@@ -88,17 +93,19 @@ prompts:
 
     The third improvement targets [specific aspect] through [explanation of method]. Implementation will proceed by [concrete steps], carefully considering [important factors]. This enhancement will [expected outcome], particularly strengthening [key area] of the document.
     </scratchpad>
-
-    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format for your output:
     <latex_code>
-    % 1ST_UPDATED_LATEX_CODE HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}.
+    % 1ST_UPDATED_LATEX_CODE HERE. Follow the order and the format of {{ INPUT_FILE }}.
     </latex_code>
 
   user_reflect: |
     Let's critically reflect on the changes made according to the given instructions. 
     Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 
-    Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.
+    Your task is to:
+    1. First, reflect on your previous changes and brainstorm additional improvements in the scratchpad below
+    2. Then, output a complete revised LaTeX document that incorporates both your previous changes and these new improvements
+
+    Use the following format for your response:
     <scratchpad>
     <reflection>
     First, we must critically evaluate how effectively the modifications align with the provided instruction. This involves examining each change to ensure it directly addresses the specified requirements and identifying any areas where the alignment could be strengthened or where important aspects of the instruction may have been overlooked.
@@ -115,11 +122,18 @@ prompts:
 
     Finally, the writing style should prioritize precise, demonstrable statements over vague generalizations. This involves identifying and revising any imprecise language, particularly focusing on replacing broad claims with specific, concrete examples and explanations that directly demonstrate the stated concepts.
     </reflection>
+
+    Based on this reflection, here are the concrete improvements we will make:
+
     The first improvement focuses on [specific aspect]. This improvement is motivated by [brief explanation of rationale]. To implement this enhancement, we will proceed by [detailed steps outlining the concrete implementation process], which will ensure [desired outcome] while maintaining [important constraints].
 
     The second improvement addresses [specific aspect] based on [brief explanation of rationale]. Implementation will involve [concrete steps detailing the process], which will enhance [target area] by [expected improvements]. This approach enables us to [key benefit] while avoiding [potential pitfall].
 
     The third improvement targets [specific aspect] through [explanation of method]. The implementation will proceed systematically by [concrete implementation steps], carefully considering [important factors]. This enhancement will strengthen [key area] of the document by [expected outcome].
     </scratchpad>
+    <latex_code>
+    % Complete LaTeX document incorporating all previous changes and new improvements
+    % Follow the order and format of {{ INPUT_FILE }}
+    </latex_code>
 
-    Then, output a further enhanced version of the \LaTeX document based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+    Remember to stay laser-focused on the specific instruction provided. If asked to revise section A, do not modify section B unless absolutely necessary for consistency (e.g., notation changes that must be propagated). Do not add new sections unless specifically requested.
