@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-from .figure_tools import extract_and_compile_tikzpictures_with_labels
+from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex
 from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
 from .logdb_utils import logdb_start, logdb_output_files
 from .model_config import MODEL_CONFIGS
@@ -25,34 +25,19 @@ class BaseReflectChainAgent(ABC):
     Provides a common structure for agents that involve reflection and processing.
     """
 
-    def __init__(self, args, agent_path: str):
-        """Initialize the agent with command line arguments and agent path."""
-        self.args = args
-        self.agent_path = agent_path
-        if not agent_path:
-            self.agent_path = get_agent_dir_from_env()
+    def __init__(self, config: AgentConfig, agent_path: str):
+        """Initialize with AgentConfig and agent path"""
+        self.agent_config = config
+        self.agent_path = agent_path or get_agent_dir_from_env()
 
         # Initialize basic attributes
         self.output_file = ["", ""]
         self.output_files = {0: [], 1: []}
         self.base_files = []
 
-        # These will be initialized in setup()
-        self.settings_dict = None
-        self.prompt_dict = None
-        self.model_config = None
-        self.agent_settings = None
-        self.agent_prompts = None
-        self.client = None
-        self.log_file = None
-        self.use_scratchpad = False
-        self.tex_count_stats = None
-        self.first_k_tex_document = None
 
-        # Initialize configurations
-        self.agent_config = AgentConfig.from_args(args)
 
-        # Load agent settings and prompts
+        # Load settings and prompts
         self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
         self.agent_settings = AgentSettings.from_dict(self.settings_dict)
         self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
@@ -180,7 +165,6 @@ class BaseReflectChainAgent(ABC):
             self.base_files = [self.agent_config.input_file]
 
         # Set up logging
-        logger.debug(f"Args: {self.args}")  # Keep this for debugging
         logger.info(f"Processing file: {self.agent_config.input_file}")
 
         # Initialize model config
@@ -468,6 +452,25 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
 
+        # Merge figure_file into figure_files if it exists
+        if self.agent_config.figure_file:
+            if not self.agent_config.figure_files:
+                self.agent_config.figure_files = []
+            if self.agent_config.figure_file not in self.agent_config.figure_files:
+                self.agent_config.figure_files.append(self.agent_config.figure_file)
+
+        # Extract figures if configured
+        if self.agent_config.auto_extract_figure:
+            extracted_figures = extract_figure_paths_from_latex(self.agent_config.input_file)
+            if extracted_figures:
+                self.agent_config.figure_files.extend(extracted_figures)
+
+        if self.agent_config.auto_extract_tikz_figure:
+            for input_file in [self.agent_config.input_file] + (self.agent_config.input_files or []):
+                extracted_tikz = extract_and_compile_tikzpictures_with_labels(input_file)
+                if extracted_tikz:
+                    self.agent_config.figure_files.extend(extracted_tikz)
+
         # Initialize state and messages
         state = State.initialize()
         messages = []
@@ -494,6 +497,7 @@ class BaseReflectChainAgent(ABC):
             # Handle multiple output files
             if self.agent_config.include_tex_count:
                 self.tex_count_stats = self._get_tex_count_stats(self.agent_config.output_files)
+
             if self.agent_config.auto_extract_tikz_figure_reflect:
                 # Handle multiple output files
                 for output_file in self.output_files[round]:

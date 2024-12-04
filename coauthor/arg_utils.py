@@ -13,6 +13,7 @@ def add_common_arguments(parser):
     Groups related arguments together for better organization.
     """
     # Model arguments
+    parser.add_argument("--agent", type=str, default="merge", help="Agent to choose.")
     parser.add_argument(
         "--model",
         type=str,

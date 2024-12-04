@@ -14,6 +14,7 @@ from .output_utils import (
 )
 from .state import State
 from .logging_utils import logger
+from .agent_dataclass import AgentConfig
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -33,8 +34,8 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
-    def __init__(self, args, agent_path: str):
-        super().__init__(args, agent_path)
+    def __init__(self, config: AgentConfig, agent_path: str):
+        super().__init__(config, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
         """Get the output file name for the given round."""
@@ -83,8 +84,8 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
 
 class DirectWrite(BaseReflectChainAgent):
-    def __init__(self, args, agent_path: str):
-        super().__init__(args, agent_path)
+    def __init__(self, config: AgentConfig, agent_path: str):
+        super().__init__(config, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
         """Get the output file name for the given round."""
