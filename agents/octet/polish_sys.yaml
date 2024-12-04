@@ -1,4 +1,4 @@
-name: polish
+name: polish_sys
 settings:
   document_tag: latex_document
   end_tag: </latex_document>
@@ -9,23 +9,34 @@ settings:
 
 prompts:
   system_prompt: |
-    You are a professional scientist. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
+    Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
 
-    When writing a professional *.tex \LaTeX document, you must:
+    When writing a professional *.tex \LaTeX code, you must:
     \begin{itemize}
         \item Follow the best practices that will result in zero warnings when checked by chktex.
         \item Use appropriate notation and terminology consistently throughout the text.
         \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
         \item Use either `` or '' as an alternative to `"'.
-        \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
+        \item When writing formal \LaTeX codes rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
-        \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex or preamble.tex.
+        \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex or preamble.tex if they are provided.
+        \item When you are referring to equations or figures, you should always use \cref{...} instead of a pure number, because for latex documents, the numbering are only generated after compiliation and can change.
     \end{itemize}
 
-  user_prefix: |
-    I am going to give you the \LaTeX document of a research paper draft. Read the document carefully before proceeding.
+    {% if MODEL_LIKE_TO_ASK_FOR_CONFIRMATION %}
+    \item \textbf{IMPORTANT:} Any of your monologue should be wrapped in <monologue> tags. Examples of monologues are:
+    <monologue>Would you like me to proceed with the complete revision?</monologue>
+    <monologue>Would you like me to continue with the next section?</monologue>
+    <monologue>[I'll continue with the section and then move to the next section.]</monologue>
+    Use <monologue> tags for all your monologues. Use
+    <monologue>I will now proceed with the next major section...</monologue>
+    in favour of barely using ``[I will now proceed with the next major section...]''.
+    \item \textbf{IMPORTANT:} In <latex_document> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_document> to wrap your monologue.
+    {% endif %}
 
-    Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
+    I am going to give you the \LaTeX code of a research paper draft. Read the document carefully before proceeding.
+
+    Here is the \LaTeX code with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
 
     <documents>
     {{ AUXILIARY_FILES }}
@@ -42,7 +53,6 @@ prompts:
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  user_request: |
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document.
     <scratchpad>
     \begin{enumerate}
@@ -64,10 +74,12 @@ prompts:
     \end{enumerate}
     </scratchpad>
 
-    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format for your output:
     <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE
+    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. As mentioned previously in the system prompt, you should not wrap any monologue here.
     </latex_document>
+  user_prefix: "Start"
+  user_request: " your response here."
 
   user_reflect: |
     Let's critically reflect on the changes made according to the given instructions. 
@@ -78,8 +90,8 @@ prompts:
     <reflection>
     \begin{enumerate}
         \item How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
-        \item Are the enhancements clear, condensed, and effective in improving the quality of the \LaTeX document? If not, how could they be further refined?
-        \item Do the changes maintain the overall structure and coherence of the original \LaTeX document? If not, what adjustments could be made to ensure a smooth flow?
+        \item Are the enhancements clear, condensed, and effective in improving the quality of the \LaTeX code? If not, how could they be further refined?
+        \item Do the changes maintain the overall structure and coherence of the original \LaTeX code? If not, what adjustments could be made to ensure a smooth flow?
         \item Have the added parts been coherently and logically incorporated, rather than just appended, into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
         \item Are there any mathematical reasonings or equations from the original version that are now missing in the new version?
         \item Are there any notations or quantities used before being defined?
@@ -108,4 +120,4 @@ prompts:
     </idea>
     </scratchpad>
 
-    Then, output a further enhanced version of the \LaTeX document based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+    Then, output a further enhanced version of the \LaTeX code based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.

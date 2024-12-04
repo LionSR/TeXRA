@@ -1,27 +1,29 @@
 import os
 import re
-from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
 import time
 
-from .logging_utils import logger
-from .figure_tools import extract_and_compile_tikzpictures_with_labels
-from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
-from .output_utils import (
-    ensure_correct_xml_structure,
-    split_scratchpad_output_xml,
-    split_multiple_scratchpad_output_xml,
-    check_for_massive_repetition,
-)
-from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
-from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
-from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
-from .openai_utils import best_connection_method
-from .replacement_utils import get_all_replacements, apply_replacements
+from abc import ABC, abstractmethod
+from typing import Optional, List, Dict
 
-from .state import State
-from .model_config import MODEL_CONFIGS
 from .config import TaskConfig, AgentSettings, AgentPrompts
+from .figure_tools import extract_and_compile_tikzpictures_with_labels
+from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
+from .logdb_utils import logdb_start, logdb_and_print_statistics, logdb_output_files
+from .logging_utils import logger
+from .model_config import MODEL_CONFIGS
+from .openai_utils import best_connection_method
+from .output_utils import (
+    check_for_massive_repetition,
+    ensure_correct_xml_structure,
+    filter_monologue_tags,
+    split_multiple_scratchpad_output_xml,
+    split_scratchpad_output_xml,
+    write_file,
+)
+from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
+from .replacement_utils import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
+from .state import State
+from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -122,6 +124,7 @@ class BaseReflectChainAgent(ABC):
 
         user_vars = {
             "MODEL": self.task_config.model,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_config.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
@@ -322,35 +325,32 @@ class BaseReflectChainAgent(ABC):
 
     def _process_response_cycle(
         self,
-        client: Any,
         state: State,
         accumulated_output: str,
         messages,
         output_file: str,
-        model_config: Any,
-        task_config: TaskConfig,
-        agent_settings: AgentSettings,
-        agent_prompts: AgentPrompts,
     ):
         end_turn = False
 
         while not end_turn:
             file_exists = os.path.exists(output_file)
             start_time = time.time()
-            response_object = model_config.create_response(
-                client=client,
+            response_object = self.model_config.create_response(
+                client=self.client,
                 messages=messages,
-                temperature=agent_settings.temperature,
-                system_prompt=agent_prompts.system_prompt,
-                end_tag=agent_settings.end_tag,
+                temperature=self.agent_settings.temperature,
+                # system_prompt=agent_prompts.system_prompt,
+                system_prompt=render_prompt(self.agent_prompts.system_prompt, self.user_vars),
+                end_tag=self.agent_settings.end_tag,
             )
             response_time = time.time() - start_time
             state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
-            new_response, input_tokens, output_tokens, stop_reason = model_config.extract_response_statistics(response_object, agent_settings.end_tag)
+            new_response, input_tokens, output_tokens, stop_reason = self.model_config.extract_response_statistics(response_object, self.agent_settings.end_tag)
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
+            new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
 
             state.update_token_counts(
@@ -360,17 +360,18 @@ class BaseReflectChainAgent(ABC):
                 getattr(response_object.usage, "cache_creation_input_tokens", 0),
             )
 
-            best_connector, _ = best_connection_method(state.last_response[-task_config.K :], new_response[: task_config.K])
+            best_connector, _ = best_connection_method(state.last_response[-self.task_config.K :], new_response[: self.task_config.K])
 
             massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
             if not massive_repetition_detected:
                 accumulated_output += best_connector + new_response
                 file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
-                logger.debug(f"Last {task_config.K} characters of the response: {new_response[-task_config.K:]}")
+                logger.debug(f"Last {self.task_config.K} characters of the response: {new_response[-self.task_config.K:]}")
                 state.last_response = new_response
 
+                # anthropic models with prefills, so we need to update the messages
                 if messages[-1]["role"] == "assistant":
-                    if model_config.supports_prompt_caching:
+                    if self.model_config.supports_prompt_caching:
                         if isinstance(messages[-1]["content"], list):
                             if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                                 if "cache_control" in messages[-1]["content"][-2]:
@@ -383,31 +384,33 @@ class BaseReflectChainAgent(ABC):
                     else:
                         messages[-1]["content"] = accumulated_output
 
-            end_turn, should_stop = model_config.check_stop_conditions(stop_reason, new_response, state, agent_settings, massive_repetition_detected)
+            end_turn, should_stop = self.model_config.check_stop_conditions(stop_reason, new_response, state, self.agent_settings, massive_repetition_detected)
             if should_stop:
-                model_config.print_stop_flags(end_turn, new_response, state, agent_settings, massive_repetition_detected, task_config.K)
+                self.model_config.print_stop_flags(end_turn, new_response, state, self.agent_settings, massive_repetition_detected)
                 break
 
             state.increment_continuation()
             logger.info(f"Starting continuation #{state.continuation_count}")
 
-            if not end_turn and not model_config.has_end_tag(new_response, agent_settings.end_tag, agent_settings.document_tag):
-                model_config.handle_continuation(messages, new_response, agent_settings.end_tag, task_config.K)
-                continue
+            if self.model_config.is_openai_compatible:
+                if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
+                    self.model_config.handle_continuation(messages, state, self.agent_settings, self.task_config)
+                    continue
+
+            if self.model_config.likes_to_ask_for_confirmation:
+                if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
+                    end_turn = False
+                    self.model_config.handle_continuation(messages, state, self.agent_settings, self.task_config)
+                    continue
 
         return state, accumulated_output, end_turn
 
     def process_first_round(
         self,
-        client: Any,
         output_file: str,
         user_vars: Dict[str, str],
         state: State,
         messages,
-        model_config: Any,
-        task_config: TaskConfig,
-        agent_settings: AgentSettings,
-        agent_prompts: AgentPrompts,
         figure_files: Optional[List[str]] = None,
         round: int = 0,
         tex_count_stats: Optional[str] = None,
@@ -416,27 +419,28 @@ class BaseReflectChainAgent(ABC):
         """Process the first round."""
         logger.info(f"Processing round {round}")
 
-        user_request = render_prompt(agent_prompts.user_request, user_vars)
-        user_prefix = render_prompt(agent_prompts.user_prefix, user_vars)
+        system_prompt = render_prompt(self.agent_prompts.system_prompt, user_vars)
+        user_request = render_prompt(self.agent_prompts.user_request, user_vars)
+        user_prefix = render_prompt(self.agent_prompts.user_prefix, user_vars)
         if tex_count_stats:
             user_prefix = f"{tex_count_stats}{user_prefix}"
-        user_request = render_prompt(agent_prompts.user_request, user_vars)
+        user_request = render_prompt(self.agent_prompts.user_request, user_vars)
 
-        messages = model_config.initialize_messages(
-            agent_prompts.system_prompt,
+        messages = self.model_config.initialize_messages(
             user_prefix,
             user_request,
-            figure_files,
+            figure_files=self.task_config.figure_files,
+            system_prompt=system_prompt,
         )
 
         accumulated_output = None
-        prefill = agent_settings.prefills[0] if agent_settings.prefills else ""
+        prefill = self.agent_settings.prefills[0] if self.agent_settings.prefills else ""
 
         accumulated_output = prefill
-        accumulated_output, end_turn, messages = model_config.initialize_output_and_prefill(
+        accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
             output_file,
-            task_config,
-            agent_settings,
+            self.task_config,
+            self.agent_settings,
             messages,
             prefill,
             accumulated_output,
@@ -449,15 +453,10 @@ class BaseReflectChainAgent(ABC):
         state = State.initialize(accumulated_output)
 
         state, accumulated_output, end_turn = self._process_response_cycle(
-            client,
             state,
             accumulated_output,
             messages,
             output_file,
-            model_config,
-            task_config,
-            agent_settings,
-            agent_prompts,
         )
 
         logger.info(f"Completed round {round}")
@@ -465,15 +464,10 @@ class BaseReflectChainAgent(ABC):
 
     def process_reflection_round(
         self,
-        client: Any,
         output_file: str,
         user_vars: Dict[str, str],
         state: State,
         messages,
-        model_config: Any,
-        task_config: TaskConfig,
-        agent_settings: AgentSettings,
-        agent_prompts: AgentPrompts,
         figure_files: Optional[List[str]] = None,
         round: int = 1,
         tex_count_stats: Optional[str] = None,
@@ -482,21 +476,21 @@ class BaseReflectChainAgent(ABC):
         """Process the reflection round."""
         logger.info(f"Processing round {round}")
 
-        user_request_reflect = render_prompt(agent_prompts.user_reflect, user_vars)
+        user_request_reflect = render_prompt(self.agent_prompts.user_reflect, user_vars)
         user_message = f"{user_request_reflect}\n"
         if tex_count_stats:
             user_message = f"{tex_count_stats}{user_message}"
 
-        messages = model_config.create_reflection_message(messages, user_message, figure_files)
+        messages = self.model_config.create_reflection_message(messages, user_message, figure_files)
 
         accumulated_output = None
-        prefill = agent_settings.prefills[round] if len(agent_settings.prefills) > round else agent_settings.prefills[0]
+        prefill = self.agent_settings.prefills[round] if len(self.agent_settings.prefills) > round else self.agent_settings.prefills[0]
 
         accumulated_output = prefill
-        accumulated_output, end_turn, messages = model_config.initialize_output_and_prefill(
+        accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
             output_file,
-            task_config,
-            agent_settings,
+            self.task_config,
+            self.agent_settings,
             messages,
             prefill,
             accumulated_output,
@@ -510,15 +504,10 @@ class BaseReflectChainAgent(ABC):
         state.last_response = accumulated_output
 
         state, accumulated_output, end_turn = self._process_response_cycle(
-            client,
             state,
             accumulated_output,
             messages,
             output_file,
-            model_config,
-            task_config,
-            agent_settings,
-            agent_prompts,
         )
 
         logger.info(f"Completed round {round}")
@@ -536,15 +525,10 @@ class BaseReflectChainAgent(ABC):
         messages = []
 
         state, accumulated_output, end_turn, messages = self.process_first_round(
-            self.client,
             self.output_file[0],
             self.user_vars,
             state,
             messages,
-            self.model_config,
-            self.task_config,
-            self.agent_settings,
-            self.agent_prompts,
             figure_files=self.task_config.figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
@@ -585,15 +569,10 @@ class BaseReflectChainAgent(ABC):
             self.first_k_tex_document = self._get_first_k_from_document()
 
         state, accumulated_output, end_turn, messages = self.process_reflection_round(
-            self.client,
             self.output_file[1],
             self.user_vars,
             state,
             messages,
-            self.model_config,
-            self.task_config,
-            self.agent_settings,
-            self.agent_prompts,
             figure_files=reflection_figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
@@ -638,13 +617,22 @@ class ThinkAndWrite(BaseReflectChainAgent):
             ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
 
             if self.task_config.output_files:
-                output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
-                self._handle_multiple_outputs(output_files)
-                self.output_files[round] = output_files
+                processed_output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from each output file
+                for processed_output_file in processed_output_files:
+                    content = read_file(processed_output_file)
+                    filtered_content = filter_monologue_tags(content)
+                    write_file(processed_output_file, filtered_content)
 
-                self._replace_input_commands(self.base_files, output_files)
+                self._handle_multiple_outputs(processed_output_files)
+                self.output_files[round] = processed_output_files
+                self._replace_input_commands(self.base_files, processed_output_files)
             else:
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from single output file
+                content = read_file(processed_output_file)
+                filtered_content = filter_monologue_tags(content)
+                write_file(processed_output_file, filtered_content)
 
                 self._handle_single_output(processed_output_file)
                 self.output_files[round] = [processed_output_file]
@@ -673,6 +661,12 @@ class DirectWrite(BaseReflectChainAgent):
         if end_turn:
             if self.task_config.output_files:  # Multiple output files
                 output_files = split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from each output file
+                for output_file in output_files:
+                    content = read_file(output_file)
+                    filtered_content = filter_monologue_tags(content)
+                    write_file(output_file, filtered_content)
+
                 self._handle_multiple_outputs(output_files)
                 self.output_files[round] = output_files
                 self.output_file[round] = output_files[0]  # Set the first file as the singular output
@@ -680,6 +674,11 @@ class DirectWrite(BaseReflectChainAgent):
                 self._replace_input_commands(self.base_files, output_files)
             else:  # Single output file
                 processed_output_file = split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+                # Filter monologue tags from single output file
+                content = read_file(processed_output_file)
+                filtered_content = filter_monologue_tags(content).strip()
+                write_file(processed_output_file, filtered_content)
+
                 self._handle_single_output(processed_output_file)
                 self.output_file[round] = processed_output_file
                 self.output_files[round] = [processed_output_file]

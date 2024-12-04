@@ -38,14 +38,15 @@ prompts:
 
     Please carefully review the provided information and reference proposal (if available) before drafting your proposal.
 
-    If a specific instruction has been provided, it is enclosed in the following tags:
+  user_request: |
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    If an instruction is provided, make sure to follow it closely while drafting your proposal.
+    {% endif %}
 
-  user_request: |
-    Based on the provided information and the reference proposal, please draft a comprehensive experimental physics proposal. Your proposal should include the following sections:
+    Based on the provided information and the reference proposal, please draft a comprehensive experimental proposal. Your proposal should include the following sections:
     1. Abstract
     2. Introduction and Background
     3. Experimental Setup

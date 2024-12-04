@@ -45,7 +45,7 @@ prompts:
     </referee_report>
     {% endif %}
 
-
+  user_request: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -53,7 +53,6 @@ prompts:
     </instruction>
     {% endif %}
 
-  user_request: |
     Based on the research paper provided and the example referee report, please write a concise, critical referee report for PRX Quantum. In the scratchpad below, outline the key points you plan to address in your report, focusing on potential weaknesses and areas for improvement.
 
     <scratchpad>

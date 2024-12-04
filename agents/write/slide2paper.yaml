@@ -34,14 +34,14 @@ prompts:
 
     Please carefully review the provided slide images (which will be shown to you separately) and the paper draft/template before writing the full research paper.
 
-    A specific instruction for this task has been provided:
+  user_request: |
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
-    Make sure to follow this instruction closely while drafting your paper.
-
-  user_request: |
     Based on the provided slide images and paper draft/template, please write a comprehensive research paper. Your paper should expand on the key points from the slides, incorporating additional details, explanations, and mathematical formulations. Use the structure provided in the draft/template, but feel free to modify or expand sections as needed.
 
     Key requirements:
