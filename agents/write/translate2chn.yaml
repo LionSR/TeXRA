@@ -34,6 +34,13 @@ prompts:
     Please translate this document {{ INPUT_FILE }}into Chinese following the guidelines provided in the system prompt.
 
   user_request: |
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
     In the scratchpad below, outline your plan for translating the document, addressing each of the guidelines mentioned in the system prompt. Include any potential challenges you foresee and how you plan to address them.
 
     <scratchpad>

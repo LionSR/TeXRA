@@ -32,7 +32,7 @@ prompts:
     </research_paper>
 
     Please carefully review the provided research paper before creating the presentation.
-
+  user_request: |
     Your task is to create a professional LaTeX Beamer presentation for a physics audience.
 
     When creating the presentation, please follow these guidelines:
@@ -49,6 +49,7 @@ prompts:
         \item End with a conclusion slide summarizing the main findings and potential future work.
     \end{enumerate}
 
+
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -56,8 +57,7 @@ prompts:
     </instruction>
     {% endif %}
 
-  user_request: |
-    Based on the research paper provided, please create a professional LaTeX Beamer presentation for a physics audience. In the scratchpad below, outline the key points and structure you plan to include in the presentation.
+    Based on the research paper provided, please create a professional LaTeX Beamer presentation for a physics audience. The presentation should consist of 10-15 slides that effectively communicate the paper's key findings. In the scratchpad below, outline the structure and key points you plan to include in each section of the presentation.
 
     <scratchpad>
     1. [Title slide content]

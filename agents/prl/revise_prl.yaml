@@ -55,9 +55,6 @@ prompts:
     <document name="Example Reply Letter">
     {{ EXAMPLE_REPLY_LETTER }}
     </document>
-    <document name="Instruction">
-    {{ INSTRUCTION }}
-    </document>
     <document name="Draft Reply Letter">
     {{{ DRAFT_REPLY_LETTER }}}
     </document>
@@ -71,8 +68,7 @@ prompts:
     (5) Referee Report A: The detailed feedback and critique from the first referee.
     (6) Referee Report B: The detailed feedback and critique from the second referee.
     (7) Example Reply Letter: A sample response letter to guide the structure and tone of your reply.
-    (8) Instruction: Specific guidelines or requirements for drafting the reply letter.
-    (9) Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
+    (8) Draft Reply Letter: An initial version of the response to the referee reports, which you will review and improve.
 
     {% if OUTPUT_FILES_ORDER %}
     You will be revising all of the following documents.
@@ -80,6 +76,13 @@ prompts:
     {% endif %}
 
   user_request: |
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
     In the scratchpad below, brainstorm concrete ways to revise the paper(s) based on the referee reports and the draft reply letter. Consider both the main paper and the supplementary material. Be as specific as possible about what changes need to be made in which sections of which document.
 
     <scratchpad>

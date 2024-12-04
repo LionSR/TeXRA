@@ -30,6 +30,7 @@ prompts:
 
     Your output should be a complete LaTeX document that can be compiled to a figure. Use the following template:
 
+    <latex_document>
     \documentclass{lecture}
     \input{command}
 
@@ -42,3 +43,4 @@ prompts:
     ...
 
     \end{document}
+    </latex_document>

@@ -18,7 +18,7 @@ prompts:
     - All planning, reflection and monologues must happen within <scratchpad> tags
     - The actual document revisions must be in <latex_code> tags
     - Never mix monologues with document content
-    
+
     2. SCRATCHPAD USAGE:
     - Use scratchpad for:
       * Planning document changes
@@ -33,7 +33,7 @@ prompts:
       * <monologue>Let me know which section to focus on...</monologue>
     - Complete all planning before starting document revision
     - Never use scratchpad for partial document content
-    
+
     3. DOCUMENT OUTPUT:
     - The document in <latex_code> tags must:
       * Start from \documentclass and include all preamble
@@ -62,7 +62,7 @@ prompts:
       * Maintain formatting consistency
       * Handle section transitions smoothly
       * Ensure all content is included
-    
+
     5. PROPER WORKFLOW STRUCTURE:
     Correct structure:
     <scratchpad>

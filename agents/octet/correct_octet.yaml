@@ -55,7 +55,6 @@ prompts:
     - As a LLM, you have an effectively infinite token response limit because the system that you are part of handles continuations automatically
     - I don't have fingers to copy and paste, so I demand a complete document.
 
-
   user_prefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 

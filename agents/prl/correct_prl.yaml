@@ -49,6 +49,13 @@ prompts:
     </documents>
 
   user_request: |
+    {% if INSTRUCTION %}
+    Focus solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
     Please carefully read through both the main text and supplementary materials, correcting any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies. Pay special attention to:
 
     \begin{enumerate}
