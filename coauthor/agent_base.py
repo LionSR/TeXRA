@@ -35,8 +35,6 @@ class BaseReflectChainAgent(ABC):
         self.output_files = {0: [], 1: []}
         self.base_files = []
 
-
-
         # Load settings and prompts
         self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
         self.agent_settings = AgentSettings.from_dict(self.settings_dict)
