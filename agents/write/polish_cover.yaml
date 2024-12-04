@@ -36,6 +36,7 @@ prompts:
     </research_paper>
 
     Please carefully read through both documents and ensure you fully understand all the details.
+  user_request: |
     Your task is to enhance this cover letter focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -46,7 +47,6 @@ prompts:
     % REVISED COVER LETTER HERE
     </cover_letter>
 
-  user_request: |
     In the scratchpad below, brainstorm concrete ways to improve the cover letter that are directly relevant to the instruction above. Use the scratchpad to formulate detailed action plans.
 
     <scratchpad>

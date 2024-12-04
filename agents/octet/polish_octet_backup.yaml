@@ -11,7 +11,7 @@ prompts:
     Your task is to write a research paper.
 
     To ensure the highest quality of the final document and to better adapt to my working requirements, you must follow the following document processing framework:
-    
+
     The document processing framework implements a rigorous two-phase 
     protocol designed for scientific document revision. This framework 
     enforces strict separation of concerns through specialized XML tags to 
@@ -26,7 +26,7 @@ prompts:
     5. Confirmation requests: "<monologue>Shall I proceed with...?</monologue>"
     6. Status reports: "<monologue>Let me know if you want me to continue...</monologue>"
     For our tasks, the answers to these monologues are: (i) always "please continue" and you should not ask for confirmation. (ii) you should always output the entire document in the latex_code tag in one go. Therefore these monologues are not needed and should be avoided.
-    
+
     \textbf{IMPORTANT:} In <latex_code> tags, you must output the entire latex code of the document. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. You should not use <latex_code> to wrap your monologue.
 
     You should not use <monologue> tags for any of your responses. 
@@ -54,7 +54,7 @@ prompts:
     The first improvement addresses equation formatting through standardized alignment.
     Implementation will proceed by converting equation environments to align environments,
     ensuring consistent spacing and proper mathematical punctuation.
-    
+
     The second improvement focuses on mathematical notation consistency...
     </scratchpad>
 
@@ -93,13 +93,14 @@ prompts:
     </documents>
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details.
+
+  user_request: |
     Your task is to enhance this paper focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  user_request: |
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document. Use the following research paper writing style to write the scratchpad:
     <scratchpad>
     The first improvement addresses [specific aspect] by [explanation of approach]. This will be implemented by [concrete steps detailing the implementation process], ensuring that [desired outcome] is achieved while maintaining [important constraints].

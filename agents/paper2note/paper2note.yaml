@@ -47,13 +47,26 @@ prompts:
     {{ INPUT_CONTENT }}
     </research_paper>
 
-    If a specific instruction has been provided, it is enclosed in the following tags:
+  user_request: |
+    {% if INSTRUCTION %}
+    Specific instructions that you must follow during the adaptation:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    If an instruction is provided, make sure to follow it closely while drafting your proposal.
 
-  user_request: |
+    Follow these instructions closely while adapting the paper into lecture notes.
+    {% endif %}
+
+    Based on the provided research paper, please create a lecture note chapter for the book "Stochastic Thermodynamics in the World of Machine Learning". The chapter should:
+
+    \begin{enumerate}
+        \item Present the key concepts and derivations in a pedagogical manner
+        \item Include detailed mathematical explanations and step-by-step derivations
+        \item Add insightful comments and interpretations to help students understand the material
+        \item Use consistent notation as defined in the command.tex file
+        \item Follow the style and formatting of the sample chapters
+    \end{enumerate}
+
     Please carefully read the provided research paper and adapt it into a condensed lecture note with detailed derivations.
 
     In your adaptation, focus on the following:

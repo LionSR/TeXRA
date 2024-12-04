@@ -37,6 +37,7 @@ prompts:
 
     Review the document carefully before revising. Respect and work with the existing research provided; do not invent new results or add any information not present in the original document.
 
+  user_request: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow during the revision:
     <instruction>
@@ -46,7 +47,6 @@ prompts:
 
     Follow these instructions closely during revision.
 
-  user_request: |
     Revise and improve the research statement based on these guidelines:
 
     \begin{enumerate}

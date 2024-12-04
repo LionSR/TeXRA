@@ -59,7 +59,6 @@ prompts:
     - Prevents fragmentation of the output
     - Maintains professional document structure
 
-
   user_prefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
@@ -73,6 +72,7 @@ prompts:
     </document>
     </documents>
 
+  user_request: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow closely:
     <instruction>
@@ -81,7 +81,6 @@ prompts:
     For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
     {% endif %}
 
-  user_request: |
     Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
 
     As you review the document, make the following corrections and improvements:

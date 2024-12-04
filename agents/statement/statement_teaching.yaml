@@ -35,15 +35,16 @@ prompts:
 
     Review the document carefully before revising. Respect and work with the existing experiences provided; do not invent new experiences or add any information not present in the original document.
 
+  user_request: |
     {% if INSTRUCTION %}
-    Specific instructions that you must follow:
+    Specific instructions that you must follow during the revision:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    {% endif %}
-    Follow these instructions closely during revision.
 
-  user_request: |
+    Follow these instructions closely during revision.
+    {% endif %}
+
     Revise and improve the teaching statement based on these guidelines:
 
     1. Teaching Philosophy: Clearly articulate how the applicant thinks about teaching and learning mathematics
