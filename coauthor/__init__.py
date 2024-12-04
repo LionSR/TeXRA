@@ -29,4 +29,4 @@ from .prompt_utils import (
 )
 
 from .state import State
-from .config import AgentPrompts, AgentSettings, TaskConfig
+from .config import AgentPrompts, AgentSettings, AgentConfig
