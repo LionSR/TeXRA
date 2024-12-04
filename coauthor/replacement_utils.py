@@ -60,10 +60,11 @@ LAZY_REPLACEMENTS = ReplacementCategory(
     description="Fixes for lazy writing with regex patterns",
     patterns={
         # Match the entire confirmation message block
-        r"<latex_document>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>",
+        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>\n<latex_code>",
         # Handle case where latex_document tag precedes the monologue
-        r"<latex_document>\s*(<monologue>\[Due to length limits,.*?</monologue>)": r"\1",
-        r"<latex_document>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>\[I apologize, but I notice this is a very long document\1</monologue>",
+        # r"<latex_code>\s*(<monologue>\[Due to length limits,.*?</monologue>)": r"\1",
+        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>\[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
+        r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
     },
 )
 

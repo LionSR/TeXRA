@@ -124,6 +124,7 @@ class BaseReflectChainAgent(ABC):
 
         user_vars = {
             "MODEL": self.task_config.model,
+            "MODEL_LIKE_TO_ASK_FOR_CONFIRMATION": self.model_config.like_to_ask_for_confirmation,
             "INSTRUCTION": self.task_config.instruction,
             # input file
             "INPUT_FILE": self.task_config.input_file,
@@ -435,10 +436,10 @@ class BaseReflectChainAgent(ABC):
         user_request = render_prompt(agent_prompts.user_request, user_vars)
 
         messages = model_config.initialize_messages(
-            agent_prompts.system_prompt,
             user_prefix,
             user_request,
             figure_files,
+            agent_prompts.system_prompt,
         )
 
         accumulated_output = None
