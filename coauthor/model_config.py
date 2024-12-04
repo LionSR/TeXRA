@@ -21,19 +21,18 @@ load_dotenv()
 CONFIRMATION_PROMPT_PATTERNS = [
     "Would you like me to",
     "[Would you like me",
+    "Would you like me to continue?",
+    "Should I proceed with",
+    "Please let me know if you'd like me to proceed",
     "I will now proceed",
     "[Due to length limits,",
     "I notice that",
-    "Would you like me to continue?",
     "I'll start from",
-    # "Previous content",
     "Since this is a large document,",
     "I'll start reviewing",
     "[Note: The corrections would be applied throughout",
     "% Note: The full corrected document would be too long",
-    "Should I proceed with",
     "[Continue with corrections...]",
-    "Please let me know if you'd like me to proceed",
     "[Continue with the rest of",
     "[Continue with corrections for",
     "[Continue with the",
@@ -49,6 +48,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "[Rest of document continues...]",
     "[Rest of the document continues",
     "[Note: At this point, I would proceed",
+    # "Previous content",
     # "[Previous sections remain unchanged",
 ]
 
@@ -68,14 +68,14 @@ class ModelConfig(ABC):
     max_tokens: int
     input_price: float
     output_price: float
-    context_length: int = 8192
+    context_window: int = 128000
     supports_prompt_caching: bool = False
     supports_reasoning: bool = False
     supports_vision: bool = True
     supports_native_pdf: bool = False
-    supports_prefill: bool = False
+    supports_assistant_prefill: bool = False
     supports_predictive_output: bool = False
-    like_to_ask_for_confirmation: bool = False
+    likes_to_ask_for_confirmation: bool = False
     base_url: Optional[str] = None
 
     @property
@@ -87,12 +87,12 @@ class ModelConfig(ABC):
         return self.provider == ModelProvider.OPENAI
 
     @property
-    def is_openrouter(self) -> bool:
-        return self.provider == ModelProvider.OPENROUTER
-
-    @property
     def is_google(self) -> bool:
         return self.provider == ModelProvider.GOOGLE
+
+    @property
+    def is_openrouter(self) -> bool:
+        return self.provider == ModelProvider.OPENROUTER
 
     @property
     def is_openai_compatible(self) -> bool:
@@ -186,7 +186,7 @@ class ModelConfig(ABC):
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop."""
 
-        CONTINUE_LIMIT = 20 if self.like_to_ask_for_confirmation else 10
+        CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 1500000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 
@@ -206,7 +206,7 @@ class ModelConfig(ABC):
     def print_stop_flags(self, end_turn: bool, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool):
         """Print the flags indicating why the conversation stopped."""
 
-        CONTINUE_LIMIT = 20 if self.like_to_ask_for_confirmation else 10
+        CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 100000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 
@@ -448,8 +448,8 @@ class AnthropicModelConfig(ModelConfig):
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
         """
-        if self.like_to_ask_for_confirmation:
-            logger.warning("Handling model_config.like_to_ask_for_confirmation")
+        if self.likes_to_ask_for_confirmation:
+            logger.warning("Handling model_config.likes_to_ask_for_confirmation")
 
             # there should be a state variable including accumulated output
             if state.continuation_count <= 1:
@@ -809,69 +809,75 @@ class OpenAICompatibleModelConfig(ModelConfig):
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
     # Anthropic Claude models
+    "opus": AnthropicModelConfig(
+        name="opus",
+        full_name="claude-3-opus-20240229",
+        provider=ModelProvider.ANTHROPIC,
+        max_tokens=4096,
+        context_window=200000,
+        input_price=15.0,
+        output_price=75.0,
+        supports_prompt_caching=True,
+        supports_assistant_prefill=True,
+    ),
     "sonnet++": AnthropicModelConfig(
         name="sonnet++",
         full_name="claude-3-5-sonnet-20241022",
         provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
+        context_window=200000,
         input_price=3.0,
         output_price=15.0,
         supports_prompt_caching=True,
         supports_native_pdf=True,
-        supports_prefill=True,
-        like_to_ask_for_confirmation=True,
+        supports_assistant_prefill=True,
+        likes_to_ask_for_confirmation=True,
     ),
     "sonnet+": AnthropicModelConfig(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
         provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
+        context_window=200000,
         input_price=3.0,
         output_price=15.0,
         supports_prompt_caching=True,
-        supports_prefill=True,
-    ),
-    "opus": AnthropicModelConfig(
-        name="opus",
-        full_name="claude-3-opus-20240229",
-        provider=ModelProvider.ANTHROPIC,
-        max_tokens=4096,
-        input_price=15.0,
-        output_price=75.0,
-        supports_prompt_caching=True,
-        supports_prefill=True,
+        supports_assistant_prefill=True,
     ),
     "sonnet": AnthropicModelConfig(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
         provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
+        context_window=200000,
         input_price=3.0,
         output_price=15.0,
         supports_prompt_caching=False,
-        supports_prefill=True,
+        supports_assistant_prefill=True,
     ),
     "haiku+": AnthropicModelConfig(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
         provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
+        context_window=200000,
         input_price=1.0,
         output_price=5.0,
         supports_prompt_caching=True,
         supports_vision=False,
-        supports_prefill=True,
-        like_to_ask_for_confirmation=True,
+        supports_assistant_prefill=True,
+        likes_to_ask_for_confirmation=True,
     ),
     "haiku": AnthropicModelConfig(
         name="haiku",
         full_name="claude-3-haiku-20240307",
         provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
+        context_window=200000,
         input_price=0.25,
         output_price=1.25,
         supports_prompt_caching=True,
-        supports_prefill=True,
+        supports_assistant_prefill=True,
     ),
     # OpenAI models
     "gpto1": OpenAICompatibleModelConfig(
@@ -879,6 +885,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="o1-preview-2024-09-12",
         provider=ModelProvider.OPENAI,
         max_tokens=32768,
+        context_window=128000,
         input_price=15.0,
         output_price=60.0,
         supports_vision=False,
@@ -889,6 +896,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="o1-mini-2024-09-12",
         provider=ModelProvider.OPENAI,
         max_tokens=65536,
+        context_window=128000,
         input_price=3.0,
         output_price=12.0,
         supports_vision=False,
@@ -901,6 +909,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="gpt-4o-2024-11-20",
         provider=ModelProvider.OPENAI,
         max_tokens=16384,
+        context_window=128000,
         input_price=2.5,
         output_price=10.0,
         supports_predictive_output=True,
@@ -910,6 +919,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="gpt-4-turbo-2024-04-09",
         provider=ModelProvider.OPENAI,
         max_tokens=4096,
+        context_window=128000,
         input_price=10.0,
         output_price=30.0,
     ),
@@ -918,6 +928,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="gpt-4o-mini-2024-07-18",
         provider=ModelProvider.OPENAI,
         max_tokens=16384,
+        context_window=128000,
         input_price=0.15,
         output_price=0.6,
         supports_predictive_output=True,
@@ -927,6 +938,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="chatgpt-4o-latest",
         provider=ModelProvider.OPENAI,
         max_tokens=16384,
+        context_window=128000,
         input_price=5.0,
         output_price=15.0,
     ),
@@ -944,6 +956,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="gemini-1.5-fresh-latest",
         provider=ModelProvider.GOOGLE,
         max_tokens=8192,
+        context_window=1048576,
         input_price=0.075,
         output_price=0.3,
     ),
@@ -951,7 +964,8 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         name="geminiexp",
         full_name="gemini-exp-1121",
         provider=ModelProvider.GOOGLE,
-        max_tokens=8192,
+        max_tokens=4096,
+        context_window=8192,
         input_price=1.25,
         output_price=5.0,
     ),
@@ -961,6 +975,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="openai/gpt-4o:extended",
         provider=ModelProvider.OPENROUTER,
         max_tokens=64000,
+        context_window=128000,
         input_price=6.0,
         output_price=18.0,
     ),
@@ -969,6 +984,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="google/gemini-pro-1.5",
         provider=ModelProvider.OPENROUTER,
         max_tokens=8192,
+        context_window=2097152,
         input_price=2.5,
         output_price=7.5,
     ),
@@ -977,6 +993,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="google/gemini-flash-1.5",
         provider=ModelProvider.OPENROUTER,
         max_tokens=8192,
+        context_window=1048576,
         input_price=0.075,
         output_price=0.3,
     ),
@@ -985,7 +1002,17 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         full_name="meta-llama/llama-3.1-405b-instruct",
         provider=ModelProvider.OPENROUTER,
         max_tokens=131072,
+        context_window=131072,
         input_price=3.0,
         output_price=3.0,
+    ),
+    "qwq-32b": OpenAICompatibleModelConfig(
+        name="qwq-32b",
+        full_name="qwen/qwq-32b-preview",
+        provider=ModelProvider.OPENROUTER,
+        max_tokens=32768,
+        context_window=32768,
+        input_price=0.15,
+        output_price=0.6,
     ),
 }
