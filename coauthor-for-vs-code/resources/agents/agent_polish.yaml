@@ -19,7 +19,7 @@ prompts:
         \item Use either `` or '' as an alternative to `"'.
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file.
-        \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex.
+        \item \textbf{IMPORTANT:} You must use the math commands defined in commands.tex or preamble.tex.
     \end{itemize}
 
   user_prefix: |
