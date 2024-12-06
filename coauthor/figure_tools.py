@@ -1,5 +1,6 @@
 import re
 import os
+from typing import List
 
 from jinja2 import Template
 
@@ -25,9 +26,10 @@ TIKZ_TEMPLATE = Template(
 )
 
 
-def extract_figure_paths(latex_file_path):
+def extract_figure_paths_from_latex(latex_file: str) -> List[str]:
+    """Extract figure paths from LaTeX file, returns list of paths"""
     figure_paths = []
-    latex_dir = os.path.dirname(latex_file_path)
+    latex_dir = os.path.dirname(latex_file)
     graphicspaths = [latex_dir]  # Start with the directory of the LaTeX file
 
     # Regular expressions to match figure inclusion commands and graphicspath
@@ -35,7 +37,7 @@ def extract_figure_paths(latex_file_path):
     graphicspath_pattern = re.compile(r"\\graphicspath\s*\{(.+?)\}")
 
     try:
-        content = read_file(latex_file_path)
+        content = read_file(latex_file)
 
         # Find all graphicspaths
         graphicspath_matches = graphicspath_pattern.findall(content)
@@ -64,7 +66,7 @@ def extract_figure_paths(latex_file_path):
                         break
 
     except FileNotFoundError:
-        logger.error(f"File '{latex_file_path}' not found.")
+        logger.error(f"File '{latex_file}' not found.")
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
 
@@ -102,7 +104,8 @@ def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
     return filename
 
 
-def extract_and_compile_tikzpictures_with_labels(latex_file):
+def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> List[str]:
+    """Extract and compile TikZ pictures, returns list of PDF paths"""
     input_dir = os.path.dirname(latex_file)
     input_filename = os.path.basename(latex_file)
     input_name = os.path.splitext(input_filename)[0]
@@ -131,26 +134,3 @@ def extract_and_compile_tikzpictures_with_labels(latex_file):
                 os.remove(aux_file)
 
     return compiled_files
-
-
-def handle_auto_extract_figure(kwargs, input_file):
-    extracted_figure_paths = extract_figure_paths(input_file)
-    logger.debug("Extracting the list of figures: " + ", ".join(extracted_figure_paths))
-    if extracted_figure_paths:
-        if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:
-            kwargs["figure_files"] = extracted_figure_paths
-        else:
-            kwargs["figure_files"].extend(extracted_figure_paths)
-
-
-def handle_auto_extract_tikz_figure(kwargs, input_files):
-    extracted_tikz_figure_paths = []
-    if isinstance(input_files, str):
-        input_files = [input_files]
-    for input_file in input_files:
-        extracted_tikz_figure_paths.extend(extract_and_compile_tikzpictures_with_labels(input_file))
-    if extracted_tikz_figure_paths:
-        if kwargs.get("figure_files") is None or kwargs.get("figure_files") == []:
-            kwargs["figure_files"] = extracted_tikz_figure_paths
-        else:
-            kwargs["figure_files"].extend(extracted_tikz_figure_paths)
