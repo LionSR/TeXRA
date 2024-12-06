@@ -25,10 +25,12 @@ prompts:
     {{ REFERENCE_CONTENT }}
     </transcript>
 
-    If there are instructions provided below, please follow them and expand them in the scratchpad.
+    {% if INSTRUCTION %}
+    Please follow the following guidelines and expand them in the scratchpad.
     <instructions>
     {{ INSTRUCTION }}
     </instructions>
+    {% endif %}
 
   user_request: |
     Your primary task is to improve the provided draft \LaTeX document by adding missing content and equations from the transcription. Follow these guidelines:
