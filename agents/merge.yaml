@@ -1,6 +1,7 @@
 name: merge
 
 settings:
+  agent_type: direct
   document_tag: full_edited_latex
   end_tag: </full_edited_latex>
   output_ext: tex

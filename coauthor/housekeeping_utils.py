@@ -36,10 +36,14 @@ HISTORY_DIR = "History"
 
 
 def get_agent_first_name_chunk(agent):
-    if agent.startswith("write-"):
-        return agent.split("-")[1]
+    if agent.startswith("write_"):
+        return agent.split("_")[1]
+    elif "_" in agent:
+        return agent.split("_")[0]
+    elif "-" in agent:
+        return agent.split("-")[0]
     else:
-        return agent.split("_")[0] if "_" in agent else agent.split("-")[0]
+        return agent
 
 
 def get_file_patterns(base, model, agent, num_rounds=4):

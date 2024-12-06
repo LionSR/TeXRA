@@ -1,18 +1,11 @@
 import sys
 import os
 import click
-import shlex
-import subprocess
-
 from dotenv import load_dotenv
-from pathlib import Path
-
 from coauthor.arg_utils import comma_separated_list
 from coauthor.figure_tools import (
-    extract_figure_paths,
+    extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
-    handle_auto_extract_figure,
-    handle_auto_extract_tikz_figure,
 )
 from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
 from coauthor.housekeeping_utils import (
@@ -26,12 +19,13 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc,
     run_pack_latexdiff_vc_multiple,
 )
-from coauthor.file_utils import get_agent_dir_from_env
 from coauthor.logging_utils import logger
+
+
+from .agent_run import run_agent, run_merge
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 load_dotenv()
 
 
@@ -70,7 +64,7 @@ def shared_arguments(func):
         click.option("--edited_file", default=None, help="Path to the file that are already edited"),
         # Auto extract figure arguments
         click.option("--auto_extract_figure", is_flag=True, help="Automatically extract the list of figures from the input file"),
-        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ the list of figures from the input file"),
+        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
         click.option("--auto_extract_tikz_figure_reflect", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
     ]
@@ -79,72 +73,7 @@ def shared_arguments(func):
     return func
 
 
-def execute_agent(script, agent, **kwargs):
-    agents_dir = get_agent_dir_from_env()
-
-    # Check if multiple agent exists and output_files is specified
-    multiple_agent = f"{agent}_multiple"
-    multiple_yaml_exists = any((Path(agents_dir) / script).rglob(f"{multiple_agent}.yaml"))
-
-    # Use multiple agent only if both conditions are met
-    if kwargs.get("output_files") and multiple_yaml_exists:
-        agent = multiple_agent
-
-    command = [
-        "python",
-        f"{agents_dir}/{script}.py",
-        f"--agent={agent}",
-    ]
-    if kwargs.get("model"):
-        command.append(f"--model={kwargs.get('model')}")
-    if kwargs.get("input_file"):
-        command.append(f"--input_file={kwargs.get('input_file')}")
-
-    # Handle figure files - merge figure_file into figure_files if either exists
-    # may to use all_figure_files
-    figure_files = []
-    if kwargs.get("figure_file"):
-        figure_files.append(kwargs.get("figure_file"))
-    if kwargs.get("figure_files"):
-        if isinstance(kwargs["figure_files"], str):
-            figure_files.extend(kwargs["figure_files"].split(","))
-        elif isinstance(kwargs["figure_files"], list):
-            figure_files.extend(kwargs["figure_files"])
-        kwargs["figure_files"] = figure_files
-
-    # this auto extract figure logic should be handled in the agent script
-    if kwargs.get("auto_extract_figure"):
-        handle_auto_extract_figure(kwargs, kwargs.get("input_file"))
-
-    # Prepare all input files
-    all_input_files = [kwargs.get("input_file")]
-    if kwargs.get("input_files"):
-        if isinstance(kwargs["input_files"], str):
-            all_input_files.extend(kwargs["input_files"].split(","))
-
-    # here only tikz figure are extracted from all the input files but not the normal figure
-    # this auto extract tikz figure logic should be handled in the agent script
-    if kwargs.get("auto_extract_tikz_figure"):
-        handle_auto_extract_tikz_figure(kwargs, all_input_files)
-
-    for key, value in kwargs.items():
-        if value is not None:
-            if isinstance(value, bool):
-                if value:
-                    command.append(f"--{key}")
-            elif key in ["input_files", "reference_files", "auxiliary_files", "figure_files", "output_files"]:
-                if isinstance(value, str):
-                    value = [value]
-                # Convert all elements to strings before joining
-                command.append(f"--{key}")
-                command.append(",".join(map(str, value)))  # Join the list into a single comma-separated string
-            else:
-                command.append(f"--{key}")
-                command.append(shlex.quote(str(value)).strip("'"))
-
-    subprocess.run(command)
-
-
+# CLI Commands
 @click.group()
 def cli():
     """Main CLI group for coauthor commands."""
@@ -156,26 +85,16 @@ def cli():
 @click.option("--input_file", required=True, help="Path to the input file")
 @click.option("--edited_file", required=True, help="Path to the edited file")
 def merge(model, input_file, edited_file):
-    agents_dir = get_agent_dir_from_env()
-    command = [
-        "python",
-        f"{agents_dir}/merge.py",
-        f"--input_file={input_file}",
-        f"--edited_file={edited_file}",
-        f"--model={model}",
-    ]
-    subprocess.run(command)
-
-
-# Agents
+    """Run merge agent from CLI"""
+    run_merge(model, input_file, edited_file)
 
 
 @cli.command()
 @shared_arguments
 @click.argument("agent")
 def run(agent: str, **kwargs):
-    """Run any agent except merge using execute_agent"""
-    execute_agent("run", agent, **kwargs)
+    """Run any agent except merge from CLI"""
+    run_agent(agent, **kwargs)
 
 
 # Housekeeping operations
@@ -287,7 +206,7 @@ def tex_count(latex_file):
 @cli.command()
 @click.argument("latex_file")
 def extract_figure_path(latex_file):
-    figure_paths = extract_figure_paths(latex_file)
+    figure_paths = extract_figure_paths_from_latex(latex_file)
     logger.info(f"Extracted figure file paths: {figure_paths}")
 
 

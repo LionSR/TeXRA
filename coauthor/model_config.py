@@ -8,7 +8,7 @@ from enum import Enum
 from dotenv import load_dotenv
 from typing import Dict, List, Optional, Any, Tuple
 
-from .config import AgentSettings, TaskConfig
+from .agent_dataclass import AgentSettings, AgentConfig
 from .file_utils import read_file, write_file
 from .logging_utils import logger
 from .output_utils import filter_monologue_tags
@@ -145,7 +145,7 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, agent_config: AgentConfig):
         """Handle continuation for a model when response is truncated."""
         pass
 
@@ -153,7 +153,7 @@ class ModelConfig(ABC):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        task_config: Any,
+        agent_config: Any,
         agent_settings: Any,
         messages: List[Dict],
         prefill: str,
@@ -443,7 +443,7 @@ class AnthropicModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, agent_config: AgentConfig):
         """
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
@@ -524,7 +524,7 @@ class AnthropicModelConfig(ModelConfig):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        task_config: Any,
+        agent_config: Any,
         agent_settings: Any,
         messages: List[Dict],
         prefill: str,
@@ -554,7 +554,7 @@ class AnthropicModelConfig(ModelConfig):
                     messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
         else:
-            if task_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
+            if agent_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
                 prefill += first_k_tex_document
                 accumulated_output = first_k_tex_document
 
@@ -754,9 +754,9 @@ class OpenAICompatibleModelConfig(ModelConfig):
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
-    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, task_config: TaskConfig):
+    def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, agent_config: AgentConfig):
         """Handle continuation for OpenAI-compatible models."""
-        prefill_tokens = state.last_response[-task_config.K :]
+        prefill_tokens = state.last_response[-agent_config.K :]
         user_message_continuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
@@ -770,7 +770,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        task_config: Any,
+        agent_config: Any,
         agent_settings: Any,
         messages: List[Dict],
         prefill: str,
@@ -791,9 +791,9 @@ class OpenAICompatibleModelConfig(ModelConfig):
                 messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
                 state = State.initialize(accumulated_output)
-                self.handle_continuation(messages, state, agent_settings, task_config)
+                self.handle_continuation(messages, state, agent_settings, agent_config)
         else:
-            if task_config.use_prefill_from_input:
+            if agent_config.use_prefill_from_input:
                 prefill += first_k_tex_document
                 accumulated_output = ""
 
