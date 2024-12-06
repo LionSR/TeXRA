@@ -1,6 +1,5 @@
 name: text2tex
 settings:
-  agent_type: direct
   document_tag: latex_document
   end_tag: </latex_document>
   output_ext: tex
@@ -27,10 +26,12 @@ prompts:
     {{ INPUT_CONTENT }}
     </document>
 
+    {% if INSTRUCTION %}
     For context, the discussion is about:
     <context>
     {{ INSTRUCTION }}
     </context>
+    {% endif %}
 
   user_request: |
     Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex \LaTeX document, closely following these guidelines:
