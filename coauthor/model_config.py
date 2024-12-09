@@ -962,10 +962,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     ),
     "geminiexp": OpenAICompatibleModelConfig(
         name="geminiexp",
-        full_name="gemini-exp-1121",
+        full_name="gemini-exp-1206",
         provider=ModelProvider.GOOGLE,
         max_tokens=4096,
-        context_window=8192,
+        context_window=2097152,
         input_price=1.25,
         output_price=5.0,
     ),
