@@ -379,6 +379,8 @@ CoAuthor uses the following environment variables:
 
 - `OPENAI_API_KEY`: Your OpenAI API key
 - `ANTHROPIC_API_KEY`: Your Anthropic API key
+- `OPENROUTER_API_KEY`: Your OpenRouter API key
+- `GOOGLE_API_KEY`: Your Google API key
 - `MODEL`: Default model to use (e.g., "opus", "gpt4o")
 - `PROMPT_DIR`: Directory containing prompt files
 - `LATEXINDENT_CONFIG`: Path to custom latexindent configuration file
