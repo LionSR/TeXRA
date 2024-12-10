@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
-import { log, initializeLogging } from './utils/logUtils';
+import { initializeLogging } from './utils/logUtils';
 
-const CHANNEL_NAME = 'Coauthor Utils';
-initializeLogging(CHANNEL_NAME);
+const CATEGORY = 'Utils';
+initializeLogging(CATEGORY);
 
 const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
   'files.ignored.fileExtensions',
