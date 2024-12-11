@@ -14,7 +14,7 @@ from ..logging_utils import logger
 
 
 @dataclass
-class OpenAICompatibleModelConfig(ModelConfig):
+class OpenAIModelConfig(ModelConfig):
     """Configuration for OpenAI-compatible models."""
 
     def get_client(self):
@@ -236,3 +236,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
             total_input_tokens = input_tokens
 
         return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
+
+
+class OpenAICompatibleModelConfig(OpenAIModelConfig):
+    pass
