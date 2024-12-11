@@ -19,6 +19,7 @@ from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_bet
 from .output_utils import check_for_massive_repetition
 from .file_utils import write_file
 
+
 class BaseReflectChainAgent(ABC):
     """
     Abstract base class for reflect chain agents.
