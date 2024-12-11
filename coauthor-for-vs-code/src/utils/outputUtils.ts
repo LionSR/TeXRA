@@ -10,7 +10,10 @@ interface RepetitionResult {
 /**
  * Checks for massive repetition using diff-match-patch
  */
-export function checkRepetitionDMP(lastResponse: string, newResponse: string): RepetitionResult {
+export function checkRepetitionDMP(
+  lastResponse: string,
+  newResponse: string,
+): RepetitionResult {
   const dmp = new diff_match_patch();
   const diffs = dmp.diff_main(lastResponse, newResponse);
 
@@ -23,32 +26,47 @@ export function checkRepetitionDMP(lastResponse: string, newResponse: string): R
   }
 
   // Calculate similarity ratio
-  const matchLength = diffs.reduce((sum, [type, text]) =>
-    type === 0 ? sum + text.length : sum, 0);
-  const ratio = (2.0 * matchLength) / (lastResponse.length + newResponse.length);
+  const matchLength = diffs.reduce(
+    (sum, [type, text]) => (type === 0 ? sum + text.length : sum),
+    0,
+  );
+  const ratio =
+    (2.0 * matchLength) / (lastResponse.length + newResponse.length);
   const massiveRepetitionDetected = longestMatch.length > 1000;
 
   return {
     massiveRepetitionDetected,
     ratio,
-    longestMatch
+    longestMatch,
   };
 }
 
 /**
  * Checks for massive repetition using difflib (similar to Python implementation)
  */
-export function checkRepetitionDifflib(lastResponse: string, newResponse: string): RepetitionResult {
-  const sequenceMatcher = new difflib.SequenceMatcher(null, lastResponse, newResponse);
+export function checkRepetitionDifflib(
+  lastResponse: string,
+  newResponse: string,
+): RepetitionResult {
+  const sequenceMatcher = new difflib.SequenceMatcher(
+    null,
+    lastResponse,
+    newResponse,
+  );
   const ratio = sequenceMatcher.ratio();
-  const match = sequenceMatcher.findLongestMatch(0, lastResponse.length, 0, newResponse.length);
+  const match = sequenceMatcher.findLongestMatch(
+    0,
+    lastResponse.length,
+    0,
+    newResponse.length,
+  );
   const longestMatch = lastResponse.slice(match[0], match[0] + match[2]);
   const massiveRepetitionDetected = longestMatch.length > 1000;
 
   return {
     massiveRepetitionDetected,
     ratio,
-    longestMatch
+    longestMatch,
   };
 }
 
@@ -59,7 +77,7 @@ export function logMassiveRepetition(result: RepetitionResult): void {
   if (result.massiveRepetitionDetected) {
     console.error(`Repetition ratio: ${result.ratio}`);
     console.error(`Longest matching substring: ${result.longestMatch}`);
-    console.error("Massive repetition detected - stopping process.");
+    console.error('Massive repetition detected - stopping process.');
   }
 }
 
@@ -82,9 +100,15 @@ export function addCdataToTags(xmlData: string, tags: string[]): string {
  * @param tags Array of tag names to wrap with CDATA
  * @returns Modified XML string with CDATA sections
  */
-export function addCdataToTagsMultiple(xmlData: string, tags: string[]): string {
+export function addCdataToTagsMultiple(
+  xmlData: string,
+  tags: string[],
+): string {
   return tags.reduce((data, tag) => {
-    const pattern = new RegExp(`(<${tag}(?:\\s+[^>]*)?>)(.*?)(<\/${tag}>)`, 'gs');
+    const pattern = new RegExp(
+      `(<${tag}(?:\\s+[^>]*)?>)(.*?)(<\/${tag}>)`,
+      'gs',
+    );
     return data.replace(pattern, '$1<![CDATA[$2]]>$3');
   }, xmlData);
 }
