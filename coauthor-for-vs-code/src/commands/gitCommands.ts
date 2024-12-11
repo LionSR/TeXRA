@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { exec } from 'child_process';
-import { getWorkspacePath, getConfig } from '../utils/commonUtils';
+import { getConfig } from '../utils/commonUtils';
+import { getWorkspacePath } from '../utils/fileUtils';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
