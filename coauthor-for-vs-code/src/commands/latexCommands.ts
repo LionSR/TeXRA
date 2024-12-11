@@ -57,21 +57,9 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
           const success = await runLatexIndent(relativePath);
           
           if (success) {
-            // Reload the file content after successful indentation
-            const edit = new vscode.WorkspaceEdit();
-            const content = await vscode.workspace.fs.readFile(document.uri);
-            const text = Buffer.from(content).toString('utf-8');
-            
-            edit.replace(
-              document.uri,
-              new vscode.Range(
-                document.positionAt(0),
-                document.positionAt(document.getText().length)
-              ),
-              text
-            );
-            
-            await vscode.workspace.applyEdit(edit);
+            // Instead of trying to modify the document directly,
+            // let VS Code handle the file change notification
+            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure file is written
             vscode.window.showInformationMessage('LaTeX file indented successfully');
           } else {
             vscode.window.showErrorMessage('Failed to indent LaTeX file');

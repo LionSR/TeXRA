@@ -337,6 +337,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       warn(CHANNEL, `Latexindent stderr: ${stderr}`);
     }
 
+    // Wait a moment for the file system to stabilize
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // Setup cleanup patterns relative to workspace
     const fileBaseName = path.basename(filePath, '.tex');
     const fileDir = path.dirname(filePath);
