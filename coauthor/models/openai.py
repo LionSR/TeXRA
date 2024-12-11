@@ -1,7 +1,6 @@
 """OpenAI-compatible model configuration."""
 
 import os
-import base64
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -11,6 +10,7 @@ from ..agent_dataclass import AgentSettings, AgentConfig
 from ..file_utils import read_file
 from ..state import State
 from ..logging_utils import logger
+from ..img_utils import get_base64_encoded_image
 
 
 @dataclass
@@ -147,8 +147,7 @@ class OpenAIModelConfig(ModelConfig):
             img_data = process_pdf_input(figure_file)
             media_type = "image/png"
         else:
-            with open(figure_file, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
+            img_data = get_base64_encoded_image(figure_file)
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 

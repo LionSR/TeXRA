@@ -37,12 +37,11 @@ def run_external_command(
         }
 
         if output_file:
-            with open(output_file, "w", encoding=encoding) as file:
-                result = subprocess.run(command, **kwargs)
-                if result.returncode != 0:
-                    logger.error(f"\nCommand failed with return code {result.returncode}")
-                    return False, None, result.stderr.strip()
-                file.write(result.stdout)
+            result = subprocess.run(command, **kwargs)
+            if result.returncode != 0:
+                logger.error(f"\nCommand failed with return code {result.returncode}")
+                return False, None, result.stderr.strip()
+            write_file(output_file, result.stdout)
             logger.info("\nCommand completed.\nOutput saved to " + output_file)
             return True, None, None
         else:
