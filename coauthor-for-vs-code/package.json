@@ -421,6 +421,10 @@
       {
         "command": "coauthor.countPdfPages",
         "title": "CoAuthor: Count PDF Pages"
+      },
+      {
+        "command": "coauthor.encodeImageToBase64",
+        "title": "CoAuthor: Encode Image to Base64"
       }
     ],
     "viewsContainers": {
