@@ -1,5 +1,5 @@
 import argparse
-from .model_config import MODEL_CONFIGS
+from .models import MODEL_CONFIGS
 
 
 def comma_separated_list(value):
