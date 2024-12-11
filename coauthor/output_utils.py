@@ -65,6 +65,7 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
 
 
 # this and the next function needs to have a better mechanism for giving the post-fix tho the names of the multiple outputs
+# can we do it with regex? xml is tedious to parse
 def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
     logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
