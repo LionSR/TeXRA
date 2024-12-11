@@ -165,7 +165,6 @@ function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
   }
 }
 
-
 function setDefaultState() {
   // Hide output name override by default
   const outputNameOverride = document.getElementById('outputNameOverride');
@@ -439,7 +438,6 @@ window.onload = function () {
   // Set default state for new folders
   setDefaultState();
 };
-
 
 window.addEventListener('message', (event) => {
   const message = event.data;
@@ -1180,4 +1178,3 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 });
-
