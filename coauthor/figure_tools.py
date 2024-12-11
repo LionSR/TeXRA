@@ -1,6 +1,6 @@
 import re
 import os
-from typing import List
+from typing import List, Tuple, Optional
 
 from jinja2 import Template
 
@@ -74,7 +74,7 @@ def extract_figure_paths_from_latex(latex_file: str) -> List[str]:
     return figure_paths
 
 
-def extract_tikzpictures_with_labels(latex_file):
+def extract_tikzpictures_with_labels(latex_file: str) -> List[Tuple[str, List[str]]]:
     content = read_file(latex_file)
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments
@@ -93,12 +93,9 @@ def extract_tikzpictures_with_labels(latex_file):
     return labeled_tikzpictures
 
 
-def create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir):
+def create_standalone_latex_with_labels(tikzpicture: str, label: str, build_dir: str, suffix: Optional[str] = None) -> str:
     standalone_content = TIKZ_TEMPLATE.render(tikzpicture=tikzpicture)
-    if suffix is not None and suffix != "":
-        filename = os.path.join(build_dir, f"{label}_{suffix}.tex")
-    else:
-        filename = os.path.join(build_dir, f"{label}.tex")
+    filename = os.path.join(build_dir, f"{label}_{suffix}.tex" if suffix else f"{label}.tex")
     write_file(filename, standalone_content)
 
     return filename
@@ -123,7 +120,7 @@ def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> List[str]:
                 suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
             else:
                 suffix = None
-            tex_file = create_standalone_latex_with_labels(tikzpicture, label, suffix, build_dir)
+            tex_file = create_standalone_latex_with_labels(tikzpicture, label, build_dir, suffix)
             compile_latex_to_pdf(tex_file)
             compiled_files.append(os.path.splitext(tex_file)[0] + ".pdf")
 

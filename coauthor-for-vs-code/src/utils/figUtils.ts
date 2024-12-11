@@ -76,3 +76,39 @@ export async function extractFigurePathsFromLatex(latexFile: string): Promise<st
         throw err;
     }
 }
+
+/**
+ * Extract TikZ pictures with their labels from a LaTeX file
+ * @param latexFile Path to the LaTeX file
+ * @returns Array of [label, tikzpictures] tuples
+ */
+export async function extractTikzpicturesWithLabels(latexFile: string): Promise<[string, string[]][]> {
+    try {
+        const content = await readFile(latexFile);
+
+        // Regular expressions to match figure environments and tikzpictures
+        const figurePattern = /\\begin{figure}.*?\\label\{(.*?)\}.*?\\end{figure}/gs;
+        const tikzPattern = /\\begin{tikzpicture}.*?\\end{tikzpicture}/gs;
+
+        const labeledTikzpictures: [string, string[]][] = [];
+        
+        let figureMatch;
+        while ((figureMatch = figurePattern.exec(content)) !== null) {
+            const figureContent = figureMatch[0];
+            const label = figureMatch[1];
+            
+            // Find all tikzpictures in this figure
+            const tikzMatches = [...figureContent.matchAll(tikzPattern)].map(match => match[0]);
+            
+            if (tikzMatches.length > 0) {
+                labeledTikzpictures.push([label, tikzMatches]);
+                debug('FigureUtils', `Found TikZ picture with label: ${label}`);
+            }
+        }
+
+        return labeledTikzpictures;
+    } catch (err) {
+        error('FigureUtils', `Error extracting TikZ pictures: ${err instanceof Error ? err.message : String(err)}`);
+        throw err;
+    }
+}
