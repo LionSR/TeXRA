@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -417,6 +417,10 @@
       {
         "command": "coauthor.indentCurrentTex",
         "title": "CoAuthor: Indent Current TeX"
+      },
+      {
+        "command": "coauthor.countPdfPages",
+        "title": "CoAuthor: Count PDF Pages"
       }
     ],
     "viewsContainers": {
@@ -497,10 +501,11 @@
     "jimp": "^1.6.0",
     "nunjucks": "^3.2.4",
     "openai": "^4.76.1",
+    "pdf-parse": "^1.1.1",
     "pdf2pic": "^3.1.3",
-    "pdfjs-dist": "^4.9.155",
     "terser-webpack-plugin": "^5.3.10",
     "winston": "^3.17.0",
-    "yaml": "^2.6.1"
+    "yaml": "^2.6.1",
+    "pdf-lib": "^1.17.1"
   }
 }
