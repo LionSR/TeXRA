@@ -375,8 +375,9 @@
             <i class="fas fa-draw-polygon"></i> Auto-extract TikZ Figs</label
           >
           <label
-            ><input type="checkbox" id="includeTikzReflection" />
-            <i class="fas fa-sync-alt"></i> Include TikZ Reflection</label
+            ><input type="checkbox" id="autoExtractTikzFigureReflect" />
+            <i class="fas fa-sync-alt"></i> Auto-extract TikZ Figs(round
+            1)</label
           >
           <label
             ><input type="checkbox" id="includeTexCount" />
@@ -390,12 +391,12 @@
               class="toggle-icon"
               title="Toggle Output Name Override"
               >▼</span
-            >
+            >Override output name:
             <br />
             <input
               type="text"
               id="outputNameOverride"
-              placeholder="Override output name (include extension)"
+              placeholder="(include extension)"
             />
           </div>
           <button id="executeButton">
