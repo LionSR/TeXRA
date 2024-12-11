@@ -509,11 +509,10 @@
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
-    "@types/glob": "^8.1.0",
     "@types/yaml": "^1.9.6",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
-    "glob": "^8.1.0",
+    "glob": "^10.4.5",
     "jest-worker": "^29.7.0",
     "jimp": "^1.6.0",
     "nunjucks": "^3.2.4",
