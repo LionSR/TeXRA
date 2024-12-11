@@ -4,12 +4,41 @@ import { debug, info, warn, error } from './logUtils';
 
 const CHANNEL = 'FileUtils';
 
+export function getRelativePath(filePath: string): string {
+  const workspacePath = getWorkspacePath();
+  return workspacePath ? path.relative(workspacePath, filePath) : filePath;
+}
+
 export function getWorkspacePath(): string | undefined {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
     return undefined;
   }
   return workspaceFolders[0].uri.fsPath;
+}
+
+export async function readFile(filePath: string): Promise<string> {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
+  }
+  const fullPath = path.join(workspacePath, filePath);
+  const uri = vscode.Uri.file(fullPath);
+  const content = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(content).toString('utf-8');
+}
+
+export async function writeFile(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
+  }
+  const fullPath = path.join(workspacePath, filePath);
+  const uri = vscode.Uri.file(fullPath);
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
 
 export async function deleteFile(filePath: string): Promise<void> {
@@ -248,4 +277,25 @@ export async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function readFileBytes(filePath: string): Promise<Buffer> {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
+  }
+  const fullPath = path.join(workspacePath, filePath);
+  const uri = vscode.Uri.file(fullPath);
+  const bytes = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(bytes);
+}
+
+export function readFileBytesSync(filePath: string): Buffer {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
+  }
+  const fullPath = path.join(workspacePath, filePath);
+  // Note: This requires importing fs
+  return require('fs').readFileSync(fullPath);
 }
