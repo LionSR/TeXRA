@@ -7,7 +7,7 @@ import { debug, info, warn, error } from './logUtils';
 
 const execAsync = promisify(cp.exec);
 
-const CATEGORY = 'TexUtils';
+const CHANNEL = 'TexUtils';
 
 export async function processFile(filePath: string): Promise<string> {
   const uri = vscode.Uri.file(filePath);
@@ -71,10 +71,10 @@ async function processDiffFile(diffFileName: string): Promise<void> {
     }
 
     await writeFile(diffFileName, newContent);
-    debug(CATEGORY, `Line breaks added to ${diffFileName}`);
+    debug(CHANNEL, `Line breaks added to ${diffFileName}`);
   } catch (err) {
     error(
-      CATEGORY,
+      CHANNEL,
       `Error processing diff file: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -101,10 +101,10 @@ async function processTikzpictureEndings(filePath: string): Promise<void> {
     }
 
     await writeFile(filePath, newContent);
-    debug(CATEGORY, `Tikzpicture endings fixed in ${filePath}`);
+    debug(CHANNEL, `Tikzpicture endings fixed in ${filePath}`);
   } catch (err) {
     error(
-      CATEGORY,
+      CHANNEL,
       `Error processing tikzpicture endings: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -135,7 +135,7 @@ export async function runLatexDiff(
       !editedContent.includes('\\begin{document}') ||
       !editedContent.includes('\\end{document}')
     ) {
-      error(CATEGORY, 'Files missing document environment');
+      error(CHANNEL, 'Files missing document environment');
       vscode.window.showWarningMessage(
         'Files must contain \\begin{document} and \\end{document}',
       );
@@ -197,7 +197,7 @@ export async function runLatexDiff(
       `"${editedFile}"`,
     ].join(' ');
 
-    debug(CATEGORY, `Running command: ${command}`);
+    debug(CHANNEL, `Running command: ${command}`);
     const { stdout } = await execAsync(command, { cwd: workspacePath });
 
     // Write the output to the diff file
@@ -206,11 +206,11 @@ export async function runLatexDiff(
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
 
-    info(CATEGORY, 'LaTeX diff completed successfully');
+    info(CHANNEL, 'LaTeX diff completed successfully');
     return diffFileName;
   } catch (err) {
     error(
-      CATEGORY,
+      CHANNEL,
       `Error running LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -236,7 +236,7 @@ export async function runLatexDiffVC(
       !inputContent.includes('\\begin{document}') ||
       !inputContent.includes('\\end{document}')
     ) {
-      error(CATEGORY, 'File missing document environment');
+      error(CHANNEL, 'File missing document environment');
       vscode.window.showWarningMessage(
         'File must contain \\begin{document} and \\end{document}',
       );
@@ -263,17 +263,17 @@ export async function runLatexDiffVC(
       `"${inputFile}"`,
     ].join(' ');
 
-    debug(CATEGORY, `Running command: ${command}`);
+    debug(CHANNEL, `Running command: ${command}`);
     await execAsync(command, { cwd: workspacePath }); // Execute from workspace root
 
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
 
-    info(CATEGORY, 'LaTeX diff VC completed successfully');
+    info(CHANNEL, 'LaTeX diff VC completed successfully');
     return path.basename(diffFileName);
   } catch (err) {
     error(
-      CATEGORY,
+      CHANNEL,
       `Error running LaTeX diff VC: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -284,10 +284,10 @@ export async function runLatexDiffVCMultiple(
   inputFiles: string[],
   commitHash: string,
 ): Promise<void> {
-  debug(CATEGORY, `Processing multiple files with commit ${commitHash}`);
+  debug(CHANNEL, `Processing multiple files with commit ${commitHash}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    error(CATEGORY, 'No input files provided');
+    error(CHANNEL, 'No input files provided');
     vscode.window.showErrorMessage('No input files provided');
     return;
   }
@@ -297,11 +297,11 @@ export async function runLatexDiffVCMultiple(
       await runLatexDiffVC(inputFile, commitHash);
     } catch (err) {
       error(
-        CATEGORY,
+        CHANNEL,
         `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
 
-  info(CATEGORY, 'All LaTeX diff operations completed');
+  info(CHANNEL, 'All LaTeX diff operations completed');
 }

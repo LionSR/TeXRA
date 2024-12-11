@@ -44,29 +44,29 @@ class VSCodeTransport extends Writable {
 const baseFormat = combine(timestamp({ format: 'HH:mm:ss' }), customFormat);
 
 // Map to store loggers for different categories
-const categoryLoggers = new Map<string, winston.Logger>();
+const channelLoggers = new Map<string, winston.Logger>();
 
 // Map to store output channels
 const outputChannels = new Map<string, vscode.OutputChannel>();
 
 export function initializeLogging(
-  defaultCategory: string,
+  defaultChannel: string,
   useColors: boolean = false,
 ): void {
   // Create default output channel if it doesn't exist
-  if (!outputChannels.has(defaultCategory)) {
-    createLoggerForCategory(defaultCategory, useColors);
+  if (!outputChannels.has(defaultChannel)) {
+    createLoggerForChannel(defaultChannel, useColors);
   }
 }
 
-function createLoggerForCategory(
-  category: string,
+function createLoggerForChannel(
+  channel: string,
   useColors: boolean = false,
 ): winston.Logger {
   const outputChannel = vscode.window.createOutputChannel(
-    'CoAuthor: ' + category,
+    'CoAuthor: ' + channel,
   );
-  outputChannels.set('CoAuthor: ' + category, outputChannel);
+  outputChannels.set('CoAuthor: ' + channel, outputChannel);
 
   const format = useColors
     ? combine(
@@ -89,32 +89,32 @@ function createLoggerForCategory(
     ],
   });
 
-  categoryLoggers.set(category, logger);
+  channelLoggers.set(channel, logger);
   return logger;
 }
 
-function getOrCreateLogger(category: string): winston.Logger {
-  if (!categoryLoggers.has(category)) {
-    return createLoggerForCategory(category);
+function getOrCreateLogger(channel: string): winston.Logger {
+  if (!channelLoggers.has(channel)) {
+    return createLoggerForChannel(channel);
   }
-  return categoryLoggers.get(category)!;
+  return channelLoggers.get(channel)!;
 }
 
-// Simplified logging methods that use category as channel name
-export const debug = (category: string, message: string): void => {
-  getOrCreateLogger(category).debug(message);
+// Simplified logging methods that use channel as channel name
+export const debug = (channel: string, message: string): void => {
+  getOrCreateLogger(channel).debug(message);
 };
 
-export const info = (category: string, message: string): void => {
-  getOrCreateLogger(category).info(message);
+export const info = (channel: string, message: string): void => {
+  getOrCreateLogger(channel).info(message);
 };
 
-export const warn = (category: string, message: string): void => {
-  getOrCreateLogger(category).warn(message);
+export const warn = (channel: string, message: string): void => {
+  getOrCreateLogger(channel).warn(message);
 };
 
-export const error = (category: string, message: string): void => {
-  getOrCreateLogger(category).error(message);
+export const error = (channel: string, message: string): void => {
+  getOrCreateLogger(channel).error(message);
 };
 
 export function getTimestamp(): string {
