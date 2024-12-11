@@ -26,10 +26,10 @@ import {
   runIndentTex,
 } from './housekeeping';
 import { runLatexDiff, runLatexDiffVC } from './utils/texUtils';
-import { log, initializeLogging } from './utils/logUtils';
+import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
 
-const CHANNEL_NAME = 'Coauthor Commands';
-initializeLogging(CHANNEL_NAME);
+const CHANNEL = 'Commands';
+initializeLogging(CHANNEL);
 
 export function registerCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -85,10 +85,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
           });
 
           showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
+          info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
           return relativePaths;
-        } catch (error) {
-          showErrorMessage(
-            `Error selecting files: ${error instanceof Error ? error.message : String(error)}`,
+        } catch (err) {
+          error(
+            CHANNEL,
+            `Error selecting files: ${err instanceof Error ? err.message : String(err)}`,
           );
           return null;
         }
@@ -143,6 +145,10 @@ export function registerCommands(context: vscode.ExtensionContext) {
           showInfoMessage(
             `Selected reference files: ${relativePaths.join(', ')}`,
           );
+          info(
+            CHANNEL,
+            `Selected reference files: ${relativePaths.join(', ')}`,
+          );
           return relativePaths;
         }
         return null;
@@ -195,6 +201,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
               : relativePath;
           });
           showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
+          info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
           return relativePaths;
         }
         return null;
@@ -247,6 +254,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
               : relativePath;
           });
           showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
+          info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
           return relativePaths;
         }
         return null;
@@ -260,65 +268,57 @@ export function registerCommands(context: vscode.ExtensionContext) {
         model: string,
         outputNameOverride?: string,
       ) => {
-        const category = 'Pack-Single';
-        log(
-          CHANNEL_NAME,
-          category,
+        debug(
+          CHANNEL,
           `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
         );
 
         if (!inputFile || !agent || !model) {
-          log(
-            CHANNEL_NAME,
-            category,
+          error(
+            CHANNEL,
             `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-            true,
           );
           vscode.window.showErrorMessage(
             'Missing required parameters for pack single',
           );
           return;
         }
-        if (outputNameOverride) {
-          await runPackSingle(model, outputNameOverride, agent);
-        } else {
-          await runPackSingle(model, inputFile, agent);
-        }
+        await runPackSingle(model, inputFile, agent, outputNameOverride);
       },
     ),
     vscode.commands.registerCommand(
-      'coauthor.packLatexDiffVC',
+      'coauthor.packMultiple',
       async (
         inputFile: string,
-        baseFile: string,
-        commitHash: string,
-        clean: boolean = false,
+        agent: string,
+        model: string,
+        outputFiles: string[],
+        outputNameOverride?: string,
       ) => {
-        const category = 'Pack-Latex-Diff-VC';
-        log(
-          CHANNEL_NAME,
-          category,
-          `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
+        debug(
+          CHANNEL,
+          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
         );
-        const fileToUse = baseFile || inputFile;
-        await runPackLatexDiffVC(fileToUse, commitHash, clean);
-      },
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.packLatexDiffVCMultiple',
-      async (
-        inputFiles: string[],
-        commitHash: string,
-        clean: boolean = false,
-      ) => {
-        const category = 'Pack-Latex-Diff-VC-Multiple';
-        log(
-          CHANNEL_NAME,
-          category,
-          `Command called with: commitHash=${commitHash}, clean=${clean}`,
+        debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+
+        if (!inputFile || !agent || !model) {
+          error(
+            CHANNEL,
+            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+          );
+          vscode.window.showErrorMessage(
+            'Missing required parameters for pack multiple',
+          );
+          return;
+        }
+
+        await runPackMultiple(
+          model,
+          inputFile,
+          agent,
+          outputFiles,
+          outputNameOverride,
         );
-        log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
-        await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
       },
     ),
     vscode.commands.registerCommand('coauthor.cleanOutput', () => {
@@ -338,19 +338,15 @@ export function registerCommands(context: vscode.ExtensionContext) {
         model: string,
         outputNameOverride: string,
       ) => {
-        const category = 'Clean-Single';
-        log(
-          CHANNEL_NAME,
-          category,
+        debug(
+          CHANNEL,
           `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
         );
 
         if (!inputFile || !agent || !model) {
-          log(
-            CHANNEL_NAME,
-            category,
+          error(
+            CHANNEL,
             `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-            true,
           );
           vscode.window.showErrorMessage(
             'Missing required parameters for clean single',
@@ -673,6 +669,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
         if (fileUri && fileUri[0]) {
           const relativePath = getRelativePath(fileUri[0].fsPath);
           showInfoMessage(`Selected file: ${relativePath}`);
+          info(CHANNEL, `Selected file: ${relativePath}`);
           return relativePath;
         }
         return null;
@@ -712,6 +709,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
           showInfoMessage(
             `Selected reference file: ${relativePaths.join(', ')}`,
           );
+          info(CHANNEL, `Selected reference file: ${relativePaths.join(', ')}`);
           return relativePaths;
         }
         return null;
@@ -732,6 +730,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       if (fileUri && fileUri[0]) {
         const relativePath = getRelativePath(fileUri[0].fsPath);
         showInfoMessage(`Selected figure file: ${relativePath}`);
+        info(CHANNEL, `Selected figure file: ${relativePath}`);
         return relativePath;
       }
       return null;
@@ -746,6 +745,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
       if (fileUri && fileUri[0]) {
         const relativePath = getRelativePath(fileUri[0].fsPath);
         showInfoMessage(`Selected edited file: ${relativePath}`);
+        info(CHANNEL, `Selected edited file: ${relativePath}`);
         return relativePath;
       }
       return null;
@@ -779,41 +779,30 @@ export function registerCommands(context: vscode.ExtensionContext) {
       },
     ),
     vscode.commands.registerCommand(
-      'coauthor.packMultiple',
+      'coauthor.packLatexDiffVC',
       async (
         inputFile: string,
-        inputFiles: string[],
-        agent: string,
-        model: string,
-        outputNameOverride: string,
-        outputFiles: string[],
+        baseFile: string,
+        commitHash: string,
+        clean: boolean,
       ) => {
-        const category = 'Pack-Multiple';
-        log(
-          CHANNEL_NAME,
-          category,
-          `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
+        debug(
+          CHANNEL,
+          `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
         );
-
-        if (!inputFile || !agent || !model) {
-          log(
-            CHANNEL_NAME,
-            category,
-            `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-            true,
-          );
-          vscode.window.showErrorMessage(
-            'Missing required parameters for pack multiple',
-          );
-          return;
-        }
-        await runPackMultiple(
-          model,
-          inputFile,
-          outputFiles,
-          agent,
-          outputNameOverride,
+        const fileToUse = baseFile || inputFile;
+        await runPackLatexDiffVC(fileToUse, commitHash, clean);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.packLatexDiffVCMultiple',
+      async (inputFiles: string[], commitHash: string, clean: boolean) => {
+        debug(
+          CHANNEL,
+          `Command called with: commitHash=${commitHash}, clean=${clean}`,
         );
+        debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+        await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
       },
     ),
     vscode.commands.registerCommand(
@@ -822,32 +811,31 @@ export function registerCommands(context: vscode.ExtensionContext) {
         inputFile: string,
         agent: string,
         model: string,
-        outputNameOverride: string,
         outputFiles: string[],
+        outputNameOverride?: string,
       ) => {
-        const category = 'Clean-Multiple';
-        log(
-          CHANNEL_NAME,
-          category,
+        debug(
+          CHANNEL,
           `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
         );
+        debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
         if (!inputFile || !agent || !model) {
-          log(
-            CHANNEL_NAME,
-            category,
+          error(
+            CHANNEL,
             `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-            true,
           );
           vscode.window.showErrorMessage(
             'Missing required parameters for clean multiple',
           );
           return;
         }
-        let inputFilesWithOverride = outputNameOverride
+
+        const inputFilesWithOverride = outputNameOverride
           ? [outputNameOverride, ...outputFiles]
           : outputFiles;
-        await runCleanMultiple(model, inputFile, inputFilesWithOverride, agent);
+
+        await runCleanMultiple(model, inputFile, agent, inputFilesWithOverride);
       },
     ),
     vscode.commands.registerCommand('coauthor.refreshInputFiles', async () => {
@@ -879,10 +867,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.cleanLatexDiffVC',
       async (inputFile: string, baseFile: string, commitHash: string) => {
-        const category = 'Clean-Latex-Diff-VC';
-        log(
-          CHANNEL_NAME,
-          category,
+        debug(
+          CHANNEL,
           `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
         );
         const fileToUse = baseFile || inputFile;
@@ -892,13 +878,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.cleanLatexDiffVCMultiple',
       async (inputFiles: string[], commitHash: string) => {
-        const category = 'Clean-Latex-Diff-VC-Multiple';
-        log(
-          CHANNEL_NAME,
-          category,
-          `Command called with: commitHash=${commitHash}`,
-        );
-        log(CHANNEL_NAME, category, `Input files: ${inputFiles.join(', ')}`);
+        debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
+        debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
         await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
       },
     ),
