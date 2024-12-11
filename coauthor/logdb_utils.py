@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from .agent_dataclass import AgentConfig, AgentSettings
 from .logging_utils import logger
-from .model_config import ModelConfig
+from .models import ModelConfig
 from .state import State
 
 HISTORY_DIR = "History"

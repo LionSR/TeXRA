@@ -153,8 +153,8 @@ class ModelConfig(ABC):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        agent_config: Any,
-        agent_settings: Any,
+        agent_config: AgentConfig,
+        agent_settings: AgentSettings,
         messages: List[Dict],
         prefill: str,
         accumulated_output: str,
@@ -182,7 +182,7 @@ class ModelConfig(ABC):
         return (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
 
     def check_stop_conditions(
-        self, stop_reason: str, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool
+        self, stop_reason: str, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop."""
 
@@ -203,7 +203,7 @@ class ModelConfig(ABC):
 
         return end_turn, should_stop
 
-    def print_stop_flags(self, end_turn: bool, new_response: str, state: Any, agent_settings: Any, massive_repetition_detected: bool):
+    def print_stop_flags(self, end_turn: bool, new_response: str, state: State, agent_settings: AgentSettings, massive_repetition_detected: bool):
         """Print the flags indicating why the conversation stopped."""
 
         CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
@@ -435,7 +435,7 @@ class AnthropicModelConfig(ModelConfig):
                     img_data = base64.b64encode(f.read()).decode("utf-8")
                 media_type = "application/pdf"
             else:
-                img_data = process_pdf_input(figure_file, is_openai_compatible=False)
+                img_data = process_pdf_input(figure_file)
                 media_type = "image/png"
         else:
             with open(figure_file, "rb") as f:
@@ -524,8 +524,8 @@ class AnthropicModelConfig(ModelConfig):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        agent_config: Any,
-        agent_settings: Any,
+        agent_config: AgentConfig,
+        agent_settings: AgentSettings,
         messages: List[Dict],
         prefill: str,
         accumulated_output: str,
@@ -675,34 +675,6 @@ class OpenAICompatibleModelConfig(ModelConfig):
             )
         return content
 
-    def compute_price(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        # for openai models with prompt caching support
-        cache_tokens: Optional[int] = None,
-        # for openai models with reasoning tokens support
-        reasoning_tokens: Optional[int] = None,
-        # for anthropic models with prompt caching support
-        cache_creation_tokens: Optional[int] = None,
-        cache_read_tokens: Optional[int] = None,
-    ) -> float:
-        """
-        Compute the price for token usage for OpenAI-compatible models.
-        In the future this should just take response_object.usage as input.
-        """
-        if reasoning_tokens:
-            total_output_tokens = output_tokens + reasoning_tokens
-        else:
-            total_output_tokens = output_tokens
-
-        if cache_tokens:
-            total_input_tokens = (input_tokens - cache_tokens) + cache_tokens * 0.5
-        else:
-            total_input_tokens = input_tokens
-
-        return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
-
     def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
         """
         Extract statistics from OpenAI response object.
@@ -746,7 +718,7 @@ class OpenAICompatibleModelConfig(ModelConfig):
         if file_extension.lower() == ".pdf":
             from .img_utils import process_pdf_input
 
-            img_data = process_pdf_input(figure_file, is_openai_compatible=True)
+            img_data = process_pdf_input(figure_file)
             media_type = "image/png"
         else:
             with open(figure_file, "rb") as f:
@@ -770,8 +742,8 @@ class OpenAICompatibleModelConfig(ModelConfig):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        agent_config: Any,
-        agent_settings: Any,
+        agent_config: AgentConfig,
+        agent_settings: AgentSettings,
         messages: List[Dict],
         prefill: str,
         accumulated_output: str,
@@ -805,6 +777,34 @@ class OpenAICompatibleModelConfig(ModelConfig):
             logger.debug(f"OpenAI prefill: {openai_prefill}")
 
         return accumulated_output, False, messages
+
+    def compute_price(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        # for openai models with prompt caching support
+        cache_tokens: Optional[int] = None,
+        # for openai models with reasoning tokens support
+        reasoning_tokens: Optional[int] = None,
+        # for anthropic models with prompt caching support
+        cache_creation_tokens: Optional[int] = None,
+        cache_read_tokens: Optional[int] = None,
+    ) -> float:
+        """
+        Compute the price for token usage for OpenAI-compatible models.
+        In the future this should just take response_object.usage as input.
+        """
+        if reasoning_tokens:
+            total_output_tokens = output_tokens + reasoning_tokens
+        else:
+            total_output_tokens = output_tokens
+
+        if cache_tokens:
+            total_input_tokens = (input_tokens - cache_tokens) + cache_tokens * 0.5
+        else:
+            total_input_tokens = input_tokens
+
+        return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
 
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
@@ -962,10 +962,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     ),
     "geminiexp": OpenAICompatibleModelConfig(
         name="geminiexp",
-        full_name="gemini-exp-1121",
+        full_name="gemini-exp-1206",
         provider=ModelProvider.GOOGLE,
         max_tokens=4096,
-        context_window=8192,
+        context_window=2097152,
         input_price=1.25,
         output_price=5.0,
     ),

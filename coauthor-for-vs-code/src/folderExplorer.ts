@@ -1,10 +1,10 @@
 // folderExplorer.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { log, initializeLogging } from './utils/logUtils';
+import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
 
-const CHANNEL_NAME = 'Coauthor Folder Explorer';
-initializeLogging(CHANNEL_NAME);
+const CHANNEL = 'FolderExplorer';
+initializeLogging(CHANNEL);
 
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
@@ -54,18 +54,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       this.fileSystemWatcher.onDidDelete(() => this.refresh());
       this.fileSystemWatcher.onDidChange(() => this.refresh());
 
-      log(
-        CHANNEL_NAME,
-        'Watcher',
-        `File system watcher set up for: ${watchPath}`,
-      );
-    } catch (error) {
-      log(
-        CHANNEL_NAME,
-        'Watcher',
-        `Error setting up file system watcher: ${error}`,
-        true,
-      );
+      info(CHANNEL, `File system watcher set up for: ${watchPath}`);
+    } catch (err) {
+      error(CHANNEL, `Error setting up file system watcher: ${err}`);
     }
   }
 
@@ -100,12 +91,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       } else {
         // For any non-absolute path (including 'agents' or empty), use global storage as base
         if (!this.context) {
-          log(
-            CHANNEL_NAME,
-            'Configuration',
-            'Extension context not available',
-            true,
-          );
+          error(CHANNEL, 'Extension context not available');
           return Promise.resolve([]);
         }
 
@@ -117,20 +103,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
           // Ensure the directory exists
           await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
-          log(
-            CHANNEL_NAME,
-            'Directory',
-            `Using global storage path: ${fullPath}`,
-          );
+          info(CHANNEL, `Using global storage path: ${fullPath}`);
 
           absolutePath = fullPath;
-        } catch (error) {
-          log(
-            CHANNEL_NAME,
-            'Directory Creation',
-            `Error with global storage path: ${error}`,
-            true,
-          );
+        } catch (err) {
+          error(CHANNEL, `Error with global storage path: ${err}`);
           return Promise.resolve([]);
         }
       }
@@ -138,14 +115,12 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       try {
         // Verify the path exists before trying to read it
         await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
-        log(CHANNEL_NAME, 'Path', `Reading from: ${absolutePath}`);
+        debug(CHANNEL, `Reading from: ${absolutePath}`);
         return this.getFilesInDirectory(absolutePath);
-      } catch (error) {
-        log(
-          CHANNEL_NAME,
-          'Path',
+      } catch (err) {
+        error(
+          CHANNEL,
           `Path does not exist or is not accessible: ${absolutePath}`,
-          true,
         );
         return Promise.resolve([]);
       }
@@ -202,12 +177,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         return a.label!.toString().localeCompare(b.label!.toString());
       });
     } catch (err) {
-      log(
-        CHANNEL_NAME,
-        'File Listing',
-        `Error reading directory: ${err}`,
-        true,
-      );
+      error(CHANNEL, `Error reading directory: ${err}`);
       return [];
     }
   }
