@@ -119,9 +119,9 @@ export async function bestConnectionMethod(
 }
 
 // Example usage:
-async function test() {
-  // const result = await bestConnectionMethod("Hello", "world", "your-api-key");
-  const result = await bestConnectionMethod('Hello', 'world');
-  console.log(result);
-}
-test();
+// async function test() {
+//   // const result = await bestConnectionMethod("Hello", "world", "your-api-key");
+//   const result = await bestConnectionMethod('Hello', 'world');
+//   console.log(result);
+// }
+// test();

@@ -3,11 +3,12 @@ import * as path from 'path';
 import { promisify } from 'util';
 import * as cp from 'child_process';
 import { getWorkspacePath } from './commonUtils';
-import { debug, info, warn, error } from './logUtils';
+import { debug, info, warn, error, initializeLogging } from './logUtils';
 
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'TexUtils';
+initializeLogging(CHANNEL);
 
 export async function processFile(filePath: string): Promise<string> {
   const uri = vscode.Uri.file(filePath);
