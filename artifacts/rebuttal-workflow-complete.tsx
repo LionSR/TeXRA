@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { 
-  FileText, ChevronDown, ArrowRight, RefreshCcw, 
-  FileCode, Scroll, PenTool, ChevronRight,
-  Layers, MessageSquare, Workflow, RotateCw,
-  Settings, ArrowDownCircle, RotateCcw
-} from 'lucide-react';
+import React, { useState } from "react";
+import {
+  FileText,
+  ChevronDown,
+  ArrowRight,
+  RefreshCcw,
+  FileCode,
+  Scroll,
+  PenTool,
+  ChevronRight,
+  Layers,
+  MessageSquare,
+  Workflow,
+  RotateCw,
+  Settings,
+  ArrowDownCircle,
+  RotateCcw,
+} from "lucide-react";
 
 // Sample XML output structure
 const SAMPLE_XML_OUTPUT = `<rebuttal_package>
@@ -37,14 +48,19 @@ const FileExtractionProcess = () => (
   <div className="bg-gray-50 p-4 rounded-lg mt-4 text-sm">
     <h4 className="font-medium mb-2">File Extraction Process:</h4>
     <ol className="space-y-2 text-gray-700">
-      <li>1. Parse XML structure and extract individual <code>&lt;document&gt;</code> nodes</li>
+      <li>
+        1. Parse XML structure and extract individual{" "}
+        <code>&lt;document&gt;</code> nodes
+      </li>
       <li>2. Write content to separate files based on name attribute</li>
-      <li>3. Generate diff files comparing with original versions:
+      <li>
+        3. Generate diff files comparing with original versions:
         <div className="pl-4 mt-1 font-mono text-xs">
           latexdiff original/paper.tex extracted/paper.tex -o paper_diff.tex
         </div>
       </li>
-      <li>4. Apply template formatting from template files:
+      <li>
+        4. Apply template formatting from template files:
         <div className="pl-4 mt-1 font-mono text-xs">
           template_reply_to_editor.tex → reply_to_editor_prb.tex
         </div>
@@ -57,41 +73,43 @@ const ProcessingStages = () => (
   <div className="relative py-12 px-4">
     <div className="flex justify-between items-center px-12">
       {[
-        { 
-          label: 'Document Ingestion', 
-          icon: FileText, 
-          tooltip: 'Load and validate all input files' 
+        {
+          label: "Document Ingestion",
+          icon: FileText,
+          tooltip: "Load and validate all input files",
         },
-        { 
-          label: 'XML Wrapping', 
-          icon: FileCode, 
-          tooltip: 'Structure content with XML tags' 
+        {
+          label: "XML Wrapping",
+          icon: FileCode,
+          tooltip: "Structure content with XML tags",
         },
-        { 
-          label: 'Template Processing', 
-          icon: Workflow, 
-          tooltip: 'Apply document templates and rules' 
+        {
+          label: "Template Processing",
+          icon: Workflow,
+          tooltip: "Apply document templates and rules",
         },
-        { 
-          label: 'File Generation', 
-          icon: Layers, 
-          tooltip: 'Create and verify all outputs' 
-        }
+        {
+          label: "File Generation",
+          icon: Layers,
+          tooltip: "Create and verify all outputs",
+        },
       ].map((stage, idx, arr) => (
         <div key={idx} className="relative group">
           {/* Main stage box */}
           <div className="flex flex-col items-center gap-2 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <stage.icon className="w-6 h-6 text-blue-600" />
-            <span className="text-sm font-medium whitespace-nowrap">{stage.label}</span>
+            <span className="text-sm font-medium whitespace-nowrap">
+              {stage.label}
+            </span>
           </div>
-          
+
           {/* Tooltip */}
           <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
               {stage.tooltip}
             </div>
           </div>
-          
+
           {/* Connector line */}
           {idx < arr.length - 1 && (
             <div className="absolute top-1/2 -translate-y-1/2 left-[95%] w-[calc(100%-10px)] h-[2px] bg-blue-200" />
@@ -99,7 +117,7 @@ const ProcessingStages = () => (
         </div>
       ))}
     </div>
-    
+
     {/* Reflection Loop */}
     <div className="absolute w-[90%] h-[70px] border-2 border-purple-300 rounded-full left-1/2 -translate-x-1/2 -bottom-4 border-b-0">
       {/* Reflection label */}
@@ -117,13 +135,12 @@ const ProcessingStages = () => (
 // Prompt Preview Component
 const PromptPreview = ({ expanded, onToggle }) => (
   <div className="bg-white p-4 rounded-lg shadow">
-    <div 
-      className="flex items-center gap-2 cursor-pointer"
-      onClick={onToggle}
-    >
+    <div className="flex items-center gap-2 cursor-pointer" onClick={onToggle}>
       <MessageSquare className="w-5 h-5 text-blue-600" />
       <h3 className="font-medium">Agent Prompt Structure</h3>
-      <ChevronRight className={`w-4 h-4 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      <ChevronRight
+        className={`w-4 h-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+      />
     </div>
     {expanded && (
       <div className="mt-3 pl-4 text-sm space-y-2 border-l-2 border-blue-200">
@@ -143,7 +160,7 @@ const PromptPreview = ({ expanded, onToggle }) => (
           <div className="pl-3 text-gray-600">
             Load documents with XML structure:
             <div className="font-mono text-xs mt-1 bg-gray-100 p-1 rounded">
-              {'<documents>'}
+              {"<documents>"}
               <br />
               {'  <document name="paper.tex">...'}
             </div>
@@ -168,15 +185,15 @@ const PromptPreview = ({ expanded, onToggle }) => (
 // File Selection Actions Component
 const FileActions = ({ onRefresh, onCurrent }) => (
   <div className="flex gap-2">
-    <button 
-      className="p-1 hover:bg-gray-100 rounded" 
+    <button
+      className="p-1 hover:bg-gray-100 rounded"
       title="Refresh Files"
       onClick={onRefresh}
     >
       <RefreshCcw className="w-4 h-4" />
     </button>
-    <button 
-      className="p-1 hover:bg-gray-100 rounded" 
+    <button
+      className="p-1 hover:bg-gray-100 rounded"
       title="Current File"
       onClick={onCurrent}
     >
@@ -189,19 +206,19 @@ const FileActions = ({ onRefresh, onCurrent }) => (
 export default function RebuttalWorkflowComplete() {
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([
-    'replies/reply_to_referees_prb.tex',
-    'replies/reply_to_editor_prb.tex',
-    'replies/list_of_major_changes_prb.tex',
-    'RenyiNetPaper.tex',
-    'supp.tex'
+    "replies/reply_to_referees_prb.tex",
+    "replies/reply_to_editor_prb.tex",
+    "replies/list_of_major_changes_prb.tex",
+    "RenyiNetPaper.tex",
+    "supp.tex",
   ]);
-  
+
   return (
     <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
       <h2 className="text-2xl font-bold text-gray-800 text-center mb-8">
         MultiFile Processing Agents
       </h2>
-      
+
       {/* Top Controls */}
       <div className="grid grid-cols-3 gap-4 bg-white p-4 rounded-lg shadow">
         <div className="space-y-2">
@@ -228,11 +245,11 @@ export default function RebuttalWorkflowComplete() {
       </div>
 
       {/* Prompt Structure */}
-      <PromptPreview 
+      <PromptPreview
         expanded={promptExpanded}
         onToggle={() => setPromptExpanded(!promptExpanded)}
       />
-      
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-2 gap-6">
         {/* Left Column: File Selection */}
@@ -245,9 +262,9 @@ export default function RebuttalWorkflowComplete() {
                   <FileText className="w-4 h-4" />
                   Select Input Files:
                 </label>
-                <FileActions 
-                  onRefresh={() => console.log('Refresh')}
-                  onCurrent={() => console.log('Current')}
+                <FileActions
+                  onRefresh={() => console.log("Refresh")}
+                  onCurrent={() => console.log("Current")}
                 />
               </div>
               <select className="w-full p-2 border rounded">
@@ -274,12 +291,16 @@ export default function RebuttalWorkflowComplete() {
                 {selectedFiles.map((file, i) => (
                   <div key={i} className="flex items-center justify-between">
                     <span>{file}</span>
-                    <button 
+                    <button
                       className="text-red-500"
-                      onClick={() => setSelectedFiles(files => 
-                        files.filter((_, index) => index !== i)
-                      )}
-                    >×</button>
+                      onClick={() =>
+                        setSelectedFiles((files) =>
+                          files.filter((_, index) => index !== i),
+                        )
+                      }
+                    >
+                      ×
+                    </button>
                   </div>
                 ))}
               </div>
