@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promisify } from 'util';
 import * as cp from 'child_process';
-import { getWorkspacePath } from './commonUtils';
+import { getWorkspacePath, readFile, writeFile, deleteFile } from './fileUtils';
 import { debug, info, warn, error, initializeLogging } from './logUtils';
 import * as glob from 'glob';
 
@@ -11,20 +11,9 @@ const execAsync = promisify(cp.exec);
 const CHANNEL = 'TexUtils';
 initializeLogging(CHANNEL);
 
-export async function processFile(filePath: string): Promise<string> {
-  const uri = vscode.Uri.file(filePath);
-  const content = await vscode.workspace.fs.readFile(uri);
-  return Buffer.from(content).toString('utf-8');
-}
-
-async function writeFile(filePath: string, content: string): Promise<void> {
-  const uri = vscode.Uri.file(filePath);
-  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-}
-
 async function processDiffFile(diffFileName: string): Promise<void> {
   try {
-    const content = await processFile(diffFileName);
+    const content = await readFile(diffFileName);
     const lines = content.split('\n');
 
     let newContent = '';
@@ -85,7 +74,7 @@ async function processDiffFile(diffFileName: string): Promise<void> {
 
 async function processTikzpictureEndings(filePath: string): Promise<void> {
   try {
-    const content = await processFile(filePath);
+    const content = await readFile(filePath);
 
     let newContent = content;
     const patterns = [
@@ -123,13 +112,9 @@ export async function runLatexDiff(
       throw new Error('No workspace path found');
     }
 
-    // Convert relative paths to absolute paths
-    const fullInputPath = path.join(workspacePath, inputFile);
-    const fullEditedPath = path.join(workspacePath, editedFile);
-
-    // Check if files contain required commands
-    const inputContent = await processFile(fullInputPath);
-    const editedContent = await processFile(fullEditedPath);
+    // Files are now relative to workspace, no need for extra path joining
+    const inputContent = await readFile(inputFile);
+    const editedContent = await readFile(editedFile);
 
     if (
       !inputContent.includes('\\begin{document}') ||
@@ -183,11 +168,7 @@ export async function runLatexDiff(
       diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
     }
 
-    const outputPath = path.join(
-      workspacePath,
-      path.dirname(inputFile),
-      diffFileName,
-    );
+    const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
     const command = [
       'latexdiff',
@@ -229,11 +210,9 @@ export async function runLatexDiffVC(
       throw new Error('No workspace path found');
     }
 
-    // Convert relative path to absolute path
-    const fullInputPath = path.join(workspacePath, inputFile);
+    // Use readFile which now handles workspace paths
+    const inputContent = await readFile(inputFile);
 
-    // Check if file contains required commands
-    const inputContent = await processFile(fullInputPath);
     if (
       !inputContent.includes('\\begin{document}') ||
       !inputContent.includes('\\end{document}')
@@ -247,7 +226,6 @@ export async function runLatexDiffVC(
 
     const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
     const outputPath = path.join(
-      workspacePath,
       path.dirname(inputFile),
       path.basename(diffFileName),
     );
@@ -361,39 +339,22 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
       for (const backupFile of backupFiles) {
         try {
-          const backupUri = vscode.Uri.file(
-            path.join(workspacePath, backupFile),
-          );
-          await vscode.workspace.fs.delete(backupUri);
+          await deleteFile(backupFile);
           debug(CHANNEL, `Removed backup file: ${backupFile}`);
         } catch (err) {
-          if (
-            !(
-              err instanceof vscode.FileSystemError &&
-              err.code === 'FileNotFound'
-            )
-          ) {
-            warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
-          }
+          warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
         }
       }
     }
 
-    // Clean up indent.log relative to workspace
-    const indentLogPath = path.join(fileDir, 'indent.log');
+    // Clean up indent.log
+    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
     try {
-      const logUri = vscode.Uri.file(path.join(workspacePath, indentLogPath));
-      if (await vscode.workspace.fs.stat(logUri)) {
-        await vscode.workspace.fs.delete(logUri);
-        debug(CHANNEL, 'Removed indent.log');
-      }
+      await deleteFile(indentLogPath);
+      debug(CHANNEL, 'Removed indent.log');
     } catch (err) {
       // Ignore error if indent.log doesn't exist
-      if (
-        !(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')
-      ) {
-        warn(CHANNEL, `Error removing indent.log: ${err}`);
-      }
+      warn(CHANNEL, `Error removing indent.log: ${err}`);
     }
 
     info(CHANNEL, `Indented ${filePath}`);

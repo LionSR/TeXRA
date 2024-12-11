@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath, getConfig } from './utils/commonUtils';
+import { getConfig } from './utils/commonUtils';
+import { getWorkspacePath } from './utils/fileUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import {
