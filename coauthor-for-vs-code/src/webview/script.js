@@ -25,13 +25,6 @@ function safeGetElementById(id) {
   return element;
 }
 
-function addEventListenerSafely(elementId, event, handler) {
-  const element = safeGetElementById(elementId);
-  if (element) {
-    element.addEventListener(event, handler);
-  }
-}
-
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(
@@ -271,7 +264,7 @@ function restoreState() {
     const checkboxElements = [
       'autoExtractFigure',
       'autoExtractTikzFigure',
-      'includeTikzReflection',
+      'autoExtractTikzFigureReflect',
       'includeTexCount',
     ];
     checkboxElements.forEach((id) => {
@@ -593,7 +586,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const checkBoxes = [
     'autoExtractFigure',
     'autoExtractTikzFigure',
-    'includeTikzReflection',
+    'autoExtractTikzFigureReflect',
     'includeTexCount',
   ];
   checkBoxes.forEach((id) => {
@@ -674,8 +667,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const autoExtractTikzFigure = document.getElementById(
         'autoExtractTikzFigure',
       ).checked;
-      const includeTikzReflection = document.getElementById(
-        'includeTikzReflection',
+      const autoExtractTikzFigureReflect = document.getElementById(
+        'autoExtractTikzFigureReflect',
       ).checked;
       const includeTexCount =
         document.getElementById('includeTexCount').checked;
@@ -700,7 +693,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // options
         autoExtractFigure: autoExtractFigure,
         autoExtractTikzFigure: autoExtractTikzFigure,
-        includeTikzReflection: includeTikzReflection,
+        autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
         includeTexCount: includeTexCount,
         // output
         outputFiles: outputFiles,
@@ -956,7 +949,7 @@ document.addEventListener('DOMContentLoaded', function () {
     'figureFileSelect',
     'autoExtractFigure',
     'autoExtractTikzFigure',
-    'includeTikzReflection',
+    'autoExtractTikzFigureReflect',
     'includeTexCount',
     'outputNameOverride',
     'baseFileSelect',
@@ -1070,20 +1063,53 @@ document.addEventListener('DOMContentLoaded', function () {
       updateFileSelect('editedFileSelect', []);
     }
   }
+
+  // Add toggle event listeners for multiple file selections
+  const toggleButtons = [
+    'toggleMultipleInputFiles',
+    'toggleMultipleReferenceFiles',
+    'toggleMultipleAuxiliaryFiles',
+    'toggleMultipleFigures',
+  ];
+
+  toggleButtons.forEach((toggleId) => {
+    document.getElementById(toggleId).addEventListener('click', () => {
+      const containerId = toggleId.replace('toggle', '');
+      const containerDivId = `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Container`;
+      toggleMultipleFiles(
+        `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Select`,
+        toggleId,
+      );
+    });
+  });
 });
 
 function toggleMultipleFiles(containerId, toggleIconId) {
   const container = document.getElementById(containerId);
-  const isVisible = container.style.display !== 'none';
-  setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
+  const containerDiv = container.closest('.multiple-files-container');
+  const isVisible = containerDiv.style.display !== 'none';
+
+  // Toggle container visibility
+  containerDiv.style.display = isVisible ? 'none' : 'block';
+
+  // Toggle icon
+  const toggleIcon = document.getElementById(toggleIconId);
+  toggleIcon.textContent = isVisible ? '▼' : '▲';
+
   saveState();
 }
 
 function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
   const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
   const toggleIcon = document.getElementById(toggleId);
-  container.style.display = isVisible ? 'block' : 'none';
-  toggleIcon.textContent = isVisible ? '▲' : '▼';
+
+  if (containerDiv) {
+    containerDiv.style.display = isVisible ? 'block' : 'none';
+  }
+  if (toggleIcon) {
+    toggleIcon.textContent = isVisible ? '▲' : '▼';
+  }
 }
 
 function hideEmptyMultipleFileSelects() {
@@ -1116,7 +1142,7 @@ function saveState() {
     'commitSelect',
     'autoExtractFigure',
     'autoExtractTikzFigure',
-    'includeTikzReflection',
+    'autoExtractTikzFigureReflect',
     'includeTexCount',
     'outputNameOverride',
     'baseFileSelect',
