@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.5",
+  "version": "0.11.6",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -433,6 +433,10 @@
       {
         "command": "coauthor.testPdfToImage",
         "title": "CoAuthor: Test PDF to Image Conversion"
+      },
+      {
+        "command": "coauthor.extractFigurePaths",
+        "title": "CoAuthor: Extract Figure Paths from LaTeX"
       }
     ],
     "viewsContainers": {
