@@ -1,32 +1,45 @@
-import React, { useState } from 'react';
-import { FileText, RefreshCcw, MessageSquare, Settings, Send, FileOutput, ArrowRight } from 'lucide-react';
+import React, { useState } from "react";
+import {
+  FileText,
+  RefreshCcw,
+  MessageSquare,
+  Settings,
+  Send,
+  FileOutput,
+  ArrowRight,
+} from "lucide-react";
 
 const PromptStructureComplete = () => {
-  const [activeSection, setActiveSection] = useState('system_prompt');
-  const [selectedFile, setSelectedFile] = useState('paper.tex');
-  const [selectedAux, setSelectedAux] = useState('commands.tex');
-  const [instruction, setInstruction] = useState('Improve the clarity of Section 2');
+  const [activeSection, setActiveSection] = useState("system_prompt");
+  const [selectedFile, setSelectedFile] = useState("paper.tex");
+  const [selectedAux, setSelectedAux] = useState("commands.tex");
+  const [instruction, setInstruction] = useState(
+    "Improve the clarity of Section 2",
+  );
 
   const promptComponents = {
     system_prompt: {
       title: "System Prompt",
       icon: <Settings className="w-6 h-6 text-blue-600" />,
       description: "Sets core behavior and requirements",
-      preview: "Expert LaTeX system setting: format rules, spacing requirements, reference handling with \\cref{}, quotes, and commands.tex usage",
-      color: "blue"
+      preview:
+        "Expert LaTeX system setting: format rules, spacing requirements, reference handling with \\cref{}, quotes, and commands.tex usage",
+      color: "blue",
     },
     user_prefix: {
       title: "User Prefix",
       icon: <MessageSquare className="w-6 h-6 text-green-600" />,
       description: "Loads documents and context",
-      preview: "Load and process document content: <documents><document name='paper.tex'>{{INPUT_CONTENT}}</document></documents>",
-      color: "green"
+      preview:
+        "Load and process document content: <documents><document name='paper.tex'>{{INPUT_CONTENT}}</document></documents>",
+      color: "green",
     },
     user_request: {
       title: "User Request",
       icon: <Send className="w-6 h-6 text-orange-600" />,
       description: "Specifies task and instructions",
-      preview: "Task definition with <instruction>{{instruction}}</instruction> followed by <scratchpad> for planning and <latex_document> for output",
+      preview:
+        "Task definition with <instruction>{{instruction}}</instruction> followed by <scratchpad> for planning and <latex_document> for output",
       color: "orange",
       output: {
         title: "Initial Edited Document",
@@ -34,14 +47,15 @@ const PromptStructureComplete = () => {
 paper_correct_r0_sonnet++_diff.tex (vs input)
 • Shows added/deleted/modified content
 • Generated using latexdiff
-• PDF preview available`
-      }
+• PDF preview available`,
+      },
     },
     user_reflect: {
       title: "Reflection Phase",
       icon: <RefreshCcw className="w-6 h-6 text-purple-600" />,
       description: "Analysis and refinement",
-      preview: "Critical review with <reflection> analyzing changes and <idea> suggesting improvements, followed by final document output",
+      preview:
+        "Critical review with <reflection> analyzing changes and <idea> suggesting improvements, followed by final document output",
       color: "purple",
       output: {
         title: "Final Edited Document",
@@ -49,21 +63,25 @@ paper_correct_r0_sonnet++_diff.tex (vs input)
 paper_correct_r1_sonnet++_diff.tex (vs r0)
 • Shows incremental improvements
 • Generated using latexdiff-vc
-• Tracks all document versions`
-      }
-    }
+• Tracks all document versions`,
+      },
+    },
   };
 
   return (
     <div className="w-full max-w-6xl mx-auto p-8 bg-white rounded-lg shadow-lg">
-      <h2 className="text-2xl font-bold text-gray-800 mb-8 text-center">Prompt Structure</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-8 text-center">
+        Prompt Structure
+      </h2>
 
       {/* Frontend File Selection UI */}
       <div className="mb-8 grid grid-cols-2 gap-6">
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Input File:</label>
-            <select 
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Input File:
+            </label>
+            <select
               className="w-full p-2 border border-gray-300 rounded-md bg-white"
               value={selectedFile}
               onChange={(e) => setSelectedFile(e.target.value)}
@@ -73,8 +91,10 @@ paper_correct_r1_sonnet++_diff.tex (vs r0)
             </select>
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Auxiliary File:</label>
-            <select 
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Auxiliary File:
+            </label>
+            <select
               className="w-full p-2 border border-gray-300 rounded-md bg-white"
               value={selectedAux}
               onChange={(e) => setSelectedAux(e.target.value)}
@@ -86,7 +106,9 @@ paper_correct_r1_sonnet++_diff.tex (vs r0)
         </div>
 
         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Specific Instructions:</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Specific Instructions:
+          </label>
           <textarea
             className="w-full p-2 border border-gray-300 rounded-md bg-white h-32"
             value={instruction}
@@ -101,9 +123,9 @@ paper_correct_r1_sonnet++_diff.tex (vs r0)
         {Object.entries(promptComponents).map(([key, component]) => (
           <div key={key} className="flex items-stretch space-x-4">
             {/* Prompt Component */}
-            <div 
+            <div
               className={`flex-1 p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer
-                ${activeSection === key ? `border-${component.color}-500 bg-${component.color}-50` : 'border-gray-200'}
+                ${activeSection === key ? `border-${component.color}-500 bg-${component.color}-50` : "border-gray-200"}
               `}
               onClick={() => setActiveSection(key)}
             >
@@ -111,8 +133,12 @@ paper_correct_r1_sonnet++_diff.tex (vs r0)
                 <div className="flex items-center space-x-3">
                   {component.icon}
                   <div>
-                    <h3 className="font-semibold text-gray-800">{component.title}</h3>
-                    <p className="text-sm text-gray-600">{component.description}</p>
+                    <h3 className="font-semibold text-gray-800">
+                      {component.title}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {component.description}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -135,9 +161,13 @@ paper_correct_r1_sonnet++_diff.tex (vs r0)
                 <div className="w-64 p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center space-x-2 mb-2">
                     <FileOutput className="w-5 h-5 text-green-600" />
-                    <h4 className="font-medium text-green-800">{component.output.title}</h4>
+                    <h4 className="font-medium text-green-800">
+                      {component.output.title}
+                    </h4>
                   </div>
-                  <p className="text-sm text-green-700">{component.output.preview}</p>
+                  <p className="text-sm text-green-700">
+                    {component.output.preview}
+                  </p>
                 </div>
               </>
             )}
