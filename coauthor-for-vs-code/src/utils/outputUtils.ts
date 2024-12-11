@@ -26,9 +26,10 @@ export function checkRepetitionDMP(lastResponse: string, newResponse: string): R
   const matchLength = diffs.reduce((sum, [type, text]) =>
     type === 0 ? sum + text.length : sum, 0);
   const ratio = (2.0 * matchLength) / (lastResponse.length + newResponse.length);
+  const massiveRepetitionDetected = longestMatch.length > 1000;
 
   return {
-    massiveRepetitionDetected: longestMatch.length > 1000,
+    massiveRepetitionDetected,
     ratio,
     longestMatch
   };
@@ -42,9 +43,10 @@ export function checkRepetitionDifflib(lastResponse: string, newResponse: string
   const ratio = sequenceMatcher.ratio();
   const match = sequenceMatcher.findLongestMatch(0, lastResponse.length, 0, newResponse.length);
   const longestMatch = lastResponse.slice(match[0], match[0] + match[2]);
+  const massiveRepetitionDetected = longestMatch.length > 1000;
 
   return {
-    massiveRepetitionDetected: longestMatch.length > 1000,
+    massiveRepetitionDetected,
     ratio,
     longestMatch
   };
@@ -59,4 +61,30 @@ export function logMassiveRepetition(result: RepetitionResult): void {
     console.error(`Longest matching substring: ${result.longestMatch}`);
     console.error("Massive repetition detected - stopping process.");
   }
+}
+
+/**
+ * Adds CDATA sections to specified XML tags
+ * @param xmlData The XML content as string
+ * @param tags Array of tag names to wrap with CDATA
+ * @returns Modified XML string with CDATA sections
+ */
+export function addCdataToTags(xmlData: string, tags: string[]): string {
+  return tags.reduce((data, tag) => {
+    const pattern = new RegExp(`(<${tag}>)(.*?)(<\/${tag}>)`, 'gs');
+    return data.replace(pattern, '$1<![CDATA[$2]]>$3');
+  }, xmlData);
+}
+
+/**
+ * Adds CDATA sections to specified XML tags, supporting tags with attributes
+ * @param xmlData The XML content as string
+ * @param tags Array of tag names to wrap with CDATA
+ * @returns Modified XML string with CDATA sections
+ */
+export function addCdataToTagsMultiple(xmlData: string, tags: string[]): string {
+  return tags.reduce((data, tag) => {
+    const pattern = new RegExp(`(<${tag}(?:\\s+[^>]*)?>)(.*?)(<\/${tag}>)`, 'gs');
+    return data.replace(pattern, '$1<![CDATA[$2]]>$3');
+  }, xmlData);
 }
