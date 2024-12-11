@@ -1,8 +1,6 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import { debug, error, initializeLogging } from './logUtils';
-import { getWorkspacePath } from './commonUtils';
+import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
 
 const CHANNEL = 'ImageUtils';
 initializeLogging(CHANNEL);
@@ -20,19 +18,14 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
       return 0;
     }
 
-    // Convert relative path to absolute path
-    const absolutePath = path.isAbsolute(pdfPath)
-      ? pdfPath
-      : path.join(workspacePath, pdfPath);
-
     // Check if file exists
-    if (!fs.existsSync(absolutePath)) {
-      error(CHANNEL, `PDF file not found: ${absolutePath}`);
+    if (!(await fileExists(pdfPath))) {
+      error(CHANNEL, `PDF file not found: ${pdfPath}`);
       return 0;
     }
 
     // Read the PDF file using pdf-lib
-    const pdfBytes = fs.readFileSync(absolutePath);
+    const pdfBytes = readFileBytesSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes, {
       updateMetadata: false,
       ignoreEncryption: true,

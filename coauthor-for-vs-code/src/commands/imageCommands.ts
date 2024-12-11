@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { countPdfPages } from '../utils/imgUtils';
 import { debug, error, initializeLogging } from '../utils/logUtils';
-import { getRelativePath } from '../utils/commonUtils';
+import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'ImageCommands';
 initializeLogging(CHANNEL);
@@ -38,9 +38,7 @@ async function handleCountPdfPages(): Promise<void> {
 
     const pageCount = await countPdfPages(selectedFile);
     if (pageCount > 0) {
-      vscode.window.showInformationMessage(
-        `The PDF has ${pageCount} pages`,
-      );
+      vscode.window.showInformationMessage(`The PDF has ${pageCount} pages`);
     } else {
       vscode.window.showErrorMessage('Could not count pages in the PDF');
     }

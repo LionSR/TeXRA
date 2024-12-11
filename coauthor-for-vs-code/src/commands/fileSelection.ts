@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import {
-  getWorkspacePath,
-  getRelativePath,
   showInfoMessage,
   showErrorMessage,
   getConfig,
 } from '../utils/commonUtils';
+import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import { debug, info, error } from '../utils/logUtils';
 import { listInputFiles } from '../utils';
 

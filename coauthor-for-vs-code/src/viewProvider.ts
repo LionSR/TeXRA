@@ -10,13 +10,9 @@ import {
 } from './utils';
 import * as path from 'path';
 import { workspace } from 'vscode';
-import {
-  getWorkspacePath,
-  getRelativePath,
-  getConfig,
-} from './utils/commonUtils';
+import { getConfig } from './utils/commonUtils';
 import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
-
+import { getWorkspacePath, getRelativePath } from './utils/fileUtils';
 const CHANNEL = 'ViewProvider';
 initializeLogging(CHANNEL);
 

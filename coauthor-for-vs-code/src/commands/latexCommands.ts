@@ -46,9 +46,7 @@ async function handleIndentCurrentTex(): Promise<void> {
       // Instead of trying to modify the document directly,
       // let VS Code handle the file change notification
       await new Promise((resolve) => setTimeout(resolve, 100)); // Small delay to ensure file is written
-      vscode.window.showInformationMessage(
-        'LaTeX file indented successfully',
-      );
+      vscode.window.showInformationMessage('LaTeX file indented successfully');
     } else {
       vscode.window.showErrorMessage('Failed to indent LaTeX file');
     }
