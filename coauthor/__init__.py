@@ -15,7 +15,7 @@ from .file_utils import (
 )
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .logdb_utils import logdb_and_print_statistics, logdb_output_files, logdb_start
-from .openai_utils import best_connection_method
+from .text_connection import best_connection_method
 from .output_utils import (
     add_cdata_to_tags,
     add_cdata_to_tags_multiple,
