@@ -437,6 +437,10 @@
       {
         "command": "coauthor.extractFigurePaths",
         "title": "CoAuthor: Extract Figure Paths from LaTeX"
+      },
+      {
+        "command": "coauthor.extractTikzFigures",
+        "title": "CoAuthor: Extract TikZ Figures from Current File"
       }
     ],
     "viewsContainers": {
