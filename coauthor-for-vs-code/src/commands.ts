@@ -8,6 +8,7 @@ import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './viewProvider';
 import { initializeLogging } from './utils/logUtils';
 import { registerLatexCommands } from './commands/latexCommands';
+import { registerImageCommands } from './commands/imageCommands';
 
 const CHANNEL = 'Commands';
 initializeLogging(CHANNEL);
@@ -26,6 +27,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     merge: registerMergeCommands(context),
     execute: registerExecuteCommand(context),
     latex: registerLatexCommands(context),
+    image: registerImageCommands(context),
   };
 
   // Register webview provider
@@ -47,3 +49,4 @@ export { packCommands } from './commands/packCommands';
 export { mergeCommands } from './commands/mergeCommands';
 export { executeCommand } from './commands/executeCommand';
 export { latexCommands } from './commands/latexCommands';
+export { imageCommands } from './commands/imageCommands';

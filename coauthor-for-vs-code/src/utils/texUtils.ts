@@ -327,7 +327,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     command.push(`"${filePath}"`);
 
     debug(CHANNEL, `Running command: ${command.join(' ')}`);
-    
+
     // Execute latexindent from workspace root
     const { stdout, stderr } = await execAsync(command.join(' '), {
       cwd: workspacePath,
@@ -338,34 +338,41 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Wait a moment for the file system to stabilize
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Setup cleanup patterns relative to workspace
     const fileBaseName = path.basename(filePath, '.tex');
     const fileDir = path.dirname(filePath);
-    
+
     // Get all backup files matching the patterns, relative to workspace
     const backupPatterns = [
       path.join(fileDir, `${fileBaseName}.tex.bak*`),
       path.join(fileDir, `${fileBaseName}.tex.bak`),
       path.join(fileDir, `${fileBaseName}.bak*`),
-      path.join(fileDir, `${fileBaseName}.bak`)
+      path.join(fileDir, `${fileBaseName}.bak`),
     ];
 
     // Clean up backup files from workspace directory
     for (const pattern of backupPatterns) {
-      const backupFiles = glob.sync(pattern, { 
+      const backupFiles = glob.sync(pattern, {
         cwd: workspacePath,
-        absolute: false 
+        absolute: false,
       });
-      
+
       for (const backupFile of backupFiles) {
         try {
-          const backupUri = vscode.Uri.file(path.join(workspacePath, backupFile));
+          const backupUri = vscode.Uri.file(
+            path.join(workspacePath, backupFile),
+          );
           await vscode.workspace.fs.delete(backupUri);
           debug(CHANNEL, `Removed backup file: ${backupFile}`);
         } catch (err) {
-          if (!(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')) {
+          if (
+            !(
+              err instanceof vscode.FileSystemError &&
+              err.code === 'FileNotFound'
+            )
+          ) {
             warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
           }
         }
@@ -382,7 +389,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       }
     } catch (err) {
       // Ignore error if indent.log doesn't exist
-      if (!(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')) {
+      if (
+        !(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')
+      ) {
         warn(CHANNEL, `Error removing indent.log: ${err}`);
       }
     }
