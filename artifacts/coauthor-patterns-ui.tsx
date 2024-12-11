@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
-import { 
-  FileText, RefreshCcw, Wrench, GitMerge, 
-  Scroll, Package, Trash2, GitBranch, 
-  FolderTree, History, FileCode, ArrowRight
-} from 'lucide-react';
+import React, { useState } from "react";
+import {
+  FileText,
+  RefreshCcw,
+  Wrench,
+  GitMerge,
+  Scroll,
+  Package,
+  Trash2,
+  GitBranch,
+  FolderTree,
+  History,
+  FileCode,
+  ArrowRight,
+} from "lucide-react";
 
 const TITLE = "CoAuthor: AI Agent Patterns for Academic Writing";
 
@@ -53,9 +62,7 @@ const PatternCard = ({ icon: Icon, title, description, content }) => (
       <h3 className="font-medium">{title}</h3>
     </div>
     <p className="text-sm text-gray-600 mb-3">{description}</p>
-    <div className="bg-gray-50 rounded-lg p-3">
-      {content}
-    </div>
+    <div className="bg-gray-50 rounded-lg p-3">{content}</div>
   </div>
 );
 
@@ -113,7 +120,9 @@ const CoAuthorPatternsUI = () => {
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-blue-50 rounded">
-                <span className="font-medium text-blue-800">Claude Models:</span>
+                <span className="font-medium text-blue-800">
+                  Claude Models:
+                </span>
                 <div>200K tokens (~150 pages)</div>
               </div>
               <div className="p-3 bg-green-50 rounded">
@@ -123,7 +132,12 @@ const CoAuthorPatternsUI = () => {
             </div>
             <div className="bg-gray-50 p-3 rounded border border-gray-200">
               <div className="font-medium mb-2">Example System Prompt:</div>
-              <pre className="text-xs whitespace-pre-wrap">You are an AI trained to process and enhance lengthy LaTeX documents. You can handle academic papers, including all sections, equations, figures, and references. Focus on maintaining document coherence across long contexts.</pre>
+              <pre className="text-xs whitespace-pre-wrap">
+                You are an AI trained to process and enhance lengthy LaTeX
+                documents. You can handle academic papers, including all
+                sections, equations, figures, and references. Focus on
+                maintaining document coherence across long contexts.
+              </pre>
             </div>
           </div>
         }
@@ -177,7 +191,9 @@ const CoAuthorPatternsUI = () => {
                 <ArrowRight className="w-4 h-4" />
                 <div className="flex-grow">Strategy Generation</div>
               </div>
-              <pre className="text-xs bg-white p-2 rounded">Analyze differences and generate merge plan</pre>
+              <pre className="text-xs bg-white p-2 rounded">
+                Analyze differences and generate merge plan
+              </pre>
             </div>
             <div className="p-3 border rounded bg-indigo-50">
               <div className="flex items-center gap-2 font-medium text-indigo-800 mb-2">
@@ -185,7 +201,9 @@ const CoAuthorPatternsUI = () => {
                 <ArrowRight className="w-4 h-4" />
                 <div className="flex-grow">Implementation</div>
               </div>
-              <pre className="text-xs bg-white p-2 rounded">Execute merge plan systematically</pre>
+              <pre className="text-xs bg-white p-2 rounded">
+                Execute merge plan systematically
+              </pre>
             </div>
           </div>
         }
