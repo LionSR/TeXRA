@@ -344,6 +344,101 @@ function restoreState() {
   hideEmptyMultipleFileSelects();
 }
 
+function toggleMultipleFiles(containerId, toggleIconId) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const isVisible = containerDiv.style.display !== 'none';
+
+  // Toggle container visibility
+  containerDiv.style.display = isVisible ? 'none' : 'block';
+
+  // Toggle icon
+  const toggleIcon = document.getElementById(toggleIconId);
+  toggleIcon.textContent = isVisible ? '▼' : '▲';
+
+  saveState();
+}
+
+function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const toggleIcon = document.getElementById(toggleId);
+
+  if (containerDiv) {
+    containerDiv.style.display = isVisible ? 'block' : 'none';
+  }
+  if (toggleIcon) {
+    toggleIcon.textContent = isVisible ? '▲' : '▼';
+  }
+}
+
+function hideEmptyMultipleFileSelects() {
+  const multipleSelections = [
+    'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
+    'multipleFiguresSelect',
+  ];
+
+  multipleSelections.forEach((id) => {
+    const selectDiv = document.getElementById(id);
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    if (selectDiv.children.length === 0) {
+      setMultipleFileSelectVisibility(id, toggleId, false);
+    }
+  });
+}
+
+function saveState() {
+  const state = {};
+  const elementsToSave = [
+    'modelSelect',
+    'agentSelect',
+    'inputFileSelect',
+    'referenceFileSelect',
+    'auxiliaryFileSelect',
+    'figureFileSelect',
+    'reflectSelect',
+    'commitSelect',
+    'autoExtractFigure',
+    'autoExtractTikzFigure',
+    'autoExtractTikzFigureReflect',
+    'includeTexCount',
+    'outputNameOverride',
+    'baseFileSelect',
+    'editedFileSelect',
+    'instructionInput',
+  ];
+
+  elementsToSave.forEach((id) => {
+    const element = document.getElementById(id);
+    state[id] = element.type === 'checkbox' ? element.checked : element.value;
+  });
+
+  const multipleSelects = [
+    'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
+    'multipleFiguresSelect',
+  ];
+
+  multipleSelects.forEach((id) => {
+    state[`${id}Visible`] =
+      document.getElementById(id).style.display === 'block';
+    state[id] = getSelectedFiles(document.getElementById(id));
+  });
+
+  state.outputFilesContainerVisible =
+    document.getElementById('outputFilesContainer').style.display === 'block';
+  state.outputFiles = getSelectedFiles(
+    document.getElementById('outputFilesList'),
+  );
+  state.outputNameOverrideVisible =
+    document.getElementById('outputNameOverride').style.display !== 'none';
+
+  vscode.setState(state);
+}
+
 window.addEventListener('message', (event) => {
   const message = event.data;
   switch (message.command) {
@@ -1084,97 +1179,3 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
-function toggleMultipleFiles(containerId, toggleIconId) {
-  const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
-  const isVisible = containerDiv.style.display !== 'none';
-
-  // Toggle container visibility
-  containerDiv.style.display = isVisible ? 'none' : 'block';
-
-  // Toggle icon
-  const toggleIcon = document.getElementById(toggleIconId);
-  toggleIcon.textContent = isVisible ? '▼' : '▲';
-
-  saveState();
-}
-
-function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
-  const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
-  const toggleIcon = document.getElementById(toggleId);
-
-  if (containerDiv) {
-    containerDiv.style.display = isVisible ? 'block' : 'none';
-  }
-  if (toggleIcon) {
-    toggleIcon.textContent = isVisible ? '▲' : '▼';
-  }
-}
-
-function hideEmptyMultipleFileSelects() {
-  const multipleSelections = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelections.forEach((id) => {
-    const selectDiv = document.getElementById(id);
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
-    if (selectDiv.children.length === 0) {
-      setMultipleFileSelectVisibility(id, toggleId, false);
-    }
-  });
-}
-
-function saveState() {
-  const state = {};
-  const elementsToSave = [
-    'modelSelect',
-    'agentSelect',
-    'inputFileSelect',
-    'referenceFileSelect',
-    'auxiliaryFileSelect',
-    'figureFileSelect',
-    'reflectSelect',
-    'commitSelect',
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'autoExtractTikzFigureReflect',
-    'includeTexCount',
-    'outputNameOverride',
-    'baseFileSelect',
-    'editedFileSelect',
-    'instructionInput',
-  ];
-
-  elementsToSave.forEach((id) => {
-    const element = document.getElementById(id);
-    state[id] = element.type === 'checkbox' ? element.checked : element.value;
-  });
-
-  const multipleSelects = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelects.forEach((id) => {
-    state[`${id}Visible`] =
-      document.getElementById(id).style.display === 'block';
-    state[id] = getSelectedFiles(document.getElementById(id));
-  });
-
-  state.outputFilesContainerVisible =
-    document.getElementById('outputFilesContainer').style.display === 'block';
-  state.outputFiles = getSelectedFiles(
-    document.getElementById('outputFilesList'),
-  );
-  state.outputNameOverrideVisible =
-    document.getElementById('outputNameOverride').style.display !== 'none';
-
-  vscode.setState(state);
-}
