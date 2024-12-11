@@ -25,13 +25,6 @@ function safeGetElementById(id) {
   return element;
 }
 
-function addEventListenerSafely(elementId, event, handler) {
-  const element = safeGetElementById(elementId);
-  if (element) {
-    element.addEventListener(event, handler);
-  }
-}
-
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(
@@ -110,6 +103,13 @@ function initializeOutputFiles() {
   });
 }
 
+function addOptionToSelect(select, value, text) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
 function toggleOutputFiles() {
   const outputFilesContainer = document.getElementById('outputFilesContainer');
   const toggleIcon = document.getElementById('toggleOutputFiles');
@@ -137,64 +137,34 @@ function toggleOutputNameOverride() {
   saveState();
 }
 
-function handleRecentCommits(message) {
-  const commitButtons = [
-    'packLatexDiffVCButton',
-    'cleanLatexDiffVCButton',
-    'latexDiffVCButton',
-  ];
-  const commitSelect = document.getElementById('commitSelect');
-  commitSelect.innerHTML = '';
+function toggleMultipleFiles(containerId, toggleIconId) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const isVisible = containerDiv.style.display !== 'none';
 
-  if (message.isGitRepo === false) {
-    addOptionToSelect(commitSelect, '', 'Not a Git repository');
-    setElementsDisabled([commitSelect, ...commitButtons], true);
-  } else {
-    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
-    message.commits.forEach((commit) => {
-      const [commitHash, ...commitMessageParts] = commit.split(': ');
-      const commitMessage = commitMessageParts.join(': ');
-      addOptionToSelect(commitSelect, commitHash, commit);
-    });
-    setElementsDisabled([commitSelect, ...commitButtons], false);
+  // Toggle container visibility
+  containerDiv.style.display = isVisible ? 'none' : 'block';
+
+  // Toggle icon
+  const toggleIcon = document.getElementById(toggleIconId);
+  toggleIcon.textContent = isVisible ? '▼' : '▲';
+
+  saveState();
+}
+
+function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const toggleIcon = document.getElementById(toggleId);
+
+  if (containerDiv) {
+    containerDiv.style.display = isVisible ? 'block' : 'none';
+  }
+  if (toggleIcon) {
+    toggleIcon.textContent = isVisible ? '▲' : '▼';
   }
 }
 
-function addOptionToSelect(select, value, text) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = text;
-  select.appendChild(option);
-}
-
-function setElementsDisabled(elements, disabled) {
-  elements.forEach((element) => {
-    if (typeof element === 'string') {
-      document.getElementById(element).disabled = disabled;
-    } else {
-      element.disabled = disabled;
-    }
-  });
-}
-
-window.onload = function () {
-  const dataRequests = [
-    'getTheme',
-    'requestInputFile',
-    'requestReferenceFile',
-    'requestAuxiliaryFile',
-    'requestFigureFile',
-    'requestRecentCommits',
-    'requestBaseFile',
-  ];
-
-  dataRequests.forEach((request) => {
-    vscode.postMessage({ command: request });
-  });
-
-  // Set default state for new folders
-  setDefaultState();
-};
 
 function setDefaultState() {
   // Hide output name override by default
@@ -271,7 +241,7 @@ function restoreState() {
     const checkboxElements = [
       'autoExtractFigure',
       'autoExtractTikzFigure',
-      'includeTikzReflection',
+      'autoExtractTikzFigureReflect',
       'includeTexCount',
     ];
     checkboxElements.forEach((id) => {
@@ -350,6 +320,126 @@ function restoreState() {
   // Hide empty multiple file select boxes
   hideEmptyMultipleFileSelects();
 }
+
+function saveState() {
+  const state = {};
+  const elementsToSave = [
+    'modelSelect',
+    'agentSelect',
+    'inputFileSelect',
+    'referenceFileSelect',
+    'auxiliaryFileSelect',
+    'figureFileSelect',
+    'reflectSelect',
+    'commitSelect',
+    'autoExtractFigure',
+    'autoExtractTikzFigure',
+    'autoExtractTikzFigureReflect',
+    'includeTexCount',
+    'outputNameOverride',
+    'baseFileSelect',
+    'editedFileSelect',
+    'instructionInput',
+  ];
+
+  elementsToSave.forEach((id) => {
+    const element = document.getElementById(id);
+    state[id] = element.type === 'checkbox' ? element.checked : element.value;
+  });
+
+  const multipleSelects = [
+    'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
+    'multipleFiguresSelect',
+  ];
+
+  multipleSelects.forEach((id) => {
+    state[`${id}Visible`] =
+      document.getElementById(id).style.display === 'block';
+    state[id] = getSelectedFiles(document.getElementById(id));
+  });
+
+  state.outputFilesContainerVisible =
+    document.getElementById('outputFilesContainer').style.display === 'block';
+  state.outputFiles = getSelectedFiles(
+    document.getElementById('outputFilesList'),
+  );
+  state.outputNameOverrideVisible =
+    document.getElementById('outputNameOverride').style.display !== 'none';
+
+  vscode.setState(state);
+}
+
+function hideEmptyMultipleFileSelects() {
+  const multipleSelections = [
+    'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
+    'multipleFiguresSelect',
+  ];
+
+  multipleSelections.forEach((id) => {
+    const selectDiv = document.getElementById(id);
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    if (selectDiv.children.length === 0) {
+      setMultipleFileSelectVisibility(id, toggleId, false);
+    }
+  });
+}
+
+function setElementsDisabled(elements, disabled) {
+  elements.forEach((element) => {
+    if (typeof element === 'string') {
+      document.getElementById(element).disabled = disabled;
+    } else {
+      element.disabled = disabled;
+    }
+  });
+}
+
+function handleRecentCommits(message) {
+  const commitButtons = [
+    'packLatexDiffVCButton',
+    'cleanLatexDiffVCButton',
+    'latexDiffVCButton',
+  ];
+  const commitSelect = document.getElementById('commitSelect');
+  commitSelect.innerHTML = '';
+
+  if (message.isGitRepo === false) {
+    addOptionToSelect(commitSelect, '', 'Not a Git repository');
+    setElementsDisabled([commitSelect, ...commitButtons], true);
+  } else {
+    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
+    message.commits.forEach((commit) => {
+      const [commitHash, ...commitMessageParts] = commit.split(': ');
+      const commitMessage = commitMessageParts.join(': ');
+      addOptionToSelect(commitSelect, commitHash, commit);
+    });
+    setElementsDisabled([commitSelect, ...commitButtons], false);
+  }
+}
+
+window.onload = function () {
+  const dataRequests = [
+    'getTheme',
+    'requestInputFile',
+    'requestReferenceFile',
+    'requestAuxiliaryFile',
+    'requestFigureFile',
+    'requestRecentCommits',
+    'requestBaseFile',
+  ];
+
+  dataRequests.forEach((request) => {
+    vscode.postMessage({ command: request });
+  });
+
+  // Set default state for new folders
+  setDefaultState();
+};
+
 
 window.addEventListener('message', (event) => {
   const message = event.data;
@@ -593,7 +683,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const checkBoxes = [
     'autoExtractFigure',
     'autoExtractTikzFigure',
-    'includeTikzReflection',
+    'autoExtractTikzFigureReflect',
     'includeTexCount',
   ];
   checkBoxes.forEach((id) => {
@@ -674,8 +764,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const autoExtractTikzFigure = document.getElementById(
         'autoExtractTikzFigure',
       ).checked;
-      const includeTikzReflection = document.getElementById(
-        'includeTikzReflection',
+      const autoExtractTikzFigureReflect = document.getElementById(
+        'autoExtractTikzFigureReflect',
       ).checked;
       const includeTexCount =
         document.getElementById('includeTexCount').checked;
@@ -700,7 +790,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // options
         autoExtractFigure: autoExtractFigure,
         autoExtractTikzFigure: autoExtractTikzFigure,
-        includeTikzReflection: includeTikzReflection,
+        autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
         includeTexCount: includeTexCount,
         // output
         outputFiles: outputFiles,
@@ -956,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', function () {
     'figureFileSelect',
     'autoExtractFigure',
     'autoExtractTikzFigure',
-    'includeTikzReflection',
+    'autoExtractTikzFigureReflect',
     'includeTexCount',
     'outputNameOverride',
     'baseFileSelect',
@@ -1070,85 +1160,24 @@ document.addEventListener('DOMContentLoaded', function () {
       updateFileSelect('editedFileSelect', []);
     }
   }
+
+  // Add toggle event listeners for multiple file selections
+  const toggleButtons = [
+    'toggleMultipleInputFiles',
+    'toggleMultipleReferenceFiles',
+    'toggleMultipleAuxiliaryFiles',
+    'toggleMultipleFigures',
+  ];
+
+  toggleButtons.forEach((toggleId) => {
+    document.getElementById(toggleId).addEventListener('click', () => {
+      const containerId = toggleId.replace('toggle', '');
+      const containerDivId = `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Container`;
+      toggleMultipleFiles(
+        `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Select`,
+        toggleId,
+      );
+    });
+  });
 });
 
-function toggleMultipleFiles(containerId, toggleIconId) {
-  const container = document.getElementById(containerId);
-  const isVisible = container.style.display !== 'none';
-  setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
-  saveState();
-}
-
-function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
-  const container = document.getElementById(containerId);
-  const toggleIcon = document.getElementById(toggleId);
-  container.style.display = isVisible ? 'block' : 'none';
-  toggleIcon.textContent = isVisible ? '▲' : '▼';
-}
-
-function hideEmptyMultipleFileSelects() {
-  const multipleSelections = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelections.forEach((id) => {
-    const selectDiv = document.getElementById(id);
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
-    if (selectDiv.children.length === 0) {
-      setMultipleFileSelectVisibility(id, toggleId, false);
-    }
-  });
-}
-
-function saveState() {
-  const state = {};
-  const elementsToSave = [
-    'modelSelect',
-    'agentSelect',
-    'inputFileSelect',
-    'referenceFileSelect',
-    'auxiliaryFileSelect',
-    'figureFileSelect',
-    'reflectSelect',
-    'commitSelect',
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'includeTikzReflection',
-    'includeTexCount',
-    'outputNameOverride',
-    'baseFileSelect',
-    'editedFileSelect',
-    'instructionInput',
-  ];
-
-  elementsToSave.forEach((id) => {
-    const element = document.getElementById(id);
-    state[id] = element.type === 'checkbox' ? element.checked : element.value;
-  });
-
-  const multipleSelects = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelects.forEach((id) => {
-    state[`${id}Visible`] =
-      document.getElementById(id).style.display === 'block';
-    state[id] = getSelectedFiles(document.getElementById(id));
-  });
-
-  state.outputFilesContainerVisible =
-    document.getElementById('outputFilesContainer').style.display === 'block';
-  state.outputFiles = getSelectedFiles(
-    document.getElementById('outputFilesList'),
-  );
-  state.outputNameOverrideVisible =
-    document.getElementById('outputNameOverride').style.display !== 'none';
-
-  vscode.setState(state);
-}
