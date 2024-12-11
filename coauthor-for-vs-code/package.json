@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.10.14",
+  "version": "0.11.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -362,6 +362,35 @@
             "scope": "resource"
           }
         }
+      },
+      {
+        "title": "CoAuthor: API Keys",
+        "properties": {
+          "coauthor.apiKeys.openai": {
+            "type": "string",
+            "default": "",
+            "description": "OpenAI API key for GPT models",
+            "scope": "application"
+          },
+          "coauthor.apiKeys.anthropic": {
+            "type": "string",
+            "default": "",
+            "description": "Anthropic API key for Claude models",
+            "scope": "application"
+          },
+          "coauthor.apiKeys.openrouter": {
+            "type": "string",
+            "default": "",
+            "description": "OpenRouter API key for various models",
+            "scope": "application"
+          },
+          "coauthor.apiKeys.google": {
+            "type": "string",
+            "default": "",
+            "description": "Google API key for Gemini models",
+            "scope": "application"
+          }
+        }
       }
     ],
     "commands": [
@@ -469,12 +498,13 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
-    "@types/node": "^18.19.34",
+    "@types/node": "^18.19.68",
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-electron": "^2.4.0",
     "eslint": "^8.57.0",
+    "prettier": "^3.4.2",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",
@@ -499,9 +529,16 @@
   },
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "@types/yaml": "^1.9.6",
     "jest-worker": "^29.7.0",
+    "jimp": "^1.6.0",
+    "nunjucks": "^3.2.4",
+    "openai": "^4.76.1",
+    "pdf2pic": "^3.1.3",
+    "pdfjs-dist": "^4.9.155",
     "terser-webpack-plugin": "^5.3.10",
-    "yaml": "^2.6.0"
+    "winston": "^3.17.0",
+    "yaml": "^2.6.1"
   }
 }
