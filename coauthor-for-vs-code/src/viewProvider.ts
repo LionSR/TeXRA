@@ -17,14 +17,13 @@ import {
 } from './utils/commonUtils';
 import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
 
-const CATEGORY = 'ViewProvider';
-initializeLogging(CATEGORY);
+const CHANNEL = 'ViewProvider';
+initializeLogging(CHANNEL);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
-    const category = 'Webview';
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
@@ -35,12 +34,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
-      debug(CATEGORY, `Received message: ${message.command}`);
+      debug(CHANNEL, `Received message: ${message.command}`);
 
       switch (message.command) {
         case 'showInformationMessage':
           vscode.window.showInformationMessage(message.text);
-          debug(CATEGORY, `Information message: ${message.text}`);
+          debug(CHANNEL, `Information message: ${message.text}`);
           break;
         // VS Code Logic
         case 'getTheme':
@@ -133,13 +132,13 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         case 'selectAuxiliaryFile':
         case 'selectFigureFile':
           const singleFileType = message.command.replace('select', '');
-          debug(CATEGORY, `Selecting ${singleFileType}`);
+          debug(CHANNEL, `Selecting ${singleFileType}`);
 
           const file = await vscode.commands.executeCommand<string>(
             `coauthor.${message.command}`,
           );
           if (file) {
-            debug(CATEGORY, `Selected ${singleFileType}: ${file}`);
+            debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
             webviewView.webview.postMessage({
               command: `${singleFileType.charAt(0).toLowerCase() + singleFileType.slice(1)}Selected`,
               filePath: file,
@@ -479,7 +478,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         .join('\n');
 
       // Replace placeholders in HTML with actual content
-      debug(CATEGORY, 'Generated HTML content for webview');
+      debug(CHANNEL, 'Generated HTML content for webview');
       return htmlContent
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
@@ -488,7 +487,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         .replace('${cspSource}', webview.cspSource);
     } catch (err) {
       error(
-        CATEGORY,
+        CHANNEL,
         `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       return '<html><body>Error loading content</body></html>';
@@ -508,7 +507,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   private async getOpenedFiles(): Promise<string[]> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
-      warn(CATEGORY, 'No workspace path found for opened files');
+      warn(CHANNEL, 'No workspace path found for opened files');
       return [];
     }
 
@@ -521,7 +520,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       )
       .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
 
-    debug(CATEGORY, `Found opened files: ${relevantFiles.join(', ')}`);
+    debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
   }
 
@@ -530,7 +529,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   ): Promise<string[] | null> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
-      error(CATEGORY, 'No workspace folder open');
+      error(CHANNEL, 'No workspace folder open');
       vscode.window.showErrorMessage('No workspace folder open');
       return null;
     }
@@ -556,14 +555,14 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       if (!fileUris || fileUris.length === 0) return null;
 
       const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
-      info(CATEGORY, `Selected output files: ${relativePaths.join(', ')}`);
+      info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
       vscode.window.showInformationMessage(
         `Selected output files: ${relativePaths.join(', ')}`,
       );
       return relativePaths;
     } catch (err) {
       error(
-        CATEGORY,
+        CHANNEL,
         `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
       );
       vscode.window.showErrorMessage(
@@ -575,7 +574,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
   private async updateBaseFileSelect(webviewView: vscode.WebviewView) {
     const baseFiles = await listInputFiles();
-    debug(CATEGORY, `Updating base files: ${baseFiles.join(', ')}`);
+    debug(CHANNEL, `Updating base files: ${baseFiles.join(', ')}`);
     webviewView.webview.postMessage({
       command: 'setBaseFile',
       files: baseFiles,

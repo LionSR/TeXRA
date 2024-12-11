@@ -3,8 +3,8 @@ import * as path from 'path';
 import { getWorkspacePath, getConfig } from './utils/commonUtils';
 import { initializeLogging } from './utils/logUtils';
 
-const CATEGORY = 'Utils';
-initializeLogging(CATEGORY);
+const CHANNEL = 'Utils';
+initializeLogging(CHANNEL);
 
 const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
   'files.ignored.fileExtensions',
