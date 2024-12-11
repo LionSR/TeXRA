@@ -6,6 +6,36 @@ const CHANNEL = 'ImageUtils';
 initializeLogging(CHANNEL);
 
 /**
+ * Convert an image file to a base64 encoded string
+ * @param imagePath Path to the image file (relative to workspace)
+ * @returns Promise<string> Base64 encoded string of the image
+ */
+export async function getBase64EncodedImage(imagePath: string): Promise<string> {
+  try {
+    // Check if file exists
+    if (!(await fileExists(imagePath))) {
+      error(CHANNEL, `Image file not found: ${imagePath}`);
+      throw new Error(`Image file not found: ${imagePath}`);
+    }
+
+    // Read the image file as bytes
+    const imageBytes = readFileBytesSync(imagePath);
+    
+    // Convert to base64
+    const base64String = imageBytes.toString('base64');
+    
+    debug(CHANNEL, `Successfully encoded image: ${imagePath}`);
+    return base64String;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error encoding image to base64: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
  * Get the number of pages in a PDF file using pdf-lib
  * @param pdfPath Path to the PDF file (can be relative to workspace)
  * @returns Promise<number> Number of pages in the PDF

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { debug, info, warn, error } from './logUtils';
+import * as fs from 'fs';
 
 const CHANNEL = 'FileUtils';
 
@@ -279,23 +280,19 @@ export async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function readFileBytes(filePath: string): Promise<Buffer> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    throw new Error('No workspace path found');
-  }
-  const fullPath = path.join(workspacePath, filePath);
-  const uri = vscode.Uri.file(fullPath);
-  const bytes = await vscode.workspace.fs.readFile(uri);
-  return Buffer.from(bytes);
-}
-
 export function readFileBytesSync(filePath: string): Buffer {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    throw new Error('No workspace path found');
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+    const fullPath = path.join(workspacePath, filePath);
+    return fs.readFileSync(fullPath);
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error reading file bytes: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
   }
-  const fullPath = path.join(workspacePath, filePath);
-  // Note: This requires importing fs
-  return require('fs').readFileSync(fullPath);
 }
