@@ -79,7 +79,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           // tools options
           const autoExtractFigure_val = message.autoExtractFigure;
           const autoExtractTikzFigure_val = message.autoExtractTikzFigure;
-          const includeTikzReflection_val = message.includeTikzReflection;
+          const autoExtractTikzFigureReflect_val =
+            message.autoExtractTikzFigureReflect;
           const includeTexCount_val = message.includeTexCount;
           // output options
           const outputFiles_val = message.outputFiles;
@@ -106,7 +107,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
               // tools options
               autoExtractFigure_val,
               autoExtractTikzFigure_val,
-              includeTikzReflection_val,
+              autoExtractTikzFigureReflect_val,
               includeTexCount_val,
               // output options
               outputFiles_val,
