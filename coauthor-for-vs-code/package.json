@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -396,67 +396,27 @@
     "commands": [
       {
         "command": "coauthor.cleanOutput",
-        "title": "Clean Output"
+        "title": "CoAuthor: Clean Output"
       },
       {
         "command": "coauthor.cleanBuild",
-        "title": "Clean All"
+        "title": "CoAuthor: Clean Build"
       },
       {
         "command": "coauthor.indentTex",
-        "title": "Indent TeX"
-      },
-      {
-        "command": "coauthor.packSingle",
-        "title": "Pack Single"
-      },
-      {
-        "command": "coauthor.cleanSingle",
-        "title": "Clean Single"
-      },
-      {
-        "command": "coauthor.latexDiff",
-        "title": "LaTeX Diff"
-      },
-      {
-        "command": "coauthor.latexDiffVC",
-        "title": "LaTeX Diff VC"
+        "title": "CoAuthor: Indent TeX"
       },
       {
         "command": "coauthor.getRecentCommits",
-        "title": "Get Recent Commits"
+        "title": "CoAuthor: Get Recent Commits"
       },
       {
         "command": "coauthor.refreshCommits",
-        "title": "Refresh Commits"
+        "title": "CoAuthor: Refresh Commits"
       },
       {
-        "command": "coauthor.selectMultipleInputFiles",
-        "title": "Select Multiple Input Files"
-      },
-      {
-        "command": "coauthor.selectInputFile",
-        "title": "Select Input File"
-      },
-      {
-        "command": "coauthor.selectReferenceFile",
-        "title": "Select Reference File"
-      },
-      {
-        "command": "coauthor.selectAuxFile",
-        "title": "Select Auxiliary File"
-      },
-      {
-        "command": "coauthor.selectFigureFile",
-        "title": "Select Figure File"
-      },
-      {
-        "command": "coauthor.execute",
-        "title": "Execute Agent"
-      },
-      {
-        "command": "coauthor.merge",
-        "title": "CoAuthor: Merge Files"
+        "command": "coauthor.indentCurrentTex",
+        "title": "CoAuthor: Indent Current TeX"
       }
     ],
     "viewsContainers": {
@@ -530,7 +490,9 @@
   "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@types/glob": "^8.1.0",
     "@types/yaml": "^1.9.6",
+    "glob": "^8.1.0",
     "jest-worker": "^29.7.0",
     "jimp": "^1.6.0",
     "nunjucks": "^3.2.4",

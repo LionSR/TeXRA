@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import * as cp from 'child_process';
 import { getWorkspacePath } from './commonUtils';
 import { debug, info, warn, error, initializeLogging } from './logUtils';
+import * as glob from 'glob';
 
 const execAsync = promisify(cp.exec);
 
@@ -305,4 +306,91 @@ export async function runLatexDiffVCMultiple(
   }
 
   info(CHANNEL, 'All LaTeX diff operations completed');
+}
+
+export async function runLatexIndent(filePath: string): Promise<boolean> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Get latexindent config from settings
+    const config = vscode.workspace.getConfiguration('coauthor.latex');
+    const latexindentConfig = config.get<string>('latexindentConfig');
+
+    // Build command array - note we're using -w (overwrite) and -s (silent)
+    const command = ['latexindent', '-w', '-s'];
+    if (latexindentConfig) {
+      command.push(`-l=${latexindentConfig}`);
+    }
+    command.push(`"${filePath}"`);
+
+    debug(CHANNEL, `Running command: ${command.join(' ')}`);
+    
+    // Execute latexindent from workspace root
+    const { stdout, stderr } = await execAsync(command.join(' '), {
+      cwd: workspacePath,
+    });
+
+    if (stderr && stderr.trim()) {
+      warn(CHANNEL, `Latexindent stderr: ${stderr}`);
+    }
+
+    // Setup cleanup patterns relative to workspace
+    const fileBaseName = path.basename(filePath, '.tex');
+    const fileDir = path.dirname(filePath);
+    
+    // Get all backup files matching the patterns, relative to workspace
+    const backupPatterns = [
+      path.join(fileDir, `${fileBaseName}.tex.bak*`),
+      path.join(fileDir, `${fileBaseName}.tex.bak`),
+      path.join(fileDir, `${fileBaseName}.bak*`),
+      path.join(fileDir, `${fileBaseName}.bak`)
+    ];
+
+    // Clean up backup files from workspace directory
+    for (const pattern of backupPatterns) {
+      const backupFiles = glob.sync(pattern, { 
+        cwd: workspacePath,
+        absolute: false 
+      });
+      
+      for (const backupFile of backupFiles) {
+        try {
+          const backupUri = vscode.Uri.file(path.join(workspacePath, backupFile));
+          await vscode.workspace.fs.delete(backupUri);
+          debug(CHANNEL, `Removed backup file: ${backupFile}`);
+        } catch (err) {
+          if (!(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')) {
+            warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
+          }
+        }
+      }
+    }
+
+    // Clean up indent.log relative to workspace
+    const indentLogPath = path.join(fileDir, 'indent.log');
+    try {
+      const logUri = vscode.Uri.file(path.join(workspacePath, indentLogPath));
+      if (await vscode.workspace.fs.stat(logUri)) {
+        await vscode.workspace.fs.delete(logUri);
+        debug(CHANNEL, 'Removed indent.log');
+      }
+    } catch (err) {
+      // Ignore error if indent.log doesn't exist
+      if (!(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')) {
+        warn(CHANNEL, `Error removing indent.log: ${err}`);
+      }
+    }
+
+    info(CHANNEL, `Indented ${filePath}`);
+    return true;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
 }
