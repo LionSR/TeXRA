@@ -4,7 +4,7 @@ import io
 import fitz
 
 from PIL import Image
-from typing import List
+from typing import List, Optional
 
 from .logging_utils import logger
 
@@ -83,14 +83,15 @@ def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (
     return base64_encoded_pngs
 
 
-def process_pdf_input(pdf_path: str, is_openai_compatible: bool = False, **kwargs):
+def process_pdf_input(pdf_path: str, max_pages: Optional[int] = None, quality: Optional[int] = None, max_size: Optional[tuple] = None):
     """
     Process a PDF file and return base64 encoded PNG image(s).
 
     Args:
         pdf_path (str): Path to the PDF file.
-        is_openai_compatible (bool): Whether to use OpenAI Compatible API.
-        **kwargs: Additional arguments to pass to the conversion functions.
+        max_pages (Optional[int]): Maximum number of pages to convert. If None, converts all pages.
+        quality (Optional[int]): Quality of the output PNG images. If None, uses default 300.
+        max_size (Optional[tuple]): Maximum size of the output images. If None, uses default (1024, 1024).
 
     Returns:
         Union[str, List[str], None]: Base64 encoded PNG image(s) or None if the file is empty or non-existent.
@@ -100,11 +101,13 @@ def process_pdf_input(pdf_path: str, is_openai_compatible: bool = False, **kwarg
         page_count = doc.page_count
         doc.close()
 
+        quality = 300 if quality is None else quality
+        max_size = (1024, 1024) if max_size is None else max_size
+
         if page_count == 1:
-            return single_page_pdf_to_png(pdf_path, **kwargs)
+            return single_page_pdf_to_png(pdf_path, quality=quality, max_size=max_size)
         else:
-            max_pages = kwargs.get("max_pages", 100 if not is_openai_compatible else float("inf"))
-            return multi_page_pdf_to_png(pdf_path, max_pages=max_pages, **kwargs)
+            return multi_page_pdf_to_png(pdf_path, quality=quality, max_size=max_size, max_pages=max_pages)
     except (fitz.FileDataError, fitz.EmptyFileError):
         logger.warning(f"The PDF file '{pdf_path}' is empty or non-existent. Skipping this file.")
         return None
