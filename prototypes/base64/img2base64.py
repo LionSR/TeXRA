@@ -20,11 +20,11 @@ def get_base64_encoded_image(image_path: str) -> str:
 
 def truncate_base64(base64_string: str, max_length: int = 100) -> str:
     """Truncate a base64 string to specified length and add ellipsis.
-    
+
     Args:
         base64_string (str): Base64 encoded string to truncate
         max_length (int): Maximum length of truncated string
-        
+
     Returns:
         str: Truncated base64 string with ellipsis
     """
