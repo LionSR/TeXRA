@@ -57,7 +57,7 @@ def single_page_pdf_to_png(pdf_path: str, page_num: int = 0, quality: int = 300,
     return base64_encoded
 
 
-def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (1024, 1024), max_pages: int = 20) -> List[str]:
+def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (1024, 1024), max_pages: int = 100) -> List[str]:
     """
     Convert multiple pages of a PDF to PNG images.
 
