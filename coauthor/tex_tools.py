@@ -30,14 +30,8 @@ def run_external_command(
         return text
 
     try:
-        kwargs = {
-            "text": True,
-            "capture_output": capture_output,
-            "encoding": encoding,
-        }
-
+        result = subprocess.run(command, text=True, capture_output=capture_output, encoding=encoding)
         if output_file:
-            result = subprocess.run(command, **kwargs)
             if result.returncode != 0:
                 logger.error(f"\nCommand failed with return code {result.returncode}")
                 return False, None, result.stderr.strip()
@@ -45,11 +39,10 @@ def run_external_command(
             logger.info("\nCommand completed.\nOutput saved to " + output_file)
             return True, None, None
         else:
-            result = subprocess.run(command, **kwargs)
             if result.returncode == 0:
                 return True, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
             else:
-                return False, truncate_output(result.stdout.strip()), result.stderr.strip()
+                return False, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
     except subprocess.CalledProcessError as e:
         error_message = "Error running command:\n"
         if hasattr(e, "stderr") and e.stderr:
