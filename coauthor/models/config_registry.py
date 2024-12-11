@@ -4,7 +4,7 @@ from typing import Dict
 
 from .model_base import ModelProvider, ModelConfig
 from .anthropic import AnthropicModelConfig
-from .openai import OpenAICompatibleModelConfig
+from .openai import OpenAIModelConfig, OpenAICompatibleModelConfig
 
 
 MODEL_CONFIGS: Dict[str, ModelConfig] = {
@@ -80,7 +80,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_assistant_prefill=True,
     ),
     # OpenAI models
-    "gpto1": OpenAICompatibleModelConfig(
+    "gpto1": OpenAIModelConfig(
         name="gpto1",
         full_name="o1-preview-2024-09-12",
         provider=ModelProvider.OPENAI,
@@ -91,7 +91,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_vision=False,
         supports_reasoning=True,
     ),
-    "gpto1-": OpenAICompatibleModelConfig(
+    "gpto1-": OpenAIModelConfig(
         name="gpto1-",
         full_name="o1-mini-2024-09-12",
         provider=ModelProvider.OPENAI,
@@ -102,7 +102,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         supports_vision=False,
         supports_reasoning=True,
     ),
-    "gpt4o": OpenAICompatibleModelConfig(
+    "gpt4o": OpenAIModelConfig(
         name="gpt4o",
         # full_name="gpt-4o-2024-08-06",
         # gpt-4o,
@@ -114,7 +114,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=10.0,
         supports_predictive_output=True,
     ),
-    "gpt4t": OpenAICompatibleModelConfig(
+    "gpt4t": OpenAIModelConfig(
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
         provider=ModelProvider.OPENAI,
@@ -123,7 +123,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=10.0,
         output_price=30.0,
     ),
-    "gpt4o-": OpenAICompatibleModelConfig(
+    "gpt4o-": OpenAIModelConfig(
         name="gpt4o-",
         full_name="gpt-4o-mini-2024-07-18",
         provider=ModelProvider.OPENAI,
@@ -133,7 +133,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         output_price=0.6,
         supports_predictive_output=True,
     ),
-    "gpt4ol": OpenAICompatibleModelConfig(
+    "gpt4ol": OpenAIModelConfig(
         name="gpt4ol",
         full_name="chatgpt-4o-latest",
         provider=ModelProvider.OPENAI,
@@ -141,24 +141,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=5.0,
         output_price=15.0,
-    ),
-    # Google Gemini models
-    "gemini1p+": OpenAICompatibleModelConfig(
-        name="gemini1p+",
-        full_name="gemini-1.5-pro-latest",
-        provider=ModelProvider.GOOGLE,
-        max_tokens=8192,
-        input_price=1.25,
-        output_price=5.0,
-    ),
-    "gemini1f+": OpenAICompatibleModelConfig(
-        name="gemini1f+",
-        full_name="gemini-1.5-fresh-latest",
-        provider=ModelProvider.GOOGLE,
-        max_tokens=8192,
-        context_window=1048576,
-        input_price=0.075,
-        output_price=0.3,
     ),
     "geminiexp": OpenAICompatibleModelConfig(
         name="geminiexp",
@@ -168,6 +150,36 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=2097152,
         input_price=1.25,
         output_price=5.0,
+    ),
+    # Google Gemini models
+    "gemini2f": OpenAICompatibleModelConfig(
+        name="gemini2f",
+        full_name="gemini-2.0-flash-exp",
+        provider=ModelProvider.GOOGLE,
+        max_tokens=8192,
+        context_window=1048576,
+        input_price=0.075,
+        output_price=0.3,
+        supports_prompt_caching=False,
+    ),
+    "gemini1p+": OpenAICompatibleModelConfig(
+        name="gemini1p+",
+        full_name="gemini-1.5-pro-latest",
+        provider=ModelProvider.GOOGLE,
+        max_tokens=8192,
+        input_price=1.25,
+        output_price=5.0,
+        supports_prompt_caching=True,
+    ),
+    "gemini1f+": OpenAICompatibleModelConfig(
+        name="gemini1f+",
+        full_name="gemini-1.5-fresh-latest",
+        provider=ModelProvider.GOOGLE,
+        max_tokens=8192,
+        context_window=1048576,
+        input_price=0.075,
+        output_price=0.3,
+        supports_prompt_caching=True,
     ),
     # OpenRouter models
     "gpt4oOR": OpenAICompatibleModelConfig(
@@ -206,7 +218,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         input_price=3.0,
         output_price=3.0,
     ),
-    "qwq-32b": OpenAICompatibleModelConfig(
+    "qwq-32bOR": OpenAICompatibleModelConfig(
         name="qwq-32b",
         full_name="qwen/qwq-32b-preview",
         provider=ModelProvider.OPENROUTER,
