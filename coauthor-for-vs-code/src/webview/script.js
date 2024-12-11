@@ -103,6 +103,13 @@ function initializeOutputFiles() {
   });
 }
 
+function addOptionToSelect(select, value, text) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
 function toggleOutputFiles() {
   const outputFilesContainer = document.getElementById('outputFilesContainer');
   const toggleIcon = document.getElementById('toggleOutputFiles');
@@ -130,64 +137,34 @@ function toggleOutputNameOverride() {
   saveState();
 }
 
-function handleRecentCommits(message) {
-  const commitButtons = [
-    'packLatexDiffVCButton',
-    'cleanLatexDiffVCButton',
-    'latexDiffVCButton',
-  ];
-  const commitSelect = document.getElementById('commitSelect');
-  commitSelect.innerHTML = '';
+function toggleMultipleFiles(containerId, toggleIconId) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const isVisible = containerDiv.style.display !== 'none';
 
-  if (message.isGitRepo === false) {
-    addOptionToSelect(commitSelect, '', 'Not a Git repository');
-    setElementsDisabled([commitSelect, ...commitButtons], true);
-  } else {
-    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
-    message.commits.forEach((commit) => {
-      const [commitHash, ...commitMessageParts] = commit.split(': ');
-      const commitMessage = commitMessageParts.join(': ');
-      addOptionToSelect(commitSelect, commitHash, commit);
-    });
-    setElementsDisabled([commitSelect, ...commitButtons], false);
+  // Toggle container visibility
+  containerDiv.style.display = isVisible ? 'none' : 'block';
+
+  // Toggle icon
+  const toggleIcon = document.getElementById(toggleIconId);
+  toggleIcon.textContent = isVisible ? '▼' : '▲';
+
+  saveState();
+}
+
+function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
+  const container = document.getElementById(containerId);
+  const containerDiv = container.closest('.multiple-files-container');
+  const toggleIcon = document.getElementById(toggleId);
+
+  if (containerDiv) {
+    containerDiv.style.display = isVisible ? 'block' : 'none';
+  }
+  if (toggleIcon) {
+    toggleIcon.textContent = isVisible ? '▲' : '▼';
   }
 }
 
-function addOptionToSelect(select, value, text) {
-  const option = document.createElement('option');
-  option.value = value;
-  option.textContent = text;
-  select.appendChild(option);
-}
-
-function setElementsDisabled(elements, disabled) {
-  elements.forEach((element) => {
-    if (typeof element === 'string') {
-      document.getElementById(element).disabled = disabled;
-    } else {
-      element.disabled = disabled;
-    }
-  });
-}
-
-window.onload = function () {
-  const dataRequests = [
-    'getTheme',
-    'requestInputFile',
-    'requestReferenceFile',
-    'requestAuxiliaryFile',
-    'requestFigureFile',
-    'requestRecentCommits',
-    'requestBaseFile',
-  ];
-
-  dataRequests.forEach((request) => {
-    vscode.postMessage({ command: request });
-  });
-
-  // Set default state for new folders
-  setDefaultState();
-};
 
 function setDefaultState() {
   // Hide output name override by default
@@ -344,51 +321,6 @@ function restoreState() {
   hideEmptyMultipleFileSelects();
 }
 
-function toggleMultipleFiles(containerId, toggleIconId) {
-  const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
-  const isVisible = containerDiv.style.display !== 'none';
-
-  // Toggle container visibility
-  containerDiv.style.display = isVisible ? 'none' : 'block';
-
-  // Toggle icon
-  const toggleIcon = document.getElementById(toggleIconId);
-  toggleIcon.textContent = isVisible ? '▼' : '▲';
-
-  saveState();
-}
-
-function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
-  const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
-  const toggleIcon = document.getElementById(toggleId);
-
-  if (containerDiv) {
-    containerDiv.style.display = isVisible ? 'block' : 'none';
-  }
-  if (toggleIcon) {
-    toggleIcon.textContent = isVisible ? '▲' : '▼';
-  }
-}
-
-function hideEmptyMultipleFileSelects() {
-  const multipleSelections = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelections.forEach((id) => {
-    const selectDiv = document.getElementById(id);
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
-    if (selectDiv.children.length === 0) {
-      setMultipleFileSelectVisibility(id, toggleId, false);
-    }
-  });
-}
-
 function saveState() {
   const state = {};
   const elementsToSave = [
@@ -438,6 +370,76 @@ function saveState() {
 
   vscode.setState(state);
 }
+
+function hideEmptyMultipleFileSelects() {
+  const multipleSelections = [
+    'multipleInputFilesSelect',
+    'multipleReferenceFilesSelect',
+    'multipleAuxiliaryFilesSelect',
+    'multipleFiguresSelect',
+  ];
+
+  multipleSelections.forEach((id) => {
+    const selectDiv = document.getElementById(id);
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    if (selectDiv.children.length === 0) {
+      setMultipleFileSelectVisibility(id, toggleId, false);
+    }
+  });
+}
+
+function setElementsDisabled(elements, disabled) {
+  elements.forEach((element) => {
+    if (typeof element === 'string') {
+      document.getElementById(element).disabled = disabled;
+    } else {
+      element.disabled = disabled;
+    }
+  });
+}
+
+function handleRecentCommits(message) {
+  const commitButtons = [
+    'packLatexDiffVCButton',
+    'cleanLatexDiffVCButton',
+    'latexDiffVCButton',
+  ];
+  const commitSelect = document.getElementById('commitSelect');
+  commitSelect.innerHTML = '';
+
+  if (message.isGitRepo === false) {
+    addOptionToSelect(commitSelect, '', 'Not a Git repository');
+    setElementsDisabled([commitSelect, ...commitButtons], true);
+  } else {
+    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
+    message.commits.forEach((commit) => {
+      const [commitHash, ...commitMessageParts] = commit.split(': ');
+      const commitMessage = commitMessageParts.join(': ');
+      addOptionToSelect(commitSelect, commitHash, commit);
+    });
+    setElementsDisabled([commitSelect, ...commitButtons], false);
+  }
+}
+
+window.onload = function () {
+  const dataRequests = [
+    'getTheme',
+    'requestInputFile',
+    'requestReferenceFile',
+    'requestAuxiliaryFile',
+    'requestFigureFile',
+    'requestRecentCommits',
+    'requestBaseFile',
+  ];
+
+  dataRequests.forEach((request) => {
+    vscode.postMessage({ command: request });
+  });
+
+  // Set default state for new folders
+  setDefaultState();
+};
+
 
 window.addEventListener('message', (event) => {
   const message = event.data;
