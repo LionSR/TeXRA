@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import * as cp from 'child_process';
 import { getWorkspacePath, readFile, writeFile, deleteFile } from './fileUtils';
 import { debug, info, warn, error, initializeLogging } from './logUtils';
-import * as glob from 'glob';
+import { sync as globSync } from 'glob';
 
 const execAsync = promisify(cp.exec);
 
@@ -332,9 +332,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
     // Clean up backup files from workspace directory
     for (const pattern of backupPatterns) {
-      const backupFiles = glob.sync(pattern, {
+      const backupFiles = globSync(pattern, {
         cwd: workspacePath,
-        absolute: false,
+        absolute: false
       });
 
       for (const backupFile of backupFiles) {
