@@ -9,7 +9,7 @@ from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex
 from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
 from .logdb_utils import logdb_start, logdb_output_files
-from .model_config import MODEL_CONFIGS
+from .models import MODEL_CONFIGS
 from .text_connection import best_connection_method
 from .logging_utils import logger
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
