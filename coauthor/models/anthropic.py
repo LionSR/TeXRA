@@ -2,7 +2,6 @@
 
 import os
 import re
-import base64
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -15,6 +14,7 @@ from ..logging_utils import logger
 from ..output_utils import filter_monologue_tags
 from ..replacement_utils import apply_replacement_regex, get_replacements_by_category
 from ..state import State
+from ..img_utils import get_base64_encoded_image
 
 
 @dataclass
@@ -182,15 +182,13 @@ class AnthropicModelConfig(ModelConfig):
 
             # For PDFs, use native PDF support if available and multi-page
             if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
-                with open(figure_file, "rb") as f:
-                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                img_data = get_base64_encoded_image(figure_file)
                 media_type = "application/pdf"
             else:
                 img_data = process_pdf_input(figure_file)
                 media_type = "image/png"
         else:
-            with open(figure_file, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
+            img_data = get_base64_encoded_image(figure_file)
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 
