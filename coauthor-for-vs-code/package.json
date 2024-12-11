@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -425,6 +425,14 @@
       {
         "command": "coauthor.encodeImageToBase64",
         "title": "CoAuthor: Encode Image to Base64"
+      },
+      {
+        "command": "coauthor.convertPdfToImages",
+        "title": "CoAuthor: Convert PDF to Images"
+      },
+      {
+        "command": "coauthor.testPdfToImage",
+        "title": "CoAuthor: Test PDF to Image Conversion"
       }
     ],
     "viewsContainers": {
@@ -473,6 +481,7 @@
     "@vscode/test-electron": "^2.4.0",
     "eslint": "^8.57.0",
     "prettier": "^3.4.2",
+    "spawn-sync": "^2.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",
@@ -505,10 +514,10 @@
     "jimp": "^1.6.0",
     "nunjucks": "^3.2.4",
     "openai": "^4.76.1",
+    "pdf-lib": "^1.17.1",
     "pdf2pic": "^3.1.3",
     "terser-webpack-plugin": "^5.3.10",
     "winston": "^3.17.0",
-    "yaml": "^2.6.1",
-    "pdf-lib": "^1.17.1"
+    "yaml": "^2.6.1"
   }
 }
