@@ -17,7 +17,7 @@ from .replacement_utils import get_all_replacements, apply_replacements, get_rep
 from .state import State
 from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
 from .output_utils import check_for_massive_repetition
-
+from .file_utils import write_file
 
 class BaseReflectChainAgent(ABC):
     """
@@ -209,13 +209,8 @@ class BaseReflectChainAgent(ABC):
 
     def _get_first_k_from_document(self) -> Optional[str]:
         K = self.agent_config.K
-        try:
-            with open(self.agent_config.input_file, encoding="utf-8") as f:
-                content = f.read()
-                return content[:K].strip()  # Return only the first k characters, stripped
-        except OSError as e:
-            logger.error(f"Error reading file {self.agent_config.input_file}: {e}")
-            return None
+        content = read_file(self.agent_config.input_file)
+        return content[:K].strip()  # Return only the first k characters, stripped
 
     def _handle_latexdiff(self, round: int) -> None:
         logger.info(f"Running latexdiff for {self.agent_config.agent} round {round}")
@@ -245,8 +240,7 @@ class BaseReflectChainAgent(ABC):
             new_content = re.sub(r"\\input{([^}]+)}", replace_input, content)
 
             if new_content != content:
-                with open(output_file, "w") as f:
-                    f.write(new_content)
+                write_file(output_file, new_content)
                 logger.debug(f"Updated input commands in {output_file}")
 
     def _process_response_cycle(
