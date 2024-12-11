@@ -95,16 +95,6 @@ def get_tex_count(file_paths: list[str]) -> str | None:
     return None
 
 
-def handle_tex_count(kwargs: dict, input_files: list[str]) -> str | None:
-    if kwargs.get("include_tex_count"):
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        tex_count_stats = get_tex_count(input_files)
-        if tex_count_stats:
-            instruction = kwargs.get("instruction", "")
-            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
-
-
 def process_tikzpicture_endings(file_path: str) -> None:
     """
     Process the file to fix tikzpicture endings with proper indentation.
