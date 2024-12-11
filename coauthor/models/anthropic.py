@@ -60,10 +60,10 @@ class AnthropicModelConfig(ModelConfig):
             image_content = self.create_image_message(figure_files)
             messages[-1]["content"].extend(image_content)
 
+        content = {"type": "text", "text": user_request}
         if self.supports_prompt_caching:
-            messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-        else:
-            messages[-1]["content"].append({"type": "text", "text": user_request})
+            content["cache_control"] = {"type": "ephemeral"}
+        messages[-1]["content"].append(content)
 
         return messages
 
