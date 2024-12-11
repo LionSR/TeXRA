@@ -42,6 +42,40 @@ export async function writeFile(
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
 
+export async function appendFile(
+  filePath: string,
+  content: string,
+): Promise<void> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+    const fullPath = path.join(workspacePath, filePath);
+    const uri = vscode.Uri.file(fullPath);
+    
+    // Read existing content
+    let existingContent = '';
+    try {
+      const fileContent = await vscode.workspace.fs.readFile(uri);
+      existingContent = Buffer.from(fileContent).toString('utf-8');
+    } catch (err) {
+      // File might not exist yet, which is fine
+    }
+    
+    // Append new content
+    const newContent = existingContent + content;
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(newContent, 'utf-8'));
+    debug(CHANNEL, `Successfully appended to file: ${filePath}`);
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error appending to file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
 export async function deleteFile(filePath: string): Promise<void> {
   try {
     const workspacePath = getWorkspacePath();
@@ -295,4 +329,15 @@ export function readFileBytesSync(filePath: string): Buffer {
     );
     throw err;
   }
+}
+
+
+
+export function extractTextFromTags(
+  inputContent: string,
+  documentTag: string,
+): string {
+  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
+  const match = inputContent.match(regex);
+  return match ? match[1] : inputContent;
 }
