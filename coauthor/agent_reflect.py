@@ -34,7 +34,7 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
-    def __init__(self, config: AgentConfig, agent_path: str):
+    def __init__(self, config: AgentConfig, agent_path: str) -> None:
         super().__init__(config, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
@@ -84,7 +84,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
 
 class DirectWrite(BaseReflectChainAgent):
-    def __init__(self, config: AgentConfig, agent_path: str):
+    def __init__(self, config: AgentConfig, agent_path: str) -> None:
         super().__init__(config, agent_path)
 
     def get_output_file(self, round: int = 0) -> str:
