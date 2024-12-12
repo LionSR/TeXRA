@@ -104,7 +104,7 @@ class OpenAIModelConfig(ModelConfig):
             )
         return content
 
-    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
         """
         Extract statistics from OpenAI response object.
         finish_reason: The reason the model stopped generating tokens.

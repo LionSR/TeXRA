@@ -3,7 +3,7 @@ import re
 import time
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex
@@ -37,6 +37,8 @@ class BaseReflectChainAgent(ABC):
         self.base_files = []
 
         # Load settings and prompts
+        self.settings_dict: Dict[str, Any]
+        self.prompt_dict: Dict[str, str]
         self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
         self.agent_settings = AgentSettings.from_dict(self.settings_dict)
         self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
@@ -49,9 +51,9 @@ class BaseReflectChainAgent(ABC):
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
 
-        all_input_files = [self.agent_config.input_file] + self.agent_config.input_files
-        all_reference_files = [self.agent_config.reference_file] + self.agent_config.reference_files
-        all_auxiliary_files = [self.agent_config.auxiliary_file] + self.agent_config.auxiliary_files
+        all_input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
+        all_reference_files = [self.agent_config.reference_file] + (self.agent_config.reference_files or [])
+        all_auxiliary_files = [self.agent_config.auxiliary_file] + (self.agent_config.auxiliary_files or [])
 
         # Start with basic model and instruction vars
         user_vars = {
@@ -336,7 +338,6 @@ class BaseReflectChainAgent(ABC):
         user_vars: Dict[str, str],
         state: State,
         messages: List[Dict[str, Any]],
-        figure_files: Optional[List[str]] = None,
         round: int = 0,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -354,7 +355,7 @@ class BaseReflectChainAgent(ABC):
         messages = self.model_config.initialize_messages(
             user_prefix,
             user_request,
-            figure_files=self.agent_config.figure_files,
+            figure_files=self.figure_files,
             system_prompt=system_prompt,
         )
 
@@ -393,7 +394,6 @@ class BaseReflectChainAgent(ABC):
         user_vars: Dict[str, str],
         state: State,
         messages: List[Dict[str, Any]],
-        figure_files: Optional[List[str]] = None,
         round: int = 1,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
@@ -406,7 +406,7 @@ class BaseReflectChainAgent(ABC):
         if tex_count_stats:
             user_message = f"{tex_count_stats}{user_message}"
 
-        messages = self.model_config.create_reflection_message(messages, user_message, figure_files)
+        messages = self.model_config.create_reflection_message(messages, user_message, self.reflection_figure_files)
 
         accumulated_output = None
         prefill = self.agent_settings.prefills[round] if len(self.agent_settings.prefills) > round else self.agent_settings.prefills[0]
@@ -446,23 +446,22 @@ class BaseReflectChainAgent(ABC):
             self.first_k_tex_document = self._get_first_k_from_document()
 
         # Merge figure_file into figure_files if it exists
+        self.figure_files = self.agent_config.figure_files.copy() if self.agent_config.figure_files else []
         if self.agent_config.figure_file:
-            if not self.agent_config.figure_files:
-                self.agent_config.figure_files = []
-            if self.agent_config.figure_file not in self.agent_config.figure_files:
-                self.agent_config.figure_files.append(self.agent_config.figure_file)
+            if self.agent_config.figure_file not in self.figure_files:
+                self.figure_files.append(self.agent_config.figure_file)
 
         # Extract figures if configured
         if self.agent_config.auto_extract_figure:
             extracted_figures = extract_figure_paths_from_latex(self.agent_config.input_file)
             if extracted_figures:
-                self.agent_config.figure_files.extend(extracted_figures)
+                self.figure_files.extend(extracted_figures)
 
         if self.agent_config.auto_extract_tikz_figure:
             for input_file in [self.agent_config.input_file] + (self.agent_config.input_files or []):
                 extracted_tikz = extract_and_compile_tikzpictures_with_labels(input_file)
                 if extracted_tikz:
-                    self.agent_config.figure_files.extend(extracted_tikz)
+                    self.figure_files.extend(extracted_tikz)
 
         # Initialize state and messages
         state = State.initialize()
@@ -473,7 +472,6 @@ class BaseReflectChainAgent(ABC):
             self.user_vars,
             state,
             messages,
-            figure_files=self.agent_config.figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
@@ -485,7 +483,7 @@ class BaseReflectChainAgent(ABC):
         return state, messages, end_turn
 
     def reflect(self, state: State, messages, round: int = 1):
-        reflection_figure_files = []
+        self.reflection_figure_files = []
         if self.agent_config.output_files:
             # Handle multiple output files
             if self.agent_config.include_tex_count:
@@ -497,7 +495,7 @@ class BaseReflectChainAgent(ABC):
                     logger.debug(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
-                        reflection_figure_files.extend(extracted_tikz_figures)
+                        self.reflection_figure_files.extend(extracted_tikz_figures)
         else:
             # Handle single output file
             logger.debug(f"Output files: {self.output_files}")
@@ -508,7 +506,7 @@ class BaseReflectChainAgent(ABC):
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
-                    reflection_figure_files.extend(extracted_tikz_figures)
+                    self.reflection_figure_files.extend(extracted_tikz_figures)
 
         if self.agent_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
@@ -518,7 +516,6 @@ class BaseReflectChainAgent(ABC):
             self.user_vars,
             state,
             messages,
-            figure_files=reflection_figure_files,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )

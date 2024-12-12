@@ -71,7 +71,7 @@ def get_xml_format_from_file(file: str) -> str:
 
 
 def get_xml_format_from_files(files: list[str]) -> str:
-    return "\n".join(get_xml_format_from_file(file) for file in files) if files else None
+    return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
 def get_list_of_files(files: list[str] | None) -> str:

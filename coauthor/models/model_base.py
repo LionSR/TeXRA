@@ -26,10 +26,10 @@ class ModelConfig(ABC):
 
     name: str  # Short name (e.g., "sonnet++")
     full_name: str  # Full model name (e.g., "claude-3-5-sonnet-20241022")
-    provider: ModelProvider
     max_tokens: int
     input_price: float
     output_price: float
+    provider: ModelProvider
     context_window: int = 128000
     supports_prompt_caching: bool = False
     supports_reasoning: bool = False
@@ -93,7 +93,7 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
         """Extract statistics from the response object.
         Returns: (new_response, input_tokens, output_tokens, stop_reason)
         """
