@@ -145,7 +145,10 @@ export async function singlePagePdfToPng(
   let tempFilePath: string | undefined;
 
   try {
-    debug(CHANNEL, `Starting singlePagePdfToPng for ${pdfPath}, page ${pageNum}`);
+    debug(
+      CHANNEL,
+      `Starting singlePagePdfToPng for ${pdfPath}, page ${pageNum}`,
+    );
 
     // Check for GraphicsMagick/ImageMagick installation
     const isImageMagickInstalled = await checkImageMagickInstalled();
@@ -201,7 +204,9 @@ export async function singlePagePdfToPng(
     tempFilePath = result.path;
 
     if (!fs.existsSync(tempFilePath)) {
-      throw new Error('Failed to convert PDF page to PNG: Output file not found');
+      throw new Error(
+        'Failed to convert PDF page to PNG: Output file not found',
+      );
     }
 
     // Read the generated PNG file and convert to base64

@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { runLatexIndent } from '../utils/texUtils';
+import { runLatexIndent, getTexCount } from '../utils/texUtils';
 import { debug, error, initializeLogging } from '../utils/logUtils';
 import { fileSelectionCommands } from './fileSelection';
+import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeXCommands';
 initializeLogging(CHANNEL);
@@ -12,6 +13,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
       'coauthor.indentCurrentTex',
       handleIndentCurrentTex,
     ),
+    vscode.commands.registerCommand('coauthor.getTexCount', handleGetTexCount),
   );
   debug(CHANNEL, 'LaTeX commands registered');
 }
@@ -56,6 +58,96 @@ async function handleIndentCurrentTex(): Promise<void> {
   }
 }
 
+async function handleGetTexCount(): Promise<void> {
+  try {
+    // Get active editor
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage('Please open a LaTeX file first');
+      return;
+    }
+
+    // Check if it's a LaTeX file
+    if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
+      vscode.window.showWarningMessage(
+        'This command only works with LaTeX files',
+      );
+      return;
+    }
+
+    const filePath = getRelativePath(editor.document.fileName);
+    debug(CHANNEL, `Getting tex count for: ${filePath}`);
+
+    // Ask if user wants to merge included files
+    const mergeOption = await vscode.window.showQuickPick(
+      [
+        { label: 'Count main file only', value: false },
+        { label: 'Merge included files', value: true },
+      ],
+      {
+        placeHolder: 'Count options',
+        canPickMany: false,
+      },
+    );
+
+    if (!mergeOption) {
+      return;
+    }
+
+    // Show progress indicator
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Counting LaTeX Document',
+        cancellable: false,
+      },
+      async (progress) => {
+        progress.report({ message: 'Running texcount...' });
+
+        const result = await getTexCount(filePath, mergeOption.value);
+
+        if (result) {
+          // Extract key statistics using regex
+          const wordMatch = result.match(/Words in text:\s*(\d+)/);
+          const headerMatch = result.match(/Words in headers:\s*(\d+)/);
+          const captionMatch = result.match(/Words in float captions:\s*(\d+)/);
+          const mathInlineMatch = result.match(
+            /Number of inline math:\s*(\d+)/,
+          );
+          const mathDisplayMatch = result.match(
+            /Number of displayed math:\s*(\d+)/,
+          );
+
+          const stats = [
+            wordMatch ? `Text: ${wordMatch[1]} words` : null,
+            headerMatch ? `Headers: ${headerMatch[1]}` : null,
+            captionMatch ? `Captions: ${captionMatch[1]}` : null,
+            mathInlineMatch ? `Inline math: ${mathInlineMatch[1]}` : null,
+            mathDisplayMatch ? `Display math: ${mathDisplayMatch[1]}` : null,
+          ]
+            .filter((item): item is string => item !== null) // Type guard to remove nulls
+            .map((label) => ({ label })); // Convert strings to QuickPickItems
+
+          // Show results in QuickPick
+          await vscode.window.showQuickPick(stats, {
+            placeHolder: 'TeXCount Results (press Esc to dismiss)',
+            canPickMany: false,
+          });
+        } else {
+          vscode.window.showErrorMessage('Failed to get tex count');
+        }
+      },
+    );
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in getTexCount command: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    vscode.window.showErrorMessage('Error getting tex count');
+  }
+}
+
 export const latexCommands = {
   handleIndentCurrentTex,
+  handleGetTexCount,
 };
