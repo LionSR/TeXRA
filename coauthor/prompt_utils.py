@@ -71,17 +71,9 @@ def get_xml_format_from_file(file: str) -> str:
 
 
 def get_xml_format_from_files(files: list[str]) -> str:
-    return "\n".join(get_xml_format_from_file(file) for file in files) if files else None
+    return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
-def get_list_of_files(files: list[str] | None) -> str | None:
-    if not files:  # Handles None and empty list cases
-        return None
-
-    # Filter out None values and convert all items to strings
-    valid_files = [str(f) for f in files if f is not None]
-
-    if not valid_files:  # Return None if no valid files after filtering
-        return None
-
-    return ", ".join(valid_files)
+def get_list_of_files(files: list[str] | None) -> str:
+    """Convert a list of files to a comma-separated string."""
+    return ", ".join(str(f) for f in (files or []) if f is not None)

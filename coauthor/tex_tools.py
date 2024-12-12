@@ -30,27 +30,19 @@ def run_external_command(
         return text
 
     try:
-        kwargs = {
-            "text": True,
-            "capture_output": capture_output,
-            "encoding": encoding,
-        }
-
+        result = subprocess.run(command, text=True, capture_output=capture_output, encoding=encoding)
         if output_file:
-            with open(output_file, "w", encoding=encoding) as file:
-                result = subprocess.run(command, **kwargs)
-                if result.returncode != 0:
-                    logger.error(f"\nCommand failed with return code {result.returncode}")
-                    return False, None, result.stderr.strip()
-                file.write(result.stdout)
+            if result.returncode != 0:
+                logger.error(f"\nCommand failed with return code {result.returncode}")
+                return False, None, result.stderr.strip()
+            write_file(output_file, result.stdout)
             logger.info("\nCommand completed.\nOutput saved to " + output_file)
             return True, None, None
         else:
-            result = subprocess.run(command, **kwargs)
             if result.returncode == 0:
                 return True, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
             else:
-                return False, truncate_output(result.stdout.strip()), result.stderr.strip()
+                return False, truncate_output(result.stdout.strip()), truncate_output(result.stderr.strip())
     except subprocess.CalledProcessError as e:
         error_message = "Error running command:\n"
         if hasattr(e, "stderr") and e.stderr:
@@ -59,11 +51,12 @@ def run_external_command(
         return False, None, error_message
 
 
-def get_tex_count(file_paths: list[str]) -> str | None:
+def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | None:
     """
     Get full statistics for LaTeX documents using the texcount Perl script.
 
     :param file_paths: List of paths to LaTeX files
+    :param merge: Whether to merge included files in the count
     :return: String containing full texcount output for all files, or None if an error occurred
     """
     if not isinstance(file_paths, list):
@@ -79,9 +72,12 @@ def get_tex_count(file_paths: list[str]) -> str | None:
             logger.warning(f"Error: File {file_path} is not a LaTeX file. Skipping.")
             continue
 
-        # success, output = run_external_command(["texcount", "-merge", file_path], capture_output=True)
-        # here one needs a switch for -merge
-        success, stdout, stderr = run_external_command(["texcount", file_path], capture_output=True)
+        command = ["texcount"]
+        if merge:
+            command.append("-merge")
+        command.append(file_path)
+
+        success, stdout, stderr = run_external_command(command, capture_output=True)
         if success:
             all_outputs.append(f"Tex Count Results for {file_path}:\n{stdout}")
         else:
@@ -93,35 +89,6 @@ def get_tex_count(file_paths: list[str]) -> str | None:
         logger.info(f"Combined Tex Count Results:\n{combined_output}")
         return combined_output
     return None
-
-
-def handle_tex_count(kwargs: dict, input_files: list[str]) -> str | None:
-    if kwargs.get("include_tex_count"):
-        if isinstance(input_files, str):
-            input_files = [input_files]
-        tex_count_stats = get_tex_count(input_files)
-        if tex_count_stats:
-            instruction = kwargs.get("instruction", "")
-            kwargs["instruction"] = f"Tex Count Statistics:\n{tex_count_stats}\n\n{instruction}"
-
-
-def process_tikzpicture_endings(file_path: str) -> None:
-    """
-    Process the file to fix tikzpicture endings with proper indentation.
-
-    :param file_path: Path to the LaTeX diff file
-    """
-    if not os.path.exists(file_path):
-        logger.warning(f"File {file_path} does not exist. Skipping.")
-        return None
-
-    content = read_file(file_path)
-
-    # Apply tikz-specific replacements
-    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
-
-    write_file(file_path, content)
-    # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
 def compile_latex_to_pdf(tex_file: str) -> bool:
@@ -139,6 +106,25 @@ def compile_latex_to_pdf(tex_file: str) -> bool:
     except ValueError as e:
         logger.error(f"Error compiling {tex_file}: {str(e)}")
         return False
+
+
+def process_tikzpicture_endings_diff(file_path: str) -> None:
+    """
+    Process the file to fix tikzpicture endings with proper indentation.
+
+    :param file_path: Path to the LaTeX diff file
+    """
+    if not os.path.exists(file_path):
+        logger.warning(f"File {file_path} does not exist. Skipping.")
+        return None
+
+    content = read_file(file_path)
+
+    # Apply tikz-specific replacements
+    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
+
+    write_file(file_path, content)
+    # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
 def run_latexindent(file_path: str) -> bool:
@@ -247,7 +233,7 @@ def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, s
         return None
 
     process_diff_file(diff_file_name)
-    process_tikzpicture_endings(diff_file_name)
+    process_tikzpicture_endings_diff(diff_file_name)
 
     return diff_file_name
 
@@ -283,7 +269,7 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
         return None
 
     process_diff_file(diff_file_name)
-    process_tikzpicture_endings(diff_file_name)
+    process_tikzpicture_endings_diff(diff_file_name)
 
     return diff_file_name
 
