@@ -3,7 +3,7 @@ import re
 import time
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex

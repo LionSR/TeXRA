@@ -23,7 +23,8 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 
     if edited_file:
         # Extract the round number from the edited file
-        edited_round = int(re.search(r"_r(\d+)_", edited_file).group(1))
+        match = re.search(r"_r(\d+)_", edited_file)
+        edited_round = int(match.group(1)) if match else 0
         new_round = edited_round + round + 1
     else:
         new_round = round
