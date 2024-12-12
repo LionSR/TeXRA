@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.2",
+  "version": "0.11.6",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -396,67 +396,59 @@
     "commands": [
       {
         "command": "coauthor.cleanOutput",
-        "title": "Clean Output"
+        "title": "CoAuthor: Clean Output"
       },
       {
         "command": "coauthor.cleanBuild",
-        "title": "Clean All"
+        "title": "CoAuthor: Clean Build"
       },
       {
         "command": "coauthor.indentTex",
-        "title": "Indent TeX"
-      },
-      {
-        "command": "coauthor.packSingle",
-        "title": "Pack Single"
-      },
-      {
-        "command": "coauthor.cleanSingle",
-        "title": "Clean Single"
-      },
-      {
-        "command": "coauthor.latexDiff",
-        "title": "LaTeX Diff"
-      },
-      {
-        "command": "coauthor.latexDiffVC",
-        "title": "LaTeX Diff VC"
+        "title": "CoAuthor: Indent TeX"
       },
       {
         "command": "coauthor.getRecentCommits",
-        "title": "Get Recent Commits"
+        "title": "CoAuthor: Get Recent Commits"
       },
       {
         "command": "coauthor.refreshCommits",
-        "title": "Refresh Commits"
+        "title": "CoAuthor: Refresh Commits"
       },
       {
-        "command": "coauthor.selectMultipleInputFiles",
-        "title": "Select Multiple Input Files"
+        "command": "coauthor.indentCurrentTex",
+        "title": "CoAuthor: Indent Current TeX"
       },
       {
-        "command": "coauthor.selectInputFile",
-        "title": "Select Input File"
+        "command": "coauthor.countPdfPages",
+        "title": "CoAuthor: Count PDF Pages"
       },
       {
-        "command": "coauthor.selectReferenceFile",
-        "title": "Select Reference File"
+        "command": "coauthor.encodeImageToBase64",
+        "title": "CoAuthor: Encode Image to Base64"
       },
       {
-        "command": "coauthor.selectAuxFile",
-        "title": "Select Auxiliary File"
+        "command": "coauthor.convertPdfToImages",
+        "title": "CoAuthor: Convert PDF to Images"
       },
       {
-        "command": "coauthor.selectFigureFile",
-        "title": "Select Figure File"
+        "command": "coauthor.testPdfToImage",
+        "title": "CoAuthor: Test PDF to Image Conversion"
       },
       {
-        "command": "coauthor.execute",
-        "title": "Execute Agent"
+        "command": "coauthor.extractFigurePaths",
+        "title": "CoAuthor: Extract Figure Paths from LaTeX"
       },
       {
-        "command": "coauthor.merge",
-        "title": "CoAuthor: Merge Files"
+        "command": "coauthor.extractTikzFigures",
+        "title": "CoAuthor: Extract TikZ Figures from Current File"
+      },
+      {
+        "command": "coauthor.compileTikzFigures",
+        "title": "CoAuthor: Compile TikZ Figures from Current File"
+      },
+      {
+        "command": "coauthor.getTexCount",
+        "title": "CoAuthor: Count Words in Current TeX File"
       }
     ],
     "viewsContainers": {
@@ -497,14 +489,22 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
+    "@types/diff-match-patch": "^1.0.36",
+    "@types/difflib": "^0.2.7",
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.68",
+    "@types/nunjucks": "^3.2.5",
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.11.0",
     "@typescript-eslint/parser": "^7.11.0",
     "@vscode/test-electron": "^2.4.0",
+    "chokidar": "^3.6.0",
     "eslint": "^8.57.0",
+    "node-loader": "^2.1.0",
+    "nunjucks": "^3.2.4",
+    "path-browserify": "^1.0.1",
     "prettier": "^3.4.2",
+    "spawn-sync": "^2.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",
@@ -531,14 +531,18 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@types/yaml": "^1.9.6",
+    "better-sqlite3": "^11.7.0",
+    "diff-match-patch": "^1.0.5",
+    "difflib": "^0.2.4",
+    "glob": "^10.4.5",
     "jest-worker": "^29.7.0",
     "jimp": "^1.6.0",
-    "nunjucks": "^3.2.4",
     "openai": "^4.76.1",
+    "pdf-lib": "^1.17.1",
     "pdf2pic": "^3.1.3",
-    "pdfjs-dist": "^4.9.155",
     "terser-webpack-plugin": "^5.3.10",
     "winston": "^3.17.0",
-    "yaml": "^2.6.1"
+    "yaml": "^2.6.1",
+    "nunjucks": "^3.2.4"
   }
 }
