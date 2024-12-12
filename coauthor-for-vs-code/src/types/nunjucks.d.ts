@@ -26,5 +26,8 @@ declare module 'nunjucks' {
   }
 
   function configure(options: ConfigureOptions): Environment;
-  function configure(path?: string | string[], options?: ConfigureOptions): Environment;
-} 
+  function configure(
+    path?: string | string[],
+    options?: ConfigureOptions,
+  ): Environment;
+}

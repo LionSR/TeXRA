@@ -15,7 +15,7 @@ import {
 const CHANNEL = 'MessageHandler';
 
 export class WebviewMessageHandler {
-  constructor(private readonly context: vscode.ExtensionContext) { }
+  constructor(private readonly context: vscode.ExtensionContext) {}
 
   async handleMessage(message: any, webviewView: vscode.WebviewView) {
     debug(CHANNEL, `Received message: ${message.command}`);
@@ -105,7 +105,10 @@ export class WebviewMessageHandler {
   }
 
   private handleThemeRequest(webviewView: vscode.WebviewView) {
-    const theme = vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light';
+    const theme =
+      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
+        ? 'dark'
+        : 'light';
     webviewView.webview.postMessage({ command: 'setTheme', theme });
   }
 
@@ -168,7 +171,9 @@ export class WebviewMessageHandler {
         outputNameOverride_val,
       );
     } else {
-      vscode.window.showErrorMessage('Please select an input file or provide an output name override.');
+      vscode.window.showErrorMessage(
+        'Please select an input file or provide an output name override.',
+      );
     }
   }
 
@@ -181,11 +186,16 @@ export class WebviewMessageHandler {
     );
   }
 
-  private async handleFileSelection(message: any, webviewView: vscode.WebviewView) {
+  private async handleFileSelection(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     const singleFileType = message.command.replace('select', '');
     debug(CHANNEL, `Selecting ${singleFileType}`);
 
-    const file = await vscode.commands.executeCommand<string>(`coauthor.${message.command}`);
+    const file = await vscode.commands.executeCommand<string>(
+      `coauthor.${message.command}`,
+    );
     if (file) {
       debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       webviewView.webview.postMessage({
@@ -196,7 +206,9 @@ export class WebviewMessageHandler {
   }
 
   private async handleEditedFileSelection(webviewView: vscode.WebviewView) {
-    const editedFile = await vscode.commands.executeCommand<string>('coauthor.selectEditedFile');
+    const editedFile = await vscode.commands.executeCommand<string>(
+      'coauthor.selectEditedFile',
+    );
     if (editedFile) {
       webviewView.webview.postMessage({
         command: 'editedFileSelected',
@@ -205,23 +217,37 @@ export class WebviewMessageHandler {
     }
   }
 
-  private async handleInputFileSelected(message: any, webviewView: vscode.WebviewView) {
+  private async handleInputFileSelected(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
-    const baseFileNameForInput = path.basename(message.filePath, path.extname(message.filePath));
+    const baseFileNameForInput = path.basename(
+      message.filePath,
+      path.extname(message.filePath),
+    );
     const filteredEditedFiles = await listEditedFiles(baseFileNameForInput);
     this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
   }
 
   private handleGenericFileSelected(message: any) {
-    vscode.window.showInformationMessage(`${message.command}: ${message.filePath}`);
+    vscode.window.showInformationMessage(
+      `${message.command}: ${message.filePath}`,
+    );
   }
 
   private async handleRequestInputFile(webviewView: vscode.WebviewView) {
-    const refreshedInputFiles = (await vscode.commands.executeCommand<string[]>('coauthor.refreshInputFiles')) || [];
+    const refreshedInputFiles =
+      (await vscode.commands.executeCommand<string[]>(
+        'coauthor.refreshInputFiles',
+      )) || [];
     this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
   }
 
-  private async handleRequestFile(message: any, webviewView: vscode.WebviewView) {
+  private async handleRequestFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     const fileType = message.command.replace('request', '').replace('File', '');
     const files = await (async () => {
       switch (fileType) {
@@ -238,10 +264,16 @@ export class WebviewMessageHandler {
     this.postFileUpdate(webviewView, fileType, files);
   }
 
-  private async handleRequestEditedFile(message: any, webviewView: vscode.WebviewView) {
+  private async handleRequestEditedFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     let allEditedFiles: string[] = [];
     if (message.baseFile) {
-      const baseFileNameForEdited = path.basename(message.baseFile, path.extname(message.baseFile));
+      const baseFileNameForEdited = path.basename(
+        message.baseFile,
+        path.extname(message.baseFile),
+      );
       allEditedFiles = await listEditedFiles(baseFileNameForEdited);
     }
     this.postFileUpdate(webviewView, 'Edited', allEditedFiles);
@@ -251,7 +283,10 @@ export class WebviewMessageHandler {
     this.postFileUpdate(webviewView, 'Base', await listInputFiles());
   }
 
-  private handleSetMultipleFiles(message: any, webviewView: vscode.WebviewView) {
+  private handleSetMultipleFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     if (message.files?.length > 0) {
       webviewView.webview.postMessage({
         command: message.command,
@@ -260,7 +295,10 @@ export class WebviewMessageHandler {
     }
   }
 
-  private async handleSelectMultipleFiles(message: any, webviewView: vscode.WebviewView) {
+  private async handleSelectMultipleFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     const multipleFileType = message.fileType;
     let selectedFiles: string[] | null = null;
 
@@ -345,9 +383,13 @@ export class WebviewMessageHandler {
   }
 
   private async handleRequestRecentCommits(webviewView: vscode.WebviewView) {
-    const isGitRepo = await vscode.commands.executeCommand<boolean>('coauthor.isGitRepository');
+    const isGitRepo = await vscode.commands.executeCommand<boolean>(
+      'coauthor.isGitRepository',
+    );
     const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits')
+      ? await vscode.commands.executeCommand<string[]>(
+          'coauthor.getRecentCommits',
+        )
       : [];
     webviewView.webview.postMessage({
       command: 'setRecentCommits',
@@ -357,9 +399,13 @@ export class WebviewMessageHandler {
   }
 
   private async handleRefreshCommits(webviewView: vscode.WebviewView) {
-    const isGitRepoRefresh = await vscode.commands.executeCommand<boolean>('coauthor.isGitRepository');
+    const isGitRepoRefresh = await vscode.commands.executeCommand<boolean>(
+      'coauthor.isGitRepository',
+    );
     if (isGitRepoRefresh) {
-      const commits_refresh = await vscode.commands.executeCommand<string[]>('coauthor.getRecentCommits');
+      const commits_refresh = await vscode.commands.executeCommand<string[]>(
+        'coauthor.getRecentCommits',
+      );
       webviewView.webview.postMessage({
         command: 'setRecentCommits',
         commits: commits_refresh,
@@ -382,26 +428,41 @@ export class WebviewMessageHandler {
     );
   }
 
-  private async handleGetCurrentFile(message: any, webviewView: vscode.WebviewView) {
+  private async handleGetCurrentFile(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
     const fileType = message.fileType || 'input';
-    const currentOpenFile = await vscode.commands.executeCommand<string>('coauthor.getCurrentFile');
+    const currentOpenFile = await vscode.commands.executeCommand<string>(
+      'coauthor.getCurrentFile',
+    );
     if (currentOpenFile) {
       if (fileType === 'edited') {
         const baseFile = message.baseFile;
         if (baseFile) {
           const baseFileName = path.basename(baseFile, path.extname(baseFile));
-          const currentFileName = path.basename(currentOpenFile, path.extname(currentOpenFile));
-          if (currentFileName.startsWith(baseFileName) && currentFileName !== baseFileName) {
+          const currentFileName = path.basename(
+            currentOpenFile,
+            path.extname(currentOpenFile),
+          );
+          if (
+            currentFileName.startsWith(baseFileName) &&
+            currentFileName !== baseFileName
+          ) {
             webviewView.webview.postMessage({
               command: 'setCurrentFile',
               filePath: currentOpenFile,
               fileType: fileType,
             });
           } else {
-            vscode.window.showInformationMessage('The current file is not a valid edited version of the base file.');
+            vscode.window.showInformationMessage(
+              'The current file is not a valid edited version of the base file.',
+            );
           }
         } else {
-          vscode.window.showInformationMessage('Please select a base file first.');
+          vscode.window.showInformationMessage(
+            'Please select a base file first.',
+          );
         }
       } else {
         webviewView.webview.postMessage({
@@ -411,7 +472,9 @@ export class WebviewMessageHandler {
         });
       }
     } else {
-      vscode.window.showInformationMessage('No file is currently open or the file is not part of the workspace.');
+      vscode.window.showInformationMessage(
+        'No file is currently open or the file is not part of the workspace.',
+      );
     }
   }
 
@@ -423,7 +486,11 @@ export class WebviewMessageHandler {
     });
   }
 
-  private postFileUpdate(webviewView: vscode.WebviewView, fileType: string, files: string[]) {
+  private postFileUpdate(
+    webviewView: vscode.WebviewView,
+    fileType: string,
+    files: string[],
+  ) {
     webviewView.webview.postMessage({
       command: `set${fileType}File`,
       files,
@@ -459,7 +526,9 @@ export class WebviewMessageHandler {
     return relevantFiles;
   }
 
-  private async selectMultipleOutputFiles(currentInputFile: string): Promise<string[] | null> {
+  private async selectMultipleOutputFiles(
+    currentInputFile: string,
+  ): Promise<string[] | null> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
       error(CHANNEL, 'No workspace folder open');
@@ -468,7 +537,9 @@ export class WebviewMessageHandler {
     }
 
     const defaultUri = currentInputFile
-      ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
+      ? vscode.Uri.file(
+          path.dirname(path.join(workspacePath, currentInputFile)),
+        )
       : vscode.Uri.file(workspacePath);
 
     try {
@@ -487,12 +558,19 @@ export class WebviewMessageHandler {
 
       const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
       info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
-      vscode.window.showInformationMessage(`Selected output files: ${relativePaths.join(', ')}`);
+      vscode.window.showInformationMessage(
+        `Selected output files: ${relativePaths.join(', ')}`,
+      );
       return relativePaths;
     } catch (err) {
-      error(CHANNEL, `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`);
-      vscode.window.showErrorMessage(`Error selecting output files: ${err instanceof Error ? err.message : String(err)}`);
+      error(
+        CHANNEL,
+        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      vscode.window.showErrorMessage(
+        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+      );
       return null;
     }
   }
-} 
+}
