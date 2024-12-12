@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as fs from 'fs';
 import { debug, error, initializeLogging } from './logUtils';
 import {
   readFile,
@@ -10,6 +9,7 @@ import {
 } from './fileUtils';
 import { compileLatexToPdf } from './texUtils';
 import * as nunjucks from 'nunjucks';
+import { renderPrompt } from './promptUtils';
 
 const CHANNEL = 'FigureUtils';
 initializeLogging(CHANNEL);
@@ -169,8 +169,8 @@ export async function createStandaloneLatexWithLabels(
   suffix?: string,
 ): Promise<string> {
   try {
-    // Use nunjucks to render the template
-    const standaloneContent = nunjucks.renderString(TIKZ_TEMPLATE, { tikzpicture });
+    // Use renderPrompt instead of nunjucks directly
+    const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, { tikzpicture });
 
     // Create filename
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
