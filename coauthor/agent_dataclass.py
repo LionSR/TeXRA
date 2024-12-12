@@ -7,10 +7,10 @@ class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
     # Document settings
-    agent_type: Optional[str] = "think"
-    document_tag: Optional[str] = None
+    agent_type: str
+    document_tag: str
     temperature: Optional[float] = 0.0
-    prefills: Optional[List[str]] = field(default_factory=list)
+    prefills: List[str] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
     required_files: Optional[Dict[str, str]] = field(default_factory=dict)
@@ -21,9 +21,9 @@ class AgentSettings:
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
-        settings = cls(
+        settings: AgentSettings = cls(
             agent_type=settings_dict.get("agent_type", "think"),  # or "direct"
-            document_tag=settings_dict.get("document_tag"),
+            document_tag=settings_dict.get("document_tag", "document"),
             temperature=settings_dict.get("temperature", 0.0),
             prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),
@@ -94,11 +94,11 @@ class AgentConfig:
     instruction: Optional[str]
 
     # Tool usage configuration
-    use_prefill_from_input: bool
-    auto_extract_figure: bool
-    auto_extract_tikz_figure: bool
-    auto_extract_tikz_figure_reflect: bool
-    include_tex_count: bool
+    use_prefill_from_input: bool = False
+    auto_extract_figure: bool = False
+    auto_extract_tikz_figure: bool = False
+    auto_extract_tikz_figure_reflect: bool = False
+    include_tex_count: bool = False
 
     # Processing configuration
     K: int = 200
@@ -119,10 +119,10 @@ class AgentConfig:
             # Processing configuration
             model=kwargs.get("model", "sonnet+"),
             reflect=kwargs.get("reflect", False),
-            agent=kwargs.get("agent"),
+            agent=kwargs.get("agent", ""),
             instruction=kwargs.get("instruction"),
             # Input/Output configuration
-            input_file=kwargs.get("input_file"),
+            input_file=kwargs.get("input_file", ""),
             input_files=kwargs.get("input_files", []),
             reference_file=kwargs.get("reference_file"),
             reference_files=kwargs.get("reference_files", []),

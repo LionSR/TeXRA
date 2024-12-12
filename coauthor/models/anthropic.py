@@ -119,7 +119,7 @@ class AnthropicModelConfig(ModelConfig):
                 )
         return content
 
-    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
         """
         Extract statistics from Anthropic response object.
         stop_reason: The reason that we stopped. This may be one the following values:

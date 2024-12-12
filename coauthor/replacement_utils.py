@@ -174,14 +174,14 @@ def get_all_replacements() -> Dict[str, str]:
     return all_replacements
 
 
-def get_replacements_by_category(category_name: str) -> Optional[Dict[str, str]]:
+def get_replacements_by_category(category_name: str) -> Dict[str, str]:
     """Get replacement patterns for a specific category.
 
     Args:
         category_name: Name of the replacement category to retrieve
 
     Returns:
-        Dictionary of replacement patterns or None if category not found
+        Dictionary of replacement patterns or an empty dictionary if category not found
     """
     categories = {
         "equations": EQUATION_REPLACEMENTS,
@@ -195,7 +195,7 @@ def get_replacements_by_category(category_name: str) -> Optional[Dict[str, str]]
     }
 
     category = categories.get(category_name)
-    return category.patterns if category else None
+    return category.patterns if category else {}
 
 
 def apply_replacements(text: str, replacements: Dict[str, str]) -> str:
