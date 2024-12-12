@@ -66,7 +66,6 @@ function addEventListenerSafely(elementId, event, handler) {
   }
 }
 
-
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(
@@ -169,6 +168,14 @@ function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
   const toggleIcon = document.getElementById(toggleId);
   container.style.display = isVisible ? 'block' : 'none';
   toggleIcon.textContent = isVisible ? '▲' : '▼';
+}
+
+function emptyMultipleFiles(containerId, toggleId) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  container.style.display = 'none';
+  document.getElementById(toggleId).textContent = '▼';
+  saveState();
 }
 
 function setDefaultState() {
@@ -1152,7 +1159,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
     });
-
 
   const toggles = [
     {

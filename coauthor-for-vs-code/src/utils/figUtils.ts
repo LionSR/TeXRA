@@ -170,7 +170,9 @@ export async function createStandaloneLatexWithLabels(
 ): Promise<string> {
   try {
     // Use renderPrompt instead of nunjucks directly
-    const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, { tikzpicture });
+    const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, {
+      tikzpicture,
+    });
 
     // Create filename
     const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
