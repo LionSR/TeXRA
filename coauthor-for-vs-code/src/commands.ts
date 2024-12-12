@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { registerFileSelectionCommands } from './commands/fileSelection';
-import { registerLatexDiffCommands } from './commands/latexDiff';
+import { registerLatexDiffCommands } from './commands/latexDiffCommmands';
 import { registerGitCommands } from './commands/gitCommands';
 import { registerPackCommands } from './commands/packCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
@@ -45,7 +45,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
 // Add exports for the command modules
 export { fileSelectionCommands } from './commands/fileSelection';
-export { latexDiffCommands } from './commands/latexDiff';
+export { latexDiffCommands } from './commands/latexDiffCommmands';
 export { gitCommands } from './commands/gitCommands';
 export { packCommands } from './commands/packCommands';
 export { mergeCommands } from './commands/mergeCommands';
