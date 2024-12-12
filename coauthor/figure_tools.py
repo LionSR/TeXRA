@@ -9,6 +9,7 @@ from .logging_utils import logger
 from .prompt_utils import get_list_of_files
 from .tex_tools import compile_latex_to_pdf
 
+# maybe in the future move to a separate file
 TIKZ_TEMPLATE = Template(
     r"""
 \documentclass[tikz,border=10pt]{standalone}
@@ -104,30 +105,30 @@ def create_standalone_latex_with_labels(tikzpicture: str, label: str, build_dir:
 def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> List[str]:
     """Extract and compile TikZ pictures, returns list of PDF paths"""
     input_dir = os.path.dirname(latex_file)
-    input_filename = os.path.basename(latex_file)
-    input_name = os.path.splitext(input_filename)[0]
-    build_dir = os.path.join(input_dir, "build", f"{input_name}")
+    input_name = os.path.splitext(os.path.basename(latex_file))[0]
+    build_dir = os.path.join(input_dir, "build", input_name)
     os.makedirs(build_dir, exist_ok=True)
 
+    # Extract TikZ pictures
     logger.debug("Extracting TikZ pictures with labels...")
     labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
     logger.debug(f"Found {len(labeled_tikzpictures)} labeled TikZ pictures.")
-    compiled_files = []
 
+    compiled_files = []
     for label, tikzpictures in labeled_tikzpictures:
-        for i, tikzpicture in enumerate(tikzpictures):
-            if len(tikzpictures) > 1:
-                suffix = chr(97 + i)  # Convert index to letter (0 -> 'a', 1 -> 'b', etc.)
-            else:
-                suffix = None
+        # Handle multiple TikZ pictures with same label by adding a,b,c suffixes
+        suffixes = [chr(97 + i) if len(tikzpictures) > 1 else None for i in range(len(tikzpictures))]
+
+        for tikzpicture, suffix in zip(tikzpictures, suffixes):
+            # Create and compile standalone LaTeX file
             tex_file = create_standalone_latex_with_labels(tikzpicture, label, build_dir, suffix)
             compile_latex_to_pdf(tex_file)
-            compiled_files.append(os.path.splitext(tex_file)[0] + ".pdf")
+            pdf_file = f"{os.path.splitext(tex_file)[0]}.pdf"
+            compiled_files.append(pdf_file)
 
-        # Clean up auxiliary files
-        for ext in [".aux", ".log"]:
-            aux_file = os.path.splitext(tex_file)[0] + ext
-            if os.path.exists(aux_file):
-                os.remove(aux_file)
+            # Clean up auxiliary files
+            for aux_file in [f"{os.path.splitext(tex_file)[0]}{ext}" for ext in (".aux", ".log")]:
+                if os.path.exists(aux_file):
+                    os.remove(aux_file)
 
     return compiled_files
