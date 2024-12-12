@@ -6,7 +6,7 @@ import { debug, error } from '../utils/logUtils';
 const CHANNEL = 'WebviewContent';
 
 export class WebviewContentProvider {
-  constructor(private readonly context: vscode.ExtensionContext) { }
+  constructor(private readonly context: vscode.ExtensionContext) {}
 
   getHtmlContent(webview: vscode.Webview): string {
     try {
@@ -66,4 +66,4 @@ export class WebviewContentProvider {
     }
     return text;
   }
-} 
+}

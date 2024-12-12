@@ -23,7 +23,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       ],
     };
 
-    webviewView.webview.html = this.contentProvider.getHtmlContent(webviewView.webview);
+    webviewView.webview.html = this.contentProvider.getHtmlContent(
+      webviewView.webview,
+    );
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       await this.messageHandler.handleMessage(message, webviewView);
