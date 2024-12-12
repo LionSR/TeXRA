@@ -6,10 +6,11 @@ import {
   getConfig,
 } from '../utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import { debug, info, error } from '../utils/logUtils';
+import { debug, info, error, initializeLogging } from '../utils/logUtils';
 import { listInputFiles } from '../utils';
 
 const CHANNEL = 'FileSelection';
+initializeLogging(CHANNEL);
 
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
@@ -167,9 +168,6 @@ async function selectMultipleReferenceFiles(
       )
     : vscode.Uri.file(workspacePath);
 
-  const includedReferenceDirectories = getConfig<string[]>(
-    'files.included.referenceDirectories',
-  );
   const includedReferenceExtensions = getConfig<string[]>(
     'files.included.referenceExtensions',
   );
@@ -188,16 +186,7 @@ async function selectMultipleReferenceFiles(
   });
 
   if (fileUris && fileUris.length > 0) {
-    const relativePaths = fileUris.map((uri) => {
-      const relativePath = getRelativePath(uri.fsPath);
-      const pathParts = relativePath.split(path.sep);
-      const startIndex = pathParts.findIndex((part) =>
-        includedReferenceDirectories.includes(part),
-      );
-      return startIndex !== -1
-        ? pathParts.slice(startIndex).join(path.sep)
-        : relativePath;
-    });
+    const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
     showInfoMessage(`Selected reference files: ${relativePaths.join(', ')}`);
     info(CHANNEL, `Selected reference files: ${relativePaths.join(', ')}`);
     return relativePaths;
@@ -220,9 +209,6 @@ async function selectMultipleAuxiliaryFiles(
       )
     : vscode.Uri.file(workspacePath);
 
-  const includedAuxiliaryDirectories = getConfig<string[]>(
-    'files.included.auxiliaryDirectories',
-  );
   const includedAuxiliaryExtensions = getConfig<string[]>(
     'files.included.auxiliaryExtensions',
   );
@@ -241,16 +227,7 @@ async function selectMultipleAuxiliaryFiles(
   });
 
   if (fileUris && fileUris.length > 0) {
-    const relativePaths = fileUris.map((uri) => {
-      const relativePath = getRelativePath(uri.fsPath);
-      const pathParts = relativePath.split(path.sep);
-      const startIndex = pathParts.findIndex((part) =>
-        includedAuxiliaryDirectories.includes(part),
-      );
-      return startIndex !== -1
-        ? pathParts.slice(startIndex).join(path.sep)
-        : relativePath;
-    });
+    const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
     info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
     return relativePaths;
