@@ -15,11 +15,13 @@ from ..output_utils import filter_monologue_tags
 from ..replacement_utils import apply_replacement_regex, get_replacements_by_category
 from ..state import State
 from ..img_utils import get_base64_encoded_image
-
+from .model_base import ModelProvider
 
 @dataclass
 class AnthropicModelConfig(ModelConfig):
     """Configuration for Anthropic models."""
+
+    provider: ModelProvider = ModelProvider.ANTHROPIC
 
     def get_client(self):
         """Get Anthropic client."""

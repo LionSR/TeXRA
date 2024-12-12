@@ -11,11 +11,14 @@ from ..file_utils import read_file
 from ..state import State
 from ..logging_utils import logger
 from ..img_utils import get_base64_encoded_image
+from .model_base import ModelProvider
 
 
 @dataclass
 class OpenAIModelConfig(ModelConfig):
-    """Configuration for OpenAI-compatible models."""
+    """Configuration for OpenAI models."""
+
+    provider: ModelProvider = ModelProvider.OPENAI
 
     def get_client(self):
         """Get the appropriate client for this model."""
