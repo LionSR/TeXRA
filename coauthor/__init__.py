@@ -8,7 +8,6 @@ from .file_utils import (
     append_file,
     extract_text_from_tags,
     get_agent_dir_from_env,
-    get_agent_path,
     read_file,
     write_file,
     write_to_output_file,
