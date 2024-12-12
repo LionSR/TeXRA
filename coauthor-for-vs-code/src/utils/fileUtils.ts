@@ -53,7 +53,7 @@ export async function appendFile(
     }
     const fullPath = path.join(workspacePath, filePath);
     const uri = vscode.Uri.file(fullPath);
-    
+
     // Read existing content
     let existingContent = '';
     try {
@@ -62,7 +62,7 @@ export async function appendFile(
     } catch (err) {
       // File might not exist yet, which is fine
     }
-    
+
     // Append new content
     const newContent = existingContent + content;
     await vscode.workspace.fs.writeFile(uri, Buffer.from(newContent, 'utf-8'));
@@ -330,8 +330,6 @@ export function readFileBytesSync(filePath: string): Buffer {
     throw err;
   }
 }
-
-
 
 export function extractTextFromTags(
   inputContent: string,
