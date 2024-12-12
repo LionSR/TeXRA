@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
+import { getConfig } from './utils/commonUtils';
 
 const CHANNEL = 'FolderExplorer';
 initializeLogging(CHANNEL);
@@ -25,18 +26,15 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   public async setupFileSystemWatcher() {
     try {
-      // Get the current path being watched
-      const rootPath = vscode.workspace
-        .getConfiguration('coauthor.explorer')
-        .get<string>('rootPath', '');
+      // Get the current path being watched using getConfig
+      const rootPath = getConfig<string>('explorer.rootPath', 'agents');
       let watchPath: string;
 
       if (rootPath && path.isAbsolute(rootPath)) {
         watchPath = rootPath;
       } else if (this.context) {
         const globalStoragePath = this.context.globalStorageUri.fsPath;
-        const relativePath = rootPath || 'agents';
-        watchPath = path.join(globalStoragePath, relativePath);
+        watchPath = path.join(globalStoragePath, rootPath);
       } else {
         return;
       }
@@ -79,17 +77,15 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       const dirPath = element.resourceUri.fsPath;
       return this.getFilesInDirectory(dirPath);
     } else {
-      // For root level, first check configuration
-      const rootPath = vscode.workspace
-        .getConfiguration('coauthor.explorer')
-        .get<string>('rootPath', '');
+      // For root level, first check configuration using getConfig
+      const rootPath = getConfig<string>('explorer.rootPath', 'agents');
 
       let absolutePath: string;
       if (rootPath && path.isAbsolute(rootPath)) {
         // If rootPath is configured and absolute, use it directly
         absolutePath = rootPath;
       } else {
-        // For any non-absolute path (including 'agents' or empty), use global storage as base
+        // For any non-absolute path, use global storage as base
         if (!this.context) {
           error(CHANNEL, 'Extension context not available');
           return Promise.resolve([]);
@@ -97,9 +93,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
         try {
           const globalStoragePath = this.context.globalStorageUri.fsPath;
-          // If rootPath is provided, use it as relative to global storage, otherwise default to 'agents'
-          const relativePath = rootPath || 'agents';
-          const fullPath = path.join(globalStoragePath, relativePath);
+          const fullPath = path.join(globalStoragePath, rootPath);
 
           // Ensure the directory exists
           await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));

@@ -12,7 +12,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "opus": AnthropicModelConfig(
         name="opus",
         full_name="claude-3-opus-20240229",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=4096,
         context_window=200000,
         input_price=15.0,
@@ -23,7 +22,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "sonnet++": AnthropicModelConfig(
         name="sonnet++",
         full_name="claude-3-5-sonnet-20241022",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
         context_window=200000,
         input_price=3.0,
@@ -36,7 +34,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "sonnet+": AnthropicModelConfig(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
         context_window=200000,
         input_price=3.0,
@@ -47,7 +44,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "sonnet": AnthropicModelConfig(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
         context_window=200000,
         input_price=3.0,
@@ -58,7 +54,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "haiku+": AnthropicModelConfig(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
         context_window=200000,
         input_price=1.0,
@@ -71,7 +66,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "haiku": AnthropicModelConfig(
         name="haiku",
         full_name="claude-3-haiku-20240307",
-        provider=ModelProvider.ANTHROPIC,
         max_tokens=8192,
         context_window=200000,
         input_price=0.25,
@@ -83,7 +77,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpto1": OpenAIModelConfig(
         name="gpto1",
         full_name="o1-preview-2024-09-12",
-        provider=ModelProvider.OPENAI,
         max_tokens=32768,
         context_window=128000,
         input_price=15.0,
@@ -94,7 +87,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpto1-": OpenAIModelConfig(
         name="gpto1-",
         full_name="o1-mini-2024-09-12",
-        provider=ModelProvider.OPENAI,
         max_tokens=65536,
         context_window=128000,
         input_price=3.0,
@@ -107,7 +99,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         # full_name="gpt-4o-2024-08-06",
         # gpt-4o,
         full_name="gpt-4o-2024-11-20",
-        provider=ModelProvider.OPENAI,
         max_tokens=16384,
         context_window=128000,
         input_price=2.5,
@@ -117,7 +108,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpt4t": OpenAIModelConfig(
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
-        provider=ModelProvider.OPENAI,
         max_tokens=4096,
         context_window=128000,
         input_price=10.0,
@@ -126,7 +116,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpt4o-": OpenAIModelConfig(
         name="gpt4o-",
         full_name="gpt-4o-mini-2024-07-18",
-        provider=ModelProvider.OPENAI,
         max_tokens=16384,
         context_window=128000,
         input_price=0.15,
@@ -136,7 +125,6 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
     "gpt4ol": OpenAIModelConfig(
         name="gpt4ol",
         full_name="chatgpt-4o-latest",
-        provider=ModelProvider.OPENAI,
         max_tokens=16384,
         context_window=128000,
         input_price=5.0,
