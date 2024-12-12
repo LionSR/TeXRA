@@ -51,13 +51,6 @@ function updateMultipleFileSelect(selectId, toggleIconId, files) {
   saveState();
 }
 
-function addEventListenerSafely(elementId, event, handler) {
-  const element = safeGetElementById(elementId);
-  if (element) {
-    element.addEventListener(event, handler);
-  }
-}
-
 function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {
@@ -65,6 +58,14 @@ function safeGetElementById(id) {
   }
   return element;
 }
+
+function addEventListenerSafely(elementId, event, handler) {
+  const element = safeGetElementById(elementId);
+  if (element) {
+    element.addEventListener(event, handler);
+  }
+}
+
 
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
