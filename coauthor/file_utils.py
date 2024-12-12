@@ -10,13 +10,6 @@ def get_agent_dir_from_env():
     return agents_dir
 
 
-def get_agent_path(library, prompt_name: str) -> str:
-    base_path = os.path.dirname(os.path.dirname(library.__file__))
-    if not prompt_name or prompt_name == ".":
-        return os.path.join(base_path, "agents")
-    return os.path.join(base_path, "agents", prompt_name)
-
-
 def read_file(file_path: str, raise_warning: bool = True) -> str:
     if file_path is None:
         if raise_warning:

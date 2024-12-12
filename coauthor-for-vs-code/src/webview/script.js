@@ -17,6 +17,40 @@ function updateFileSelect(selectId, files) {
     files.map((file) => `<option value="${file}">${file}</option>`).join('');
 }
 
+function updateEditedFileSelect(baseFile) {
+  if (baseFile) {
+    vscode.postMessage({
+      command: 'requestEditedFile',
+      baseFile: baseFile,
+    });
+  } else {
+    updateFileSelect('editedFileSelect', []);
+  }
+}
+
+function updateMultipleFileSelect(selectId, toggleIconId, files) {
+  const selectDiv = document.getElementById(selectId);
+  const toggleIcon = document.getElementById(toggleIconId);
+  const existingFiles = getSelectedFiles(selectDiv);
+  const newFiles = files.filter((file) => !existingFiles.includes(file));
+  if (newFiles.length > 0) {
+    newFiles.forEach((file) => {
+      addFileToList(selectId, file);
+    });
+    selectDiv.style.display = 'block';
+    toggleIcon.textContent = '▲';
+    const containerDiv = selectDiv.closest('.file-select');
+    if (containerDiv) {
+      containerDiv.style.display = 'block';
+    }
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `Added ${newFiles.length} file(s) to ${selectId}`,
+    });
+  }
+  saveState();
+}
+
 function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {
@@ -24,6 +58,14 @@ function safeGetElementById(id) {
   }
   return element;
 }
+
+function addEventListenerSafely(elementId, event, handler) {
+  const element = safeGetElementById(elementId);
+  if (element) {
+    element.addEventListener(event, handler);
+  }
+}
+
 
 function addFileToList(containerId, file) {
   const container = document.getElementById(containerId);
@@ -58,29 +100,6 @@ function getSelectedFiles(multipleFilesSelectDiv) {
   return Array.from(fileElements).map(
     (el) => el.textContent.replace(' -', '') || '',
   );
-}
-
-function updateMultipleFileSelect(selectId, toggleIconId, files) {
-  const selectDiv = document.getElementById(selectId);
-  const toggleIcon = document.getElementById(toggleIconId);
-  const existingFiles = getSelectedFiles(selectDiv);
-  const newFiles = files.filter((file) => !existingFiles.includes(file));
-  if (newFiles.length > 0) {
-    newFiles.forEach((file) => {
-      addFileToList(selectId, file);
-    });
-    selectDiv.style.display = 'block';
-    toggleIcon.textContent = '▲';
-    const containerDiv = selectDiv.closest('.file-select');
-    if (containerDiv) {
-      containerDiv.style.display = 'block';
-    }
-    vscode.postMessage({
-      command: 'showInformationMessage',
-      text: `Added ${newFiles.length} file(s) to ${selectId}`,
-    });
-  }
-  saveState();
 }
 
 function initializeOutputFiles() {
@@ -139,32 +158,18 @@ function toggleOutputNameOverride() {
 
 function toggleMultipleFiles(containerId, toggleIconId) {
   const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
-  const isVisible = containerDiv.style.display !== 'none';
-
-  // Toggle container visibility
-  containerDiv.style.display = isVisible ? 'none' : 'block';
-
-  // Toggle icon
-  const toggleIcon = document.getElementById(toggleIconId);
-  toggleIcon.textContent = isVisible ? '▼' : '▲';
+  const isVisible = container.style.display !== 'none';
+  setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
 
   saveState();
 }
 
 function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
   const container = document.getElementById(containerId);
-  const containerDiv = container.closest('.multiple-files-container');
   const toggleIcon = document.getElementById(toggleId);
-
-  if (containerDiv) {
-    containerDiv.style.display = isVisible ? 'block' : 'none';
-  }
-  if (toggleIcon) {
-    toggleIcon.textContent = isVisible ? '▲' : '▼';
-  }
+  container.style.display = isVisible ? 'block' : 'none';
+  toggleIcon.textContent = isVisible ? '▲' : '▼';
 }
-
 
 function setDefaultState() {
   // Hide output name override by default
@@ -439,7 +444,6 @@ window.onload = function () {
   // Set default state for new folders
   setDefaultState();
 };
-
 
 window.addEventListener('message', (event) => {
   const message = event.data;
@@ -1149,35 +1153,28 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-  // Add function to update edited file select when base file changes
-  function updateEditedFileSelect(baseFile) {
-    if (baseFile) {
-      vscode.postMessage({
-        command: 'requestEditedFile',
-        baseFile: baseFile,
-      });
-    } else {
-      updateFileSelect('editedFileSelect', []);
-    }
-  }
 
-  // Add toggle event listeners for multiple file selections
-  const toggleButtons = [
-    'toggleMultipleInputFiles',
-    'toggleMultipleReferenceFiles',
-    'toggleMultipleAuxiliaryFiles',
-    'toggleMultipleFigures',
+  const toggles = [
+    {
+      containerId: 'multipleInputFilesSelect',
+      toggleId: 'toggleMultipleInputFiles',
+    },
+    {
+      containerId: 'multipleReferenceFilesSelect',
+      toggleId: 'toggleMultipleReferenceFiles',
+    },
+    {
+      containerId: 'multipleAuxiliaryFilesSelect',
+      toggleId: 'toggleMultipleAuxiliaryFiles',
+    },
+    { containerId: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' },
   ];
 
-  toggleButtons.forEach((toggleId) => {
-    document.getElementById(toggleId).addEventListener('click', () => {
-      const containerId = toggleId.replace('toggle', '');
-      const containerDivId = `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Container`;
-      toggleMultipleFiles(
-        `${containerId.charAt(0).toLowerCase() + containerId.slice(1)}Select`,
-        toggleId,
+  toggles.forEach(({ containerId, toggleId }) => {
+    document
+      .getElementById(toggleId)
+      .addEventListener('click', () =>
+        toggleMultipleFiles(containerId, toggleId),
       );
-    });
   });
 });
-

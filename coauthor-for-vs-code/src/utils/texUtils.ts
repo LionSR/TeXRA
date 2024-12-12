@@ -2,28 +2,24 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promisify } from 'util';
 import * as cp from 'child_process';
-import { getWorkspacePath } from './commonUtils';
+import {
+  getWorkspacePath,
+  readFile,
+  writeFile,
+  deleteFile,
+  fileExists,
+} from './fileUtils';
 import { debug, info, warn, error, initializeLogging } from './logUtils';
+import { sync as globSync } from 'glob';
 
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'TexUtils';
 initializeLogging(CHANNEL);
 
-export async function processFile(filePath: string): Promise<string> {
-  const uri = vscode.Uri.file(filePath);
-  const content = await vscode.workspace.fs.readFile(uri);
-  return Buffer.from(content).toString('utf-8');
-}
-
-async function writeFile(filePath: string, content: string): Promise<void> {
-  const uri = vscode.Uri.file(filePath);
-  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
-}
-
 async function processDiffFile(diffFileName: string): Promise<void> {
   try {
-    const content = await processFile(diffFileName);
+    const content = await readFile(diffFileName);
     const lines = content.split('\n');
 
     let newContent = '';
@@ -84,7 +80,7 @@ async function processDiffFile(diffFileName: string): Promise<void> {
 
 async function processTikzpictureEndings(filePath: string): Promise<void> {
   try {
-    const content = await processFile(filePath);
+    const content = await readFile(filePath);
 
     let newContent = content;
     const patterns = [
@@ -122,13 +118,9 @@ export async function runLatexDiff(
       throw new Error('No workspace path found');
     }
 
-    // Convert relative paths to absolute paths
-    const fullInputPath = path.join(workspacePath, inputFile);
-    const fullEditedPath = path.join(workspacePath, editedFile);
-
-    // Check if files contain required commands
-    const inputContent = await processFile(fullInputPath);
-    const editedContent = await processFile(fullEditedPath);
+    // Files are now relative to workspace, no need for extra path joining
+    const inputContent = await readFile(inputFile);
+    const editedContent = await readFile(editedFile);
 
     if (
       !inputContent.includes('\\begin{document}') ||
@@ -182,11 +174,7 @@ export async function runLatexDiff(
       diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
     }
 
-    const outputPath = path.join(
-      workspacePath,
-      path.dirname(inputFile),
-      diffFileName,
-    );
+    const outputPath = path.join(path.dirname(inputFile), diffFileName);
 
     const command = [
       'latexdiff',
@@ -228,11 +216,9 @@ export async function runLatexDiffVC(
       throw new Error('No workspace path found');
     }
 
-    // Convert relative path to absolute path
-    const fullInputPath = path.join(workspacePath, inputFile);
+    // Use readFile which now handles workspace paths
+    const inputContent = await readFile(inputFile);
 
-    // Check if file contains required commands
-    const inputContent = await processFile(fullInputPath);
     if (
       !inputContent.includes('\\begin{document}') ||
       !inputContent.includes('\\end{document}')
@@ -246,7 +232,6 @@ export async function runLatexDiffVC(
 
     const diffFileName = inputFile.replace('.tex', `-diff${commitHash}.tex`);
     const outputPath = path.join(
-      workspacePath,
       path.dirname(inputFile),
       path.basename(diffFileName),
     );
@@ -305,4 +290,200 @@ export async function runLatexDiffVCMultiple(
   }
 
   info(CHANNEL, 'All LaTeX diff operations completed');
+}
+
+export async function runLatexIndent(filePath: string): Promise<boolean> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Get latexindent config from settings
+    const config = vscode.workspace.getConfiguration('coauthor.latex');
+    const latexindentConfig = config.get<string>('latexindentConfig');
+
+    // Build command array - note we're using -w (overwrite) and -s (silent)
+    const command = ['latexindent', '-w', '-s'];
+    if (latexindentConfig) {
+      command.push(`-l=${latexindentConfig}`);
+    }
+    command.push(`"${filePath}"`);
+
+    debug(CHANNEL, `Running command: ${command.join(' ')}`);
+
+    // Execute latexindent from workspace root
+    const { stdout, stderr } = await execAsync(command.join(' '), {
+      cwd: workspacePath,
+    });
+
+    if (stderr && stderr.trim()) {
+      warn(CHANNEL, `Latexindent stderr: ${stderr}`);
+    }
+
+    // Wait a moment for the file system to stabilize
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Setup cleanup patterns relative to workspace
+    const fileBaseName = path.basename(filePath, '.tex');
+    const fileDir = path.dirname(filePath);
+
+    // Get all backup files matching the patterns, relative to workspace
+    const backupPatterns = [
+      path.join(fileDir, `${fileBaseName}.tex.bak*`),
+      path.join(fileDir, `${fileBaseName}.tex.bak`),
+      path.join(fileDir, `${fileBaseName}.bak*`),
+      path.join(fileDir, `${fileBaseName}.bak`),
+    ];
+
+    // Clean up backup files from workspace directory
+    for (const pattern of backupPatterns) {
+      const backupFiles = globSync(pattern, {
+        cwd: workspacePath,
+        absolute: false,
+      });
+
+      for (const backupFile of backupFiles) {
+        try {
+          await deleteFile(backupFile);
+          debug(CHANNEL, `Removed backup file: ${backupFile}`);
+        } catch (err) {
+          warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
+        }
+      }
+    }
+
+    // Clean up indent.log
+    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
+    try {
+      await deleteFile(indentLogPath);
+      debug(CHANNEL, 'Removed indent.log');
+    } catch (err) {
+      // Ignore error if indent.log doesn't exist
+      warn(CHANNEL, `Error removing indent.log: ${err}`);
+    }
+
+    info(CHANNEL, `Indented ${filePath}`);
+    return true;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Compile a LaTeX file to PDF
+ * @param texFile Path to the LaTeX file
+ * @returns Promise<boolean> True if compilation succeeded
+ */
+export async function compileLatexToPdf(texFile: string): Promise<boolean> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    const outputDirectory = path.dirname(texFile);
+    const command = [
+      'pdflatex',
+      '-interaction=nonstopmode',
+      `-output-directory="${outputDirectory}"`,
+      `"${texFile}"`,
+    ].join(' ');
+
+    debug(CHANNEL, `Running command: ${command}`);
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: workspacePath,
+    });
+
+    if (stderr && stderr.trim()) {
+      warn(CHANNEL, `pdflatex stderr: ${stderr}`);
+    }
+
+    info(CHANNEL, `Successfully compiled ${texFile}`);
+    return true;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Get full statistics for LaTeX documents using the texcount Perl script
+ * @param filePaths Single file path or array of file paths
+ * @param merge Whether to merge included files in the count
+ * @returns Promise<string | null> String containing full texcount output for all files, or null if an error occurred
+ */
+export async function getTexCount(
+  filePaths: string | string[],
+  merge: boolean = false,
+): Promise<string | null> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Convert single path to array
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const allOutputs: string[] = [];
+
+    for (const filePath of paths) {
+      if (!(await fileExists(filePath))) {
+        warn(CHANNEL, `Warning: File ${filePath} does not exist.`);
+        continue;
+      }
+
+      if (!filePath.endsWith('.tex')) {
+        warn(CHANNEL, `Error: File ${filePath} is not a LaTeX file. Skipping.`);
+        continue;
+      }
+
+      const command = ['texcount'];
+      if (merge) {
+        command.push('-merge');
+      }
+      command.push(`"${filePath}"`);
+
+      debug(CHANNEL, `Running command: ${command.join(' ')}`);
+      try {
+        const { stdout, stderr } = await execAsync(command.join(' '), {
+          cwd: workspacePath,
+        });
+
+        if (stderr && stderr.trim()) {
+          warn(CHANNEL, `texcount stderr: ${stderr}`);
+        }
+
+        allOutputs.push(`Tex Count Results for ${filePath}:\n${stdout}`);
+        debug(CHANNEL, `Successfully counted ${filePath}`);
+      } catch (err) {
+        error(CHANNEL, `Error getting tex count for ${filePath}`);
+        error(
+          CHANNEL,
+          `Error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (allOutputs.length > 0) {
+      const combinedOutput = allOutputs.join('\n\n');
+      info(CHANNEL, `Combined Tex Count Results:\n${combinedOutput}`);
+      return combinedOutput;
+    }
+
+    return null;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in getTexCount: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
 }
