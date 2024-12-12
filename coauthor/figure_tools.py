@@ -2,16 +2,13 @@ import re
 import os
 from typing import List, Tuple, Optional
 
-from jinja2 import Template
-
 from .file_utils import read_file, write_file
 from .logging_utils import logger
-from .prompt_utils import get_list_of_files
+from .prompt_utils import get_list_of_files, render_prompt
 from .tex_tools import compile_latex_to_pdf
 
 # maybe in the future move to a separate file
-TIKZ_TEMPLATE = Template(
-    r"""
+TIKZ_TEMPLATE = r"""
 \documentclass[tikz,border=10pt]{standalone}
 \usepackage{tikz}
 \usepackage{pgfplots}
@@ -24,7 +21,6 @@ TIKZ_TEMPLATE = Template(
 {{ tikzpicture }}
 \end{document}
 """
-)
 
 
 def extract_figure_paths_from_latex(latex_file: str) -> List[str]:
@@ -95,7 +91,7 @@ def extract_tikzpictures_with_labels(latex_file: str) -> List[Tuple[str, List[st
 
 
 def create_standalone_latex_with_labels(tikzpicture: str, label: str, build_dir: str, suffix: Optional[str] = None) -> str:
-    standalone_content = TIKZ_TEMPLATE.render(tikzpicture=tikzpicture)
+    standalone_content = render_prompt(TIKZ_TEMPLATE, {"tikzpicture": tikzpicture})
     filename = os.path.join(build_dir, f"{label}_{suffix}.tex" if suffix else f"{label}.tex")
     write_file(filename, standalone_content)
 
