@@ -1,5 +1,6 @@
 import os
 import re
+from typing import List
 
 from .agent_dataclass import AgentConfig
 from .state import State
@@ -8,7 +9,7 @@ from .logging_utils import logger
 
 
 class AgentMerge(DirectWrite):
-    def __init__(self, config: AgentConfig, agent_path):
+    def __init__(self, config: AgentConfig, agent_path: str) -> None:
         super().__init__(config, agent_path)
         self.output_file = [self.get_output_file(r) for r in range(2)]
 

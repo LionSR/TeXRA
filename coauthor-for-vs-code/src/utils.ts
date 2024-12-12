@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath, getConfig } from './utils/commonUtils';
+import { getConfig } from './utils/commonUtils';
 import { initializeLogging } from './utils/logUtils';
+import { getWorkspacePath } from './utils/fileUtils';
 
 const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);

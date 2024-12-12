@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath, getConfig } from './utils/commonUtils';
+import { getConfig } from './utils/commonUtils';
+import { getWorkspacePath } from './utils/fileUtils';
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import {
@@ -19,18 +20,13 @@ const CHANNEL = 'Housekeeping';
 initializeLogging(CHANNEL);
 
 const EXCLUDED_DIRS = new Set([
-  'Figs',
-  'Figures',
-  'build',
-  'Versions',
-  'versions',
-  'History',
-  'history',
   'figs',
   'figures',
-  'Notes',
+  'build',
+  'versions',
+  'history',
+  'notes',
   'diffs',
-  'Diffs',
 ]);
 const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 const TEMP_EXTENSIONS = [
@@ -407,7 +403,11 @@ export async function runCleanBuild(): Promise<void> {
     try {
       const entries = await readDirectory(dirPath);
       for (const [name, type] of entries) {
-        if (type === vscode.FileType.Directory && !EXCLUDED_DIRS.has(name)) {
+        // here one should include the build directory
+        if (
+          type === vscode.FileType.Directory &&
+          !EXCLUDED_DIRS.has(name.toLowerCase())
+        ) {
           const fullPath = path.join(dirPath, name);
           await cleanBuildDir(fullPath);
           await processDirectory(fullPath);
