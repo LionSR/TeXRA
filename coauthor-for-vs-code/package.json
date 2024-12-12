@@ -441,6 +441,14 @@
       {
         "command": "coauthor.extractTikzFigures",
         "title": "CoAuthor: Extract TikZ Figures from Current File"
+      },
+      {
+        "command": "coauthor.compileTikzFigures",
+        "title": "CoAuthor: Compile TikZ Figures from Current File"
+      },
+      {
+        "command": "coauthor.getTexCount",
+        "title": "CoAuthor: Count Words in Current TeX File"
       }
     ],
     "viewsContainers": {

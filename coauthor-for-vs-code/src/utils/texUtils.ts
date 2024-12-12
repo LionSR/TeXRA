@@ -2,7 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promisify } from 'util';
 import * as cp from 'child_process';
-import { getWorkspacePath, readFile, writeFile, deleteFile } from './fileUtils';
+import {
+  getWorkspacePath,
+  readFile,
+  writeFile,
+  deleteFile,
+  fileExists,
+} from './fileUtils';
 import { debug, info, warn, error, initializeLogging } from './logUtils';
 import { sync as globSync } from 'glob';
 
@@ -334,7 +340,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     for (const pattern of backupPatterns) {
       const backupFiles = globSync(pattern, {
         cwd: workspacePath,
-        absolute: false
+        absolute: false,
       });
 
       for (const backupFile of backupFiles) {
@@ -365,5 +371,119 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
     );
     return false;
+  }
+}
+
+/**
+ * Compile a LaTeX file to PDF
+ * @param texFile Path to the LaTeX file
+ * @returns Promise<boolean> True if compilation succeeded
+ */
+export async function compileLatexToPdf(texFile: string): Promise<boolean> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    const outputDirectory = path.dirname(texFile);
+    const command = [
+      'pdflatex',
+      '-interaction=nonstopmode',
+      `-output-directory="${outputDirectory}"`,
+      `"${texFile}"`,
+    ].join(' ');
+
+    debug(CHANNEL, `Running command: ${command}`);
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: workspacePath,
+    });
+
+    if (stderr && stderr.trim()) {
+      warn(CHANNEL, `pdflatex stderr: ${stderr}`);
+    }
+
+    info(CHANNEL, `Successfully compiled ${texFile}`);
+    return true;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Get full statistics for LaTeX documents using the texcount Perl script
+ * @param filePaths Single file path or array of file paths
+ * @param merge Whether to merge included files in the count
+ * @returns Promise<string | null> String containing full texcount output for all files, or null if an error occurred
+ */
+export async function getTexCount(
+  filePaths: string | string[],
+  merge: boolean = false,
+): Promise<string | null> {
+  try {
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Convert single path to array
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const allOutputs: string[] = [];
+
+    for (const filePath of paths) {
+      if (!(await fileExists(filePath))) {
+        warn(CHANNEL, `Warning: File ${filePath} does not exist.`);
+        continue;
+      }
+
+      if (!filePath.endsWith('.tex')) {
+        warn(CHANNEL, `Error: File ${filePath} is not a LaTeX file. Skipping.`);
+        continue;
+      }
+
+      const command = ['texcount'];
+      if (merge) {
+        command.push('-merge');
+      }
+      command.push(`"${filePath}"`);
+
+      debug(CHANNEL, `Running command: ${command.join(' ')}`);
+      try {
+        const { stdout, stderr } = await execAsync(command.join(' '), {
+          cwd: workspacePath,
+        });
+
+        if (stderr && stderr.trim()) {
+          warn(CHANNEL, `texcount stderr: ${stderr}`);
+        }
+
+        allOutputs.push(`Tex Count Results for ${filePath}:\n${stdout}`);
+        debug(CHANNEL, `Successfully counted ${filePath}`);
+      } catch (err) {
+        error(CHANNEL, `Error getting tex count for ${filePath}`);
+        error(
+          CHANNEL,
+          `Error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (allOutputs.length > 0) {
+      const combinedOutput = allOutputs.join('\n\n');
+      info(CHANNEL, `Combined Tex Count Results:\n${combinedOutput}`);
+      return combinedOutput;
+    }
+
+    return null;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in getTexCount: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
   }
 }
