@@ -2,7 +2,6 @@
 
 import os
 import re
-import base64
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -15,11 +14,14 @@ from ..logging_utils import logger
 from ..output_utils import filter_monologue_tags
 from ..replacement_utils import apply_replacement_regex, get_replacements_by_category
 from ..state import State
-
+from ..img_utils import get_base64_encoded_image
+from .model_base import ModelProvider
 
 @dataclass
 class AnthropicModelConfig(ModelConfig):
     """Configuration for Anthropic models."""
+
+    provider: ModelProvider = ModelProvider.ANTHROPIC
 
     def get_client(self):
         """Get Anthropic client."""
@@ -60,10 +62,10 @@ class AnthropicModelConfig(ModelConfig):
             image_content = self.create_image_message(figure_files)
             messages[-1]["content"].extend(image_content)
 
+        content = {"type": "text", "text": user_request}
         if self.supports_prompt_caching:
-            messages[-1]["content"].append({"type": "text", "text": user_request, "cache_control": {"type": "ephemeral"}})
-        else:
-            messages[-1]["content"].append({"type": "text", "text": user_request})
+            content["cache_control"] = {"type": "ephemeral"}
+        messages[-1]["content"].append(content)
 
         return messages
 
@@ -117,7 +119,7 @@ class AnthropicModelConfig(ModelConfig):
                 )
         return content
 
-    def extract_response_statistics(self, response_object, end_tag: str = None) -> Tuple[str, int, int, str]:
+    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
         """
         Extract statistics from Anthropic response object.
         stop_reason: The reason that we stopped. This may be one the following values:
@@ -182,15 +184,13 @@ class AnthropicModelConfig(ModelConfig):
 
             # For PDFs, use native PDF support if available and multi-page
             if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
-                with open(figure_file, "rb") as f:
-                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                img_data = get_base64_encoded_image(figure_file)
                 media_type = "application/pdf"
             else:
                 img_data = process_pdf_input(figure_file)
                 media_type = "image/png"
         else:
-            with open(figure_file, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
+            img_data = get_base64_encoded_image(figure_file)
             media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
         return img_data, media_type
 

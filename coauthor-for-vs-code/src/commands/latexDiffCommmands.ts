@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getWorkspacePath } from '../utils/commonUtils';
+import { getWorkspacePath } from '../utils/fileUtils';
 import { runLatexDiff, runLatexDiffVC } from '../utils/texUtils';
 import {
   runPackLatexDiffVC,

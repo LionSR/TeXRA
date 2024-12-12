@@ -16,7 +16,7 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     return output_file
 
 
-def check_for_massive_repetition(last_response: str, new_response: str) -> tuple[bool, float]:
+def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
     longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
@@ -65,18 +65,16 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
 
 
 # this and the next function needs to have a better mechanism for giving the post-fix tho the names of the multiple outputs
+# can we do it with regex? xml is tedious to parse
 def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
     logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
-    if document_tag in ["latex_documents", "rebuttal_package"]:
-        return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
+    # if document_tag in ["latex_documents", "rebuttal_package"]:
+    #     return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
     base_name, extension = os.path.splitext(output_file)
     tex_file = f"{base_name}.tex"
     logger.debug(f"TeX file: {tex_file}")
-    if split_and_save_thinking:
-        log_file_thinking = f"{base_name}_thinking.xml"
-        logger.debug(f"Thinking file: {log_file_thinking}")
 
     # Read the content of the output file
     output_content = read_file(output_file)
@@ -101,6 +99,8 @@ def split_scratchpad_output_xml(output_file: str, document_tag: str, thinking_ta
 
         # Extract scratchpad content
         if split_and_save_thinking:
+            log_file_thinking = f"{base_name}_thinking.xml"
+            logger.debug(f"Thinking file: {log_file_thinking}")
             scratchpad = root.find(thinking_tag)
             if scratchpad is not None:
                 scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
@@ -129,10 +129,6 @@ def split_multiple_scratchpad_output_xml(
 
     base_name, extension = os.path.splitext(output_file)
 
-    if split_and_save_thinking:
-        log_file_thinking = f"{base_name}_thinking.xml"
-        logger.debug(f"Log file: {log_file_thinking}")
-
     # Read the content of the output file
     output_content = read_file(output_file)
 
@@ -153,6 +149,8 @@ def split_multiple_scratchpad_output_xml(
 
         # Extract scratchpad content
         if split_and_save_thinking:
+            log_file_thinking = f"{base_name}_thinking.xml"
+            logger.debug(f"Log file: {log_file_thinking}")
             scratchpad = root.find(thinking_tag)
             if scratchpad is not None:
                 scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")

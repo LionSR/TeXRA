@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { registerFileSelectionCommands } from './commands/fileSelection';
-import { registerLatexDiffCommands } from './commands/latexDiff';
+import { registerLatexDiffCommands } from './commands/latexDiffCommmands';
 import { registerGitCommands } from './commands/gitCommands';
 import { registerPackCommands } from './commands/packCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './viewProvider';
 import { initializeLogging } from './utils/logUtils';
+import { registerLatexCommands } from './commands/latexCommands';
+import { registerImageCommands } from './commands/imageCommands';
+import { registerFigureCommands } from './commands/figCommands';
 
 const CHANNEL = 'Commands';
 initializeLogging(CHANNEL);
@@ -24,6 +27,9 @@ export function registerCommands(context: vscode.ExtensionContext) {
     pack: registerPackCommands(context),
     merge: registerMergeCommands(context),
     execute: registerExecuteCommand(context),
+    latex: registerLatexCommands(context),
+    image: registerImageCommands(context),
+    figure: registerFigureCommands(context),
   };
 
   // Register webview provider
@@ -39,8 +45,11 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
 // Add exports for the command modules
 export { fileSelectionCommands } from './commands/fileSelection';
-export { latexDiffCommands } from './commands/latexDiff';
+export { latexDiffCommands } from './commands/latexDiffCommmands';
 export { gitCommands } from './commands/gitCommands';
 export { packCommands } from './commands/packCommands';
 export { mergeCommands } from './commands/mergeCommands';
 export { executeCommand } from './commands/executeCommand';
+export { latexCommands } from './commands/latexCommands';
+export { imageCommands } from './commands/imageCommands';
+export { figureCommands } from './commands/figCommands';
