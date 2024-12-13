@@ -10,7 +10,7 @@ import {
   setMultipleFileSelectVisibility,
   addFileToList,
   getSelectedFiles,
-} from './fileHandler.js';
+} from './fileHandlers.js';
 
 export function setDefaultState() {
   // Hide output name override by default
