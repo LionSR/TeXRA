@@ -29,8 +29,8 @@ const extensionConfig = {
     extensions: ['.ts', '.js'],
     fallback: {
       fs: false,
-      path: require.resolve('path-browserify')
-    }
+      path: require.resolve('path-browserify'),
+    },
   },
   module: {
     rules: [
@@ -46,7 +46,7 @@ const extensionConfig = {
       {
         test: /\.node$/,
         use: 'node-loader',
-      }
+      },
     ],
   },
   devtool: 'nosources-source-map',

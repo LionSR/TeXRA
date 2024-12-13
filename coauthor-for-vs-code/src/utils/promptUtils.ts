@@ -126,7 +126,7 @@ export async function loadYaml(
 
         // Ensure the directory exists
         await vscode.workspace.fs.createDirectory(
-          vscode.Uri.file(path.dirname(fullPath))
+          vscode.Uri.file(path.dirname(fullPath)),
         );
         debug(CHANNEL, `Using global storage path: ${fullPath}`);
 
@@ -147,7 +147,7 @@ export async function loadYaml(
       const fileContent = await vscode.workspace.fs.readFile(fileUri);
       const yamlContent = Buffer.from(fileContent).toString('utf-8');
       const parsedYaml = yaml.parse(yamlContent);
-      
+
       debug(CHANNEL, `Successfully loaded YAML from: ${filePath}`);
       return parsedYaml;
     } catch (err) {
@@ -179,7 +179,12 @@ export function mergeDicts(
   try {
     const result = { ...base };
     for (const [key, value] of Object.entries(override)) {
-      if (value && typeof value === 'object' && !Array.isArray(value) && key in result) {
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        key in result
+      ) {
         result[key] = mergeDicts(result[key], value);
       } else {
         result[key] = value;
