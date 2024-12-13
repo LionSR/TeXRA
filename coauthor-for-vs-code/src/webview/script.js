@@ -1,5 +1,19 @@
 const vscode = acquireVsCodeApi();
 
+const multipleSelections = [
+  'multipleInputFilesSelect',
+  'multipleReferenceFilesSelect',
+  'multipleAuxiliaryFilesSelect',
+  'multipleFiguresSelect',
+];
+
+const checkBoxes = [
+  'autoExtractFigure',
+  'autoExtractTikzFigure',
+  'autoExtractTikzFigureReflect',
+  'includeTexCount',
+];
+
 function handleCheckboxChange(event) {
   const checkboxId = event.target.id;
   const isChecked = event.target.checked;
@@ -28,9 +42,9 @@ function updateEditedFileSelect(baseFile) {
   }
 }
 
-function updateMultipleFileSelect(selectId, toggleIconId, files) {
+function updateMultipleFileSelect(selectId, toggleId, files) {
   const selectDiv = document.getElementById(selectId);
-  const toggleIcon = document.getElementById(toggleIconId);
+  const toggleIcon = document.getElementById(toggleId);
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter((file) => !existingFiles.includes(file));
   if (newFiles.length > 0) {
@@ -155,10 +169,10 @@ function toggleOutputNameOverride() {
   saveState();
 }
 
-function toggleMultipleFiles(containerId, toggleIconId) {
+function toggleMultipleFiles(containerId, toggleId) {
   const container = document.getElementById(containerId);
   const isVisible = container.style.display !== 'none';
-  setMultipleFileSelectVisibility(containerId, toggleIconId, !isVisible);
+  setMultipleFileSelectVisibility(containerId, toggleId, !isVisible);
 
   saveState();
 }
@@ -167,6 +181,10 @@ function setMultipleFileSelectVisibility(containerId, toggleId, isVisible) {
   const container = document.getElementById(containerId);
   const toggleIcon = document.getElementById(toggleId);
   container.style.display = isVisible ? 'block' : 'none';
+  if (toggleIcon === null) {
+    console.error('toggleIcon is null');
+    console.log('toggleId:', toggleId);
+  }
   toggleIcon.textContent = isVisible ? '▲' : '▼';
 }
 
@@ -197,19 +215,27 @@ function setDefaultState() {
   document.getElementById('outputFilesList').innerHTML = '';
 
   // Hide all multiple file select containers
-  const multipleSelections = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
   multipleSelections.forEach((id) => {
     const selectDiv = document.getElementById(id);
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
-    const toggleIcon = document.getElementById(toggleId);
     selectDiv.innerHTML = '';
+    selectDiv.style.display = 'none';
+  });
+
+  multipleSelections.forEach((id) => {
+    // const selectDiv = document.getElementById(id);
+    const toggleId = `toggle1${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    console.log('toggleId:', toggleId);
+
+    // const baseId = id.replace('Select', '');
+    // const toggleId1 = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+    // console.log('toggleId1:', toggleId1);
+    // const toggleIcon = document.getElementById(toggleId1);
+
+    // selectDiv.innerHTML = '';
+    // selectDiv.style.display = 'none';
+    // toggleIcon.textContent = '▼';
     setMultipleFileSelectVisibility(id, toggleId, false);
+    // emptyMultipleFiles(id, toggleId1);
   });
 
   // Save this default state
@@ -250,32 +276,14 @@ function restoreState() {
         previousState[id] || defaultValues[id] || '';
     });
 
-    const checkboxElements = [
-      'autoExtractFigure',
-      'autoExtractTikzFigure',
-      'autoExtractTikzFigureReflect',
-      'includeTexCount',
-    ];
-    checkboxElements.forEach((id) => {
+    checkBoxes.forEach((id) => {
       document.getElementById(id).checked = previousState[id] || false;
     });
 
-    const multipleSelections = [
-      { id: 'multipleInputFilesSelect', toggleId: 'toggleMultipleInputFiles' },
-      {
-        id: 'multipleReferenceFilesSelect',
-        toggleId: 'toggleMultipleReferenceFiles',
-      },
-      {
-        id: 'multipleAuxiliaryFilesSelect',
-        toggleId: 'toggleMultipleAuxiliaryFiles',
-      },
-      { id: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' },
-    ];
-
-    multipleSelections.forEach(({ id, toggleId }) => {
+    multipleSelections.forEach((id) => {
+      const baseId = id.replace('Select', '');
+      const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
       const selectDiv = document.getElementById(id);
-      const toggleIcon = document.getElementById(toggleId);
       selectDiv.innerHTML = '';
       if (previousState[id] && previousState[id].length > 0) {
         previousState[id].forEach((file) => {
@@ -359,14 +367,7 @@ function saveState() {
     state[id] = element.type === 'checkbox' ? element.checked : element.value;
   });
 
-  const multipleSelects = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
-  multipleSelects.forEach((id) => {
+  multipleSelections.forEach((id) => {
     state[`${id}Visible`] =
       document.getElementById(id).style.display === 'block';
     state[id] = getSelectedFiles(document.getElementById(id));
@@ -384,16 +385,11 @@ function saveState() {
 }
 
 function hideEmptyMultipleFileSelects() {
-  const multipleSelections = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-  ];
-
   multipleSelections.forEach((id) => {
     const selectDiv = document.getElementById(id);
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    const baseId = id.replace('Select', '');
+    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+    console.log('toggleId:', toggleId);
     if (selectDiv.children.length === 0) {
       setMultipleFileSelectVisibility(id, toggleId, false);
     }
@@ -691,12 +687,6 @@ document.addEventListener('DOMContentLoaded', function () {
       saveState();
     });
 
-  const checkBoxes = [
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'autoExtractTikzFigureReflect',
-    'includeTexCount',
-  ];
   checkBoxes.forEach((id) => {
     document
       .getElementById(id)
@@ -1160,27 +1150,13 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-  const toggles = [
-    {
-      containerId: 'multipleInputFilesSelect',
-      toggleId: 'toggleMultipleInputFiles',
-    },
-    {
-      containerId: 'multipleReferenceFilesSelect',
-      toggleId: 'toggleMultipleReferenceFiles',
-    },
-    {
-      containerId: 'multipleAuxiliaryFilesSelect',
-      toggleId: 'toggleMultipleAuxiliaryFiles',
-    },
-    { containerId: 'multipleFiguresSelect', toggleId: 'toggleMultipleFigures' },
-  ];
-
-  toggles.forEach(({ containerId, toggleId }) => {
+  multipleSelections.forEach((id) => {
+    const baseId = id.replace('Select', '');
+    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
     document
       .getElementById(toggleId)
       .addEventListener('click', () =>
-        toggleMultipleFiles(containerId, toggleId),
+        toggleMultipleFiles(id, toggleId),
       );
   });
 });
