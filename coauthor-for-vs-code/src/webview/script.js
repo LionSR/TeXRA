@@ -785,121 +785,65 @@ document.addEventListener('DOMContentLoaded', function () {
       vscode.postMessage({ command: 'refreshAllFiles' });
     });
 
-  document.getElementById('packButton').addEventListener('click', function () {
-    const inputFile = document.getElementById('inputFileSelect').value;
-    const agent = document.getElementById('agentSelect').value;
-    const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideElement =
-      document.getElementById('outputNameOverride');
-    const outputNameOverride =
-      outputNameOverrideElement.style.display !== 'none'
-        ? outputNameOverrideElement.value.trim()
-        : null;
+  ['pack', 'clean'].forEach((action) => {
+    document.getElementById(`${action}Button`).addEventListener('click', function () {
+      const inputFile = document.getElementById('inputFileSelect').value;
+      const agent = document.getElementById('agentSelect').value;
+      const model = document.getElementById('modelSelect').value;
+      const outputNameOverrideElement =
+        document.getElementById('outputNameOverride');
+      const outputNameOverride =
+        outputNameOverrideElement.style.display !== 'none'
+          ? outputNameOverrideElement.value.trim()
+          : null;
 
-    const inputFiles = getSelectedFiles(
-      document.getElementById('multipleInputFilesSelect'),
-    );
-    const outputFiles = getSelectedFiles(
-      document.getElementById('multipleOutputFilesSelect'),
-    );
+      const inputFiles = getSelectedFiles(
+        document.getElementById('multipleInputFilesSelect'),
+      );
+      const outputFiles = getSelectedFiles(
+        document.getElementById('multipleOutputFilesSelect'),
+      );
 
-    // Determine if we should use multiple or single mode
-    const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
+      // Determine if we should use multiple or single mode
+      const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
 
-    if (useMultiple) {
-      vscode.postMessage({
-        command: 'packMultiple',
-        inputFile: inputFile,
-        agent: agent,
-        model: model,
-        outputNameOverride: outputNameOverride,
-        outputFiles: outputFiles,
-      });
+      if (useMultiple) {
+        vscode.postMessage({
+          command: `${action}Multiple`,
+          inputFile: inputFile,
+          agent: agent,
+          model: model,
+          outputNameOverride: outputNameOverride,
+          outputFiles: outputFiles,
+        });
 
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Packing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
-      });
-    } else {
-      if (!inputFile || !agent || !model) {
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: 'Please select all required fields (input file, agent, and model)',
+          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
         });
-        return;
-      }
+      } else {
+        if (!inputFile || !agent || !model) {
+          vscode.postMessage({
+            command: 'showInformationMessage',
+            text: 'Please select all required fields (input file, agent, and model)',
+          });
+          return;
+        }
 
-      vscode.postMessage({
-        command: 'packSingle',
-        inputFile: inputFile,
-        agent: agent,
-        model: model,
-        outputNameOverride: outputNameOverride,
-      });
+        vscode.postMessage({
+          command: `${action}Single`,
+          inputFile: inputFile,
+          agent: agent,
+          model: model,
+          outputNameOverride: outputNameOverride,
+        });
 
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Packing single file: ${inputFile}`,
-      });
-    }
-  });
-
-  document.getElementById('cleanButton').addEventListener('click', function () {
-    const inputFile = document.getElementById('inputFileSelect').value;
-    const agent = document.getElementById('agentSelect').value;
-    const model = document.getElementById('modelSelect').value;
-    const outputNameOverrideElement =
-      document.getElementById('outputNameOverride');
-    const outputNameOverride =
-      outputNameOverrideElement.style.display !== 'none'
-        ? outputNameOverrideElement.value.trim()
-        : null;
-
-    const inputFiles = getSelectedFiles(
-      document.getElementById('multipleInputFilesSelect'),
-    );
-    const outputFiles = getSelectedFiles(
-      document.getElementById('multipleOutputFilesSelect'),
-    );
-
-    // Determine if we should use multiple or single mode
-    const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
-
-    if (useMultiple) {
-      vscode.postMessage({
-        command: 'cleanMultiple',
-        inputFile: inputFile,
-        agent: agent,
-        model: model,
-        outputNameOverride: outputNameOverride,
-        outputFiles: outputFiles,
-      });
-
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Cleaning multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
-      });
-    } else {
-      if (!inputFile || !agent || !model) {
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: 'Please select all required fields (input file, agent, and model)',
+          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing single file: ${inputFile}`,
         });
-        return;
       }
-      vscode.postMessage({
-        command: 'cleanSingle',
-        inputFile: inputFile,
-        agent: agent,
-        model: model,
-        outputNameOverride: outputNameOverride,
-      });
-
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Cleaning single file: ${inputFile}`,
-      });
-    }
+    });
   });
 
   document
