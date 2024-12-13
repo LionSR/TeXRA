@@ -23,35 +23,14 @@ export function setDefaultState() {
   );
   outputFilesContainer.style.display = 'none';
   toggleMultipleOutputFiles.textContent = '▼';
-
-  // Clear any existing output files
   document.getElementById('multipleOutputFilesSelect').innerHTML = '';
 
-  // Hide all multiple file select containers
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const selectDiv = document.getElementById(id);
-    selectDiv.innerHTML = '';
-    selectDiv.style.display = 'none';
-  });
-
-  MULTIPLE_SELECTIONS.forEach((id) => {
-    // const selectDiv = document.getElementById(id);
-    const toggleId = `toggle1${id.charAt(0).toUpperCase() + id.slice(1)}`;
-    console.log('toggleId:', toggleId);
-
-    // const baseId = id.replace('Select', '');
-    // const toggleId1 = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
-    // console.log('toggleId1:', toggleId1);
-    // const toggleIcon = document.getElementById(toggleId1);
-
-    // selectDiv.innerHTML = '';
-    // selectDiv.style.display = 'none';
-    // toggleIcon.textContent = '▼';
+    const baseId = id.replace('Select', '');
+    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
     setMultipleFileSelectVisibility(id, toggleId, false);
-    // emptyMultipleFiles(id, toggleId1);
   });
 
-  // Save this default state
   saveState();
 }
 
