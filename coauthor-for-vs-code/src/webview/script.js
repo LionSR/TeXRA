@@ -1,5 +1,5 @@
 import { vscode } from './modules/vscodeApi.js';
-import { setDefaultState } from './modules/stateManager.js';
+import { setDefaultState, restoreState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
 
@@ -19,7 +19,7 @@ window.onload = function () {
   });
 
   // Set default state for new folders
-  setDefaultState();
+  restoreState();
 };
 
 setupMessageHandlers();
