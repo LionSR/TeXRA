@@ -14,6 +14,28 @@ const checkBoxes = [
   'includeTexCount',
 ];
 
+const valueElements = [
+  // parameters
+  'agentSelect',
+  'modelSelect',
+  'reflectSelect',
+  // files
+  'inputFileSelect',
+  'auxiliaryFileSelect',
+  'figureFileSelect',
+  'referenceFileSelect',
+  'editedFileSelect',
+  'baseFileSelect',
+  // instructions
+  'instructionInput',
+  // output
+  'outputNameOverride',
+  // git
+  'commitSelect',
+];
+
+const elementsToSave = [...valueElements, ...checkBoxes];
+
 function handleCheckboxChange(event) {
   const checkboxId = event.target.id;
   const isChecked = event.target.checked;
@@ -90,7 +112,7 @@ function addFileToList(containerId, file) {
   fileElement.querySelector('.remove-button').addEventListener('click', () => {
     container.removeChild(fileElement);
     if (container.children.length === 0) {
-      containerId === 'outputFilesList'
+      containerId === 'multipleOutputFilesSelect'
         ? handleEmptyOutputFiles()
         : ((container.style.display = 'none'),
           (toggleIcon.textContent = '▼'),
@@ -102,7 +124,7 @@ function addFileToList(containerId, file) {
 
 function handleEmptyOutputFiles() {
   const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleIcon = document.getElementById('toggleOutputFiles');
+  const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
   outputFilesContainer.style.display = 'none';
   toggleIcon.textContent = '▼';
   saveState();
@@ -120,18 +142,18 @@ function initializeOutputFiles() {
   const multipleInputFilesSelect = document.getElementById(
     'multipleInputFilesSelect',
   );
-  const outputFilesList = document.getElementById('outputFilesList');
-  outputFilesList.innerHTML = '';
+  const outputFilesDiv = document.getElementById('multipleOutputFilesSelect');
+  outputFilesDiv.innerHTML = '';
 
   // Add the main input file
   if (inputFileSelect.value) {
-    addFileToList('outputFilesList', inputFileSelect.value);
+    addFileToList('multipleOutputFilesSelect', inputFileSelect.value);
   }
 
   // Add multiple input files
   const additionalFiles = getSelectedFiles(multipleInputFilesSelect);
   additionalFiles.forEach((file) => {
-    addFileToList('outputFilesList', file);
+    addFileToList('multipleOutputFilesSelect', file);
   });
 }
 
@@ -142,9 +164,9 @@ function addOptionToSelect(select, value, text) {
   select.appendChild(option);
 }
 
-function toggleOutputFiles() {
+function toggleMultipleOutputFiles() {
   const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleIcon = document.getElementById('toggleOutputFiles');
+  const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
   if (outputFilesContainer.style.display === 'none') {
     outputFilesContainer.style.display = 'block';
     toggleIcon.textContent = '▲';
@@ -207,12 +229,14 @@ function setDefaultState() {
 
   // Hide multiple file output by default
   const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleOutputFiles = document.getElementById('toggleOutputFiles');
+  const toggleMultipleOutputFiles = document.getElementById(
+    'toggleMultipleOutputFiles',
+  );
   outputFilesContainer.style.display = 'none';
-  toggleOutputFiles.textContent = '▼';
+  toggleMultipleOutputFiles.textContent = '▼';
 
   // Clear any existing output files
-  document.getElementById('outputFilesList').innerHTML = '';
+  document.getElementById('multipleOutputFilesSelect').innerHTML = '';
 
   // Hide all multiple file select containers
   multipleSelections.forEach((id) => {
@@ -251,26 +275,6 @@ function restoreState() {
       commitSelect: 'HEAD',
     };
 
-    const valueElements = [
-      // parameters
-      'agentSelect',
-      'modelSelect',
-      'reflectSelect',
-      // files
-      'inputFileSelect',
-      'auxiliaryFileSelect',
-      'figureFileSelect',
-      'referenceFileSelect',
-      'editedFileSelect',
-      'baseFileSelect',
-      // instructions
-      'instructionInput',
-      // output
-      'outputNameOverride',
-      // git
-      'commitSelect',
-    ];
-
     valueElements.forEach((id) => {
       document.getElementById(id).value =
         previousState[id] || defaultValues[id] || '';
@@ -302,7 +306,7 @@ function restoreState() {
     const outputFilesContainer = document.getElementById(
       'outputFilesContainer',
     );
-    const toggleIcon = document.getElementById('toggleOutputFiles');
+    const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
     if (
       previousState.outputFilesContainerVisible &&
       previousState.outputFiles &&
@@ -310,10 +314,12 @@ function restoreState() {
     ) {
       outputFilesContainer.style.display = 'block';
       toggleIcon.textContent = '▲';
-      const outputFilesList = document.getElementById('outputFilesList');
-      outputFilesList.innerHTML = '';
+      const outputFilesDiv = document.getElementById(
+        'multipleOutputFilesSelect',
+      );
+      outputFilesDiv.innerHTML = '';
       previousState.outputFiles.forEach((file) => {
-        addFileToList('outputFilesList', file);
+        addFileToList('multipleOutputFilesSelect', file);
       });
     } else {
       outputFilesContainer.style.display = 'none';
@@ -343,28 +349,12 @@ function restoreState() {
 
 function saveState() {
   const state = {};
-  const elementsToSave = [
-    'modelSelect',
-    'agentSelect',
-    'inputFileSelect',
-    'referenceFileSelect',
-    'auxiliaryFileSelect',
-    'figureFileSelect',
-    'reflectSelect',
-    'commitSelect',
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'autoExtractTikzFigureReflect',
-    'includeTexCount',
-    'outputNameOverride',
-    'baseFileSelect',
-    'editedFileSelect',
-    'instructionInput',
-  ];
 
-  elementsToSave.forEach((id) => {
-    const element = document.getElementById(id);
-    state[id] = element.type === 'checkbox' ? element.checked : element.value;
+  valueElements.forEach((id) => {
+    state[id] = document.getElementById(id).value;
+  });
+  checkBoxes.forEach((id) => {
+    state[id] = document.getElementById(id).checked;
   });
 
   multipleSelections.forEach((id) => {
@@ -376,7 +366,7 @@ function saveState() {
   state.outputFilesContainerVisible =
     document.getElementById('outputFilesContainer').style.display === 'block';
   state.outputFiles = getSelectedFiles(
-    document.getElementById('outputFilesList'),
+    document.getElementById('multipleOutputFilesSelect'),
   );
   state.outputNameOverrideVisible =
     document.getElementById('outputNameOverride').style.display !== 'none';
@@ -389,7 +379,6 @@ function hideEmptyMultipleFileSelects() {
     const selectDiv = document.getElementById(id);
     const baseId = id.replace('Select', '');
     const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
-    console.log('toggleId:', toggleId);
     if (selectDiv.children.length === 0) {
       setMultipleFileSelectVisibility(id, toggleId, false);
     }
@@ -463,6 +452,7 @@ window.addEventListener('message', (event) => {
     case 'setReferenceFile':
     case 'setAuxiliaryFile':
     case 'setFigureFile':
+    case 'setEditedFile':
       updateFileSelect(
         `${message.command.charAt(3).toLowerCase() + message.command.slice(4)}Select`,
         message.files,
@@ -482,21 +472,12 @@ window.addEventListener('message', (event) => {
     case 'setMultipleReferenceFiles':
     case 'setMultipleAuxiliaryFiles':
     case 'setMultipleFigures':
+    case 'setMultipleOutputFiles':
       updateMultipleFileSelect(
         `${message.command.replace('setMultiple', 'multiple')}Select`,
         `toggle${message.command.replace('set', '')}`,
         message.files,
       );
-      break;
-    case 'setMultipleOutputFiles':
-      updateMultipleFileSelect(
-        'outputFilesList',
-        'toggleOutputFiles',
-        message.files,
-      );
-      break;
-    case 'setEditedFile':
-      updateFileSelect('editedFileSelect', message.files);
       break;
     case 'setRecentCommits':
       handleRecentCommits(message);
@@ -521,26 +502,11 @@ window.addEventListener('message', (event) => {
       }
       break;
     case 'setOpenedFiles':
-      updateMultipleFileSelect(
-        'multipleInputFilesSelect',
-        'toggleMultipleInputFiles',
-        message.files,
-      );
-      updateMultipleFileSelect(
-        'multipleReferenceFilesSelect',
-        'toggleMultipleReferenceFiles',
-        message.files,
-      );
-      updateMultipleFileSelect(
-        'multipleAuxiliaryFilesSelect',
-        'toggleMultipleAuxiliaryFiles',
-        message.files,
-      );
-      updateMultipleFileSelect(
-        'multipleFiguresSelect',
-        'toggleMultipleFigures',
-        message.files,
-      );
+      multipleSelections.forEach((id) => {
+        const baseId = id.replace('Select', '');
+        const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+        updateMultipleFileSelect(id, toggleId, message.files);
+      });
       break;
     case 'setBaseFile':
       updateFileSelect('baseFileSelect', message.files);
@@ -554,13 +520,7 @@ window.addEventListener('message', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  const sortableElements = [
-    'multipleInputFilesSelect',
-    'multipleReferenceFilesSelect',
-    'multipleAuxiliaryFilesSelect',
-    'multipleFiguresSelect',
-    'outputFilesList',
-  ];
+  const sortableElements = [...multipleSelections, 'multipleOutputFilesSelect'];
 
   sortableElements.forEach((id) => {
     const element = document.getElementById(id);
@@ -576,7 +536,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Add event listeners for the new empty buttons
+  // Add event listeners for the empty buttons
   ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
     (type) => {
       document
@@ -631,6 +591,7 @@ document.addEventListener('DOMContentLoaded', function () {
         filePath: referenceFile,
       });
     });
+
   const multipleFileSelectors = [
     { id: 'InputFiles', selectId: 'inputFileSelect' },
     { id: 'ReferenceFiles', selectId: 'referenceFileSelect' },
@@ -651,33 +612,40 @@ document.addEventListener('DOMContentLoaded', function () {
       });
   });
 
-  const emptyButtons = [
-    {
-      id: 'emptyMultipleInputFilesButton',
-      selectId: 'multipleInputFilesSelect',
-      toggleId: 'toggleMultipleInputFiles',
-    },
-    {
-      id: 'emptyMultipleReferenceFilesButton',
-      selectId: 'multipleReferenceFilesSelect',
-      toggleId: 'toggleMultipleReferenceFiles',
-    },
-    {
-      id: 'emptyMultipleAuxiliaryFilesButton',
-      selectId: 'multipleAuxiliaryFilesSelect',
-      toggleId: 'toggleMultipleAuxiliaryFiles',
-    },
-    {
-      id: 'emptyMultipleFiguresButton',
-      selectId: 'multipleFiguresSelect',
-      toggleId: 'toggleMultipleFigures',
-    },
-  ];
+  document
+  .getElementById('selectMultipleOutputFilesButton')
+  .addEventListener('click', function () {
+    const inputFile = document.getElementById('inputFileSelect').value;
+    vscode.postMessage({
+      command: 'selectMultipleFiles',
+      fileType: 'OutputFiles',
+      currentFile: inputFile,
+    });
+  });
 
-  emptyButtons.forEach(({ id, selectId, toggleId }) => {
+  multipleSelections.forEach((id) => {
+    let baseId = id.replace('Select', '');
+    baseId = baseId.charAt(0).toUpperCase() + baseId.slice(1);
+    document
+      .getElementById(`empty${baseId}Button`)
+      .addEventListener('click', () =>
+        emptyMultipleFiles(id, `toggle${baseId}`),
+      );
+  });
+
+  document
+    .getElementById('emptyMultipleOutputFilesButton')
+    .addEventListener('click', function () {
+      emptyMultipleFiles(
+      'multipleOutputFilesSelect',
+      'toggleMultipleOutputFiles',
+    );
+  });
+
+  checkBoxes.forEach((id) => {
     document
       .getElementById(id)
-      .addEventListener('click', () => emptyMultipleFiles(selectId, toggleId));
+      .addEventListener('change', handleCheckboxChange);
   });
 
   document
@@ -686,12 +654,6 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('instructionInput').value = '';
       saveState();
     });
-
-  checkBoxes.forEach((id) => {
-    document
-      .getElementById(id)
-      .addEventListener('change', handleCheckboxChange);
-  });
 
   const buttonCommands = {
     cleanOutputButton: 'cleanOutput',
@@ -749,7 +711,9 @@ document.addEventListener('DOMContentLoaded', function () {
       );
       const outputFiles =
         outputFilesContainer.style.display === 'block'
-          ? getSelectedFiles(document.getElementById('outputFilesList'))
+          ? getSelectedFiles(
+              document.getElementById('multipleOutputFilesSelect'),
+            )
           : null;
       const outputNameOverrideElement =
         document.getElementById('outputNameOverride');
@@ -832,14 +796,11 @@ document.addEventListener('DOMContentLoaded', function () {
         ? outputNameOverrideElement.value.trim()
         : null;
 
-    // Get multiple files if they exist
     const inputFiles = getSelectedFiles(
       document.getElementById('multipleInputFilesSelect'),
     );
-
-    // Get output files if they exist
     const outputFiles = getSelectedFiles(
-      document.getElementById('outputFilesList'),
+      document.getElementById('multipleOutputFilesSelect'),
     );
 
     // Determine if we should use multiple or single mode
@@ -894,14 +855,11 @@ document.addEventListener('DOMContentLoaded', function () {
         ? outputNameOverrideElement.value.trim()
         : null;
 
-    // Get multiple files if they exist
     const inputFiles = getSelectedFiles(
       document.getElementById('multipleInputFilesSelect'),
     );
-
-    // Get output files if they exist
     const outputFiles = getSelectedFiles(
-      document.getElementById('outputFilesList'),
+      document.getElementById('multipleOutputFilesSelect'),
     );
 
     // Determine if we should use multiple or single mode
@@ -922,6 +880,13 @@ document.addEventListener('DOMContentLoaded', function () {
         text: `Cleaning multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
       });
     } else {
+      if (!inputFile || !agent || !model) {
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: 'Please select all required fields (input file, agent, and model)',
+        });
+        return;
+      }
       vscode.postMessage({
         command: 'cleanSingle',
         inputFile: inputFile,
@@ -975,113 +940,68 @@ document.addEventListener('DOMContentLoaded', function () {
         text: `Running LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
       });
     });
-  document
-    .getElementById('packLatexDiffVCButton')
-    .addEventListener('click', function () {
-      const inputFile = document.getElementById('inputFileSelect').value;
-      const baseFile = document.getElementById('baseFileSelect').value;
-      const commitHash = document.getElementById('commitSelect').value;
+  ['pack', 'clean'].forEach((action) => {
+    document
+      .getElementById(`${action}LatexDiffVCButton`)
+      .addEventListener('click', function () {
+        const inputFile = document.getElementById('inputFileSelect').value;
+        const baseFile = document.getElementById('baseFileSelect').value;
+        const commitHash = document.getElementById('commitSelect').value;
 
-      vscode.postMessage({
-        command: 'packLatexDiffVC',
-        inputFile: inputFile,
-        baseFile: baseFile,
-        commitHash: commitHash,
-        clean: false,
-      });
+        vscode.postMessage({
+          command: `${action}LatexDiffVC`,
+          inputFile: inputFile,
+          baseFile: baseFile,
+          commitHash: commitHash,
+          clean: action === 'clean',
+        });
 
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Packing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+        const actionText = action === 'pack' ? 'Packing' : 'Cleaning';
+        vscode.postMessage({
+          command: 'showInformationMessage',
+          text: `${actionText} LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+        });
       });
-    });
-  document
-    .getElementById('cleanLatexDiffVCButton')
-    .addEventListener('click', function () {
-      const inputFile = document.getElementById('inputFileSelect').value;
-      const baseFile = document.getElementById('baseFileSelect').value;
-      const commitHash = document.getElementById('commitSelect').value;
+  });
 
-      vscode.postMessage({
-        command: 'cleanLatexDiffVC',
-        inputFile: inputFile,
-        baseFile: baseFile,
-        commitHash: commitHash,
-        clean: true,
+  ['base', 'edited'].forEach((type) => {
+    document
+      .getElementById(
+        `current${type.charAt(0).toUpperCase() + type.slice(1)}FileButton`,
+      )
+      .addEventListener('click', function () {
+        const baseFile = document.getElementById('baseFileSelect').value;
+        vscode.postMessage({
+          command: 'getCurrentFile',
+          fileType: type,
+          baseFile: baseFile,
+        });
       });
+  });
 
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: `Cleaning LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
-      });
-    });
-  document
-    .getElementById('currentBaseFileButton')
-    .addEventListener('click', function () {
-      const baseFile = document.getElementById('baseFileSelect').value;
-      vscode.postMessage({
-        command: 'getCurrentFile',
-        fileType: 'base',
-        baseFile: baseFile,
-      });
-    });
-  document
-    .getElementById('currentEditedFileButton')
-    .addEventListener('click', function () {
-      const baseFile = document.getElementById('baseFileSelect').value;
-      vscode.postMessage({
-        command: 'getCurrentFile',
-        fileType: 'edited',
-        baseFile: baseFile,
-      });
-    });
-
-  // Save state on input changes
-  const elementsToWatch = [
-    'modelSelect',
-    'agentSelect',
-    'reflectSelect',
-    'inputFileSelect',
-    'referenceFileSelect',
-    'auxiliaryFileSelect',
-    'figureFileSelect',
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'autoExtractTikzFigureReflect',
-    'includeTexCount',
-    'outputNameOverride',
-    'baseFileSelect',
-    'editedFileSelect',
-    'commitSelect',
-  ];
-
-  elementsToWatch.forEach((id) => {
-    document.getElementById(id).addEventListener('change', saveState);
+  elementsToSave.forEach((id) => {
+    if (id !== 'instructionInput') {
+      document.getElementById(id).addEventListener('change', saveState);
+    }
   });
 
   // Special case for instructionInput as it uses 'input' event
   document
     .getElementById('instructionInput')
     .addEventListener('input', saveState);
-
   document
-    .getElementById('toggleOutputFiles')
-    .addEventListener('click', toggleOutputFiles);
+  .getElementById('outputNameOverride')
+  .addEventListener('input', saveState);
 
-  new Sortable(document.getElementById('outputFilesList'), {
+  new Sortable(document.getElementById('multipleOutputFilesSelect'), {
     animation: 150,
     onEnd: saveState,
   });
 
   document
-    .getElementById('outputNameOverride')
-    .addEventListener('input', saveState);
-
-  document
     .getElementById('toggleOutputNameOverride')
     .addEventListener('click', toggleOutputNameOverride);
 
-  // Add these event listeners
   document
     .getElementById('addOpenedFilesButton')
     .addEventListener('click', function () {
@@ -1102,23 +1022,6 @@ document.addEventListener('DOMContentLoaded', function () {
       });
   });
 
-  document
-    .getElementById('selectMultipleOutputFilesButton')
-    .addEventListener('click', function () {
-      const inputFile = document.getElementById('inputFileSelect').value;
-      vscode.postMessage({
-        command: 'selectMultipleFiles',
-        fileType: 'OutputFiles',
-        currentFile: inputFile,
-      });
-    });
-
-  document
-    .getElementById('emptyOutputFilesButton')
-    .addEventListener('click', function () {
-      emptyMultipleFiles('outputFilesList', 'toggleOutputFiles');
-    });
-
   // Add event listener for base file select
   document
     .getElementById('baseFileSelect')
@@ -1132,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // sus
     });
 
-  // Add event listener for the new refresh button
+  // Add event listener for the refresh button
   document
     .getElementById('refreshEditedFileButton')
     .addEventListener('click', function () {
@@ -1150,13 +1053,16 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
+
+  document
+    .getElementById('toggleMultipleOutputFiles')
+    .addEventListener('click', toggleMultipleOutputFiles);
+
   multipleSelections.forEach((id) => {
     const baseId = id.replace('Select', '');
     const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
     document
       .getElementById(toggleId)
-      .addEventListener('click', () =>
-        toggleMultipleFiles(id, toggleId),
-      );
+      .addEventListener('click', () => toggleMultipleFiles(id, toggleId));
   });
 });
