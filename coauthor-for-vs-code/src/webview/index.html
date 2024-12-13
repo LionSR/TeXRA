@@ -5,14 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src ${cspSource} https:; font-src https://cdnjs.cloudflare.com;"
+      content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src https:; font-src https://cdnjs.cloudflare.com;"
     />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
     <link rel="stylesheet" href="${styleUri}" />
-    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "./modules/stateManager.js": "${stateManagerUri}",
+          "./modules/fileHandlers.js": "${fileHandlersUri}",
+          "./modules/uiHandlers.js": "${uiHandlersUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "./modules/vscodeApi.js": "${vscodeApiUri}",
+          "./modules/utils.js": "${utilsUri}",
+          "sortablejs": "https://cdn.skypack.dev/sortablejs"
+        }
+      }
+    </script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   </head>
 
@@ -317,14 +330,17 @@
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="outputFilesSelect">
-              <span id="toggleOutputFiles" class="toggle-icon" title="More"
+            <label for="multipleOutputFilesSelect">
+              <span
+                id="toggleMultipleOutputFiles"
+                class="toggle-icon"
+                title="More"
                 >▼</span
               ><span class="advanced-feature">Multiple File Output</span>
             </label>
             <div class="file-select-actions">
               <button
-                id="emptyOutputFilesButton"
+                id="emptyMultipleOutputFilesButton"
                 class="icon-button"
                 title="Empty"
               >
@@ -340,7 +356,10 @@
             </div>
           </div>
           <div id="outputFilesContainer" style="display: none">
-            <div id="outputFilesList" class="multiple-files-list"></div>
+            <div
+              id="multipleOutputFilesSelect"
+              class="multiple-files-list"
+            ></div>
           </div>
         </div>
       </div>
