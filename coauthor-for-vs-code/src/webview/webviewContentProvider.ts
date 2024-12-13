@@ -48,7 +48,7 @@ export class WebviewContentProvider {
         .replace('${scriptUri}', scriptUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace('${agentOptions}', agentOptions)
-        .replace('${cspSource}', webview.cspSource)
+        .replace(/\${cspSource}/g, webview.cspSource)
         .replace('${utilsUri}', utilsUri.toString())
         .replace('${stateManagerUri}', stateManagerUri.toString())
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
