@@ -1,40 +1,11 @@
-const vscode = acquireVsCodeApi();
+import { vscode } from './modules/vscodeApi.js';
 
-const multipleSelections = [
-  'multipleInputFilesSelect',
-  'multipleReferenceFilesSelect',
-  'multipleAuxiliaryFilesSelect',
-  'multipleFiguresSelect',
-];
-
-const checkBoxes = [
-  'autoExtractFigure',
-  'autoExtractTikzFigure',
-  'autoExtractTikzFigureReflect',
-  'includeTexCount',
-];
-
-const valueElements = [
-  // parameters
-  'agentSelect',
-  'modelSelect',
-  'reflectSelect',
-  // files
-  'inputFileSelect',
-  'auxiliaryFileSelect',
-  'figureFileSelect',
-  'referenceFileSelect',
-  'editedFileSelect',
-  'baseFileSelect',
-  // instructions
-  'instructionInput',
-  // output
-  'outputNameOverride',
-  // git
-  'commitSelect',
-];
-
-const elementsToSave = [...valueElements, ...checkBoxes];
+import {
+  multipleSelections,
+  checkBoxes,
+  valueElements,
+  elementsToSave,
+} from './modules/utils.js';
 
 function handleCheckboxChange(event) {
   const checkboxId = event.target.id;
@@ -85,21 +56,6 @@ function updateMultipleFileSelect(selectId, toggleId, files) {
     });
   }
   saveState();
-}
-
-function safeGetElementById(id) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
-  }
-  return element;
-}
-
-function addEventListenerSafely(elementId, event, handler) {
-  const element = safeGetElementById(elementId);
-  if (element) {
-    element.addEventListener(event, handler);
-  }
 }
 
 function addFileToList(containerId, file) {
