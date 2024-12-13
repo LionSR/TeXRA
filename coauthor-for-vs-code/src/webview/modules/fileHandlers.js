@@ -28,7 +28,7 @@ export function addFileToList(containerId, file) {
   );
   const fileElement = document.createElement('div');
   fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
-  
+
   const removeButton = fileElement.querySelector('.remove-button');
   if (removeButton) {
     addEventListenerSafely(removeButton, 'click', () => {
