@@ -12,7 +12,20 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
     <link rel="stylesheet" href="${styleUri}" />
-    <script nonce="${nonce}" src="${scriptUri}"></script>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "./modules/stateManager.js": "${stateManagerUri}",
+          "./modules/fileHandlers.js": "${fileHandlersUri}",
+          "./modules/uiHandlers.js": "${uiHandlersUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "./modules/vscodeApi.js": "${vscodeApiUri}",
+          "./modules/utils.js": "${utilsUri}",
+          "sortablejs": "https://cdn.skypack.dev/sortablejs"
+        }
+      }
+    </script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   </head>
 
