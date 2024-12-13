@@ -1,18 +1,18 @@
-export const multipleSelections = [
+export const MULTIPLE_SELECTIONS = [
   'multipleInputFilesSelect',
   'multipleReferenceFilesSelect',
   'multipleAuxiliaryFilesSelect',
   'multipleFiguresSelect',
 ];
 
-export const checkBoxes = [
+export const CHECK_BOXES = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
   'autoExtractTikzFigureReflect',
   'includeTexCount',
 ];
 
-export const valueElements = [
+export const VALUE_ELEMENTS = [
   // parameters
   'agentSelect',
   'modelSelect',
@@ -32,20 +32,19 @@ export const valueElements = [
   'commitSelect',
 ];
 
-export const elementsToSave = [...valueElements, ...checkBoxes];
-
+export const ELEMENTS_TO_SAVE = [...VALUE_ELEMENTS, ...CHECK_BOXES];
 
 export function safeGetElementById(id) {
-	const element = document.getElementById(id);
-	if (!element) {
-		console.warn(`Element with id '${id}' not found`);
-	}
-	return element;
+  const element = document.getElementById(id);
+  if (!element) {
+    console.warn(`Element with id '${id}' not found`);
+  }
+  return element;
 }
 
 export function addEventListenerSafely(elementId, event, handler) {
-	const element = safeGetElementById(elementId);
-	if (element) {
-		element.addEventListener(event, handler);
-	}
+  const element = safeGetElementById(elementId);
+  if (element) {
+    element.addEventListener(event, handler);
+  }
 }
