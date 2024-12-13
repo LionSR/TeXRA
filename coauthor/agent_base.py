@@ -348,6 +348,7 @@ class BaseReflectChainAgent(ABC):
         system_prompt = render_prompt(self.agent_prompts.system_prompt, user_vars)
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
         user_prefix = render_prompt(self.agent_prompts.user_prefix, user_vars)
+        ## maybe this (and first_k_tex_document) should be part of the state, and state should be per round
         if tex_count_stats:
             user_prefix = f"{tex_count_stats}{user_prefix}"
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
@@ -377,6 +378,7 @@ class BaseReflectChainAgent(ABC):
             return State.initialize(accumulated_output), accumulated_output, end_turn, messages
 
         state = State.initialize(accumulated_output)
+        # accumulated_output should perhaps be separate from state
 
         state, accumulated_output, end_turn = self._process_response_cycle(
             state,
@@ -459,9 +461,9 @@ class BaseReflectChainAgent(ABC):
 
         if self.agent_config.auto_extract_tikz_figure:
             for input_file in [self.agent_config.input_file] + (self.agent_config.input_files or []):
-                extracted_tikz = extract_and_compile_tikzpictures_with_labels(input_file)
-                if extracted_tikz:
-                    self.figure_files.extend(extracted_tikz)
+                extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(input_file)
+                if extracted_tikz_figures:
+                    self.figure_files.extend(extracted_tikz_figures)
 
         # Initialize state and messages
         state = State.initialize()
