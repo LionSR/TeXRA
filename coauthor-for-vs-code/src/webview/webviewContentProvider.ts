@@ -1,76 +1,29 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { getConfig } from '../utils/commonUtils';
-import { debug, error } from '../utils/logUtils';
+import { debug, error, initializeLogging } from '../utils/logUtils';
 
 const CHANNEL = 'WebviewContent';
-
+initializeLogging(CHANNEL);
 export class WebviewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   getHtmlContent(webview: vscode.Webview): string {
     try {
-      const htmlPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'index.html',
-      );
-      const cssPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'styles.css',
-      );
-      const mainScriptPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'script.js',
-      );
+      const getWebviewPath = (path: string) =>
+        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', path);
+
+      const htmlPath = getWebviewPath('index.html');
+      const cssPath = getWebviewPath('styles.css');
+      const mainScriptPath = getWebviewPath('script.js');
+
       // Get URIs for all modules
-      const stateManagerPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'stateManager.js',
-      );
-      const messageHandlersPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'messageHandlers.js',
-      );
-      const fileHandlersPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'fileHandlers.js',
-      );
-      const uiHandlersPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'uiHandlers.js',
-      );
-      const utilsPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'utils.js',
-      );
-      const vscodeApiPath = vscode.Uri.joinPath(
-        this.context.extensionUri,
-        'src',
-        'webview',
-        'modules',
-        'vscodeApi.js',
-      );
+      const stateManagerPath = getWebviewPath('modules/stateManager.js');
+      const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
+      const fileHandlersPath = getWebviewPath('modules/fileHandlers.js');
+      const uiHandlersPath = getWebviewPath('modules/uiHandlers.js');
+      const utilsPath = getWebviewPath('modules/utils.js');
+      const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
 
       let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
