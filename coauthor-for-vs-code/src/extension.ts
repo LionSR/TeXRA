@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { FolderExplorer } from './folderExplorer';
+import { LogViewProvider } from './logView/logViewProvider';
+import { setLogViewProvider } from './utils/logUtils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -45,17 +47,26 @@ export function activate(context: vscode.ExtensionContext) {
   // Copy default agents first
   copyDefaultAgents(context);
 
+  // Register commands
   registerCommands(context);
 
   // Register the folder explorer with context
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
 
-  // Register the tree data provider
+  // Create and register the log view provider
+  const logViewProvider = new LogViewProvider(context);
+  setLogViewProvider(logViewProvider);
+
+  // Register the tree data provider and log view provider
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider(
       'coauthor.folderExplorer',
       folderExplorer,
+    ),
+    vscode.window.registerWebviewViewProvider(
+      'coauthor.logView',
+      logViewProvider,
     ),
     // Add watcher for configuration changes
     vscode.workspace.onDidChangeConfiguration((e) => {
