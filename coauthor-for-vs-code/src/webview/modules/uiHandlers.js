@@ -13,7 +13,6 @@ import {
 
 import { safeGetElementById, addEventListenerSafely } from './utils.js';
 
-
 export function setupUIHandlers() {
   const sortableElements = [
     ...MULTIPLE_SELECTIONS,
@@ -38,7 +37,9 @@ export function setupUIHandlers() {
   ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
     (type) => {
       addEventListenerSafely(`empty${type}FileButton`, 'click', () => {
-        const selectElement = safeGetElementById(`${type.toLowerCase()}FileSelect`);
+        const selectElement = safeGetElementById(
+          `${type.toLowerCase()}FileSelect`,
+        );
         if (selectElement) {
           selectElement.value = '';
           saveState();
@@ -47,7 +48,7 @@ export function setupUIHandlers() {
     },
   );
 
-  addEventListenerSafely('agentSelect', 'change', function() {
+  addEventListenerSafely('agentSelect', 'change', function () {
     const selectedAgent = this.value;
     if (selectedAgent.startsWith('correct')) {
       const figureSelect = safeGetElementById('figureFileSelect');
@@ -62,16 +63,17 @@ export function setupUIHandlers() {
     saveState();
   });
 
-  addEventListenerSafely('modelSelect', 'change', function() {
+  addEventListenerSafely('modelSelect', 'change', function () {
     vscode.postMessage({
       command: 'modelSelected',
       model: this.value,
     });
   });
 
-  addEventListenerSafely('inputFileSelect', 'change', function() {
+  addEventListenerSafely('inputFileSelect', 'change', function () {
     const inputFile = this.value;
-    const outputNameOverride = safeGetElementById('outputNameOverride')?.value.trim() || null;
+    const outputNameOverride =
+      safeGetElementById('outputNameOverride')?.value.trim() || null;
     vscode.postMessage({
       command: 'inputFileSelected',
       filePath: inputFile,
@@ -79,7 +81,7 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('referenceFileSelect', 'change', function() {
+  addEventListenerSafely('referenceFileSelect', 'change', function () {
     const referenceFile = this.value;
     vscode.postMessage({
       command: 'referenceFileSelected',
@@ -105,14 +107,18 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('selectMultipleOutputFilesButton', 'click', function () {
-    const inputFile = safeGetElementById('inputFileSelect').value;
-    vscode.postMessage({
-      command: 'selectMultipleFiles',
-      fileType: 'OutputFiles',
-      currentFile: inputFile,
-    });
-  });
+  addEventListenerSafely(
+    'selectMultipleOutputFilesButton',
+    'click',
+    function () {
+      const inputFile = safeGetElementById('inputFileSelect').value;
+      vscode.postMessage({
+        command: 'selectMultipleFiles',
+        fileType: 'OutputFiles',
+        currentFile: inputFile,
+      });
+    },
+  );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
     let baseId = id.replace('Select', '');
@@ -122,12 +128,16 @@ export function setupUIHandlers() {
     );
   });
 
-  addEventListenerSafely('emptyMultipleOutputFilesButton', 'click', function () {
-    emptyMultipleFiles(
-      'multipleOutputFilesSelect',
-      'toggleMultipleOutputFiles',
-    );
-  });
+  addEventListenerSafely(
+    'emptyMultipleOutputFilesButton',
+    'click',
+    function () {
+      emptyMultipleFiles(
+        'multipleOutputFilesSelect',
+        'toggleMultipleOutputFiles',
+      );
+    },
+  );
 
   CHECK_BOXES.forEach((id) => {
     addEventListenerSafely(id, 'change', handleCheckboxChange);
@@ -161,12 +171,8 @@ export function setupUIHandlers() {
 
     // Get single files
     const inputFile = safeGetElementById('inputFileSelect').value;
-    const referenceFile = safeGetElementById(
-      'referenceFileSelect',
-    ).value;
-    const auxiliaryFile = safeGetElementById(
-      'auxiliaryFileSelect',
-    ).value;
+    const referenceFile = safeGetElementById('referenceFileSelect').value;
+    const auxiliaryFile = safeGetElementById('auxiliaryFileSelect').value;
     const figureFile = safeGetElementById('figureFileSelect').value;
 
     // Get multiple files
@@ -190,17 +196,12 @@ export function setupUIHandlers() {
       (file) => file !== figureFile,
     );
 
-    const outputFilesContainer = safeGetElementById(
-      'outputFilesContainer',
-    );
+    const outputFilesContainer = safeGetElementById('outputFilesContainer');
     const outputFiles =
       outputFilesContainer.style.display === 'block'
-        ? getSelectedFiles(
-            safeGetElementById('multipleOutputFilesSelect'),
-          )
+        ? getSelectedFiles(safeGetElementById('multipleOutputFilesSelect'))
         : null;
-    const outputNameOverrideElement =
-      safeGetElementById('outputNameOverride');
+    const outputNameOverrideElement = safeGetElementById('outputNameOverride');
     const outputNameOverride =
       outputNameOverrideElement.style.display !== 'none'
         ? outputNameOverrideElement.value.trim()
@@ -208,16 +209,14 @@ export function setupUIHandlers() {
 
     const instructions = safeGetElementById('instructionInput').value;
 
-    const autoExtractFigure =
-      safeGetElementById('autoExtractFigure').checked;
+    const autoExtractFigure = safeGetElementById('autoExtractFigure').checked;
     const autoExtractTikzFigure = safeGetElementById(
       'autoExtractTikzFigure',
     ).checked;
     const autoExtractTikzFigureReflect = safeGetElementById(
       'autoExtractTikzFigureReflect',
     ).checked;
-    const includeTexCount =
-      safeGetElementById('includeTexCount').checked;
+    const includeTexCount = safeGetElementById('includeTexCount').checked;
 
     vscode.postMessage({
       command: 'execute',
@@ -416,7 +415,11 @@ export function setupUIHandlers() {
     onEnd: saveState,
   });
 
-  addEventListenerSafely('toggleOutputNameOverride', 'click', toggleOutputNameOverride);
+  addEventListenerSafely(
+    'toggleOutputNameOverride',
+    'click',
+    toggleOutputNameOverride,
+  );
 
   addEventListenerSafely('addOpenedFilesButton', 'click', function () {
     vscode.postMessage({
@@ -426,16 +429,12 @@ export function setupUIHandlers() {
 
   // Add event listeners for current file buttons
   ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
-    addEventListenerSafely(
-      `current${type}FileButton`,
-      'click',
-      () => {
-        vscode.postMessage({
-          command: 'getCurrentFile',
-          fileType: type.toLowerCase(),
-        });
-      },
-    );
+    addEventListenerSafely(`current${type}FileButton`, 'click', () => {
+      vscode.postMessage({
+        command: 'getCurrentFile',
+        fileType: type.toLowerCase(),
+      });
+    });
   });
 
   // Add event listener for base file select
@@ -465,11 +464,17 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely('toggleMultipleOutputFiles', 'click', toggleMultipleOutputFiles);
+  addEventListenerSafely(
+    'toggleMultipleOutputFiles',
+    'click',
+    toggleMultipleOutputFiles,
+  );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
     const baseId = id.replace('Select', '');
     const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
-    addEventListenerSafely(toggleId, 'click', () => toggleMultipleFiles(id, toggleId));
+    addEventListenerSafely(toggleId, 'click', () =>
+      toggleMultipleFiles(id, toggleId),
+    );
   });
 }
