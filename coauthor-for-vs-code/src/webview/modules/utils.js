@@ -43,10 +43,11 @@ export function safeGetElementById(id) {
 }
 
 export function addEventListenerSafely(elementOrId, event, handler) {
-  const element = typeof elementOrId === 'string' 
-    ? safeGetElementById(elementOrId) 
-    : elementOrId;
-    
+  const element =
+    typeof elementOrId === 'string'
+      ? safeGetElementById(elementOrId)
+      : elementOrId;
+
   if (element) {
     element.addEventListener(event, handler);
   }
