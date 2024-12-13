@@ -3,7 +3,6 @@ import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
   VALUE_ELEMENTS,
-  ELEMENTS_TO_SAVE,
 } from './utils.js';
 import {
   hideEmptyMultipleFileSelects,

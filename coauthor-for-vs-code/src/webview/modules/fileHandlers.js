@@ -1,6 +1,6 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS } from './utils.js';
+import { MULTIPLE_SELECTIONS, addEventListenerSafely } from './utils.js';
 
 export function updateFileSelect(selectId, files) {
   const select = document.getElementById(selectId);
@@ -28,16 +28,20 @@ export function addFileToList(containerId, file) {
   );
   const fileElement = document.createElement('div');
   fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
-  fileElement.querySelector('.remove-button').addEventListener('click', () => {
-    container.removeChild(fileElement);
-    if (container.children.length === 0) {
-      containerId === 'multipleOutputFilesSelect'
-        ? handleEmptyOutputFiles()
-        : ((container.style.display = 'none'),
-          (toggleIcon.textContent = '▼'),
-          saveState());
-    }
-  });
+  
+  const removeButton = fileElement.querySelector('.remove-button');
+  if (removeButton) {
+    addEventListenerSafely(removeButton, 'click', () => {
+      container.removeChild(fileElement);
+      if (container.children.length === 0) {
+        containerId === 'multipleOutputFilesSelect'
+          ? handleEmptyOutputFiles()
+          : ((container.style.display = 'none'),
+            (toggleIcon.textContent = '▼'),
+            saveState());
+      }
+    });
+  }
   container.appendChild(fileElement);
 }
 
