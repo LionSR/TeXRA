@@ -21,13 +21,12 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
 
+    new_round = round
     if edited_file:
         # Extract the round number from the edited file
         match = re.search(r"_r(\d+)_", edited_file)
         edited_round = int(match.group(1)) if match else 0
-        new_round = edited_round + round + 1
-    else:
-        new_round = round
+        new_round += edited_round + 1
 
     output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
     logger.debug(f"Output file: {output_file}")
