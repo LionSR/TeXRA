@@ -12,6 +12,11 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.DS_Store
 
-!src/webview
+!src/webview/*.js
+!src/webview/*.ts
+!src/webview/*.html
+!src/webview/*.css
+!src/webview/modules/*.js
 !resources/**
