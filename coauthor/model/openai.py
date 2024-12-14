@@ -98,18 +98,15 @@ class OpenAIModelConfig(ModelConfig):
             )
         return content
 
-    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
+    def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
         """
-        Extract statistics from OpenAI response object.
-        finish_reason: The reason the model stopped generating tokens.
-        This will be "stop" if the model hit a natural stop point or a provided stop sequence,
-        "length" if the maximum number of tokens specified in the request was reached,
-        "content_filter" if content was omitted due to a flag from our content filters,
-        "tool_calls" if the model called a tool, or "function_call" (deprecated) if the model called a function.
+        Extract response text and usage statistics from OpenAI response object.
+        Returns:
+            Tuple containing:
+            - response text (str)
+            - response usage object (Any)
+            - stop reason (str)
         """
-        # this function needs to be split
-        # one part for statistics
-        # one part for response extraction
         if not response_object or not response_object.choices:
             logger.error("Invalid response object")
             raise ValueError("Invalid response from API")
@@ -119,26 +116,11 @@ class OpenAIModelConfig(ModelConfig):
         stop_reason = choice.finish_reason
         new_response = choice.message.content.strip()
 
-        # Get usage statistics
-        usage = getattr(response_object, "usage", None)
-        if usage is None:
-            logger.warning("No usage information in response")
-            input_tokens = output_tokens = 0
-        else:
-            input_tokens = usage.prompt_tokens
-            output_tokens = usage.completion_tokens
-            # for openai models, we can get more detailed usage information
-            # cached_tokens = response_usage.prompt_tokens_details.cached_tokens
-            # reasoning_tokens = response_usage.completion_tokens_details.reasoning_tokens
-            # accepted_prediction_tokens = response_usage.completion_tokens_details.accepted_prediction_tokens
-            # rejected_prediction_tokens = response_usage.completion_tokens_details.rejected_prediction_tokens
-
-        # maybe in some cases, we need to use \\end{document} instead of end_tag
         # Add end tag if needed
         if stop_reason == "stop" and end_tag and end_tag not in new_response:
             new_response += f"\n{end_tag}"
 
-        return new_response, input_tokens, output_tokens, stop_reason
+        return new_response, response_object.usage, stop_reason
 
     def handle_continuation(
         self,

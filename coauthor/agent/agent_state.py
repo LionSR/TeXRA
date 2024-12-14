@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
 
 @dataclass
@@ -40,18 +40,53 @@ class AgentState:
         """Initialize a newAgentState object with optional accumulated output."""
         return cls(last_response=accumulated_output or "")
 
-    def update_token_counts(self, input_tokens: int, output_tokens: int, cache_read: int = 0, cache_creation: int = 0) -> None:
-        """Update token counts in state."""
-        self.input_tokens = input_tokens
-        self.output_tokens = output_tokens
-        self.total_input_tokens += input_tokens
-        self.total_output_tokens += output_tokens
-        self.total_cache_read_input_tokens += cache_read
-        self.total_cache_creation_input_tokens += cache_creation
+    def update_token_counts(self, response_usage: Any) -> None:
+        """Update token counts in state based on response usage object."""
+        # Handle OpenAI's CompletionUsage
+        if hasattr(response_usage, 'prompt_tokens'):
+            self.input_tokens = response_usage.prompt_tokens
+            self.output_tokens = response_usage.completion_tokens
+            
+            # Handle OpenAI specific token details
+            if hasattr(response_usage, 'prompt_tokens_details'):
+                if hasattr(response_usage.prompt_tokens_details, 'cached_tokens'):
+                    self.cached_tokens = response_usage.prompt_tokens_details.cached_tokens
+                    self.total_cached_tokens += self.cached_tokens
+            
+            if hasattr(response_usage, 'completion_tokens_details'):
+                if hasattr(response_usage.completion_tokens_details, 'reasoning_tokens'):
+                    self.reasoning_tokens = response_usage.completion_tokens_details.reasoning_tokens
+                    self.total_reasoning_tokens += self.reasoning_tokens
+                if hasattr(response_usage.completion_tokens_details, 'accepted_prediction_tokens'):
+                    self.accepted_prediction_tokens = response_usage.completion_tokens_details.accepted_prediction_tokens
+                    self.total_accepted_prediction_tokens += self.accepted_prediction_tokens
+                if hasattr(response_usage.completion_tokens_details, 'rejected_prediction_tokens'):
+                    self.rejected_prediction_tokens = response_usage.completion_tokens_details.rejected_prediction_tokens
+                    self.total_rejected_prediction_tokens += self.rejected_prediction_tokens
+        
+        # Handle Anthropic's BetaUsage
+        elif hasattr(response_usage, 'input_tokens'):
+            self.input_tokens = response_usage.input_tokens
+            self.output_tokens = response_usage.output_tokens
+            
+            # Handle Anthropic specific cache tokens
+            if hasattr(response_usage, 'cache_read_input_tokens'):
+                self.total_cache_read_input_tokens += response_usage.cache_read_input_tokens
+            if hasattr(response_usage, 'cache_creation_input_tokens'):
+                self.total_cache_creation_input_tokens += response_usage.cache_creation_input_tokens
+        
+        # Update total token counts
+        self.total_input_tokens += self.input_tokens
+        self.total_output_tokens += self.output_tokens
 
         # Set first_input_tokens only on first update
         if self.continuation_count == 0:
-            self.first_input_tokens = input_tokens + cache_read + cache_creation
+            if hasattr(response_usage, 'prompt_tokens'):
+                # For OpenAI, include cached tokens in first input count
+                self.first_input_tokens = self.input_tokens + self.cached_tokens
+            else:
+                # For Anthropic, include cache read and creation tokens
+                self.first_input_tokens = self.input_tokens + self.total_cache_read_input_tokens + self.total_cache_creation_input_tokens
 
     def update_response_time(self, response_time: float) -> None:
         """Update total response time."""
