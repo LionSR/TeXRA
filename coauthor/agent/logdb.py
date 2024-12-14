@@ -158,17 +158,12 @@ def logdb_and_print_statistics(state: AgentState, model_config: Any, log_id: Opt
             logger.info(f"Total cached tokens: {cached_tokens}")
             percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
             logger.info(f"Percentage cached: {percentage_cached}%")
-        
+
         if model_config.supports_reasoning:
             logger.info(f"Total reasoning tokens: {reasoning_tokens}")
-        
-        cost = model_config.compute_price(
-            total_input_tokens, 
-            total_output_tokens,
-            cache_tokens=cached_tokens,
-            reasoning_tokens=reasoning_tokens
-        )
-    
+
+        cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_tokens=cached_tokens, reasoning_tokens=reasoning_tokens)
+
     # Handle Anthropic models
     elif model_config.is_anthropic and model_config.supports_prompt_caching:
         logger.info(f"Total input tokens (cache read): {total_cache_read_tokens}")
@@ -177,14 +172,11 @@ def logdb_and_print_statistics(state: AgentState, model_config: Any, log_id: Opt
         total_input_tokens_all = total_cache_creation_tokens + total_cache_read_tokens
         percentage_cached = (total_cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         logger.info(f"Percentage cached: {percentage_cached}%")
-        
+
         cost = model_config.compute_price(
-            total_input_tokens,
-            total_output_tokens,
-            cache_creation_tokens=total_cache_creation_tokens,
-            cache_read_tokens=total_cache_read_tokens
+            total_input_tokens, total_output_tokens, cache_creation_tokens=total_cache_creation_tokens, cache_read_tokens=total_cache_read_tokens
         )
-    
+
     # Handle models without caching or reasoning
     else:
         cost = model_config.compute_price(total_input_tokens, total_output_tokens)
