@@ -11,7 +11,7 @@ from .confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompt
 from ..agent_dataclass import AgentSettings, AgentConfig
 from ..file_utils import read_file, write_file
 from ..logging_utils import logger
-from ..output_utils import filter_monologue_tags
+from .confirmation import filter_monologue_tags
 from ..replacement_utils import apply_replacement_regex, get_replacements_by_category
 from ..state import State
 from .model_base import ModelProvider
@@ -150,7 +150,8 @@ class AnthropicModelConfig(ModelConfig):
 
         # Extract and process response text
         new_response = response_object.content[0].text.strip()
-        new_response = wrap_confirmation_prompts(new_response)
+        if self.likes_to_ask_for_confirmation:
+            new_response = wrap_confirmation_prompts(new_response)
 
         # Check for confirmation patterns
         if any(pattern.lower() in new_response.lower() for pattern in CONFIRMATION_PROMPT_PATTERNS):
@@ -159,7 +160,7 @@ class AnthropicModelConfig(ModelConfig):
         # Handle output tags if present
         if "<output>" in new_response and self.likes_to_ask_for_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
-            match = re.search(r"<output>(.*?)<output>", new_response, re.DOTALL)
+            match = re.search(r"<output>(.*?)</output>", new_response, re.DOTALL)
             new_response = match.group(1) if match else new_response
             logger.warning("No <output> tags found in response" if not match else "Extracted content from <output> tags")
 
@@ -292,9 +293,6 @@ class AnthropicModelConfig(ModelConfig):
     ) -> float:
         """Compute the price for token usage for Anthropic models (with prompt caching support)."""
         base_price = super().compute_price(input_tokens, output_tokens)
-
-        if not self.supports_prompt_caching:
-            return base_price
 
         if cache_creation_tokens:
             base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6

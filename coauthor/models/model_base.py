@@ -10,8 +10,6 @@ from ..agent_dataclass import AgentSettings, AgentConfig
 from ..state import State
 from ..logging_utils import logger
 from ..img_utils import get_base64_encoded_image, page_count_pdf, process_pdf_input
-from openai import OpenAI
-from anthropic import Anthropic
 
 
 class ModelProvider(Enum):
@@ -87,7 +85,7 @@ class ModelConfig(ABC):
     @abstractmethod
     def create_response(
         self,
-        client: OpenAI | Anthropic,
+        client: Any,
         messages: List[Dict],
         temperature: float,
         system_prompt: Optional[str] = None,
