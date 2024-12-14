@@ -244,21 +244,16 @@ class BaseReflectChainAgent(ABC):
             response_time = time.time() - start_time
             state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
-            new_response, input_tokens, output_tokens, stop_reason = self.model_config.extract_response_statistics(
+            new_response, response_usage, stop_reason = self.model_config.extract_response(
                 response_object, self.agent_settings.end_tag
             )
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
+            state.update_token_counts(response_usage)
+
             new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
-
-            state.update_token_counts(
-                input_tokens,
-                output_tokens,
-                getattr(response_object.usage, "cache_read_input_tokens", 0),
-                getattr(response_object.usage, "cache_creation_input_tokens", 0),
-            )
 
             best_connector, _ = best_connection_method(state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
 
