@@ -15,14 +15,6 @@ from .file_utils import (
 from .img_utils import get_base64_encoded_image, single_page_pdf_to_png
 from .logdb_utils import logdb_and_print_statistics, logdb_output_files, logdb_start
 from .text_connection import best_connection_method
-from .output_utils import (
-    add_cdata_to_tags,
-    add_cdata_to_tags_multiple,
-    check_for_massive_repetition,
-    ensure_correct_xml_structure,
-    split_multiple_scratchpad_output_xml,
-    split_scratchpad_output_xml,
-)
 from .prompt_utils import (
     get_xml_format_from_files,
     load_agent_settings_and_prompts,

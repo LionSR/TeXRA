@@ -6,23 +6,33 @@ from typing import Optional, List, Dict, Any
 class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
-    # Document settings
     agent_type: str
     document_tag: str
     temperature: Optional[float] = 0.0
     prefills: List[str] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
-    required_files: Optional[Dict[str, str]] = field(default_factory=dict)
-    required_files_internal: Optional[Dict[str, str]] = field(default_factory=dict)
-    default_output_files: Optional[List[str]] = field(default_factory=list)
-    file_patterns_contain: Optional[List[Dict[str, str]]] = field(default_factory=list)
+    required_files: Dict[str, str] = field(default_factory=dict)
+    required_files_internal: Dict[str, str] = field(default_factory=dict)
+    default_output_files: List[str] = field(default_factory=list)
+    file_patterns_contain: List[Dict[str, str]] = field(default_factory=list)
+
+    def __post_init__(self):
+        """Validate settings after initialization."""
+        if self.agent_type not in ["think", "direct"]:
+            raise ValueError(f"Invalid agent_type: {self.agent_type}. Must be 'think' or 'direct'")
+
+        if self.temperature is not None and not 0.0 <= self.temperature <= 1.0:
+            raise ValueError(f"Temperature must be between 0.0 and 1.0, got {self.temperature}")
+
+        if not self.document_tag:
+            raise ValueError("document_tag cannot be empty")
 
     @classmethod
     def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
-        settings: AgentSettings = cls(
-            agent_type=settings_dict.get("agent_type", "think"),  # or "direct"
+        settings = cls(
+            agent_type=settings_dict.get("agent_type", "think"),
             document_tag=settings_dict.get("document_tag", "document"),
             temperature=settings_dict.get("temperature", 0.0),
             prefills=settings_dict.get("prefills", []),
@@ -37,14 +47,7 @@ class AgentSettings:
 
     def has_end_tag(self, file_content: str) -> bool:
         """Check if the file content contains the end tag or document tag."""
-        if self.end_tag in file_content:
-            return True
-        if self.document_tag:
-            if f"</{self.document_tag}>" in file_content:
-                return True
-        if "\\end{document}" in file_content:
-            return True
-        return False
+        return any([self.end_tag in file_content, self.document_tag and f"</{self.document_tag}>" in file_content, "\\end{document}" in file_content])
 
 
 @dataclass
