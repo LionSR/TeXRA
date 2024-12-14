@@ -50,11 +50,11 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 class OutputHandler:
     """Base class for handling agent outputs."""
 
-    def __init__(self, agent_settings: AgentSettings, agent_config: AgentConfig, model_config: Any, log_file: int):
+    def __init__(self, agent_settings: AgentSettings, agent_config: AgentConfig, model_config: Any, log_id: int):
         self.agent_settings = agent_settings
         self.agent_config = agent_config
         self.model_config = model_config
-        self.log_file = log_file
+        self.log_id = log_id
         self.output_files = {0: [], 1: []}
         self.base_files = []
 
@@ -66,7 +66,7 @@ class OutputHandler:
         logger.debug(f"Handling multiple outputs: tasked output_files: {self.agent_config.output_files}; actual output_files: {output_files}")
         if self.agent_config.output_files:
             for input_file, output_file in zip(self.agent_config.output_files, output_files):
-                logdb_output_files(output_file, self.log_file)
+                logdb_output_files(output_file, self.log_id)
                 if ".tex" in input_file and ".tex" in output_file:
                     _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
 

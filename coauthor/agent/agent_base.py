@@ -47,7 +47,7 @@ class BaseReflectChainAgent(ABC):
         self.setup()
         self.user_vars = self.get_user_vars()
 
-        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_config, self.log_file)
+        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_config, self.log_id)
 
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
@@ -201,7 +201,7 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_file = logdb_start(self.agent_config, self.agent_settings)
+        self.log_id = logdb_start(self.agent_config, self.agent_settings)
 
     @abstractmethod
     def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
@@ -264,7 +264,7 @@ class BaseReflectChainAgent(ABC):
 
                 # anthropic models with prefills, so we need to update the messages
                 if messages[-1]["role"] == "assistant":
-                    if self.model_config.supports_prompt_caching:
+                    if self.model_config.is_anthropic and self.model_config.supports_prompt_caching:
                         if isinstance(messages[-1]["content"], list):
                             if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
                                 if "cache_control" in messages[-1]["content"][-2]:
