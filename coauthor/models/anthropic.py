@@ -11,11 +11,12 @@ from .confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompt
 from ..agent_dataclass import AgentSettings, AgentConfig
 from ..file_utils import read_file, write_file
 from ..logging_utils import logger
-from ..output_utils import filter_monologue_tags
+from .confirmation import filter_monologue_tags
 from ..replacement_utils import apply_replacement_regex, get_replacements_by_category
 from ..state import State
-from ..img_utils import get_base64_encoded_image
 from .model_base import ModelProvider
+from anthropic import Anthropic
+
 
 @dataclass
 class AnthropicModelConfig(ModelConfig):
@@ -25,13 +26,11 @@ class AnthropicModelConfig(ModelConfig):
 
     def get_client(self):
         """Get Anthropic client."""
-        from anthropic import Anthropic
-
-        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        return Anthropic(api_key=self.provider.get_api_key())
 
     def create_response(
         self,
-        client: Any,
+        client: Anthropic,
         messages: List[Dict],
         temperature: float,
         system_prompt: Optional[str] = None,
@@ -56,40 +55,41 @@ class AnthropicModelConfig(ModelConfig):
 
     def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
         """Initialize messages for the conversation."""
-        messages = [{"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
+        content = [{"type": "text", "text": user_prefix}]
 
         if figure_files:
             image_content = self.create_image_message(figure_files)
-            messages[-1]["content"].extend(image_content)
+            content.extend(image_content)
 
-        content = {"type": "text", "text": user_request}
+        # Add user request with optional caching
+        request = {"type": "text", "text": user_request}
         if self.supports_prompt_caching:
-            content["cache_control"] = {"type": "ephemeral"}
-        messages[-1]["content"].append(content)
+            request["cache_control"] = {"type": "ephemeral"}
+        content.append(request)
 
-        return messages
+        return [{"role": "user", "content": content}]
 
     def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
         """Create a reflection message for Anthropic models."""
-        reflection_message = {"role": "user", "content": []}
+        content = []
 
         if figure_files:
             image_content = self.create_image_message(figure_files)
-            reflection_message["content"].extend(image_content)
+            content.extend(image_content)
 
+        # Add user message with optional caching
+        message = {"type": "text", "text": user_message}
         if self.supports_prompt_caching:
-            # A better and more maintainable way is required for managing cache control.
-            reflection_message["content"].append({"type": "text", "text": user_message, "cache_control": {"type": "ephemeral"}})
-            # Make sure the number of cache control is fewer than 4 for Anthropic models
+            message["cache_control"] = {"type": "ephemeral"}
+            # Manage cache control count
             if isinstance(messages[-1]["content"], list):
                 if len(messages[-1]["content"]) == 1:
                     messages[0]["content"][-1].pop("cache_control", None)
                 elif len(messages[-1]["content"]) >= 2:
                     messages[-1]["content"][-2].pop("cache_control", None)
-        else:
-            reflection_message["content"].append({"type": "text", "text": user_message})
+        content.append(message)
 
-        messages.append(reflection_message)
+        messages.append({"role": "user", "content": content})
         return messages
 
     def create_image_content(self, image_contents: list) -> List[Dict]:
@@ -100,7 +100,7 @@ class AnthropicModelConfig(ModelConfig):
                 content.extend(
                     [
                         {"type": "text", "text": f"Document: {image['file_name']}"},
-                        {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": image["data"]}},
+                        {"type": "document", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
                     ]
                 )
             else:
@@ -131,6 +131,10 @@ class AnthropicModelConfig(ModelConfig):
         - "ask_for_confirmation": the model asked for confirmation
         """
 
+        if hasattr(response_object, "error"):
+            logger.error(f"API error: {response_object.error}")
+            raise ValueError(f"API error: {response_object.error}")
+
         # this function needs to be split
         # one part for statistics
         # one part for response extraction
@@ -138,67 +142,45 @@ class AnthropicModelConfig(ModelConfig):
         output_tokens = response_object.usage.output_tokens
         stop_reason = response_object.stop_reason
 
-        if output_tokens == 3:
+        if output_tokens == 3:  # Anthropic specific empty response check
             logger.error("No output generated - API returned empty response")
             logger.debug(f"response_object: {response_object}")
             logger.debug(f"response_object.content: {response_object.content}")
             raise ValueError("No output generated")
 
-        if response_object.type == "error":
-            logger.error("API error")
-            logger.debug(f"output_tokens: {output_tokens}")
-            logger.debug(f"error: {response_object.error}")
-            raise ValueError("API error")
-
+        # Extract and process response text
         new_response = response_object.content[0].text.strip()
+        if self.likes_to_ask_for_confirmation:
+            new_response = wrap_confirmation_prompts(new_response)
 
-        # Process the response to wrap confirmation prompts
-        new_response = wrap_confirmation_prompts(new_response)
-
-        # Check if any confirmation patterns were found
+        # Check for confirmation patterns
         if any(pattern.lower() in new_response.lower() for pattern in CONFIRMATION_PROMPT_PATTERNS):
             stop_reason = "ask_for_confirmation"
 
-        if "<output>" in new_response:
-            # logic for when the model likes to ask for confirmation
+        # Handle output tags if present
+        if "<output>" in new_response and self.likes_to_ask_for_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
-            # new_response = extract what is inside <output> ... </output>
             match = re.search(r"<output>(.*?)</output>", new_response, re.DOTALL)
-            if match:
-                new_response = match.group(1)
-            else:
-                logger.warning("No <output> tags found in response")
+            new_response = match.group(1) if match else new_response
+            logger.warning("No <output> tags found in response" if not match else "Extracted content from <output> tags")
 
-        # Only append end_tag if it's a stop sequence and not a confirmation prompt
-        # maybe in some cases, we need to use \\end{document} instead of end_tag
-        if stop_reason == "stop_sequence" and f"{end_tag}" not in new_response:
-            logger.warning(f"Stop reason: {stop_reason}. Appending {end_tag} to the response.")
+        # Apply formatting
+        new_response = apply_replacement_regex(new_response, get_replacements_by_category("anthropic"))
+        new_response = filter_monologue_tags(new_response)
+
+        # Add end tag if needed
+        if stop_reason == "stop_sequence" and end_tag not in new_response:
             new_response += f"\n{end_tag}"
 
         return new_response, input_tokens, output_tokens, stop_reason
-
-    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
-        """Process image for Anthropic models."""
-        if file_extension.lower() == ".pdf":
-            from ..img_utils import page_count_pdf, process_pdf_input
-
-            # For PDFs, use native PDF support if available and multi-page
-            if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
-                img_data = get_base64_encoded_image(figure_file)
-                media_type = "application/pdf"
-            else:
-                img_data = process_pdf_input(figure_file)
-                media_type = "image/png"
-        else:
-            img_data = get_base64_encoded_image(figure_file)
-            media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
-        return img_data, media_type
 
     def handle_continuation(self, messages: List[Dict], state: State, agent_settings: AgentSettings, agent_config: AgentConfig):
         """
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
         """
+
+        # add a flag for enabling this mode
         if self.likes_to_ask_for_confirmation:
             if state.continuation_count <= 1:
                 user_message_continuation = (
@@ -249,20 +231,6 @@ class AnthropicModelConfig(ModelConfig):
                 messages[-1]["content"] = user_message_continuation
             elif messages[-1]["role"] == "assistant":
                 messages.append({"role": "user", "content": user_message_continuation})
-
-            # solution 2: keep alternating between user and assistant messages
-            # seems to be working poorly
-            # if messages[-1]["role"] == "user":
-            #     messages.append({"role": "assistant", "content": state.last_response})
-            #     messages.append({"role": "user", "content": user_message_continuation})
-            # elif messages[-1]["role"] == "assistant":
-            #     if isinstance(messages[-2]["content"], list):
-            #         messages[-1]["content"].append({"type": "text", "text": "\n" + state.last_response})
-            #     elif isinstance(messages[-2]["content"], str):
-            #         messages[-2]["content"] += "\n" + state.last_response
-            #     messages.append({"role": "user", "content": user_message_continuation})
-
-            # are there any prompt caching issues here?
         else:
             pass
 
@@ -287,22 +255,22 @@ class AnthropicModelConfig(ModelConfig):
                 logger.debug("End tag detected - skipping continuation")
                 if messages[-1]["content"][-1].get("cache_control"):
                     messages[-1]["content"][-1].pop("cache_control")
-                messages.append({"role": "assistant", "content": file_content})
+                content = file_content
                 return None, True, messages
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
                 accumulated_output = file_content
                 if self.supports_prompt_caching:
-                    messages.append({"role": "assistant", "content": [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]})
+                    content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
                 else:
-                    messages.append({"role": "assistant", "content": file_content})
+                    content = file_content
                 logger.debug(f"Using existing content as prefill: {output_file}")
         else:
             if agent_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
                 prefill += first_k_tex_document
                 accumulated_output = first_k_tex_document
 
-            messages.append({"role": "assistant", "content": prefill})
+            content = prefill
             logger.debug(f"Anthropic prefill: {prefill}")
 
             if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
@@ -310,8 +278,10 @@ class AnthropicModelConfig(ModelConfig):
             elif agent_settings.output_ext == "xml":
                 write_file(output_file, prefill + "\n")
 
+        messages.append({"role": "assistant", "content": content})
         return accumulated_output, False, messages
 
+    # this should just take response object stats
     def compute_price(
         self,
         input_tokens: int,
@@ -323,9 +293,6 @@ class AnthropicModelConfig(ModelConfig):
     ) -> float:
         """Compute the price for token usage for Anthropic models (with prompt caching support)."""
         base_price = super().compute_price(input_tokens, output_tokens)
-
-        if not self.supports_prompt_caching:
-            return base_price
 
         if cache_creation_tokens:
             base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6

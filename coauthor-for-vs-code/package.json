@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.11.10",
+  "version": "0.12.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -465,12 +465,20 @@
         {
           "type": "webview",
           "id": "coauthor.chatView",
-          "name": "Your Favourite CoAuthor "
+          "name": "Your Favourite CoAuthor",
+          "contextualTitle": "CoAuthor"
+        },
+        {
+          "type": "webview",
+          "id": "coauthor.logView",
+          "name": "CoAuthor Tasks",
+          "contextualTitle": "CoAuthor Tasks"
         },
         {
           "id": "coauthor.folderExplorer",
           "name": "CoAuthor Agents",
-          "when": "workbenchState != empty"
+          "when": "workbenchState != empty",
+          "contextualTitle": "CoAuthor Agents"
         }
       ]
     }

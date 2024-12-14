@@ -1,3 +1,5 @@
+import re
+
 """
 Contains patterns and utilities for handling confirmation prompts in the chat.
 """
@@ -27,6 +29,18 @@ CONFIRMATION_PROMPT_PATTERNS = [
     "Let me know if",
     "Please let me know if",
 ]
+
+
+def filter_monologue_tags(content: str) -> str:
+    """Filter out content wrapped in monologue tags including the tags themselves.
+
+    Args:
+        content: String content that may contain monologue tags
+
+    Returns:
+        String with monologue sections removed
+    """
+    return re.sub(r"<monologue>.*?</monologue>\s*", "", content, flags=re.DOTALL)
 
 
 def wrap_confirmation_prompts(text: str) -> str:
