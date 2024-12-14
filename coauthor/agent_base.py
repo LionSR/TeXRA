@@ -8,16 +8,17 @@ from typing import Optional, List, Dict, Any
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .figure_tools import extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex
 from .file_utils import read_file, write_to_output_file, get_agent_dir_from_env
-from .logdb_utils import logdb_start, logdb_output_files
+from .logdb_utils import logdb_start
 from .models import MODEL_CONFIGS
 from .text_connection import best_connection_method
 from .logging_utils import logger
 from .prompt_utils import load_agent_settings_and_prompts, get_xml_format_from_files, render_prompt, get_list_of_files
 from .replacement_utils import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from .state import State
-from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds, get_tex_count
-from .output_utils import check_for_massive_repetition
-from .file_utils import write_file
+from .tex_tools import get_tex_count
+from .output_handler import check_for_massive_repetition
+
+from .output_handler import OutputHandler
 
 
 class BaseReflectChainAgent(ABC):
@@ -42,25 +43,36 @@ class BaseReflectChainAgent(ABC):
         self.settings_dict, self.prompt_dict = load_agent_settings_and_prompts(self.agent_path, self.agent_config.agent)
         self.agent_settings = AgentSettings.from_dict(self.settings_dict)
         self.agent_prompts = AgentPrompts.from_dict(self.prompt_dict)
-        # logger.debug(f"Agent settings: {self.agent_settings}")
-        # logger.debug(f"Agent prompts: {self.agent_prompts}")
 
         self.setup()
         self.user_vars = self.get_user_vars()
 
+        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_config, self.log_file)
+
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
+        user_vars = self._get_basic_vars()
+        user_vars.update(self._get_file_vars())
+        user_vars.update(self._get_required_file_vars())
+        user_vars.update(self._get_pattern_based_file_vars())
+        user_vars.update(self._get_output_files_order())
+        return user_vars
 
-        all_input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
-        all_reference_files = [self.agent_config.reference_file] + (self.agent_config.reference_files or [])
-        all_auxiliary_files = [self.agent_config.auxiliary_file] + (self.agent_config.auxiliary_files or [])
-
-        # Start with basic model and instruction vars
-        user_vars = {
+    def _get_basic_vars(self) -> Dict[str, Any]:
+        """Get basic model and instruction variables."""
+        return {
             "MODEL": self.agent_config.model,
             "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_config.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
         }
+
+    def _get_file_vars(self) -> Dict[str, Any]:
+        """Get variables related to input, reference, and auxiliary files."""
+        user_vars = {}
+
+        all_input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
+        all_reference_files = [self.agent_config.reference_file] + (self.agent_config.reference_files or [])
+        all_auxiliary_files = [self.agent_config.auxiliary_file] + (self.agent_config.auxiliary_files or [])
 
         # Handle single files
         single_file_mappings = {
@@ -86,9 +98,14 @@ class BaseReflectChainAgent(ABC):
             user_vars[f"ALL_{prefix}S"] = get_xml_format_from_files(all_files) if all_files else None
             user_vars[f"LIST_OF_ALL_{prefix}S"] = get_list_of_files(all_files)
 
+        return user_vars
+
+    def _get_required_file_vars(self) -> Dict[str, Any]:
+        """Get variables from required files specified in agent settings."""
+        user_vars = {}
+
         # Add variables for required files
         if self.agent_settings.required_files:
-            # logger.debug(f"Required files: {self.agent_settings.required_files}")
             for var_name, file_path in self.agent_settings.required_files.items():
                 if os.path.exists(file_path):
                     file_content = read_file(file_path)
@@ -100,20 +117,24 @@ class BaseReflectChainAgent(ABC):
 
         # Add variables for internal required files (from prompt directory)
         if self.agent_settings.required_files_internal:
-            # logger.debug(f"Required files internal: {self.agent_settings.required_files_internal}")
-            for var_name, file_name in self.agent_settings.required_files_internal.items():
-                internal_file_path = os.path.join(self.agent_path, file_name)
-                if os.path.exists(internal_file_path):
-                    file_content = read_file(internal_file_path)
-                    user_vars[f"{var_name}_FILE"] = internal_file_path
+            for var_name, file_path in self.agent_settings.required_files_internal.items():
+                full_path = os.path.join(self.agent_path, file_path)
+                if os.path.exists(full_path):
+                    file_content = read_file(full_path)
+                    user_vars[f"{var_name}_FILE"] = full_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
-                    logger.info(f"Found from [Required Files Internal] the [VAR '{var_name}']: {internal_file_path}")
+                    logger.info(f"Found from [Required Files Internal] the [VAR '{var_name}']: {full_path}")
                 else:
-                    logger.warning(f"[Internal required file] {internal_file_path} not found from [VAR '{var_name}']")
+                    logger.warning(f"[Required file internal] {full_path} not found from [VAR '{var_name}']")
+
+        return user_vars
+
+    def _get_pattern_based_file_vars(self) -> Dict[str, Any]:
+        """Get variables from pattern-based file mappings specified in agent settings."""
+        user_vars = {}
 
         # Handle pattern-based file mappings if defined in settings
         if self.agent_settings.file_patterns_contain:
-            # logger.debug(f"File patterns contain: {self.agent_settings.file_patterns_contain}")
             for pattern_config in self.agent_settings.file_patterns_contain:
                 pattern = pattern_config["pattern"].lower()
                 var_name = pattern_config["var_name"]
@@ -147,6 +168,12 @@ class BaseReflectChainAgent(ABC):
                                         logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
 
+        return user_vars
+
+    def _get_output_files_order(self) -> Dict[str, Any]:
+        """Get variables for output files order."""
+        user_vars = {}
+
         # Handle output files order - use default_output_files if no output_files specified
         if self.agent_config.output_files:
             user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.agent_config.output_files)
@@ -160,10 +187,7 @@ class BaseReflectChainAgent(ABC):
     def setup(self):
         """Set up the agent for processing."""
         # Initialize base files
-        if self.agent_config.output_files:
-            self.base_files = self.agent_config.output_files
-        else:
-            self.base_files = [self.agent_config.input_file]
+        self.base_files = self.agent_config.output_files or [self.agent_config.input_file]
 
         # Set up logging
         logger.info(f"Processing file: {self.agent_config.input_file}")
@@ -193,17 +217,6 @@ class BaseReflectChainAgent(ABC):
     def get_output_file(self, round: int = 0) -> str:
         pass
 
-    def _handle_single_output(self, output_file: str) -> None:
-        if ".tex" in self.agent_config.input_file and ".tex" in output_file:
-            _ = run_latexdiff(self.agent_config.input_file, output_file, self.agent_config.agent)
-
-    def _handle_multiple_outputs(self, output_files: List[str]) -> None:
-        logger.debug(f"Handling multiple outputs: tasked output_files: {self.agent_config.output_files}; actual output_files: {output_files}")
-        for input_file, output_file in zip(self.agent_config.output_files, output_files):
-            logdb_output_files(output_file, self.log_file)
-            if ".tex" in input_file and ".tex" in output_file:
-                _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
-
     def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
         if isinstance(input_files, str):
             input_files = [input_files]
@@ -214,37 +227,6 @@ class BaseReflectChainAgent(ABC):
         K = self.agent_config.K
         content = read_file(self.agent_config.input_file)
         return content[:K].strip()  # Return only the first k characters, stripped
-
-    def _handle_latexdiff(self, round: int) -> None:
-        logger.info(f"Running latexdiff for {self.agent_config.agent} round {round}")
-
-        logger.debug(f"Base files: {self.base_files}")
-        logger.debug(f"Round {round} output files: {self.output_files[round]}")
-
-        for base_file, output_file in zip(self.base_files, self.output_files[round]):
-            run_latexdiff_for_round(base_file, output_file, self.agent_config.agent, round)
-
-        for r in range(1, round + 1):
-            for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
-                run_latexdiff_between_rounds(output_file1, output_file2, self.agent_config.agent)
-
-    def _replace_input_commands(self, base_files: List[str], output_files: List[str]) -> None:
-        base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
-
-        for output_file in output_files:
-            content = read_file(output_file)
-
-            def replace_input(match):
-                input_file = match.group(1)
-                if input_file in base_to_output:
-                    return f"\\input{{{base_to_output[input_file]}}}"
-                return match.group(0)
-
-            new_content = re.sub(r"\\input{([^}]+)}", replace_input, content)
-
-            if new_content != content:
-                write_file(output_file, new_content)
-                logger.debug(f"Updated input commands in {output_file}")
 
     def _process_response_cycle(
         self,
@@ -493,15 +475,15 @@ class BaseReflectChainAgent(ABC):
 
             if self.agent_config.auto_extract_tikz_figure_reflect:
                 # Handle multiple output files
-                for output_file in self.output_files[round]:
+                for output_file in self.output_handler.output_files[round]:
                     logger.debug(f"Extracting TikZ figures from {output_file}")
                     extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
                     if extracted_tikz_figures:
                         self.reflection_figure_files.extend(extracted_tikz_figures)
         else:
             # Handle single output file
-            logger.debug(f"Output files: {self.output_files}")
-            generated_output_file = self.output_files[0][0]
+            logger.debug(f"Output files: {self.output_handler.output_files[0]}")
+            generated_output_file = self.output_handler.output_files[0][0]
             if self.agent_config.include_tex_count:
                 self.tex_count_stats = self._get_tex_count_stats(generated_output_file)
             if self.agent_config.auto_extract_tikz_figure_reflect:

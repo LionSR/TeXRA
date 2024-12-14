@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Type
 
 from .logging_utils import logger
 from .agent_dataclass import AgentConfig
-from .agent_reflect import ThinkAndWrite, DirectWrite
+from .agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
 from .agent_merge import AgentMerge
 from .file_utils import get_agent_dir_from_env
 from .prompt_utils import load_agent_settings_and_prompts
@@ -13,7 +13,12 @@ load_dotenv()
 
 
 def create_agent_config(**kwargs) -> AgentConfig:
-    """Create AgentConfig from CLI kwargs"""
+    """Create AgentConfig from CLI kwargs."""
+    required_fields = ["model", "agent"]
+    for field in required_fields:
+        if field not in kwargs:
+            raise ValueError(f"Missing required field: {field}")
+
     # Convert comma-separated strings to lists
     list_fields = ["input_files", "reference_files", "auxiliary_files", "figure_files", "output_files"]
     for field in list_fields:
@@ -25,21 +30,19 @@ def create_agent_config(**kwargs) -> AgentConfig:
     return AgentConfig.from_kwargs(**kwargs)
 
 
-def get_agent_class(agent_path: str, agent: str):
-    """Determine agent class based on yaml settings"""
+def get_agent_class(agent_path: str, agent: str) -> Type[BaseReflectChainAgent]:
+    """Determine agent class based on yaml settings."""
     settings_dict, _ = load_agent_settings_and_prompts(agent_path, agent)
     return DirectWrite if settings_dict.get("agent_type") == "direct" else ThinkAndWrite
 
 
 def get_agent_name(base_agent: str, output_files: Optional[List[str]] = None) -> str:
-    """Get agent name, appending _multiple if output_files exist"""
-    if output_files:
-        return f"{base_agent}_multiple"
-    return base_agent
+    """Get agent name, appending _multiple if output_files exist."""
+    return f"{base_agent}_multiple" if output_files else base_agent
 
 
 def get_agent_path(agent_name: str) -> str:
-    """Get agent path from yaml location"""
+    """Get agent path from yaml location."""
     agents_dir = Path(get_agent_dir_from_env())
     for yaml_file in agents_dir.rglob(f"{agent_name}.yaml"):
         return str(yaml_file.parent)
@@ -52,7 +55,7 @@ def run_agent(agent: str, **kwargs):
     agent_name = get_agent_name(agent, kwargs.get("output_files"))
     agent_path = get_agent_path(agent_name)
 
-    # Create config
+    # Create config and validate
     config = create_agent_config(agent=agent_name, **kwargs)
     logger.debug(f"Config: {config}")
 
