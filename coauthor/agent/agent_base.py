@@ -35,6 +35,10 @@ class BaseReflectChainAgent(ABC):
         self.agent_prompts = agent_prompts
         self.agent_path = agent_path
 
+        logger.debug(f"Agent config: {self.agent_config}")
+        logger.debug(f"Agent settings: {self.agent_settings}")
+        logger.debug(f"Model config: {self.model_config}")
+
         # Initialize basic attributes
         self.output_file = ["", ""]
         self.output_files = {0: [], 1: []}
@@ -189,9 +193,6 @@ class BaseReflectChainAgent(ABC):
         logger.info(f"Processing file: {self.agent_config.input_file}")
 
         self.client = self.model_config.get_client()
-
-        logger.debug(f"Agent settings type: {type(self.agent_settings)}")
-        logger.debug(f"Agent settings: {self.agent_settings}")
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
