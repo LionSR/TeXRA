@@ -4,7 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, TypedDict
 
 from ..logger import logger
 
@@ -38,6 +38,33 @@ class ModelProvider(Enum):
         return urls.get(self)
 
 
+class ResponseUsageBase(TypedDict):
+    """Base type for response usage statistics."""
+
+    total_input_tokens: int
+    total_output_tokens: int
+    percentage_cached: float
+    cost: float
+
+
+class OpenAIResponseUsage(ResponseUsageBase):
+    """Type for OpenAI response usage statistics."""
+
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int
+    reasoning_tokens: int
+
+
+class AnthropicResponseUsage(ResponseUsageBase):
+    """Type for Anthropic response usage statistics."""
+
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_creation_tokens: int
+
+
 @dataclass
 class ModelConfig(ABC):
     """Base class for model configurations."""
@@ -50,6 +77,7 @@ class ModelConfig(ABC):
     provider: ModelProvider
     context_window: int = 128000
     supports_prompt_caching: bool = False
+    supports_auto_prompt_caching: bool = False
     supports_reasoning: bool = False
     supports_vision: bool = True
     supports_native_pdf: bool = False
@@ -161,23 +189,48 @@ class ModelConfig(ABC):
         """Initialize output and handle prefill based on model requirements."""
         pass
 
-    def compute_price(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        # for openai models with prompt caching support
-        cache_tokens: Optional[int] = None,
-        # for openai models with reasoning tokens support
-        reasoning_tokens: Optional[int] = None,
-        # for anthropic models with prompt caching support
-        cache_creation_tokens: Optional[int] = None,
-        cache_read_tokens: Optional[int] = None,
-    ) -> float:
+    @abstractmethod
+    def compute_price(self, response_usage: Any) -> float:
         """
         Compute the price for token usage.
-        In the future this should just take response_object.usage as input.
+        Each model implementation should handle its specific response usage format.
+
+        Args:
+            response_usage: The usage statistics from the model's response
+
+        Returns:
+            float: The computed price in dollars
         """
-        return (input_tokens * self.input_price + output_tokens * self.output_price) / 1e6
+        raise NotImplementedError("Each model class must implement compute_price")
+
+    @abstractmethod
+    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
+        """
+        Compute model-specific statistics from response usage object.
+        This should be implemented by each model class to handle their specific response usage format.
+
+        Args:
+            response_usage: The usage statistics from the model's response
+
+        Returns:
+            ResponseUsageBase containing token usage statistics and cost
+        """
+        raise NotImplementedError("Each model class must implement compute_statistics")
+
+    @abstractmethod
+    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
+        """
+        Extract round statistics from agent state and print them.
+        This creates a response usage object from the agent state and computes statistics.
+
+        Args:
+            state: The current agent state
+
+        Returns:
+            ResponseUsageBase containing token usage statistics and cost.
+            The returned stats should only contain fields relevant to this model type.
+        """
+        raise NotImplementedError("Each model class must implement extract_round_stats")
 
     def check_stop_conditions(
         self, stop_reason: str, new_response: str, state: "AgentState", agent_settings: "AgentSettings", massive_repetition_detected: bool

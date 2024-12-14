@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from anthropic import Anthropic
 
-from .model_base import ModelConfig
+from .model_base import ModelConfig, ModelProvider, AnthropicResponseUsage, ResponseUsageBase
+
 from .confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
-from .model_base import ModelProvider
 
 from ..agent import AgentSettings, AgentConfig, AgentState
 from ..logger import logger
@@ -272,22 +272,111 @@ class AnthropicModelConfig(ModelConfig):
         messages.append({"role": "assistant", "content": content})
         return accumulated_output, False, messages
 
-    # this should just take response object stats
-    def compute_price(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        cache_tokens: Optional[int] = None,
-        reasoning_tokens: Optional[int] = None,
-        cache_creation_tokens: Optional[int] = None,
-        cache_read_tokens: Optional[int] = None,
-    ) -> float:
-        """Compute the price for token usage for Anthropic models (with prompt caching support)."""
-        base_price = super().compute_price(input_tokens, output_tokens)
+    def compute_price(self, response_usage: Any) -> float:
+        """
+        Compute the price for token usage for Anthropic models.
 
-        if cache_creation_tokens:
-            base_price += (cache_creation_tokens * self.input_price * 1.25) / 1e6
-        if cache_read_tokens:
-            base_price += (cache_read_tokens * self.input_price * 0.1) / 1e6
+        Args:
+            response_usage: Anthropic response usage object
+
+        Returns:
+            float: The computed price in dollars
+        """
+        base_price = (response_usage.input_tokens * self.input_price + response_usage.output_tokens * self.output_price) / 1e6
+
+        # Add caching costs if supported
+        if self.supports_prompt_caching:
+            if hasattr(response_usage, "cache_creation_tokens"):
+                base_price += (response_usage.cache_creation_tokens * self.input_price * 1.25) / 1e6
+            if hasattr(response_usage, "cache_read_tokens"):
+                base_price += (response_usage.cache_read_tokens * self.input_price * 0.1) / 1e6
 
         return base_price
+
+    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
+        """
+        Compute statistics from Anthropic response usage object.
+
+        Args:
+            response_usage: Anthropic response usage object
+
+        Returns:
+            AnthropicResponseUsage containing token usage statistics and cost
+        """
+        total_input_tokens = response_usage.input_tokens
+        total_output_tokens = response_usage.output_tokens
+        cache_read_tokens = 0
+        cache_creation_tokens = 0
+        percentage_cached = 0
+
+        # Handle caching if supported
+        if self.supports_prompt_caching:
+            if hasattr(response_usage, "cache_read_tokens"):
+                cache_read_tokens = response_usage.cache_read_tokens
+            if hasattr(response_usage, "cache_creation_tokens"):
+                cache_creation_tokens = response_usage.cache_creation_tokens
+
+            total_input_tokens_all = cache_creation_tokens + cache_read_tokens
+            percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
+
+        cost = self.compute_price(response_usage)
+
+        return AnthropicResponseUsage(
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            input_tokens=total_input_tokens,
+            output_tokens=total_output_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            percentage_cached=percentage_cached,
+            cost=cost,
+        )
+
+    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
+        """
+        Extract round statistics from agent state for Anthropic models.
+
+        Args:
+            state: The current agent state
+
+        Returns:
+            AnthropicResponseUsage containing token usage statistics and cost
+        """
+        # Print basic statistics
+        logger.info(f"Total input tokens  : {state.total_input_tokens}")
+        logger.info(f"Total output tokens : {state.total_output_tokens}")
+
+        # Create a response usage object that mimics Anthropic's format
+        response_usage = type(
+            "ResponseUsage",
+            (),
+            {
+                "input_tokens": state.total_input_tokens,
+                "output_tokens": state.total_output_tokens,
+                "cache_read_tokens": state.total_cache_read_input_tokens,
+                "cache_creation_tokens": state.total_cache_creation_input_tokens,
+            },
+        )
+
+        stats = self.compute_statistics(response_usage)
+
+        # Print Anthropic-specific statistics
+        if self.supports_prompt_caching:
+            logger.info(f"Total input tokens (cache read): {stats['cache_read_tokens']}")
+            logger.info(f"Total input tokens (cache create): {stats['cache_creation_tokens']}")
+            logger.info(f"Percentage cached: {stats['percentage_cached']}%")
+
+        logger.info(f"Total response time : {state.total_response_time} seconds")
+        logger.warning(f"Total cost          : ${stats['cost']:.2f}")
+
+        # Return only Anthropic-specific stats
+        return AnthropicResponseUsage(
+            total_input_tokens=stats["total_input_tokens"],
+            total_output_tokens=stats["total_output_tokens"],
+            input_tokens=stats["input_tokens"],
+            output_tokens=stats["output_tokens"],
+            cache_read_tokens=stats["cache_read_tokens"],
+            cache_creation_tokens=stats["cache_creation_tokens"],
+            percentage_cached=stats["percentage_cached"],
+            cost=stats["cost"],
+        )

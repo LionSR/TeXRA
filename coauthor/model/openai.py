@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from openai import OpenAI
 
-from .model_base import ModelConfig, ModelProvider
+from .model_base import ModelConfig, ModelProvider, OpenAIResponseUsage, ResponseUsageBase
 
 from ..agent import AgentSettings, AgentConfig, AgentState
 from ..utils.file import read_file
@@ -179,30 +179,114 @@ class OpenAIModelConfig(ModelConfig):
 
         return accumulated_output, False, messages
 
-    def compute_price(
-        self,
-        input_tokens: int,
-        output_tokens: int,
-        # for openai models with prompt caching support
-        cache_tokens: Optional[int] = None,
-        # for openai models with reasoning tokens support
-        reasoning_tokens: Optional[int] = None,
-        # for anthropic models with prompt caching support
-        cache_creation_tokens: Optional[int] = None,
-        cache_read_tokens: Optional[int] = None,
-    ) -> float:
+    def compute_price(self, response_usage: Any) -> float:
         """
         Compute the price for token usage for OpenAI-compatible models.
-        In the future this should just take response_object.usage as input.
+
+        Args:
+            response_usage: OpenAI response usage object
+
+        Returns:
+            float: The computed price in dollars
         """
-        total_input_tokens = input_tokens
-        total_output_tokens = output_tokens
-        if reasoning_tokens:
-            total_output_tokens += reasoning_tokens
-        if cache_tokens:
-            total_input_tokens -= cache_tokens * 0.5
+        total_input_tokens = response_usage.prompt_tokens
+        total_output_tokens = response_usage.completion_tokens
+
+        # Apply adjustments for caching and reasoning
+        if hasattr(response_usage, "reasoning_tokens"):
+            total_output_tokens += response_usage.reasoning_tokens
+        if hasattr(response_usage, "cached_tokens"):
+            total_input_tokens -= response_usage.cached_tokens * 0.5
 
         return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
+
+    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
+        """
+        Compute statistics from OpenAI response usage object.
+
+        Args:
+            response_usage: OpenAI response usage object containing prompt_tokens and completion_tokens
+
+        Returns:
+            OpenAIResponseUsage containing token usage statistics and cost
+        """
+        total_input_tokens = response_usage.prompt_tokens
+        total_output_tokens = response_usage.completion_tokens
+        cached_tokens = 0
+        reasoning_tokens = 0
+        percentage_cached = 0
+
+        # Handle caching if supported
+        if self.supports_auto_prompt_caching and hasattr(response_usage, "cached_tokens"):
+            cached_tokens = response_usage.cached_tokens
+            percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
+
+        # Handle reasoning if supported
+        if self.supports_reasoning and hasattr(response_usage, "reasoning_tokens"):
+            reasoning_tokens = response_usage.reasoning_tokens
+
+        cost = self.compute_price(response_usage)
+
+        return OpenAIResponseUsage(
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            prompt_tokens=total_input_tokens,
+            completion_tokens=total_output_tokens,
+            cached_tokens=cached_tokens,
+            reasoning_tokens=reasoning_tokens,
+            percentage_cached=percentage_cached,
+            cost=cost,
+        )
+
+    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
+        """
+        Extract round statistics from agent state for OpenAI models.
+
+        Args:
+            state: The current agent state
+
+        Returns:
+            OpenAIResponseUsage containing token usage statistics and cost
+        """
+        # Print basic statistics
+        logger.info(f"Total input tokens  : {state.total_input_tokens}")
+        logger.info(f"Total output tokens : {state.total_output_tokens}")
+
+        # Create a response usage object that mimics OpenAI's format
+        response_usage = type(
+            "ResponseUsage",
+            (),
+            {
+                "prompt_tokens": state.total_input_tokens,
+                "completion_tokens": state.total_output_tokens,
+                "cached_tokens": state.total_cached_tokens,
+                "reasoning_tokens": state.total_reasoning_tokens,
+            },
+        )
+
+        stats = self.compute_statistics(response_usage)
+
+        # Print OpenAI-specific statistics
+        if self.supports_auto_prompt_caching:
+            logger.info(f"Total cached tokens: {stats['cached_tokens']}")
+            logger.info(f"Percentage cached: {stats['percentage_cached']}%")
+        if self.supports_reasoning:
+            logger.info(f"Total reasoning tokens: {stats['reasoning_tokens']}")
+
+        logger.info(f"Total response time : {state.total_response_time} seconds")
+        logger.warning(f"Total cost          : ${stats['cost']:.2f}")
+
+        # Return only OpenAI-specific stats
+        return OpenAIResponseUsage(
+            total_input_tokens=stats["total_input_tokens"],
+            total_output_tokens=stats["total_output_tokens"],
+            prompt_tokens=stats["prompt_tokens"],
+            completion_tokens=stats["completion_tokens"],
+            cached_tokens=stats["cached_tokens"],
+            reasoning_tokens=stats["reasoning_tokens"],
+            percentage_cached=stats["percentage_cached"],
+            cost=stats["cost"],
+        )
 
 
 class OpenAICompatibleModelConfig(OpenAIModelConfig):

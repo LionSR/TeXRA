@@ -6,7 +6,7 @@ from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 
 from .output_handler import get_output_file_name
 
-from .logdb import logdb_and_print_statistics, logdb_output_files
+from .logdb import logdb_output_files, _update_statistics_in_db
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
@@ -45,8 +45,12 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
             self.output_handler._handle_latexdiff(round)
 
-        logdb_output_files(output_file, self.log_file, self.output_handler.output_files[round])
-        logdb_and_print_statistics(state, self.model_config, self.log_file)
+        # Get model-specific statistics and update database
+        stats = self.model_config.extract_round_stats(state)  # This handles printing
+        if self.log_id is not None:
+            _update_statistics_in_db(self.log_id, stats, state.total_response_time)
+
+        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
         return self.output_handler.output_files[round]
 
 
@@ -83,6 +87,10 @@ class DirectWrite(BaseReflectChainAgent):
 
             self.output_handler._handle_latexdiff(round)
 
-        logdb_output_files(output_file, self.log_file, self.output_handler.output_files[round])
-        logdb_and_print_statistics(state, self.model_config, self.log_file)
+        # Get model-specific statistics and update database
+        stats = self.model_config.extract_round_stats(state)  # This handles printing
+        if self.log_id is not None:
+            _update_statistics_in_db(self.log_id, stats, state.total_response_time)
+
+        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
         return self.output_handler.output_files[round]
