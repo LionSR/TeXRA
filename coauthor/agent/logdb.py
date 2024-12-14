@@ -4,7 +4,7 @@ import sqlite3
 import json
 
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 
 from ..logger import logger
 
@@ -131,100 +131,63 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     return log_id
 
 
-def logdb_and_print_statistics(state: AgentState, model_config: Any, log_id: Optional[int] = None) -> None:
+def update_round_stats(state: AgentState, model_config: Any, log_id: Optional[int] = None) -> None:
     """
-    Log statistics to SQLite and print them to console.
-    Handles both OpenAI and Anthropic token usage patterns.
+    Extract round statistics from the model and update the database.
+
+    Args:
+        state: The current agent state
+        model_config: The model configuration
+        log_id: Optional ID for database logging
     """
-    total_input_tokens = state.total_input_tokens
-    total_output_tokens = state.total_output_tokens
-    total_response_time = state.total_response_time
+    stats = model_config.extract_round_stats(state)  # This also handles printing
 
-    # Print basic statistics
-    logger.info(f"Total input tokens  : {total_input_tokens}")
-    logger.info(f"Total output tokens : {total_output_tokens}")
-
-    # Calculate and print caching statistics if applicable
-    total_cache_read_tokens = state.total_cache_read_input_tokens
-    total_cache_creation_tokens = state.total_cache_creation_input_tokens
-
-    cached_tokens = state.total_cached_tokens
-    reasoning_tokens = state.total_reasoning_tokens
-    percentage_cached = 0
-
-    # Handle OpenAI models (can have both caching and reasoning)
-    if model_config.is_openai:
-        if model_config.supports_prompt_caching:
-            logger.info(f"Total cached tokens: {cached_tokens}")
-            percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
-            logger.info(f"Percentage cached: {percentage_cached}%")
-
-        if model_config.supports_reasoning:
-            logger.info(f"Total reasoning tokens: {reasoning_tokens}")
-
-        cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_tokens=cached_tokens, reasoning_tokens=reasoning_tokens)
-
-    # Handle Anthropic models
-    elif model_config.is_anthropic and model_config.supports_prompt_caching:
-        logger.info(f"Total input tokens (cache read): {total_cache_read_tokens}")
-        logger.info(f"Total input tokens (cache create): {total_cache_creation_tokens}")
-
-        total_input_tokens_all = total_cache_creation_tokens + total_cache_read_tokens
-        percentage_cached = (total_cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
-        logger.info(f"Percentage cached: {percentage_cached}%")
-
-        cost = model_config.compute_price(
-            total_input_tokens, total_output_tokens, cache_creation_tokens=total_cache_creation_tokens, cache_read_tokens=total_cache_read_tokens
-        )
-
-    # Handle models without caching or reasoning
-    else:
-        cost = model_config.compute_price(total_input_tokens, total_output_tokens)
-
-    logger.info(f"Total response time : {total_response_time} seconds")
-    logger.warning(f"Total cost          : ${cost:.2f}")
-
-    # Update statistics in database if we have a log ID
+    # Update database if we have a log ID
     if log_id is not None:
-        conn = sqlite3.connect(get_db_path())
-        c = conn.cursor()
+        _update_statistics_in_db(log_id, stats, state.total_response_time)
 
-        # Get current round from is_reflection
-        c.execute("SELECT is_reflection, round_stats FROM coauthor_logs WHERE id = ?", (log_id,))
-        row = c.fetchone()
-        current_round = 1 if row[0] else 0
-        round_stats = json.loads(row[1]) if row[1] else []
 
-        # Create stats for current round
-        round_stat = {
-            "round": current_round,
-            "cost": cost,
-            "total_input_tokens": total_input_tokens,
-            "total_output_tokens": total_output_tokens,
-            "total_response_time": total_response_time,
-            "total_cache_read_tokens": total_cache_read_tokens,  # Anthropic specific
-            "total_cache_creation_tokens": total_cache_creation_tokens,  # Anthropic specific
-            "cached_tokens": cached_tokens,  # OpenAI specific
-            "reasoning_tokens": reasoning_tokens,  # OpenAI specific
-            "percentage_cached": percentage_cached,
-        }
+def _update_statistics_in_db(log_id: int, stats: Dict[str, Any], total_response_time: float) -> None:
+    """
+    Update statistics in the database.
 
-        # Update or append round stats
-        if current_round < len(round_stats):
-            round_stats[current_round] = round_stat
-        else:
-            round_stats.append(round_stat)
+    Args:
+        log_id: The log entry ID
+        stats: Model-specific statistics dictionary
+        total_response_time: Total response time for this round
+    """
+    conn = sqlite3.connect(get_db_path())
+    c = conn.cursor()
 
-        # Update the database
-        c.execute(
-            """UPDATE coauthor_logs SET
-            round_stats = ?
-            WHERE id = ?""",
-            (json.dumps(round_stats), log_id),
-        )
+    # Get current round from is_reflection
+    c.execute("SELECT is_reflection, round_stats FROM coauthor_logs WHERE id = ?", (log_id,))
+    row = c.fetchone()
+    current_round = 1 if row[0] else 0
+    round_stats = json.loads(row[1]) if row[1] else []
 
-        conn.commit()
-        conn.close()
+    # Create stats for current round, including only fields that exist in the stats dict
+    round_stat = {
+        "round": current_round,
+        "total_response_time": total_response_time,
+        **{k: v for k, v in stats.items() if v is not None},  # Only include non-None values from model-specific stats
+    }
+
+    # Update or append round stats
+    if current_round < len(round_stats):
+        round_stats[current_round] = round_stat
+    else:
+        round_stats.append(round_stat)
+
+    # Update the database
+    c.execute(
+        """UPDATE coauthor_logs SET
+        round_stats = ?
+        WHERE id = ?""",
+        (json.dumps(round_stats), log_id),
+    )
+
+    conn.commit()
+    conn.close()
 
 
 # this needs to be refactored back to the handle_output in agent_base.py
