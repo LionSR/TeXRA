@@ -111,9 +111,9 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
+    def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
         """Extract statistics from the response object.
-        Returns: (new_response, input_tokens, output_tokens, stop_reason)
+        Returns: (new_response, response_usage, stop_reason)
         """
         pass
 

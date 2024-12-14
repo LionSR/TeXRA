@@ -133,35 +133,59 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
 
 def logdb_and_print_statistics(state: AgentState, model_config: Any, log_id: Optional[int] = None) -> None:
     """
-    Log statistics to SQLite and print them to console
-    To be more maintainable I think we should separate the extracting/printing of statistics from the logging.
+    Log statistics to SQLite and print them to console.
+    Handles both OpenAI and Anthropic token usage patterns.
     """
-
     total_input_tokens = state.total_input_tokens
     total_output_tokens = state.total_output_tokens
     total_response_time = state.total_response_time
 
-    # Print statistics to console
+    # Print basic statistics
     logger.info(f"Total input tokens  : {total_input_tokens}")
     logger.info(f"Total output tokens : {total_output_tokens}")
 
-    # Calculate caching statistics
-    cache_read_tokens = state.total_cache_read_input_tokens
-    cache_creation_tokens = state.total_cache_creation_input_tokens
+    # Calculate and print caching statistics if applicable
+    total_cache_read_tokens = state.total_cache_read_input_tokens
+    total_cache_creation_tokens = state.total_cache_creation_input_tokens
+
+    cached_tokens = state.total_cached_tokens
+    reasoning_tokens = state.total_reasoning_tokens
     percentage_cached = 0
 
-    # this maybe should be out of the logdb_utils
-    if model_config.supports_prompt_caching:
-        logger.info(f"Total input tokens (cache read): {cache_read_tokens}")
-        logger.info(f"Total input tokens (cache create): {cache_creation_tokens}")
+    # Handle OpenAI models (can have both caching and reasoning)
+    if model_config.is_openai:
+        if model_config.supports_prompt_caching:
+            logger.info(f"Total cached tokens: {cached_tokens}")
+            percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
+            logger.info(f"Percentage cached: {percentage_cached}%")
+        
+        if model_config.supports_reasoning:
+            logger.info(f"Total reasoning tokens: {reasoning_tokens}")
+        
+        cost = model_config.compute_price(
+            total_input_tokens, 
+            total_output_tokens,
+            cache_tokens=cached_tokens,
+            reasoning_tokens=reasoning_tokens
+        )
+    
+    # Handle Anthropic models
+    elif model_config.is_anthropic and model_config.supports_prompt_caching:
+        logger.info(f"Total input tokens (cache read): {total_cache_read_tokens}")
+        logger.info(f"Total input tokens (cache create): {total_cache_creation_tokens}")
 
-        total_input_tokens_all = cache_creation_tokens + cache_read_tokens
-        percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
+        total_input_tokens_all = total_cache_creation_tokens + total_cache_read_tokens
+        percentage_cached = (total_cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
         logger.info(f"Percentage cached: {percentage_cached}%")
-        cost = model_config.compute_price(total_input_tokens, total_output_tokens, cache_creation_tokens, cache_read_tokens)
-    elif model_config.supports_reasoning:
-        logger.info(f"Total reasoning tokens: {state.total_reasoning_tokens}")
-        cost = model_config.compute_price(total_input_tokens, total_output_tokens, reasoning_tokens=state.total_reasoning_tokens)
+        
+        cost = model_config.compute_price(
+            total_input_tokens,
+            total_output_tokens,
+            cache_creation_tokens=total_cache_creation_tokens,
+            cache_read_tokens=total_cache_read_tokens
+        )
+    
+    # Handle models without caching or reasoning
     else:
         cost = model_config.compute_price(total_input_tokens, total_output_tokens)
 
@@ -182,12 +206,14 @@ def logdb_and_print_statistics(state: AgentState, model_config: Any, log_id: Opt
         # Create stats for current round
         round_stat = {
             "round": current_round,
-            "input_tokens": total_input_tokens,
-            "output_tokens": total_output_tokens,
-            "response_time": total_response_time,
             "cost": cost,
-            "cache_read_tokens": cache_read_tokens,
-            "cache_creation_tokens": cache_creation_tokens,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_response_time": total_response_time,
+            "total_cache_read_tokens": total_cache_read_tokens,  # Anthropic specific
+            "total_cache_creation_tokens": total_cache_creation_tokens,  # Anthropic specific
+            "cached_tokens": cached_tokens,  # OpenAI specific
+            "reasoning_tokens": reasoning_tokens,  # OpenAI specific
             "percentage_cached": percentage_cached,
         }
 
