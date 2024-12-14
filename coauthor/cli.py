@@ -2,13 +2,13 @@ import sys
 import os
 import click
 from dotenv import load_dotenv
-from coauthor.arg_utils import comma_separated_list
-from coauthor.figure_tools import (
+from coauthor.args import comma_separated_list
+from coauthor.latex import (
     extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
-from coauthor.housekeeping_utils import (
+from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
+from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
     run_clean_build,
@@ -19,10 +19,9 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc,
     run_pack_latexdiff_vc_multiple,
 )
-from coauthor.logging_utils import logger
+from coauthor.logger import logger
 
-
-from .agent_run import run_agent, run_merge
+from coauthor.execute import run_agent, run_merge
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
