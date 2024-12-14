@@ -10,8 +10,8 @@ from ..agent_dataclass import AgentSettings, AgentConfig
 from ..file_utils import read_file
 from ..state import State
 from ..logging_utils import logger
-from ..img_utils import get_base64_encoded_image
 from .model_base import ModelProvider
+from openai import OpenAI
 
 
 @dataclass
@@ -22,18 +22,14 @@ class OpenAIModelConfig(ModelConfig):
 
     def get_client(self):
         """Get the appropriate client for this model."""
-        from openai import OpenAI
+        api_key = self.provider.get_api_key()
+        base_url = self.provider.get_base_url()
 
-        if self.is_openrouter:
-            return OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
-        elif self.is_openai:
-            return OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        elif self.is_google:
-            return OpenAI(api_key=os.getenv("GOOGLE_API_KEY"), base_url="https://generativelanguage.googleapis.com/v1beta")
+        return OpenAI(api_key=api_key, base_url=base_url)
 
     def create_response(
         self,
-        client: Any,
+        client: OpenAI,
         messages: List[Dict],
         temperature: float,
         system_prompt: Optional[str] = None,
@@ -70,19 +66,19 @@ class OpenAIModelConfig(ModelConfig):
             messages[-1]["content"].extend(image_content)
 
         messages[-1]["content"].append({"type": "text", "text": user_request})
-
         return messages
 
     def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
         """Create a reflection message for OpenAI-compatible models."""
-        reflection_message = {"role": "user", "content": []}
+        content = []
 
         if figure_files:
             image_content = self.create_image_message(figure_files)
-            reflection_message["content"].extend(image_content)
+            content.extend(image_content)
 
-        reflection_message["content"].append({"type": "text", "text": user_message})
-        messages.append(reflection_message)
+        content.append({"type": "text", "text": user_message})
+
+        messages.append({"role": "user", "content": content})
         return messages
 
     def create_image_content(self, image_contents: list) -> List[Dict]:
@@ -113,23 +109,26 @@ class OpenAIModelConfig(ModelConfig):
         "content_filter" if content was omitted due to a flag from our content filters,
         "tool_calls" if the model called a tool, or "function_call" (deprecated) if the model called a function.
         """
-
         # this function needs to be split
         # one part for statistics
         # one part for response extraction
+        if not response_object or not response_object.choices:
+            logger.error("Invalid response object")
+            raise ValueError("Invalid response from API")
 
-        stop_reason = response_object.choices[0].finish_reason
-        new_response = response_object.choices[0].message.content.strip()
+        # Extract response content and stop reason
+        choice = response_object.choices[0]
+        stop_reason = choice.finish_reason
+        new_response = choice.message.content.strip()
 
-        response_usage = response_object.usage
-
-        if response_usage is None:
-            logger.error("No usage information in response object")
-            input_tokens, output_tokens = 0, 0
+        # Get usage statistics
+        usage = getattr(response_object, "usage", None)
+        if usage is None:
+            logger.warning("No usage information in response")
+            input_tokens = output_tokens = 0
         else:
-            input_tokens = response_usage.prompt_tokens
-            output_tokens = response_usage.completion_tokens
-
+            input_tokens = usage.prompt_tokens
+            output_tokens = usage.completion_tokens
             # for openai models, we can get more detailed usage information
             # cached_tokens = response_usage.prompt_tokens_details.cached_tokens
             # reasoning_tokens = response_usage.completion_tokens_details.reasoning_tokens
@@ -137,22 +136,11 @@ class OpenAIModelConfig(ModelConfig):
             # rejected_prediction_tokens = response_usage.completion_tokens_details.rejected_prediction_tokens
 
         # maybe in some cases, we need to use \\end{document} instead of end_tag
-        if "stop" in stop_reason and f"{end_tag}" not in new_response:
+        # Add end tag if needed
+        if stop_reason == "stop" and end_tag and end_tag not in new_response:
             new_response += f"\n{end_tag}"
 
         return new_response, input_tokens, output_tokens, stop_reason
-
-    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
-        """Process image for OpenAI-compatible models."""
-        if file_extension.lower() == ".pdf":
-            from ..img_utils import process_pdf_input
-
-            img_data = process_pdf_input(figure_file)
-            media_type = "image/png"
-        else:
-            img_data = get_base64_encoded_image(figure_file)
-            media_type = "image/png" if file_extension.lower() in [".png", ".jpg", ".jpeg"] else "application/octet-stream"
-        return img_data, media_type
 
     def handle_continuation(
         self,
@@ -199,7 +187,7 @@ class OpenAIModelConfig(ModelConfig):
                 state = State.initialize(accumulated_output)
                 self.handle_continuation(messages, state, agent_settings, agent_config)
         else:
-            if agent_config.use_prefill_from_input:
+            if agent_config.use_prefill_from_input and first_k_tex_document:
                 prefill += first_k_tex_document
                 accumulated_output = ""
 
@@ -227,15 +215,13 @@ class OpenAIModelConfig(ModelConfig):
         Compute the price for token usage for OpenAI-compatible models.
         In the future this should just take response_object.usage as input.
         """
+        total_output_tokens = output_tokens
         if reasoning_tokens:
-            total_output_tokens = output_tokens + reasoning_tokens
-        else:
-            total_output_tokens = output_tokens
+            total_output_tokens += reasoning_tokens
 
+        total_input_tokens = input_tokens
         if cache_tokens:
-            total_input_tokens = (input_tokens - cache_tokens) + cache_tokens * 0.5
-        else:
-            total_input_tokens = input_tokens
+            total_input_tokens -= cache_tokens * 0.5
 
         return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
 

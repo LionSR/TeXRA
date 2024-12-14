@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from ..agent_dataclass import AgentSettings, AgentConfig
 from ..state import State
 from ..logging_utils import logger
+from ..img_utils import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
 
 class ModelProvider(Enum):
@@ -18,6 +19,22 @@ class ModelProvider(Enum):
     OPENAI = "openai"
     GOOGLE = "google"
     OPENROUTER = "openrouter"
+
+    def get_api_key(self) -> str:
+        """Get API key from environment variables."""
+        key = os.getenv(f"{self.value.upper()}_API_KEY")
+        if not key:
+            raise ValueError(f"{self.value.upper()}_API_KEY environment variable not set")
+        return key
+
+    def get_base_url(self) -> Optional[str]:
+        """Get base URL for API requests."""
+        urls = {
+            self.OPENROUTER: "https://openrouter.ai/api/v1",
+            self.GOOGLE: "https://generativelanguage.googleapis.com/v1beta",
+            self.OPENAI: None,
+        }
+        return urls.get(self)
 
 
 @dataclass
@@ -99,12 +116,22 @@ class ModelConfig(ABC):
         """
         pass
 
-    @abstractmethod
-    def process_image(self, figure_file: str, file_extension: str) -> Tuple[str, str]:
-        """Process an image file according to model requirements.
-        Returns: (img_data, media_type)
-        """
-        pass
+    def process_image(self, figure_file: str, file_extension: str):
+        """Process image for Anthropic models."""
+        img_data = get_base64_encoded_image(figure_file)
+        if file_extension.lower() in [".jpg", ".jpeg"]:
+            media_type = "image/jpeg"
+        elif file_extension.lower() == ".png":
+            media_type = "image/png"
+        elif file_extension.lower() == ".pdf":
+            # For PDFs, use native PDF support if available and multi-page
+            if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
+                media_type = "application/pdf"
+            else:
+                img_data = process_pdf_input(figure_file)
+                media_type = "image/png"
+
+        return img_data, media_type
 
     @abstractmethod
     def handle_continuation(
@@ -203,7 +230,6 @@ class ModelConfig(ABC):
                 # Use model-specific image processing
                 img_data, media_type = self.process_image(figure_file, file_extension)
                 logger.debug(f"Processed image: {figure_file}, type: {media_type}")
-                logger.debug(f"length of img_data: {len(img_data)}")
 
                 # Handle multi-page PDFs
                 if isinstance(img_data, list):
