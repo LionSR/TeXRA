@@ -12,6 +12,7 @@ from .agent_dataclass import AgentConfig, AgentSettings
 from .models import ModelConfig
 from .tex_tools import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds
 from .replacement_utils import apply_replacements, get_replacements_by_category
+from .models import filter_monologue_tags
 
 
 def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
