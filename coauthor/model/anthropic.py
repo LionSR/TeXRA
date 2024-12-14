@@ -119,30 +119,22 @@ class AnthropicModelConfig(ModelConfig):
                 )
         return content
 
-    def extract_response_statistics(self, response_object, end_tag: str) -> Tuple[str, int, int, str]:
+    def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
         """
-        Extract statistics from Anthropic response object.
-        stop_reason: The reason that we stopped. This may be one the following values:
-        - "end_turn": the model reached a natural stopping point
-        - "max_tokens": we exceeded the requested max_tokens or the model's maximum
-        - "stop_sequence": the model reached a stop sequence
-        - "tool_use": the model invoked one or more tools
-        and we also use a customized stop reason:
-        - "ask_for_confirmation": the model asked for confirmation
+        Extract response text and usage statistics from Anthropic response object.
+        Returns:
+            Tuple containing:
+            - response text (str)
+            - response usage object (Any)
+            - stop reason (str)
         """
-
         if hasattr(response_object, "error"):
             logger.error(f"API error: {response_object.error}")
             raise ValueError(f"API error: {response_object.error}")
 
-        # this function needs to be split
-        # one part for statistics
-        # one part for response extraction
-        input_tokens = response_object.usage.input_tokens
-        output_tokens = response_object.usage.output_tokens
         stop_reason = response_object.stop_reason
 
-        if output_tokens == 3:  # Anthropic specific empty response check
+        if response_object.usage.output_tokens == 3:  # Anthropic specific empty response check
             logger.error("No output generated - API returned empty response")
             logger.debug(f"response_object: {response_object}")
             logger.debug(f"response_object.content: {response_object.content}")
@@ -171,7 +163,7 @@ class AnthropicModelConfig(ModelConfig):
         if stop_reason == "stop_sequence" and end_tag not in new_response:
             new_response += f"\n{end_tag}"
 
-        return new_response, input_tokens, output_tokens, stop_reason
+        return new_response, response_object.usage, stop_reason
 
     def handle_continuation(self, messages: List[Dict], state: AgentState, agent_settings: AgentSettings, agent_config: AgentConfig):
         """
