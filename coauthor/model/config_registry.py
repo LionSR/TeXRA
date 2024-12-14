@@ -81,7 +81,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=15.0,
         output_price=60.0,
-        supports_prompt_caching=True,
+        supports_auto_prompt_caching=True,
         supports_vision=False,
         supports_reasoning=True,
     ),
@@ -105,7 +105,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=2.5,
         output_price=10.0,
-        supports_prompt_caching=True,
+        supports_auto_prompt_caching=True,
         supports_predictive_output=True,
     ),
     "gpt4t": OpenAIModelConfig(
@@ -123,7 +123,7 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=0.15,
         output_price=0.6,
-        supports_prompt_caching=True,
+        supports_auto_prompt_caching=True,
         supports_predictive_output=True,
     ),
     "gpt4ol": OpenAIModelConfig(
