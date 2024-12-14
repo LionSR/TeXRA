@@ -79,7 +79,7 @@ def run_agent(agent: str, **kwargs):
 
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
-    
+
     # Get correct agent class and run
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
@@ -101,16 +101,12 @@ def run_merge(model: str, input_file: str, edited_file: str):
     # Get agent path and load settings/prompts
     agent_path = get_agent_path("merge")
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, "merge")
-    
+
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
     # Create and run merge agent
     agent = AgentMerge(
-        agent_config=agent_config,
-        model_config=model_config,
-        agent_settings=agent_settings,
-        agent_prompts=agent_prompts,
-        agent_path=agent_path
+        agent_config=agent_config, model_config=model_config, agent_settings=agent_settings, agent_prompts=agent_prompts, agent_path=agent_path
     )
     return agent.run()
