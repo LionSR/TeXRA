@@ -215,15 +215,13 @@ class OpenAIModelConfig(ModelConfig):
         Compute the price for token usage for OpenAI-compatible models.
         In the future this should just take response_object.usage as input.
         """
+        total_output_tokens = output_tokens
         if reasoning_tokens:
-            total_output_tokens = output_tokens + reasoning_tokens
-        else:
-            total_output_tokens = output_tokens
+            total_output_tokens += reasoning_tokens
 
+        total_input_tokens = input_tokens
         if cache_tokens:
-            total_input_tokens = (input_tokens - cache_tokens) + cache_tokens * 0.5
-        else:
-            total_input_tokens = input_tokens
+            total_input_tokens -= cache_tokens * 0.5
 
         return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
 
