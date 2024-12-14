@@ -17,7 +17,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    title: string = "Tasks"
+    title: string = 'Tasks',
   ) {
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
@@ -29,21 +29,25 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this._loadState();
         this._updateWebview();
-      })
+      }),
     );
   }
 
   public dispose() {
-    this._disposables.forEach(d => d.dispose());
+    this._disposables.forEach((d) => d.dispose());
   }
 
   private _getWorkspaceKey(): string {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder ? `${this._storageKey}.${workspaceFolder.uri.fsPath}` : this._storageKey;
+    return workspaceFolder
+      ? `${this._storageKey}.${workspaceFolder.uri.fsPath}`
+      : this._storageKey;
   }
 
   private _loadState() {
-    const savedState = this.context.workspaceState.get<{ [key: string]: ColoredLogMessage[] }>(this._getWorkspaceKey());
+    const savedState = this.context.workspaceState.get<{
+      [key: string]: ColoredLogMessage[];
+    }>(this._getWorkspaceKey());
     if (savedState) {
       this._logStreams = new Map(Object.entries(savedState));
     } else {
@@ -75,7 +79,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
         if (webviewView.visible) {
           this._updateWebview();
         }
-      })
+      }),
     );
 
     this._updateWebview();
@@ -111,7 +115,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._disposables.push(
       webviewView.onDidDispose(() => {
         this._view = undefined;
-      })
+      }),
     );
   }
 
@@ -125,20 +129,24 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._updateLogContent(currentStream);
   }
 
-  public addLogMessage(stream: string, message: string, level: 'error' | 'warn' | 'info' | 'debug' = 'info') {
+  public addLogMessage(
+    stream: string,
+    message: string,
+    level: 'error' | 'warn' | 'info' | 'debug' = 'info',
+  ) {
     if (!this._logStreams.has(stream)) {
       this._logStreams.set(stream, []);
       this._updateWebview();
     }
-    
+
     const logMessage: ColoredLogMessage = {
       message,
       level,
     };
-    
+
     const messages = this._logStreams.get(stream)!;
     messages.push(logMessage);
-    
+
     if (messages.length > 1000) {
       messages.splice(0, messages.length - 1000);
     }
@@ -156,7 +164,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   private _updateLogContent(stream: string) {
     if (!this._view) return;
-    
+
     // If no stream is provided or stream doesn't exist, use the first available stream
     if (!stream || !this._logStreams.has(stream)) {
       const streams = Array.from(this._logStreams.keys());
@@ -185,7 +193,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
 
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    const workspaceName = workspaceFolder ? workspaceFolder.name : 'No Workspace';
+    const workspaceName = workspaceFolder
+      ? workspaceFolder.name
+      : 'No Workspace';
 
     return `<!DOCTYPE html>
     <html>
@@ -413,4 +423,4 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       </body>
     </html>`;
   }
-} 
+}
