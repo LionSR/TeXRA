@@ -15,6 +15,8 @@ import {
   addEventListenerSafely,
   safeGetElementValue,
   safeGetElementChecked,
+  capitalize,
+  uncapitalize,
 } from './utils.js';
 
 export function setupUIHandlers() {
@@ -34,7 +36,7 @@ export function setupUIHandlers() {
   ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
     (type) => {
       addEventListenerSafely(`empty${type}FileButton`, 'click', () => {
-        const selectElement = safeGetElementById(`${type.toLowerCase()}File`);
+        const selectElement = safeGetElementById(`${uncapitalize(type)}File`);
         if (selectElement) {
           selectElement.value = '';
           saveState();
@@ -92,8 +94,7 @@ export function setupUIHandlers() {
   ];
 
   multipleFileSelectors.forEach(({ id, selectId }) => {
-    const baseId = id.charAt(0).toUpperCase() + id.slice(1);
-    const selectMultipleButtonId = `selectMultiple${baseId}Button`;
+    const selectMultipleButtonId = `selectMultiple${capitalize(id)}Button`;
     addEventListenerSafely(selectMultipleButtonId, 'click', function () {
       const currentFile = safeGetElementValue(selectId);
       vscode.postMessage({
@@ -118,10 +119,9 @@ export function setupUIHandlers() {
   );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const baseId = id.charAt(0).toUpperCase() + id.slice(1);
-    const toggleId = `toggle${baseId}`;
+    const toggleId = `toggle${capitalize(id)}`;
 
-    addEventListenerSafely(`empty${baseId}Button`, 'click', () =>
+    addEventListenerSafely(`empty${capitalize(id)}Button`, 'click', () =>
       emptyMultipleFiles(id, toggleId),
     );
   });
@@ -295,7 +295,7 @@ export function setupUIHandlers() {
 
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
+          text: `${capitalize(action)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
         });
       } else {
         if (!inputFile || !agent || !model) {
@@ -316,7 +316,7 @@ export function setupUIHandlers() {
 
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing single file: ${inputFile}`,
+          text: `${capitalize(action)}ing single file: ${inputFile}`,
         });
       }
     });
@@ -372,17 +372,16 @@ export function setupUIHandlers() {
         clean: action === 'clean',
       });
 
-      const actionText = action === 'pack' ? 'Packing' : 'Cleaning';
       vscode.postMessage({
         command: 'showInformationMessage',
-        text: `${actionText} LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+        text: `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
       });
     });
   });
 
   ['base', 'edited'].forEach((type) => {
     addEventListenerSafely(
-      `current${type.charAt(0).toUpperCase() + type.slice(1)}FileButton`,
+      `current${capitalize(type)}FileButton`,
       'click',
       function () {
         const baseFile = safeGetElementValue('baseFile');
@@ -424,10 +423,11 @@ export function setupUIHandlers() {
 
   // Add event listeners for current file buttons
   ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
-    addEventListenerSafely(`current${type}FileButton`, 'click', () => {
+    const currentFileButtonId = `current${capitalize(type)}FileButton`;
+    addEventListenerSafely(currentFileButtonId, 'click', () => {
       vscode.postMessage({
         command: 'getCurrentFile',
-        fileType: type.toLowerCase(),
+        fileType: uncapitalize(type),
       });
     });
   });
@@ -465,7 +465,7 @@ export function setupUIHandlers() {
   );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    const toggleId = `toggle${capitalize(id)}`;
     addEventListenerSafely(toggleId, 'click', () =>
       toggleMultipleFiles(id, toggleId),
     );
