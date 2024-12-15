@@ -61,7 +61,8 @@ class AgentMerge(DirectWrite):
         logger.info(f"Merge output file: {output_file}")
         return output_file
 
-    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> None:
+    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0):
         if end_turn:
-            super().handle_output(state, end_turn, output_file, round)
+            _files = super().handle_output(state, end_turn, output_file, round)
             logger.info(f"Output file: {output_file}")
+            return _files
