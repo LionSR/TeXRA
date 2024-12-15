@@ -4,6 +4,7 @@ import {
   updateEditedFileSelect,
   updateMultipleFileSelect,
   handleRecentCommits,
+  handleSetCurrentFile,
 } from './fileHandlers.js';
 import {
   safeSetElementValue,
@@ -60,22 +61,10 @@ export function setupMessageHandlers() {
         handleRecentCommits(message);
         break;
       case 'setCurrentFile':
-        const fileId = `${message.fileType}File`;
-        const fileDiv = document.getElementById(fileId);
-        if (!fileDiv) {
-          console.warn(`Element with id '${fileId}' not found`);
-          return;
-        }
-        const options = Array.from(fileDiv.options);
-        if (options.some((option) => option.value === message.filePath)) {
-          safeSetElementValue(fileId, message.filePath);
-          fileDiv.dispatchEvent(new Event('change'));
-        } else {
-          vscode.postMessage({
-            command: 'showInformationMessage',
-            text: `The current file is not in the ${message.fileType} file list: ${message.filePath}`,
-          });
-        }
+        handleSetCurrentFile({
+          fileType: message.fileType,
+          filePath: message.filePath
+        });
         break;
       case 'setOpenedFiles':
         MULTIPLE_SELECTIONS.forEach((id) => {

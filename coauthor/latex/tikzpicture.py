@@ -10,7 +10,7 @@ from ..utils.file import read_file, write_file
 from ..utils.prompt import render_prompt
 
 
-# maybe in the future move to a separate file
+# maybe in the future move to a separate file in the agent path
 TIKZ_TEMPLATE = r"""
 \documentclass[tikz,border=10pt]{standalone}
 \usepackage{tikz}

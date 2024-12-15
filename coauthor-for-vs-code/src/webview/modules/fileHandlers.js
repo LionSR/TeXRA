@@ -4,6 +4,7 @@ import {
   MULTIPLE_SELECTIONS,
   addEventListenerSafely,
   safeGetElementById,
+  safeSetElementValue,
 } from './utils.js';
 
 export function updateFileSelect(id, files) {
@@ -239,4 +240,24 @@ export function emptyMultipleFiles(containerId, toggleId) {
   const toggleIconDiv = safeGetElementById(toggleId);
   if (toggleIconDiv) toggleIconDiv.textContent = '▼';
   saveState();
+}
+
+export function handleSetCurrentFile({ fileType, filePath }) {
+  const fileId = `${fileType}File`;
+  const fileDiv = document.getElementById(fileId);
+  if (!fileDiv) {
+    console.warn(`Element with id '${fileId}' not found`);
+    return;
+  }
+
+  const options = Array.from(fileDiv.options);
+  if (options.some((option) => option.value === filePath)) {
+    safeSetElementValue(fileId, filePath);
+    fileDiv.dispatchEvent(new Event('change'));
+  } else {
+    vscode.postMessage({
+      command: 'showInformationMessage',
+      text: `The current file is not in the ${fileType} file list: ${filePath}`,
+    });
+  }
 }
