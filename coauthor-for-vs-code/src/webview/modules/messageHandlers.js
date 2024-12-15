@@ -13,6 +13,7 @@ import {
 } from './utils.js';
 import { restoreState } from './stateManager.js';
 import { MULTIPLE_SELECTIONS } from './utils.js';
+import { capitalize, uncapitalize } from './utils.js';
 
 export function setupMessageHandlers() {
   window.addEventListener('message', (event) => {
@@ -31,7 +32,7 @@ export function setupMessageHandlers() {
       case 'setFigureFile':
       case 'setEditedFile':
         updateFileSelect(
-          `${message.command.charAt(3).toLowerCase() + message.command.slice(4)}`,
+          uncapitalize(message.command.slice(3)),
           message.files,
         );
         break;
@@ -68,7 +69,7 @@ export function setupMessageHandlers() {
         break;
       case 'setOpenedFiles':
         MULTIPLE_SELECTIONS.forEach((id) => {
-          const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+          const toggleId = `toggle${capitalize(id)}`;
           updateMultipleFileSelect(id, toggleId, message.files);
         });
         break;
