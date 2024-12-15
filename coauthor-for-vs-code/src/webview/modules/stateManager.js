@@ -6,28 +6,36 @@ import {
   addFileToList,
   getSelectedFiles,
 } from './fileHandlers.js';
+import {
+  safeGetElementValue,
+  safeGetElementById,
+  safeGetElementChecked,
+  safeSetElementValue,
+  safeSetElementChecked,
+} from './utils.js';
 
 export function setDefaultState() {
   // Hide output name override by default
-  const outputNameOverride = document.getElementById('outputNameOverride');
-  const toggleOutputNameOverride = document.getElementById(
+  const outputNameOverrideDiv = document.getElementById('outputNameOverride');
+  const toggleOutputNameOverrideDiv = document.getElementById(
     'toggleOutputNameOverride',
   );
-  outputNameOverride.style.display = 'none';
-  toggleOutputNameOverride.textContent = '▼';
+  outputNameOverrideDiv.style.display = 'none';
+  toggleOutputNameOverrideDiv.textContent = '▼';
 
   // Hide multiple file output by default
-  const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleMultipleOutputFiles = document.getElementById(
+  const outputFilesContainerDiv = document.getElementById(
+    'outputFilesContainer',
+  );
+  const toggleMultipleOutputFilesDiv = document.getElementById(
     'toggleMultipleOutputFiles',
   );
-  outputFilesContainer.style.display = 'none';
-  toggleMultipleOutputFiles.textContent = '▼';
-  document.getElementById('multipleOutputFilesSelect').innerHTML = '';
+  outputFilesContainerDiv.style.display = 'none';
+  toggleMultipleOutputFilesDiv.textContent = '▼';
+  document.getElementById('multipleOutputFiles').innerHTML = '';
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const baseId = id.replace('Select', '');
-    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
     setMultipleFileSelectVisibility(id, toggleId, false);
   });
 
@@ -38,24 +46,27 @@ export function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
     const defaultValues = {
-      agentSelect: 'correct_tex',
-      reflectSelect: 'True',
-      commitSelect: 'HEAD',
+      agent: 'correct_tex',
+      reflect: 'True',
+      commit: 'HEAD',
     };
 
     VALUE_ELEMENTS.forEach((id) => {
-      document.getElementById(id).value =
-        previousState[id] || defaultValues[id] || '';
+      safeSetElementValue(id, previousState[id] || defaultValues[id] || '');
     });
 
     CHECK_BOXES.forEach((id) => {
-      document.getElementById(id).checked = previousState[id] || false;
+      safeSetElementChecked(id, previousState[id] || false);
     });
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const baseId = id.replace('Select', '');
-      const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
-      const selectDiv = document.getElementById(id);
+      const baseId = id.charAt(0).toUpperCase() + id.slice(1);
+      const toggleId = `toggle${baseId}`;
+      const selectDiv = safeGetElementById(id);
+      if (!selectDiv) {
+        console.warn(`Element with id '${id}' not found`);
+        return;
+      }
       selectDiv.innerHTML = '';
       if (previousState[id] && previousState[id].length > 0) {
         previousState[id].forEach((file) => {
@@ -71,40 +82,39 @@ export function restoreState() {
       }
     });
 
-    const outputFilesContainer = document.getElementById(
+    const outputFilesContainerDiv = document.getElementById(
       'outputFilesContainer',
     );
-    const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
+    const toggleIconDiv = document.getElementById('toggleMultipleOutputFiles');
+
     if (
       previousState.outputFilesContainerVisible &&
       previousState.outputFiles &&
       previousState.outputFiles.length > 0
     ) {
-      outputFilesContainer.style.display = 'block';
-      toggleIcon.textContent = '▲';
-      const outputFilesDiv = document.getElementById(
-        'multipleOutputFilesSelect',
-      );
+      outputFilesContainerDiv.style.display = 'block';
+      toggleIconDiv.textContent = '▲';
+      const outputFilesDiv = document.getElementById('multipleOutputFiles');
       outputFilesDiv.innerHTML = '';
       previousState.outputFiles.forEach((file) => {
-        addFileToList('multipleOutputFilesSelect', file);
+        addFileToList('multipleOutputFiles', file);
       });
     } else {
-      outputFilesContainer.style.display = 'none';
-      toggleIcon.textContent = '▼';
+      outputFilesContainerDiv.style.display = 'none';
+      toggleIconDiv.textContent = '▼';
     }
 
-    const outputNameOverride = document.getElementById('outputNameOverride');
-    const toggleOutputNameOverride = document.getElementById(
+    const outputNameOverrideDiv = document.getElementById('outputNameOverride');
+    const toggleOutputNameOverrideDiv = document.getElementById(
       'toggleOutputNameOverride',
     );
     if (previousState.outputNameOverrideVisible) {
-      outputNameOverride.style.display = 'inline-block';
-      toggleOutputNameOverride.textContent = '▲';
-      outputNameOverride.value = previousState.outputNameOverride || '';
+      outputNameOverrideDiv.style.display = 'inline-block';
+      toggleOutputNameOverrideDiv.textContent = '▲';
+      outputNameOverrideDiv.value = previousState.outputNameOverride || '';
     } else {
-      outputNameOverride.style.display = 'none';
-      toggleOutputNameOverride.textContent = '▼';
+      outputNameOverrideDiv.style.display = 'none';
+      toggleOutputNameOverrideDiv.textContent = '▼';
     }
   } else {
     // If there's no previous state, set to default
@@ -119,25 +129,43 @@ export function saveState() {
   const state = {};
 
   VALUE_ELEMENTS.forEach((id) => {
-    state[id] = document.getElementById(id).value;
+    const value = safeGetElementValue(id);
+    if (value !== undefined) {
+      state[id] = value;
+    }
   });
+
   CHECK_BOXES.forEach((id) => {
-    state[id] = document.getElementById(id).checked;
+    state[id] = safeGetElementChecked(id);
   });
 
   MULTIPLE_SELECTIONS.forEach((id) => {
+    const elementDiv = safeGetElementById(id);
+    if (!elementDiv) return;
+    const containerDiv = safeGetElementById(`${id}Container`);
     state[`${id}Visible`] =
-      document.getElementById(id).style.display === 'block';
-    state[id] = getSelectedFiles(document.getElementById(id));
+      containerDiv && containerDiv.style.display === 'block';
+    state[id] = getSelectedFiles(elementDiv);
   });
 
-  state.outputFilesContainerVisible =
-    document.getElementById('outputFilesContainer').style.display === 'block';
-  state.outputFiles = getSelectedFiles(
-    document.getElementById('multipleOutputFilesSelect'),
-  );
-  state.outputNameOverrideVisible =
-    document.getElementById('outputNameOverride').style.display !== 'none';
+  const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
+  const multipleOutputFilesDiv = safeGetElementById('multipleOutputFiles');
+  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
+
+  if (outputFilesContainerDiv) {
+    state.outputFilesContainerVisible =
+      outputFilesContainerDiv.style.display === 'block';
+  }
+
+  if (multipleOutputFilesDiv) {
+    state.outputFiles = getSelectedFiles(multipleOutputFilesDiv);
+  }
+
+  if (outputNameOverrideDiv) {
+    state.outputNameOverrideVisible =
+      outputNameOverrideDiv.style.display !== 'none';
+    state.outputNameOverride = outputNameOverrideDiv.value;
+  }
 
   vscode.setState(state);
 }
