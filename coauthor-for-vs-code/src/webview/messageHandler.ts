@@ -383,6 +383,16 @@ export class WebviewMessageHandler {
     );
   }
 
+  private handleLatexDiffVCOperation(message: any) {
+    vscode.commands.executeCommand(
+      `coauthor.${message.command}`,
+      message.inputFile,
+      message.baseFile,
+      message.commitHash,
+      message.clean,
+    );
+  }
+
   private async handleRequestRecentCommits(webviewView: vscode.WebviewView) {
     const isGitRepo = await vscode.commands.executeCommand<boolean>(
       'coauthor.isGitRepository',
@@ -417,16 +427,6 @@ export class WebviewMessageHandler {
         isGitRepo: false,
       });
     }
-  }
-
-  private handleLatexDiffVCOperation(message: any) {
-    vscode.commands.executeCommand(
-      `coauthor.${message.command}`,
-      message.inputFile,
-      message.baseFile,
-      message.commitHash,
-      message.clean,
-    );
   }
 
   private async handleGetCurrentFile(
@@ -487,7 +487,7 @@ export class WebviewMessageHandler {
     });
   }
 
-  private postFileUpdate(
+  private async postFileUpdate(
     webviewView: vscode.WebviewView,
     fileType: string,
     files: string[],
