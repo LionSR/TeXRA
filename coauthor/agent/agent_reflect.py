@@ -72,7 +72,7 @@ class DirectWrite(BaseReflectChainAgent):
             base_output_file, self.agent_config.agent, self.model_config.name, self.agent_settings.output_ext, round, self.agent_config.edited_file
         )
 
-    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
+    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0):
         """Handle the output for the given round."""
         if end_turn:
             if self.agent_config.output_files:
