@@ -5,6 +5,8 @@ import {
   addEventListenerSafely,
   safeGetElementById,
   safeSetElementValue,
+  capitalize,
+  uncapitalize,
 } from './utils.js';
 
 export function updateFileSelect(id, files) {
@@ -29,7 +31,7 @@ export function updateEditedFileSelect(baseFile) {
 export function addFileToList(containerId, file) {
   const container = safeGetElementById(containerId);
   const toggleIcon = safeGetElementById(
-    `toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`,
+    `toggle${capitalize(containerId)}`,
   );
   if (!container || !toggleIcon) return;
 
@@ -97,7 +99,7 @@ export function hideEmptyMultipleFileSelects() {
   MULTIPLE_SELECTIONS.forEach((id) => {
     const selectDiv = safeGetElementById(id);
     if (!selectDiv) return;
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    const toggleId = `toggle${capitalize(id)}`;
     if (selectDiv.children.length === 0) {
       setMultipleFileSelectVisibility(id, toggleId, false);
     }
@@ -167,7 +169,7 @@ export function handleCheckboxChange(event) {
   const checkboxId = event.target.id;
   const isChecked = event.target.checked;
   vscode.postMessage({
-    command: `update${checkboxId.charAt(0).toUpperCase() + checkboxId.slice(1)}`,
+    command: `update${capitalize(checkboxId)}`,
     value: isChecked,
   });
 }
@@ -243,7 +245,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
 }
 
 export function handleSetCurrentFile({ fileType, filePath }) {
-  const fileId = `${fileType}File`;
+  const fileId = `${uncapitalize(fileType)}File`;
   const fileDiv = document.getElementById(fileId);
   if (!fileDiv) {
     console.warn(`Element with id '${fileId}' not found`);

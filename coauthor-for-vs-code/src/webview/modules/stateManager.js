@@ -13,6 +13,7 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
 } from './utils.js';
+import { capitalize, uncapitalize } from './utils.js';
 
 export function setDefaultState() {
   // Hide output name override by default
@@ -35,7 +36,7 @@ export function setDefaultState() {
   document.getElementById('multipleOutputFiles').innerHTML = '';
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
+    const toggleId = `toggle${capitalize(id)}`;
     setMultipleFileSelectVisibility(id, toggleId, false);
   });
 
@@ -60,8 +61,7 @@ export function restoreState() {
     });
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const baseId = id.charAt(0).toUpperCase() + id.slice(1);
-      const toggleId = `toggle${baseId}`;
+      const toggleId = `toggle${capitalize(id)}`;
       const selectDiv = safeGetElementById(id);
       if (!selectDiv) {
         console.warn(`Element with id '${id}' not found`);

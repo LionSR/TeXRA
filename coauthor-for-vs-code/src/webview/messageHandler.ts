@@ -11,6 +11,7 @@ import {
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../utils';
+import { capitalize, uncapitalize } from '../utils/commonUtils';
 
 const CHANNEL = 'MessageHandler';
 
@@ -200,7 +201,7 @@ export class WebviewMessageHandler {
     if (file) {
       debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       webviewView.webview.postMessage({
-        command: `${singleFileType.charAt(0).toLowerCase() + singleFileType.slice(1)}Selected`,
+        command: `${uncapitalize(singleFileType)}Selected`,
         filePath: file,
       });
     }
@@ -332,7 +333,7 @@ export class WebviewMessageHandler {
     Object.entries(refreshedFiles).forEach(([type, files]) => {
       this.postFileUpdate(
         webviewView,
-        type.charAt(0).toUpperCase() + type.slice(1),
+        capitalize(type),
         files,
       );
     });
@@ -355,6 +356,11 @@ export class WebviewMessageHandler {
   }
 
   private handleMultipleOperation(message: any) {
+    const operation = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
+    info(
+      CHANNEL,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${message.outputFiles.join(', ')}`,
+    );
     vscode.commands.executeCommand(
       `coauthor.${message.command}`,
       message.inputFile,
@@ -493,7 +499,7 @@ export class WebviewMessageHandler {
     files: string[],
   ) {
     webviewView.webview.postMessage({
-      command: `set${fileType}File`,
+      command: `set${capitalize(fileType)}File`,
       files,
     });
   }
