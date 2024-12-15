@@ -1,11 +1,15 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS, addEventListenerSafely } from './utils.js';
+import {
+  MULTIPLE_SELECTIONS,
+  addEventListenerSafely,
+  safeGetElementById,
+} from './utils.js';
 
-export function updateFileSelect(selectId, files) {
-  const select = document.getElementById(selectId);
-  if (!select) return console.error(`Element with id '${selectId}' not found`);
-  select.innerHTML =
+export function updateFileSelect(id, files) {
+  const selectDiv = document.getElementById(id);
+  if (!selectDiv) return console.error(`Element with id '${id}' not found`);
+  selectDiv.innerHTML =
     '<option value="">None</option>' +
     files.map((file) => `<option value="${file}">${file}</option>`).join('');
 }
@@ -17,15 +21,17 @@ export function updateEditedFileSelect(baseFile) {
       baseFile: baseFile,
     });
   } else {
-    updateFileSelect('editedFileSelect', []);
+    updateFileSelect('editedFile', []);
   }
 }
 
 export function addFileToList(containerId, file) {
-  const container = document.getElementById(containerId);
-  const toggleIcon = document.getElementById(
+  const container = safeGetElementById(containerId);
+  const toggleIcon = safeGetElementById(
     `toggle${containerId.charAt(0).toUpperCase() + containerId.slice(1)}`,
   );
+  if (!container || !toggleIcon) return;
+
   const fileElement = document.createElement('div');
   fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
 
@@ -34,7 +40,7 @@ export function addFileToList(containerId, file) {
     addEventListenerSafely(removeButton, 'click', () => {
       container.removeChild(fileElement);
       if (container.children.length === 0) {
-        containerId === 'multipleOutputFilesSelect'
+        containerId === 'multipleOutputFiles'
           ? handleEmptyOutputFiles()
           : ((container.style.display = 'none'),
             (toggleIcon.textContent = '▼'),
@@ -46,8 +52,10 @@ export function addFileToList(containerId, file) {
 }
 
 export function updateMultipleFileSelect(selectId, toggleId, files) {
-  const selectDiv = document.getElementById(selectId);
-  const toggleIcon = document.getElementById(toggleId);
+  const selectDiv = safeGetElementById(selectId);
+  const toggleIcon = safeGetElementById(toggleId);
+  if (!selectDiv || !toggleIcon) return;
+
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter((file) => !existingFiles.includes(file));
   if (newFiles.length > 0) {
@@ -68,16 +76,17 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
   saveState();
 }
 
-export function getSelectedFiles(multipleFilesSelectDiv) {
-  const fileElements = multipleFilesSelectDiv.getElementsByTagName('div');
+export function getSelectedFiles(multipleFilesDiv) {
+  const fileElements = multipleFilesDiv.getElementsByTagName('div');
   return Array.from(fileElements).map(
     (el) => el.textContent.replace(' -', '') || '',
   );
 }
 
 export function handleEmptyOutputFiles() {
-  const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
+  const outputFilesContainer = safeGetElementById('outputFilesContainer');
+  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
+  if (!outputFilesContainer || !toggleIcon) return;
   outputFilesContainer.style.display = 'none';
   toggleIcon.textContent = '▼';
   saveState();
@@ -85,9 +94,9 @@ export function handleEmptyOutputFiles() {
 
 export function hideEmptyMultipleFileSelects() {
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const selectDiv = document.getElementById(id);
-    const baseId = id.replace('Select', '');
-    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+    const selectDiv = safeGetElementById(id);
+    if (!selectDiv) return;
+    const toggleId = `toggle${id.charAt(0).toUpperCase() + id.slice(1)}`;
     if (selectDiv.children.length === 0) {
       setMultipleFileSelectVisibility(id, toggleId, false);
     }
@@ -99,20 +108,24 @@ export function setMultipleFileSelectVisibility(
   toggleId,
   isVisible,
 ) {
-  const container = document.getElementById(containerId);
-  const toggleIcon = document.getElementById(toggleId);
-  container.style.display = isVisible ? 'block' : 'none';
-  if (toggleIcon === null) {
-    console.error('toggleIcon is null');
-    console.log('toggleId:', toggleId);
+  const container = safeGetElementById(`${containerId}Container`);
+  const toggleIcon = safeGetElementById(toggleId);
+  if (!container || !toggleIcon) {
+    console.error(`Container or toggle icon not found for ${containerId}`);
+    return;
   }
+
+  container.style.display = isVisible ? 'block' : 'none';
   toggleIcon.textContent = isVisible ? '▲' : '▼';
 }
 
 export function setElementsDisabled(elements, disabled) {
   elements.forEach((element) => {
     if (typeof element === 'string') {
-      document.getElementById(element).disabled = disabled;
+      const elementDiv = document.getElementById(element);
+      if (elementDiv) {
+        elementDiv.disabled = disabled;
+      }
     } else {
       element.disabled = disabled;
     }
@@ -132,20 +145,20 @@ export function handleRecentCommits(message) {
     'cleanLatexDiffVCButton',
     'latexDiffVCButton',
   ];
-  const commitSelect = document.getElementById('commitSelect');
-  commitSelect.innerHTML = '';
+  const commitDiv = document.getElementById('commit');
+  commitDiv.innerHTML = '';
 
   if (message.isGitRepo === false) {
-    addOptionToSelect(commitSelect, '', 'Not a Git repository');
-    setElementsDisabled([commitSelect, ...commitButtons], true);
+    addOptionToSelect(commitDiv, '', 'Not a Git repository');
+    setElementsDisabled([commitDiv, ...commitButtons], true);
   } else {
-    addOptionToSelect(commitSelect, 'HEAD', 'HEAD');
+    addOptionToSelect(commitDiv, 'HEAD', 'HEAD');
     message.commits.forEach((commit) => {
       const [commitHash, ...commitMessageParts] = commit.split(': ');
       const commitMessage = commitMessageParts.join(': ');
-      addOptionToSelect(commitSelect, commitHash, commit);
+      addOptionToSelect(commitDiv, commitHash, commit);
     });
-    setElementsDisabled([commitSelect, ...commitButtons], false);
+    setElementsDisabled([commitDiv, ...commitButtons], false);
   }
 }
 
@@ -159,64 +172,71 @@ export function handleCheckboxChange(event) {
 }
 
 export function initializeOutputFiles() {
-  const inputFileSelect = document.getElementById('inputFileSelect');
-  const multipleInputFilesSelect = document.getElementById(
-    'multipleInputFilesSelect',
-  );
-  const outputFilesDiv = document.getElementById('multipleOutputFilesSelect');
+  const inputFileDiv = safeGetElementById('inputFile');
+  const multipleInputFilesDiv = safeGetElementById('multipleInputFiles');
+  const outputFilesDiv = safeGetElementById('multipleOutputFiles');
+  if (!outputFilesDiv) return;
+
   outputFilesDiv.innerHTML = '';
 
   // Add the main input file
-  if (inputFileSelect.value) {
-    addFileToList('multipleOutputFilesSelect', inputFileSelect.value);
+  if (inputFileDiv && inputFileDiv.value) {
+    addFileToList('multipleOutputFiles', inputFileDiv.value);
   }
 
   // Add multiple input files
-  const additionalFiles = getSelectedFiles(multipleInputFilesSelect);
-  additionalFiles.forEach((file) => {
-    addFileToList('multipleOutputFilesSelect', file);
+  const additionalFilesDiv = multipleInputFilesDiv
+    ? getSelectedFiles(multipleInputFilesDiv)
+    : [];
+  additionalFilesDiv.forEach((file) => {
+    addFileToList('multipleOutputFiles', file);
   });
 }
 
 export function toggleMultipleOutputFiles() {
-  const outputFilesContainer = document.getElementById('outputFilesContainer');
-  const toggleIcon = document.getElementById('toggleMultipleOutputFiles');
-  if (outputFilesContainer.style.display === 'none') {
-    outputFilesContainer.style.display = 'block';
+  const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
+  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
+  if (!outputFilesContainerDiv || !toggleIcon) return;
+  if (outputFilesContainerDiv.style.display === 'none') {
+    outputFilesContainerDiv.style.display = 'block';
     toggleIcon.textContent = '▲';
     initializeOutputFiles();
   } else {
-    outputFilesContainer.style.display = 'none';
+    outputFilesContainerDiv.style.display = 'none';
     toggleIcon.textContent = '▼';
   }
   saveState();
 }
 
 export function toggleOutputNameOverride() {
-  const outputNameOverride = document.getElementById('outputNameOverride');
-  const toggleIcon = document.getElementById('toggleOutputNameOverride');
-  if (outputNameOverride.style.display === 'none') {
-    outputNameOverride.style.display = 'inline-block';
+  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
+  const toggleIcon = safeGetElementById('toggleOutputNameOverride');
+  if (!outputNameOverrideDiv || !toggleIcon) return;
+  if (outputNameOverrideDiv.style.display === 'none') {
+    outputNameOverrideDiv.style.display = 'inline-block';
     toggleIcon.textContent = '▲';
   } else {
-    outputNameOverride.style.display = 'none';
+    outputNameOverrideDiv.style.display = 'none';
     toggleIcon.textContent = '▼';
   }
   saveState();
 }
 
 export function toggleMultipleFiles(containerId, toggleId) {
-  const container = document.getElementById(containerId);
+  const container = safeGetElementById(`${containerId}Container`);
+  if (!container) return;
   const isVisible = container.style.display !== 'none';
   setMultipleFileSelectVisibility(containerId, toggleId, !isVisible);
-
   saveState();
 }
 
 export function emptyMultipleFiles(containerId, toggleId) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = '';
+  const listDiv = safeGetElementById(containerId);
+  const container = safeGetElementById(`${containerId}Container`);
+  if (!listDiv || !container) return;
+  listDiv.innerHTML = '';
   container.style.display = 'none';
-  document.getElementById(toggleId).textContent = '▼';
+  const toggleIconDiv = safeGetElementById(toggleId);
+  if (toggleIconDiv) toggleIconDiv.textContent = '▼';
   saveState();
 }
