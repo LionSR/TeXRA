@@ -10,6 +10,7 @@ from ..logger import logger
 
 
 def get_base64_encoded_image(image_path: str) -> str:
+    """Converts an image file to base64 string."""
     with open(image_path, "rb") as image_file:
         binary_data = image_file.read()
         base_64_encoded_data = base64.b64encode(binary_data)
@@ -18,18 +19,7 @@ def get_base64_encoded_image(image_path: str) -> str:
 
 
 def single_page_pdf_to_png(pdf_path: str, page_num: int = 0, quality: int = 300, max_size: tuple = (1024, 1024)) -> str:
-    """
-    Convert a single page of a PDF to a PNG image.
-
-    Args:
-        pdf_path (str): Path to the PDF file.
-        page_num (int): Page number to convert (0-indexed).
-        quality (int): Quality of the output PNG image (default: 300).
-        max_size (tuple): Maximum size of the output image (default: (1024, 1024)).
-
-    Returns:
-        str: Base64 encoded PNG image.
-    """
+    """Converts a single PDF page to base64-encoded PNG."""
     doc = fitz.open(pdf_path)
     page = doc.load_page(page_num)
 
@@ -58,18 +48,7 @@ def single_page_pdf_to_png(pdf_path: str, page_num: int = 0, quality: int = 300,
 
 
 def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (1024, 1024), max_pages: int = 100) -> List[str]:
-    """
-    Convert multiple pages of a PDF to PNG images.
-
-    Args:
-        pdf_path: str - Path to the PDF file.
-        quality: int - Quality of the output PNG images (default: 300).
-        max_size: tuple - Maximum size of the output images (default: (1024, 1024)).
-        max_pages: int - Maximum number of pages to convert (default: 20).
-
-    Returns:
-        List[str] - List of base64 encoded PNG images.
-    """
+    """Converts multiple PDF pages to base64-encoded PNGs."""
     doc = fitz.open(pdf_path)
 
     base64_encoded_pngs = []
@@ -84,18 +63,7 @@ def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (
 
 
 def process_pdf_input(pdf_path: str, max_pages: Optional[int] = None, quality: Optional[int] = None, max_size: Optional[tuple] = None):
-    """
-    Process a PDF file and return base64 encoded PNG image(s).
-
-    Args:
-        pdf_path (str): Path to the PDF file.
-        max_pages (Optional[int]): Maximum number of pages to convert. If None, converts all pages.
-        quality (Optional[int]): Quality of the output PNG images. If None, uses default 300.
-        max_size (Optional[tuple]): Maximum size of the output images. If None, uses default (1024, 1024).
-
-    Returns:
-        Union[str, List[str], None]: Base64 encoded PNG image(s) or None if the file is empty or non-existent.
-    """
+    """Processes PDF file and returns base64-encoded PNG(s)."""
     try:
         doc = fitz.open(pdf_path)
         page_count = doc.page_count
@@ -113,16 +81,8 @@ def process_pdf_input(pdf_path: str, max_pages: Optional[int] = None, quality: O
         return None
 
 
-def page_count_pdf(pdf_path: str) -> int:
-    """
-    Get the number of pages in a PDF file.
-
-    Args:
-        pdf_path (str): Path to the PDF file.
-
-    Returns:
-        int: Number of pages in the PDF.
-    """
+def page_count_pdf(pdf_path: str):
+    """Returns the number of pages in a PDF file."""
     if os.path.exists(pdf_path):
         doc = fitz.open(pdf_path)
         return doc.page_count
