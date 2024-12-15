@@ -34,13 +34,13 @@
       <div class="compact-selections">
         <div class="select-group">
           <i class="fas fa-tasks" title="Agent"></i>
-          <select id="agentSelect">
+          <select id="agent">
             ${agentOptions}
           </select>
         </div>
         <div class="select-group">
           <i class="fas fa-robot" title="Model"></i>
-          <select id="modelSelect">
+          <select id="model">
             <option value="sonnet++">sonnet3++</option>
             <option value="sonnet+">sonnet3+</option>
             <option value="opus">opus3</option>
@@ -63,7 +63,7 @@
         </div>
         <div class="select-group">
           <i class="fas fa-sync-alt" title="Reflect"></i>
-          <select id="reflectSelect">
+          <select id="reflect">
             <option value="True">True</option>
             <option value="False">False</option>
           </select>
@@ -73,7 +73,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
-              <label for="inputFileSelect"
+              <label for="inputFile"
                 ><i class="fas fa-file-alt"></i> Select Input File:</label
               >
             </div>
@@ -128,7 +128,7 @@
               </button>
             </div>
           </div>
-          <select id="inputFileSelect">
+          <select id="inputFile">
             <option value="">None</option>
           </select>
           <div
@@ -137,16 +137,13 @@
             style="display: none"
           >
             <div class="multiple-files-content">
-              <div
-                id="multipleInputFilesSelect"
-                class="multiple-files-list"
-              ></div>
+              <div id="multipleInputFiles" class="multiple-files-list"></div>
             </div>
           </div>
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="referenceFileSelect"
+            <label for="referenceFile"
               ><i class="fas fa-file-alt"></i> Select Reference File:</label
             >
             <div class="file-select-actions">
@@ -193,7 +190,7 @@
               </button>
             </div>
           </div>
-          <select id="referenceFileSelect">
+          <select id="referenceFile">
             <option value="">None</option>
           </select>
           <div
@@ -203,7 +200,7 @@
           >
             <div class="multiple-files-content">
               <div
-                id="multipleReferenceFilesSelect"
+                id="multipleReferenceFiles"
                 class="multiple-files-list"
               ></div>
             </div>
@@ -211,7 +208,7 @@
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="auxiliaryFileSelect"
+            <label for="auxiliaryFile"
               ><i class="fas fa-file-alt"></i> Select Auxiliary File:</label
             >
             <div class="file-select-actions">
@@ -258,7 +255,7 @@
               </button>
             </div>
           </div>
-          <select id="auxiliaryFileSelect">
+          <select id="auxiliaryFile">
             <option value="">None</option>
           </select>
           <div
@@ -268,7 +265,7 @@
           >
             <div class="multiple-files-content">
               <div
-                id="multipleAuxiliaryFilesSelect"
+                id="multipleAuxiliaryFiles"
                 class="multiple-files-list"
               ></div>
             </div>
@@ -277,7 +274,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
-              <label for="figureFileSelect"
+              <label for="figureFile"
                 ><i class="fas fa-file-alt"></i> Select Figure File:</label
               >
             </div>
@@ -315,7 +312,7 @@
               </button>
             </div>
           </div>
-          <select id="figureFileSelect">
+          <select id="figureFile">
             <option value="">None</option>
           </select>
           <div
@@ -324,7 +321,7 @@
             style="display: none"
           >
             <div class="multiple-files-content">
-              <div id="multipleFiguresSelect" class="multiple-files-list"></div>
+              <div id="multipleFigures" class="multiple-files-list"></div>
             </div>
           </div>
         </div>
@@ -356,10 +353,7 @@
             </div>
           </div>
           <div id="outputFilesContainer" style="display: none">
-            <div
-              id="multipleOutputFilesSelect"
-              class="multiple-files-list"
-            ></div>
+            <div id="multipleOutputFiles" class="multiple-files-list"></div>
           </div>
         </div>
       </div>
@@ -460,7 +454,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
-              <label for="baseFileSelect"
+              <label for="baseFile"
                 ><i class="fas fa-file-alt"></i> Select Base File:</label
               >
             </div>
@@ -481,14 +475,14 @@
               </button>
             </div>
           </div>
-          <select id="baseFileSelect">
+          <select id="baseFile">
             <option value="">None</option>
           </select>
         </div>
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
-              <label for="editedFileSelect"
+              <label for="editedFile"
                 ><i class="fas fa-file-edit"></i> Select Edited File:</label
               >
               <button id="mergeButton" class="icon-button" title="Merge">
@@ -526,14 +520,14 @@
               </button>
             </div>
           </div>
-          <select id="editedFileSelect">
+          <select id="editedFile">
             <option value="">None</option>
           </select>
         </div>
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
-              <label for="commitSelect"
+              <label for="commit"
                 ><i class="fas fa-code-commit"></i> Select Commit:</label
               >
               <button
@@ -568,7 +562,7 @@
               </button>
             </div>
           </div>
-          <select id="commitSelect">
+          <select id="commit">
             <option value="HEAD">HEAD</option>
           </select>
         </div>

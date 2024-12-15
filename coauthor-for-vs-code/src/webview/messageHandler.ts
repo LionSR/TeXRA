@@ -25,6 +25,7 @@ export class WebviewMessageHandler {
         return this.handleInfoMessage(message);
       case 'getTheme':
         return this.handleThemeRequest(webviewView);
+      // Why no agentSelected?
       case 'modelSelected':
         return this.handleModelSelection(message, webviewView);
       case 'execute':
