@@ -280,7 +280,8 @@ export function setupUIHandlers() {
         safeGetElementById('multipleOutputFiles'),
       );
 
-      // Determine if we should use multiple or single mode
+      // BUG: Determine if we should use multiple or single mode
+      // only activate if are toggled!!
       const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
 
       if (useMultiple) {
