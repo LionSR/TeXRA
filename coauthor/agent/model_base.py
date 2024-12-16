@@ -4,7 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple, Union
+from typing import Any
 
 from ..logger import logger
 
@@ -14,8 +14,6 @@ from ..agent.agent_state import AgentGlobalState, AgentRoundState
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
-
-ModelUsageType = Union[OpenAIResponseUsage, AnthropicResponseUsage]
 
 
 @dataclass
@@ -47,7 +45,7 @@ class ModelProvider(Enum):
             raise ValueError(f"{self.value.upper()}_API_KEY environment variable not set")
         return key
 
-    def get_base_url(self) -> Optional[str]:
+    def get_base_url(self) -> str | None:
         """Get base URL for API requests."""
         urls = {
             self.OPENROUTER: "https://openrouter.ai/api/v1",
@@ -58,7 +56,7 @@ class ModelProvider(Enum):
 
 
 @dataclass
-class ModelConfig(ABC):
+class ModelHandler(ABC):
     """Base class for model configurations."""
 
     name: str  # Short name (e.g., "sonnet++")
@@ -67,9 +65,18 @@ class ModelConfig(ABC):
     input_price: float
     output_price: float
     provider: ModelProvider
-    base_url: Optional[str] = None
+    base_url: str | None = None
     context_window: int = 128000
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+
+    # Added class-level constants
+    CONTINUE_LIMIT: int = field(init=False)
+    INPUT_TOKEN_LIMIT: int = 1500000
+    OUTPUT_TOKEN_LIMIT_FACTOR: float = 2.5
+
+    def __post_init__(self):
+        """Initialize dependent attributes after dataclass initialization."""
+        self.CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
 
     @property
     def is_anthropic(self) -> bool:
@@ -100,31 +107,31 @@ class ModelConfig(ABC):
     def create_response(
         self,
         client: Any,
-        messages: List[Dict],
+        messages: list[dict],
         temperature: float,
-        system_prompt: Optional[str] = None,
-        end_tag: Optional[str] = None,
+        system_prompt: str | None = None,
+        end_tag: str | None = None,
     ) -> Any:
         """Create a response using the appropriate API call for this model."""
         pass
 
     @abstractmethod
-    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
+    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: str | None = None) -> list[dict]:
         """Initialize messages for the conversation."""
         pass
 
     @abstractmethod
-    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
+    def create_reflection_message(self, messages: list[dict], user_message: str, figure_files=None) -> list[dict]:
         """Create a reflection message and handle prompt caching."""
         pass
 
     @abstractmethod
-    def create_image_content(self, image_contents: list) -> List[Dict]:
+    def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for the model."""
         pass
 
     @abstractmethod
-    def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
+    def extract_response(self, response_object, end_tag: str) -> tuple[str, Any, str]:
         """Extract statistics from the response object.
         Returns: (new_response, response_usage, stop_reason)
         """
@@ -151,7 +158,7 @@ class ModelConfig(ABC):
     @abstractmethod
     def handle_continuation(
         self,
-        messages: List[Dict],
+        messages: list[dict],
         round_state: AgentRoundState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
@@ -165,11 +172,11 @@ class ModelConfig(ABC):
         output_file: str,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
-        messages: List[Dict],
+        messages: list[dict],
         prefill: str,
         accumulated_output: str,
-        first_k_tex_document: Optional[str] = None,
-    ) -> Tuple[str, bool, List[Dict]]:
+        first_k_tex_document: str | None = None,
+    ) -> tuple[str, bool, list[dict]]:
         """Initialize output and handle prefill based on model requirements."""
         pass
 
@@ -179,7 +186,7 @@ class ModelConfig(ABC):
         pass
 
     @abstractmethod
-    def compute_statistics(self, response_usage: Any, response_time: float) -> ModelUsageType:
+    def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage | AnthropicResponseUsage:
         """Compute model-specific statistics from response usage object."""
         pass
 
@@ -187,18 +194,14 @@ class ModelConfig(ABC):
         self, stop_reason: str, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop."""
-        CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
-        INPUT_TOKEN_LIMIT = 1500000
-        OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
-
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
-        continuation_limit = round_state.continuation_count > CONTINUE_LIMIT
-        input_token_limit = global_state.total_input_tokens > INPUT_TOKEN_LIMIT
-        output_token_limit = global_state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens
+        continuation_limit = round_state.continuation_count > self.CONTINUE_LIMIT
+        input_token_limit = global_state.total_input_tokens > self.INPUT_TOKEN_LIMIT
+        output_token_limit = global_state.total_output_tokens > self.OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens
 
         if output_token_limit:
-            logger.error(f"Output tokens exceed {OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
+            logger.error(f"Output tokens exceed {self.OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
 
         should_stop = encounter_document_tag or continuation_limit or input_token_limit or output_token_limit
 
@@ -208,17 +211,13 @@ class ModelConfig(ABC):
         self, end_turn: bool, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
     ):
         """Print the flags indicating why the conversation stopped."""
-        CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
-        INPUT_TOKEN_LIMIT = 100000
-        OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
-
         logger.debug(
             f"Stop flags:\n"
             f"end_turn: {end_turn}\n"
             f"encounter_document_tag: {'</'+agent_settings.document_tag+'>' in new_response}\n"
-            f"continuation_limit: {round_state.continuation_count > CONTINUE_LIMIT}\n"
-            f"input_token_limit: {global_state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
-            f"output_token_limit: {global_state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens}\n"
+            f"continuation_limit: {round_state.continuation_count > self.CONTINUE_LIMIT}\n"
+            f"input_token_limit: {global_state.total_input_tokens > self.INPUT_TOKEN_LIMIT}\n"
+            f"output_token_limit: {global_state.total_output_tokens > self.OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens}\n"
         )
 
     def create_image_message(self, figure_files):
@@ -256,6 +255,6 @@ class ModelConfig(ABC):
         return self.create_image_content(image_contents)
 
     @abstractmethod
-    def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update the message content based on model-specific requirements."""
         pass

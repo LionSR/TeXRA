@@ -16,7 +16,7 @@ from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_ta
 from .logdb import logdb_output_files
 
 
-def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
+def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: str | None = None) -> str:
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
 
@@ -47,7 +47,7 @@ class OutputHandler:
         if ".tex" in self.agent_config.input_file and ".tex" in output_file:
             _ = run_latexdiff(self.agent_config.input_file, output_file, self.agent_config.agent)
 
-    def _handle_multiple_outputs(self, output_files: List[str]) -> None:
+    def _handle_multiple_outputs(self, output_files: list[str]) -> None:
         logger.debug(f"Handling multiple outputs: tasked output_files: {self.agent_config.output_files}; actual output_files: {output_files}")
         if self.agent_config.output_files:
             for input_file, output_file in zip(self.agent_config.output_files, output_files):
@@ -63,7 +63,7 @@ class OutputHandler:
         write_file(processed_output_file, filtered_content)
         return processed_output_file
 
-    def _process_multiple_outputs(self, output_file: str) -> List[str]:
+    def _process_multiple_outputs(self, output_file: str) -> list[str]:
         """Process multiple output files."""
         processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         for processed_output_file in processed_output_files:
@@ -85,7 +85,7 @@ class OutputHandler:
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
                 run_latexdiff_between_rounds(output_file1, output_file2, self.agent_config.agent)
 
-    def _replace_input_commands(self, base_files: List[str], output_files: List[str]) -> None:
+    def _replace_input_commands(self, base_files: list[str], output_files: list[str]) -> None:
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
 
         for output_file in output_files:

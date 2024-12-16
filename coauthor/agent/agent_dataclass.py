@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 
 @dataclass
@@ -8,14 +8,14 @@ class AgentSettings:
 
     agent_type: str
     document_tag: str
-    temperature: Optional[float] = 0.0
-    prefills: List[str] = field(default_factory=list)
+    temperature: float | None = 0.0
+    prefills: list[str] = field(default_factory=list)
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
-    required_files: Dict[str, str] = field(default_factory=dict)
-    required_files_internal: Dict[str, str] = field(default_factory=dict)
-    default_output_files: List[str] = field(default_factory=list)
-    file_patterns_contain: List[Dict[str, str]] = field(default_factory=list)
+    required_files: dict[str, str] = field(default_factory=dict)
+    required_files_internal: dict[str, str] = field(default_factory=dict)
+    default_output_files: list[str] = field(default_factory=list)
+    file_patterns_contain: list[dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self):
         """Validate settings after initialization."""
@@ -29,7 +29,7 @@ class AgentSettings:
             raise ValueError("document_tag cannot be empty")
 
     @classmethod
-    def from_dict(cls, settings_dict: Dict[str, Any]) -> "AgentSettings":
+    def from_dict(cls, settings_dict: dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
         settings = cls(
             agent_type=settings_dict.get("agent_type", "think"),
@@ -60,7 +60,7 @@ class AgentPrompts:
     user_reflect: str
 
     @classmethod
-    def from_dict(cls, prompt_dict: Dict[str, str]) -> "AgentPrompts":
+    def from_dict(cls, prompt_dict: dict[str, str]) -> "AgentPrompts":
         """Create a AgentPrompts from a dictionary of prompts."""
         return cls(
             system_prompt=prompt_dict.get("system_prompt", ""),
@@ -84,17 +84,17 @@ class AgentConfig:
 
     # Input/Output configuration
     input_file: str
-    input_files: Optional[List[str]]
-    reference_file: Optional[str]
-    reference_files: Optional[List[str]]
-    auxiliary_file: Optional[str]
-    auxiliary_files: Optional[List[str]]
-    figure_file: Optional[str]
-    figure_files: Optional[List[str]]
-    output_files: Optional[List[str]]
-    output_name_override: Optional[str]
-    edited_file: Optional[str]
-    instruction: Optional[str]
+    input_files: list[str] | None
+    reference_file: str | None
+    reference_files: list[str] | None
+    auxiliary_file: str | None
+    auxiliary_files: list[str] | None
+    figure_file: str | None
+    figure_files: list[str] | None
+    output_files: list[str] | None
+    output_name_override: str | None
+    edited_file: str | None
+    instruction: str | None
 
     # Tool usage configuration
     use_prefill_from_input: bool = False
