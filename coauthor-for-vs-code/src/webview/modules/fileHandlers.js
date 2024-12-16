@@ -30,9 +30,7 @@ export function updateEditedFileSelect(baseFile) {
 
 export function addFileToList(containerId, file) {
   const container = safeGetElementById(containerId);
-  const toggleIcon = safeGetElementById(
-    `toggle${capitalize(containerId)}`,
-  );
+  const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
   if (!container || !toggleIcon) return;
 
   const fileElement = document.createElement('div');
