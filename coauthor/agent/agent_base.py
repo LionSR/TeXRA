@@ -275,7 +275,9 @@ class BaseReflectChainAgent(ABC):
             round_state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
 
-            new_response, response_usage, stop_reason = self.model_handler.extract_response(response_object, self.agent_settings.end_tag, self.agent_settings.auto_confirmation)
+            new_response, response_usage, stop_reason = self.model_handler.extract_response(
+                response_object, self.agent_settings.end_tag, self.agent_settings.auto_confirmation
+            )
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 

@@ -11,7 +11,7 @@ export const CHECK_BOXES = [
   'autoExtractTikzFigureReflect',
   'includeTexCount',
   'usePrefillFromInput',
-  'autoConfirmation'
+  'autoConfirmation',
 ];
 
 export const VALUE_ELEMENTS = [
