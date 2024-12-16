@@ -1,12 +1,13 @@
+"""Base agent class for handling model interactions."""
+
 import os
 import re
 import time
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from ..latex import get_tex_count, extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex, best_connection_method
-
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.xml import get_xml_format_from_files
 from ..utils.file import read_file, write_to_output_file
@@ -15,10 +16,10 @@ from ..utils.repetition import check_for_massive_repetition
 
 from ..logger import logger
 
-from .agent_state import AgentState
+from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 
-from .logdb import logdb_start
+from .logdb import logdb_start, update_statistics_in_db, logdb_output_files
 from .output_handler import OutputHandler
 
 
@@ -204,9 +205,20 @@ class BaseReflectChainAgent(ABC):
         # Initialize logging
         self.log_id = logdb_start(self.agent_config, self.agent_settings)
 
-    @abstractmethod
-    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
-        pass
+    def handle_output(
+        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+    ) -> List[str]:
+        """Handle the output for the given round.
+
+        This base implementation handles database updates. Derived classes should call super().handle_output()
+        after processing their specific output handling logic.
+        """
+        # Update database with statistics
+        if self.log_id is not None:
+            update_statistics_in_db(self.log_id, global_state, round_state, round)
+
+        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
+        return self.output_handler.output_files[round]
 
     @abstractmethod
     def get_output_file(self, round: int) -> str:
@@ -225,11 +237,12 @@ class BaseReflectChainAgent(ABC):
 
     def _process_response_cycle(
         self,
-        state: AgentState,
+        round_state: AgentRoundState,
+        global_state: AgentGlobalState,
         accumulated_output: str,
         messages: List[Dict[str, Any]],
         output_file: str,
-    ):
+    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool]:
         end_turn = False
 
         while not end_turn:
@@ -243,16 +256,19 @@ class BaseReflectChainAgent(ABC):
                 end_tag=self.agent_settings.end_tag,
             )
             response_time = time.time() - start_time
-            state.update_response_time(response_time)
+            round_state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
 
             new_response, response_usage, stop_reason = self.model_handler.extract_response(response_object, self.agent_settings.end_tag)
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
-            state.update_token_counts(response_usage)
+            # Compute statistics and update states
+            model_usage = self.model_handler.compute_statistics(response_usage, response_time)
+            round_state.update_token_counts(model_usage)
+            global_state.update_from_round(round_state)
 
-            massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
+            massive_repetition_detected = check_for_massive_repetition(round_state.last_response, new_response)
             if massive_repetition_detected:
                 logger.error(f"The new response is: {new_response}")
                 logger.error("Massive repetition detected - skipping this response")
@@ -265,7 +281,7 @@ class BaseReflectChainAgent(ABC):
             logger.info("First K characters of the response:")
             logger.debug(f"{new_response[:self.agent_config.K]}")
 
-            best_connector, _ = best_connection_method(state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
+            best_connector, _ = best_connection_method(round_state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
             accumulated_output += best_connector + new_response
 
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
@@ -273,43 +289,41 @@ class BaseReflectChainAgent(ABC):
             logger.info("Last K characters of the response:")
             logger.debug(f"{new_response[-self.agent_config.K:]}")
 
-            state.last_response = new_response
+            round_state.last_response = new_response
 
             self.model_handler.update_message_content(messages, best_connector, new_response, accumulated_output)
 
-            end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, state, self.agent_settings)
+            end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, round_state, global_state, self.agent_settings)
             if should_stop:
-                self.model_handler.print_stop_flags(end_turn, new_response, state, self.agent_settings)
+                self.model_handler.print_stop_flags(end_turn, new_response, round_state, global_state, self.agent_settings)
                 break
 
-            state.increment_continuation()
-            logger.info(f"Starting continuation #{state.continuation_count}")
+            round_state.increment_continuation()
+            logger.info(f"Starting continuation #{round_state.continuation_count}")
 
-            # TODO: maybe I can get rid of the conditioning and just use model_handler.handle_continuation
             if self.model_handler.is_openai_compatible:
                 if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
-                    self.model_handler.handle_continuation(messages, state, self.agent_settings, self.agent_config)
+                    self.model_handler.handle_continuation(messages, round_state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_handler.is_anthropic and self.model_handler.likes_to_ask_for_confirmation:
+            if self.model_handler.is_anthropic and self.model_handler.capabilities.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
-                    # this is handle confirmation actually
-                    self.model_handler.handle_continuation(messages, state, self.agent_settings, self.agent_config)
+                    self.model_handler.handle_continuation(messages, round_state, self.agent_settings, self.agent_config)
                     continue
 
-        return state, accumulated_output, end_turn
+        return round_state, global_state, accumulated_output, end_turn
 
     def process_first_round(
         self,
         output_file: str,
         user_vars: Dict[str, str],
-        state: AgentState,
+        global_state: AgentGlobalState,
         messages: List[Dict[str, Any]],
         round: int = 0,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
-    ):
+    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool, List[Dict[str, Any]]]:
         """Process the first round."""
         logger.info(f"\n\nProcessing round {round}")
 
@@ -317,10 +331,8 @@ class BaseReflectChainAgent(ABC):
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
         user_prefix = render_prompt(self.agent_prompts.user_prefix, user_vars)
 
-        # TODO: Consider making tex_count_stats and first_k_tex_document part of a agent tool state object
         if tex_count_stats:
             user_prefix = f"{tex_count_stats}{user_prefix}"
-        user_request = render_prompt(self.agent_prompts.user_request, user_vars)
 
         messages = self.model_handler.initialize_messages(
             user_prefix,
@@ -343,30 +355,31 @@ class BaseReflectChainAgent(ABC):
         )
 
         if end_turn:
-            return AgentState.initialize(accumulated_output), accumulated_output, end_turn, messages
+            round_state = AgentRoundState.initialize(round, accumulated_output)
+            return round_state, global_state, accumulated_output, end_turn, messages
 
-        state = AgentState.initialize(accumulated_output)
-        # accumulated_output should perhaps be separate from state
+        round_state = AgentRoundState.initialize(round, accumulated_output)
 
-        state, accumulated_output, end_turn = self._process_response_cycle(
-            state,
+        round_state, global_state, accumulated_output, end_turn = self._process_response_cycle(
+            round_state,
+            global_state,
             accumulated_output,
             messages,
             output_file,
         )
 
-        return state, accumulated_output, end_turn, messages
+        return round_state, global_state, accumulated_output, end_turn, messages
 
     def process_reflection_round(
         self,
         output_file: str,
         user_vars: Dict[str, str],
-        state: AgentState,
+        global_state: AgentGlobalState,
         messages: List[Dict[str, Any]],
         round: int = 1,
         tex_count_stats: Optional[str] = None,
         first_k_tex_document: Optional[str] = None,
-    ):
+    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool, List[Dict[str, Any]]]:
         """Process the reflection round."""
         logger.info(f"\n\nProcessing round {round}")
 
@@ -391,19 +404,20 @@ class BaseReflectChainAgent(ABC):
         )
 
         if end_turn:
-            return AgentState.initialize(accumulated_output), accumulated_output, end_turn, messages
+            round_state = AgentRoundState.initialize(round, accumulated_output)
+            return round_state, global_state, accumulated_output, end_turn, messages
 
-        state.continuation_count = 0
-        state.last_response = accumulated_output
+        round_state = AgentRoundState.initialize(round, accumulated_output)
 
-        state, accumulated_output, end_turn = self._process_response_cycle(
-            state,
+        round_state, global_state, accumulated_output, end_turn = self._process_response_cycle(
+            round_state,
+            global_state,
             accumulated_output,
             messages,
             output_file,
         )
 
-        return state, accumulated_output, end_turn, messages
+        return round_state, global_state, accumulated_output, end_turn, messages
 
     def process(self):
         input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
@@ -431,19 +445,19 @@ class BaseReflectChainAgent(ABC):
                     self.figure_files.extend(extracted_tikz_figures)
 
         # Initialize state and messages
-        state = AgentState.initialize()
+        global_state = AgentGlobalState.initialize()
         messages = []
 
-        state, accumulated_output, end_turn, messages = self.process_first_round(
+        round_state, global_state, accumulated_output, end_turn, messages = self.process_first_round(
             self.output_file[0],
             self.user_vars,
-            state,
+            global_state,
             messages,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
 
-        self.handle_output(state, end_turn, self.output_file[0], round=0)
+        self.handle_output(round_state, global_state, end_turn, self.output_file[0], round=0)
 
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
@@ -453,9 +467,9 @@ class BaseReflectChainAgent(ABC):
 
         logger.info("Completed round 0")
 
-        return state, messages, end_turn
+        return round_state, global_state, messages, end_turn
 
-    def reflect(self, state: AgentState, messages, round: int = 1):
+    def reflect(self, global_state: AgentGlobalState, messages, round: int = 1):
         self.reflection_figure_files = []
         if self.agent_config.output_files:
             # Handle multiple output files
@@ -484,15 +498,16 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.use_prefill_from_input:
             self.first_k_tex_document = self._get_first_k_from_document()
 
-        state, accumulated_output, end_turn, messages = self.process_reflection_round(
+        round_state, global_state, accumulated_output, end_turn, messages = self.process_reflection_round(
             self.output_file[1],
             self.user_vars,
-            state,
+            global_state,
             messages,
             tex_count_stats=self.tex_count_stats,
             first_k_tex_document=self.first_k_tex_document,
         )
-        self.handle_output(state, end_turn, self.output_file[1], round=1)
+
+        self.handle_output(round_state, global_state, end_turn, self.output_file[1], round=1)
 
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
@@ -502,10 +517,10 @@ class BaseReflectChainAgent(ABC):
 
         logger.info("Completed round 1")
 
-        return state, messages, end_turn
+        return round_state, global_state, messages, end_turn
 
     def run(self):
-        state, messages, end_turn = self.process()
+        round_state, global_state, messages, end_turn = self.process()
         if self.agent_config.reflect and end_turn:
-            state, messages, end_turn = self.reflect(state, messages)
-        return state, messages
+            round_state, global_state, messages, end_turn = self.reflect(global_state, messages)
+        return round_state, global_state, messages

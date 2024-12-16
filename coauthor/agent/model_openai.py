@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from openai import OpenAI
 
-
-from ..agent import AgentSettings, AgentConfig, AgentState
+from ..agent import AgentSettings, AgentConfig
+from ..agent.agent_state import AgentRoundState
 from ..utils.file import read_file
 from ..logger import logger
 
 from .model_base import ModelConfig, ModelProvider
-from .response_usage import ResponseUsageBase, OpenAIResponseUsage
+from .response_usage import OpenAIResponseUsage
 
 
 @dataclass
@@ -101,14 +101,7 @@ class OpenAIModelConfig(ModelConfig):
         return content
 
     def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
-        """
-        Extract response text and usage statistics from OpenAI response object.
-        Returns:
-            Tuple containing:
-            - response text (str)
-            - response usage object (Any)
-            - stop reason (str)
-        """
+        """Extract response text and usage statistics from OpenAI response object."""
         if not response_object or not response_object.choices:
             logger.error("Invalid response object")
             raise ValueError("Invalid response from API")
@@ -127,7 +120,7 @@ class OpenAIModelConfig(ModelConfig):
     def handle_continuation(
         self,
         messages: List[Dict],
-        state: AgentState,
+        round_state: AgentRoundState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ):
@@ -136,7 +129,7 @@ class OpenAIModelConfig(ModelConfig):
             # no user message needs to be added if assistant prefill is supported
             pass
         else:
-            prefill_tokens = state.last_response[-agent_config.K :]
+            prefill_tokens = round_state.last_response[-agent_config.K :]
             user_message_continuation = (
                 f"Your response got cut off, because you only have limited response space. "
                 f"Continue writing exactly from where you left off until the very end, "
@@ -171,7 +164,7 @@ class OpenAIModelConfig(ModelConfig):
                 accumulated_output = file_content
                 messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
-                state = AgentState.initialize(accumulated_output)
+                state = AgentRoundState.initialize(0, accumulated_output)
                 self.handle_continuation(messages, state, agent_settings, agent_config)
         else:
             if agent_config.use_prefill_from_input and first_k_tex_document:
@@ -188,15 +181,7 @@ class OpenAIModelConfig(ModelConfig):
         return accumulated_output, False, messages
 
     def compute_price(self, response_usage: Any) -> float:
-        """
-        Compute the price for token usage for OpenAI-compatible models.
-
-        Args:
-            response_usage: OpenAI response usage object
-
-        Returns:
-            float: The computed price in dollars
-        """
+        """Compute the price for token usage."""
         total_input_tokens = response_usage.prompt_tokens
         total_output_tokens = response_usage.completion_tokens
 
@@ -208,91 +193,9 @@ class OpenAIModelConfig(ModelConfig):
 
         return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
 
-    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
-        """
-        Compute statistics from OpenAI response usage object.
-
-        Args:
-            response_usage: OpenAI response usage object containing prompt_tokens and completion_tokens
-
-        Returns:
-            OpenAIResponseUsage containing token usage statistics and cost
-        """
-        total_input_tokens = response_usage.prompt_tokens
-        total_output_tokens = response_usage.completion_tokens
-        cached_tokens = 0
-        reasoning_tokens = 0
-        percentage_cached = 0
-
-        # Handle caching if supported
-        if self.capabilities.supports_auto_prompt_caching and hasattr(response_usage, "cached_tokens"):
-            cached_tokens = response_usage.cached_tokens
-            percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
-
-        # Handle reasoning if supported
-        if self.capabilities.supports_reasoning and hasattr(response_usage, "reasoning_tokens"):
-            reasoning_tokens = response_usage.reasoning_tokens
-
-        cost = self.compute_price(response_usage)
-
-        return OpenAIResponseUsage(
-            total_input_tokens=total_input_tokens,
-            total_output_tokens=total_output_tokens,
-            prompt_tokens=total_input_tokens,
-            completion_tokens=total_output_tokens,
-            cached_tokens=cached_tokens,
-            reasoning_tokens=reasoning_tokens,
-            percentage_cached=percentage_cached,
-            cost=cost,
-        )
-
-    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
-        """
-        Extract round statistics from agent state for OpenAI models.
-
-        Args:
-            state: The current agent state
-
-        Returns:
-            OpenAIResponseUsage containing token usage statistics and cost
-        """
-        # Print basic statistics
-        logger.info(f"Total input tokens  : {state.total_input_tokens}")
-        logger.info(f"Total output tokens : {state.total_output_tokens}")
-
-        # Create a response usage object that mimics OpenAI's format
-        response_usage = type(
-            "ResponseUsage",
-            (),
-            {
-                "prompt_tokens": state.total_input_tokens,
-                "completion_tokens": state.total_output_tokens,
-                "cached_tokens": state.total_cached_tokens,
-                "reasoning_tokens": state.total_reasoning_tokens,
-            },
-        )
-
-        stats = self.compute_statistics(response_usage)
-
-        if self.capabilities.supports_auto_prompt_caching:
-            logger.info(f"Total cached tokens: {stats['cached_tokens']}")
-            logger.info(f"Percentage cached: {stats['percentage_cached']}%")
-        if self.capabilities.supports_reasoning:
-            logger.info(f"Total reasoning tokens: {stats['reasoning_tokens']}")
-
-        logger.info(f"Total response time : {state.total_response_time} seconds")
-        logger.warning(f"Total cost          : ${stats['cost']:.2f}")
-
-        return OpenAIResponseUsage(
-            total_input_tokens=stats["total_input_tokens"],
-            total_output_tokens=stats["total_output_tokens"],
-            prompt_tokens=stats["prompt_tokens"],
-            completion_tokens=stats["completion_tokens"],
-            cached_tokens=stats["cached_tokens"],
-            reasoning_tokens=stats["reasoning_tokens"],
-            percentage_cached=stats["percentage_cached"],
-            cost=stats["cost"],
-        )
+    def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage:
+        """Compute model-specific statistics from response usage object."""
+        return OpenAIResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
     def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update message content for OpenAI models."""
