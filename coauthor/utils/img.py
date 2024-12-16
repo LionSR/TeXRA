@@ -4,7 +4,6 @@ import io
 import fitz
 
 from PIL import Image
-from typing import List, Optional
 
 from ..logger import logger
 

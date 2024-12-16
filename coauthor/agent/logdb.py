@@ -2,7 +2,6 @@ import os
 import sqlite3
 import json
 from datetime import datetime
-from typing import Optional, List
 
 from .agent_dataclass import AgentConfig, AgentSettings
 from .agent_state import AgentGlobalState, AgentRoundState
@@ -51,6 +50,7 @@ def init_db() -> None:
         auto_extract_tikz_figure_reflect BOOLEAN,
         include_tex_count BOOLEAN,
         use_prefill_from_input BOOLEAN,
+        auto_confirmation BOOLEAN,
         global_state TEXT,  -- JSON object for global metrics
         round_states TEXT   -- JSON array of round-specific metrics
     )"""
@@ -88,8 +88,8 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
         global_state, round_states,
         reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
-        use_prefill_from_input
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        use_prefill_from_input, auto_confirmation
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now(),
             agent_config.agent,
@@ -116,6 +116,7 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
             agent_config.auto_extract_tikz_figure_reflect,
             agent_config.include_tex_count,
             agent_config.use_prefill_from_input,
+            agent_config.auto_confirmation,
         ),
     )
 
@@ -214,7 +215,7 @@ def get_task_info_from_db(log_id: int):
         global_state, round_states,
         reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
-        use_prefill_from_input,
+        use_prefill_from_input, auto_confirmation,
         input_files, auxiliary_file, auxiliary_files,
         figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
@@ -247,19 +248,20 @@ def get_task_info_from_db(log_id: int):
                 "auto_extract_tikz_figure_reflect": row[12],
                 "include_tex_count": row[13],
                 "use_prefill_from_input": row[14],
+                "auto_confirmation": row[15],
             },
             "files": {
-                "input_files": json.loads(row[15]) if row[15] else [],
-                "auxiliary_file": row[16],
-                "auxiliary_files": json.loads(row[17]) if row[17] else [],
-                "figure_file": row[18],
-                "figure_files": json.loads(row[19]) if row[19] else [],
-                "reference_file": row[20],
-                "reference_files": json.loads(row[21]) if row[21] else [],
-                "edited_file": row[22],
-                "output_files": json.loads(row[23]) if row[23] else [],
-                "output_name_override": row[24],
-                "actual_output_files": json.loads(row[25]) if row[25] else [],
+                "input_files": json.loads(row[16]) if row[16] else [],
+                "auxiliary_file": row[17],
+                "auxiliary_files": json.loads(row[18]) if row[18] else [],
+                "figure_file": row[19],
+                "figure_files": json.loads(row[20]) if row[20] else [],
+                "reference_file": row[21],
+                "reference_files": json.loads(row[22]) if row[22] else [],
+                "edited_file": row[23],
+                "output_files": json.loads(row[24]) if row[24] else [],
+                "output_name_override": row[25],
+                "actual_output_files": json.loads(row[26]) if row[26] else [],
             },
         }
         conn.close()

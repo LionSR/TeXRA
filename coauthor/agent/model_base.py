@@ -131,7 +131,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def extract_response(self, response_object, end_tag: str) -> tuple[str, Any, str]:
+    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
         """Extract statistics from the response object.
         Returns: (new_response, response_usage, stop_reason)
         """

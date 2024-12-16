@@ -206,13 +206,11 @@ export function setupUIHandlers() {
     const instructions = safeGetElementValue('instructionInput');
 
     const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
-    const autoExtractTikzFigure = safeGetElementChecked(
-      'autoExtractTikzFigure',
-    );
-    const autoExtractTikzFigureReflect = safeGetElementChecked(
-      'autoExtractTikzFigureReflect',
-    );
+    const autoExtractTikzFigure = safeGetElementChecked('autoExtractTikzFigure');
+    const autoExtractTikzFigureReflect = safeGetElementChecked('autoExtractTikzFigureReflect');
     const includeTexCount = safeGetElementChecked('includeTexCount');
+    const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
+    const autoConfirmation = safeGetElementChecked('autoConfirmation');
 
     vscode.postMessage({
       command: 'execute',
@@ -236,6 +234,8 @@ export function setupUIHandlers() {
       autoExtractTikzFigure: autoExtractTikzFigure,
       autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
       includeTexCount: includeTexCount,
+      usePrefillFromInput: usePrefillFromInput,
+      autoConfirmation: autoConfirmation,
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,
