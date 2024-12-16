@@ -60,11 +60,9 @@ def get_agent_path(agent_name: str) -> str:
 
 def run_agent(agent: str, **kwargs):
     """Run any agent except merge. Can be called from both CLI and Python."""
-    # Determine agent name and path
+    # Core arguments
     agent_name = get_agent_name(agent, kwargs.get("output_files"))
     agent_path = get_agent_path(agent_name)
-
-    # Create config and validate
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
     # Get model handler
@@ -72,23 +70,26 @@ def run_agent(agent: str, **kwargs):
         raise ValueError(f"Model {agent_config.model} not found in MODEL_HANDLERS")
     model_handler = MODEL_HANDLERS[agent_config.model]
 
-    # Load agent settings and prompts
+    # Load settings and prompts
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
-
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
-    # Get correct agent class and run
+    # Initialize and run agent
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
-        model_handler=model_handler, agent_config=agent_config, agent_settings=agent_settings, agent_prompts=agent_prompts, agent_path=agent_path
+        model_handler=model_handler,  # Core dependency
+        agent_config=agent_config,  # Config objects
+        agent_settings=agent_settings,
+        agent_prompts=agent_prompts,
+        agent_path=agent_path,  # Required path
     )
     return agent_instance.run()
 
 
 def run_merge(model: str, input_file: str, edited_file: str):
     """Run merge agent. Can be called from both CLI and Python."""
-    # Create config and validate
+    # Core arguments
     agent_config = create_agent_config(agent="merge", model=model, input_file=input_file, edited_file=edited_file)
 
     # Get model handler
@@ -96,15 +97,18 @@ def run_merge(model: str, input_file: str, edited_file: str):
         raise ValueError(f"Model {model} not found in MODEL_HANDLERS")
     model_handler = MODEL_HANDLERS[model]
 
-    # Get agent path and load settings/prompts
+    # Load settings and prompts
     agent_path = get_agent_path("merge")
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, "merge")
-
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
-    # Create and run merge agent
+    # Initialize and run merge agent
     agent = AgentMerge(
-        model_handler=model_handler, agent_config=agent_config, agent_settings=agent_settings, agent_prompts=agent_prompts, agent_path=agent_path
+        model_handler=model_handler,  # Core dependency
+        agent_config=agent_config,  # Config objects
+        agent_settings=agent_settings,
+        agent_prompts=agent_prompts,
+        agent_path=agent_path,  # Required path
     )
     return agent.run()
