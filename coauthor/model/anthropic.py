@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from anthropic import Anthropic
 
-from .model_base import ModelConfig, ModelProvider, AnthropicResponseUsage, ResponseUsageBase
-
 from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
 from ..agent import AgentSettings, AgentConfig, AgentState
@@ -16,6 +14,8 @@ from ..utils.replacement import apply_replacement_regex, get_replacements_by_cat
 
 from ..utils.file import read_file, write_file
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
+
+from .model_base import ModelConfig, ModelProvider, AnthropicResponseUsage, ResponseUsageBase
 
 
 @dataclass
