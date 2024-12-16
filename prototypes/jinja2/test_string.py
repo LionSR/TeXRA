@@ -2,7 +2,7 @@ from typing import Dict, Set
 import string
 
 
-def check_format_variables(template_str: str) -> Set[str]:
+def check_format_variables(template_str: str) -> set[str]:
     """
     Extract variable names from a format string template.
     Returns set of variable names used in the template.
@@ -12,7 +12,7 @@ def check_format_variables(template_str: str) -> Set[str]:
     return template_vars
 
 
-def check_format_variables_match(template_str: str, variables: Dict) -> tuple[Set[str], Set[str]]:
+def check_format_variables_match(template_str: str, variables: dict) -> tuple[set[str], set[str]]:
     """
     Check for missing and extra variables in the format string template.
     Returns (missing_vars, extra_vars)
@@ -28,7 +28,7 @@ def check_format_variables_match(template_str: str, variables: Dict) -> tuple[Se
 
 def read_template(file_path: str) -> str:
     """Read template content from a file."""
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         return f.read()
 
 

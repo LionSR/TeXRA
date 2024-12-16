@@ -1,15 +1,13 @@
 """Registry of available model handlers."""
 
-from typing import Dict
-
-from .model_base import ModelProvider, ModelConfig, ModelCapabilities
-from .model_anthropic import AnthropicModelConfig
-from .model_openai import OpenAIModelConfig, OpenAICompatibleModelConfig
+from .model_base import ModelProvider, ModelHandler, ModelCapabilities
+from .model_anthropic import AnthropicModelHandler
+from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
 
 
-MODEL_HANDLERS: Dict[str, ModelConfig] = {
+MODEL_HANDLERS: dict[str, ModelHandler] = {
     # Anthropic Claude models
-    "opus": AnthropicModelConfig(
+    "opus": AnthropicModelHandler(
         name="opus",
         full_name="claude-3-opus-20240229",
         max_output_tokens=4096,
@@ -18,7 +16,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=75.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    "sonnet++": AnthropicModelConfig(
+    "sonnet++": AnthropicModelHandler(
         name="sonnet++",
         full_name="claude-3-5-sonnet-20241022",
         max_output_tokens=8192,
@@ -29,7 +27,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
             supports_prompt_caching=True, supports_native_pdf=True, supports_assistant_prefill=True, likes_to_ask_for_confirmation=True
         ),
     ),
-    "sonnet+": AnthropicModelConfig(
+    "sonnet+": AnthropicModelHandler(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
         max_output_tokens=8192,
@@ -38,7 +36,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=15.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    "sonnet": AnthropicModelConfig(
+    "sonnet": AnthropicModelHandler(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
         max_output_tokens=8192,
@@ -47,7 +45,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=15.0,
         capabilities=ModelCapabilities(supports_prompt_caching=False, supports_assistant_prefill=True),
     ),
-    "haiku+": AnthropicModelConfig(
+    "haiku+": AnthropicModelHandler(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
         max_output_tokens=8192,
@@ -58,7 +56,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
             supports_prompt_caching=True, supports_vision=False, supports_assistant_prefill=True, likes_to_ask_for_confirmation=True
         ),
     ),
-    "haiku": AnthropicModelConfig(
+    "haiku": AnthropicModelHandler(
         name="haiku",
         full_name="claude-3-haiku-20240307",
         max_output_tokens=8192,
@@ -68,7 +66,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
     # OpenAI models
-    "gpto1": OpenAIModelConfig(
+    "gpto1": OpenAIModelHandler(
         name="gpto1",
         full_name="o1-preview-2024-09-12",
         max_output_tokens=32768,
@@ -77,7 +75,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=60.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_vision=False, supports_reasoning=True),
     ),
-    "gpto1-": OpenAIModelConfig(
+    "gpto1-": OpenAIModelHandler(
         name="gpto1-",
         full_name="o1-mini-2024-09-12",
         max_output_tokens=65536,
@@ -86,7 +84,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=12.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_vision=False, supports_reasoning=True),
     ),
-    "gpt4o": OpenAIModelConfig(
+    "gpt4o": OpenAIModelHandler(
         name="gpt4o",
         # full_name="gpt-4o-2024-08-06",
         # gpt-4o,
@@ -97,7 +95,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=10.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_predictive_output=True),
     ),
-    "gpt4t": OpenAIModelConfig(
+    "gpt4t": OpenAIModelHandler(
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
         max_output_tokens=4096,
@@ -106,7 +104,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=30.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
     ),
-    "gpt4o-": OpenAIModelConfig(
+    "gpt4o-": OpenAIModelHandler(
         name="gpt4o-",
         full_name="gpt-4o-mini-2024-07-18",
         max_output_tokens=16384,
@@ -115,7 +113,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=0.6,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_predictive_output=True),
     ),
-    "gpt4ol": OpenAIModelConfig(
+    "gpt4ol": OpenAIModelHandler(
         name="gpt4ol",
         full_name="chatgpt-4o-latest",
         max_output_tokens=16384,
@@ -124,7 +122,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=15.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
     ),
-    "geminiexp": OpenAICompatibleModelConfig(
+    "geminiexp": OpenAICompatibleModelHandler(
         name="geminiexp",
         full_name="gemini-exp-1206",
         provider=ModelProvider.GOOGLE,
@@ -135,7 +133,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
     # Google Gemini models
-    "gemini2f": OpenAICompatibleModelConfig(
+    "gemini2f": OpenAICompatibleModelHandler(
         name="gemini2f",
         full_name="gemini-2.0-flash-exp",
         provider=ModelProvider.GOOGLE,
@@ -145,7 +143,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=0.3,
         capabilities=ModelCapabilities(supports_prompt_caching=False, supports_native_pdf=True),
     ),
-    "gemini1p+": OpenAICompatibleModelConfig(
+    "gemini1p+": OpenAICompatibleModelHandler(
         name="gemini1p+",
         full_name="gemini-1.5-pro-latest",
         provider=ModelProvider.GOOGLE,
@@ -154,7 +152,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=5.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    "gemini1f+": OpenAICompatibleModelConfig(
+    "gemini1f+": OpenAICompatibleModelHandler(
         name="gemini1f+",
         full_name="gemini-1.5-fresh-latest",
         provider=ModelProvider.GOOGLE,
@@ -165,7 +163,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
     ),
     # OpenRouter models
-    "gpt4oOR": OpenAICompatibleModelConfig(
+    "gpt4oOR": OpenAICompatibleModelHandler(
         name="gpt4oOR",
         full_name="openai/gpt-4o:extended",
         provider=ModelProvider.OPENROUTER,
@@ -175,7 +173,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=18.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
     ),
-    "gemini1p+OR": OpenAICompatibleModelConfig(
+    "gemini1p+OR": OpenAICompatibleModelHandler(
         name="gemini1p+OR",
         full_name="google/gemini-pro-1.5",
         provider=ModelProvider.OPENROUTER,
@@ -185,7 +183,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=7.5,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    "gemini1f+OR": OpenAICompatibleModelConfig(
+    "gemini1f+OR": OpenAICompatibleModelHandler(
         name="gemini1f+OR",
         full_name="google/gemini-flash-1.5",
         provider=ModelProvider.OPENROUTER,
@@ -195,7 +193,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=0.3,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
     ),
-    "llama3+OR": OpenAICompatibleModelConfig(
+    "llama3+OR": OpenAICompatibleModelHandler(
         name="llama3+OR",
         full_name="meta-llama/llama-3.1-405b-instruct",
         provider=ModelProvider.OPENROUTER,
@@ -205,7 +203,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=3.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
     ),
-    "qwq-32bOR": OpenAICompatibleModelConfig(
+    "qwq-32bOR": OpenAICompatibleModelHandler(
         name="qwq-32b",
         full_name="qwen/qwq-32b-preview",
         provider=ModelProvider.OPENROUTER,
@@ -215,7 +213,7 @@ MODEL_HANDLERS: Dict[str, ModelConfig] = {
         output_price=0.6,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
     ),
-    "sonnet++OR": OpenAICompatibleModelConfig(
+    "sonnet++OR": OpenAICompatibleModelHandler(
         name="sonnet++OR",
         full_name="anthropic/claude-3.5-sonnet:beta",
         provider=ModelProvider.OPENROUTER,

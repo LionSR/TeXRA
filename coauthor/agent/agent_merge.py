@@ -1,18 +1,18 @@
 import os
 import re
-from typing import Any, List, Optional
 
 from ..logger import logger
 
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_reflect import DirectWrite
+from .model_base import ModelHandler
 
 
 class AgentMerge(DirectWrite):
     def __init__(
         self,
-        model_handler: Any,
+        model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
@@ -47,7 +47,7 @@ class AgentMerge(DirectWrite):
         parts = edited_base.split("_")
         underscore_count = edited_base.count("_")
 
-        agent: Optional[str] = None
+        agent: str | None = None
         edited_base_override = parts[0]
 
         if underscore_count == 3:
@@ -82,7 +82,7 @@ class AgentMerge(DirectWrite):
 
     def handle_output(
         self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
-    ) -> List[str]:
+    ) -> list[str]:
         """Handle the output for the given round.
 
         Args:

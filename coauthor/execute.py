@@ -2,7 +2,6 @@ import os
 
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import Optional, List, Type
 
 from .agent.agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent.agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
@@ -39,13 +38,13 @@ def create_agent_config(**kwargs) -> AgentConfig:
     return AgentConfig.from_kwargs(**kwargs)
 
 
-def get_agent_class(agent_path: str, agent: str) -> Type[BaseReflectChainAgent]:
+def get_agent_class(agent_path: str, agent: str) -> type[BaseReflectChainAgent]:
     """Determine agent class based on yaml settings."""
     settings_dict, _ = load_agent_settings_and_prompts(agent_path, agent)
     return DirectWrite if settings_dict.get("agent_type") == "direct" else ThinkAndWrite
 
 
-def get_agent_name(base_agent: str, output_files: Optional[List[str]] = None) -> str:
+def get_agent_name(base_agent: str, output_files: list[str] | None = None) -> str:
     """Get agent name, appending _multiple if output_files exist."""
     return f"{base_agent}_multiple" if output_files else base_agent
 
