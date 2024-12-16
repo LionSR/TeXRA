@@ -331,7 +331,7 @@ export class WebviewMessageHandler {
       : 'Cleaning';
 
     // Validate outputFiles is an array before joining
-    const outputFilesStr = Array.isArray(message.outputFiles) 
+    const outputFilesStr = Array.isArray(message.outputFiles)
       ? message.outputFiles.join(', ')
       : '';
 
@@ -339,7 +339,7 @@ export class WebviewMessageHandler {
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
-    
+
     vscode.commands.executeCommand(
       `coauthor.${message.command}`,
       message.inputFile,
