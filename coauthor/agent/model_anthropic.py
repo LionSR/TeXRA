@@ -38,9 +38,9 @@ class AnthropicModelConfig(ModelConfig):
     ) -> Any:
         """Create a response using Anthropic's API."""
         extra_headers = []
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             extra_headers.append("prompt-caching-2024-07-31")
-        if self.supports_native_pdf:
+        if self.capabilities.supports_native_pdf:
             extra_headers.append("pdfs-2024-09-25")
 
         return client.beta.messages.create(
@@ -63,7 +63,7 @@ class AnthropicModelConfig(ModelConfig):
 
         # Add user request with optional caching
         request = {"type": "text", "text": user_request}
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             request["cache_control"] = {"type": "ephemeral"}
         content.append(request)
 
@@ -79,7 +79,7 @@ class AnthropicModelConfig(ModelConfig):
 
         # Add user message with optional caching
         message = {"type": "text", "text": user_message}
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             message["cache_control"] = {"type": "ephemeral"}
             # Manage cache control count
             if isinstance(messages[-1]["content"], list):
@@ -96,7 +96,7 @@ class AnthropicModelConfig(ModelConfig):
         """Create image content for Anthropic models."""
         content = []
         for image in image_contents:
-            if self.supports_native_pdf and image["media_type"] == "application/pdf":
+            if self.capabilities.supports_native_pdf and image["media_type"] == "application/pdf":
                 content.extend(
                     [
                         {"type": "text", "text": f"Document: {image['file_name']}"},
@@ -142,7 +142,7 @@ class AnthropicModelConfig(ModelConfig):
 
         # Extract and process response text
         new_response = response_object.content[0].text.strip()
-        if self.likes_to_ask_for_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
 
         # Check for confirmation patterns
@@ -150,7 +150,7 @@ class AnthropicModelConfig(ModelConfig):
             stop_reason = "ask_for_confirmation"
 
         # Handle output tags if present
-        if "<output>" in new_response and self.likes_to_ask_for_confirmation:
+        if "<output>" in new_response and self.capabilities.likes_to_ask_for_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
             new_response = extract_text_from_tags(new_response, "output")
             logger.warning("No <output> tags found in response" if new_response == new_response else "Extracted content from <output> tags")
@@ -165,14 +165,20 @@ class AnthropicModelConfig(ModelConfig):
 
         return new_response, response_object.usage, stop_reason
 
-    def handle_continuation(self, messages: List[Dict], state: AgentState, agent_settings: AgentSettings, agent_config: AgentConfig):
+    def handle_continuation(
+        self,
+        messages: List[Dict],
+        state: AgentState,
+        agent_settings: AgentSettings,
+        agent_config: AgentConfig,
+    ) -> None:
         """
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
         """
 
         # add a flag for enabling this mode
-        if self.likes_to_ask_for_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation:
             if state.continuation_count <= 1:
                 user_message_continuation = (
                     "Proceed. "
@@ -182,7 +188,6 @@ class AnthropicModelConfig(ModelConfig):
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
                     f"The total number of tokens you output in the last turn is {state.output_tokens}, "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
-                    # "Output as much as possible in each turn. Maximizing the output length is preferred. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
             else:
@@ -193,7 +198,6 @@ class AnthropicModelConfig(ModelConfig):
                     "Remember to stay professional and write latex code all the time. "
                     "Note that you have an effectively infinite token response limit "
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                    # f"Only output the end tag {end_tag} when you have finished processing the whole document until the last section."
                     f"The total number of tokens you output in the last turn is {state.output_tokens}, "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
@@ -207,7 +211,7 @@ class AnthropicModelConfig(ModelConfig):
                         state.last_response = state.last_response.replace(line, "", 1).strip()
                         break
 
-            logger.info(f"Adding User message:")
+            logger.info("Adding User message")
             logger.debug(user_message_continuation)
 
             state.last_response = filter_tags_from_text(state.last_response, "monologue")
@@ -252,7 +256,7 @@ class AnthropicModelConfig(ModelConfig):
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
                 accumulated_output = file_content
-                if self.supports_prompt_caching:
+                if self.capabilities.supports_prompt_caching:
                     content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
                 else:
                     content = file_content
@@ -286,7 +290,7 @@ class AnthropicModelConfig(ModelConfig):
         base_price = (response_usage.input_tokens * self.input_price + response_usage.output_tokens * self.output_price) / 1e6
 
         # Add caching costs if supported
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             if hasattr(response_usage, "cache_creation_tokens"):
                 base_price += (response_usage.cache_creation_tokens * self.input_price * 1.25) / 1e6
             if hasattr(response_usage, "cache_read_tokens"):
@@ -311,7 +315,7 @@ class AnthropicModelConfig(ModelConfig):
         percentage_cached = 0
 
         # Handle caching if supported
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             if hasattr(response_usage, "cache_read_tokens"):
                 cache_read_tokens = response_usage.cache_read_tokens
             if hasattr(response_usage, "cache_creation_tokens"):
@@ -362,7 +366,7 @@ class AnthropicModelConfig(ModelConfig):
         stats = self.compute_statistics(response_usage)
 
         # Print Anthropic-specific statistics
-        if self.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             logger.info(f"Total input tokens (cache read): {stats['cache_read_tokens']}")
             logger.info(f"Total input tokens (cache create): {stats['cache_creation_tokens']}")
             logger.info(f"Percentage cached: {stats['percentage_cached']}%")
@@ -370,7 +374,6 @@ class AnthropicModelConfig(ModelConfig):
         logger.info(f"Total response time : {state.total_response_time} seconds")
         logger.warning(f"Total cost          : ${stats['cost']:.2f}")
 
-        # Return only Anthropic-specific stats
         return AnthropicResponseUsage(
             total_input_tokens=stats["total_input_tokens"],
             total_output_tokens=stats["total_output_tokens"],
@@ -384,12 +387,11 @@ class AnthropicModelConfig(ModelConfig):
 
     def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update message content for Anthropic models."""
-
-        logger.debug(f"Updating message content for Anthropic models.")
+        logger.debug("Updating message content for Anthropic models")
         if messages[-1]["role"] == "assistant":
             last_message = messages[-1]
 
-            if self.supports_prompt_caching:
+            if self.capabilities.supports_prompt_caching:
                 if isinstance(last_message["content"], list):
                     # Remove cache_control from previous message if it exists
                     if len(last_message["content"]) >= 2 and isinstance(last_message["content"][-2], dict):
