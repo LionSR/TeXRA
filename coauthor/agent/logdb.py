@@ -9,9 +9,10 @@ from typing import Optional, List, Any, Dict
 from ..logger import logger
 
 from .agent_dataclass import AgentConfig, AgentSettings
-from .agent_state import AgentState
 
 HISTORY_DIR = "History"
+
+# should change into a clas
 
 
 def get_db_path() -> str:
@@ -131,23 +132,7 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     return log_id
 
 
-def update_round_stats(state: AgentState, model_config: Any, log_id: Optional[int] = None) -> None:
-    """
-    Extract round statistics from the model and update the database.
-
-    Args:
-        state: The current agent state
-        model_config: The model configuration
-        log_id: Optional ID for database logging
-    """
-    stats = model_config.extract_round_stats(state)  # This also handles printing
-
-    # Update database if we have a log ID
-    if log_id is not None:
-        _update_statistics_in_db(log_id, stats, state.total_response_time)
-
-
-def _update_statistics_in_db(log_id: int, stats: Dict[str, Any], total_response_time: float) -> None:
+def update_statistics_in_db(log_id: int, stats: Dict[str, Any], total_response_time: float) -> None:
     """
     Update statistics in the database.
 
