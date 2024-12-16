@@ -124,53 +124,27 @@ export class WebviewMessageHandler {
   }
 
   private async handleExecute(message: any) {
-    const {
-      agent: agent_val,
-      model: model_val,
-      reflect: reflect_val,
-      inputFile: inputFile_val,
-      referenceFile: referenceFile_val,
-      auxiliaryFile: auxiliaryFile_val,
-      figureFile: figureFile_val,
-      inputFiles: inputFiles_raw,
-      referenceFiles: referenceFiles_raw,
-      auxiliaryFiles: auxiliaryFiles_raw,
-      figureFiles: figureFiles_raw,
-      instructions: instructions_val,
-      autoExtractFigure: autoExtractFigure_val,
-      autoExtractTikzFigure: autoExtractTikzFigure_val,
-      autoExtractTikzFigureReflect: autoExtractTikzFigureReflect_val,
-      includeTexCount: includeTexCount_val,
-      outputFiles: outputFiles_val,
-      outputNameOverride: outputNameOverride_val,
-    } = message;
-
-    const inputFiles_val = getFilesIfNotEmpty(inputFiles_raw);
-    const referenceFiles_val = getFilesIfNotEmpty(referenceFiles_raw);
-    const auxiliaryFiles_val = getFilesIfNotEmpty(auxiliaryFiles_raw);
-    const figureFiles_val = getFilesIfNotEmpty(figureFiles_raw);
-
-    if (inputFile_val || outputNameOverride_val) {
+    if (message.inputFile || message.outputNameOverride) {
       vscode.commands.executeCommand(
         'coauthor.execute',
-        agent_val,
-        model_val,
-        reflect_val,
-        inputFile_val,
-        inputFiles_val,
-        referenceFile_val,
-        referenceFiles_val,
-        auxiliaryFile_val,
-        auxiliaryFiles_val,
-        figureFile_val,
-        figureFiles_val,
-        instructions_val,
-        autoExtractFigure_val,
-        autoExtractTikzFigure_val,
-        autoExtractTikzFigureReflect_val,
-        includeTexCount_val,
-        outputFiles_val,
-        outputNameOverride_val,
+        message.agent,
+        message.model,
+        message.reflect,
+        message.inputFile,
+        getFilesIfNotEmpty(message.inputFiles),
+        message.referenceFile,
+        getFilesIfNotEmpty(message.referenceFiles),
+        message.auxiliaryFile,
+        getFilesIfNotEmpty(message.auxiliaryFiles),
+        message.figureFile,
+        getFilesIfNotEmpty(message.figureFiles),
+        message.instructions,
+        message.autoExtractFigure,
+        message.autoExtractTikzFigure,
+        message.autoExtractTikzFigureReflect,
+        message.includeTexCount,
+        message.outputFiles,
+        message.outputNameOverride,
       );
     } else {
       vscode.window.showErrorMessage(
@@ -331,11 +305,7 @@ export class WebviewMessageHandler {
     };
 
     Object.entries(refreshedFiles).forEach(([type, files]) => {
-      this.postFileUpdate(
-        webviewView,
-        capitalize(type),
-        files,
-      );
+      this.postFileUpdate(webviewView, capitalize(type), files);
     });
 
     await this.updateBaseFileSelect(webviewView);
@@ -356,11 +326,20 @@ export class WebviewMessageHandler {
   }
 
   private handleMultipleOperation(message: any) {
-    const operation = message.command.startsWith('pack') ? 'Packing' : 'Cleaning';
+    const operation = message.command.startsWith('pack')
+      ? 'Packing'
+      : 'Cleaning';
+
+    // Validate outputFiles is an array before joining
+    const outputFilesStr = Array.isArray(message.outputFiles) 
+      ? message.outputFiles.join(', ')
+      : '';
+
     info(
       CHANNEL,
-      `${capitalize(operation)} multiple files: ${message.inputFile}, ${message.outputFiles.join(', ')}`,
+      `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
+    
     vscode.commands.executeCommand(
       `coauthor.${message.command}`,
       message.inputFile,
