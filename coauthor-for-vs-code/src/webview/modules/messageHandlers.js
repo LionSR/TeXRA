@@ -1,4 +1,3 @@
-import { vscode } from './vscodeApi.js';
 import {
   updateFileSelect,
   updateEditedFileSelect,
@@ -31,10 +30,7 @@ export function setupMessageHandlers() {
       case 'setAuxiliaryFile':
       case 'setFigureFile':
       case 'setEditedFile':
-        updateFileSelect(
-          uncapitalize(message.command.slice(3)),
-          message.files,
-        );
+        updateFileSelect(uncapitalize(message.command.slice(3)), message.files);
         break;
       case 'inputFileSelected':
       case 'referenceFileSelected':
@@ -64,7 +60,7 @@ export function setupMessageHandlers() {
       case 'setCurrentFile':
         handleSetCurrentFile({
           fileType: message.fileType,
-          filePath: message.filePath
+          filePath: message.filePath,
         });
         break;
       case 'setOpenedFiles':
