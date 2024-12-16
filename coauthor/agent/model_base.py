@@ -14,6 +14,7 @@ from ..agent.agent_state import AgentGlobalState, AgentRoundState
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
+from .agent_state import ToolState
 
 
 @dataclass
@@ -160,6 +161,7 @@ class ModelHandler(ABC):
         self,
         messages: list[dict],
         round_state: AgentRoundState,
+        tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ):
@@ -174,9 +176,8 @@ class ModelHandler(ABC):
         agent_settings: AgentSettings,
         messages: list[dict],
         prefill: str,
-        accumulated_output: str,
-        first_k_tex_document: str | None = None,
-    ) -> tuple[str, bool, list[dict]]:
+        tool_state: ToolState,
+    ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill based on model requirements."""
         pass
 
@@ -193,32 +194,34 @@ class ModelHandler(ABC):
     def check_stop_conditions(
         self, stop_reason: str, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
     ) -> tuple[bool, bool]:
-        """Check if the conversation should stop."""
+        """Check if the conversation should stop and print debug info if stopping."""
+
+        OUTPUT_TOKEN_LIMIT = self.OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens if global_state.first_input_tokens > 0 else float("inf")
+
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
         continuation_limit = round_state.continuation_count > self.CONTINUE_LIMIT
         input_token_limit = global_state.total_input_tokens > self.INPUT_TOKEN_LIMIT
-        output_token_limit = global_state.total_output_tokens > self.OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens
+        output_token_limit = global_state.total_output_tokens > OUTPUT_TOKEN_LIMIT
 
         if output_token_limit:
             logger.error(f"Output tokens exceed {self.OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
+            logger.error(f"Total output tokens: {global_state.total_output_tokens}, First input tokens: {global_state.first_input_tokens}")
 
         should_stop = encounter_document_tag or continuation_limit or input_token_limit or output_token_limit
 
-        return end_turn, should_stop
+        # Print debug info if stopping
+        if should_stop:
+            logger.debug(
+                f"Stop flags:\n"
+                f"end_turn: {end_turn}\n"
+                f"encounter_document_tag: {encounter_document_tag}\n"
+                f"continuation_limit: {continuation_limit}\n"
+                f"input_token_limit: {input_token_limit}\n"
+                f"output_token_limit: {output_token_limit}\n"
+            )
 
-    def print_stop_flags(
-        self, end_turn: bool, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
-    ):
-        """Print the flags indicating why the conversation stopped."""
-        logger.debug(
-            f"Stop flags:\n"
-            f"end_turn: {end_turn}\n"
-            f"encounter_document_tag: {'</'+agent_settings.document_tag+'>' in new_response}\n"
-            f"continuation_limit: {round_state.continuation_count > self.CONTINUE_LIMIT}\n"
-            f"input_token_limit: {global_state.total_input_tokens > self.INPUT_TOKEN_LIMIT}\n"
-            f"output_token_limit: {global_state.total_output_tokens > self.OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens}\n"
-        )
+        return end_turn, should_stop
 
     def create_image_message(self, figure_files):
         """Create image messages for the conversation."""
@@ -255,6 +258,6 @@ class ModelHandler(ABC):
         return self.create_image_content(image_contents)
 
     @abstractmethod
-    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
         """Update the message content based on model-specific requirements."""
         pass
