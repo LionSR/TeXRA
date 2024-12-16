@@ -11,11 +11,6 @@ def get_xml_format_from_files(files: list[str]) -> str:
     return "\n".join(get_xml_format_from_file(file) for file in files) if files else ""
 
 
-def extract_text_from_tags(input_content: str, document_tag: str) -> str:
-    match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
-    return match.group(1) if match else input_content
-
-
 def add_cdata_to_tags(xml_data: str, tags: list[str]) -> str:
     for tag in tags:
         pattern = f"(<{tag}>)(.*?)(</{tag}>)"
@@ -30,5 +25,25 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
     return xml_data
 
 
-def filter_monologue_tags(content: str) -> str:
-    return re.sub(r"<monologue>.*?</monologue>\s*", "", content, flags=re.DOTALL)
+def extract_text_from_tags(input_content: str, document_tag: str) -> str:
+    match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
+    return match.group(1) if match else input_content
+
+
+def filter_tags_from_text(content: str, tags: list[str] | str) -> str:
+    """Filter out specified XML tags and their content from a string.
+
+    Args:
+        content: Input string containing XML tags
+        tags: Single tag name or list of tag names to filter out
+
+    Returns:
+        String with specified tags and their content removed
+    """
+    if isinstance(tags, str):
+        tags = [tags]
+
+    for tag in tags:
+        content = re.sub(rf"<{tag}>.*?</{tag}>\s*", "", content, flags=re.DOTALL)
+
+    return content
