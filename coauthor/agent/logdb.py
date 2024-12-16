@@ -169,7 +169,7 @@ def update_statistics_in_db(log_id: int, global_state: AgentGlobalState, round_s
     conn.close()
 
 
-def logdb_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None) -> None:
+def logdb_output_files(output_file: str, log_id: int, all_output_files: list[str] | None = None) -> None:
     """Log output files to database."""
     if log_id is None:
         return

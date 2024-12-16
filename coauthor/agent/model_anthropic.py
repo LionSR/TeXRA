@@ -16,12 +16,12 @@ from ..utils.replacement import apply_replacement_regex, get_replacements_by_cat
 from ..utils.file import read_file, write_file
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
-from .model_base import ModelConfig, ModelProvider
+from .model_base import ModelHandler, ModelProvider
 from .response_usage import AnthropicResponseUsage
 
 
 @dataclass
-class AnthropicModelConfig(ModelConfig):
+class AnthropicModelHandler(ModelHandler):
     """Configuration for Anthropic models."""
 
     provider: ModelProvider = ModelProvider.ANTHROPIC
@@ -33,10 +33,10 @@ class AnthropicModelConfig(ModelConfig):
     def create_response(
         self,
         client: Anthropic,
-        messages: List[Dict],
+        messages: list[dict],
         temperature: float,
-        system_prompt: Optional[str] = "",
-        end_tag: Optional[str] = "",
+        system_prompt: str | None = "",
+        end_tag: str | None = "",
     ) -> Any:
         """Create a response using Anthropic's API."""
         extra_headers = []
@@ -55,7 +55,7 @@ class AnthropicModelConfig(ModelConfig):
             betas=extra_headers if extra_headers else None,
         )
 
-    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: Optional[str] = None) -> List[Dict]:
+    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: str | None = None) -> list[dict]:
         """Initialize messages for the conversation."""
         content = [{"type": "text", "text": user_prefix}]
 
@@ -71,7 +71,7 @@ class AnthropicModelConfig(ModelConfig):
 
         return [{"role": "user", "content": content}]
 
-    def create_reflection_message(self, messages: List[Dict], user_message: str, figure_files=None) -> List[Dict]:
+    def create_reflection_message(self, messages: list[dict], user_message: str, figure_files=None) -> list[dict]:
         """Create a reflection message for Anthropic models."""
         content = []
 
@@ -94,7 +94,7 @@ class AnthropicModelConfig(ModelConfig):
         messages.append({"role": "user", "content": content})
         return messages
 
-    def create_image_content(self, image_contents: list) -> List[Dict]:
+    def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for Anthropic models."""
         content = []
         for image in image_contents:
@@ -121,7 +121,7 @@ class AnthropicModelConfig(ModelConfig):
                 )
         return content
 
-    def extract_response(self, response_object, end_tag: str) -> Tuple[str, Any, str]:
+    def extract_response(self, response_object, end_tag: str) -> tuple[str, Any, str]:
         """
         Extract response text and usage statistics from Anthropic response object.
         Returns:
@@ -169,7 +169,7 @@ class AnthropicModelConfig(ModelConfig):
 
     def handle_continuation(
         self,
-        messages: List[Dict],
+        messages: list[dict],
         round_state: AgentRoundState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
@@ -237,11 +237,11 @@ class AnthropicModelConfig(ModelConfig):
         output_file: str,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
-        messages: List[Dict],
+        messages: list[dict],
         prefill: str,
         accumulated_output: str,
-        first_k_tex_document: Optional[str] = None,
-    ) -> Tuple[str, bool, List[Dict]]:
+        first_k_tex_document: str | None = None,
+    ) -> tuple[str, bool, list[dict]]:
         """Initialize output and handle prefill for Anthropic models."""
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
@@ -296,7 +296,7 @@ class AnthropicModelConfig(ModelConfig):
         """Compute model-specific statistics from response usage object."""
         return AnthropicResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
-    def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update message content for Anthropic models."""
         logger.debug("Updating message content for Anthropic models")
         if messages[-1]["role"] == "assistant":

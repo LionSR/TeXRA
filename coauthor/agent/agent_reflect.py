@@ -1,15 +1,16 @@
-from typing import List, Any
+from typing import Any
 
 from .agent_base import BaseReflectChainAgent
 from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .output_handler import get_output_file_name
+from .model_base import ModelHandler
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
     def __init__(
         self,
-        model_handler: Any,
+        model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
@@ -27,7 +28,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
     def handle_output(
         self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
-    ) -> List[str]:
+    ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
             self.output_handler.ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
@@ -70,7 +71,7 @@ class DirectWrite(BaseReflectChainAgent):
 
     def handle_output(
         self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
-    ) -> List[str]:
+    ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
             if self.agent_config.output_files:

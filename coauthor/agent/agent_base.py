@@ -5,7 +5,7 @@ import re
 import time
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any
 
 from ..latex import get_tex_count, extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex, best_connection_method
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
@@ -18,6 +18,7 @@ from ..logger import logger
 
 from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .model_base import ModelHandler
 
 from .logdb import logdb_start, update_statistics_in_db, logdb_output_files
 from .output_handler import OutputHandler
@@ -29,7 +30,9 @@ class BaseReflectChainAgent(ABC):
     Provides a common structure for agents that involve reflection and processing.
     """
 
-    def __init__(self, model_handler: Any, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str):
+    def __init__(
+        self, model_handler: ModelHandler, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str
+    ):
         """Initialize with model handler, agent config, settings/prompts, and agent path"""
         self.model_handler = model_handler
         self.agent_config = agent_config
@@ -60,7 +63,7 @@ class BaseReflectChainAgent(ABC):
         user_vars.update(self._get_output_files_order())
         return user_vars
 
-    def _get_basic_vars(self) -> Dict[str, Any]:
+    def _get_basic_vars(self) -> dict[str, Any]:
         """Get basic model and instruction variables."""
         return {
             "MODEL": self.agent_config.model,
@@ -68,7 +71,7 @@ class BaseReflectChainAgent(ABC):
             "INSTRUCTION": self.agent_config.instruction,
         }
 
-    def _get_file_vars(self) -> Dict[str, Any]:
+    def _get_file_vars(self) -> dict[str, Any]:
         """Get variables related to input, reference, and auxiliary files."""
         user_vars = {}
 
@@ -102,7 +105,7 @@ class BaseReflectChainAgent(ABC):
 
         return user_vars
 
-    def _get_required_file_vars(self) -> Dict[str, Any]:
+    def _get_required_file_vars(self) -> dict[str, Any]:
         """Get variables from required files specified in agent settings."""
         user_vars = {}
 
@@ -131,7 +134,7 @@ class BaseReflectChainAgent(ABC):
 
         return user_vars
 
-    def _get_pattern_based_file_vars(self) -> Dict[str, Any]:
+    def _get_pattern_based_file_vars(self) -> dict[str, Any]:
         """Get variables from pattern-based file mappings specified in agent settings."""
         user_vars = {}
 
@@ -172,7 +175,7 @@ class BaseReflectChainAgent(ABC):
 
         return user_vars
 
-    def _get_output_files_order(self) -> Dict[str, Any]:
+    def _get_output_files_order(self) -> dict[str, Any]:
         """Get variables for output files order."""
         user_vars = {}
 
@@ -207,7 +210,7 @@ class BaseReflectChainAgent(ABC):
 
     def handle_output(
         self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
-    ) -> List[str]:
+    ) -> list[str]:
         """Handle the output for the given round.
 
         This base implementation handles database updates. Derived classes should call super().handle_output()
@@ -224,13 +227,13 @@ class BaseReflectChainAgent(ABC):
     def get_output_file(self, round: int) -> str:
         pass
 
-    def _get_tex_count_stats(self, input_files: str | List[str]) -> Optional[str]:
+    def _get_tex_count_stats(self, input_files: str | list[str]) -> str | None:
         if isinstance(input_files, str):
             input_files = [input_files]
         tex_count_stats = get_tex_count(input_files)
         return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
 
-    def _get_first_k_from_document(self) -> Optional[str]:
+    def _get_first_k_from_document(self) -> str | None:
         K = self.agent_config.K
         content = read_file(self.agent_config.input_file)
         return content[:K].strip()  # Return only the first k characters, stripped
@@ -240,9 +243,9 @@ class BaseReflectChainAgent(ABC):
         round_state: AgentRoundState,
         global_state: AgentGlobalState,
         accumulated_output: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         output_file: str,
-    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool]:
+    ) -> tuple[AgentRoundState, AgentGlobalState, str, bool]:
         end_turn = False
 
         while not end_turn:
@@ -317,13 +320,13 @@ class BaseReflectChainAgent(ABC):
     def process_first_round(
         self,
         output_file: str,
-        user_vars: Dict[str, str],
+        user_vars: dict[str, str],
         global_state: AgentGlobalState,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         round: int = 0,
-        tex_count_stats: Optional[str] = None,
-        first_k_tex_document: Optional[str] = None,
-    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool, List[Dict[str, Any]]]:
+        tex_count_stats: str | None = None,
+        first_k_tex_document: str | None = None,
+    ) -> tuple[AgentRoundState, AgentGlobalState, str, bool, list[dict[str, Any]]]:
         """Process the first round."""
         logger.info(f"\n\nProcessing round {round}")
 
@@ -373,13 +376,13 @@ class BaseReflectChainAgent(ABC):
     def process_reflection_round(
         self,
         output_file: str,
-        user_vars: Dict[str, str],
+        user_vars: dict[str, str],
         global_state: AgentGlobalState,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         round: int = 1,
-        tex_count_stats: Optional[str] = None,
-        first_k_tex_document: Optional[str] = None,
-    ) -> Tuple[AgentRoundState, AgentGlobalState, str, bool, List[Dict[str, Any]]]:
+        tex_count_stats: str | None = None,
+        first_k_tex_document: str | None = None,
+    ) -> tuple[AgentRoundState, AgentGlobalState, str, bool, list[dict[str, Any]]]:
         """Process the reflection round."""
         logger.info(f"\n\nProcessing round {round}")
 

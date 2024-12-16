@@ -18,10 +18,10 @@ class AgentRoundState:
     response_time: float = 0
     last_response: str = ""
     output_file: str = ""
-    model_usage: Optional[ModelUsageType] = None
+    model_usage: ModelUsageType | None = None
 
     @classmethod
-    def initialize(cls, round_number: int, accumulated_output: Optional[str] = None) -> "AgentRoundState":
+    def initialize(cls, round_number: int, accumulated_output: str | None = None) -> "AgentRoundState":
         """Initialize a new AgentRoundState object."""
         return cls(round_number=round_number, last_response=accumulated_output or "")
 
@@ -59,7 +59,7 @@ class AgentGlobalState:
     total_response_time: float = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
-    model_usage: Optional[ModelUsageType] = None
+    model_usage: ModelUsageType | None = None
 
     @classmethod
     def initialize(cls) -> "AgentGlobalState":
@@ -88,7 +88,7 @@ class AgentGlobalState:
         }
 
     @classmethod
-    def from_dict(cls, state_dict: Optional[dict]) -> "AgentGlobalState":
+    def from_dict(cls, state_dict: dict | None) -> "AgentGlobalState":
         """Create AgentGlobalState object from dictionary."""
         if state_dict is None:
             return cls()

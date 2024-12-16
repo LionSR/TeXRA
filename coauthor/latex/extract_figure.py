@@ -6,7 +6,7 @@ from ..logger import logger
 from ..utils.file import read_file
 
 
-def extract_figure_paths_from_latex(latex_file: str) -> Optional[List[str]]:
+def extract_figure_paths_from_latex(latex_file: str) -> list[str] | None:
     """Extract figure paths from a LaTeX file."""
     if not latex_file or not os.path.exists(latex_file):
         return None
