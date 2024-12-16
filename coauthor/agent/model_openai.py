@@ -2,7 +2,7 @@
 
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any
 from openai import OpenAI
 
 from ..agent import AgentSettings, AgentConfig
@@ -100,7 +100,7 @@ class OpenAIModelHandler(ModelHandler):
             )
         return content
 
-    def extract_response(self, response_object, end_tag: str) -> tuple[str, Any, str]:
+    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from OpenAI response object."""
         if not response_object or not response_object.choices:
             logger.error("Invalid response object")

@@ -95,6 +95,7 @@ def add_common_arguments(parser):
     )
     tool_group.add_argument("--auto_extract_tikz_figure_reflect", action="store_true", help="Include TikZ reflection in the output")
     tool_group.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
+    tool_group.add_argument("--auto_confirmation", action="store_true", help="Automatically confirm model's questions")
 
     # Other arguments
     parser.add_argument("--edited_file", type=str, help="Path to the file that are already edited")
