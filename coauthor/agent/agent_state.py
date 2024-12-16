@@ -1,9 +1,6 @@
 from dataclasses import dataclass
-from typing import Optional, Union
 
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
-
-ModelUsageType = Union[OpenAIResponseUsage, AnthropicResponseUsage]
 
 
 @dataclass
@@ -18,14 +15,14 @@ class AgentRoundState:
     response_time: float = 0
     last_response: str = ""
     output_file: str = ""
-    model_usage: ModelUsageType | None = None
+    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None
 
     @classmethod
     def initialize(cls, round_number: int, accumulated_output: str | None = None) -> "AgentRoundState":
         """Initialize a new AgentRoundState object."""
         return cls(round_number=round_number, last_response=accumulated_output or "")
 
-    def update_token_counts(self, response_usage: ModelUsageType) -> None:
+    def update_token_counts(self, response_usage: OpenAIResponseUsage | AnthropicResponseUsage) -> None:
         """Update token counts based on model response usage."""
         self.model_usage = response_usage
 
@@ -59,7 +56,7 @@ class AgentGlobalState:
     total_response_time: float = 0
     total_input_tokens: int = 0
     total_output_tokens: int = 0
-    model_usage: ModelUsageType | None = None
+    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None
 
     @classmethod
     def initialize(cls) -> "AgentGlobalState":

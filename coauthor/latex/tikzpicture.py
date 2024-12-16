@@ -1,8 +1,6 @@
 import re
 import os
 
-from typing import List, Tuple, Optional
-
 from ..logger import logger
 from .tex_tools import run_external_command
 

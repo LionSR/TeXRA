@@ -1,6 +1,5 @@
 import os
 from openai import OpenAI
-from typing import Optional
 
 from ..logger import logger
 

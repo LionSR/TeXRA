@@ -102,6 +102,7 @@ class AgentConfig:
     auto_extract_tikz_figure: bool = False
     auto_extract_tikz_figure_reflect: bool = False
     include_tex_count: bool = False
+    auto_confirmation: bool = False
 
     # Processing configuration
     K: int = 200
@@ -142,6 +143,7 @@ class AgentConfig:
             auto_extract_figure=kwargs.get("auto_extract_figure", False),
             auto_extract_tikz_figure=kwargs.get("auto_extract_tikz_figure", False),
             auto_extract_tikz_figure_reflect=kwargs.get("auto_extract_tikz_figure_reflect", False),
+            auto_confirmation=kwargs.get("auto_confirmation", False),
         )
         agent_config.validate()
         return agent_config

@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from ..latex import get_tex_count, extract_and_compile_tikzpictures_with_labels, extract_figure_paths_from_latex, best_connection_method
+
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.xml import get_xml_format_from_files
 from ..utils.file import read_file, write_to_output_file
@@ -61,6 +62,7 @@ class BaseReflectChainAgent(ABC):
         user_vars.update(self._get_required_file_vars())
         user_vars.update(self._get_pattern_based_file_vars())
         user_vars.update(self._get_output_files_order())
+        user_vars.update(self._get_tool_flags())
         return user_vars
 
     def _get_basic_vars(self) -> dict[str, Any]:
@@ -189,6 +191,17 @@ class BaseReflectChainAgent(ABC):
 
         return user_vars
 
+    def _get_tool_flags(self) -> dict[str, Any]:
+        """Get variables related to tool usage flags."""
+        return {
+            "AUTO_CONFIRMATION": self.agent_config.auto_confirmation,
+            "USE_PREFILL_FROM_INPUT": self.agent_config.use_prefill_from_input,
+            "AUTO_EXTRACT_FIGURE": self.agent_config.auto_extract_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE": self.agent_config.auto_extract_tikz_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": self.agent_config.auto_extract_tikz_figure_reflect,
+            "INCLUDE_TEX_COUNT": self.agent_config.include_tex_count,
+        }
+
     def setup(self):
         """Set up the agent for processing."""
         # Initialize base files
@@ -262,7 +275,7 @@ class BaseReflectChainAgent(ABC):
             round_state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
 
-            new_response, response_usage, stop_reason = self.model_handler.extract_response(response_object, self.agent_settings.end_tag)
+            new_response, response_usage, stop_reason = self.model_handler.extract_response(response_object, self.agent_settings.end_tag, self.agent_settings.auto_confirmation)
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
@@ -277,7 +290,7 @@ class BaseReflectChainAgent(ABC):
                 logger.error("Massive repetition detected - skipping this response")
                 break
 
-            if self.model_handler.capabilities.likes_to_ask_for_confirmation:
+            if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_settings.auto_confirmation:
                 new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
 
