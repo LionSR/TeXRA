@@ -39,7 +39,7 @@ class BaseReflectChainAgent(ABC):
 
     def __init__(
         self, model_handler: ModelHandler, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str
-    ):
+    ) -> None:
         """Initialize with model handler, agent config, settings/prompts, and agent path"""
         self.model_handler = model_handler
         self.agent_config = agent_config
@@ -226,7 +226,16 @@ class BaseReflectChainAgent(ABC):
         self.log_id = create_log_entry(self.agent_config, self.agent_settings)
 
     def handle_output(
-        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+        self,
+        # State objects (required)
+        round_state: AgentRoundState,
+        global_state: AgentGlobalState,
+        # File paths (required)
+        output_file: str,
+        # Processing flags
+        end_turn: bool,
+        # Optional metadata
+        round: int = 0,
     ) -> list[str]:
         """Handle the output for the given round."""
         # Update database with statistics
@@ -247,12 +256,16 @@ class BaseReflectChainAgent(ABC):
 
     def _process_response_cycle(
         self,
+        # Core content (required)
+        messages: list[dict[str, Any]],
+        # State objects (required)
         round_state: AgentRoundState,
         global_state: AgentGlobalState,
         tool_state: ToolState,
-        messages: list[dict[str, Any]],
+        # File paths (required)
         output_file: str,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool]:
+        """Process a single response cycle."""
         end_turn = False
 
         while not end_turn:
@@ -327,11 +340,15 @@ class BaseReflectChainAgent(ABC):
 
     def process_first_round(
         self,
-        output_file: str,
-        user_vars: dict[str, str],
-        global_state: AgentGlobalState,
+        # Core content (required)
         messages: list[dict[str, Any]],
+        user_vars: dict[str, str],
+        # State objects (required)
+        global_state: AgentGlobalState,
         tool_state: ToolState,
+        # Processing parameters (required)
+        output_file: str,
+        # Optional metadata
         round: int = 0,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
         """Process the first round."""
@@ -355,12 +372,15 @@ class BaseReflectChainAgent(ABC):
         tool_state.update_accumulated_output(prefill if prefill else "")
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            output_file,
-            self.agent_config,
-            self.agent_settings,
-            messages,
-            prefill,
-            tool_state,
+            # Core configs (required)
+            agent_config=self.agent_config,
+            agent_settings=self.agent_settings,
+            # State/content (required)
+            messages=messages,
+            tool_state=tool_state,
+            # Processing parameters (required)
+            output_file=output_file,
+            prefill=prefill,
         )
 
         if end_turn:
@@ -370,10 +390,10 @@ class BaseReflectChainAgent(ABC):
         round_state = AgentRoundState.initialize(round)
 
         round_state, global_state, tool_state, end_turn = self._process_response_cycle(
+            messages,
             round_state,
             global_state,
             tool_state,
-            messages,
             output_file,
         )
 
@@ -381,11 +401,15 @@ class BaseReflectChainAgent(ABC):
 
     def process_reflection_round(
         self,
-        output_file: str,
-        user_vars: dict[str, str],
-        global_state: AgentGlobalState,
+        # Core content (required)
         messages: list[dict[str, Any]],
+        user_vars: dict[str, str],
+        # State objects (required)
+        global_state: AgentGlobalState,
         tool_state: ToolState,
+        # Processing parameters (required)
+        output_file: str,
+        # Optional metadata
         round: int = 1,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
         """Process the reflection round."""
@@ -402,12 +426,15 @@ class BaseReflectChainAgent(ABC):
         tool_state.update_accumulated_output(prefill if prefill else "")
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            output_file,
-            self.agent_config,
-            self.agent_settings,
-            messages,
-            prefill,
-            tool_state,
+            # Core configs (required)
+            agent_config=self.agent_config,
+            agent_settings=self.agent_settings,
+            # State/content (required)
+            messages=messages,
+            tool_state=tool_state,
+            # Processing parameters (required)
+            output_file=output_file,
+            prefill=prefill,
         )
 
         if end_turn:
@@ -417,10 +444,10 @@ class BaseReflectChainAgent(ABC):
         round_state = AgentRoundState.initialize(round)
 
         round_state, global_state, tool_state, end_turn = self._process_response_cycle(
+            messages,
             round_state,
             global_state,
             tool_state,
-            messages,
             output_file,
         )
 
@@ -458,14 +485,14 @@ class BaseReflectChainAgent(ABC):
         messages = []
 
         round_state, global_state, tool_state, end_turn, messages = self.process_first_round(
-            self.output_file[0],
+            messages,
             self.user_vars,
             global_state,
-            messages,
             tool_state,
+            self.output_file[0],
         )
 
-        self.handle_output(round_state, global_state, end_turn, self.output_file[0], round=0)
+        self.handle_output(round_state, global_state, self.output_file[0], end_turn, round=0)
 
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
@@ -506,14 +533,14 @@ class BaseReflectChainAgent(ABC):
             tool_state.first_k_tex_document = self._get_first_k_from_document()
 
         round_state, global_state, tool_state, end_turn, messages = self.process_reflection_round(
-            self.output_file[1],
+            messages,
             self.user_vars,
             global_state,
-            messages,
             tool_state,
+            self.output_file[1],
         )
 
-        self.handle_output(round_state, global_state, end_turn, self.output_file[1], round=1)
+        self.handle_output(round_state, global_state, self.output_file[1], end_turn, round=1)
 
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
