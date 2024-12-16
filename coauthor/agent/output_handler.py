@@ -3,7 +3,7 @@ import re
 
 
 import xml.etree.ElementTree as ET
-from typing import Optional, List, Any
+from typing import Any
 
 from ..logger import logger
 from ..agent import AgentConfig, AgentSettings

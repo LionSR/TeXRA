@@ -61,11 +61,12 @@ def shared_arguments(func):
         click.option("--output_name_override", type=str, default=None, help="Override base output name"),
         # Tool usage arguments
         click.option("--edited_file", default=None, help="Path to the file that are already edited"),
-        # Auto extract figure arguments
         click.option("--auto_extract_figure", is_flag=True, help="Automatically extract the list of figures from the input file"),
         click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
         click.option("--auto_extract_tikz_figure_reflect", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--use_prefill_from_input", is_flag=True, help="Use the prefill from the input file"),
+        click.option("--auto_confirmation", is_flag=True, help="Automatically confirm model's questions"),
     ]
     for option in options:
         func = option(func)

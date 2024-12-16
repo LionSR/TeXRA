@@ -3,7 +3,7 @@
 import os
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any
 from anthropic import Anthropic
 
 from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
@@ -121,7 +121,7 @@ class AnthropicModelHandler(ModelHandler):
                 )
         return content
 
-    def extract_response(self, response_object, end_tag: str) -> tuple[str, Any, str]:
+    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
         """
         Extract response text and usage statistics from Anthropic response object.
         Returns:
@@ -144,7 +144,7 @@ class AnthropicModelHandler(ModelHandler):
 
         # Extract and process response text
         new_response = response_object.content[0].text.strip()
-        if self.capabilities.likes_to_ask_for_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
 
         # Check for confirmation patterns
@@ -152,7 +152,7 @@ class AnthropicModelHandler(ModelHandler):
             stop_reason = "ask_for_confirmation"
 
         # Handle output tags if present
-        if "<output>" in new_response and self.capabilities.likes_to_ask_for_confirmation:
+        if "<output>" in new_response and self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
             new_response = extract_text_from_tags(new_response, "output")
             logger.warning("No <output> tags found in response" if new_response == new_response else "Extracted content from <output> tags")
@@ -179,7 +179,7 @@ class AnthropicModelHandler(ModelHandler):
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
         """
         # add a flag for enabling this mode
-        if self.capabilities.likes_to_ask_for_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
             output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
             if round_state.continuation_count <= 1:
                 user_message_continuation = (

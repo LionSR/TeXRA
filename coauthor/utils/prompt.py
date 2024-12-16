@@ -1,5 +1,5 @@
 from jinja2 import Template
-from typing import Dict, Any
+from typing import Any
 
 
 def get_list_of_files(files: list[str] | None) -> str:
