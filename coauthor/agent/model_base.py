@@ -75,6 +75,7 @@ class ModelConfig(ABC):
     input_price: float
     output_price: float
     provider: ModelProvider
+    base_url: Optional[str] = None
     context_window: int = 128000
     # maybe split the following under capabilities
     supports_prompt_caching: bool = False
@@ -85,7 +86,7 @@ class ModelConfig(ABC):
     supports_assistant_prefill: bool = False
     supports_predictive_output: bool = False
     likes_to_ask_for_confirmation: bool = False
-    base_url: Optional[str] = None
+    
 
     @property
     def is_anthropic(self) -> bool:

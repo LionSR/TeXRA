@@ -197,9 +197,9 @@ def pack_latexdiff_vc_multiple(input_files, commit_hash, clean):
 @cli.command()
 @click.argument("latex_file")
 def tex_count(latex_file):
-    stats = get_tex_count(latex_file)
-    if stats is not None:
-        logger.info(f"Statistics for {latex_file}:\n {stats}")
+    tex_count_stats = get_tex_count(latex_file)
+    if tex_count_stats is not None:
+        logger.info(f"Statistics for {latex_file}:\n {tex_count_stats}")
 
 
 @cli.command()
