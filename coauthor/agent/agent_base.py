@@ -318,7 +318,8 @@ class BaseReflectChainAgent(ABC):
         system_prompt = render_prompt(self.agent_prompts.system_prompt, user_vars)
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
         user_prefix = render_prompt(self.agent_prompts.user_prefix, user_vars)
-        # TODO: Consider making tex_count_stats and first_k_tex_document part of the state object
+    
+        # TODO: Consider making tex_count_stats and first_k_tex_document part of a agent tool state object
         if tex_count_stats:
             user_prefix = f"{tex_count_stats}{user_prefix}"
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
@@ -330,10 +331,9 @@ class BaseReflectChainAgent(ABC):
             system_prompt=system_prompt,
         )
 
-        accumulated_output = None
-        prefill = self.agent_settings.prefills[0] if self.agent_settings.prefills else ""
-
-        accumulated_output = prefill
+        prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        accumulated_output = prefill if prefill else ""
+    
         accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
             output_file,
             self.agent_config,
@@ -379,10 +379,9 @@ class BaseReflectChainAgent(ABC):
 
         messages = self.model_config.create_reflection_message(messages, user_message, self.reflection_figure_files)
 
-        accumulated_output = None
-        prefill = self.agent_settings.prefills[round] if len(self.agent_settings.prefills) > round else self.agent_settings.prefills[0]
+        prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        accumulated_output = prefill if prefill else ""
 
-        accumulated_output = prefill
         accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
             output_file,
             self.agent_config,
