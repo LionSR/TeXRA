@@ -39,7 +39,7 @@ class OpenAIModelConfig(ModelConfig):
             "messages": messages,
             "temperature": temperature,
             # For openai model, this value is now in favor of max_tokens, and max_tokens not compatible with o1 series models.
-            "max_completion_tokens": self.max_tokens,
+            "max_completion_tokens": self.max_output_tokens,
         }
 
         if "o1" in self.name:
@@ -130,16 +130,21 @@ class OpenAIModelConfig(ModelConfig):
         agent_config: AgentConfig,
     ):
         """Handle continuation for OpenAI-compatible models."""
-        prefill_tokens = state.last_response[-agent_config.K :]
-        user_message_continuation = (
-            f"Your response got cut off, because you only have limited response space. "
-            f"Continue writing exactly from where you left off until the very end, "
-            f"marked by {agent_settings.end_tag}. "
-            "Avoid repeat yourself and avoid starting over. "
-            f'Start your response at the next token after: "{prefill_tokens}"'
-        )
-        logger.info("User message: " + user_message_continuation)
-        messages.append({"role": "user", "content": user_message_continuation})
+        if self.supports_assistant_prefill:
+            # no user message needs to be added if assistant prefill is supported
+            pass
+        else:
+            prefill_tokens = state.last_response[-agent_config.K :]
+            user_message_continuation = (
+                f"Your response got cut off, because you only have limited response space. "
+                f"Continue writing exactly from where you left off until the very end, "
+                f"marked by {agent_settings.end_tag}. "
+                "Avoid repeat yourself and avoid starting over. "
+                f'Start your response at the next token after: "{prefill_tokens}"'
+            )
+            logger.info("Adding User message:")
+            logger.debug(user_message_continuation)
+            messages.append({"role": "user", "content": [{"type": "text", "text": user_message_continuation}]})
 
     def initialize_output_and_prefill(
         self,
@@ -175,6 +180,7 @@ class OpenAIModelConfig(ModelConfig):
                     prefill = f"<latex_document>{first_k_tex_document}"
 
             openai_prefill = f"Start your response with\n{prefill}"
+            # this assumes that the last message is a user message
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
 
         return accumulated_output, False, messages
@@ -266,7 +272,6 @@ class OpenAIModelConfig(ModelConfig):
 
         stats = self.compute_statistics(response_usage)
 
-        # Print OpenAI-specific statistics
         if self.supports_auto_prompt_caching:
             logger.info(f"Total cached tokens: {stats['cached_tokens']}")
             logger.info(f"Percentage cached: {stats['percentage_cached']}%")
@@ -276,7 +281,6 @@ class OpenAIModelConfig(ModelConfig):
         logger.info(f"Total response time : {state.total_response_time} seconds")
         logger.warning(f"Total cost          : ${stats['cost']:.2f}")
 
-        # Return only OpenAI-specific stats
         return OpenAIResponseUsage(
             total_input_tokens=stats["total_input_tokens"],
             total_output_tokens=stats["total_output_tokens"],
@@ -287,6 +291,36 @@ class OpenAIModelConfig(ModelConfig):
             percentage_cached=stats["percentage_cached"],
             cost=stats["cost"],
         )
+
+    def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+        """Update message content for OpenAI models."""
+        logger.debug(f"Updating message content for OpenAI models.")
+
+        last_message = messages[-1]
+        if self.supports_assistant_prefill:
+            # although OpenAI models do not support assistant prefill, some models via OpenRouter might do
+            if last_message["role"] == "assistant":
+                messages[-1]["content"] = accumulated_output
+            elif last_message["role"] == "user":
+                messages.append({"role": "assistant", "content": accumulated_output})
+            pass
+        else:
+            # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
+            if last_message["role"] == "user":
+                logger.debug("Last message is a user message")
+                if "Your response got cut off" in last_message["content"]:
+                    # the second last message is an assistant message must be a assistant message
+                    if messages[-2]["role"] == "assistant":
+                        if isinstance(messages[-2]["content"], list):
+                            messages[-2]["content"].append({"type": "text", "text": best_connector + new_response})
+                        else:
+                            logger.error("Second last message content is not a list")
+                            messages[-2]["content"] = best_connector + new_response
+                        messages.pop()
+                else:
+                    logger.debug("Last message is a request message rather than a ask to continue after cut off")
+                    # otherwise last message is a request message rather than a ask to continue after cut off
+                    messages.append({"role": "assistant", "content": [{"type": "text", "text": accumulated_output}]})
 
 
 class OpenAICompatibleModelConfig(OpenAIModelConfig):
