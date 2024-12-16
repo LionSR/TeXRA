@@ -15,7 +15,8 @@ from ..utils.replacement import apply_replacement_regex, get_replacements_by_cat
 from ..utils.file import read_file, write_file
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
-from .model_base import ModelConfig, ModelProvider, AnthropicResponseUsage, ResponseUsageBase
+from .model_base import ModelConfig, ModelProvider
+from .response_usage import ResponseUsageBase, AnthropicResponseUsage
 
 
 @dataclass
