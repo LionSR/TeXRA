@@ -12,6 +12,7 @@ from ..logger import logger
 
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import OpenAIResponseUsage
+from .agent_state import ToolState
 
 
 @dataclass
@@ -121,6 +122,7 @@ class OpenAIModelHandler(ModelHandler):
         self,
         messages: list[dict],
         round_state: AgentRoundState,
+        tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ):
@@ -129,7 +131,7 @@ class OpenAIModelHandler(ModelHandler):
             # no user message needs to be added if assistant prefill is supported
             pass
         else:
-            prefill_tokens = round_state.last_response[-agent_config.K :]
+            prefill_tokens = tool_state.last_response[-agent_config.K :]
             user_message_continuation = (
                 f"Your response got cut off, because you only have limited response space. "
                 f"Continue writing exactly from where you left off until the very end, "
@@ -148,9 +150,8 @@ class OpenAIModelHandler(ModelHandler):
         agent_settings: AgentSettings,
         messages: list[dict],
         prefill: str,
-        accumulated_output: str,
-        first_k_tex_document: str | None = None,
-    ) -> tuple[str, bool, list[dict]]:
+        tool_state: ToolState,
+    ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for OpenAI-compatible models."""
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
@@ -158,27 +159,28 @@ class OpenAIModelHandler(ModelHandler):
             if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
                 messages.append({"role": "assistant", "content": file_content})
-                return None, True, messages
+                return True, messages
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
-                accumulated_output = file_content
+                tool_state.update_accumulated_output(file_content)
                 messages.append({"role": "assistant", "content": file_content})
                 logger.debug(f"Using existing content as prefill: {output_file}")
-                state = AgentRoundState.initialize(0, accumulated_output)
-                self.handle_continuation(messages, state, agent_settings, agent_config)
+                state = AgentRoundState.initialize(0)
+                tool_state.last_response = tool_state.accumulated_output
+                self.handle_continuation(messages, state, tool_state, agent_settings, agent_config)
         else:
-            if agent_config.use_prefill_from_input and first_k_tex_document:
-                prefill += first_k_tex_document
-                accumulated_output = ""
+            if agent_config.use_prefill_from_input and tool_state.first_k_tex_document:
+                prefill += tool_state.first_k_tex_document
+                tool_state.update_accumulated_output("")
 
-                if agent_settings.output_ext == "tex" and first_k_tex_document:
-                    prefill = f"<latex_document>{first_k_tex_document}"
+                if agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
+                    prefill = f"<latex_document>{tool_state.first_k_tex_document}"
 
             openai_prefill = f"Start your response with\n{prefill}"
             # this assumes that the last message is a user message
             messages[-1]["content"].append({"type": "text", "text": openai_prefill})
 
-        return accumulated_output, False, messages
+        return False, messages
 
     def compute_price(self, response_usage: Any) -> float:
         """Compute the price for token usage."""
@@ -197,7 +199,7 @@ class OpenAIModelHandler(ModelHandler):
         """Compute model-specific statistics from response usage object."""
         return OpenAIResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
-    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
         """Update message content for OpenAI models."""
         logger.debug("Updating message content for OpenAI models")
 
@@ -205,9 +207,9 @@ class OpenAIModelHandler(ModelHandler):
         if self.capabilities.supports_assistant_prefill:
             # although OpenAI models do not support assistant prefill, some models via OpenRouter might do
             if last_message["role"] == "assistant":
-                messages[-1]["content"] = accumulated_output
+                messages[-1]["content"] = tool_state.accumulated_output
             elif last_message["role"] == "user":
-                messages.append({"role": "assistant", "content": accumulated_output})
+                messages.append({"role": "assistant", "content": tool_state.accumulated_output})
             pass
         else:
             # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
@@ -225,7 +227,7 @@ class OpenAIModelHandler(ModelHandler):
                 else:
                     logger.debug("Last message is a request message rather than a ask to continue after cut off")
                     # otherwise last message is a request message rather than a ask to continue after cut off
-                    messages.append({"role": "assistant", "content": [{"type": "text", "text": accumulated_output}]})
+                    messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})
 
 
 class OpenAICompatibleModelHandler(OpenAIModelHandler):

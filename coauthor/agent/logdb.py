@@ -69,15 +69,17 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
     actual_output_files = json.dumps([])
 
     # Consolidate tool flags into a single JSON object
-    tool_flags = json.dumps({
-        "reflect": agent_config.reflect,
-        "auto_extract_figure": agent_config.auto_extract_figure,
-        "auto_extract_tikz_figure": agent_config.auto_extract_tikz_figure,
-        "auto_extract_tikz_figure_reflect": agent_config.auto_extract_tikz_figure_reflect,
-        "include_tex_count": agent_config.include_tex_count,
-        "use_prefill_from_input": agent_config.use_prefill_from_input,
-        "auto_confirmation": agent_config.auto_confirmation,
-    })
+    tool_flags = json.dumps(
+        {
+            "reflect": agent_config.reflect,
+            "auto_extract_figure": agent_config.auto_extract_figure,
+            "auto_extract_tikz_figure": agent_config.auto_extract_tikz_figure,
+            "auto_extract_tikz_figure_reflect": agent_config.auto_extract_tikz_figure_reflect,
+            "include_tex_count": agent_config.include_tex_count,
+            "use_prefill_from_input": agent_config.use_prefill_from_input,
+            "auto_confirmation": agent_config.auto_confirmation,
+        }
+    )
 
     # Initialize empty state objects
     global_state = json.dumps({})
