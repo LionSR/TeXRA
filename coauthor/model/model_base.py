@@ -71,11 +71,12 @@ class ModelConfig(ABC):
 
     name: str  # Short name (e.g., "sonnet++")
     full_name: str  # Full model name (e.g., "claude-3-5-sonnet-20241022")
-    max_tokens: int
+    max_output_tokens: int
     input_price: float
     output_price: float
     provider: ModelProvider
     context_window: int = 128000
+    # maybe split the following under capabilities
     supports_prompt_caching: bool = False
     supports_auto_prompt_caching: bool = False
     supports_reasoning: bool = False
@@ -232,9 +233,7 @@ class ModelConfig(ABC):
         """
         raise NotImplementedError("Each model class must implement extract_round_stats")
 
-    def check_stop_conditions(
-        self, stop_reason: str, new_response: str, state: "AgentState", agent_settings: "AgentSettings", massive_repetition_detected: bool
-    ) -> tuple[bool, bool]:
+    def check_stop_conditions(self, stop_reason: str, new_response: str, state: "AgentState", agent_settings: "AgentSettings") -> tuple[bool, bool]:
         """Check if the conversation should stop."""
         CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 1500000
@@ -249,13 +248,11 @@ class ModelConfig(ABC):
         if output_token_limit:
             logger.error(f"Output tokens exceed {OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
 
-        should_stop = encounter_document_tag or continuation_limit or input_token_limit or massive_repetition_detected or output_token_limit
+        should_stop = encounter_document_tag or continuation_limit or input_token_limit or output_token_limit
 
         return end_turn, should_stop
 
-    def print_stop_flags(
-        self, end_turn: bool, new_response: str, state: "AgentState", agent_settings: "AgentSettings", massive_repetition_detected: bool
-    ):
+    def print_stop_flags(self, end_turn: bool, new_response: str, state: "AgentState", agent_settings: "AgentSettings"):
         """Print the flags indicating why the conversation stopped."""
 
         CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
@@ -268,7 +265,6 @@ class ModelConfig(ABC):
             f"encounter_document_tag: {'</'+agent_settings.document_tag+'>' in new_response}\n"
             f"continuation_limit: {state.continuation_count > CONTINUE_LIMIT}\n"
             f"input_token_limit: {state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
-            f"massive_repetition_detected: {massive_repetition_detected}\n"
             f"output_token_limit: {state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * state.first_input_tokens}\n"
         )
 
@@ -307,3 +303,16 @@ class ModelConfig(ABC):
         logger.info(f"Successfully added: {added_figures}")
 
         return self.create_image_content(image_contents)
+
+    @abstractmethod
+    def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+        """
+        Update the message content based on model-specific requirements.
+
+        Args:
+            messages: List of conversation messages
+            best_connector: String to connect responses
+            new_response: New response text
+            accumulated_output: Complete accumulated output so far
+        """
+        pass

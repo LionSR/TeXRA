@@ -8,14 +8,14 @@ from anthropic import Anthropic
 
 from .model_base import ModelConfig, ModelProvider, AnthropicResponseUsage, ResponseUsageBase
 
-from .confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
+from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
 from ..agent import AgentSettings, AgentConfig, AgentState
 from ..logger import logger
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 
 from ..utils.file import read_file, write_file
-from ..utils.xml import extract_text_from_tags, filter_monologue_tags
+from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
 
 @dataclass
@@ -45,7 +45,7 @@ class AnthropicModelConfig(ModelConfig):
 
         return client.beta.messages.create(
             model=self.full_name,
-            max_tokens=self.max_tokens,
+            max_tokens=self.max_output_tokens,
             messages=messages,
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
@@ -157,7 +157,7 @@ class AnthropicModelConfig(ModelConfig):
 
         # Apply formatting
         new_response = apply_replacement_regex(new_response, get_replacements_by_category("anthropic"))
-        new_response = filter_monologue_tags(new_response)
+        new_response = filter_tags_from_text(new_response, "monologue")
 
         # Add end tag if needed
         if stop_reason == "stop_sequence" and end_tag not in new_response:
@@ -207,9 +207,10 @@ class AnthropicModelConfig(ModelConfig):
                         state.last_response = state.last_response.replace(line, "", 1).strip()
                         break
 
-            logger.info("User message: " + user_message_continuation)
+            logger.info(f"Adding User message:")
+            logger.debug(user_message_continuation)
 
-            state.last_response = filter_monologue_tags(state.last_response)
+            state.last_response = filter_tags_from_text(state.last_response, "monologue")
 
             # solution 1: keep updating the last assistant message
             if messages[-1]["role"] == "user":
@@ -239,7 +240,7 @@ class AnthropicModelConfig(ModelConfig):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            file_content = filter_monologue_tags(file_content).strip()
+            file_content = filter_tags_from_text(file_content, "monologue").strip()
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
 
             if agent_settings.has_end_tag(file_content):
@@ -380,3 +381,27 @@ class AnthropicModelConfig(ModelConfig):
             percentage_cached=stats["percentage_cached"],
             cost=stats["cost"],
         )
+
+    def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+        """Update message content for Anthropic models."""
+
+        logger.debug(f"Updating message content for Anthropic models.")
+        if messages[-1]["role"] == "assistant":
+            last_message = messages[-1]
+
+            if self.supports_prompt_caching:
+                if isinstance(last_message["content"], list):
+                    # Remove cache_control from previous message if it exists
+                    if len(last_message["content"]) >= 2 and isinstance(last_message["content"][-2], dict):
+                        last_message["content"][-2].pop("cache_control", None)
+
+                    # Append new message with cache control
+                    last_message["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
+                else:
+                    # Initialize content list with single message
+                    last_message["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
+            else:
+                if isinstance(last_message["content"], list):
+                    last_message["content"].append({"type": "text", "text": best_connector + new_response})
+                else:
+                    last_message["content"] = accumulated_output

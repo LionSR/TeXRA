@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional, Any
 
+# this class need to support per round stats
+
 
 @dataclass
 class AgentState:
@@ -15,6 +17,12 @@ class AgentState:
     continuation_count: int = 0
     first_input_tokens: int = 0
     # tokens
+    # time
+    response_time: float = 0
+    total_response_time: float = 0
+    # response
+    last_response: str = ""
+    # can we separate into a usage object that is model-specific?
     input_tokens: int = 0
     output_tokens: int = 0
     cached_tokens: int = 0  # openai
@@ -29,11 +37,6 @@ class AgentState:
     total_reasoning_tokens: int = 0  # openai
     total_accepted_prediction_tokens: int = 0  # openai
     total_rejected_prediction_tokens: int = 0  # openai
-    # time
-    response_time: float = 0
-    total_response_time: float = 0
-    # response
-    last_response: str = ""
 
     @classmethod
     def initialize(cls, accumulated_output: Optional[str] = None) -> "AgentState":
