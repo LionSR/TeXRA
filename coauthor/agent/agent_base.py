@@ -11,6 +11,7 @@ from ..utils.replacement import get_all_replacements, apply_replacements, get_re
 from ..utils.xml import get_xml_format_from_files
 from ..utils.file import read_file, write_to_output_file
 from ..utils.prompt import render_prompt, get_list_of_files
+from ..utils.repetition import check_for_massive_repetition
 
 from ..logger import logger
 
@@ -18,7 +19,7 @@ from .agent_state import AgentState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 
 from .logdb import logdb_start
-from .output_handler import check_for_massive_repetition, OutputHandler
+from .output_handler import OutputHandler
 
 
 class BaseReflectChainAgent(ABC):
@@ -244,57 +245,58 @@ class BaseReflectChainAgent(ABC):
             response_time = time.time() - start_time
             state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
+
             new_response, response_usage, stop_reason = self.model_config.extract_response(response_object, self.agent_settings.end_tag)
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
             state.update_token_counts(response_usage)
 
-            new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
+            massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
+            if massive_repetition_detected:
+                logger.error("Massive repetition detected - skipping this response")
+                break
+
+            if self.model_config.likes_to_ask_for_confirmation:
+                new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
 
+            logger.info("First K characters of the response:")
+            logger.debug(f"{new_response[:self.agent_config.K]}")
+
+            # does this apply for openai/gemini models?
             best_connector, _ = best_connection_method(state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
+            accumulated_output += best_connector + new_response
 
-            massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
-            if not massive_repetition_detected:
-                accumulated_output += best_connector + new_response
-                file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
-                logger.debug(f"Last {self.agent_config.K} characters of the response: {new_response[-self.agent_config.K:]}")
-                state.last_response = new_response
+            file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
 
-                # anthropic models with prefills, so we need to update the messages
-                if messages[-1]["role"] == "assistant":
-                    if self.model_config.is_anthropic and self.model_config.supports_prompt_caching:
-                        if isinstance(messages[-1]["content"], list):
-                            if len(messages[-1]["content"]) >= 2 and isinstance(messages[-1]["content"][-2], dict):
-                                if "cache_control" in messages[-1]["content"][-2]:
-                                    messages[-1]["content"][-2].pop("cache_control")
-                            messages[-1]["content"].append(
-                                {"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}}
-                            )
-                        else:
-                            messages[-1]["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
-                    else:
-                        messages[-1]["content"] = accumulated_output
+            logger.info("Last K characters of the response:")
+            logger.debug(f"{new_response[-self.agent_config.K:]}")
 
-            end_turn, should_stop = self.model_config.check_stop_conditions(
-                stop_reason, new_response, state, self.agent_settings, massive_repetition_detected
-            )
+            state.last_response = new_response
+
+            # Update message content using model-specific logic
+            # should this be merged with handle_continuation?
+            self.model_config.update_message_content(messages, best_connector, new_response, accumulated_output)
+
+            end_turn, should_stop = self.model_config.check_stop_conditions(stop_reason, new_response, state, self.agent_settings)
             if should_stop:
-                self.model_config.print_stop_flags(end_turn, new_response, state, self.agent_settings, massive_repetition_detected)
+                self.model_config.print_stop_flags(end_turn, new_response, state, self.agent_settings)
                 break
 
             state.increment_continuation()
             logger.info(f"Starting continuation #{state.continuation_count}")
 
+            # TODO: maybe I can get rid of the conditioning and just use model_config.handle_continuation
             if self.model_config.is_openai_compatible:
                 if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
                     self.model_config.handle_continuation(messages, state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_config.likes_to_ask_for_confirmation:
+            if self.model_config.is_anthropic and self.model_config.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
+                    # this is handle confirmation actually
                     self.model_config.handle_continuation(messages, state, self.agent_settings, self.agent_config)
                     continue
 
@@ -311,7 +313,7 @@ class BaseReflectChainAgent(ABC):
         first_k_tex_document: Optional[str] = None,
     ):
         """Process the first round."""
-        logger.info(f"Processing round {round}")
+        logger.info(f"\n\nProcessing round {round}")
 
         system_prompt = render_prompt(self.agent_prompts.system_prompt, user_vars)
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
@@ -355,7 +357,6 @@ class BaseReflectChainAgent(ABC):
             output_file,
         )
 
-        logger.info(f"Completed round {round}")
         return state, accumulated_output, end_turn, messages
 
     def process_reflection_round(
@@ -369,7 +370,7 @@ class BaseReflectChainAgent(ABC):
         first_k_tex_document: Optional[str] = None,
     ):
         """Process the reflection round."""
-        logger.info(f"Processing round {round}")
+        logger.info(f"\n\nProcessing round {round}")
 
         user_request_reflect = render_prompt(self.agent_prompts.user_reflect, user_vars)
         user_message = f"{user_request_reflect}\n"
@@ -405,7 +406,6 @@ class BaseReflectChainAgent(ABC):
             output_file,
         )
 
-        logger.info(f"Completed round {round}")
         return state, accumulated_output, end_turn, messages
 
     def process(self):
@@ -448,7 +448,13 @@ class BaseReflectChainAgent(ABC):
 
         self.handle_output(state, end_turn, self.output_file[0], round=0)
 
-        logger.info(f"\n\nProcessed input files {get_list_of_files(input_files)}. The output was saved as {self.output_file[0]}")
+        logger.info(
+            f"\n\nProcessed input file {self.agent_config.input_file} "
+            f"and/or input files {self.agent_config.input_files}. "
+            f"The round {round} output was saved as {self.output_file[1]}"
+        )
+
+        logger.info(f"Completed round {round}")
 
         return state, messages, end_turn
 
@@ -494,8 +500,10 @@ class BaseReflectChainAgent(ABC):
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
             f"and/or input files {self.agent_config.input_files}. "
-            f"The reflection output was saved as {self.output_file[1]}"
+            f"The round {round} output was saved as {self.output_file[1]}"
         )
+
+        logger.info(f"Completed round {round}")
 
         return state, messages, end_turn
 
