@@ -13,7 +13,7 @@ from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
 from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
 
-from .logdb import logdb_output_files
+from .logdb import update_log_output_files
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: str | None = None) -> str:
@@ -51,7 +51,7 @@ class OutputHandler:
         logger.debug(f"Handling multiple outputs: tasked output_files: {self.agent_config.output_files}; actual output_files: {output_files}")
         if self.agent_config.output_files:
             for input_file, output_file in zip(self.agent_config.output_files, output_files):
-                logdb_output_files(output_file, self.log_id)
+                update_log_output_files(self.log_id, output_file)
                 if ".tex" in input_file and ".tex" in output_file:
                     _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
 

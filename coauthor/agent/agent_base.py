@@ -21,7 +21,7 @@ from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .model_base import ModelHandler
 
-from .logdb import logdb_start, update_statistics_in_db, logdb_output_files
+from .logdb import create_log_entry, update_log_statistics, update_log_output_files
 from .output_handler import OutputHandler
 
 
@@ -219,21 +219,17 @@ class BaseReflectChainAgent(ABC):
         self.first_k_tex_document = None
 
         # Initialize logging
-        self.log_id = logdb_start(self.agent_config, self.agent_settings)
+        self.log_id = create_log_entry(self.agent_config, self.agent_settings)
 
     def handle_output(
         self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
     ) -> list[str]:
-        """Handle the output for the given round.
-
-        This base implementation handles database updates. Derived classes should call super().handle_output()
-        after processing their specific output handling logic.
-        """
+        """Handle the output for the given round."""
         # Update database with statistics
         if self.log_id is not None:
-            update_statistics_in_db(self.log_id, global_state, round_state, round)
+            update_log_statistics(self.log_id, global_state, round_state, round)
 
-        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
+        update_log_output_files(self.log_id, output_file, self.output_handler.output_files[round])
         return self.output_handler.output_files[round]
 
     @abstractmethod
