@@ -450,10 +450,10 @@ class BaseReflectChainAgent(ABC):
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
             f"and/or input files {self.agent_config.input_files}. "
-            f"The round {round} output was saved as {self.output_file[1]}"
+            f"The round 0 output was saved as {self.output_file[1]}"
         )
 
-        logger.info(f"Completed round {round}")
+        logger.info(f"Completed round 0")
 
         return state, messages, end_turn
 
@@ -499,10 +499,10 @@ class BaseReflectChainAgent(ABC):
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
             f"and/or input files {self.agent_config.input_files}. "
-            f"The round {round} output was saved as {self.output_file[1]}"
+            f"The round 1 output was saved as {self.output_file[1]}"
         )
 
-        logger.info(f"Completed round {round}")
+        logger.info(f"Completed round 1")
 
         return state, messages, end_turn
 
