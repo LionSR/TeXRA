@@ -8,7 +8,8 @@ from anthropic import Anthropic
 
 from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
-from ..agent import AgentSettings, AgentConfig, AgentState
+from ..agent import AgentSettings, AgentConfig
+from ..agent.agent_state import AgentRoundState
 from ..logger import logger
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 
@@ -16,7 +17,7 @@ from ..utils.file import read_file, write_file
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
 from .model_base import ModelConfig, ModelProvider
-from .response_usage import ResponseUsageBase, AnthropicResponseUsage
+from .response_usage import AnthropicResponseUsage
 
 
 @dataclass
@@ -169,7 +170,7 @@ class AnthropicModelConfig(ModelConfig):
     def handle_continuation(
         self,
         messages: List[Dict],
-        state: AgentState,
+        round_state: AgentRoundState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ) -> None:
@@ -177,17 +178,17 @@ class AnthropicModelConfig(ModelConfig):
         Anthropic models before sonnet++/haiku+ don't need continuation handling.
         However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
         """
-
         # add a flag for enabling this mode
         if self.capabilities.likes_to_ask_for_confirmation:
-            if state.continuation_count <= 1:
+            output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
+            if round_state.continuation_count <= 1:
                 user_message_continuation = (
                     "Proceed. "
                     "If no previous revised output of the document is provided, "
                     "please start from the very beginning of the document and work through the full document systematically. "
                     "Note that you have an effectively infinite token response limit "
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                    f"The total number of tokens you output in the last turn is {state.output_tokens}, "
+                    f"The total number of tokens you output in the last turn is {output_tokens}, "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
@@ -199,32 +200,32 @@ class AnthropicModelConfig(ModelConfig):
                     "Remember to stay professional and write latex code all the time. "
                     "Note that you have an effectively infinite token response limit "
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                    f"The total number of tokens you output in the last turn is {state.output_tokens}, "
+                    f"The total number of tokens you output in the last turn is {output_tokens}, "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
                 # this should also consider what if continue from existing output of a document
                 document_tag_start_string = f"<{agent_settings.document_tag}>"
-                first_lines = state.last_response.split("\n")[:10]
+                first_lines = round_state.last_response.split("\n")[:10]
                 for line in first_lines:
                     if line.strip().startswith(document_tag_start_string):
                         logger.warning(f"Removing document tag prefix {document_tag_start_string} from response")
-                        state.last_response = state.last_response.replace(line, "", 1).strip()
+                        round_state.last_response = round_state.last_response.replace(line, "", 1).strip()
                         break
 
             logger.info("Adding User message")
             logger.debug(user_message_continuation)
 
-            state.last_response = filter_tags_from_text(state.last_response, "monologue")
+            round_state.last_response = filter_tags_from_text(round_state.last_response, "monologue")
 
             # solution 1: keep updating the last assistant message
             if messages[-1]["role"] == "user":
                 if messages[-2]["role"] == "assistant":
                     logger.warning("Appending new response to the previous assistant message")
                     if isinstance(messages[-2]["content"], list):
-                        messages[-2]["content"].append({"type": "text", "text": "\n" + state.last_response})
+                        messages[-2]["content"].append({"type": "text", "text": "\n" + round_state.last_response})
                     elif isinstance(messages[-2]["content"], str):
-                        messages[-2]["content"] += "\n" + state.last_response
+                        messages[-2]["content"] += "\n" + round_state.last_response
                 messages[-1]["content"] = user_message_continuation
             elif messages[-1]["role"] == "assistant":
                 messages.append({"role": "user", "content": user_message_continuation})
@@ -279,15 +280,7 @@ class AnthropicModelConfig(ModelConfig):
         return accumulated_output, False, messages
 
     def compute_price(self, response_usage: Any) -> float:
-        """
-        Compute the price for token usage for Anthropic models.
-
-        Args:
-            response_usage: Anthropic response usage object
-
-        Returns:
-            float: The computed price in dollars
-        """
+        """Compute the price for token usage."""
         base_price = (response_usage.input_tokens * self.input_price + response_usage.output_tokens * self.output_price) / 1e6
 
         # Add caching costs if supported
@@ -299,92 +292,9 @@ class AnthropicModelConfig(ModelConfig):
 
         return base_price
 
-    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
-        """
-        Compute statistics from Anthropic response usage object.
-
-        Args:
-            response_usage: Anthropic response usage object
-
-        Returns:
-            AnthropicResponseUsage containing token usage statistics and cost
-        """
-        total_input_tokens = response_usage.input_tokens
-        total_output_tokens = response_usage.output_tokens
-        cache_read_tokens = 0
-        cache_creation_tokens = 0
-        percentage_cached = 0
-
-        # Handle caching if supported
-        if self.capabilities.supports_prompt_caching:
-            if hasattr(response_usage, "cache_read_tokens"):
-                cache_read_tokens = response_usage.cache_read_tokens
-            if hasattr(response_usage, "cache_creation_tokens"):
-                cache_creation_tokens = response_usage.cache_creation_tokens
-
-            total_input_tokens_all = cache_creation_tokens + cache_read_tokens
-            percentage_cached = (cache_read_tokens / total_input_tokens_all * 100) if total_input_tokens_all > 0 else 0
-
-        cost = self.compute_price(response_usage)
-
-        return AnthropicResponseUsage(
-            total_input_tokens=total_input_tokens,
-            total_output_tokens=total_output_tokens,
-            input_tokens=total_input_tokens,
-            output_tokens=total_output_tokens,
-            cache_read_tokens=cache_read_tokens,
-            cache_creation_tokens=cache_creation_tokens,
-            percentage_cached=percentage_cached,
-            cost=cost,
-        )
-
-    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
-        """
-        Extract round statistics from agent state for Anthropic models.
-
-        Args:
-            state: The current agent state
-
-        Returns:
-            AnthropicResponseUsage containing token usage statistics and cost
-        """
-        # Print basic statistics
-        logger.info(f"Total input tokens  : {state.total_input_tokens}")
-        logger.info(f"Total output tokens : {state.total_output_tokens}")
-
-        # Create a response usage object that mimics Anthropic's format
-        response_usage = type(
-            "ResponseUsage",
-            (),
-            {
-                "input_tokens": state.total_input_tokens,
-                "output_tokens": state.total_output_tokens,
-                "cache_read_tokens": state.total_cache_read_input_tokens,
-                "cache_creation_tokens": state.total_cache_creation_input_tokens,
-            },
-        )
-
-        stats = self.compute_statistics(response_usage)
-
-        # Print Anthropic-specific statistics
-        if self.capabilities.supports_prompt_caching:
-            logger.info(f"Total input tokens (cache read): {stats['cache_read_tokens']}")
-            logger.info(f"Total input tokens (cache create): {stats['cache_creation_tokens']}")
-            logger.info(f"Percentage cached: {stats['percentage_cached']}%")
-
-        logger.info(f"Total response time : {state.total_response_time} seconds")
-        logger.warning(f"Total cost          : ${stats['cost']:.2f}")
-
-        return AnthropicResponseUsage(
-            total_input_tokens=stats["total_input_tokens"],
-            total_output_tokens=stats["total_output_tokens"],
-            input_tokens=stats["input_tokens"],
-            output_tokens=stats["output_tokens"],
-            cache_read_tokens=stats["cache_read_tokens"],
-            cache_creation_tokens=stats["cache_creation_tokens"],
-            percentage_cached=stats["percentage_cached"],
-            cost=stats["cost"],
-        )
+    def compute_statistics(self, response_usage: Any, response_time: float) -> AnthropicResponseUsage:
+        """Compute model-specific statistics from response usage object."""
+        return AnthropicResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
     def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update message content for Anthropic models."""
