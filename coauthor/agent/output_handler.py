@@ -1,6 +1,6 @@
 import os
 import re
-import difflib
+
 
 import xml.etree.ElementTree as ET
 from typing import Optional, List, Any
@@ -11,24 +11,9 @@ from ..latex import run_latexdiff, run_latexdiff_for_round, run_latexdiff_betwee
 
 from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
-from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_monologue_tags
+from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
 
 from .logdb import logdb_output_files
-
-
-def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
-    sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
-    repetition_ratio = sequence_matcher.ratio()
-    longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
-    longest_matching_substring = last_response[longest_match.a : longest_match.a + longest_match.size]
-    massive_repetition_detected = len(longest_matching_substring) > 1000
-
-    if massive_repetition_detected:
-        logger.error(f"Repetition ratio: {repetition_ratio}")
-        logger.error(f"Longest matching substring: {longest_matching_substring}")
-        logger.error("Massive repetition detected - stopping process.")
-
-    return massive_repetition_detected
 
 
 def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: Optional[str] = None) -> str:
@@ -74,7 +59,7 @@ class OutputHandler:
         """Process a single output file."""
         processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         content = read_file(processed_output_file)
-        filtered_content = filter_monologue_tags(content)
+        filtered_content = filter_tags_from_text(content, "monologue")
         write_file(processed_output_file, filtered_content)
         return processed_output_file
 
@@ -83,7 +68,7 @@ class OutputHandler:
         processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         for processed_output_file in processed_output_files:
             content = read_file(processed_output_file)
-            filtered_content = filter_monologue_tags(content)
+            filtered_content = filter_tags_from_text(content, "monologue")
             write_file(processed_output_file, filtered_content)
         return processed_output_files
 
@@ -124,6 +109,7 @@ class OutputHandler:
     ) -> str:
         logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
+        # hoepfully this has been handled by output_files_default?
         # if document_tag in ["latex_documents", "rebuttal_package"]:
         #     return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
@@ -134,8 +120,8 @@ class OutputHandler:
         # Read the content of the output file
         output_content = read_file(output_file)
 
-        # Filter monologue tags first
-        output_content = filter_monologue_tags(output_content)
+        # Filter monologue tags first (if model likes to ask confirmation?)
+        output_content = filter_tags_from_text(output_content, "monologue")
 
         # Apply replacements
         output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
