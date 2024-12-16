@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Tuple
 from openai import OpenAI
 
-from .model_base import ModelConfig, ModelProvider, OpenAIResponseUsage, ResponseUsageBase
 
 from ..agent import AgentSettings, AgentConfig, AgentState
 from ..utils.file import read_file
 from ..logger import logger
+
+from .model_base import ModelConfig, ModelProvider
+from .response_usage import ResponseUsageBase, OpenAIResponseUsage
 
 
 @dataclass

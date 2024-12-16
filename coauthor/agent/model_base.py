@@ -4,7 +4,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple, TypedDict
+from typing import Dict, List, Optional, Any, Tuple
 
 from ..logger import logger
 
@@ -12,10 +12,13 @@ from ..agent import AgentSettings, AgentConfig, AgentState
 
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
+from .response_usage import ResponseUsageBase
+
 
 @dataclass
 class ModelCapabilities:
     """Model capabilities configuration."""
+
     supports_prompt_caching: bool = False
     supports_auto_prompt_caching: bool = False
     supports_reasoning: bool = False
@@ -49,33 +52,6 @@ class ModelProvider(Enum):
             self.OPENAI: None,
         }
         return urls.get(self)
-
-
-class ResponseUsageBase(TypedDict):
-    """Base type for response usage statistics."""
-
-    total_input_tokens: int
-    total_output_tokens: int
-    percentage_cached: float
-    cost: float
-
-
-class OpenAIResponseUsage(ResponseUsageBase):
-    """Type for OpenAI response usage statistics."""
-
-    prompt_tokens: int
-    completion_tokens: int
-    cached_tokens: int
-    reasoning_tokens: int
-
-
-class AnthropicResponseUsage(ResponseUsageBase):
-    """Type for Anthropic response usage statistics."""
-
-    input_tokens: int
-    output_tokens: int
-    cache_read_tokens: int
-    cache_creation_tokens: int
 
 
 @dataclass
