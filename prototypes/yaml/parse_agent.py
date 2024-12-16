@@ -9,7 +9,7 @@ class PolishAgentConfig:
         Args:
             yaml_path (str): Path to the polish agent YAML file
         """
-        with open(yaml_path, "r", encoding="utf-8") as file:
+        with open(yaml_path, encoding="utf-8") as file:
             self.config = yaml.safe_load(file)
 
     @property
@@ -18,7 +18,7 @@ class PolishAgentConfig:
         return self.config.get("name", "")
 
     @property
-    def settings(self) -> Dict:
+    def settings(self) -> dict:
         """Get all settings."""
         return self.config.get("settings", {})
 
@@ -38,12 +38,12 @@ class PolishAgentConfig:
         return self.settings.get("output_ext", "")
 
     @property
-    def prefills(self) -> List[str]:
+    def prefills(self) -> list[str]:
         """Get the prefills list."""
         return self.settings.get("prefills", [])
 
     @property
-    def prompts(self) -> Dict:
+    def prompts(self) -> dict:
         """Get all prompts."""
         return self.config.get("prompts", {})
 

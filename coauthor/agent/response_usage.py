@@ -22,8 +22,8 @@ class OpenAIResponseUsage(ResponseUsageBase):
     completion_tokens: int
     cached_tokens: int
     reasoning_tokens: int
-    accepted_prediction_tokens: Optional[int]
-    rejected_prediction_tokens: Optional[int]
+    accepted_prediction_tokens: int | None
+    rejected_prediction_tokens: int | None
 
     @classmethod
     def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "OpenAIResponseUsage":
@@ -80,8 +80,8 @@ class AnthropicResponseUsage(ResponseUsageBase):
 
     input_tokens: int
     output_tokens: int
-    cache_read_tokens: Optional[int]
-    cache_creation_tokens: Optional[int]
+    cache_read_tokens: int | None
+    cache_creation_tokens: int | None
 
     @classmethod
     def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "AnthropicResponseUsage":

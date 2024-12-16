@@ -47,7 +47,7 @@ def single_page_pdf_to_png(pdf_path: str, page_num: int = 0, quality: int = 300,
     return base64_encoded
 
 
-def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (1024, 1024), max_pages: int = 100) -> List[str]:
+def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (1024, 1024), max_pages: int = 100) -> list[str]:
     """Converts multiple PDF pages to base64-encoded PNGs."""
     doc = fitz.open(pdf_path)
 
@@ -62,7 +62,7 @@ def multi_page_pdf_to_png(pdf_path: str, quality: int = 300, max_size: tuple = (
     return base64_encoded_pngs
 
 
-def process_pdf_input(pdf_path: str, max_pages: Optional[int] = None, quality: Optional[int] = None, max_size: Optional[tuple] = None):
+def process_pdf_input(pdf_path: str, max_pages: int | None = None, quality: int | None = None, max_size: tuple | None = None):
     """Processes PDF file and returns base64-encoded PNG(s)."""
     try:
         doc = fitz.open(pdf_path)
