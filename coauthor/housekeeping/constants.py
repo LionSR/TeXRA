@@ -1,4 +1,4 @@
-from ..agent.model_registry import MODEL_CONFIGS
+from ..agent.model_registry import MODEL_HANDLERS
 
 EXCLUDED_DIRS = ["Figs", "Figures", "build", "Versions", "versions", "History", "history", "figs", "figures", "Notes"]
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
@@ -20,5 +20,5 @@ TEMP_EXTENSIONS = [
     "-blx.bib",
     "Notes.bib",
 ]
-MODELS = list(MODEL_CONFIGS.keys())
+MODELS = list(MODEL_HANDLERS.keys())
 HISTORY_DIR = "History"

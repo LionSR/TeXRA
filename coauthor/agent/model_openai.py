@@ -130,7 +130,7 @@ class OpenAIModelConfig(ModelConfig):
         agent_config: AgentConfig,
     ):
         """Handle continuation for OpenAI-compatible models."""
-        if self.supports_assistant_prefill:
+        if self.capabilities.supports_assistant_prefill:
             # no user message needs to be added if assistant prefill is supported
             pass
         else:
@@ -223,12 +223,12 @@ class OpenAIModelConfig(ModelConfig):
         percentage_cached = 0
 
         # Handle caching if supported
-        if self.supports_auto_prompt_caching and hasattr(response_usage, "cached_tokens"):
+        if self.capabilities.supports_auto_prompt_caching and hasattr(response_usage, "cached_tokens"):
             cached_tokens = response_usage.cached_tokens
             percentage_cached = (cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
 
         # Handle reasoning if supported
-        if self.supports_reasoning and hasattr(response_usage, "reasoning_tokens"):
+        if self.capabilities.supports_reasoning and hasattr(response_usage, "reasoning_tokens"):
             reasoning_tokens = response_usage.reasoning_tokens
 
         cost = self.compute_price(response_usage)
@@ -272,10 +272,10 @@ class OpenAIModelConfig(ModelConfig):
 
         stats = self.compute_statistics(response_usage)
 
-        if self.supports_auto_prompt_caching:
+        if self.capabilities.supports_auto_prompt_caching:
             logger.info(f"Total cached tokens: {stats['cached_tokens']}")
             logger.info(f"Percentage cached: {stats['percentage_cached']}%")
-        if self.supports_reasoning:
+        if self.capabilities.supports_reasoning:
             logger.info(f"Total reasoning tokens: {stats['reasoning_tokens']}")
 
         logger.info(f"Total response time : {state.total_response_time} seconds")
@@ -294,10 +294,10 @@ class OpenAIModelConfig(ModelConfig):
 
     def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
         """Update message content for OpenAI models."""
-        logger.debug(f"Updating message content for OpenAI models.")
+        logger.debug("Updating message content for OpenAI models")
 
         last_message = messages[-1]
-        if self.supports_assistant_prefill:
+        if self.capabilities.supports_assistant_prefill:
             # although OpenAI models do not support assistant prefill, some models via OpenRouter might do
             if last_message["role"] == "assistant":
                 messages[-1]["content"] = accumulated_output
