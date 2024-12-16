@@ -18,6 +18,7 @@ from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import AnthropicResponseUsage
+from .agent_state import ToolState
 
 
 @dataclass
@@ -171,6 +172,7 @@ class AnthropicModelHandler(ModelHandler):
         self,
         messages: list[dict],
         round_state: AgentRoundState,
+        tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ) -> None:
@@ -206,26 +208,26 @@ class AnthropicModelHandler(ModelHandler):
                 )
                 # this should also consider what if continue from existing output of a document
                 document_tag_start_string = f"<{agent_settings.document_tag}>"
-                first_lines = round_state.last_response.split("\n")[:10]
+                first_lines = tool_state.last_response.split("\n")[:10]
                 for line in first_lines:
                     if line.strip().startswith(document_tag_start_string):
                         logger.warning(f"Removing document tag prefix {document_tag_start_string} from response")
-                        round_state.last_response = round_state.last_response.replace(line, "", 1).strip()
+                        tool_state.last_response = tool_state.last_response.replace(line, "", 1).strip()
                         break
 
             logger.info("Adding User message")
             logger.debug(user_message_continuation)
 
-            round_state.last_response = filter_tags_from_text(round_state.last_response, "monologue")
+            tool_state.last_response = filter_tags_from_text(tool_state.last_response, "monologue")
 
             # solution 1: keep updating the last assistant message
             if messages[-1]["role"] == "user":
                 if messages[-2]["role"] == "assistant":
                     logger.warning("Appending new response to the previous assistant message")
                     if isinstance(messages[-2]["content"], list):
-                        messages[-2]["content"].append({"type": "text", "text": "\n" + round_state.last_response})
+                        messages[-2]["content"].append({"type": "text", "text": "\n" + tool_state.last_response})
                     elif isinstance(messages[-2]["content"], str):
-                        messages[-2]["content"] += "\n" + round_state.last_response
+                        messages[-2]["content"] += "\n" + tool_state.last_response
                 messages[-1]["content"] = user_message_continuation
             elif messages[-1]["role"] == "assistant":
                 messages.append({"role": "user", "content": user_message_continuation})
@@ -239,9 +241,8 @@ class AnthropicModelHandler(ModelHandler):
         agent_settings: AgentSettings,
         messages: list[dict],
         prefill: str,
-        accumulated_output: str,
-        first_k_tex_document: str | None = None,
-    ) -> tuple[str, bool, list[dict]]:
+        tool_state: ToolState,
+    ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for Anthropic models."""
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
@@ -254,30 +255,30 @@ class AnthropicModelHandler(ModelHandler):
                 if messages[-1]["content"][-1].get("cache_control"):
                     messages[-1]["content"][-1].pop("cache_control")
                 content = file_content
-                return None, True, messages
+                return True, messages
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
-                accumulated_output = file_content
+                tool_state.update_accumulated_output(file_content)
                 if self.capabilities.supports_prompt_caching:
                     content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
                 else:
                     content = file_content
                 logger.debug(f"Using existing content as prefill: {output_file}")
         else:
-            if agent_config.use_prefill_from_input and agent_settings.output_ext == "tex" and first_k_tex_document:
-                prefill += first_k_tex_document
-                accumulated_output = first_k_tex_document
+            if agent_config.use_prefill_from_input and agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
+                prefill += tool_state.first_k_tex_document
+                tool_state.update_accumulated_output(tool_state.first_k_tex_document)
 
             content = prefill
             logger.debug(f"Anthropic prefill: {prefill}")
 
-            if accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
+            if tool_state.accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
                 write_file(output_file, prefill)
             elif agent_settings.output_ext == "xml":
                 write_file(output_file, prefill + "\n")
 
         messages.append({"role": "assistant", "content": content})
-        return accumulated_output, False, messages
+        return False, messages
 
     def compute_price(self, response_usage: Any) -> float:
         """Compute the price for token usage."""
@@ -296,7 +297,7 @@ class AnthropicModelHandler(ModelHandler):
         """Compute model-specific statistics from response usage object."""
         return AnthropicResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
-    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
+    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
         """Update message content for Anthropic models."""
         logger.debug("Updating message content for Anthropic models")
         if messages[-1]["role"] == "assistant":
@@ -312,9 +313,9 @@ class AnthropicModelHandler(ModelHandler):
                     last_message["content"].append({"type": "text", "text": best_connector + new_response, "cache_control": {"type": "ephemeral"}})
                 else:
                     # Initialize content list with single message
-                    last_message["content"] = [{"type": "text", "text": accumulated_output, "cache_control": {"type": "ephemeral"}}]
+                    last_message["content"] = [{"type": "text", "text": tool_state.accumulated_output, "cache_control": {"type": "ephemeral"}}]
             else:
                 if isinstance(last_message["content"], list):
                     last_message["content"].append({"type": "text", "text": best_connector + new_response})
                 else:
-                    last_message["content"] = accumulated_output
+                    last_message["content"] = tool_state.accumulated_output
