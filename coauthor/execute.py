@@ -10,7 +10,7 @@ from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
 
 from .logger import logger
-from .agent.model_registry import MODEL_CONFIGS
+from .agent.model_registry import MODEL_HANDLERS
 
 load_dotenv()
 
@@ -68,10 +68,10 @@ def run_agent(agent: str, **kwargs):
     # Create config and validate
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    # Get model config
-    if agent_config.model not in MODEL_CONFIGS:
-        raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
-    model_config = MODEL_CONFIGS[agent_config.model]
+    # Get model handler
+    if agent_config.model not in MODEL_HANDLERS:
+        raise ValueError(f"Model {agent_config.model} not found in MODEL_HANDLERS")
+    model_handler = MODEL_HANDLERS[agent_config.model]
 
     # Load agent settings and prompts
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
@@ -82,7 +82,11 @@ def run_agent(agent: str, **kwargs):
     # Get correct agent class and run
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
-        agent_config=agent_config, model_config=model_config, agent_settings=agent_settings, agent_prompts=agent_prompts, agent_path=agent_path
+        model_handler=model_handler,
+        agent_config=agent_config, 
+        agent_settings=agent_settings,
+        agent_prompts=agent_prompts,
+        agent_path=agent_path
     )
     return agent_instance.run()
 
@@ -92,10 +96,10 @@ def run_merge(model: str, input_file: str, edited_file: str):
     # Create config and validate
     agent_config = create_agent_config(agent="merge", model=model, input_file=input_file, edited_file=edited_file)
 
-    # Get model config
-    if model not in MODEL_CONFIGS:
-        raise ValueError(f"Model {model} not found in MODEL_CONFIGS")
-    model_config = MODEL_CONFIGS[model]
+    # Get model handler
+    if model not in MODEL_HANDLERS:
+        raise ValueError(f"Model {model} not found in MODEL_HANDLERS")
+    model_handler = MODEL_HANDLERS[model]
 
     # Get agent path and load settings/prompts
     agent_path = get_agent_path("merge")
@@ -106,6 +110,10 @@ def run_merge(model: str, input_file: str, edited_file: str):
 
     # Create and run merge agent
     agent = AgentMerge(
-        agent_config=agent_config, model_config=model_config, agent_settings=agent_settings, agent_prompts=agent_prompts, agent_path=agent_path
+        model_handler=model_handler,
+        agent_config=agent_config,
+        agent_settings=agent_settings, 
+        agent_prompts=agent_prompts,
+        agent_path=agent_path
     )
     return agent.run()
