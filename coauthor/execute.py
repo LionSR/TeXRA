@@ -10,7 +10,7 @@ from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
 
 from .logger import logger
-from .model import MODEL_CONFIGS
+from .agent.model_registry import MODEL_CONFIGS
 
 load_dotenv()
 
@@ -67,7 +67,6 @@ def run_agent(agent: str, **kwargs):
 
     # Create config and validate
     agent_config = create_agent_config(agent=agent_name, **kwargs)
-    logger.debug(f"Config: {agent_config}")
 
     # Get model config
     if agent_config.model not in MODEL_CONFIGS:

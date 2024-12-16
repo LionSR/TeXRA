@@ -32,7 +32,7 @@ def run_external_command(
                 logger.error(f"\nCommand failed with return code {result.returncode}")
                 return False, None, result.stderr.strip()
             write_file(output_file, result.stdout)
-            logger.info("\nCommand completed.\nOutput saved to " + output_file)
+            logger.info("Command completed.\nOutput saved to " + output_file)
             return True, None, None
         else:
             if result.returncode == 0:

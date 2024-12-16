@@ -118,7 +118,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         # new sonnet 3.5 problems
         "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\\makeheader[Previous",
         "</monologue><monologue>": "</monologue>\n<monologue>",
-        # "<latex_document>\n[Previous sections": "[Previous sections",
+        "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
+        "```\n</latex_document>": "</latex_document>",
     },
 )
 
