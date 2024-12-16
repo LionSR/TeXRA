@@ -19,7 +19,7 @@ from ..latex import (
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.xml import get_xml_format_from_files
 from ..utils.file import read_file, write_to_output_file
-from ..utils.prompt import render_prompt, get_list_of_files
+from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_from_document
 from ..utils.repetition import check_for_massive_repetition
 
 
@@ -249,11 +249,6 @@ class BaseReflectChainAgent(ABC):
     def get_output_file(self, round: int) -> str:
         pass
 
-    def _get_first_k_from_document(self) -> str | None:
-        K = self.agent_config.K
-        content = read_file(self.agent_config.input_file)
-        return content[:K].strip()
-
     def _process_response_cycle(
         self,
         # Core content (required)
@@ -460,7 +455,7 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.include_tex_count:
             tool_state.tex_count_stats = get_tex_count_stats(input_files)
         if self.agent_config.use_prefill_from_input:
-            tool_state.first_k_tex_document = self._get_first_k_from_document()
+            tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
 
         # Merge figure_file into figure_files if it exists
         if self.agent_config.figure_file and self.agent_config.figure_file not in tool_state.figure_files:
@@ -530,7 +525,7 @@ class BaseReflectChainAgent(ABC):
                     tool_state.add_figure_files(extracted_tikz_figures)
 
         if self.agent_config.use_prefill_from_input:
-            tool_state.first_k_tex_document = self._get_first_k_from_document()
+            tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
 
         round_state, global_state, tool_state, end_turn, messages = self.process_reflection_round(
             messages,
