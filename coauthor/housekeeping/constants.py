@@ -1,4 +1,4 @@
-from ..model import MODEL_CONFIGS
+from ..agent.model_registry import MODEL_CONFIGS
 
 EXCLUDED_DIRS = ["Figs", "Figures", "build", "Versions", "versions", "History", "history", "figs", "figures", "Notes"]
 PACK_EXTENSIONS = [".pdf", ".tex", ".txt", ".text", ".xml", ".md"]
