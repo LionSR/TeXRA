@@ -206,8 +206,12 @@ export function setupUIHandlers() {
     const instructions = safeGetElementValue('instructionInput');
 
     const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
-    const autoExtractTikzFigure = safeGetElementChecked('autoExtractTikzFigure');
-    const autoExtractTikzFigureReflect = safeGetElementChecked('autoExtractTikzFigureReflect');
+    const autoExtractTikzFigure = safeGetElementChecked(
+      'autoExtractTikzFigure',
+    );
+    const autoExtractTikzFigureReflect = safeGetElementChecked(
+      'autoExtractTikzFigureReflect',
+    );
     const includeTexCount = safeGetElementChecked('includeTexCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');

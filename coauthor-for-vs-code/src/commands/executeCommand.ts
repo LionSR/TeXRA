@@ -115,10 +115,13 @@ export const executeCommand = {
     const flagsToAdd = [
       { condition: autoExtractFigure, flag: '--auto_extract_figure' },
       { condition: autoExtractTikzFigure, flag: '--auto_extract_tikz_figure' },
-      { condition: autoExtractTikzFigureReflect, flag: '--auto_extract_tikz_figure_reflect' },
+      {
+        condition: autoExtractTikzFigureReflect,
+        flag: '--auto_extract_tikz_figure_reflect',
+      },
       { condition: includeTexCount, flag: '--include_tex_count' },
       { condition: usePrefillFromInput, flag: '--use_prefill_from_input' },
-      { condition: autoConfirmation, flag: '--auto_confirmation' }
+      { condition: autoConfirmation, flag: '--auto_confirmation' },
     ];
     flagsToAdd.forEach(({ condition, flag }) => {
       if (condition) {
