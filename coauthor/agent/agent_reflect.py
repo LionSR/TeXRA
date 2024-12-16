@@ -1,12 +1,9 @@
 from typing import List, Any
 
 from .agent_base import BaseReflectChainAgent
-from .agent_state import AgentState
+from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-
 from .output_handler import get_output_file_name
-
-from .logdb import logdb_output_files, update_statistics_in_db
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
@@ -28,7 +25,9 @@ class ThinkAndWrite(BaseReflectChainAgent):
             base_output_file, self.agent_config.agent, self.model_handler.name, file_extension, round, self.agent_config.edited_file
         )
 
-    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
+    def handle_output(
+        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+    ) -> List[str]:
         """Handle the output for the given round."""
         if end_turn:
             self.output_handler.ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
@@ -38,20 +37,17 @@ class ThinkAndWrite(BaseReflectChainAgent):
                 self.output_handler._handle_multiple_outputs(processed_files)
                 self.output_handler.output_files[round] = processed_files
                 self.output_handler._replace_input_commands(self.base_files, processed_files)
+                round_state.output_file = processed_files[0]  # Store first file as main output
             else:
                 processed_file = self.output_handler._process_single_output(output_file)
                 self.output_handler._handle_single_output(processed_file)
                 self.output_handler.output_files[round] = [processed_file]
+                round_state.output_file = processed_file
 
             self.output_handler._handle_latexdiff(round)
 
-        # Get model-specific statistics and update database
-        stats = self.model_handler.extract_round_stats(state)  # This handles printing
-        if self.log_id is not None:
-            update_statistics_in_db(self.log_id, stats, state.total_response_time)
-
-        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
-        return self.output_handler.output_files[round]
+        # Call base implementation for database updates
+        return super().handle_output(round_state, global_state, end_turn, output_file, round)
 
 
 class DirectWrite(BaseReflectChainAgent):
@@ -72,7 +68,9 @@ class DirectWrite(BaseReflectChainAgent):
             base_output_file, self.agent_config.agent, self.model_handler.name, self.agent_settings.output_ext, round, self.agent_config.edited_file
         )
 
-    def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0):
+    def handle_output(
+        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+    ) -> List[str]:
         """Handle the output for the given round."""
         if end_turn:
             if self.agent_config.output_files:
@@ -80,17 +78,14 @@ class DirectWrite(BaseReflectChainAgent):
                 self.output_handler._handle_multiple_outputs(processed_files)
                 self.output_handler.output_files[round] = processed_files
                 self.output_handler._replace_input_commands(self.base_files, processed_files)
+                round_state.output_file = processed_files[0]  # Store first file as main output
             else:
                 processed_file = self.output_handler._process_single_output(output_file)
                 self.output_handler._handle_single_output(processed_file)
                 self.output_handler.output_files[round] = [processed_file]
+                round_state.output_file = processed_file
 
             self.output_handler._handle_latexdiff(round)
 
-        # Get model-specific statistics and update database
-        stats = self.model_handler.extract_round_stats(state)  # This handles printing
-        if self.log_id is not None:
-            update_statistics_in_db(self.log_id, stats, state.total_response_time)
-
-        logdb_output_files(output_file, self.log_id, self.output_handler.output_files[round])
-        return self.output_handler.output_files[round]
+        # Call base implementation for database updates
+        return super().handle_output(round_state, global_state, end_turn, output_file, round)

@@ -4,15 +4,18 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 
 from ..logger import logger
 
-from ..agent import AgentSettings, AgentConfig, AgentState
+from ..agent import AgentSettings, AgentConfig
+from ..agent.agent_state import AgentGlobalState, AgentRoundState
 
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
-from .response_usage import ResponseUsageBase
+from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
+
+ModelUsageType = Union[OpenAIResponseUsage, AnthropicResponseUsage]
 
 
 @dataclass
@@ -128,14 +131,13 @@ class ModelConfig(ABC):
         pass
 
     def process_image(self, figure_file: str, file_extension: str):
-        """Process image for Anthropic models."""
+        """Process image for models."""
         img_data = get_base64_encoded_image(figure_file)
         if file_extension.lower() in [".jpg", ".jpeg"]:
             media_type = "image/jpeg"
         elif file_extension.lower() == ".png":
             media_type = "image/png"
         elif file_extension.lower() == ".pdf":
-            # For PDFs, use native PDF support if available and multi-page
             if self.capabilities.supports_native_pdf and page_count_pdf(figure_file) > 1:
                 media_type = "application/pdf"
             else:
@@ -150,9 +152,9 @@ class ModelConfig(ABC):
     def handle_continuation(
         self,
         messages: List[Dict],
-        state: "AgentState",
-        agent_settings: "AgentSettings",
-        agent_config: "AgentConfig",
+        round_state: AgentRoundState,
+        agent_settings: AgentSettings,
+        agent_config: AgentConfig,
     ):
         """Handle continuation for a model when response is truncated."""
         pass
@@ -161,8 +163,8 @@ class ModelConfig(ABC):
     def initialize_output_and_prefill(
         self,
         output_file: str,
-        agent_config: "AgentConfig",
-        agent_settings: "AgentSettings",
+        agent_config: AgentConfig,
+        agent_settings: AgentSettings,
         messages: List[Dict],
         prefill: str,
         accumulated_output: str,
@@ -173,48 +175,17 @@ class ModelConfig(ABC):
 
     @abstractmethod
     def compute_price(self, response_usage: Any) -> float:
-        """
-        Compute the price for token usage.
-        Each model implementation should handle its specific response usage format.
-
-        Args:
-            response_usage: The usage statistics from the model's response
-
-        Returns:
-            float: The computed price in dollars
-        """
-        raise NotImplementedError("Each model class must implement compute_price")
+        """Compute the price for token usage."""
+        pass
 
     @abstractmethod
-    def compute_statistics(self, response_usage: Any) -> ResponseUsageBase:
-        """
-        Compute model-specific statistics from response usage object.
-        This should be implemented by each model class to handle their specific response usage format.
+    def compute_statistics(self, response_usage: Any, response_time: float) -> ModelUsageType:
+        """Compute model-specific statistics from response usage object."""
+        pass
 
-        Args:
-            response_usage: The usage statistics from the model's response
-
-        Returns:
-            ResponseUsageBase containing token usage statistics and cost
-        """
-        raise NotImplementedError("Each model class must implement compute_statistics")
-
-    @abstractmethod
-    def extract_round_stats(self, state: "AgentState") -> ResponseUsageBase:
-        """
-        Extract round statistics from agent state and print them.
-        This creates a response usage object from the agent state and computes statistics.
-
-        Args:
-            state: The current agent state
-
-        Returns:
-            ResponseUsageBase containing token usage statistics and cost.
-            The returned stats should only contain fields relevant to this model type.
-        """
-        raise NotImplementedError("Each model class must implement extract_round_stats")
-
-    def check_stop_conditions(self, stop_reason: str, new_response: str, state: "AgentState", agent_settings: "AgentSettings") -> tuple[bool, bool]:
+    def check_stop_conditions(
+        self, stop_reason: str, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
+    ) -> tuple[bool, bool]:
         """Check if the conversation should stop."""
         CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 1500000
@@ -222,9 +193,9 @@ class ModelConfig(ABC):
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
-        continuation_limit = state.continuation_count > CONTINUE_LIMIT
-        input_token_limit = state.total_input_tokens > INPUT_TOKEN_LIMIT
-        output_token_limit = state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * state.first_input_tokens
+        continuation_limit = round_state.continuation_count > CONTINUE_LIMIT
+        input_token_limit = global_state.total_input_tokens > INPUT_TOKEN_LIMIT
+        output_token_limit = global_state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens
 
         if output_token_limit:
             logger.error(f"Output tokens exceed {OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
@@ -233,9 +204,10 @@ class ModelConfig(ABC):
 
         return end_turn, should_stop
 
-    def print_stop_flags(self, end_turn: bool, new_response: str, state: "AgentState", agent_settings: "AgentSettings"):
+    def print_stop_flags(
+        self, end_turn: bool, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
+    ):
         """Print the flags indicating why the conversation stopped."""
-
         CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 100000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
@@ -244,9 +216,9 @@ class ModelConfig(ABC):
             f"Stop flags:\n"
             f"end_turn: {end_turn}\n"
             f"encounter_document_tag: {'</'+agent_settings.document_tag+'>' in new_response}\n"
-            f"continuation_limit: {state.continuation_count > CONTINUE_LIMIT}\n"
-            f"input_token_limit: {state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
-            f"output_token_limit: {state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * state.first_input_tokens}\n"
+            f"continuation_limit: {round_state.continuation_count > CONTINUE_LIMIT}\n"
+            f"input_token_limit: {global_state.total_input_tokens > INPUT_TOKEN_LIMIT}\n"
+            f"output_token_limit: {global_state.total_output_tokens > OUTPUT_TOKEN_LIMIT_FACTOR * global_state.first_input_tokens}\n"
         )
 
     def create_image_message(self, figure_files):
@@ -262,11 +234,9 @@ class ModelConfig(ABC):
             file_extension = os.path.splitext(figure_file)[1].lower()
 
             try:
-                # Use model-specific image processing
                 img_data, media_type = self.process_image(figure_file, file_extension)
                 logger.debug(f"Processed image: {figure_file}, type: {media_type}")
 
-                # Handle multi-page PDFs
                 if isinstance(img_data, list):
                     logger.debug(f"Adding {len(img_data)} pages to the image contents")
                     for i, data in enumerate(img_data):
@@ -287,13 +257,5 @@ class ModelConfig(ABC):
 
     @abstractmethod
     def update_message_content(self, messages: List[Dict], best_connector: str, new_response: str, accumulated_output: str) -> None:
-        """
-        Update the message content based on model-specific requirements.
-
-        Args:
-            messages: List of conversation messages
-            best_connector: String to connect responses
-            new_response: New response text
-            accumulated_output: Complete accumulated output so far
-        """
+        """Update the message content based on model-specific requirements."""
         pass

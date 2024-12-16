@@ -1,18 +1,14 @@
 import os
-import re
 import sqlite3
 import json
-
 from datetime import datetime
-from typing import Optional, List, Any, Dict
-
-from ..logger import logger
+from typing import Optional, List
 
 from .agent_dataclass import AgentConfig, AgentSettings
+from .agent_state import AgentGlobalState, AgentRoundState
+
 
 HISTORY_DIR = "History"
-
-# should change into a clas
 
 
 def get_db_path() -> str:
@@ -28,28 +24,26 @@ def init_db() -> None:
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
 
-    # Update table schema to match all possible fields from AgentConfig and agent settings
     c.execute(
         """CREATE TABLE IF NOT EXISTS coauthor_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME,
         agent TEXT,
         model TEXT,
-        temperature FLOAT,  -- Added to match AgentConfig
+        temperature FLOAT,
         input_file TEXT,
-        input_files TEXT,  -- JSON array of additional input files
-        auxiliary_file TEXT,  -- Added to match AgentConfig
-        auxiliary_files TEXT,  -- JSON array of auxiliary files
-        figure_file TEXT,  -- Added to match AgentConfig
-        figure_files TEXT,  -- JSON array of figure files
-        reference_file TEXT,  -- Added to match AgentConfig
-        reference_files TEXT,  -- JSON array of reference files
-        edited_file TEXT,  -- Added to match AgentConfig
-        output_files TEXT,  -- JSON array of target output files
-        output_name_override TEXT,  -- Added to match AgentConfig
-        actual_output_files TEXT,  -- JSON array of actual output files
-        output_file TEXT,  -- Main output file
-        is_reflection BOOLEAN,
+        input_files TEXT,
+        auxiliary_file TEXT,
+        auxiliary_files TEXT,
+        figure_file TEXT,
+        figure_files TEXT,
+        reference_file TEXT,
+        reference_files TEXT,
+        edited_file TEXT,
+        output_files TEXT,
+        output_name_override TEXT,
+        actual_output_files TEXT,
+        output_file TEXT,
         instruction TEXT,
         reflect BOOLEAN,
         auto_extract_figure BOOLEAN,
@@ -57,7 +51,8 @@ def init_db() -> None:
         auto_extract_tikz_figure_reflect BOOLEAN,
         include_tex_count BOOLEAN,
         use_prefill_from_input BOOLEAN,
-        round_stats TEXT  -- JSON array of stats per round
+        global_state TEXT,  -- JSON object for global metrics
+        round_states TEXT   -- JSON array of round-specific metrics
     )"""
     )
 
@@ -77,10 +72,11 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     figure_files = json.dumps(agent_config.figure_files) if agent_config.figure_files else None
     reference_files = json.dumps(agent_config.reference_files) if agent_config.reference_files else None
     output_files = json.dumps(agent_config.output_files) if agent_config.output_files else None
-    actual_output_files = json.dumps([])  # Initialize as empty
+    actual_output_files = json.dumps([])
 
-    # Initialize empty array for round stats
-    round_stats = json.dumps([])
+    # Initialize empty state objects
+    global_state = json.dumps({})
+    round_states = json.dumps({})
 
     c.execute(
         """INSERT INTO coauthor_logs (
@@ -88,7 +84,8 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
         input_file, input_files, auxiliary_file, auxiliary_files,
         figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
-        actual_output_files, is_reflection, instruction, round_stats,
+        actual_output_files, instruction,
+        global_state, round_states,
         reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input
@@ -110,9 +107,9 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
             output_files,
             agent_config.output_name_override,
             actual_output_files,
-            False,  # is_reflection
             agent_config.instruction,
-            round_stats,
+            global_state,
+            round_states,
             agent_config.reflect,
             agent_config.auto_extract_figure,
             agent_config.auto_extract_tikz_figure,
@@ -123,7 +120,7 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     )
 
     log_id = c.lastrowid
-    if log_id is None:  # Add type safety check
+    if log_id is None:
         raise RuntimeError("Failed to create log entry - no ID returned")
 
     conn.commit()
@@ -132,62 +129,50 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     return log_id
 
 
-def update_statistics_in_db(log_id: int, stats: Dict[str, Any], total_response_time: float) -> None:
-    """
-    Update statistics in the database.
+def update_statistics_in_db(log_id: int, global_state: AgentGlobalState, round_state: AgentRoundState, round: int) -> None:
+    """Update statistics in the database.
 
     Args:
         log_id: The log entry ID
-        stats: Model-specific statistics dictionary
-        total_response_time: Total response time for this round
+        global_state: The global state object containing all metrics
+        round_state: The state for the current round
+        round: The current round number
     """
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
 
-    # Get current round from is_reflection
-    c.execute("SELECT is_reflection, round_stats FROM coauthor_logs WHERE id = ?", (log_id,))
+    # First, get existing round states
+    c.execute("SELECT round_states FROM coauthor_logs WHERE id = ?", (log_id,))
     row = c.fetchone()
-    current_round = 1 if row[0] else 0
-    round_stats = json.loads(row[1]) if row[1] else []
+    existing_round_states = json.loads(row[0]) if row and row[0] else {}
 
-    # Create stats for current round, including only fields that exist in the stats dict
-    round_stat = {
-        "round": current_round,
-        "total_response_time": total_response_time,
-        **{k: v for k, v in stats.items() if v is not None},  # Only include non-None values from model-specific stats
-    }
+    # Update the round states with the new state
+    existing_round_states[str(round)] = round_state.to_dict()
 
-    # Update or append round stats
-    if current_round < len(round_stats):
-        round_stats[current_round] = round_stat
-    else:
-        round_stats.append(round_stat)
+    # Get the output file from the current round state
+    output_file = round_state.output_file
+
+    global_state_json = json.dumps(global_state.to_dict())
+    round_states_json = json.dumps(existing_round_states)
 
     # Update the database
     c.execute(
         """UPDATE coauthor_logs SET
-        round_stats = ?
+        global_state = ?,
+        round_states = ?,
+        output_file = ?
         WHERE id = ?""",
-        (json.dumps(round_stats), log_id),
+        (global_state_json, round_states_json, output_file, log_id),
     )
 
     conn.commit()
     conn.close()
 
 
-# this needs to be refactored back to the handle_output in agent_base.py
 def logdb_output_files(output_file: str, log_id: int, all_output_files: Optional[List[str]] = None) -> None:
-    """
-    Args:
-        output_file: The current output file
-        log_id: The log entry ID
-        all_output_files: List of all output files for this round (optional)
-    """
+    """Log output files to database."""
     if log_id is None:
         return
-
-    round_match = re.search(r"_r(\d+)_", output_file)
-    is_reflection = bool(round_match and int(round_match.group(1)) > 0)
 
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
@@ -202,17 +187,15 @@ def logdb_output_files(output_file: str, log_id: int, all_output_files: Optional
         for file in all_output_files:
             if file not in actual_files:
                 actual_files.append(file)
-    elif output_file not in actual_files:  # Backward compatibility
+    elif output_file not in actual_files:
         actual_files.append(output_file)
 
     # Update the database
     c.execute(
         """UPDATE coauthor_logs SET
-        output_file = ?,
-        actual_output_files = ?,
-        is_reflection = ?
+        actual_output_files = ?
         WHERE id = ?""",
-        (output_file, json.dumps(actual_files), is_reflection, log_id),
+        (json.dumps(actual_files), log_id),
     )
 
     conn.commit()
@@ -227,7 +210,8 @@ def get_task_info_from_db(log_id: int):
     c.execute(
         """SELECT 
         timestamp, agent, model, temperature,
-        input_file, output_file, instruction, round_stats,
+        input_file, output_file, instruction,
+        global_state, round_states,
         reflect, auto_extract_figure, auto_extract_tikz_figure,
         auto_extract_tikz_figure_reflect, include_tex_count,
         use_prefill_from_input,
@@ -241,8 +225,8 @@ def get_task_info_from_db(log_id: int):
 
     row = c.fetchone()
     if row:
-        round_stats = json.loads(row[7])
-        latest_stats = round_stats[-1] if round_stats else {}
+        global_state = json.loads(row[7]) if row[7] else {}
+        round_states = json.loads(row[8]) if row[8] else {}
 
         info = {
             "timestamp": row[0],
@@ -252,32 +236,30 @@ def get_task_info_from_db(log_id: int):
             "input_file": row[4],
             "output_file": row[5],
             "instruction": row[6],
-            "total_input_tokens": latest_stats.get("input_tokens", 0),
-            "total_output_tokens": latest_stats.get("output_tokens", 0),
-            "total_response_time": latest_stats.get("response_time", 0),
-            "total_cost": latest_stats.get("cost", 0),
-            "percentage_cached": latest_stats.get("percentage_cached", 0),
-            "round_stats": round_stats,
+            "total_input_tokens": global_state.get("total_input_tokens", 0),
+            "total_output_tokens": global_state.get("total_output_tokens", 0),
+            "total_response_time": global_state.get("total_response_time", 0),
+            "round_states": round_states,
             "flags": {
-                "reflect": row[8],
-                "auto_extract_figure": row[9],
-                "auto_extract_tikz_figure": row[10],
-                "auto_extract_tikz_figure_reflect": row[11],
-                "include_tex_count": row[12],
-                "use_prefill_from_input": row[13],
+                "reflect": row[9],
+                "auto_extract_figure": row[10],
+                "auto_extract_tikz_figure": row[11],
+                "auto_extract_tikz_figure_reflect": row[12],
+                "include_tex_count": row[13],
+                "use_prefill_from_input": row[14],
             },
             "files": {
-                "input_files": json.loads(row[14]) if row[14] else [],
-                "auxiliary_file": row[15],
-                "auxiliary_files": json.loads(row[16]) if row[16] else [],
-                "figure_file": row[17],
-                "figure_files": json.loads(row[18]) if row[18] else [],
-                "reference_file": row[19],
-                "reference_files": json.loads(row[20]) if row[20] else [],
-                "edited_file": row[21],
-                "output_files": json.loads(row[22]) if row[22] else [],
-                "output_name_override": row[23],
-                "actual_output_files": json.loads(row[24]) if row[24] else [],
+                "input_files": json.loads(row[15]) if row[15] else [],
+                "auxiliary_file": row[16],
+                "auxiliary_files": json.loads(row[17]) if row[17] else [],
+                "figure_file": row[18],
+                "figure_files": json.loads(row[19]) if row[19] else [],
+                "reference_file": row[20],
+                "reference_files": json.loads(row[21]) if row[21] else [],
+                "edited_file": row[22],
+                "output_files": json.loads(row[23]) if row[23] else [],
+                "output_name_override": row[24],
+                "actual_output_files": json.loads(row[25]) if row[25] else [],
             },
         }
         conn.close()
