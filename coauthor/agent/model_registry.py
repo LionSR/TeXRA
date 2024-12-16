@@ -1,13 +1,13 @@
-"""Registry of available model configurations."""
+"""Registry of available model handlers."""
 
 from typing import Dict
 
-from .model_base import ModelProvider, ModelConfig
-from .anthropic import AnthropicModelConfig
-from .openai import OpenAIModelConfig, OpenAICompatibleModelConfig
+from .model_base import ModelProvider, ModelConfig, ModelCapabilities
+from .model_anthropic import AnthropicModelConfig
+from .model_openai import OpenAIModelConfig, OpenAICompatibleModelConfig
 
 
-MODEL_CONFIGS: Dict[str, ModelConfig] = {
+MODEL_HANDLERS: Dict[str, ModelConfig] = {
     # Anthropic Claude models
     "opus": AnthropicModelConfig(
         name="opus",
@@ -16,8 +16,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=15.0,
         output_price=75.0,
-        supports_prompt_caching=True,
-        supports_assistant_prefill=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     "sonnet++": AnthropicModelConfig(
         name="sonnet++",
@@ -26,10 +28,12 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        supports_prompt_caching=True,
-        supports_native_pdf=True,
-        supports_assistant_prefill=True,
-        likes_to_ask_for_confirmation=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_native_pdf=True,
+            supports_assistant_prefill=True,
+            likes_to_ask_for_confirmation=True
+        )
     ),
     "sonnet+": AnthropicModelConfig(
         name="sonnet+",
@@ -38,8 +42,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        supports_prompt_caching=True,
-        supports_assistant_prefill=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     "sonnet": AnthropicModelConfig(
         name="sonnet",
@@ -48,8 +54,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        supports_prompt_caching=False,
-        supports_assistant_prefill=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=False,
+            supports_assistant_prefill=True
+        )
     ),
     "haiku+": AnthropicModelConfig(
         name="haiku+",
@@ -58,10 +66,12 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=1.0,
         output_price=5.0,
-        supports_prompt_caching=True,
-        supports_vision=False,
-        supports_assistant_prefill=True,
-        likes_to_ask_for_confirmation=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_vision=False,
+            supports_assistant_prefill=True,
+            likes_to_ask_for_confirmation=True
+        )
     ),
     "haiku": AnthropicModelConfig(
         name="haiku",
@@ -70,8 +80,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=0.25,
         output_price=1.25,
-        supports_prompt_caching=True,
-        supports_assistant_prefill=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     # OpenAI models
     "gpto1": OpenAIModelConfig(
@@ -81,9 +93,11 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=15.0,
         output_price=60.0,
-        supports_auto_prompt_caching=True,
-        supports_vision=False,
-        supports_reasoning=True,
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_vision=False,
+            supports_reasoning=True
+        )
     ),
     "gpto1-": OpenAIModelConfig(
         name="gpto1-",
@@ -92,9 +106,11 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=3.0,
         output_price=12.0,
-        supports_prompt_caching=True,
-        supports_vision=False,
-        supports_reasoning=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_vision=False,
+            supports_reasoning=True
+        )
     ),
     "gpt4o": OpenAIModelConfig(
         name="gpt4o",
@@ -105,8 +121,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=2.5,
         output_price=10.0,
-        supports_auto_prompt_caching=True,
-        supports_predictive_output=True,
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_predictive_output=True
+        )
     ),
     "gpt4t": OpenAIModelConfig(
         name="gpt4t",
@@ -115,6 +133,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=10.0,
         output_price=30.0,
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
     "gpt4o-": OpenAIModelConfig(
         name="gpt4o-",
@@ -123,8 +145,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=0.15,
         output_price=0.6,
-        supports_auto_prompt_caching=True,
-        supports_predictive_output=True,
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_predictive_output=True
+        )
     ),
     "gpt4ol": OpenAIModelConfig(
         name="gpt4ol",
@@ -133,6 +157,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=5.0,
         output_price=15.0,
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
     "geminiexp": OpenAICompatibleModelConfig(
         name="geminiexp",
@@ -142,6 +170,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=2097152,
         input_price=1.25,
         output_price=5.0,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     # Google Gemini models
     "gemini2f": OpenAICompatibleModelConfig(
@@ -152,7 +184,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        supports_prompt_caching=False,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=False,
+            supports_native_pdf=True
+        )
     ),
     "gemini1p+": OpenAICompatibleModelConfig(
         name="gemini1p+",
@@ -161,7 +196,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         max_output_tokens=8192,
         input_price=1.25,
         output_price=5.0,
-        supports_prompt_caching=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     "gemini1f+": OpenAICompatibleModelConfig(
         name="gemini1f+",
@@ -171,7 +209,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        supports_prompt_caching=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_native_pdf=True
+        )
     ),
     # OpenRouter models
     "gpt4oOR": OpenAICompatibleModelConfig(
@@ -182,7 +223,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=128000,
         input_price=6.0,
         output_price=18.0,
-        supports_prompt_caching=True,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
     "gemini1p+OR": OpenAICompatibleModelConfig(
         name="gemini1p+OR",
@@ -192,6 +236,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=2097152,
         input_price=2.5,
         output_price=7.5,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True
+        )
     ),
     "gemini1f+OR": OpenAICompatibleModelConfig(
         name="gemini1f+OR",
@@ -201,6 +249,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_native_pdf=True
+        )
     ),
     "llama3+OR": OpenAICompatibleModelConfig(
         name="llama3+OR",
@@ -210,6 +262,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=131072,
         input_price=3.0,
         output_price=3.0,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
     "qwq-32bOR": OpenAICompatibleModelConfig(
         name="qwq-32b",
@@ -219,6 +275,10 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=32768,
         input_price=0.15,
         output_price=0.6,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
     "sonnet++OR": OpenAICompatibleModelConfig(
         name="sonnet++OR",
@@ -228,5 +288,9 @@ MODEL_CONFIGS: Dict[str, ModelConfig] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_reasoning=True
+        )
     ),
 }

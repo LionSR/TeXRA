@@ -12,20 +12,20 @@ from .logdb import logdb_output_files, update_statistics_in_db
 class ThinkAndWrite(BaseReflectChainAgent):
     def __init__(
         self,
+        model_handler: Any,
         agent_config: AgentConfig,
-        model_config: Any,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         agent_path: str,
     ) -> None:
-        super().__init__(agent_config, model_config, agent_settings, agent_prompts, agent_path)
+        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
 
     def get_output_file(self, round: int) -> str:
         """Get the output file name for the given round."""
         base_output_file = self.agent_config.output_name_override or self.agent_config.input_file
         file_extension = "xml" if self.use_scratchpad else self.agent_settings.output_ext
         return get_output_file_name(
-            base_output_file, self.agent_config.agent, self.model_config.name, file_extension, round, self.agent_config.edited_file
+            base_output_file, self.agent_config.agent, self.model_handler.name, file_extension, round, self.agent_config.edited_file
         )
 
     def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0) -> List[str]:
@@ -46,7 +46,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
             self.output_handler._handle_latexdiff(round)
 
         # Get model-specific statistics and update database
-        stats = self.model_config.extract_round_stats(state)  # This handles printing
+        stats = self.model_handler.extract_round_stats(state)  # This handles printing
         if self.log_id is not None:
             update_statistics_in_db(self.log_id, stats, state.total_response_time)
 
@@ -57,19 +57,19 @@ class ThinkAndWrite(BaseReflectChainAgent):
 class DirectWrite(BaseReflectChainAgent):
     def __init__(
         self,
+        model_handler: Any,
         agent_config: AgentConfig,
-        model_config: Any,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         agent_path: str,
     ) -> None:
-        super().__init__(agent_config, model_config, agent_settings, agent_prompts, agent_path)
+        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
 
     def get_output_file(self, round: int) -> str:
         """Get the output file name for the given round."""
         base_output_file = self.agent_config.output_name_override or self.agent_config.input_file
         return get_output_file_name(
-            base_output_file, self.agent_config.agent, self.model_config.name, self.agent_settings.output_ext, round, self.agent_config.edited_file
+            base_output_file, self.agent_config.agent, self.model_handler.name, self.agent_settings.output_ext, round, self.agent_config.edited_file
         )
 
     def handle_output(self, state: AgentState, end_turn: bool, output_file: str, round: int = 0):
@@ -88,7 +88,7 @@ class DirectWrite(BaseReflectChainAgent):
             self.output_handler._handle_latexdiff(round)
 
         # Get model-specific statistics and update database
-        stats = self.model_config.extract_round_stats(state)  # This handles printing
+        stats = self.model_handler.extract_round_stats(state)  # This handles printing
         if self.log_id is not None:
             update_statistics_in_db(self.log_id, stats, state.total_response_time)
 
