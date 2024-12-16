@@ -5,7 +5,7 @@ from typing import Optional
 from ..logger import logger
 
 
-def best_connection_method(str1: str, str2: str, openai_api_key: Optional[str] = None) -> tuple[str, str]:
+def best_connection_method(str1: str, str2: str, openai_api_key: str | None = None) -> tuple[str, str]:
     """
     Example usage
     str1 = "Hello"

@@ -2,7 +2,7 @@ from jinja2 import Template, Environment, meta
 from typing import Dict, Set
 
 
-def check_template_variables(template_str: str, variables: Dict) -> tuple[Set[str], Set[str]]:
+def check_template_variables(template_str: str, variables: dict) -> tuple[set[str], set[str]]:
     """
     Check for missing and extra variables in the template.
     Returns (missing_vars, extra_vars)
@@ -20,7 +20,7 @@ def check_template_variables(template_str: str, variables: Dict) -> tuple[Set[st
 
 def read_template(file_path: str) -> str:
     """Read template content from a file."""
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         return f.read()
 
 

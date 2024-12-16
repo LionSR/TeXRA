@@ -6,7 +6,6 @@ the application for cleaning and normalizing text content.
 
 import re
 
-from typing import Dict
 from dataclasses import dataclass
 
 
@@ -16,7 +15,7 @@ class ReplacementCategory:
 
     name: str
     description: str
-    patterns: Dict[str, str]
+    patterns: dict[str, str]
 
 
 # Common LaTeX equation spacing fixes
@@ -154,9 +153,9 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
 )
 
 
-def get_all_replacements() -> Dict[str, str]:
+def get_all_replacements() -> dict[str, str]:
     """Get all replacement patterns combined into a single dictionary."""
-    all_replacements: Dict[str, str] = {}
+    all_replacements: dict[str, str] = {}
     categories = [
         # STYLE CHOICES
         EQUATION_REPLACEMENTS,
@@ -175,7 +174,7 @@ def get_all_replacements() -> Dict[str, str]:
     return all_replacements
 
 
-def get_replacements_by_category(category_name: str) -> Dict[str, str]:
+def get_replacements_by_category(category_name: str) -> dict[str, str]:
     """Get replacement patterns for a specific category."""
     categories = {
         "equations": EQUATION_REPLACEMENTS,
@@ -192,14 +191,14 @@ def get_replacements_by_category(category_name: str) -> Dict[str, str]:
     return category.patterns if category else {}
 
 
-def apply_replacements(text: str, replacements: Dict[str, str]) -> str:
+def apply_replacements(text: str, replacements: dict[str, str]) -> str:
     """Apply a dictionary of replacements to the given text."""
     for old, new in replacements.items():
         text = text.replace(old, new)
     return text
 
 
-def apply_replacement_regex(text: str, replacements: Dict[str, str], flags: int = 0) -> str:
+def apply_replacement_regex(text: str, replacements: dict[str, str], flags: int = 0) -> str:
     """Apply a dictionary of regex replacements to the given text."""
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=flags)

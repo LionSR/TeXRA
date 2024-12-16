@@ -5,9 +5,9 @@ from .agent_merge import AgentMerge
 from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_load import load_agent_settings_and_prompts
 
-from .model_base import ModelConfig, ModelProvider, ModelCapabilities
-from .model_anthropic import AnthropicModelConfig
-from .model_openai import OpenAIModelConfig, OpenAICompatibleModelConfig
+from .model_base import ModelHandler, ModelProvider, ModelCapabilities
+from .model_anthropic import AnthropicModelHandler
+from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
 from .model_registry import MODEL_HANDLERS
 
 
@@ -30,11 +30,11 @@ __all__ = [
     # Model handlers
     "MODEL_HANDLERS",
     # Model base classes
-    "ModelConfig",
+    "ModelHandler",
     "ModelProvider",
     "ModelCapabilities",
     # Model implementations
-    "AnthropicModelConfig",
-    "OpenAIModelConfig",
-    "OpenAICompatibleModelConfig",
+    "AnthropicModelHandler",
+    "OpenAIModelHandler",
+    "OpenAICompatibleModelHandler",
 ]

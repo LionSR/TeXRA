@@ -7,7 +7,7 @@ def get_list_of_files(files: list[str] | None) -> str:
     return ", ".join(str(f) for f in (files or []) if f is not None)
 
 
-def render_prompt(prompt: str, variables: Dict[str, Any]) -> str:
+def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
     """Render a prompt string using Jinja2 templating."""
     template = Template(prompt)
     rendered_prompt = template.render(**variables)
