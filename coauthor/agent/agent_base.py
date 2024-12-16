@@ -276,7 +276,7 @@ class BaseReflectChainAgent(ABC):
             logger.info(f"Response time: {response_time:.2f}s")
 
             new_response, response_usage, stop_reason = self.model_handler.extract_response(
-                response_object, self.agent_settings.end_tag, self.agent_settings.auto_confirmation
+                response_object, self.agent_settings.end_tag, self.agent_config.auto_confirmation
             )
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
@@ -292,7 +292,7 @@ class BaseReflectChainAgent(ABC):
                 logger.error("Massive repetition detected - skipping this response")
                 break
 
-            if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_settings.auto_confirmation:
+            if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.auto_confirmation:
                 new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
 
