@@ -171,12 +171,15 @@ class ModelHandler(ABC):
     @abstractmethod
     def initialize_output_and_prefill(
         self,
-        output_file: str,
+        # Core configs (required)
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
+        # State/content (required)
         messages: list[dict],
-        prefill: str,
         tool_state: ToolState,
+        # Processing parameters (required)
+        output_file: str,
+        prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill based on model requirements."""
         pass

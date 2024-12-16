@@ -6,13 +6,13 @@ from typing import Any
 class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
-    agent_type: str
+    agent_type: str  # Core settings
     document_tag: str
     temperature: float | None = 0.0
-    prefills: list[str] = field(default_factory=list)
+    prefills: list[str] = field(default_factory=list)  # Generation settings
     output_ext: str = "txt"
     end_tag: str = "\\end{document}"
-    required_files: dict[str, str] = field(default_factory=dict)
+    required_files: dict[str, str] = field(default_factory=dict)  # File configurations
     required_files_internal: dict[str, str] = field(default_factory=dict)
     default_output_files: list[str] = field(default_factory=list)
     file_patterns_contain: list[dict[str, str]] = field(default_factory=list)
@@ -32,12 +32,15 @@ class AgentSettings:
     def from_dict(cls, settings_dict: dict[str, Any]) -> "AgentSettings":
         """Create an AgentSettings from a dictionary."""
         settings = cls(
+            # Core settings
             agent_type=settings_dict.get("agent_type", "think"),
             document_tag=settings_dict.get("document_tag", "document"),
             temperature=settings_dict.get("temperature", 0.0),
+            # Generation settings
             prefills=settings_dict.get("prefills", []),
             output_ext=settings_dict.get("output_ext", "txt"),
             end_tag=settings_dict.get("end_tag", "\\end{document}"),
+            # File configurations
             required_files=settings_dict.get("required_files", {}),
             required_files_internal=settings_dict.get("required_files_internal", {}),
             default_output_files=settings_dict.get("default_output_files", []),
@@ -78,9 +81,11 @@ class AgentPrompts:
 class AgentConfig:
     """Configuration for task execution and tool usage."""
 
+    # Core configuration
     model: str
     reflect: bool
     agent: str
+    instruction: str
 
     # Input/Output configuration
     input_file: str
@@ -94,7 +99,6 @@ class AgentConfig:
     output_files: list[str] | None
     output_name_override: str | None
     edited_file: str | None
-    instruction: str | None
 
     # Tool usage configuration
     use_prefill_from_input: bool = False
@@ -118,9 +122,8 @@ class AgentConfig:
     @classmethod
     def from_kwargs(cls, **kwargs) -> "AgentConfig":
         """Create AgentConfig from keyword arguments"""
-        # Handle defaults and conversions
         agent_config = cls(
-            # Processing configuration
+            # Core configuration
             model=kwargs.get("model", "sonnet+"),
             reflect=kwargs.get("reflect", False),
             agent=kwargs.get("agent", ""),

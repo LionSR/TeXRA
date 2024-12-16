@@ -8,7 +8,7 @@ def load_yaml(file_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-def merge_dicts(base: dict, override: dict) -> dict:
+def merge_dicts(base: dict, override: dict) -> dict:  # Core dictionaries
     """Merge two dictionaries recursively."""
     result = base.copy()
     for key, value in override.items():
@@ -19,7 +19,11 @@ def merge_dicts(base: dict, override: dict) -> dict:
     return result
 
 
-def load_agent_settings_and_prompts(agent_path: str, agent: str):
+def load_agent_settings_and_prompts(
+    # Core paths (required)
+    agent_path: str,
+    agent: str,
+) -> tuple[dict, dict]:
     """Load agent settings and prompts from YAML files."""
 
     def load_agent_from_yaml(agent_path, agent_name):

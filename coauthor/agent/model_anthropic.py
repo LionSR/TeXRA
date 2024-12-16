@@ -33,11 +33,15 @@ class AnthropicModelHandler(ModelHandler):
 
     def create_response(
         self,
+        # Core client (required)
         client: Anthropic,
+        # Content (required)
         messages: list[dict],
+        # Processing parameters (required)
         temperature: float,
-        system_prompt: str | None = "",
-        end_tag: str | None = "",
+        # Optional parameters
+        system_prompt: str | None = None,
+        end_tag: str | None = None,
     ) -> Any:
         """Create a response using Anthropic's API."""
         extra_headers = []
@@ -56,7 +60,15 @@ class AnthropicModelHandler(ModelHandler):
             betas=extra_headers if extra_headers else None,
         )
 
-    def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: str | None = None) -> list[dict]:
+    def initialize_messages(
+        self,
+        # Core content (required)
+        user_prefix: str,
+        user_request: str,
+        # Optional content
+        figure_files: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> list[dict]:
         """Initialize messages for the conversation."""
         content = [{"type": "text", "text": user_prefix}]
 
@@ -72,7 +84,14 @@ class AnthropicModelHandler(ModelHandler):
 
         return [{"role": "user", "content": content}]
 
-    def create_reflection_message(self, messages: list[dict], user_message: str, figure_files=None) -> list[dict]:
+    def create_reflection_message(
+        self,
+        # Core content (required)
+        messages: list[dict],
+        user_message: str,
+        # Optional content
+        figure_files: list[str] | None = None,
+    ) -> list[dict]:
         """Create a reflection message for Anthropic models."""
         content = []
 
@@ -122,15 +141,16 @@ class AnthropicModelHandler(ModelHandler):
                 )
         return content
 
-    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
-        """
-        Extract response text and usage statistics from Anthropic response object.
-        Returns:
-            Tuple containing:
-            - response text (str)
-            - response usage object (Any)
-            - stop reason (str)
-        """
+    def extract_response(
+        self,
+        # Core content (required)
+        response_object: Any,
+        # Processing parameters (required)
+        end_tag: str,
+        # Optional flags
+        auto_confirmation: bool = False,
+    ) -> tuple[str, Any, str]:
+        """Extract response text and usage statistics from Anthropic response object."""
         if hasattr(response_object, "error"):
             logger.error(f"API error: {response_object.error}")
             raise ValueError(f"API error: {response_object.error}")
@@ -170,16 +190,16 @@ class AnthropicModelHandler(ModelHandler):
 
     def handle_continuation(
         self,
+        # Core content (required)
         messages: list[dict],
+        # State objects (required)
         round_state: AgentRoundState,
         tool_state: ToolState,
+        # Configuration (required)
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ) -> None:
-        """
-        Anthropic models before sonnet++/haiku+ don't need continuation handling.
-        However, for sonnet++/haiku+ we need to handle the continuation because they have been hard-coded to ask for confirmation.
-        """
+        """Handle continuation for Anthropic models."""
         # add a flag for enabling this mode
         if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
             output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
@@ -236,12 +256,15 @@ class AnthropicModelHandler(ModelHandler):
 
     def initialize_output_and_prefill(
         self,
-        output_file: str,
+        # Core configs (required)
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
+        # State/content (required)
         messages: list[dict],
-        prefill: str,
         tool_state: ToolState,
+        # Processing parameters (required)
+        output_file: str,
+        prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for Anthropic models."""
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
