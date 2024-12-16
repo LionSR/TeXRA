@@ -44,13 +44,7 @@ def init_db() -> None:
         actual_output_files TEXT,
         output_file TEXT,
         instruction TEXT,
-        reflect BOOLEAN,
-        auto_extract_figure BOOLEAN,
-        auto_extract_tikz_figure BOOLEAN,
-        auto_extract_tikz_figure_reflect BOOLEAN,
-        include_tex_count BOOLEAN,
-        use_prefill_from_input BOOLEAN,
-        auto_confirmation BOOLEAN,
+        tool_flags TEXT,  -- JSON object for all tool flags
         global_state TEXT,  -- JSON object for global metrics
         round_states TEXT   -- JSON array of round-specific metrics
     )"""
@@ -60,8 +54,8 @@ def init_db() -> None:
     conn.close()
 
 
-def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int:
-    """Initialize a new log entry and return its ID"""
+def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -> int:
+    """Create a new log entry and return its ID"""
     init_db()
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
@@ -74,6 +68,17 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     output_files = json.dumps(agent_config.output_files) if agent_config.output_files else None
     actual_output_files = json.dumps([])
 
+    # Consolidate tool flags into a single JSON object
+    tool_flags = json.dumps({
+        "reflect": agent_config.reflect,
+        "auto_extract_figure": agent_config.auto_extract_figure,
+        "auto_extract_tikz_figure": agent_config.auto_extract_tikz_figure,
+        "auto_extract_tikz_figure_reflect": agent_config.auto_extract_tikz_figure_reflect,
+        "include_tex_count": agent_config.include_tex_count,
+        "use_prefill_from_input": agent_config.use_prefill_from_input,
+        "auto_confirmation": agent_config.auto_confirmation,
+    })
+
     # Initialize empty state objects
     global_state = json.dumps({})
     round_states = json.dumps({})
@@ -85,11 +90,8 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
         figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
         actual_output_files, instruction,
-        global_state, round_states,
-        reflect, auto_extract_figure, auto_extract_tikz_figure,
-        auto_extract_tikz_figure_reflect, include_tex_count,
-        use_prefill_from_input, auto_confirmation
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        tool_flags, global_state, round_states
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now(),
             agent_config.agent,
@@ -108,15 +110,9 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
             agent_config.output_name_override,
             actual_output_files,
             agent_config.instruction,
+            tool_flags,
             global_state,
             round_states,
-            agent_config.reflect,
-            agent_config.auto_extract_figure,
-            agent_config.auto_extract_tikz_figure,
-            agent_config.auto_extract_tikz_figure_reflect,
-            agent_config.include_tex_count,
-            agent_config.use_prefill_from_input,
-            agent_config.auto_confirmation,
         ),
     )
 
@@ -130,8 +126,8 @@ def logdb_start(agent_config: AgentConfig, agent_settings: AgentSettings) -> int
     return log_id
 
 
-def update_statistics_in_db(log_id: int, global_state: AgentGlobalState, round_state: AgentRoundState, round: int) -> None:
-    """Update statistics in the database.
+def update_log_statistics(log_id: int, global_state: AgentGlobalState, round_state: AgentRoundState, round: int) -> None:
+    """Update statistics in the database for a specific log entry.
 
     Args:
         log_id: The log entry ID
@@ -170,8 +166,8 @@ def update_statistics_in_db(log_id: int, global_state: AgentGlobalState, round_s
     conn.close()
 
 
-def logdb_output_files(output_file: str, log_id: int, all_output_files: list[str] | None = None) -> None:
-    """Log output files to database."""
+def update_log_output_files(log_id: int, output_file: str, all_output_files: list[str] | None = None) -> None:
+    """Update output files for a specific log entry."""
     if log_id is None:
         return
 
@@ -203,8 +199,8 @@ def logdb_output_files(output_file: str, log_id: int, all_output_files: list[str
     conn.close()
 
 
-def get_task_info_from_db(log_id: int):
-    """Retrieve task information for VS Code frontend"""
+def get_log_entry(log_id: int):
+    """Retrieve complete log entry information for a specific ID"""
     conn = sqlite3.connect(get_db_path())
     c = conn.cursor()
 
@@ -213,9 +209,7 @@ def get_task_info_from_db(log_id: int):
         timestamp, agent, model, temperature,
         input_file, output_file, instruction,
         global_state, round_states,
-        reflect, auto_extract_figure, auto_extract_tikz_figure,
-        auto_extract_tikz_figure_reflect, include_tex_count,
-        use_prefill_from_input, auto_confirmation,
+        tool_flags,
         input_files, auxiliary_file, auxiliary_files,
         figure_file, figure_files, reference_file, reference_files,
         edited_file, output_files, output_name_override,
@@ -228,6 +222,7 @@ def get_task_info_from_db(log_id: int):
     if row:
         global_state = json.loads(row[7]) if row[7] else {}
         round_states = json.loads(row[8]) if row[8] else {}
+        tool_flags = json.loads(row[9]) if row[9] else {}
 
         info = {
             "timestamp": row[0],
@@ -237,31 +232,21 @@ def get_task_info_from_db(log_id: int):
             "input_file": row[4],
             "output_file": row[5],
             "instruction": row[6],
-            "total_input_tokens": global_state.get("total_input_tokens", 0),
-            "total_output_tokens": global_state.get("total_output_tokens", 0),
-            "total_response_time": global_state.get("total_response_time", 0),
+            "global_state": global_state,
             "round_states": round_states,
-            "flags": {
-                "reflect": row[9],
-                "auto_extract_figure": row[10],
-                "auto_extract_tikz_figure": row[11],
-                "auto_extract_tikz_figure_reflect": row[12],
-                "include_tex_count": row[13],
-                "use_prefill_from_input": row[14],
-                "auto_confirmation": row[15],
-            },
+            "flags": tool_flags,
             "files": {
-                "input_files": json.loads(row[16]) if row[16] else [],
-                "auxiliary_file": row[17],
-                "auxiliary_files": json.loads(row[18]) if row[18] else [],
-                "figure_file": row[19],
-                "figure_files": json.loads(row[20]) if row[20] else [],
-                "reference_file": row[21],
-                "reference_files": json.loads(row[22]) if row[22] else [],
-                "edited_file": row[23],
-                "output_files": json.loads(row[24]) if row[24] else [],
-                "output_name_override": row[25],
-                "actual_output_files": json.loads(row[26]) if row[26] else [],
+                "input_files": json.loads(row[10]) if row[10] else [],
+                "auxiliary_file": row[11],
+                "auxiliary_files": json.loads(row[12]) if row[12] else [],
+                "figure_file": row[13],
+                "figure_files": json.loads(row[14]) if row[14] else [],
+                "reference_file": row[15],
+                "reference_files": json.loads(row[16]) if row[16] else [],
+                "edited_file": row[17],
+                "output_files": json.loads(row[18]) if row[18] else [],
+                "output_name_override": row[19],
+                "actual_output_files": json.loads(row[20]) if row[20] else [],
             },
         }
         conn.close()
