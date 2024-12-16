@@ -10,10 +10,12 @@ from .model_base import ModelHandler
 class ThinkAndWrite(BaseReflectChainAgent):
     def __init__(
         self,
+        # Core handlers/configs (required)
         model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
+        # Path info (required)
         agent_path: str,
     ) -> None:
         super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
@@ -27,7 +29,16 @@ class ThinkAndWrite(BaseReflectChainAgent):
         )
 
     def handle_output(
-        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+        self,
+        # State objects (required)
+        round_state: AgentRoundState,
+        global_state: AgentGlobalState,
+        # Processing parameters (required)
+        output_file: str,
+        # Processing flags
+        end_turn: bool,
+        # Optional metadata
+        round: int = 0,
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
@@ -54,10 +65,12 @@ class ThinkAndWrite(BaseReflectChainAgent):
 class DirectWrite(BaseReflectChainAgent):
     def __init__(
         self,
+        # Core handlers/configs (required)
         model_handler: Any,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
+        # Path info (required)
         agent_path: str,
     ) -> None:
         super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
@@ -70,7 +83,16 @@ class DirectWrite(BaseReflectChainAgent):
         )
 
     def handle_output(
-        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+        self,
+        # State objects (required)
+        round_state: AgentRoundState,
+        global_state: AgentGlobalState,
+        # Processing parameters (required)
+        output_file: str,
+        # Processing flags
+        end_turn: bool,
+        # Optional metadata
+        round: int = 0,
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
