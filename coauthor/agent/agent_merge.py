@@ -12,10 +12,12 @@ from .model_base import ModelHandler
 class AgentMerge(DirectWrite):
     def __init__(
         self,
+        # Core handlers/configs (required)
         model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
+        # Path info (required)
         agent_path: str,
     ) -> None:
         super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
@@ -81,22 +83,20 @@ class AgentMerge(DirectWrite):
         return output_file
 
     def handle_output(
-        self, round_state: AgentRoundState, global_state: AgentGlobalState, end_turn: bool, output_file: str, round: int = 0
+        self,
+        # State objects (required)
+        round_state: AgentRoundState,
+        global_state: AgentGlobalState,
+        # Processing parameters (required)
+        output_file: str,
+        # Processing flags
+        end_turn: bool,
+        # Optional metadata
+        round: int = 0,
     ) -> list[str]:
-        """Handle the output for the given round.
-
-        Args:
-            round_state: The state for the current round
-            global_state: The global state across all rounds
-            end_turn: Whether this is the end of a turn
-            output_file: The output file path
-            round: The round number
-
-        Returns:
-            List[str]: List of processed output files
-        """
+        """Handle the output for the given round."""
         if end_turn:
-            _files = super().handle_output(round_state, global_state, end_turn, output_file, round)
+            _files = super().handle_output(round_state, global_state, output_file, end_turn, round)
             logger.info(f"Output file: {output_file}")
             return _files
         return []
