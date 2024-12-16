@@ -11,7 +11,7 @@ from .latexdiff import (
 from .latexindent import run_latexindent
 from .tex_tools import run_external_command
 from .text_connection import best_connection_method
-from .texcount import get_tex_count
+from .texcount import get_tex_count, get_tex_count_stats
 from .tikzpicture import compile_latex_to_pdf, extract_and_compile_tikzpictures_with_labels
 
 __all__ = [
@@ -29,4 +29,5 @@ __all__ = [
     "extract_and_compile_tikzpictures_with_labels",
     "extract_figure_paths_from_latex",
     "best_connection_method",
+    "get_tex_count_stats",
 ]

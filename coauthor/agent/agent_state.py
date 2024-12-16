@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from ..logger import logger
 
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
 
@@ -13,14 +15,13 @@ class AgentRoundState:
     round_number: int
     continuation_count: int = 0
     response_time: float = 0
-    last_response: str = ""
     output_file: str = ""
     model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None
 
     @classmethod
-    def initialize(cls, round_number: int, accumulated_output: str | None = None) -> "AgentRoundState":
+    def initialize(cls, round_number: int) -> "AgentRoundState":
         """Initialize a new AgentRoundState object."""
-        return cls(round_number=round_number, last_response=accumulated_output or "")
+        return cls(round_number=round_number)
 
     def update_token_counts(self, response_usage: OpenAIResponseUsage | AnthropicResponseUsage) -> None:
         """Update token counts based on model response usage."""
@@ -43,6 +44,37 @@ class AgentRoundState:
             "output_file": self.output_file,
             "model_usage": self.model_usage,
         }
+
+
+@dataclass
+class ToolState:
+    """
+    State for tool-specific runtime data that doesn't need to be logged.
+    This includes temporary data used during processing that is specific to each round.
+    """
+
+    tex_count_stats: str | None = None
+    first_k_tex_document: str | None = None
+    last_response: str = ""
+    accumulated_output: str = ""
+    figure_files: list[str] = field(default_factory=list)
+
+    @classmethod
+    def initialize(cls) -> "ToolState":
+        """Initialize a new ToolState object."""
+        return cls()
+
+    def update_last_response(self, response: str) -> None:
+        """Update the last response."""
+        self.last_response = response
+
+    def update_accumulated_output(self, output: str) -> None:
+        """Update the accumulated output."""
+        self.accumulated_output = output
+
+    def add_figure_files(self, files: list[str]) -> None:
+        """Add figure files to the list."""
+        self.figure_files.extend(files)
 
 
 @dataclass
@@ -69,8 +101,12 @@ class AgentGlobalState:
             # Update first input tokens only for the first round
             if round_state.round_number == 0 and self.first_input_tokens == 0:
                 self.first_input_tokens = round_state.model_usage["total_input_tokens"]
+                # Add cache_read_tokens if it exists and is not None
+                cache_read = round_state.model_usage.get("cache_read_tokens", 0) or 0
+                self.first_input_tokens += cache_read
+                logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
 
-            # Update global totals
+            # Update global totals (using total_input_tokens without cache adjustment)
             self.total_input_tokens += round_state.model_usage["total_input_tokens"]
             self.total_output_tokens += round_state.model_usage["total_output_tokens"]
             self.total_response_time += round_state.response_time
