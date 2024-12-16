@@ -29,6 +29,8 @@ from .prompt import (
     render_prompt,
 )
 
+from .confirmation import wrap_confirmation_prompts, CONFIRMATION_PROMPT_PATTERNS
+
 __all__ = [
     # File utilities
     "read_file",
@@ -54,4 +56,7 @@ __all__ = [
     # Prompt utilities
     "get_list_of_files",
     "render_prompt",
+    # Confirmation utilities
+    "wrap_confirmation_prompts",
+    "CONFIRMATION_PROMPT_PATTERNS",
 ]
