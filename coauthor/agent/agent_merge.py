@@ -12,13 +12,13 @@ from .agent_reflect import DirectWrite
 class AgentMerge(DirectWrite):
     def __init__(
         self,
+        model_handler: Any,
         agent_config: AgentConfig,
-        model_config: Any,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         agent_path: str,
     ) -> None:
-        super().__init__(agent_config, model_config, agent_settings, agent_prompts, agent_path)
+        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
         self.output_file = [self.get_output_file(r) for r in range(2)]
 
     def get_output_file(self, round: int) -> str:

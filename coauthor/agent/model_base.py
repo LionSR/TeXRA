@@ -2,7 +2,7 @@
 
 import os
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple, TypedDict
 
@@ -11,6 +11,19 @@ from ..logger import logger
 from ..agent import AgentSettings, AgentConfig, AgentState
 
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
+
+
+@dataclass
+class ModelCapabilities:
+    """Model capabilities configuration."""
+    supports_prompt_caching: bool = False
+    supports_auto_prompt_caching: bool = False
+    supports_reasoning: bool = False
+    supports_vision: bool = True
+    supports_native_pdf: bool = False
+    supports_assistant_prefill: bool = False
+    supports_predictive_output: bool = False
+    likes_to_ask_for_confirmation: bool = False
 
 
 class ModelProvider(Enum):
@@ -77,16 +90,7 @@ class ModelConfig(ABC):
     provider: ModelProvider
     base_url: Optional[str] = None
     context_window: int = 128000
-    # maybe split the following under capabilities
-    supports_prompt_caching: bool = False
-    supports_auto_prompt_caching: bool = False
-    supports_reasoning: bool = False
-    supports_vision: bool = True
-    supports_native_pdf: bool = False
-    supports_assistant_prefill: bool = False
-    supports_predictive_output: bool = False
-    likes_to_ask_for_confirmation: bool = False
-    
+    capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
 
     @property
     def is_anthropic(self) -> bool:
@@ -156,7 +160,7 @@ class ModelConfig(ABC):
             media_type = "image/png"
         elif file_extension.lower() == ".pdf":
             # For PDFs, use native PDF support if available and multi-page
-            if self.supports_native_pdf and page_count_pdf(figure_file) > 1:
+            if self.capabilities.supports_native_pdf and page_count_pdf(figure_file) > 1:
                 media_type = "application/pdf"
             else:
                 img_data = process_pdf_input(figure_file)
@@ -236,7 +240,7 @@ class ModelConfig(ABC):
 
     def check_stop_conditions(self, stop_reason: str, new_response: str, state: "AgentState", agent_settings: "AgentSettings") -> tuple[bool, bool]:
         """Check if the conversation should stop."""
-        CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
+        CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 1500000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 
@@ -256,7 +260,7 @@ class ModelConfig(ABC):
     def print_stop_flags(self, end_turn: bool, new_response: str, state: "AgentState", agent_settings: "AgentSettings"):
         """Print the flags indicating why the conversation stopped."""
 
-        CONTINUE_LIMIT = 20 if self.likes_to_ask_for_confirmation else 10
+        CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
         INPUT_TOKEN_LIMIT = 100000
         OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 

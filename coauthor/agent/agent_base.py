@@ -28,17 +28,17 @@ class BaseReflectChainAgent(ABC):
     Provides a common structure for agents that involve reflection and processing.
     """
 
-    def __init__(self, agent_config: AgentConfig, model_config: Any, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str):
-        """Initialize with agent config, model config, settings/prompts, and agent path"""
-        self.agent_config = agent_config
-        self.model_config = model_config
+    def __init__(self, model_handler: Any, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str):
+        """Initialize with model handler, agent config, settings/prompts, and agent path"""
+        self.model_handler = model_handler
+        self.agent_config = agent_config 
         self.agent_settings = agent_settings
         self.agent_prompts = agent_prompts
         self.agent_path = agent_path
 
+        logger.debug(f"Model handler: {self.model_handler}")
         logger.debug(f"Agent config: {self.agent_config}")
         logger.debug(f"Agent settings: {self.agent_settings}")
-        logger.debug(f"Model config: {self.model_config}")
 
         # Initialize basic attributes
         self.output_file = ["", ""]
@@ -48,7 +48,7 @@ class BaseReflectChainAgent(ABC):
         self.setup()
         self.user_vars = self.get_user_vars()
 
-        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_config, self.log_id)
+        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_handler, self.log_id)
 
     def get_user_vars(self):
         """Get the basic user variables that are common across all agents."""
@@ -63,7 +63,7 @@ class BaseReflectChainAgent(ABC):
         """Get basic model and instruction variables."""
         return {
             "MODEL": self.agent_config.model,
-            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_config.likes_to_ask_for_confirmation,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.capabilities.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
         }
 
@@ -193,7 +193,7 @@ class BaseReflectChainAgent(ABC):
         # Set up logging
         logger.info(f"Processing file: {self.agent_config.input_file}")
 
-        self.client = self.model_config.get_client()
+        self.client = self.model_handler.get_client()
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -235,7 +235,7 @@ class BaseReflectChainAgent(ABC):
         while not end_turn:
             file_exists = os.path.exists(output_file)
             start_time = time.time()
-            response_object = self.model_config.create_response(
+            response_object = self.model_handler.create_response(
                 client=self.client,
                 messages=messages,
                 temperature=self.agent_settings.temperature or 0.0,
@@ -246,7 +246,7 @@ class BaseReflectChainAgent(ABC):
             state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
 
-            new_response, response_usage, stop_reason = self.model_config.extract_response(response_object, self.agent_settings.end_tag)
+            new_response, response_usage, stop_reason = self.model_handler.extract_response(response_object, self.agent_settings.end_tag)
             logger.info(f"Stop reason: {stop_reason}")
             logger.info(f"Token usage: {response_object.usage}")
 
@@ -254,17 +254,17 @@ class BaseReflectChainAgent(ABC):
 
             massive_repetition_detected = check_for_massive_repetition(state.last_response, new_response)
             if massive_repetition_detected:
+                logger.error(f"The new response is: {new_response}")
                 logger.error("Massive repetition detected - skipping this response")
                 break
 
-            if self.model_config.likes_to_ask_for_confirmation:
+            if self.model_handler.capabilities.likes_to_ask_for_confirmation:
                 new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
 
             logger.info("First K characters of the response:")
             logger.debug(f"{new_response[:self.agent_config.K]}")
 
-            # does this apply for openai/gemini models?
             best_connector, _ = best_connection_method(state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
             accumulated_output += best_connector + new_response
 
@@ -275,29 +275,27 @@ class BaseReflectChainAgent(ABC):
 
             state.last_response = new_response
 
-            # Update message content using model-specific logic
-            # should this be merged with handle_continuation?
-            self.model_config.update_message_content(messages, best_connector, new_response, accumulated_output)
+            self.model_handler.update_message_content(messages, best_connector, new_response, accumulated_output)
 
-            end_turn, should_stop = self.model_config.check_stop_conditions(stop_reason, new_response, state, self.agent_settings)
+            end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, state, self.agent_settings)
             if should_stop:
-                self.model_config.print_stop_flags(end_turn, new_response, state, self.agent_settings)
+                self.model_handler.print_stop_flags(end_turn, new_response, state, self.agent_settings)
                 break
 
             state.increment_continuation()
             logger.info(f"Starting continuation #{state.continuation_count}")
 
-            # TODO: maybe I can get rid of the conditioning and just use model_config.handle_continuation
-            if self.model_config.is_openai_compatible:
+            # TODO: maybe I can get rid of the conditioning and just use model_handler.handle_continuation
+            if self.model_handler.is_openai_compatible:
                 if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
-                    self.model_config.handle_continuation(messages, state, self.agent_settings, self.agent_config)
+                    self.model_handler.handle_continuation(messages, state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_config.is_anthropic and self.model_config.likes_to_ask_for_confirmation:
+            if self.model_handler.is_anthropic and self.model_handler.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
                     # this is handle confirmation actually
-                    self.model_config.handle_continuation(messages, state, self.agent_settings, self.agent_config)
+                    self.model_handler.handle_continuation(messages, state, self.agent_settings, self.agent_config)
                     continue
 
         return state, accumulated_output, end_turn
@@ -324,7 +322,7 @@ class BaseReflectChainAgent(ABC):
             user_prefix = f"{tex_count_stats}{user_prefix}"
         user_request = render_prompt(self.agent_prompts.user_request, user_vars)
 
-        messages = self.model_config.initialize_messages(
+        messages = self.model_handler.initialize_messages(
             user_prefix,
             user_request,
             figure_files=self.figure_files,
@@ -334,7 +332,7 @@ class BaseReflectChainAgent(ABC):
         prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
         accumulated_output = prefill if prefill else ""
     
-        accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
+        accumulated_output, end_turn, messages = self.model_handler.initialize_output_and_prefill(
             output_file,
             self.agent_config,
             self.agent_settings,
@@ -377,12 +375,12 @@ class BaseReflectChainAgent(ABC):
         if tex_count_stats:
             user_message = f"{tex_count_stats}{user_message}"
 
-        messages = self.model_config.create_reflection_message(messages, user_message, self.reflection_figure_files)
+        messages = self.model_handler.create_reflection_message(messages, user_message, self.reflection_figure_files)
 
         prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
         accumulated_output = prefill if prefill else ""
 
-        accumulated_output, end_turn, messages = self.model_config.initialize_output_and_prefill(
+        accumulated_output, end_turn, messages = self.model_handler.initialize_output_and_prefill(
             output_file,
             self.agent_config,
             self.agent_settings,
@@ -453,7 +451,7 @@ class BaseReflectChainAgent(ABC):
             f"The round 0 output was saved as {self.output_file[1]}"
         )
 
-        logger.info(f"Completed round 0")
+        logger.info("Completed round 0")
 
         return state, messages, end_turn
 
@@ -502,7 +500,7 @@ class BaseReflectChainAgent(ABC):
             f"The round 1 output was saved as {self.output_file[1]}"
         )
 
-        logger.info(f"Completed round 1")
+        logger.info("Completed round 1")
 
         return state, messages, end_turn
 
