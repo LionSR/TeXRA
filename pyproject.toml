@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coauthor"
-version = "0.15.0"
+version = "0.15.1"
 authors = [
   { name="Sirui Lu", email="14889516+LionSR@users.noreply.github.com" },
 ]
@@ -20,8 +20,8 @@ classifiers = [
 dependencies = [
     "colorlog",
     "requests",
-    "openai",
-    "anthropic",
+    "openai>=1.58.0",
+    "anthropic>=0.41.0",
     "IPython",
     "click",
     "PyMuPDF",
