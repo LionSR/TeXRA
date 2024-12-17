@@ -38,15 +38,6 @@ class AnthropicModelHandler(ModelHandler):
         end_tag: str | None = None,
     ) -> Any:
         """Create a response using Anthropic's API."""
-        extra_headers = [
-            header
-            for header, enabled in [
-                ("prompt-caching-2024-07-31", self.capabilities.supports_prompt_caching),
-                ("pdfs-2024-09-25", self.capabilities.supports_native_pdf),
-            ]
-            if enabled
-        ]
-
         return client.beta.messages.create(
             model=self.full_name,
             max_tokens=self.max_output_tokens,
@@ -54,7 +45,6 @@ class AnthropicModelHandler(ModelHandler):
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
             system=system_prompt,
-            betas=extra_headers or None,
         )
 
     def initialize_messages(
