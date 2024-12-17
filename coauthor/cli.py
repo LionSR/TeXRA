@@ -32,7 +32,7 @@ def shared_arguments(func):
     options = [
         # Model arguments
         click.option("--model", required=False, default="sonnet+", help="Model to use"),
-        click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
+        click.option("--reflect", required=False, type=click.BOOL, default=False, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
         # Input file arguments
         click.option("--input_file", required=True, help="Path to the input file"),
