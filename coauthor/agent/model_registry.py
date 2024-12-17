@@ -1,67 +1,82 @@
-"""Registry of available model handlers."""
+"""Registry of available model configurations."""
 
-from .model_base import ModelProvider, ModelHandler, ModelCapabilities
-from .model_anthropic import AnthropicModelHandler
-from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
+from .model_config import ModelConfig, ModelProvider, ModelCapabilities
 
 # Common capabilities
 ANTHROPIC_BASE_CAPABILITIES = ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True)
 
-
-MODEL_HANDLERS: dict[str, ModelHandler] = {
+MODEL_CONFIGS: dict[str, ModelConfig] = {
     # ===== Anthropic Claude Models =====
-    "opus": AnthropicModelHandler(
+    "opus": ModelConfig(
         name="opus",
         full_name="claude-3-opus-20240229",
+        openrouter_full_name="anthropic/claude-3-opus-20240229",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=4096,
         context_window=200000,
         input_price=15.0,
         output_price=75.0,
         capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
-    "sonnet++": AnthropicModelHandler(
+    "sonnet++": ModelConfig(
         name="sonnet++",
         full_name="claude-3-5-sonnet-20241022",
+        openrouter_full_name="anthropic/claude-3.5-sonnet:beta",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
         capabilities=ModelCapabilities(
-            supports_prompt_caching=True, supports_assistant_prefill=True, supports_native_pdf=True, likes_to_ask_for_confirmation=True
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True,
+            supports_native_pdf=True,
+            likes_to_ask_for_confirmation=True,
         ),
     ),
-    "sonnet+": AnthropicModelHandler(
+    "sonnet+": ModelConfig(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
+        openrouter_full_name="anthropic/claude-3.5-sonnet-20240620",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
         capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
-    "sonnet": AnthropicModelHandler(
+    "sonnet": ModelConfig(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
+        openrouter_full_name="anthropic/claude-3.5-sonnet-20240229",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
         capabilities=ModelCapabilities(supports_assistant_prefill=True),
     ),
-    "haiku+": AnthropicModelHandler(
+    "haiku+": ModelConfig(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
+        openrouter_full_name="anthropic/claude-3.5-haiku-20241022",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
         input_price=1.0,
         output_price=5.0,
         capabilities=ModelCapabilities(
-            supports_prompt_caching=True, supports_assistant_prefill=True, supports_vision=False, likes_to_ask_for_confirmation=True
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True,
+            supports_vision=False,
+            likes_to_ask_for_confirmation=True,
         ),
     ),
-    "haiku": AnthropicModelHandler(
+    "haiku": ModelConfig(
         name="haiku",
         full_name="claude-3-haiku-20240307",
+        openrouter_full_name="anthropic/claude-3.5-haiku-20240307",
+        provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
         input_price=0.25,
@@ -69,64 +84,92 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
     # ===== OpenAI Models =====
-    "o1": OpenAIModelHandler(
+    "o1": ModelConfig(
         name="o1",
         full_name="o1-2024-12-17",
+        openrouter_full_name="openai/o1-2024-12-17",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=100000,
         context_window=200000,
         input_price=15.0,
         output_price=60.0,
-        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_vision=True, supports_reasoning=True),
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_vision=True,
+            supports_reasoning=True,
+        ),
     ),
-    "o1preview": OpenAIModelHandler(
+    "o1preview": ModelConfig(
         name="o1preview",
         full_name="o1-preview-2024-09-12",
+        openrouter_full_name="openai/o1-preview-2024-09-12",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=32768,
         context_window=128000,
         input_price=15.0,
         output_price=60.0,
-        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_vision=False, supports_reasoning=True),
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_vision=False,
+            supports_reasoning=True,
+        ),
     ),
-    "o1-": OpenAIModelHandler(
+    "o1-": ModelConfig(
         name="o1-",
         full_name="o1-mini-2024-09-12",
+        openrouter_full_name="openai/o1-mini-2024-09-12",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=65536,
         context_window=128000,
         input_price=3.0,
         output_price=12.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_vision=False, supports_reasoning=True),
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_vision=False,
+            supports_reasoning=True,
+        ),
     ),
-    "gpt4o": OpenAIModelHandler(
+    "gpt4o": ModelConfig(
         name="gpt4o",
-        # full_name="gpt-4o-2024-11-20",
         full_name="gpt-4o-2024-08-06",
+        openrouter_full_name="openai/gpt-4o-2024-08-06",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=16384,
         context_window=128000,
         input_price=2.5,
         output_price=10.0,
-        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_predictive_output=True),
+        capabilities=ModelCapabilities(
+            supports_auto_prompt_caching=True,
+            supports_predictive_output=True,
+        ),
     ),
-    "gpt4t": OpenAIModelHandler(
+    "gpt4t": ModelConfig(
         name="gpt4t",
         full_name="gpt-4-turbo-2024-04-09",
+        openrouter_full_name="openai/gpt-4-turbo-2024-04-09",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=4096,
         context_window=128000,
         input_price=10.0,
         output_price=30.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=False, supports_reasoning=False),
     ),
-    "gpt4o-": OpenAIModelHandler(
+    "gpt4o-": ModelConfig(
         name="gpt4o-",
         full_name="gpt-4o-mini-2024-07-18",
+        openrouter_full_name="openai/gpt-4o-mini-2024-07-18",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=16384,
         context_window=128000,
         input_price=0.15,
         output_price=0.6,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_predictive_output=True),
     ),
-    "gpt4ol": OpenAIModelHandler(
+    "gpt4ol": ModelConfig(
         name="gpt4ol",
         full_name="chatgpt-4o-latest",
+        openrouter_full_name="openai/chatgpt-4o-latest",
+        provider=ModelProvider.OPENAI,
         max_output_tokens=16384,
         context_window=128000,
         input_price=5.0,
@@ -134,19 +177,24 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
     ),
     # ===== Google Gemini Models =====
-    "geminiexp": OpenAICompatibleModelHandler(
+    "geminiexp": ModelConfig(
         name="geminiexp",
         full_name="gemini-exp-1206",
+        openrouter_full_name="google/gemini-1.5-pro-exp-0120",
         provider=ModelProvider.GOOGLE,
         max_output_tokens=4096,
         context_window=2097152,
         input_price=1.25,
         output_price=5.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
+        capabilities=ModelCapabilities(
+            supports_prompt_caching=True,
+            supports_assistant_prefill=True,
+        ),
     ),
-    "gemini2f": OpenAICompatibleModelHandler(
+    "gemini2f": ModelConfig(
         name="gemini2f",
         full_name="gemini-2.0-flash-exp",
+        openrouter_full_name="google/gemini-2.0-flash-exp",
         provider=ModelProvider.GOOGLE,
         max_output_tokens=8192,
         context_window=1048576,
@@ -154,18 +202,21 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         output_price=0.3,
         capabilities=ModelCapabilities(supports_native_pdf=True),
     ),
-    "gemini1p+": OpenAICompatibleModelHandler(
+    "gemini1p+": ModelConfig(
         name="gemini1p+",
         full_name="gemini-1.5-pro-latest",
+        openrouter_full_name="google/gemini-1.5-pro-latest",
         provider=ModelProvider.GOOGLE,
         max_output_tokens=8192,
+        context_window=1048576,
         input_price=1.25,
         output_price=5.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    "gemini1f+": OpenAICompatibleModelHandler(
+    "gemini1f+": ModelConfig(
         name="gemini1f+",
         full_name="gemini-1.5-fresh-latest",
+        openrouter_full_name="google/gemini-1.5-fresh-latest",
         provider=ModelProvider.GOOGLE,
         max_output_tokens=8192,
         context_window=1048576,
@@ -174,63 +225,25 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
     ),
     # ===== OpenRouter Models =====
-    "gpt4oOR": OpenAICompatibleModelHandler(
-        name="gpt4oOR",
-        full_name="openai/gpt-4o:extended",
-        provider=ModelProvider.OPENROUTER,
-        max_output_tokens=64000,
-        context_window=128000,
-        input_price=6.0,
-        output_price=18.0,
-        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
-    ),
-    "gemini1p+OR": OpenAICompatibleModelHandler(
-        name="gemini1p+OR",
-        full_name="google/gemini-pro-1.5",
-        provider=ModelProvider.OPENROUTER,
-        max_output_tokens=8192,
-        context_window=2097152,
-        input_price=2.5,
-        output_price=7.5,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
-    ),
-    "gemini1f+OR": OpenAICompatibleModelHandler(
-        name="gemini1f+OR",
-        full_name="google/gemini-flash-1.5",
-        provider=ModelProvider.OPENROUTER,
-        max_output_tokens=8192,
-        context_window=1048576,
-        input_price=0.075,
-        output_price=0.3,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
-    ),
-    "llama3+OR": OpenAICompatibleModelHandler(
+    "llama3+OR": ModelConfig(
         name="llama3+OR",
         full_name="meta-llama/llama-3.1-405b-instruct",
-        provider=ModelProvider.OPENROUTER,
+        provider=ModelProvider.OTHERS,
+        openrouter_full_name="meta-llama/llama-3.1-405b-instruct",
         max_output_tokens=131072,
         context_window=131072,
         input_price=3.0,
         output_price=3.0,
     ),
-    "qwq-32bOR": OpenAICompatibleModelHandler(
+    "qwq-32bOR": ModelConfig(
         name="qwq-32b",
         full_name="qwen/qwq-32b-preview",
-        provider=ModelProvider.OPENROUTER,
+        provider=ModelProvider.OTHERS,
+        openrouter_full_name="qwen/qwq-32b-preview",
         max_output_tokens=32768,
         context_window=32768,
         input_price=0.15,
         output_price=0.6,
         capabilities=ModelCapabilities(supports_reasoning=True),
-    ),
-    "sonnet++OR": OpenAICompatibleModelHandler(
-        name="sonnet++OR",
-        full_name="anthropic/claude-3.5-sonnet:beta",
-        provider=ModelProvider.OPENROUTER,
-        max_output_tokens=8192,
-        context_window=200000,
-        input_price=3.0,
-        output_price=15.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=False),
     ),
 }
