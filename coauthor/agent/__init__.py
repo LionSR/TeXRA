@@ -1,10 +1,31 @@
+"""
+Agent module for the coauthor package.
+This module provides the core agent functionality for academic writing assistance.
+"""
+
+# Core dataclasses and configurations
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_state import AgentRoundState, AgentGlobalState
+
+# Base agent implementations
 from .agent_base import BaseReflectChainAgent
+
+# Specialized agent implementations
 from .agent_reflect import ThinkAndWrite, DirectWrite
 from .agent_merge import AgentMerge
-from .agent_state import AgentRoundState, AgentGlobalState
-from .agent_load import load_agent_settings_and_prompts
 
+# Utility and loading functions
+from .agent_load import load_agent_settings_and_prompts
+from .response_usage import ResponseUsageBase, OpenAIResponseUsage, AnthropicResponseUsage
+from .output_handler import OutputHandler
+from .logdb import (
+    create_log_entry,
+    update_log_statistics,
+    update_log_output_files,
+    get_log_entry,
+)
+
+# Model infrastructure
 from .model_base import ModelHandler, ModelProvider, ModelCapabilities
 from .model_anthropic import AnthropicModelHandler
 from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
@@ -12,27 +33,33 @@ from .model_registry import MODEL_HANDLERS
 
 
 __all__ = [
-    # Core dataclasses
+    # Core dataclasses and configurations
     "AgentConfig",
     "AgentSettings",
     "AgentPrompts",
+    "AgentRoundState",
+    "AgentGlobalState",
     # Base agent class
     "BaseReflectChainAgent",
     # Agent implementations
     "ThinkAndWrite",
     "DirectWrite",
     "AgentMerge",
-    # AgentState management
-    "AgentRoundState",
-    "AgentGlobalState",
-    # Load functions
+    # Utility and infrastructure
     "load_agent_settings_and_prompts",
-    # Model handlers
-    "MODEL_HANDLERS",
-    # Model base classes
+    "ResponseUsageBase",
+    "OpenAIResponseUsage",
+    "AnthropicResponseUsage",
+    "OutputHandler",
+    "create_log_entry",
+    "update_log_statistics",
+    "update_log_output_files",
+    "get_log_entry",
+    # Model infrastructure
     "ModelHandler",
     "ModelProvider",
     "ModelCapabilities",
+    "MODEL_HANDLERS",
     # Model implementations
     "AnthropicModelHandler",
     "OpenAIModelHandler",

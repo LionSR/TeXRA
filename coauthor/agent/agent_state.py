@@ -1,16 +1,12 @@
 from dataclasses import dataclass, field
 
 from ..logger import logger
-
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
 
 
 @dataclass
 class AgentRoundState:
-    """
-    State for a single round (first round or reflection round).
-    All metrics here are specific to this round only.
-    """
+    """State for a single round (first round or reflection round)."""
 
     round_number: int
     continuation_count: int = 0
@@ -25,17 +21,12 @@ class AgentRoundState:
 
     def update_token_counts(
         self,
-        # Core content (required)
-        response_usage: OpenAIResponseUsage | AnthropicResponseUsage,
+        response_usage: OpenAIResponseUsage | AnthropicResponseUsage,  # Usage statistics from model response
     ) -> None:
         """Update token counts based on model response usage."""
         self.model_usage = response_usage
 
-    def update_response_time(
-        self,
-        # Processing parameters (required)
-        response_time: float,
-    ) -> None:
+    def update_response_time(self, response_time: float) -> None:
         """Update response time for this round."""
         self.response_time += response_time
 
@@ -56,16 +47,13 @@ class AgentRoundState:
 
 @dataclass
 class ToolState:
-    """
-    State for tool-specific runtime data that doesn't need to be logged.
-    This includes temporary data used during processing that is specific to each round.
-    """
+    """State for tool-specific runtime data that doesn't need to be logged."""
 
-    tex_count_stats: str | None = None
-    first_k_tex_document: str | None = None
-    last_response: str = ""
-    accumulated_output: str = ""
-    figure_files: list[str] = field(default_factory=list)
+    tex_count_stats: str | None = None  # Statistics about TeX document structure
+    first_k_tex_document: str | None = None  # First K lines of TeX document
+    last_response: str = ""  # Most recent model response
+    accumulated_output: str = ""  # Combined output from all responses
+    figure_files: list[str] = field(default_factory=list)  # Paths to figure files
 
     @classmethod
     def initialize(cls) -> "ToolState":
@@ -87,33 +75,24 @@ class ToolState:
 
 @dataclass
 class AgentGlobalState:
-    """
-    Global state tracking metrics across all rounds.
-    Maintains cumulative statistics.
-    """
+    """Global state tracking metrics across all rounds."""
 
-    first_input_tokens: int = 0
-    total_response_time: float = 0
-    total_input_tokens: int = 0
-    total_output_tokens: int = 0
-    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None
+    first_input_tokens: int = 0  # Token count of initial input
+    total_response_time: float = 0  # Cumulative response time
+    total_input_tokens: int = 0  # Total tokens consumed
+    total_output_tokens: int = 0  # Total tokens generated
+    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None  # Overall usage stats
 
     @classmethod
     def initialize(cls) -> "AgentGlobalState":
         """Initialize a new AgentGlobalState object."""
         return cls()
 
-    def update_from_round(
-        self,
-        # State objects (required)
-        round_state: AgentRoundState,
-    ) -> None:
+    def update_from_round(self, round_state: AgentRoundState) -> None:
         """Update global metrics based on round state."""
         if round_state.model_usage:
-            # Update first input tokens only for the first round
-            if round_state.round_number == 0 and self.first_input_tokens == 0:
-                self.first_input_tokens = round_state.model_usage["total_input_tokens"]
-                # Add cache_read_input_tokens if it exists and is not None
+            if self.first_input_tokens == 0:
+                self.first_input_tokens = round_state.model_usage.input_tokens
                 cache_read = round_state.model_usage.get("cache_read_input_tokens", 0) or 0
                 self.first_input_tokens += cache_read
                 logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
@@ -121,7 +100,8 @@ class AgentGlobalState:
             # Update global totals (using total_input_tokens without cache adjustment)
             self.total_input_tokens += round_state.model_usage["total_input_tokens"]
             self.total_output_tokens += round_state.model_usage["total_output_tokens"]
-            self.total_response_time += round_state.response_time
+
+        self.total_response_time += round_state.response_time
 
     def to_dict(self) -> dict:
         """Convert global state to dictionary format."""
@@ -130,17 +110,19 @@ class AgentGlobalState:
             "total_response_time": self.total_response_time,
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
+            "model_usage": self.model_usage,
         }
 
     @classmethod
     def from_dict(cls, state_dict: dict | None) -> "AgentGlobalState":
         """Create AgentGlobalState object from dictionary."""
-        if state_dict is None:
+        if not state_dict:
             return cls()
 
-        return cls(
-            first_input_tokens=state_dict.get("first_input_tokens", 0),
-            total_response_time=state_dict.get("total_response_time", 0),
-            total_input_tokens=state_dict.get("total_input_tokens", 0),
-            total_output_tokens=state_dict.get("total_output_tokens", 0),
-        )
+        state = cls()
+        state.first_input_tokens = state_dict.get("first_input_tokens", 0)
+        state.total_response_time = state_dict.get("total_response_time", 0)
+        state.total_input_tokens = state_dict.get("total_input_tokens", 0)
+        state.total_output_tokens = state_dict.get("total_output_tokens", 0)
+        state.model_usage = state_dict.get("model_usage")
+        return state

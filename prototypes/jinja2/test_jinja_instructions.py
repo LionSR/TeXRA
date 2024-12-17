@@ -1,5 +1,4 @@
 from jinja2 import Template, Environment, meta
-from typing import Dict, Set
 
 
 def check_template_variables(template_str: str, variables: dict) -> tuple[set[str], set[str]]:

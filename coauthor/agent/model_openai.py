@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from typing import Any
 from openai import OpenAI
 
+from ..logger import logger
 from ..agent import AgentSettings, AgentConfig
 from ..agent.agent_state import AgentRoundState
 from ..utils.file import read_file
-from ..logger import logger
 
+from .agent_state import ToolState
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import OpenAIResponseUsage
-from .agent_state import ToolState
 
 
 @dataclass
@@ -21,11 +21,10 @@ class OpenAIModelHandler(ModelHandler):
 
     provider: ModelProvider = ModelProvider.OPENAI
 
-    def get_client(self):
+    def get_client(self) -> OpenAI:
         """Get the appropriate client for this model."""
         api_key = self.provider.get_api_key()
         base_url = self.provider.get_base_url()
-
         return OpenAI(api_key=api_key, base_url=base_url)
 
     def create_response(
@@ -36,13 +35,12 @@ class OpenAIModelHandler(ModelHandler):
         system_prompt: str | None = None,
         end_tag: str | None = None,
     ) -> Any:
-        """Create a response using the appropriate API call for this model."""
+        """Create a response using the OpenAI API."""
         kwargs = {
             "model": self.full_name,
             "messages": messages,
             "temperature": temperature,
-            # For openai model, this value is now in favor of max_tokens, and max_tokens not compatible with o1 series models.
-            "max_completion_tokens": self.max_output_tokens,
+            "max_completion_tokens": self.max_output_tokens,  # Preferred over max_tokens for o1 series
         }
 
         if "o1" in self.name:

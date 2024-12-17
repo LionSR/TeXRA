@@ -6,13 +6,7 @@ from .tex_tools import run_external_command
 
 
 def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | None:
-    """
-    Get full statistics for LaTeX documents using the texcount Perl script.
-
-    :param file_paths: List of paths to LaTeX files
-    :param merge: Whether to merge included files in the count
-    :return: String containing full texcount output for all files, or None if an error occurred
-    """
+    """Run texcount on LaTeX files and return combined statistics output, optionally merging included files."""
     if not isinstance(file_paths, list):
         file_paths = [file_paths]
 
@@ -47,12 +41,7 @@ def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | Non
 
 
 def get_tex_count_stats(input_files: str | list[str]) -> str | None:
-    """
-    Get formatted tex count statistics with XML-style tags.
-
-    :param input_files: Single file path or list of file paths to LaTeX files
-    :return: Formatted string containing tex count statistics, or None if counting failed
-    """
+    """Run texcount on LaTeX files and return formatted statistics with XML-style tags."""
     if isinstance(input_files, str):
         input_files = [input_files]
     tex_count_stats = get_tex_count(input_files)
