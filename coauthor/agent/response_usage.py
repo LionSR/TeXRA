@@ -80,8 +80,8 @@ class AnthropicResponseUsage(ResponseUsageBase):
 
     input_tokens: int
     output_tokens: int
-    cache_read_tokens: int | None
-    cache_creation_tokens: int | None
+    cache_read_input_tokens: int | None
+    cache_creation_input_tokens: int | None
 
     @classmethod
     def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "AnthropicResponseUsage":
@@ -95,19 +95,19 @@ class AnthropicResponseUsage(ResponseUsageBase):
         Returns:
             AnthropicResponseUsage object with computed statistics
         """
-        cache_read_tokens = None
-        cache_creation_tokens = None
+        cache_read_input_tokens = None
+        cache_creation_input_tokens = None
         percentage_cached = 0.0
 
         # Extract cache tokens if available
         if hasattr(response_usage, "cache_read_input_tokens"):
-            cache_read_tokens = response_usage.cache_read_input_tokens
+            cache_read_input_tokens = response_usage.cache_read_input_tokens
         if hasattr(response_usage, "cache_creation_input_tokens"):
-            cache_creation_tokens = response_usage.cache_creation_input_tokens
+            cache_creation_input_tokens = response_usage.cache_creation_input_tokens
 
         # Calculate percentage cached if cache tokens are available
-        if cache_read_tokens is not None and cache_creation_tokens is not None:
-            total_cache_tokens = cache_read_tokens + cache_creation_tokens
+        if cache_read_input_tokens is not None and cache_creation_input_tokens is not None:
+            total_cache_tokens = cache_read_input_tokens + cache_creation_input_tokens
             percentage_cached = (total_cache_tokens / response_usage.input_tokens * 100) if response_usage.input_tokens > 0 else 0
 
         return cls(
@@ -115,8 +115,8 @@ class AnthropicResponseUsage(ResponseUsageBase):
             total_output_tokens=response_usage.output_tokens,
             input_tokens=response_usage.input_tokens,
             output_tokens=response_usage.output_tokens,
-            cache_read_tokens=cache_read_tokens,
-            cache_creation_tokens=cache_creation_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
             percentage_cached=percentage_cached,
             cost=cost,
             response_time=response_time,

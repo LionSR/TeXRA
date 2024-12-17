@@ -13,16 +13,16 @@ def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
     template = Template(prompt)
     rendered_prompt = template.render(**variables)
     # logger.info(f"Rendered prompt: {rendered_prompt}")
-    return rendered_prompt
+    return rendered_prompt.strip()
 
 
 def get_first_k_from_document(input_file: str, k: int) -> str | None:
     """Get the first K characters from a document.
-    
+
     Args:
         input_file: Path to the input file
         k: Number of characters to return
-        
+
     Returns:
         First K characters from the document, stripped of whitespace, or None if file cannot be read
     """
