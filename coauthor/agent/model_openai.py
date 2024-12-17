@@ -36,20 +36,18 @@ class OpenAIModelHandler(ModelHandler):
         end_tag: str | None = None,
     ) -> Any:
         """Create a response using the OpenAI API."""
-        kwargs = {
+        base_kwargs = {
             "model": self.full_name,
             "messages": messages,
-            "temperature": temperature,
-            "max_completion_tokens": self.max_output_tokens,  # Preferred over max_tokens for o1 series
+            "max_completion_tokens": self.max_output_tokens,
         }
 
-        if "o1" in self.name:
-            kwargs["temperature"] = 1.0
-        else:
-            kwargs["stop"] = end_tag
-
-        if self.is_openrouter:
-            kwargs["extra_headers"] = {"X-Title": "CoA"}
+        kwargs = {
+            **base_kwargs,
+            "temperature": 1.0 if "o1" in self.name else temperature,
+            **({"stop": end_tag} if end_tag and "o1" not in self.name else {}),
+            **({"extra_headers": {"X-Title": "CoA"}} if self.is_openrouter else {}),
+        }
 
         return client.chat.completions.create(**kwargs)
 
@@ -82,39 +80,52 @@ class OpenAIModelHandler(ModelHandler):
 
     def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for OpenAI-compatible models."""
-        content = []
-        for image in image_contents:
-            content.extend(
-                [
-                    {"type": "text", "text": f"Image: {image['file_name']}"},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{image['media_type']};base64,{image['data']}",
-                            "media_type": image["media_type"],
-                            "data": image["data"],
-                        },
+        return [
+            item
+            for image in image_contents
+            for item in [
+                {"type": "text", "text": f"Image: {image['file_name']}"},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{image['media_type']};base64,{image['data']}",
+                        "media_type": image["media_type"],
+                        "data": image["data"],
                     },
-                ]
-            )
-        return content
+                },
+            ]
+        ]
 
     def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from OpenAI response object."""
-        if not response_object or not response_object.choices:
-            logger.error("Invalid response object")
-            raise ValueError("Invalid response from API")
+        if not (hasattr(response_object, "choices") and response_object.choices):
+            error_msg = "Invalid response from API: missing choices"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        # Extract response content and stop reason
+        # Extract base response
         choice = response_object.choices[0]
         stop_reason = choice.finish_reason
         new_response = choice.message.content.strip()
 
-        # Add end tag if needed
-        if stop_reason == "stop" and end_tag and end_tag not in new_response:
-            new_response += f"\n{end_tag}"
+        # Add end tag if response was stopped and tag isn't present
+        if all([stop_reason == "stop", end_tag]) and end_tag not in new_response:
+            new_response = f"{new_response}\n{end_tag}"
 
         return new_response, response_object.usage, stop_reason
+
+    def compute_price(self, response_usage: Any) -> float:
+        """Compute the price for token usage."""
+        # Calculate base price from input and output tokens
+        base_price = (response_usage.prompt_tokens * self.input_price + response_usage.completion_tokens * self.output_price) / 1e6
+
+        # Apply adjustments for additional features
+        if hasattr(response_usage, "reasoning_tokens"):
+            base_price += (response_usage.reasoning_tokens * self.output_price) / 1e6
+        if hasattr(response_usage, "cached_tokens"):
+            base_price -= (response_usage.cached_tokens * self.input_price * 0.5) / 1e6
+
+        return base_price
 
     def handle_continuation(
         self,
@@ -126,77 +137,68 @@ class OpenAIModelHandler(ModelHandler):
     ):
         """Handle continuation for OpenAI-compatible models."""
         if self.capabilities.supports_assistant_prefill:
-            # no user message needs to be added if assistant prefill is supported
-            pass
-        else:
-            prefill_tokens = tool_state.last_response[-agent_config.K :]
-            user_message_continuation = (
-                f"Your response got cut off, because you only have limited response space. "
-                f"Continue writing exactly from where you left off until the very end, "
-                f"marked by {agent_settings.end_tag}. "
-                "Avoid repeat yourself and avoid starting over. "
-                f'Start your response at the next token after: "{prefill_tokens}"'
-            )
-            logger.info("Adding User message:")
-            logger.debug(user_message_continuation)
-            messages.append({"role": "user", "content": [{"type": "text", "text": user_message_continuation}]})
+            logger.debug("Skipping continuation - assistant prefill is supported")
+            return
+
+        # Create continuation message
+        prefill_tokens = tool_state.last_response[-agent_config.K :]
+        user_message_continuation = (
+            f"Your response got cut off, because you only have limited response space. "
+            f"Continue writing exactly from where you left off until the very end, "
+            f"marked by {agent_settings.end_tag}. "
+            "Avoid repeat yourself and avoid starting over. "
+            f'Start your response at the next token after: "{prefill_tokens}"'
+        )
+
+        # Add continuation message
+        logger.info("Adding continuation message to conversation")
+        logger.debug(f"Continuation message: {user_message_continuation}")
+        messages.append(
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_message_continuation}],
+            }
+        )
 
     def initialize_output_and_prefill(
         self,
-        # Core configs (required)
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
-        # State/content (required)
         messages: list[dict],
         tool_state: ToolState,
-        # Processing parameters (required)
         output_file: str,
         prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for OpenAI-compatible models."""
-        if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
-            # try to get prefill from existing file
-            file_content = read_file(output_file)
-            file_content = file_content.strip()
+        if not os.path.exists(output_file) or os.path.getsize(output_file) <= 15:
+            self._handle_new_output(messages, agent_config, agent_settings, tool_state, prefill)
+            return False, messages
 
-            if agent_settings.has_end_tag(file_content):
-                logger.debug("End tag detected - skipping continuation")
-                messages.append({"role": "assistant", "content": file_content})
-                return True, messages
-            else:
-                logger.warning("Output file exists but no end tag found - continuing from file")
-                tool_state.update_accumulated_output(file_content)
-                messages.append({"role": "assistant", "content": file_content})
-                logger.debug(f"Using existing content as prefill: {output_file}")
-                state = AgentRoundState.initialize(0)
-                tool_state.last_response = tool_state.accumulated_output
-                self.handle_continuation(messages, state, tool_state, agent_settings, agent_config)
-        else:
-            if agent_config.use_prefill_from_input and tool_state.first_k_tex_document:
-                prefill += tool_state.first_k_tex_document
-                tool_state.update_accumulated_output("")
+        file_content = read_file(output_file).strip()
+        messages.append({"role": "assistant", "content": file_content})
 
-                if agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
-                    prefill = f"<latex_document>{tool_state.first_k_tex_document}"
+        if agent_settings.has_end_tag(file_content):
+            return True, messages
 
-            openai_prefill = f"Start your response with\n{prefill}"
-            # this assumes that the last message is a user message
-            messages[-1]["content"].append({"type": "text", "text": openai_prefill})
+        # Continue from existing file
+        logger.warning("Output file exists but no end tag found - continuing from file")
+        tool_state.update_accumulated_output(file_content)
 
+        state = AgentRoundState.initialize(0)
+        tool_state.last_response = tool_state.accumulated_output
+        self.handle_continuation(messages, state, tool_state, agent_settings, agent_config)
         return False, messages
 
-    def compute_price(self, response_usage: Any) -> float:
-        """Compute the price for token usage."""
-        total_input_tokens = response_usage.prompt_tokens
-        total_output_tokens = response_usage.completion_tokens
+    def _handle_new_output(self, messages: list[dict], agent_config: AgentConfig, agent_settings: AgentSettings, tool_state: ToolState, prefill: str):
+        """Helper method to handle new output initialization."""
+        if agent_config.use_prefill_from_input and tool_state.first_k_tex_document:
+            prefill += tool_state.first_k_tex_document
+            tool_state.update_accumulated_output("")
 
-        # Apply adjustments for caching and reasoning
-        if hasattr(response_usage, "reasoning_tokens"):
-            total_output_tokens += response_usage.reasoning_tokens
-        if hasattr(response_usage, "cached_tokens"):
-            total_input_tokens -= response_usage.cached_tokens * 0.5
+            if agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
+                prefill = f"<latex_document>{tool_state.first_k_tex_document}"
 
-        return (total_input_tokens * self.input_price + total_output_tokens * self.output_price) / 1e6
+        messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
 
     def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage:
         """Compute model-specific statistics from response usage object."""
