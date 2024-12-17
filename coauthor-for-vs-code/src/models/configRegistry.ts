@@ -149,8 +149,8 @@ export const MODEL_CONFIGS = {
   }),
 
   // OpenAI models
-  gpto1: createOpenAIConfig({
-    name: 'gpto1',
+  o1: createOpenAIConfig({
+    name: 'o1',
     fullName: 'o1-preview-2024-09-12',
     maxTokens: 32768,
     contextWindow: 128000,
@@ -160,8 +160,8 @@ export const MODEL_CONFIGS = {
     supportsReasoning: true,
   }),
 
-  'gpto1-': createOpenAIConfig({
-    name: 'gpto1-',
+  'o1-': createOpenAIConfig({
+    name: 'o1-',
     fullName: 'o1-mini-2024-09-12',
     maxTokens: 65536,
     contextWindow: 128000,

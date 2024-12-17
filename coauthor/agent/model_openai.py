@@ -47,16 +47,17 @@ class OpenAIModelHandler(ModelHandler):
             "temperature": 1.0 if "o1" in self.name else temperature,
             **({"stop": end_tag} if end_tag and "o1" not in self.name else {}),
             **({"extra_headers": {"X-Title": "CoA"}} if self.is_openrouter else {}),
+            **({"reasoning_effort": "high"} if "o1" in self.name else {}),
         }
 
         return client.chat.completions.create(**kwargs)
 
     def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: str | None = None) -> list[dict]:
         """Initialize messages for the conversation."""
-        if "o1" in self.name:
+        if self.name in ["o1-", "o1preview"]:
             messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
         else:
-            messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
+            messages = [{"role": "developer", "content": system_prompt}, {"role": "user", "content": [{"type": "text", "text": user_prefix}]}]
 
         if figure_files:
             image_content = self.create_image_message(figure_files)
