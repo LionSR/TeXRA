@@ -1,65 +1,118 @@
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
+import { debug, error } from './utils/logUtils';
+
+const CHANNEL = 'TextConnection';
 
 interface ConnectionResult {
   connector: string;
   choice: string;
 }
 
+interface TestStrings {
+  A: string;
+  B: string;
+  C: string;
+}
+
+const caseDict: { [key: string]: string } = {
+  A: '',
+  B: ' ',
+  C: '\n',
+};
+
+/**
+ * Prepares test strings and prompt for both implementations
+ */
+function preparePrompt(str1: string, str2: string): { strings: TestStrings; prompt: string } {
+  const strings = {
+    A: str1 + str2,
+    B: str1 + ' ' + str2,
+    C: str1 + '\n' + str2,
+  };
+
+  const prompt =
+    `Given three strings from a LaTeX document:\n` +
+    `A: ${strings.A}\n` +
+    `B: ${strings.B}\n` +
+    `C: ${strings.C}\n` +
+    `Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason.`;
+
+  return { strings, prompt };
+}
+
+/**
+ * Processes choices to determine the majority vote
+ */
+function processMajorityChoice(choices: string[]): ConnectionResult {
+  const choiceCounts = new Map<string, number>();
+  choices.forEach((choice) => {
+    choiceCounts.set(choice, (choiceCounts.get(choice) ?? 0) + 1);
+  });
+
+  let majorityChoice = '';
+  let maxCount = 0;
+  choiceCounts.forEach((count, choice) => {
+    if (count > maxCount) {
+      maxCount = count;
+      majorityChoice = choice;
+    }
+  });
+
+  if (majorityChoice in caseDict) {
+    return {
+      connector: caseDict[majorityChoice],
+      choice: majorityChoice,
+    };
+  } else {
+    debug(CHANNEL, `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`);
+    return {
+      connector: ' ',
+      choice: 'B',
+    };
+  }
+}
+
+/**
+ * Gets API key from VS Code settings
+ */
+function getApiKey(provider: 'openai' | 'anthropic'): string {
+  const apiKey = vscode.workspace
+    .getConfiguration('coauthor.apiKeys')
+    .get<string>(provider);
+
+  if (!apiKey) {
+    throw new Error(
+      `${provider.toUpperCase()} API key not found in settings (coauthor.apiKeys.${provider})`,
+    );
+  }
+
+  return apiKey;
+}
+
 /**
  * Determines the best way to connect two strings in a LaTeX context using GPT-4
- * @param str1 First string
- * @param str2 Second string
- * @param openaiApiKey Optional OpenAI API key
- * @returns Promise containing the best connector and the model's choice
  */
 export async function bestConnectionMethod(
   str1: string,
   str2: string,
   openaiApiKey?: string,
+  n: number = 10,
 ): Promise<ConnectionResult> {
-  // If API key not provided, try to get it from VS Code settings
-  if (!openaiApiKey) {
-    openaiApiKey = vscode.workspace
-      .getConfiguration('coauthor.apiKeys')
-      .get<string>('openai');
-
-    if (!openaiApiKey) {
-      throw new Error(
-        'OpenAI API key not found in settings (coauthor.apiKeys.openai)',
-      );
-    }
-  }
-
-  // Define the strings A, B, C
-  const A = str1 + str2;
-  const B = str1 + ' ' + str2;
-  const C = str1 + '\n' + str2;
-
-  // Set up the prompt for the GPT model
-  const prompt =
-    `Given three strings from a LaTeX document:\n` +
-    `A: ${A}\n` +
-    `B: ${B}\n` +
-    `C: ${C}\n` +
-    `Which is more english and latex grammatically correct? Output 'A', 'B', or 'C' directly without giving any reason.`;
-
   try {
-    // Initialize OpenAI client
-    const client = new OpenAI({
-      apiKey: openaiApiKey,
-    });
+    const apiKey = openaiApiKey || getApiKey('openai');
+    const { prompt } = preparePrompt(str1, str2);
+    const client = new OpenAI({ apiKey });
 
-    // Query the model
     const completion = await client.chat.completions.create({
       model: 'gpt-4-turbo',
       temperature: 0,
-      n: 10,
+      n,
       messages: [
         {
           role: 'system',
-          content:
-            'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
+          content: 'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
         },
         {
           role: 'user',
@@ -68,49 +121,13 @@ export async function bestConnectionMethod(
       ],
     });
 
-    // Extract and process choices
     const choices = completion.choices.map(
       (choice) => choice.message.content?.trim() ?? '',
     );
 
-    // Determine majority vote
-    const choiceCounts = new Map<string, number>();
-    choices.forEach((choice) => {
-      choiceCounts.set(choice, (choiceCounts.get(choice) ?? 0) + 1);
-    });
-
-    let majorityChoice = '';
-    let maxCount = 0;
-    choiceCounts.forEach((count, choice) => {
-      if (count > maxCount) {
-        maxCount = count;
-        majorityChoice = choice;
-      }
-    });
-
-    // Map choices to connectors
-    const caseDict: { [key: string]: string } = {
-      A: '',
-      B: ' ',
-      C: '\n',
-    };
-
-    if (majorityChoice in caseDict) {
-      return {
-        connector: caseDict[majorityChoice],
-        choice: majorityChoice,
-      };
-    } else {
-      console.log(
-        `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`,
-      );
-      return {
-        connector: ' ',
-        choice: 'B',
-      };
-    }
-  } catch (error) {
-    console.error('Error in bestConnectionMethod:', error);
+    return processMajorityChoice(choices);
+  } catch (err) {
+    error(CHANNEL, `Error in bestConnectionMethod: ${err instanceof Error ? err.message : String(err)}`);
     return {
       connector: ' ',
       choice: 'B',
@@ -118,10 +135,52 @@ export async function bestConnectionMethod(
   }
 }
 
-// Example usage:
-// async function test() {
-//   // const result = await bestConnectionMethod("Hello", "world", "your-api-key");
-//   const result = await bestConnectionMethod('Hello', 'world');
-//   console.log(result);
-// }
-// test();
+/**
+ * Determines the best way to connect two strings in a LaTeX context using Claude
+ */
+export async function bestConnectionMethodAnthropic(
+  str1: string,
+  str2: string,
+  anthropicApiKey?: string,
+  n: number = 10,
+): Promise<ConnectionResult> {
+  try {
+    const apiKey = anthropicApiKey || getApiKey('anthropic');
+    const { prompt } = preparePrompt(str1, str2);
+    const client = new Anthropic({ apiKey });
+
+    // Make multiple API calls since Anthropic doesn't support n parameter
+    const choices = await Promise.all(
+      Array(n)
+        .fill(null)
+        .map(() =>
+          client.messages
+            .create({
+              model: 'claude-3-5-sonnet-20241022',
+              max_tokens: 128,
+              messages: [
+                {
+                  role: 'user',
+                  content: prompt,
+                },
+              ],
+            })
+            .then((response) => {
+              const content = response.content[0];
+              if ('text' in content) {
+                return content.text.trim();
+              }
+              return 'B';
+            }),
+        ),
+    );
+
+    return processMajorityChoice(choices);
+  } catch (err) {
+    error(CHANNEL, `Error in bestConnectionMethodAnthropic: ${err instanceof Error ? err.message : String(err)}`);
+    return {
+      connector: ' ',
+      choice: 'B',
+    };
+  }
+}
