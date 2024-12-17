@@ -25,6 +25,7 @@ TIKZ_TEMPLATE = r"""
 
 
 def compile_latex_to_pdf(tex_file: str) -> bool:
+    """Compile a LaTeX file to PDF using pdflatex."""
     output_directory = os.path.dirname(tex_file)
     command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, tex_file]
 
@@ -42,6 +43,7 @@ def compile_latex_to_pdf(tex_file: str) -> bool:
 
 
 def extract_tikzpictures_with_labels(latex_file: str) -> list[tuple[str, list[str]]]:
+    """Extract TikZ pictures and their associated labels from LaTeX file, returns list of (label, pictures) tuples."""
     content = read_file(latex_file)
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments
@@ -61,7 +63,7 @@ def extract_tikzpictures_with_labels(latex_file: str) -> list[tuple[str, list[st
 
 
 def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> list[str]:
-    """Extract and compile TikZ pictures, returns list of PDF paths"""
+    """Extract and compile TikZ pictures from LaTeX file into standalone PDFs, returns PDF paths."""
     input_dir = os.path.dirname(latex_file)
     input_name = os.path.splitext(os.path.basename(latex_file))[0]
     build_dir = os.path.join(input_dir, "build", input_name)
@@ -93,6 +95,7 @@ def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> list[str]:
 
 
 def create_standalone_latex_with_labels(tikzpicture: str, label: str, build_dir: str, suffix: str | None = None) -> str:
+    """Create a standalone LaTeX file containing a TikZ picture with labels."""
     standalone_content = render_prompt(TIKZ_TEMPLATE, {"tikzpicture": tikzpicture})
     filename = os.path.join(build_dir, f"{label}_{suffix}.tex" if suffix else f"{label}.tex")
     write_file(filename, standalone_content)

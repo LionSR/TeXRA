@@ -6,6 +6,7 @@ from ..logger import logger
 
 
 def run_latexindent(file_path: str) -> bool:
+    """Run latexindent on a LaTeX file and clean up backup files."""
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
     command = ["latexindent", file_path, "-w", "-s"]
     if latexindent_config:
