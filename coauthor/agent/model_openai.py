@@ -96,7 +96,12 @@ class OpenAIModelHandler(ModelHandler):
             ]
         ]
 
-    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
+    def extract_response(
+        self,
+        response_object: Any,
+        end_tag: str,
+        auto_confirmation: bool = False,
+    ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from OpenAI response object."""
         if not (hasattr(response_object, "choices") and response_object.choices):
             error_msg = "Invalid response from API: missing choices"
@@ -191,7 +196,7 @@ class OpenAIModelHandler(ModelHandler):
 
     def _handle_new_output(self, messages: list[dict], agent_config: AgentConfig, agent_settings: AgentSettings, tool_state: ToolState, prefill: str):
         """Helper method to handle new output initialization."""
-        if agent_config.use_prefill_from_input and tool_state.first_k_tex_document:
+        if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_tex_document:
             prefill += tool_state.first_k_tex_document
             tool_state.update_accumulated_output("")
 
