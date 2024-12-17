@@ -58,6 +58,7 @@ class OutputHandler:
     def _process_single_output(self, output_file: str) -> str:
         """Process a single output file."""
         processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+        # i think above is not need for direct write agent...
         content = read_file(processed_output_file)
         filtered_content = filter_tags_from_text(content, "monologue")
         write_file(processed_output_file, filtered_content)
