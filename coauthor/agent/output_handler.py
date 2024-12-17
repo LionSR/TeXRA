@@ -1,7 +1,7 @@
 import os
 import re
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, List
 
 from ..logger import logger
 from ..agent import AgentConfig, AgentSettings
@@ -71,13 +71,29 @@ class OutputHandler:
                     _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
 
     def _process_single_output(self, output_file: str) -> str:
+        """Process a single output file.
+
+        Args:
+            output_file: Path to the file to process
+
+        Returns:
+            Path to the processed output file
+        """
         processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         content = read_file(processed_output_file)
         filtered_content = filter_tags_from_text(content, "monologue")
         write_file(processed_output_file, filtered_content)
         return processed_output_file
 
-    def _process_multiple_outputs(self, output_file: str) -> list[str]:
+    def _process_multiple_outputs(self, output_file: str) -> List[str]:
+        """Process multiple output files.
+
+        Args:
+            output_file: Path to the file containing multiple outputs
+
+        Returns:
+            List of paths to processed output files
+        """
         processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         for processed_output_file in processed_output_files:
             content = read_file(processed_output_file)
@@ -86,33 +102,48 @@ class OutputHandler:
         return processed_output_files
 
     def _handle_latexdiff(self, round: int) -> None:
+        """Handle LaTeX diff generation between files and rounds.
+
+        Args:
+            round: Current round number
+        """
         logger.info(f"Running latexdiff for {self.agent_config.agent} round {round}")
         logger.debug(f"Base files: {self.base_files}")
         logger.debug(f"Round {round} output files: {self.output_files[round]}")
 
+        # Generate diffs between base files and current round
         for base_file, output_file in zip(self.base_files, self.output_files[round]):
             run_latexdiff_for_round(base_file, output_file, self.agent_config.agent, round)
 
+        # Generate diffs between consecutive rounds
         for r in range(1, round + 1):
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
                 run_latexdiff_between_rounds(output_file1, output_file2, self.agent_config.agent)
 
-    def _replace_input_commands(self, base_files: list[str], output_files: list[str]) -> None:
+    def _replace_input_commands(self, base_files: List[str], output_files: List[str]) -> None:
+        """Replace LaTeX input commands with updated file names.
+
+        Args:
+            base_files: List of original input files
+            output_files: List of new output files
+        """
         base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, output_files)}
 
         for output_file in output_files:
             content = read_file(output_file)
             new_content = re.sub(
                 r"\\input{([^}]+)}",
-                lambda match: f"\\input{{{base_to_output[match.group(1)]}}}" if match.group(1) in base_to_output else match.group(0),
-                content
+                lambda match: (f"\\input{{{base_to_output[match.group(1)]}}}" if match.group(1) in base_to_output else match.group(0)),
+                content,
             )
 
             if new_content != content:
                 write_file(output_file, new_content)
                 logger.debug(f"Updated input commands in {output_file}")
 
-    def split_scratchpad_output_xml(self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
+    def split_scratchpad_output_xml(
+        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
+    ) -> str:
         logger.debug(f"Splitting scratchpad output XML: {output_file}")
 
         base_name, extension = os.path.splitext(output_file)
@@ -139,7 +170,9 @@ class OutputHandler:
 
         return tex_file
 
-    def split_multiple_scratchpad_output_xml(self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> list[str]:
+    def split_multiple_scratchpad_output_xml(
+        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
+    ) -> list[str]:
         logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
         base_name, extension = os.path.splitext(output_file)
 
