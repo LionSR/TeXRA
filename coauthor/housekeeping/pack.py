@@ -8,7 +8,8 @@ from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
 from .utils import get_agent_first_name_chunk, get_file_patterns, get_folder_datetime
 
 
-def run_pack_single(model, input_file, agent, output_folder=None):
+def run_pack_single(model: str, input_file: str, agent: str, output_folder: str | None = None) -> None:
+    """Pack LaTeX files and related outputs into timestamped history directory, cleaning temp files."""
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
@@ -52,7 +53,8 @@ def run_pack_single(model, input_file, agent, output_folder=None):
     return output_folder
 
 
-def run_pack_multiple(model, input_file, input_files, agent, output_name_override):
+def run_pack_multiple(model: str, input_file: str, input_files: list[str], agent: str, output_name_override: str | None = None) -> None:
+    """Pack multiple LaTeX files and their outputs into a single history directory."""
     # Initialize base_name and output_dir
     if output_name_override:
         base_name = os.path.splitext(os.path.basename(output_name_override))[0]

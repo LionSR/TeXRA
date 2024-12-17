@@ -1,21 +1,25 @@
 """Base model configuration classes and types."""
 
+# Standard library imports
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+# Local imports - core
 from ..logger import logger
-
 from ..agent import AgentSettings, AgentConfig
 from ..agent.agent_state import AgentGlobalState, AgentRoundState
 
+# Local imports - utilities
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
+# Local imports - response handling
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
 from .agent_state import ToolState
 
+# Default configuration values
 DEFAULT_CONTEXT_WINDOW = 128000
 DEFAULT_INPUT_TOKEN_LIMIT = 1500000
 DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
@@ -49,7 +53,7 @@ class ModelProvider(Enum):
         """Get API key from environment variables."""
         key = os.getenv(f"{self.value.upper()}_API_KEY")
         if not key:
-            raise ValueError(f"{self.value.upper()}_API_KEY environment variable not set")
+            raise ValueError(f"Missing {self.value.upper()}_API_KEY in environment")
         return key
 
     def get_base_url(self) -> str | None:
@@ -76,13 +80,12 @@ class ModelHandler(ABC):
     context_window: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
 
-    # Added class-level constants
     INPUT_TOKEN_LIMIT: int = DEFAULT_INPUT_TOKEN_LIMIT
     OUTPUT_TOKEN_LIMIT_FACTOR: float = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
     CONTINUE_LIMIT: int = DEFAULT_CONTINUE_LIMIT
 
     def __post_init__(self):
-        """Initialize dependent attributes after dataclass initialization."""
+        """Initialize CONTINUE_LIMIT based on model confirmation capability."""
         self.CONTINUE_LIMIT = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
 
     @property
@@ -119,7 +122,7 @@ class ModelHandler(ABC):
         system_prompt: str | None = None,
         end_tag: str | None = None,
     ) -> Any:
-        """Create a response using the appropriate API call for this model."""
+        """Create a response using the model's API."""
         pass
 
     @abstractmethod

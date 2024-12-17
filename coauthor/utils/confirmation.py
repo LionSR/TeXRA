@@ -1,6 +1,4 @@
-"""
-Contains patterns and utilities for handling confirmation prompts in the chat.
-"""
+"""Contains patterns and utilities for handling confirmation prompts in the chat."""
 
 # Patterns that indicate the assistant is asking for confirmation
 CONFIRMATION_PROMPT_PATTERNS = [
@@ -30,15 +28,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
 
 
 def wrap_confirmation_prompts(text: str) -> str:
-    """
-    Process text to wrap confirmation prompts in monologue tags.
-
-    Args:
-        text (str): The input text to process
-
-    Returns:
-        str: Processed text with confirmation prompts wrapped in monologue tags
-    """
+    """Process text to wrap confirmation prompts in monologue tags."""
     lines = text.split("\n")
     processed_lines = []
 

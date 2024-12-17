@@ -7,20 +7,10 @@ from ..logger import logger
 def run_external_command(
     command: list[str], output_file: str = "", encoding: str = "utf-8", capture_output: bool = True
 ) -> tuple[bool, str | None, str | None]:
-    """Run an external command and handle its output.
+    """Execute external command with output handling, returns (success, stdout, stderr) or writes to file."""
 
-    Args:
-        command: List containing the command and its arguments
-        output_file: Path to the output file (if any)
-        encoding: Encoding to use for file operations
-        capture_output: Whether to capture and return the command output
-
-    Returns:
-        Tuple[bool, Optional[str], Optional[str]]: (success_flag, output_message, error_message)
-    """
-    logger.info("\nRunning command: " + " ".join(command))
-
-    def truncate_output(text, max_chars=150):
+    def truncate_output(text: str | None, max_chars: int = 150) -> str | None:
+        """Truncate text to max_chars by keeping the end portion."""
         if text and len(text) > max_chars:
             return "..." + text[-max_chars:]
         return text

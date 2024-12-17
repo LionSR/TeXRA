@@ -1,13 +1,12 @@
 import os
 import re
-from typing import List, Optional
 
 from ..logger import logger
 from ..utils.file import read_file
 
 
 def extract_figure_paths_from_latex(latex_file: str) -> list[str] | None:
-    """Extract figure paths from a LaTeX file."""
+    """Extract absolute paths of figures referenced by \includegraphics commands in LaTeX file."""
     if not latex_file or not os.path.exists(latex_file):
         return None
 
