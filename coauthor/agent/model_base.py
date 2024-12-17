@@ -16,6 +16,12 @@ from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_in
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
 from .agent_state import ToolState
 
+DEFAULT_CONTEXT_WINDOW = 128000
+DEFAULT_INPUT_TOKEN_LIMIT = 1500000
+DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
+DEFAULT_CONTINUE_LIMIT = 10
+CONFIRMATION_CONTINUE_LIMIT = 20
+
 
 @dataclass
 class ModelCapabilities:
@@ -67,17 +73,17 @@ class ModelHandler(ABC):
     output_price: float
     provider: ModelProvider
     base_url: str | None = None
-    context_window: int = 128000
+    context_window: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
 
     # Added class-level constants
-    CONTINUE_LIMIT: int = field(init=False)
-    INPUT_TOKEN_LIMIT: int = 1500000
-    OUTPUT_TOKEN_LIMIT_FACTOR: float = 2.5
+    INPUT_TOKEN_LIMIT: int = DEFAULT_INPUT_TOKEN_LIMIT
+    OUTPUT_TOKEN_LIMIT_FACTOR: float = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
+    CONTINUE_LIMIT: int = DEFAULT_CONTINUE_LIMIT
 
     def __post_init__(self):
         """Initialize dependent attributes after dataclass initialization."""
-        self.CONTINUE_LIMIT = 20 if self.capabilities.likes_to_ask_for_confirmation else 10
+        self.CONTINUE_LIMIT = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
 
     @property
     def is_anthropic(self) -> bool:
@@ -227,7 +233,7 @@ class ModelHandler(ABC):
 
         return end_turn, should_stop
 
-    def create_image_message(self, figure_files):
+    def create_image_message(self, figure_files: list[str]) -> list[dict]:
         """Create image messages for the conversation."""
         image_contents = []
         added_figures = []
