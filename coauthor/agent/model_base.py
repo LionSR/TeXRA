@@ -51,19 +51,20 @@ class ModelProvider(Enum):
 
     def get_api_key(self) -> str:
         """Get API key from environment variables."""
-        key = os.getenv(f"{self.value.upper()}_API_KEY")
-        if not key:
-            raise ValueError(f"Missing {self.value.upper()}_API_KEY in environment")
-        return key
+        env_key = f"{self.value.upper()}_API_KEY"
+        if key := os.getenv(env_key):
+            return key
+        raise ValueError(f"Missing {env_key} in environment")
 
     def get_base_url(self) -> str | None:
-        """Get base URL for API requests."""
-        urls = {
-            self.OPENROUTER: "https://openrouter.ai/api/v1",
-            self.GOOGLE: "https://generativelanguage.googleapis.com/v1beta",
-            self.OPENAI: None,
+        # Class constant for base URLs
+        BASE_URLS = {
+            "openrouter": "https://openrouter.ai/api/v1",
+            "google": "https://generativelanguage.googleapis.com/v1beta",
+            "openai": None,
         }
-        return urls.get(self)
+        """Get base URL for API requests."""
+        return BASE_URLS.get(self.value)
 
 
 @dataclass
@@ -150,18 +151,21 @@ class ModelHandler(ABC):
     def process_image(self, figure_file: str, file_extension: str):
         """Process image for models."""
         img_data = get_base64_encoded_image(figure_file)
-        if file_extension.lower() in [".jpg", ".jpeg"]:
-            media_type = "image/jpeg"
-        elif file_extension.lower() == ".png":
-            media_type = "image/png"
-        elif file_extension.lower() == ".pdf":
-            if self.capabilities.supports_native_pdf and page_count_pdf(figure_file) > 1:
-                media_type = "application/pdf"
-            else:
-                img_data = process_pdf_input(figure_file)
-                media_type = "image/png"
-        else:
+        ext = file_extension.lower()
+
+        media_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".pdf": "application/pdf" if (self.capabilities.supports_native_pdf and page_count_pdf(figure_file) > 1) else "image/png",
+        }
+
+        if ext not in media_types:
             raise ValueError(f"Unsupported file extension: {file_extension}")
+
+        media_type = media_types[ext]
+        if ext == ".pdf" and media_type == "image/png":
+            img_data = process_pdf_input(figure_file)
 
         return img_data, media_type
 
