@@ -241,7 +241,7 @@ class AnthropicModelHandler(ModelHandler):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
+            if self.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
                 file_content = filter_tags_from_text(file_content, "monologue")
 
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
@@ -262,7 +262,7 @@ class AnthropicModelHandler(ModelHandler):
                     content = file_content
                 logger.debug(f"Using existing content as prefill: {output_file}")
         else:
-            if agent_config.use_prefill_from_input and agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
+            if agent_config.tool_config.use_prefill_from_input and agent_settings.output_ext == "tex" and tool_state.first_k_tex_document:
                 prefill += tool_state.first_k_tex_document
                 tool_state.update_accumulated_output(tool_state.first_k_tex_document)
 
