@@ -205,15 +205,13 @@ class BaseReflectChainAgent(ABC):
 
     def _get_tool_flags(self) -> dict[str, Any]:
         """Get variables related to tool usage flags."""
-        # Use direct attribute access for cleaner code
-        config = self.agent_config
         return {
-            "AUTO_CONFIRMATION": config.auto_confirmation,
-            "USE_PREFILL_FROM_INPUT": config.use_prefill_from_input,
-            "AUTO_EXTRACT_FIGURE": config.auto_extract_figure,
-            "AUTO_EXTRACT_TIKZ_FIGURE": config.auto_extract_tikz_figure,
-            "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": config.auto_extract_tikz_figure_reflect,
-            "INCLUDE_TEX_COUNT": config.include_tex_count,
+            "AUTO_CONFIRMATION": self.agent_config.tool_config.auto_confirmation,
+            "USE_PREFILL_FROM_INPUT": self.agent_config.tool_config.use_prefill_from_input,
+            "AUTO_EXTRACT_FIGURE": self.agent_config.tool_config.auto_extract_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE": self.agent_config.tool_config.auto_extract_tikz_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": self.agent_config.tool_config.auto_extract_tikz_figure_reflect,
+            "INCLUDE_TEX_COUNT": self.agent_config.tool_config.include_tex_count,
         }
 
     def setup(self):
@@ -279,7 +277,7 @@ class BaseReflectChainAgent(ABC):
 
             # Extract and validate response
             new_response, response_usage, stop_reason = self.model_handler.extract_response(
-                response_object, self.agent_settings.end_tag, self.agent_config.auto_confirmation
+                response_object, self.agent_settings.end_tag, self.agent_config.tool_config.auto_confirmation
             )
 
             # Compute statistics and update states
@@ -299,7 +297,7 @@ class BaseReflectChainAgent(ABC):
             # Chain response processing operations
             new_response = (
                 apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
-                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.auto_confirmation
+                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
                 else new_response
             )
             new_response = apply_replacements(new_response, get_all_replacements()).strip()
@@ -456,11 +454,11 @@ class BaseReflectChainAgent(ABC):
         tool_state = ToolState.initialize()
 
         # Handle tex count if enabled
-        if self.agent_config.include_tex_count:
+        if self.agent_config.tool_config.include_tex_count:
             tool_state.tex_count_stats = get_tex_count_stats(input_files)
 
         # Handle prefill from input if enabled
-        if self.agent_config.use_prefill_from_input:
+        if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
 
         # Merge figure_file into figure_files if it exists
@@ -470,11 +468,11 @@ class BaseReflectChainAgent(ABC):
             tool_state.add_figure_files(self.agent_config.figure_files)
 
         # Extract figures if configured
-        if self.agent_config.auto_extract_figure:
+        if self.agent_config.tool_config.auto_extract_figure:
             if extracted_figures := extract_figure_paths_from_latex(self.agent_config.input_file):
                 tool_state.add_figure_files(extracted_figures)
 
-        if self.agent_config.auto_extract_tikz_figure:
+        if self.agent_config.tool_config.auto_extract_tikz_figure:
             for input_file in input_files:
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(input_file)
                 if extracted_tikz_figures:
@@ -503,10 +501,10 @@ class BaseReflectChainAgent(ABC):
     def reflect(self, global_state: AgentGlobalState, messages, tool_state: ToolState, round: int = 1):
         if self.agent_config.output_files:
             # Handle multiple output files
-            if self.agent_config.include_tex_count:
+            if self.agent_config.tool_config.include_tex_count:
                 tool_state.tex_count_stats = get_tex_count_stats(self.agent_config.output_files)
 
-            if self.agent_config.auto_extract_tikz_figure_reflect:
+            if self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
                 # Handle multiple output files
                 for output_file in self.output_handler.output_files[round]:
                     logger.debug(f"Extracting TikZ figures from {output_file}")
@@ -517,15 +515,15 @@ class BaseReflectChainAgent(ABC):
             # Handle single output file
             logger.debug(f"Output files: {self.output_handler.output_files[0]}")
             generated_output_file = self.output_handler.output_files[0][0]
-            if self.agent_config.include_tex_count:
+            if self.agent_config.tool_config.include_tex_count:
                 tool_state.tex_count_stats = get_tex_count_stats(generated_output_file)
-            if self.agent_config.auto_extract_tikz_figure_reflect:
+            if self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
                 extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
                 if extracted_tikz_figures:
                     tool_state.add_figure_files(extracted_tikz_figures)
 
-        if self.agent_config.use_prefill_from_input:
+        if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
 
         round_state, global_state, tool_state, end_turn, messages = self.process_reflection_round(

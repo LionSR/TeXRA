@@ -124,29 +124,32 @@ class ModelHandler(ABC):
         end_tag: str | None = None,
     ) -> Any:
         """Create a response using the model's API."""
-        pass
+        raise NotImplementedError("Subclasses must implement create_response")
 
     @abstractmethod
     def initialize_messages(self, user_prefix: str, user_request: str, figure_files=None, system_prompt: str | None = None) -> list[dict]:
         """Initialize messages for the conversation."""
-        pass
+        raise NotImplementedError("Subclasses must implement initialize_messages")
 
     @abstractmethod
     def create_reflection_message(self, messages: list[dict], user_message: str, figure_files=None) -> list[dict]:
         """Create a reflection message and handle prompt caching."""
-        pass
+        raise NotImplementedError("Subclasses must implement create_reflection_message")
 
     @abstractmethod
     def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for the model."""
-        pass
+        raise NotImplementedError("Subclasses must implement create_image_content")
 
     @abstractmethod
-    def extract_response(self, response_object, end_tag: str, auto_confirmation: bool = False) -> tuple[str, Any, str]:
-        """Extract statistics from the response object.
-        Returns: (new_response, response_usage, stop_reason)
-        """
-        pass
+    def extract_response(
+        self,
+        response_object: Any,
+        end_tag: str,
+        auto_confirmation: bool = False,
+    ) -> tuple[str, Any, str]:
+        """Extract response text and usage statistics from response object."""
+        raise NotImplementedError("Subclasses must implement extract_response")
 
     def process_image(self, figure_file: str, file_extension: str):
         """Process image for models."""
@@ -179,7 +182,7 @@ class ModelHandler(ABC):
         agent_config: AgentConfig,
     ):
         """Handle continuation for a model when response is truncated."""
-        pass
+        raise NotImplementedError("Subclasses must implement handle_continuation")
 
     @abstractmethod
     def initialize_output_and_prefill(
@@ -195,17 +198,17 @@ class ModelHandler(ABC):
         prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill based on model requirements."""
-        pass
+        raise NotImplementedError("Subclasses must implement initialize_output_and_prefill")
 
     @abstractmethod
     def compute_price(self, response_usage: Any) -> float:
         """Compute the price for token usage."""
-        pass
+        raise NotImplementedError("Subclasses must implement compute_price")
 
     @abstractmethod
     def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage | AnthropicResponseUsage:
         """Compute model-specific statistics from response usage object."""
-        pass
+        raise NotImplementedError("Subclasses must implement compute_statistics")
 
     def check_stop_conditions(
         self, stop_reason: str, new_response: str, round_state: AgentRoundState, global_state: AgentGlobalState, agent_settings: AgentSettings
@@ -277,4 +280,4 @@ class ModelHandler(ABC):
     @abstractmethod
     def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
         """Update the message content based on model-specific requirements."""
-        pass
+        raise NotImplementedError("Subclasses must implement update_message_content")
