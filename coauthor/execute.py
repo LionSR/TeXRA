@@ -1,3 +1,5 @@
+"""Execute agent tasks."""
+
 import os
 from pathlib import Path
 from typing import Any
@@ -8,7 +10,8 @@ from .agent.agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent.agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
 from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
-from .agent.model_registry import MODEL_HANDLERS
+from .agent.model_registry import MODEL_CONFIGS
+from .agent.model_factory import ModelFactory
 from .logger import logger
 
 load_dotenv()
@@ -67,9 +70,11 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    if agent_config.model not in MODEL_HANDLERS:
-        raise ValueError(f"Model {agent_config.model} not found in MODEL_HANDLERS")
-    model_handler = MODEL_HANDLERS[agent_config.model]
+    if agent_config.model not in MODEL_CONFIGS:
+        raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
+
+    model_config = MODEL_CONFIGS[agent_config.model]
+    model_operations = ModelFactory.create_operations(model_config)
 
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
@@ -77,7 +82,7 @@ def run_agent(agent: str, **kwargs: Any) -> None:
 
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
-        model_handler=model_handler,
+        model_operations=model_operations,
         agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,
@@ -90,9 +95,11 @@ def run_merge(model: str, input_file: str, edited_file: str) -> None:
     """Initialize and run merge agent to handle file merging operations."""
     agent_config = create_agent_config(agent="merge", model=model, input_file=input_file, edited_file=edited_file)
 
-    if model not in MODEL_HANDLERS:
-        raise ValueError(f"Model {model} not found in MODEL_HANDLERS")
-    model_handler = MODEL_HANDLERS[model]
+    if model not in MODEL_CONFIGS:
+        raise ValueError(f"Model {model} not found in MODEL_CONFIGS")
+
+    model_config = MODEL_CONFIGS[model]
+    model_operations = ModelFactory.create_operations(model_config)
 
     agent_path = get_agent_path("merge")
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, "merge")
@@ -100,7 +107,7 @@ def run_merge(model: str, input_file: str, edited_file: str) -> None:
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
     agent = AgentMerge(
-        model_handler=model_handler,
+        model_operations=model_operations,
         agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,

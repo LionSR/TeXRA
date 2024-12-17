@@ -31,11 +31,11 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 class OutputHandler:
     """Handler for processing and managing output files."""
 
-    def __init__(self, agent_settings: AgentSettings, agent_config: AgentConfig, model_config: Any, log_id: int):
+    def __init__(self, agent_settings: AgentSettings, agent_config: AgentConfig, model_handler: Any, log_id: int):
         """Initialize output handler with settings and configuration."""
         self.agent_settings = agent_settings
         self.agent_config = agent_config
-        self.model_config = model_config
+        self.model_handler = model_handler
         self.log_id = log_id
         self.output_files = {0: [], 1: []}  # Maps round number to output files
         self.base_files = []  # Original input files
