@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { Writable } from 'stream';
 import { LogViewProvider } from '../logView/logViewProvider';
 
-const { combine, timestamp, printf } = winston.format;
+const { combine, timestamp, printf, json } = winston.format;
 
 // Define log levels
 const logLevels = {
@@ -32,29 +32,30 @@ class VSCodeTransport extends Writable {
   private channel: vscode.OutputChannel;
   private logViewProvider?: LogViewProvider;
   private streamName: string;
-  private level: 'error' | 'warn' | 'info' | 'debug';
 
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
-    level: 'error' | 'warn' | 'info' | 'debug',
     logViewProvider?: LogViewProvider,
   ) {
     super();
     this.channel = channel;
     this.streamName = streamName;
-    this.level = level;
     this.logViewProvider = logViewProvider;
   }
 
   write(chunk: any): boolean {
-    const formattedMessage = chunk.toString().trim();
+    const info = JSON.parse(chunk);
+    const { level, message, timestamp } = info;
+    const emoji = emojis[level as keyof typeof emojis];
+    const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
+    
     this.channel.appendLine(formattedMessage);
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
         formattedMessage,
-        this.level,
+        level as 'error' | 'warn' | 'info' | 'debug',
       );
     }
     return true;
@@ -107,48 +108,19 @@ function createLoggerForChannel(
   const logger = winston.createLogger({
     levels: logLevels,
     level: 'debug',
-    format: baseFormat,
+    format: combine(
+      timestamp({ 
+        format: 'YYYY-MM-DD HH:mm:ss' 
+      }),
+      json()
+    ),
     transports: [
-      new winston.transports.Console({ format: baseFormat }),
       new winston.transports.Stream({
         stream: new VSCodeTransport(
           outputChannel,
           channel,
-          'error',
           globalLogViewProvider,
         ),
-        format: baseFormat,
-        level: 'error',
-      }),
-      new winston.transports.Stream({
-        stream: new VSCodeTransport(
-          outputChannel,
-          channel,
-          'warn',
-          globalLogViewProvider,
-        ),
-        format: baseFormat,
-        level: 'warn',
-      }),
-      new winston.transports.Stream({
-        stream: new VSCodeTransport(
-          outputChannel,
-          channel,
-          'info',
-          globalLogViewProvider,
-        ),
-        format: baseFormat,
-        level: 'info',
-      }),
-      new winston.transports.Stream({
-        stream: new VSCodeTransport(
-          outputChannel,
-          channel,
-          'debug',
-          globalLogViewProvider,
-        ),
-        format: baseFormat,
-        level: 'debug',
       }),
     ],
   });
@@ -182,12 +154,15 @@ function getOrCreateLogger(channel: string): winston.Logger {
 }
 
 export function getTimestamp(): string {
-  return new Date().toLocaleTimeString('en-US', {
+  return new Date().toLocaleString('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-  });
+  }).replace(',', '');
 }
 
 export { emojis };
