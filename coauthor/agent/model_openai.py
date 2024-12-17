@@ -10,7 +10,7 @@ from ..agent import AgentSettings, AgentConfig
 from ..agent.agent_state import AgentRoundState
 from ..utils.file import read_file
 
-from .agent_state import ToolState
+from .tool_handler import ToolState
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import OpenAIResponseUsage
 
