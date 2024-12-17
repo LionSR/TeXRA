@@ -1,5 +1,6 @@
 import os
 import yaml
+from typing import Tuple, Dict
 
 
 def load_yaml(file_path: str) -> dict:
@@ -19,39 +20,27 @@ def merge_dicts(base: dict, override: dict) -> dict:  # Core dictionaries
     return result
 
 
-def load_agent_settings_and_prompts(
-    # Core paths (required)
-    agent_path: str,
-    agent: str,
-) -> tuple[dict, dict]:
-    """Load agent settings and prompts from YAML files."""
+def load_agent_from_yaml(agent_path: str, agent_name: str) -> Tuple[Dict, Dict]:
+    agent_file = os.path.join(agent_path, f"{agent_name}.yaml")
+    if not os.path.exists(agent_file):
+        raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
 
-    def load_agent_from_yaml(agent_path, agent_name):
-        agent_file = f"{agent_path}/{agent_name}.yaml"
-        if not os.path.exists(agent_file):
-            raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
+    config = load_yaml(agent_file)
+    parent = config.get("inherits")
 
-        config = load_yaml(agent_file)
-        parent = config.get("inherits")
+    if parent:
+        parent_settings, parent_prompts = load_agent_from_yaml(agent_path, parent)
+        agent_settings = config.get("settings", {}) or {}
+        agent_prompts = config.get("prompts", {}) or {}
+        settings = merge_dicts(parent_settings, agent_settings)
+        prompts = merge_dicts(parent_prompts, agent_prompts)
+    else:
+        settings = config.get("settings", {}) or {}
+        prompts = config.get("prompts", {}) or {}
+        settings.setdefault("prefills", [])
 
-        if parent:
-            parent_settings, parent_prompts = load_agent_from_yaml(agent_path, parent)
+    return settings, prompts
 
-            # Extract settings and prompts from current agent
-            agent_settings = config.get("settings", {}) or {}
-            agent_prompts = config.get("prompts", {}) or {}
 
-            # Merge with parent settings and prompts
-            settings = merge_dicts(parent_settings, agent_settings)
-            prompts = merge_dicts(parent_prompts, agent_prompts)
-        else:
-            settings = config.get("settings", {}) or {}
-            prompts = config.get("prompts", {}) or {}
-
-            # Handle prefills if present in settings
-            if "prefills" not in settings:
-                settings["prefills"] = []
-
-        return settings, prompts
-
+def load_agent_settings_and_prompts(agent_path: str, agent: str) -> Tuple[Dict, Dict]:
     return load_agent_from_yaml(agent_path, agent)

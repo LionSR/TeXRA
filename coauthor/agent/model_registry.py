@@ -4,9 +4,12 @@ from .model_base import ModelProvider, ModelHandler, ModelCapabilities
 from .model_anthropic import AnthropicModelHandler
 from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
 
+# Common capabilities
+ANTHROPIC_BASE_CAPABILITIES = ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True)
+
 
 MODEL_HANDLERS: dict[str, ModelHandler] = {
-    # Anthropic Claude models
+    # ===== Anthropic Claude Models =====
     "opus": AnthropicModelHandler(
         name="opus",
         full_name="claude-3-opus-20240229",
@@ -14,7 +17,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=200000,
         input_price=15.0,
         output_price=75.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
+        capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
     "sonnet++": AnthropicModelHandler(
         name="sonnet++",
@@ -24,7 +27,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         input_price=3.0,
         output_price=15.0,
         capabilities=ModelCapabilities(
-            supports_prompt_caching=True, supports_native_pdf=True, supports_assistant_prefill=True, likes_to_ask_for_confirmation=True
+            supports_prompt_caching=True, supports_assistant_prefill=True, supports_native_pdf=True, likes_to_ask_for_confirmation=True
         ),
     ),
     "sonnet+": AnthropicModelHandler(
@@ -34,7 +37,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
+        capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
     "sonnet": AnthropicModelHandler(
         name="sonnet",
@@ -43,7 +46,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=False, supports_assistant_prefill=True),
+        capabilities=ModelCapabilities(supports_assistant_prefill=True),
     ),
     "haiku+": AnthropicModelHandler(
         name="haiku+",
@@ -53,7 +56,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         input_price=1.0,
         output_price=5.0,
         capabilities=ModelCapabilities(
-            supports_prompt_caching=True, supports_vision=False, supports_assistant_prefill=True, likes_to_ask_for_confirmation=True
+            supports_prompt_caching=True, supports_assistant_prefill=True, supports_vision=False, likes_to_ask_for_confirmation=True
         ),
     ),
     "haiku": AnthropicModelHandler(
@@ -63,9 +66,9 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=200000,
         input_price=0.25,
         output_price=1.25,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
+        capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
-    # OpenAI models
+    # ===== OpenAI Models =====
     "gpto1": OpenAIModelHandler(
         name="gpto1",
         full_name="o1-preview-2024-09-12",
@@ -86,8 +89,6 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
     ),
     "gpt4o": OpenAIModelHandler(
         name="gpt4o",
-        # full_name="gpt-4o-2024-08-06",
-        # gpt-4o,
         full_name="gpt-4o-2024-11-20",
         max_output_tokens=16384,
         context_window=128000,
@@ -102,7 +103,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=128000,
         input_price=10.0,
         output_price=30.0,
-        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
+        capabilities=ModelCapabilities(supports_auto_prompt_caching=False, supports_reasoning=False),
     ),
     "gpt4o-": OpenAIModelHandler(
         name="gpt4o-",
@@ -122,6 +123,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         output_price=15.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
     ),
+    # ===== Google Gemini Models =====
     "geminiexp": OpenAICompatibleModelHandler(
         name="geminiexp",
         full_name="gemini-exp-1206",
@@ -132,7 +134,6 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         output_price=5.0,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
-    # Google Gemini models
     "gemini2f": OpenAICompatibleModelHandler(
         name="gemini2f",
         full_name="gemini-2.0-flash-exp",
@@ -141,7 +142,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        capabilities=ModelCapabilities(supports_prompt_caching=False, supports_native_pdf=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True),
     ),
     "gemini1p+": OpenAICompatibleModelHandler(
         name="gemini1p+",
@@ -162,7 +163,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         output_price=0.3,
         capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
     ),
-    # OpenRouter models
+    # ===== OpenRouter Models =====
     "gpt4oOR": OpenAICompatibleModelHandler(
         name="gpt4oOR",
         full_name="openai/gpt-4o:extended",
@@ -171,7 +172,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=128000,
         input_price=6.0,
         output_price=18.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
+        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_reasoning=True),
     ),
     "gemini1p+OR": OpenAICompatibleModelHandler(
         name="gemini1p+OR",
@@ -201,7 +202,6 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=131072,
         input_price=3.0,
         output_price=3.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
     ),
     "qwq-32bOR": OpenAICompatibleModelHandler(
         name="qwq-32b",
@@ -211,7 +211,7 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=32768,
         input_price=0.15,
         output_price=0.6,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
+        capabilities=ModelCapabilities(supports_reasoning=True),
     ),
     "sonnet++OR": OpenAICompatibleModelHandler(
         name="sonnet++OR",
@@ -221,6 +221,6 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=True),
+        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_reasoning=False),
     ),
 }
