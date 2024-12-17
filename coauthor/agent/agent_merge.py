@@ -1,6 +1,5 @@
 import os
 import re
-from typing import List
 
 from ..logger import logger
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
