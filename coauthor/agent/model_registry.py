@@ -69,8 +69,17 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
     # ===== OpenAI Models =====
-    "gpto1": OpenAIModelHandler(
-        name="gpto1",
+    "o1": OpenAIModelHandler(
+        name="o1",
+        full_name="o1-2024-12-17",
+        max_output_tokens=100000,
+        context_window=200000,
+        input_price=15.0,
+        output_price=60.0,
+        capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_vision=True, supports_reasoning=True),
+    ),
+    "o1preview": OpenAIModelHandler(
+        name="o1preview",
         full_name="o1-preview-2024-09-12",
         max_output_tokens=32768,
         context_window=128000,
@@ -78,8 +87,8 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
         output_price=60.0,
         capabilities=ModelCapabilities(supports_auto_prompt_caching=True, supports_vision=False, supports_reasoning=True),
     ),
-    "gpto1-": OpenAIModelHandler(
-        name="gpto1-",
+    "o1-": OpenAIModelHandler(
+        name="o1-",
         full_name="o1-mini-2024-09-12",
         max_output_tokens=65536,
         context_window=128000,
@@ -89,7 +98,8 @@ MODEL_HANDLERS: dict[str, ModelHandler] = {
     ),
     "gpt4o": OpenAIModelHandler(
         name="gpt4o",
-        full_name="gpt-4o-2024-11-20",
+        # full_name="gpt-4o-2024-11-20",
+        full_name="gpt-4o-2024-08-06",
         max_output_tokens=16384,
         context_window=128000,
         input_price=2.5,

@@ -41,7 +41,7 @@ def best_connection_method(str1: str, str2: str, openai_api_key: str | None = No
         n=10,
         messages=[
             {
-                "role": "system",
+                "role": "developer",
                 "content": "You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.",
             },
             {"role": "user", "content": prompt},
