@@ -10,6 +10,7 @@ import { initializeLogging } from './utils/logUtils';
 import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';
+import { registerTestCommands } from './commands/testCommands';
 
 const CHANNEL = 'Commands';
 initializeLogging(CHANNEL);
@@ -30,6 +31,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     latex: registerLatexCommands(context),
     image: registerImageCommands(context),
     figure: registerFigureCommands(context),
+    test: registerTestCommands(context),
   };
 
   // Register webview provider
@@ -53,3 +55,4 @@ export { executeCommand } from './commands/executeCommand';
 export { latexCommands } from './commands/latexCommands';
 export { imageCommands } from './commands/imageCommands';
 export { figureCommands } from './commands/figCommands';
+export { testCommands } from './commands/testCommands';
