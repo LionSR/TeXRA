@@ -17,7 +17,7 @@ from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_in
 
 # Local imports - response handling
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
-from .agent_state import ToolState
+from .tool_handler import ToolState
 
 # Default configuration values
 DEFAULT_CONTEXT_WINDOW = 128000
