@@ -2,9 +2,7 @@ from typing import TypedDict, Any
 
 
 class ResponseUsageBase(TypedDict):
-    """Base type for response usage statistics.
-    Contains common fields across all model types.
-    """
+    """Base type for response usage statistics."""
 
     total_input_tokens: int
     total_output_tokens: int
@@ -14,9 +12,7 @@ class ResponseUsageBase(TypedDict):
 
 
 class OpenAIResponseUsage(ResponseUsageBase):
-    """Type for OpenAI response usage statistics.
-    Includes OpenAI-specific fields for token tracking.
-    """
+    """Type for OpenAI response usage statistics."""
 
     prompt_tokens: int
     completion_tokens: int
@@ -27,35 +23,16 @@ class OpenAIResponseUsage(ResponseUsageBase):
 
     @classmethod
     def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "OpenAIResponseUsage":
-        """Create OpenAIResponseUsage from raw response usage object.
+        # Extract tokens from response usage
+        cached_tokens = getattr(response_usage.prompt_tokens_details, "cached_tokens", 0) if hasattr(response_usage, "prompt_tokens_details") else 0
 
-        Args:
-            response_usage: Raw OpenAI response usage object
-            cost: Computed cost for this response
-            response_time: Time taken for this response
+        # Extract completion details
+        completion_details = getattr(response_usage, "completion_tokens_details", None)
+        reasoning_tokens = getattr(completion_details, "reasoning_tokens", 0) if completion_details else 0
+        accepted_prediction_tokens = getattr(completion_details, "accepted_prediction_tokens", None) if completion_details else None
+        rejected_prediction_tokens = getattr(completion_details, "rejected_prediction_tokens", None) if completion_details else None
 
-        Returns:
-            OpenAIResponseUsage object with computed statistics
-        """
-        cached_tokens = 0
-        reasoning_tokens = 0
-        accepted_prediction_tokens = None
-        rejected_prediction_tokens = None
-
-        # Extract cached tokens if available
-        if hasattr(response_usage, "prompt_tokens_details"):
-            if hasattr(response_usage.prompt_tokens_details, "cached_tokens"):
-                cached_tokens = response_usage.prompt_tokens_details.cached_tokens
-
-        # Extract reasoning and prediction tokens if available
-        if hasattr(response_usage, "completion_tokens_details"):
-            if hasattr(response_usage.completion_tokens_details, "reasoning_tokens"):
-                reasoning_tokens = response_usage.completion_tokens_details.reasoning_tokens
-            if hasattr(response_usage.completion_tokens_details, "accepted_prediction_tokens"):
-                accepted_prediction_tokens = response_usage.completion_tokens_details.accepted_prediction_tokens
-            if hasattr(response_usage.completion_tokens_details, "rejected_prediction_tokens"):
-                rejected_prediction_tokens = response_usage.completion_tokens_details.rejected_prediction_tokens
-
+        # Calculate percentage cached
         percentage_cached = (cached_tokens / response_usage.prompt_tokens * 100) if response_usage.prompt_tokens > 0 else 0
 
         return cls(
@@ -74,9 +51,7 @@ class OpenAIResponseUsage(ResponseUsageBase):
 
 
 class AnthropicResponseUsage(ResponseUsageBase):
-    """Type for Anthropic response usage statistics.
-    Includes Anthropic-specific fields for token tracking.
-    """
+    """Type for Anthropic response usage statistics."""
 
     input_tokens: int
     output_tokens: int
@@ -85,30 +60,13 @@ class AnthropicResponseUsage(ResponseUsageBase):
 
     @classmethod
     def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "AnthropicResponseUsage":
-        """Create AnthropicResponseUsage from raw response usage object.
+        # Extract cache-related tokens
+        cache_read_input_tokens = getattr(response_usage, "cache_read_input_tokens", None)
+        cache_creation_input_tokens = getattr(response_usage, "cache_creation_input_tokens", None)
 
-        Args:
-            response_usage: Raw Anthropic response usage object
-            cost: Computed cost for this response
-            response_time: Time taken for this response
-
-        Returns:
-            AnthropicResponseUsage object with computed statistics
-        """
-        cache_read_input_tokens = None
-        cache_creation_input_tokens = None
-        percentage_cached = 0.0
-
-        # Extract cache tokens if available
-        if hasattr(response_usage, "cache_read_input_tokens"):
-            cache_read_input_tokens = response_usage.cache_read_input_tokens
-        if hasattr(response_usage, "cache_creation_input_tokens"):
-            cache_creation_input_tokens = response_usage.cache_creation_input_tokens
-
-        # Calculate percentage cached if cache tokens are available
-        if cache_read_input_tokens is not None and cache_creation_input_tokens is not None:
-            total_cache_tokens = cache_read_input_tokens + cache_creation_input_tokens
-            percentage_cached = (total_cache_tokens / response_usage.input_tokens * 100) if response_usage.input_tokens > 0 else 0
+        # Calculate percentage cached
+        total_cache_tokens = (cache_read_input_tokens or 0) + (cache_creation_input_tokens or 0)
+        percentage_cached = (total_cache_tokens / response_usage.input_tokens * 100) if response_usage.input_tokens > 0 else 0
 
         return cls(
             total_input_tokens=response_usage.input_tokens,
