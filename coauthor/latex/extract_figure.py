@@ -6,7 +6,7 @@ from ..utils.file import read_file
 
 
 def extract_figure_paths_from_latex(latex_file: str) -> list[str] | None:
-    """Extract absolute paths of figures referenced by \includegraphics commands in LaTeX file."""
+    r"""Extract absolute paths of figures referenced by \includegraphics commands in LaTeX file."""
     if not latex_file or not os.path.exists(latex_file):
         return None
 
