@@ -120,7 +120,7 @@ class BaseReflectChainAgent(ABC):
         # Add variables for required files
         if self.agent_settings.required_files:
             for var_name, file_path in self.agent_settings.required_files.items():
-                if os.path.exists(file_path):
+                if file_path is not None and os.path.exists(file_path):
                     file_content = read_file(file_path)
                     user_vars[f"{var_name}_FILE"] = file_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
@@ -132,7 +132,7 @@ class BaseReflectChainAgent(ABC):
         if self.agent_settings.required_files_internal:
             for var_name, file_path in self.agent_settings.required_files_internal.items():
                 full_path = os.path.join(self.agent_path, file_path)
-                if os.path.exists(full_path):
+                if os.path.exists(full_path) and full_path:
                     file_content = read_file(full_path)
                     user_vars[f"{var_name}_FILE"] = full_path
                     user_vars[f"{var_name}_CONTENT"] = file_content
@@ -160,11 +160,14 @@ class BaseReflectChainAgent(ABC):
 
                     if category.endswith("_file"):  # Single file categories
                         if category_value and pattern in category_value.lower():
-                            file_content = read_file(category_value)
-                            if file_content and os.path.exists(category_value):
-                                user_vars[var_name + "_FILE"] = category_value
-                                user_vars[var_name + "_CONTENT"] = file_content
-                                logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {category_value}")
+                            if os.path.exists(category_value):
+                                file_content = read_file(category_value)
+                                if file_content:
+                                    user_vars[var_name + "_FILE"] = category_value
+                                    user_vars[var_name + "_CONTENT"] = file_content
+                                    logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {category_value}")
+                                else:
+                                    logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
                             else:
                                 logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
 
@@ -172,11 +175,14 @@ class BaseReflectChainAgent(ABC):
                         if category_value:
                             for file in category_value:
                                 if pattern in file.lower():
-                                    file_content = read_file(file)
-                                    if file_content and os.path.exists(file):
-                                        user_vars[var_name + "_FILE"] = file
-                                        user_vars[var_name + "_CONTENT"] = file_content
-                                        logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {file}")
+                                    if os.path.exists(file):
+                                        file_content = read_file(file)
+                                        if file_content:
+                                            user_vars[var_name + "_FILE"] = file
+                                            user_vars[var_name + "_CONTENT"] = file_content
+                                            logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{var_name}']: {file}")
+                                        else:
+                                            logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     else:
                                         logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
@@ -297,6 +303,9 @@ class BaseReflectChainAgent(ABC):
             if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.auto_confirmation:
                 new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             new_response = apply_replacements(new_response, get_all_replacements())
+            new_response = new_response.strip()
+
+            tool_state.update_last_response(new_response)
 
             logger.info("First K characters of the response:")
             logger.debug(f"{new_response[:self.agent_config.K]}")
@@ -308,8 +317,6 @@ class BaseReflectChainAgent(ABC):
 
             logger.info("Last K characters of the response:")
             logger.debug(f"{new_response[-self.agent_config.K:]}")
-
-            tool_state.update_last_response(new_response)
 
             self.model_handler.update_message_content(messages, best_connector, new_response, tool_state)
 
@@ -410,12 +417,18 @@ class BaseReflectChainAgent(ABC):
         """Process the reflection round."""
         logger.info(f"\n\nProcessing round {round}")
 
+        round_state = AgentRoundState.initialize(round)
+
         user_request_reflect = render_prompt(self.agent_prompts.user_reflect, user_vars)
-        user_message = f"{user_request_reflect}\n"
+        user_message = f"{user_request_reflect}\n" if user_request_reflect else ""
         if tool_state.tex_count_stats:
             user_message = f"{tool_state.tex_count_stats}{user_message}"
 
-        messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
+        # Only create reflection message if there's actual content
+        if user_message.strip():
+            messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
+        else:
+            return round_state, global_state, tool_state, True, messages
 
         prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
         tool_state.update_accumulated_output(prefill if prefill else "")
@@ -436,7 +449,14 @@ class BaseReflectChainAgent(ABC):
             round_state = AgentRoundState.initialize(round)
             return round_state, global_state, tool_state, end_turn, messages
 
-        round_state = AgentRoundState.initialize(round)
+        for item in messages:
+            content = item["content"]
+            if isinstance(content, list):
+                for content_item in content:
+                    if isinstance(content_item, dict):
+                        logger.debug(f"Message [within list]: {content_item['text'][-50:]}")
+            else:
+                logger.debug(f"Message: {content[-50:]}")
 
         round_state, global_state, tool_state, end_turn = self._process_response_cycle(
             messages,
@@ -552,5 +572,7 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.reflect and end_turn:
             # Create a new ToolState for reflection round
             reflection_tool_state = ToolState.initialize()
-            round_state, global_state, messages, end_turn = self.reflect(global_state, messages, reflection_tool_state)
-        return round_state, global_state, messages
+            reflection_round_state, global_state, reflection_messages, end_turn_reflection = self.reflect(
+                global_state, messages, reflection_tool_state
+            )
+            messages = reflection_messages
