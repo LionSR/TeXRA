@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.12.1",
+  "version": "0.12.5",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -370,25 +370,29 @@
             "type": "string",
             "default": "",
             "description": "OpenAI API key for GPT models",
-            "scope": "application"
+            "scope": "application",
+            "password": true
           },
           "coauthor.apiKeys.anthropic": {
             "type": "string",
             "default": "",
             "description": "Anthropic API key for Claude models",
-            "scope": "application"
+            "scope": "application",
+            "password": true
           },
           "coauthor.apiKeys.openrouter": {
             "type": "string",
             "default": "",
             "description": "OpenRouter API key for various models",
-            "scope": "application"
+            "scope": "application",
+            "password": true
           },
           "coauthor.apiKeys.google": {
             "type": "string",
             "default": "",
             "description": "Google API key for Gemini models",
-            "scope": "application"
+            "scope": "application",
+            "password": true
           }
         }
       }
@@ -449,6 +453,10 @@
       {
         "command": "coauthor.getTexCount",
         "title": "CoAuthor: Count Words in Current TeX File"
+      },
+      {
+        "command": "coauthor.testConnection",
+        "title": "Coauthor: Test Text Connection Methods"
       }
     ],
     "viewsContainers": {
