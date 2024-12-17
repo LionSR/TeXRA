@@ -2,13 +2,13 @@ import sys
 import os
 import click
 from dotenv import load_dotenv
-from coauthor.arg_utils import comma_separated_list
-from coauthor.figure_tools import (
+from coauthor.args import comma_separated_list
+from coauthor.latex import (
     extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.tex_tools import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
-from coauthor.housekeeping_utils import (
+from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
+from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
     run_clean_build,
@@ -19,10 +19,9 @@ from coauthor.housekeeping_utils import (
     run_pack_latexdiff_vc,
     run_pack_latexdiff_vc_multiple,
 )
-from coauthor.logging_utils import logger
+from coauthor.logger import logger
 
-
-from .agent_run import run_agent, run_merge
+from coauthor.execute import run_agent, run_merge
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,7 +32,7 @@ def shared_arguments(func):
     options = [
         # Model arguments
         click.option("--model", required=False, default="sonnet+", help="Model to use"),
-        click.option("--reflect", required=False, default=None, help="Reflect on the changes"),
+        click.option("--reflect", required=False, type=click.BOOL, default=False, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
         # Input file arguments
         click.option("--input_file", required=True, help="Path to the input file"),
@@ -62,11 +61,12 @@ def shared_arguments(func):
         click.option("--output_name_override", type=str, default=None, help="Override base output name"),
         # Tool usage arguments
         click.option("--edited_file", default=None, help="Path to the file that are already edited"),
-        # Auto extract figure arguments
         click.option("--auto_extract_figure", is_flag=True, help="Automatically extract the list of figures from the input file"),
         click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
         click.option("--auto_extract_tikz_figure_reflect", is_flag=True, help="Include TikZ reflection in the output"),
         click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--use_prefill_from_input", is_flag=True, help="Use the prefill from the input file"),
+        click.option("--auto_confirmation", is_flag=True, help="Automatically confirm model's questions"),
     ]
     for option in options:
         func = option(func)
@@ -198,9 +198,9 @@ def pack_latexdiff_vc_multiple(input_files, commit_hash, clean):
 @cli.command()
 @click.argument("latex_file")
 def tex_count(latex_file):
-    stats = get_tex_count(latex_file)
-    if stats is not None:
-        logger.info(f"Statistics for {latex_file}:\n {stats}")
+    tex_count_stats = get_tex_count(latex_file)
+    if tex_count_stats is not None:
+        logger.info(f"Statistics for {latex_file}:\n {tex_count_stats}")
 
 
 @cli.command()
