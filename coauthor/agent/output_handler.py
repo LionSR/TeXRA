@@ -1,18 +1,14 @@
 import os
 import re
-
-
 import xml.etree.ElementTree as ET
 from typing import Any
 
 from ..logger import logger
 from ..agent import AgentConfig, AgentSettings
 from ..latex import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds
-
 from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
 from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
-
 from .logdb import update_log_output_files
 
 
@@ -21,7 +17,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
     agent_first_name_chunk = agent.split("_")[0]
 
     new_round = round
-    # this is for continuing from an edited file and adding a new round
     if edited_file:
         match = re.search(r"_r(\d+)_", edited_file)
         edited_round = int(match.group(1)) if match else 0
@@ -33,8 +28,6 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
 
 
 class OutputHandler:
-    """Base class for handling agent outputs."""
-
     def __init__(self, agent_settings: AgentSettings, agent_config: AgentConfig, model_config: Any, log_id: int):
         self.agent_settings = agent_settings
         self.agent_config = agent_config
@@ -42,6 +35,28 @@ class OutputHandler:
         self.log_id = log_id
         self.output_files = {0: [], 1: []}
         self.base_files = []
+
+    def _process_xml_content(self, output_content: str) -> str:
+        output_content = filter_tags_from_text(output_content, "monologue")
+        output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
+        output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
+        return output_content
+
+    def _extract_document_content(self, root: ET.Element, document_tag: str) -> str | None:
+        latex_document = root.find(document_tag)
+        if latex_document is not None:
+            return ET.tostring(latex_document, encoding="unicode", method="text").strip()
+        logger.error(f"No {document_tag} found in output file.")
+        return None
+
+    def _handle_scratchpad(self, root: ET.Element, base_name: str, thinking_tag: str, split_and_save_thinking: bool) -> None:
+        if split_and_save_thinking:
+            log_file_thinking = f"{base_name}_thinking.xml"
+            logger.debug(f"Thinking file: {log_file_thinking}")
+            scratchpad = root.find(thinking_tag)
+            if scratchpad is not None:
+                scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
+                write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
 
     def _handle_single_output(self, output_file: str) -> None:
         if ".tex" in self.agent_config.input_file and ".tex" in output_file:
@@ -56,16 +71,13 @@ class OutputHandler:
                     _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
 
     def _process_single_output(self, output_file: str) -> str:
-        """Process a single output file."""
         processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
-        # i think above is not need for direct write agent...
         content = read_file(processed_output_file)
         filtered_content = filter_tags_from_text(content, "monologue")
         write_file(processed_output_file, filtered_content)
         return processed_output_file
 
     def _process_multiple_outputs(self, output_file: str) -> list[str]:
-        """Process multiple output files."""
         processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
         for processed_output_file in processed_output_files:
             content = read_file(processed_output_file)
@@ -75,7 +87,6 @@ class OutputHandler:
 
     def _handle_latexdiff(self, round: int) -> None:
         logger.info(f"Running latexdiff for {self.agent_config.agent} round {round}")
-
         logger.debug(f"Base files: {self.base_files}")
         logger.debug(f"Round {round} output files: {self.output_files[round]}")
 
@@ -91,155 +102,94 @@ class OutputHandler:
 
         for output_file in output_files:
             content = read_file(output_file)
-
-            def replace_input(match):
-                input_file = match.group(1)
-                if input_file in base_to_output:
-                    return f"\\input{{{base_to_output[input_file]}}}"
-                return match.group(0)
-
-            new_content = re.sub(r"\\input{([^}]+)}", replace_input, content)
+            new_content = re.sub(
+                r"\\input{([^}]+)}",
+                lambda match: f"\\input{{{base_to_output[match.group(1)]}}}" if match.group(1) in base_to_output else match.group(0),
+                content
+            )
 
             if new_content != content:
                 write_file(output_file, new_content)
                 logger.debug(f"Updated input commands in {output_file}")
 
-    # the following two functions can reuse some components
-    def split_scratchpad_output_xml(
-        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
-    ) -> str:
+    def split_scratchpad_output_xml(self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> str:
         logger.debug(f"Splitting scratchpad output XML: {output_file}")
-
-        # hoepfully this has been handled by output_files_default?
-        # if document_tag in ["latex_documents", "rebuttal_package"]:
-        #     return split_multiple_scratchpad_output_xml(output_file, document_tag, thinking_tag, split_and_save_thinking)
 
         base_name, extension = os.path.splitext(output_file)
         tex_file = f"{base_name}.tex"
         logger.debug(f"TeX file: {tex_file}")
 
-        # Read the content of the output file
         output_content = read_file(output_file)
+        output_content = self._process_xml_content(output_content)
 
-        # Filter monologue tags first (if model likes to ask confirmation?)
-        output_content = filter_tags_from_text(output_content, "monologue")
-
-        # Apply replacements
-        output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
-        output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
-
-        # Add CDATA sections to specified tags
         tags_to_wrap = [document_tag, thinking_tag]
         output_content = add_cdata_to_tags(output_content, tags_to_wrap)
 
-        # Wrap the content in a root element for proper XML parsing
         root_content = f"<root>{output_content}</root>"
 
         try:
-            # Parse the XML content
             root = ET.fromstring(root_content)
+            self._handle_scratchpad(root, base_name, thinking_tag, split_and_save_thinking)
 
-            # Extract scratchpad content
-            if split_and_save_thinking:
-                log_file_thinking = f"{base_name}_thinking.xml"
-                logger.debug(f"Thinking file: {log_file_thinking}")
-                scratchpad = root.find(thinking_tag)
-                if scratchpad is not None:
-                    scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
-                    write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
-
-            # Extract latex document content (assuming only one)
-            latex_document = root.find(document_tag)
-            if latex_document is not None:
-                # Get the full content of the latex document
-                latex_document = ET.tostring(latex_document, encoding="unicode", method="text")
-                latex_document = latex_document.strip()
+            latex_document = self._extract_document_content(root, document_tag)
+            if latex_document:
                 write_file(tex_file, latex_document)
-            else:
-                logger.error(f"No {document_tag} found in output file.")
-
         except ET.ParseError as e:
             logger.error(f"Failed to parse XML content: {str(e)}")
 
         return tex_file
 
-    def split_multiple_scratchpad_output_xml(
-        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
-    ) -> list[str]:
+    def split_multiple_scratchpad_output_xml(self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False) -> list[str]:
         logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
-
         base_name, extension = os.path.splitext(output_file)
 
-        # Read the content of the output file
         output_content = read_file(output_file)
+        output_content = self._process_xml_content(output_content)
 
-        # Apply output XML replacements
-        output_content = apply_replacements(output_content, get_replacements_by_category("latex_xml"))
-        output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
-
-        # Add CDATA sections to specified tags
         tags_to_wrap = [thinking_tag, "document"]
         output_content = add_cdata_to_tags_multiple(output_content, tags_to_wrap)
 
-        # Wrap the content in a root element for proper XML parsing
         root_content = f"<root>{output_content}</root>"
 
         try:
-            # Parse the XML content
             root = ET.fromstring(root_content)
+            self._handle_scratchpad(root, base_name, thinking_tag, split_and_save_thinking)
 
-            # Extract scratchpad content
-            if split_and_save_thinking:
-                log_file_thinking = f"{base_name}_thinking.xml"
-                logger.debug(f"Log file: {log_file_thinking}")
-                scratchpad = root.find(thinking_tag)
-                if scratchpad is not None:
-                    scratchpad_content = ET.tostring(scratchpad, encoding="unicode", method="text")
-                    write_file(log_file_thinking, f"<scratchpad>\n{scratchpad_content.strip()}\n</scratchpad>\n")
-
-            # Extract latex documents content
             latex_documents = root.find(document_tag)
             if latex_documents is not None:
-                output_files = []
+                return self._process_latex_documents(latex_documents, output_file)
 
-                # Extract agent name and model from the output file name
-                output_parts = os.path.basename(output_file).split("_")
-                agent = output_parts[-3]
-                model = output_parts[-1].split(".")[0]
-
-                # Determine the round number from the output file name
-                round_match = re.search(r"_r(\d+)_", output_file)
-                round = int(round_match.group(1)) if round_match else 0
-
-                for doc in latex_documents.findall("document"):
-                    source = doc.get("name")
-                    logger.debug(f"XML Source: {source}")
-                    content = doc.text
-
-                    if source is not None and content is not None:
-                        # Generate the output file name
-                        base_name, extension = os.path.splitext(source)
-                        extension = extension.strip(".")
-                        tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
-
-                        content_text = content.strip()
-
-                        # Write the content to the file
-                        write_file(tex_file, content_text)
-                        output_files.append(tex_file)
-                        logger.debug(f"TeX file written: {tex_file}")
-                    else:
-                        logger.error(f"Invalid document structure in {document_tag}")
-
-                return output_files
-
-            else:
-                logger.error(f"No {document_tag} found in output file.")
-                return []
-
+            logger.error(f"No {document_tag} found in output file.")
+            return []
         except ET.ParseError as e:
             logger.error(f"Failed to parse XML content: {str(e)}")
             return []
+
+    def _process_latex_documents(self, latex_documents: ET.Element, output_file: str) -> list[str]:
+        output_files = []
+        output_parts = os.path.basename(output_file).split("_")
+        agent = output_parts[-3]
+        model = output_parts[-1].split(".")[0]
+
+        round_match = re.search(r"_r(\d+)_", output_file)
+        round = int(round_match.group(1)) if round_match else 0
+
+        for doc in latex_documents.findall("document"):
+            source = doc.get("name")
+            logger.debug(f"XML Source: {source}")
+            content = doc.text
+
+            if source is not None and content is not None:
+                base_name, extension = os.path.splitext(source)
+                extension = extension.strip(".")
+                tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
+                write_file(tex_file, content.strip())
+                output_files.append(tex_file)
+                logger.debug(f"TeX file written: {tex_file}")
+            else:
+                logger.error(f"Invalid document structure in {latex_documents.tag}")
+
+        return output_files
 
     def ensure_correct_xml_structure(self, file_path: str, document_tag: str) -> None:
         logger.debug(f"Ensuring correct XML structure: {file_path}")
@@ -249,13 +199,10 @@ class OutputHandler:
                 if "</{document_tag}>" not in content and f"<{document_tag}>" in content:
                     content += f"\n</{document_tag}>"
                 else:
-                    # Move the closing tag to the end
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
                     content += f"\n</{document_tag}>"
 
-            # Apply replacements from centralized utilities
-            content = apply_replacements(content, get_replacements_by_category("latex_xml"))
-            content = apply_replacements(content, get_replacements_by_category("scratchpad_xml"))
+            content = self._process_xml_content(content)
 
         write_file(file_path, content)
 
