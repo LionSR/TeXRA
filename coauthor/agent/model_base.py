@@ -211,7 +211,8 @@ class ModelHandler(ABC):
             logger.error(f"Output tokens exceed {self.OUTPUT_TOKEN_LIMIT_FACTOR}x input tokens - halting process")
             logger.error(f"Total output tokens: {global_state.total_output_tokens}, First input tokens: {global_state.first_input_tokens}")
 
-        should_stop = encounter_document_tag or continuation_limit or input_token_limit or output_token_limit
+        should_stop = encounter_document_tag or continuation_limit or input_token_limit
+        # or output_token_limit
 
         # Print debug info if stopping
         if should_stop:

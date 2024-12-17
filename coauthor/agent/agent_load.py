@@ -1,6 +1,6 @@
+from ast import Tuple
 import os
 import yaml
-from typing import Tuple, Dict
 
 
 def load_yaml(file_path: str) -> dict:
@@ -20,7 +20,7 @@ def merge_dicts(base: dict, override: dict) -> dict:  # Core dictionaries
     return result
 
 
-def load_agent_from_yaml(agent_path: str, agent_name: str) -> Tuple[Dict, Dict]:
+def load_agent_from_yaml(agent_path: str, agent_name: str) -> tuple[dict, dict]:
     agent_file = os.path.join(agent_path, f"{agent_name}.yaml")
     if not os.path.exists(agent_file):
         raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
@@ -42,5 +42,5 @@ def load_agent_from_yaml(agent_path: str, agent_name: str) -> Tuple[Dict, Dict]:
     return settings, prompts
 
 
-def load_agent_settings_and_prompts(agent_path: str, agent: str) -> Tuple[Dict, Dict]:
+def load_agent_settings_and_prompts(agent_path: str, agent: str) -> tuple[dict, dict]:
     return load_agent_from_yaml(agent_path, agent)
