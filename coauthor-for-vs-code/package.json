@@ -374,7 +374,7 @@
             "password": true
           },
           "coauthor.apiKeys.anthropic": {
-            "type": "string", 
+            "type": "string",
             "default": "",
             "description": "Anthropic API key for Claude models",
             "scope": "application",
@@ -383,7 +383,7 @@
           "coauthor.apiKeys.openrouter": {
             "type": "string",
             "default": "",
-            "description": "OpenRouter API key for various models", 
+            "description": "OpenRouter API key for various models",
             "scope": "application",
             "password": true
           },
