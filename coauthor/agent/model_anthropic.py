@@ -38,11 +38,14 @@ class AnthropicModelHandler(ModelHandler):
         end_tag: str | None = None,
     ) -> Any:
         """Create a response using Anthropic's API."""
-        extra_headers = []
-        if self.capabilities.supports_prompt_caching:
-            extra_headers.append("prompt-caching-2024-07-31")
-        if self.capabilities.supports_native_pdf:
-            extra_headers.append("pdfs-2024-09-25")
+        extra_headers = [
+            header
+            for header, enabled in [
+                ("prompt-caching-2024-07-31", self.capabilities.supports_prompt_caching),
+                ("pdfs-2024-09-25", self.capabilities.supports_native_pdf),
+            ]
+            if enabled
+        ]
 
         return client.beta.messages.create(
             model=self.full_name,
@@ -51,7 +54,7 @@ class AnthropicModelHandler(ModelHandler):
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
             system=system_prompt,
-            betas=extra_headers if extra_headers else None,
+            betas=extra_headers or None,
         )
 
     def initialize_messages(
@@ -65,13 +68,14 @@ class AnthropicModelHandler(ModelHandler):
         content = [{"type": "text", "text": user_prefix}]
 
         if figure_files:
-            image_content = self.create_image_message(figure_files)
-            content.extend(image_content)
+            content.extend(self.create_image_message(figure_files))
 
         # Add user request with optional caching
-        request = {"type": "text", "text": user_request}
-        if self.capabilities.supports_prompt_caching:
-            request["cache_control"] = {"type": "ephemeral"}
+        request = {
+            "type": "text",
+            "text": user_request,
+            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
+        }
         content.append(request)
 
         return [{"role": "user", "content": content}]
@@ -84,52 +88,38 @@ class AnthropicModelHandler(ModelHandler):
     ) -> list[dict]:
         """Create a reflection message for Anthropic models."""
         content = []
-
         if figure_files:
-            image_content = self.create_image_message(figure_files)
-            content.extend(image_content)
+            content.extend(self.create_image_message(figure_files))
 
-        # Add user message with optional caching
-        message = {"type": "text", "text": user_message}
-        if self.capabilities.supports_prompt_caching:
-            message["cache_control"] = {"type": "ephemeral"}
-            # Manage cache control count
-            if isinstance(messages[-1]["content"], list):
-                if len(messages[-1]["content"]) == 1:
-                    messages[0]["content"][-1].pop("cache_control", None)
-                elif len(messages[-1]["content"]) >= 2:
-                    messages[-1]["content"][-2].pop("cache_control", None)
+        message = {
+            "type": "text",
+            "text": user_message,
+            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
+        }
         content.append(message)
+
+        # Manage cache control for previous messages
+        if self.capabilities.supports_prompt_caching and isinstance(messages[-1]["content"], list):
+            prev_content = messages[-1]["content"]
+            if len(prev_content) >= 2:
+                prev_content[-2].pop("cache_control", None)
+            elif len(prev_content) == 1:
+                messages[0]["content"][-1].pop("cache_control", None)
 
         messages.append({"role": "user", "content": content})
         return messages
 
     def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for Anthropic models."""
-        content = []
-        for image in image_contents:
-            if self.capabilities.supports_native_pdf and image["media_type"] == "application/pdf":
-                content.extend(
-                    [
-                        {"type": "text", "text": f"Document: {image['file_name']}"},
-                        {"type": "document", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
-                    ]
-                )
-            else:
-                content.extend(
-                    [
-                        {"type": "text", "text": f"Image: {image['file_name']}"},
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": image["media_type"],
-                                "data": image["data"],
-                            },
-                        },
-                    ]
-                )
-        return content
+
+        def create_content_pair(image: dict) -> list[dict]:
+            is_pdf = self.capabilities.supports_native_pdf and image["media_type"] == "application/pdf"
+            return [
+                {"type": "text", "text": f"{'Document' if is_pdf else 'Image'}: {image['file_name']}"},
+                {"type": "document" if is_pdf else "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
+            ]
+
+        return [item for image in image_contents for item in create_content_pair(image)]
 
     def extract_response(
         self,
@@ -139,18 +129,19 @@ class AnthropicModelHandler(ModelHandler):
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from Anthropic response object."""
         if hasattr(response_object, "error"):
-            logger.error(f"API error: {response_object.error}")
-            raise ValueError(f"API error: {response_object.error}")
-
-        stop_reason = response_object.stop_reason
+            error_msg = f"API error: {response_object.error}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         if response_object.usage.output_tokens == 3:  # Anthropic specific empty response check
-            logger.error("No output generated - API returned empty response")
+            error_msg = "No output generated - API returned empty response"
+            logger.error(error_msg)
             logger.debug(f"response_object: {response_object}")
             logger.debug(f"response_object.content: {response_object.content}")
-            raise ValueError("No output generated")
+            raise ValueError(error_msg)
 
-        # Extract and process response text
+        # Extract base response
+        stop_reason = response_object.stop_reason
         new_response = response_object.content[0].text.strip()
         if self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
@@ -193,7 +184,7 @@ class AnthropicModelHandler(ModelHandler):
                     "please start from the very beginning of the document and work through the full document systematically. "
                     "Note that you have an effectively infinite token response limit "
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                    f"The total number of tokens you output in the last turn is {output_tokens}, "
+                    "The total number of tokens you output in the last turn is " + str(output_tokens) + ", "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
@@ -205,7 +196,7 @@ class AnthropicModelHandler(ModelHandler):
                     "Remember to stay professional and write latex code all the time. "
                     "Note that you have an effectively infinite token response limit "
                     "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                    f"The total number of tokens you output in the last turn is {output_tokens}, "
+                    "The total number of tokens you output in the last turn is " + str(output_tokens) + ", "
                     "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                     "Respond the latex code of the next section in the <output> ... </output> tags."
                 )
