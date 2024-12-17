@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { bestConnectionMethod, bestConnectionMethodAnthropic } from '../textConnection';
+import {
+  bestConnectionMethod,
+  bestConnectionMethodAnthropic,
+} from '../textConnection';
 import { info, debug, error, initializeLogging } from '../utils/logUtils';
 
 const CHANNEL = 'TestCommands';
@@ -43,7 +46,9 @@ async function handleTestConnection(): Promise<void> {
       info(CHANNEL, `Connected text: "${str1}${result.connector}${str2}"`);
     }
 
-    vscode.window.showInformationMessage('Check Debug Console for test results');
+    vscode.window.showInformationMessage(
+      'Check Debug Console for test results',
+    );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     error(CHANNEL, `Test failed: ${errorMessage}`);
@@ -56,4 +61,4 @@ async function handleTestConnection(): Promise<void> {
 
 export const testCommands = {
   handleTestConnection,
-}; 
+};
