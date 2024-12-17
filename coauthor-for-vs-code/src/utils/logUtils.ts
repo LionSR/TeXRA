@@ -49,7 +49,7 @@ class VSCodeTransport extends Writable {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
-    
+
     this.channel.appendLine(formattedMessage);
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
@@ -109,10 +109,10 @@ function createLoggerForChannel(
     levels: logLevels,
     level: 'debug',
     format: combine(
-      timestamp({ 
-        format: 'YYYY-MM-DD HH:mm:ss' 
+      timestamp({
+        format: 'YYYY-MM-DD HH:mm:ss',
       }),
-      json()
+      json(),
     ),
     transports: [
       new winston.transports.Stream({
@@ -154,15 +154,17 @@ function getOrCreateLogger(channel: string): winston.Logger {
 }
 
 export function getTimestamp(): string {
-  return new Date().toLocaleString('en-US', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).replace(',', '');
+  return new Date()
+    .toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+    .replace(',', '');
 }
 
 export { emojis };
