@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ToolState:
-    """State for tool-specific runtime data that doesn't need to be logged."""
+    """State for tool-specific runtime data that doesn't need to be logged. [Per round]"""
 
     tex_count_stats: str | None = None  # Statistics about TeX document structure
     first_k_tex_document: str | None = None  # First K lines of TeX document

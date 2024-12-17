@@ -3,6 +3,30 @@ from typing import Any
 
 
 @dataclass
+class ToolConfig:
+    """Configuration for tool usage and automation features."""
+
+    use_prefill_from_input: bool = False
+    auto_extract_figure: bool = False
+    auto_extract_tikz_figure: bool = False
+    auto_extract_tikz_figure_reflect: bool = False
+    include_tex_count: bool = False
+    auto_confirmation: bool = False
+
+    @classmethod
+    def from_dict(cls, config_dict: dict[str, bool]) -> "ToolConfig":
+        """Create a ToolConfig from a dictionary."""
+        return cls(
+            use_prefill_from_input=config_dict.get("use_prefill_from_input", False),
+            auto_extract_figure=config_dict.get("auto_extract_figure", False),
+            auto_extract_tikz_figure=config_dict.get("auto_extract_tikz_figure", False),
+            auto_extract_tikz_figure_reflect=config_dict.get("auto_extract_tikz_figure_reflect", False),
+            include_tex_count=config_dict.get("include_tex_count", False),
+            auto_confirmation=config_dict.get("auto_confirmation", False),
+        )
+
+
+@dataclass
 class AgentSettings:
     """Configuration for agent behavior and generation settings."""
 
@@ -100,28 +124,42 @@ class AgentConfig:
     output_name_override: str | None
     edited_file: str | None
 
-    # Tool usage configuration
-    use_prefill_from_input: bool = False
-    auto_extract_figure: bool = False
-    auto_extract_tikz_figure: bool = False
-    auto_extract_tikz_figure_reflect: bool = False
-    include_tex_count: bool = False
-    auto_confirmation: bool = False
+    # Tool configuration
+    tool_config: ToolConfig = field(default_factory=ToolConfig)
 
     # Processing configuration
     K: int = 200
 
     def __getitem__(self, key: str) -> Any:
         """Enable dictionary-style access (config['input_file'])"""
+        # Handle nested tool_config attributes
+        if hasattr(self.tool_config, key):
+            return getattr(self.tool_config, key)
         return getattr(self, key)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Dictionary-style get with default value"""
-        return getattr(self, key, default)
+        try:
+            return self[key]
+        except AttributeError:
+            return default
 
     @classmethod
     def from_kwargs(cls, **kwargs) -> "AgentConfig":
         """Create AgentConfig from keyword arguments"""
+        # Extract tool configuration fields
+        tool_config_fields = {
+            k: kwargs.pop(k, False)
+            for k in [
+                "use_prefill_from_input",
+                "auto_extract_figure",
+                "auto_extract_tikz_figure",
+                "auto_extract_tikz_figure_reflect",
+                "include_tex_count",
+                "auto_confirmation",
+            ]
+        }
+
         agent_config = cls(
             # Core configuration
             model=kwargs.get("model", "sonnet+"),
@@ -140,13 +178,8 @@ class AgentConfig:
             output_files=kwargs.get("output_files"),
             output_name_override=kwargs.get("output_name_override"),
             edited_file=kwargs.get("edited_file"),
-            # Tool usage configuration
-            use_prefill_from_input=kwargs.get("use_prefill_from_input", False),
-            include_tex_count=kwargs.get("include_tex_count", False),
-            auto_extract_figure=kwargs.get("auto_extract_figure", False),
-            auto_extract_tikz_figure=kwargs.get("auto_extract_tikz_figure", False),
-            auto_extract_tikz_figure_reflect=kwargs.get("auto_extract_tikz_figure_reflect", False),
-            auto_confirmation=kwargs.get("auto_confirmation", False),
+            # Tool configuration
+            tool_config=ToolConfig.from_dict(tool_config_fields),
         )
         agent_config.validate()
         return agent_config
