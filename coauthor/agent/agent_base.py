@@ -4,7 +4,6 @@
 import os
 import re
 import time
-import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -61,7 +60,9 @@ class BaseReflectChainAgent(ABC):
 
     def get_user_vars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
-        user_vars = self._get_basic_vars()
+        # Build user variables incrementally with clear categories
+        user_vars = {}
+        user_vars.update(self._get_basic_vars())
         user_vars.update(self._get_file_vars())
         user_vars.update(self._get_required_file_vars())
         user_vars.update(self._get_pattern_based_file_vars())
@@ -203,30 +204,31 @@ class BaseReflectChainAgent(ABC):
 
     def _get_tool_flags(self) -> dict[str, Any]:
         """Get variables related to tool usage flags."""
+        # Use direct attribute access for cleaner code
+        config = self.agent_config
         return {
-            "AUTO_CONFIRMATION": self.agent_config.auto_confirmation,
-            "USE_PREFILL_FROM_INPUT": self.agent_config.use_prefill_from_input,
-            "AUTO_EXTRACT_FIGURE": self.agent_config.auto_extract_figure,
-            "AUTO_EXTRACT_TIKZ_FIGURE": self.agent_config.auto_extract_tikz_figure,
-            "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": self.agent_config.auto_extract_tikz_figure_reflect,
-            "INCLUDE_TEX_COUNT": self.agent_config.include_tex_count,
+            "AUTO_CONFIRMATION": config.auto_confirmation,
+            "USE_PREFILL_FROM_INPUT": config.use_prefill_from_input,
+            "AUTO_EXTRACT_FIGURE": config.auto_extract_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE": config.auto_extract_tikz_figure,
+            "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": config.auto_extract_tikz_figure_reflect,
+            "INCLUDE_TEX_COUNT": config.include_tex_count,
         }
 
     def setup(self):
         """Set up the agent for processing."""
-        # Initialize base files
+        # Initialize base files and logging
         self.base_files = self.agent_config.output_files or [self.agent_config.input_file]
-
-        # Set up logging
         logger.info(f"Processing file: {self.agent_config.input_file}")
 
+        # Initialize client and check scratchpad usage
         self.client = self.model_handler.get_client()
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
         self.output_file[1] = self.get_output_file(round=1)
 
-        # Initialize logging
+        # Initialize logging and database entry
         self.log_id = create_log_entry(self.agent_config, self.agent_settings)
 
     def handle_output(
@@ -274,47 +276,57 @@ class BaseReflectChainAgent(ABC):
             round_state.update_response_time(response_time)
             logger.info(f"Response time: {response_time:.2f}s")
 
+            # Extract and validate response
             new_response, response_usage, stop_reason = self.model_handler.extract_response(
                 response_object, self.agent_settings.end_tag, self.agent_config.auto_confirmation
             )
-            logger.info(f"Stop reason: {stop_reason}")
-            logger.info(f"Token usage: {response_object.usage}")
 
             # Compute statistics and update states
             model_usage = self.model_handler.compute_statistics(response_usage, response_time)
             round_state.update_token_counts(model_usage)
             global_state.update_from_round(round_state)
 
-            massive_repetition_detected = check_for_massive_repetition(tool_state.last_response, new_response)
-            if massive_repetition_detected:
+            logger.info(f"Stop reason: {stop_reason}")
+            logger.info(f"Token usage: {response_object.usage}")
+
+            # Early exit for repetition
+            if check_for_massive_repetition(tool_state.last_response, new_response):
                 logger.error(f"The new response is: {new_response}")
                 logger.error("Massive repetition detected - skipping this response")
                 break
 
-            if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.auto_confirmation:
-                new_response = apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
-            new_response = apply_replacements(new_response, get_all_replacements())
-            new_response = new_response.strip()
+            # Chain response processing operations
+            new_response = (
+                apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
+                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.auto_confirmation
+                else new_response
+            )
+            new_response = apply_replacements(new_response, get_all_replacements()).strip()
 
             tool_state.update_last_response(new_response)
 
-            logger.info("First K characters of the response:")
-            logger.debug(f"{new_response[:self.agent_config.K]}")
+            # Process response connection with proper slicing
+            k_slice = self.agent_config.K
+            best_connector, _ = best_connection_method(tool_state.last_response[-k_slice:], new_response[:k_slice])
 
-            best_connector, _ = best_connection_method(tool_state.last_response[-self.agent_config.K :], new_response[: self.agent_config.K])
+            # Update state and file atomically
             tool_state.update_accumulated_output(tool_state.accumulated_output + best_connector + new_response)
-
             file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
 
-            logger.info("Last K characters of the response:")
-            logger.debug(f"{new_response[-self.agent_config.K:]}")
+            # Log response boundaries
+            logger.info("Response preview:")
+            logger.debug(f"First {k_slice} chars: {new_response[:k_slice]}")
+            logger.debug(f"Last {k_slice} chars: {new_response[-k_slice:]}")
 
+            # Update message content
             self.model_handler.update_message_content(messages, best_connector, new_response, tool_state)
 
+            # Check stop conditions
             end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, round_state, global_state, self.agent_settings)
             if should_stop:
                 break
 
+            # Handle continuation
             round_state.increment_continuation()
             logger.info(f"Starting continuation #{round_state.continuation_count}")
 
@@ -437,11 +449,16 @@ class BaseReflectChainAgent(ABC):
         return round_state, global_state, tool_state, end_turn, messages
 
     def process(self):
+        """Process the input files and generate output."""
+        # Initialize input files list
         input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
         tool_state = ToolState.initialize()
 
+        # Handle tex count if enabled
         if self.agent_config.include_tex_count:
             tool_state.tex_count_stats = get_tex_count_stats(input_files)
+
+        # Handle prefill from input if enabled
         if self.agent_config.use_prefill_from_input:
             tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
 
@@ -453,8 +470,7 @@ class BaseReflectChainAgent(ABC):
 
         # Extract figures if configured
         if self.agent_config.auto_extract_figure:
-            extracted_figures = extract_figure_paths_from_latex(self.agent_config.input_file)
-            if extracted_figures:
+            if extracted_figures := extract_figure_paths_from_latex(self.agent_config.input_file):
                 tool_state.add_figure_files(extracted_figures)
 
         if self.agent_config.auto_extract_tikz_figure:
@@ -467,22 +483,18 @@ class BaseReflectChainAgent(ABC):
         global_state = AgentGlobalState.initialize()
         messages = []
 
+        # Process first round
         round_state, global_state, tool_state, end_turn, messages = self.process_first_round(
-            messages,
-            self.user_vars,
-            global_state,
-            tool_state,
-            self.output_file[0],
+            messages, self.user_vars, global_state, tool_state, self.output_file[0]
         )
 
+        # Handle output and logging
         self.handle_output(round_state, global_state, self.output_file[0], end_turn, round=0)
-
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
             f"and/or input files {self.agent_config.input_files}. "
             f"The round 0 output was saved as {self.output_file[1]}"
         )
-
         logger.info("Completed round 0")
 
         return round_state, global_state, messages, end_turn, tool_state
