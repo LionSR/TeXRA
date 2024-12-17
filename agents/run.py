@@ -1,6 +1,6 @@
 # agents/run.py
 import coauthor as coa
-from coauthor.logging_utils import logger
+from coauthor.logger import logger
 
 
 def main():

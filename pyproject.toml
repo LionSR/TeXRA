@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coauthor"
-version = "0.14.1"
+version = "0.15.1"
 authors = [
   { name="Sirui Lu", email="14889516+LionSR@users.noreply.github.com" },
 ]
 description = "A package containing utility functions for interacting with LLM models like Anthropic's Claude AI."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -20,8 +20,8 @@ classifiers = [
 dependencies = [
     "colorlog",
     "requests",
-    "openai",
-    "anthropic",
+    "openai>=1.58.0",
+    "anthropic>=0.41.0",
     "IPython",
     "click",
     "PyMuPDF",
@@ -42,7 +42,7 @@ coauthor = "coauthor.cli:cli"
 
 [tool.black]
 line-length = 151
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py310', 'py311', 'py312']
 include = '\.(pyi?|ipynb)$'
 exclude = '''
 /(
@@ -60,7 +60,7 @@ exclude = '''
 '''
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 exclude = ["*.ipynb"]
 

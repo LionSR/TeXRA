@@ -1,0 +1,45 @@
+import os
+import yaml
+
+
+def load_yaml(file_path: str) -> dict:
+    """Load a YAML file and return its contents as a dictionary."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"YAML file not found: {file_path}")
+    with open(file_path) as f:
+        content = yaml.safe_load(f)
+        return content if content else {}
+
+
+def merge_dicts(base: dict, override: dict) -> dict:
+    """Merge two dictionaries recursively."""
+    result = base.copy()
+    for key, value in override.items():
+        if isinstance(value, dict) and key in result:
+            result[key] = merge_dicts(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def load_agent_settings_and_prompts(agent_path: str, agent_name: str) -> tuple[dict, dict]:
+    """Load agent settings and prompts from YAML file with inheritance support."""
+    agent_file = os.path.join(agent_path, f"{agent_name}.yaml")
+    if not os.path.exists(agent_file):
+        raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
+
+    config = load_yaml(agent_file)
+    parent = config.get("inherits")
+
+    if parent:
+        parent_settings, parent_prompts = load_agent_settings_and_prompts(agent_path, parent)
+        agent_settings = config.get("settings", {}) or {}
+        agent_prompts = config.get("prompts", {}) or {}
+        settings = merge_dicts(parent_settings, agent_settings)
+        prompts = merge_dicts(parent_prompts, agent_prompts)
+    else:
+        settings = config.get("settings", {}) or {}
+        prompts = config.get("prompts", {}) or {}
+        settings.setdefault("prefills", [])
+
+    return settings, prompts
