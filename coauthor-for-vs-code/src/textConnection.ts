@@ -25,7 +25,10 @@ const caseDict: { [key: string]: string } = {
 /**
  * Prepares test strings and prompt for both implementations
  */
-function preparePrompt(str1: string, str2: string): { strings: TestStrings; prompt: string } {
+function preparePrompt(
+  str1: string,
+  str2: string,
+): { strings: TestStrings; prompt: string } {
   const strings = {
     A: str1 + str2,
     B: str1 + ' ' + str2,
@@ -66,7 +69,10 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
       choice: majorityChoice,
     };
   } else {
-    debug(CHANNEL, `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`);
+    debug(
+      CHANNEL,
+      `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`,
+    );
     return {
       connector: ' ',
       choice: 'B',
@@ -112,7 +118,8 @@ export async function bestConnectionMethod(
       messages: [
         {
           role: 'system',
-          content: 'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
+          content:
+            'You are an assistant trained to determine the most grammatically correct string in a LaTeX document context.',
         },
         {
           role: 'user',
@@ -127,7 +134,10 @@ export async function bestConnectionMethod(
 
     return processMajorityChoice(choices);
   } catch (err) {
-    error(CHANNEL, `Error in bestConnectionMethod: ${err instanceof Error ? err.message : String(err)}`);
+    error(
+      CHANNEL,
+      `Error in bestConnectionMethod: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return {
       connector: ' ',
       choice: 'B',
@@ -177,7 +187,10 @@ export async function bestConnectionMethodAnthropic(
 
     return processMajorityChoice(choices);
   } catch (err) {
-    error(CHANNEL, `Error in bestConnectionMethodAnthropic: ${err instanceof Error ? err.message : String(err)}`);
+    error(
+      CHANNEL,
+      `Error in bestConnectionMethodAnthropic: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return {
       connector: ' ',
       choice: 'B',
