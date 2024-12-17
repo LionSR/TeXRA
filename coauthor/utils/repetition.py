@@ -4,6 +4,7 @@ from ..logger import logger
 
 
 def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
+    """Check if there is significant text repetition between responses."""
     sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
     repetition_ratio = sequence_matcher.ratio()
     longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))

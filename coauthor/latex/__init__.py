@@ -1,3 +1,9 @@
+"""
+LaTeX module for the coauthor package.
+Provides utilities for LaTeX document processing, including diff generation,
+figure extraction, TikZ compilation, and text analysis.
+"""
+
 from .extract_figure import extract_figure_paths_from_latex
 from .latexdiff import (
     process_tikzpicture_endings_diff,
@@ -15,19 +21,24 @@ from .texcount import get_tex_count, get_tex_count_stats
 from .tikzpicture import compile_latex_to_pdf, extract_and_compile_tikzpictures_with_labels
 
 __all__ = [
-    "get_tex_count",
+    # Document comparison and diffing
     "run_latexdiff",
-    "run_latexdiff_vc",
     "run_latexdiff_multiple",
-    "run_latexdiff_vc_multiple",
     "run_latexdiff_for_round",
     "run_latexdiff_between_rounds",
+    "run_latexdiff_vc",
+    "run_latexdiff_vc_multiple",
+    "process_tikzpicture_endings_diff",
+    # Document formatting and compilation
     "run_latexindent",
     "compile_latex_to_pdf",
-    "run_external_command",
-    "process_tikzpicture_endings_diff",
-    "extract_and_compile_tikzpictures_with_labels",
+    # Figure and TikZ handling
     "extract_figure_paths_from_latex",
-    "best_connection_method",
+    "extract_and_compile_tikzpictures_with_labels",
+    # Text analysis and processing
+    "get_tex_count",
     "get_tex_count_stats",
+    "best_connection_method",
+    # Utility functions
+    "run_external_command",
 ]

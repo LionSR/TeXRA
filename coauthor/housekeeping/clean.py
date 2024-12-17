@@ -6,7 +6,8 @@ from .constants import EXCLUDED_DIRS, TEMP_EXTENSIONS, PACK_EXTENSIONS, MODELS
 from .utils import get_agent_first_name_chunk, get_file_patterns
 
 
-def run_clean_single(model, input_file, agent):
+def run_clean_single(model: str, input_file: str, agent: str) -> None:
+    """Clean temporary and packed files for a single LaTeX file based on model and agent."""
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
 
@@ -26,14 +27,17 @@ def run_clean_single(model, input_file, agent):
     logger.info(f"Cleanup finished: {input_file}.")
 
 
-def run_clean_multiple(model, input_file, input_files, agent):
+def run_clean_multiple(model: str, input_file: str, input_files: list[str], agent: str) -> None:
+    """Clean temporary and packed files for multiple LaTeX files based on model and agent."""
     run_clean_single(model, input_file, agent)
     for f in input_files:
         run_clean_single(model, f, agent)
     logger.info("Multi-file cleanup finished")
 
 
-def run_clean_build():
+def run_clean_build() -> None:
+    """Recursively clean all build directories while respecting excluded directories."""
+
     def clean_build_dir(directory):
         build_dir = os.path.join(directory, "build")
         if os.path.isdir(build_dir):
@@ -52,7 +56,8 @@ def run_clean_build():
     logger.info("All specified files deleted")
 
 
-def run_clean_output():
+def run_clean_output() -> None:
+    """Clean all output files matching specified patterns and extensions."""
     patterns = [f"*_{model}*.tex" for model in MODELS]
     patterns_build = [f"*/build/*_{model}*" for model in MODELS]
 

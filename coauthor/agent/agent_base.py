@@ -1,15 +1,17 @@
 """Base agent class for handling model interactions."""
 
+# Standard library imports
 import os
 import re
 import time
 import logging
-
 from abc import ABC, abstractmethod
 from typing import Any
 
+# Local imports - core
 from ..logger import logger
 
+# Local imports - latex utils
 from ..latex import (
     extract_and_compile_tikzpictures_with_labels,
     extract_figure_paths_from_latex,
@@ -17,31 +19,27 @@ from ..latex import (
     get_tex_count_stats,
 )
 
-from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
-from ..utils.xml import get_xml_format_from_files
+# Local imports - utilities
 from ..utils.file import read_file, write_to_output_file
 from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_from_document
+from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
+from ..utils.xml import get_xml_format_from_files
 
-
-from .agent_state import AgentRoundState, AgentGlobalState, ToolState
+# Local imports - agent components
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-from .model_base import ModelHandler
-
+from .agent_state import AgentRoundState, AgentGlobalState, ToolState
 from .logdb import create_log_entry, update_log_statistics, update_log_output_files
+from .model_base import ModelHandler
 from .output_handler import OutputHandler
 
 
 class BaseReflectChainAgent(ABC):
-    """
-    Abstract base class for reflect chain agents.
-    Provides a common structure for agents that involve reflection and processing.
-    """
+    """Abstract base class for reflect chain agents."""
 
     def __init__(
         self, model_handler: ModelHandler, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str
     ) -> None:
-        """Initialize with model handler, agent config, settings/prompts, and agent path"""
         self.model_handler = model_handler
         self.agent_config = agent_config
         self.agent_settings = agent_settings
@@ -59,11 +57,10 @@ class BaseReflectChainAgent(ABC):
 
         self.setup()
         self.user_vars = self.get_user_vars()
-
         self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_handler, self.log_id)
 
-    def get_user_vars(self):
-        """Get the basic user variables that are common across all agents."""
+    def get_user_vars(self) -> dict[str, Any]:
+        """Get basic user variables common across agents."""
         user_vars = self._get_basic_vars()
         user_vars.update(self._get_file_vars())
         user_vars.update(self._get_required_file_vars())
@@ -81,7 +78,7 @@ class BaseReflectChainAgent(ABC):
         }
 
     def _get_file_vars(self) -> dict[str, Any]:
-        """Get variables related to input, reference, and auxiliary files."""
+        """Get input, reference, and auxiliary file variables."""
         user_vars = {}
 
         all_input_files = [self.agent_config.input_file] + (self.agent_config.input_files or [])
@@ -234,14 +231,10 @@ class BaseReflectChainAgent(ABC):
 
     def handle_output(
         self,
-        # State objects (required)
         round_state: AgentRoundState,
         global_state: AgentGlobalState,
-        # File paths (required)
         output_file: str,
-        # Processing flags
         end_turn: bool,
-        # Optional metadata
         round: int = 0,
     ) -> list[str]:
         """Handle the output for the given round."""
@@ -258,13 +251,10 @@ class BaseReflectChainAgent(ABC):
 
     def _process_response_cycle(
         self,
-        # Core content (required)
         messages: list[dict[str, Any]],
-        # State objects (required)
         round_state: AgentRoundState,
         global_state: AgentGlobalState,
         tool_state: ToolState,
-        # File paths (required)
         output_file: str,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool]:
         """Process a single response cycle."""
@@ -274,11 +264,11 @@ class BaseReflectChainAgent(ABC):
             file_exists = os.path.exists(output_file)
             start_time = time.time()
             response_object = self.model_handler.create_response(
-                client=self.client,
-                messages=messages,
-                temperature=self.agent_settings.temperature or 0.0,
-                system_prompt=render_prompt(self.agent_prompts.system_prompt, self.user_vars),
-                end_tag=self.agent_settings.end_tag,
+                self.client,
+                messages,
+                self.agent_settings.temperature or 0.0,
+                render_prompt(self.agent_prompts.system_prompt, self.user_vars),
+                self.agent_settings.end_tag,
             )
             response_time = time.time() - start_time
             round_state.update_response_time(response_time)
@@ -343,15 +333,11 @@ class BaseReflectChainAgent(ABC):
 
     def process_first_round(
         self,
-        # Core content (required)
         messages: list[dict[str, Any]],
         user_vars: dict[str, str],
-        # State objects (required)
         global_state: AgentGlobalState,
         tool_state: ToolState,
-        # Processing parameters (required)
         output_file: str,
-        # Optional metadata
         round: int = 0,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
         """Process the first round."""
@@ -375,15 +361,12 @@ class BaseReflectChainAgent(ABC):
         tool_state.update_accumulated_output(prefill if prefill else "")
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            # Core configs (required)
-            agent_config=self.agent_config,
-            agent_settings=self.agent_settings,
-            # State/content (required)
-            messages=messages,
-            tool_state=tool_state,
-            # Processing parameters (required)
-            output_file=output_file,
-            prefill=prefill,
+            self.agent_config,
+            self.agent_settings,
+            messages,
+            tool_state,
+            output_file,
+            prefill,
         )
 
         if end_turn:
@@ -404,15 +387,11 @@ class BaseReflectChainAgent(ABC):
 
     def process_reflection_round(
         self,
-        # Core content (required)
         messages: list[dict[str, Any]],
         user_vars: dict[str, str],
-        # State objects (required)
         global_state: AgentGlobalState,
         tool_state: ToolState,
-        # Processing parameters (required)
         output_file: str,
-        # Optional metadata
         round: int = 1,
     ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
         """Process the reflection round."""
@@ -435,31 +414,17 @@ class BaseReflectChainAgent(ABC):
         tool_state.update_accumulated_output(prefill if prefill else "")
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            # Core configs (required)
-            agent_config=self.agent_config,
-            agent_settings=self.agent_settings,
-            # State/content (required)
-            messages=messages,
-            tool_state=tool_state,
-            # Processing parameters (required)
-            output_file=output_file,
-            prefill=prefill,
+            self.agent_config,
+            self.agent_settings,
+            messages,
+            tool_state,
+            output_file,
+            prefill,
         )
 
         if end_turn:
             round_state = AgentRoundState.initialize(round)
             return round_state, global_state, tool_state, end_turn, messages
-
-        # Debug message content if needed
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            for item in messages:
-                content = item["content"]
-                if isinstance(content, list):
-                    for content_item in content:
-                        if isinstance(content_item, dict):
-                            logger.debug(f"Message [within list]: {content_item['text'][-50:]}")
-                else:
-                    logger.debug(f"Message: {content[-50:]}")
 
         round_state, global_state, tool_state, end_turn = self._process_response_cycle(
             messages,

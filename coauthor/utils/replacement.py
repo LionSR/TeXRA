@@ -1,11 +1,6 @@
-"""Utilities for managing text replacements in the codebase.
-
-This module centralizes the management of text replacement patterns used throughout
-the application for cleaning and normalizing text content.
-"""
+"""Utilities for managing text replacements in the codebase."""
 
 import re
-
 from dataclasses import dataclass
 
 
@@ -170,7 +165,6 @@ def get_all_replacements() -> dict[str, str]:
 
     for category in categories:
         all_replacements.update(category.patterns)
-
     return all_replacements
 
 
@@ -186,7 +180,6 @@ def get_replacements_by_category(category_name: str) -> dict[str, str]:
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
         "lazy": LAZY_REPLACEMENTS,
     }
-
     category = categories.get(category_name)
     return category.patterns if category else {}
 
@@ -200,6 +193,6 @@ def apply_replacements(text: str, replacements: dict[str, str]) -> str:
 
 def apply_replacement_regex(text: str, replacements: dict[str, str], flags: int = 0) -> str:
     """Apply a dictionary of regex replacements to the given text."""
-    for pattern, replacement in replacements.items():
-        text = re.sub(pattern, replacement, text, flags=flags)
+    for pattern, repl in replacements.items():
+        text = re.sub(pattern, repl, text, flags=flags)
     return text
