@@ -3,6 +3,7 @@
 import os
 import re
 import time
+import logging
 
 from abc import ABC, abstractmethod
 from typing import Any
@@ -449,14 +450,16 @@ class BaseReflectChainAgent(ABC):
             round_state = AgentRoundState.initialize(round)
             return round_state, global_state, tool_state, end_turn, messages
 
-        for item in messages:
-            content = item["content"]
-            if isinstance(content, list):
-                for content_item in content:
-                    if isinstance(content_item, dict):
-                        logger.debug(f"Message [within list]: {content_item['text'][-50:]}")
-            else:
-                logger.debug(f"Message: {content[-50:]}")
+        # Debug message content if needed
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            for item in messages:
+                content = item["content"]
+                if isinstance(content, list):
+                    for content_item in content:
+                        if isinstance(content_item, dict):
+                            logger.debug(f"Message [within list]: {content_item['text'][-50:]}")
+                else:
+                    logger.debug(f"Message: {content[-50:]}")
 
         round_state, global_state, tool_state, end_turn = self._process_response_cycle(
             messages,
