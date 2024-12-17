@@ -49,12 +49,12 @@ class ThinkAndWrite(BaseReflectChainAgent):
                 self.output_handler._handle_multiple_outputs(processed_files)
                 self.output_handler.output_files[round] = processed_files
                 self.output_handler._replace_input_commands(self.base_files, processed_files)
-                round_state.output_file = processed_files[0]  # Store first file as main output
+                # round_state.output_file = processed_files[0]  # Store first file as main output
             else:
                 processed_file = self.output_handler._process_single_output(output_file)
                 self.output_handler._handle_single_output(processed_file)
                 self.output_handler.output_files[round] = [processed_file]
-                round_state.output_file = processed_file
+                # round_state.output_file = processed_file
 
             self.output_handler._handle_latexdiff(round)
 
@@ -101,12 +101,12 @@ class DirectWrite(BaseReflectChainAgent):
                 self.output_handler._handle_multiple_outputs(processed_files)
                 self.output_handler.output_files[round] = processed_files
                 self.output_handler._replace_input_commands(self.base_files, processed_files)
-                round_state.output_file = processed_files[0]  # Store first file as main output
+                # round_state.output_file = processed_files[0]  # Store first file as main output
             else:
                 processed_file = self.output_handler._process_single_output(output_file)
                 self.output_handler._handle_single_output(processed_file)
                 self.output_handler.output_files[round] = [processed_file]
-                round_state.output_file = processed_file
+                # round_state.output_file = processed_file
 
             self.output_handler._handle_latexdiff(round)
 
