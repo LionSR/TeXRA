@@ -84,7 +84,7 @@ def run_agent(agent: str, **kwargs):
         agent_prompts=agent_prompts,
         agent_path=agent_path,  # Required path
     )
-    return agent_instance.run()
+    agent_instance.run()
 
 
 def run_merge(model: str, input_file: str, edited_file: str):
@@ -111,4 +111,4 @@ def run_merge(model: str, input_file: str, edited_file: str):
         agent_prompts=agent_prompts,
         agent_path=agent_path,  # Required path
     )
-    return agent.run()
+    agent.run()

@@ -159,6 +159,8 @@ class OpenAIModelHandler(ModelHandler):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
+            file_content = file_content.strip()
+
             if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
                 messages.append({"role": "assistant", "content": file_content})

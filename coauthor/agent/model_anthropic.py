@@ -245,12 +245,12 @@ class AnthropicModelHandler(ModelHandler):
                 if messages[-2]["role"] == "assistant":
                     logger.warning("Appending new response to the previous assistant message")
                     if isinstance(messages[-2]["content"], list):
-                        messages[-2]["content"].append({"type": "text", "text": "\n" + tool_state.last_response})
+                        messages[-2]["content"].append({"type": "text", "text": "\n" + tool_state.last_response.strip()})
                     elif isinstance(messages[-2]["content"], str):
-                        messages[-2]["content"] += "\n" + tool_state.last_response
-                messages[-1]["content"] = user_message_continuation
+                        messages[-2]["content"] += "\n" + tool_state.last_response.strip()
+                messages[-1]["content"] = user_message_continuation.strip()
             elif messages[-1]["role"] == "assistant":
-                messages.append({"role": "user", "content": user_message_continuation})
+                messages.append({"role": "user", "content": user_message_continuation.strip()})
         else:
             pass
 
@@ -272,6 +272,7 @@ class AnthropicModelHandler(ModelHandler):
             file_content = read_file(output_file)
             file_content = filter_tags_from_text(file_content, "monologue").strip()
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
+            file_content = file_content.strip()
 
             if agent_settings.has_end_tag(file_content):
                 logger.debug("End tag detected - skipping continuation")
@@ -309,10 +310,10 @@ class AnthropicModelHandler(ModelHandler):
 
         # Add caching costs if supported
         if self.capabilities.supports_prompt_caching:
-            if hasattr(response_usage, "cache_creation_tokens"):
-                base_price += (response_usage.cache_creation_tokens * self.input_price * 1.25) / 1e6
-            if hasattr(response_usage, "cache_read_tokens"):
-                base_price += (response_usage.cache_read_tokens * self.input_price * 0.1) / 1e6
+            if hasattr(response_usage, "cache_creation_input_tokens"):
+                base_price += (response_usage.cache_creation_input_tokens * self.input_price * 1.25) / 1e6
+            if hasattr(response_usage, "cache_read_input_tokens"):
+                base_price += (response_usage.cache_read_input_tokens * self.input_price * 0.1) / 1e6
 
         return base_price
 

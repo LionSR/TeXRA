@@ -113,8 +113,8 @@ class AgentGlobalState:
             # Update first input tokens only for the first round
             if round_state.round_number == 0 and self.first_input_tokens == 0:
                 self.first_input_tokens = round_state.model_usage["total_input_tokens"]
-                # Add cache_read_tokens if it exists and is not None
-                cache_read = round_state.model_usage.get("cache_read_tokens", 0) or 0
+                # Add cache_read_input_tokens if it exists and is not None
+                cache_read = round_state.model_usage.get("cache_read_input_tokens", 0) or 0
                 self.first_input_tokens += cache_read
                 logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
 
