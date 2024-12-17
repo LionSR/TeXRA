@@ -25,8 +25,6 @@ b. Add more detailed explanations where necessary
 c. Ensure consistency with the main text
 </scratchpad>
 
-Now, I will proceed with implementing these improvements in the \LaTeX documents.
-
 <latex_documents>
 <document name="coolingAlgorithmNEW.tex">
 \documentclass[aps,pra,twocolumn,superscriptaddress,nolongbibliography,nobalancelastpage,10pt]{revtex4-2}

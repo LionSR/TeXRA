@@ -10,14 +10,17 @@ import {
   toggleOutputNameOverride,
   emptyMultipleFiles,
 } from './fileHandlers.js';
-
-import { safeGetElementById, addEventListenerSafely } from './utils.js';
+import {
+  safeGetElementById,
+  addEventListenerSafely,
+  safeGetElementValue,
+  safeGetElementChecked,
+  capitalize,
+  uncapitalize,
+} from './utils.js';
 
 export function setupUIHandlers() {
-  const sortableElements = [
-    ...MULTIPLE_SELECTIONS,
-    'multipleOutputFilesSelect',
-  ];
+  const sortableElements = [...MULTIPLE_SELECTIONS, 'multipleOutputFiles'];
 
   sortableElements.forEach((id) => {
     const element = safeGetElementById(id);
@@ -26,10 +29,6 @@ export function setupUIHandlers() {
         animation: 150,
         onEnd: saveState,
       });
-    } else {
-      console.warn(
-        `Element with id '${id}' not found for Sortable initialization`,
-      );
     }
   });
 
@@ -37,9 +36,7 @@ export function setupUIHandlers() {
   ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
     (type) => {
       addEventListenerSafely(`empty${type}FileButton`, 'click', () => {
-        const selectElement = safeGetElementById(
-          `${type.toLowerCase()}FileSelect`,
-        );
+        const selectElement = safeGetElementById(`${uncapitalize(type)}File`);
         if (selectElement) {
           selectElement.value = '';
           saveState();
@@ -48,29 +45,29 @@ export function setupUIHandlers() {
     },
   );
 
-  addEventListenerSafely('agentSelect', 'change', function () {
+  addEventListenerSafely('agent', 'change', function () {
     const selectedAgent = this.value;
     if (selectedAgent.startsWith('correct')) {
-      const figureSelect = safeGetElementById('figureFileSelect');
-      const reflectSelect = safeGetElementById('reflectSelect');
-      if (figureSelect) figureSelect.value = '';
-      if (reflectSelect) reflectSelect.value = 'False';
+      const figure = safeGetElementById('figureFile');
+      const reflect = safeGetElementById('reflect');
+      if (figure) figure.value = '';
+      if (reflect) reflect.value = 'False';
     } else {
       vscode.postMessage({ command: 'requestFigureFile' });
-      const reflectSelect = safeGetElementById('reflectSelect');
-      if (reflectSelect) reflectSelect.value = 'True';
+      const reflect = safeGetElementById('reflect');
+      if (reflect) reflect.value = 'True';
     }
     saveState();
   });
 
-  addEventListenerSafely('modelSelect', 'change', function () {
+  addEventListenerSafely('model', 'change', function () {
     vscode.postMessage({
       command: 'modelSelected',
       model: this.value,
     });
   });
 
-  addEventListenerSafely('inputFileSelect', 'change', function () {
+  addEventListenerSafely('inputFile', 'change', function () {
     const inputFile = this.value;
     const outputNameOverride =
       safeGetElementById('outputNameOverride')?.value.trim() || null;
@@ -81,7 +78,7 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('referenceFileSelect', 'change', function () {
+  addEventListenerSafely('referenceFile', 'change', function () {
     const referenceFile = this.value;
     vscode.postMessage({
       command: 'referenceFileSelected',
@@ -90,15 +87,16 @@ export function setupUIHandlers() {
   });
 
   const multipleFileSelectors = [
-    { id: 'InputFiles', selectId: 'inputFileSelect' },
-    { id: 'ReferenceFiles', selectId: 'referenceFileSelect' },
-    { id: 'AuxiliaryFiles', selectId: 'auxiliaryFileSelect' },
-    { id: 'Figures', selectId: 'figureFileSelect' },
+    { id: 'InputFiles', selectId: 'inputFile' },
+    { id: 'ReferenceFiles', selectId: 'referenceFile' },
+    { id: 'AuxiliaryFiles', selectId: 'auxiliaryFile' },
+    { id: 'Figures', selectId: 'figureFile' },
   ];
 
   multipleFileSelectors.forEach(({ id, selectId }) => {
-    addEventListenerSafely(`selectMultiple${id}Button`, 'click', function () {
-      const currentFile = safeGetElementById(selectId).value;
+    const selectMultipleButtonId = `selectMultiple${capitalize(id)}Button`;
+    addEventListenerSafely(selectMultipleButtonId, 'click', function () {
+      const currentFile = safeGetElementValue(selectId);
       vscode.postMessage({
         command: 'selectMultipleFiles',
         fileType: id,
@@ -111,7 +109,7 @@ export function setupUIHandlers() {
     'selectMultipleOutputFilesButton',
     'click',
     function () {
-      const inputFile = safeGetElementById('inputFileSelect').value;
+      const inputFile = safeGetElementValue('inputFile');
       vscode.postMessage({
         command: 'selectMultipleFiles',
         fileType: 'OutputFiles',
@@ -121,10 +119,10 @@ export function setupUIHandlers() {
   );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    let baseId = id.replace('Select', '');
-    baseId = baseId.charAt(0).toUpperCase() + baseId.slice(1);
-    addEventListenerSafely(`empty${baseId}Button`, 'click', () =>
-      emptyMultipleFiles(id, `toggle${baseId}`),
+    const toggleId = `toggle${capitalize(id)}`;
+
+    addEventListenerSafely(`empty${capitalize(id)}Button`, 'click', () =>
+      emptyMultipleFiles(id, toggleId),
     );
   });
 
@@ -132,10 +130,7 @@ export function setupUIHandlers() {
     'emptyMultipleOutputFilesButton',
     'click',
     function () {
-      emptyMultipleFiles(
-        'multipleOutputFilesSelect',
-        'toggleMultipleOutputFiles',
-      );
+      emptyMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
     },
   );
 
@@ -165,58 +160,61 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('executeButton', 'click', function () {
-    const agent = safeGetElementById('agentSelect').value;
-    const model = safeGetElementById('modelSelect').value;
-    const reflect = safeGetElementById('reflectSelect').value;
+    const agent = safeGetElementValue('agent');
+    const model = safeGetElementValue('model');
+    const reflect = safeGetElementValue('reflect');
 
     // Get single files
-    const inputFile = safeGetElementById('inputFileSelect').value;
-    const referenceFile = safeGetElementById('referenceFileSelect').value;
-    const auxiliaryFile = safeGetElementById('auxiliaryFileSelect').value;
-    const figureFile = safeGetElementById('figureFileSelect').value;
+    const inputFile = safeGetElementValue('inputFile');
+    const referenceFile = safeGetElementValue('referenceFile');
+    const auxiliaryFile = safeGetElementValue('auxiliaryFile');
+    const figureFile = safeGetElementValue('figureFile');
 
     // Get multiple files
     const getMultipleFiles = (selectId) => {
       const selectDiv = safeGetElementById(selectId);
-      return selectDiv.style.display === 'block'
+      return selectDiv && selectDiv.style.display === 'block'
         ? getSelectedFiles(selectDiv)
         : [];
     };
 
-    const inputFiles = getMultipleFiles('multipleInputFilesSelect').filter(
+    const inputFiles = getMultipleFiles('multipleInputFiles').filter(
       (file) => file !== inputFile,
     );
-    const referenceFiles = getMultipleFiles(
-      'multipleReferenceFilesSelect',
-    ).filter((file) => file !== referenceFile);
-    const auxiliaryFiles = getMultipleFiles(
-      'multipleAuxiliaryFilesSelect',
-    ).filter((file) => file !== auxiliaryFile);
-    const figureFiles = getMultipleFiles('multipleFiguresSelect').filter(
+    const referenceFiles = getMultipleFiles('multipleReferenceFiles').filter(
+      (file) => file !== referenceFile,
+    );
+    const auxiliaryFiles = getMultipleFiles('multipleAuxiliaryFiles').filter(
+      (file) => file !== auxiliaryFile,
+    );
+    const figureFiles = getMultipleFiles('multipleFigures').filter(
       (file) => file !== figureFile,
     );
 
-    const outputFilesContainer = safeGetElementById('outputFilesContainer');
+    const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
     const outputFiles =
-      outputFilesContainer.style.display === 'block'
-        ? getSelectedFiles(safeGetElementById('multipleOutputFilesSelect'))
+      outputFilesContainerDiv &&
+      outputFilesContainerDiv.style.display === 'block'
+        ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
         : null;
-    const outputNameOverrideElement = safeGetElementById('outputNameOverride');
+    const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
     const outputNameOverride =
-      outputNameOverrideElement.style.display !== 'none'
-        ? outputNameOverrideElement.value.trim()
+      outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
+        ? outputNameOverrideDiv.value.trim()
         : null;
 
-    const instructions = safeGetElementById('instructionInput').value;
+    const instructions = safeGetElementValue('instructionInput');
 
-    const autoExtractFigure = safeGetElementById('autoExtractFigure').checked;
-    const autoExtractTikzFigure = safeGetElementById(
+    const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
+    const autoExtractTikzFigure = safeGetElementChecked(
       'autoExtractTikzFigure',
-    ).checked;
-    const autoExtractTikzFigureReflect = safeGetElementById(
+    );
+    const autoExtractTikzFigureReflect = safeGetElementChecked(
       'autoExtractTikzFigureReflect',
-    ).checked;
-    const includeTexCount = safeGetElementById('includeTexCount').checked;
+    );
+    const includeTexCount = safeGetElementChecked('includeTexCount');
+    const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
+    const autoConfirmation = safeGetElementChecked('autoConfirmation');
 
     vscode.postMessage({
       command: 'execute',
@@ -240,6 +238,8 @@ export function setupUIHandlers() {
       autoExtractTikzFigure: autoExtractTikzFigure,
       autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
       includeTexCount: includeTexCount,
+      usePrefillFromInput: usePrefillFromInput,
+      autoConfirmation: autoConfirmation,
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,
@@ -247,8 +247,8 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('mergeButton', 'click', function () {
-    const inputFile = safeGetElementById('inputFileSelect').value;
-    const editedFile = safeGetElementById('editedFileSelect').value;
+    const inputFile = safeGetElementValue('inputFile');
+    const editedFile = safeGetElementValue('editedFile');
 
     vscode.postMessage({
       command: 'merge',
@@ -268,24 +268,24 @@ export function setupUIHandlers() {
 
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}Button`, 'click', function () {
-      const inputFile = safeGetElementById('inputFileSelect').value;
-      const agent = safeGetElementById('agentSelect').value;
-      const model = safeGetElementById('modelSelect').value;
-      const outputNameOverrideElement =
-        safeGetElementById('outputNameOverride');
+      const inputFile = safeGetElementValue('inputFile');
+      const agent = safeGetElementValue('agent');
+      const model = safeGetElementValue('model');
+      const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
       const outputNameOverride =
-        outputNameOverrideElement.style.display !== 'none'
-          ? outputNameOverrideElement.value.trim()
+        outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
+          ? outputNameOverrideDiv.value.trim()
           : null;
 
       const inputFiles = getSelectedFiles(
-        safeGetElementById('multipleInputFilesSelect'),
+        safeGetElementById('multipleInputFiles'),
       );
       const outputFiles = getSelectedFiles(
-        safeGetElementById('multipleOutputFilesSelect'),
+        safeGetElementById('multipleOutputFiles'),
       );
 
-      // Determine if we should use multiple or single mode
+      // BUG: Determine if we should use multiple or single mode
+      // only activate if are toggled!!
       const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
 
       if (useMultiple) {
@@ -300,7 +300,7 @@ export function setupUIHandlers() {
 
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
+          text: `${capitalize(action)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
         });
       } else {
         if (!inputFile || !agent || !model) {
@@ -321,16 +321,16 @@ export function setupUIHandlers() {
 
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: `${action.charAt(0).toUpperCase() + action.slice(1)}ing single file: ${inputFile}`,
+          text: `${capitalize(action)}ing single file: ${inputFile}`,
         });
       }
     });
   });
 
   addEventListenerSafely('latexDiffButton', 'click', function () {
-    const inputFile = safeGetElementById('inputFileSelect').value;
-    const baseFile = safeGetElementById('baseFileSelect').value;
-    const editedFile = safeGetElementById('editedFileSelect').value;
+    const inputFile = safeGetElementValue('inputFile');
+    const baseFile = safeGetElementValue('baseFile');
+    const editedFile = safeGetElementValue('editedFile');
 
     vscode.postMessage({
       command: 'latexDiff',
@@ -346,9 +346,9 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('latexDiffVCButton', 'click', function () {
-    const inputFile = safeGetElementById('inputFileSelect').value;
-    const baseFile = safeGetElementById('baseFileSelect').value;
-    const commitHash = safeGetElementById('commitSelect').value;
+    const inputFile = safeGetElementValue('inputFile');
+    const baseFile = safeGetElementValue('baseFile');
+    const commitHash = safeGetElementValue('commit');
 
     vscode.postMessage({
       command: 'latexDiffVC',
@@ -365,9 +365,9 @@ export function setupUIHandlers() {
 
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}LatexDiffVCButton`, 'click', function () {
-      const inputFile = safeGetElementById('inputFileSelect').value;
-      const baseFile = safeGetElementById('baseFileSelect').value;
-      const commitHash = safeGetElementById('commitSelect').value;
+      const inputFile = safeGetElementValue('inputFile');
+      const baseFile = safeGetElementValue('baseFile');
+      const commitHash = safeGetElementValue('commit');
 
       vscode.postMessage({
         command: `${action}LatexDiffVC`,
@@ -377,20 +377,19 @@ export function setupUIHandlers() {
         clean: action === 'clean',
       });
 
-      const actionText = action === 'pack' ? 'Packing' : 'Cleaning';
       vscode.postMessage({
         command: 'showInformationMessage',
-        text: `${actionText} LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
+        text: `${capitalize(action)}ing LaTeX diff with version control: ${baseFile} at commit ${commitHash}`,
       });
     });
   });
 
   ['base', 'edited'].forEach((type) => {
     addEventListenerSafely(
-      `current${type.charAt(0).toUpperCase() + type.slice(1)}FileButton`,
+      `current${capitalize(type)}FileButton`,
       'click',
       function () {
-        const baseFile = safeGetElementById('baseFileSelect').value;
+        const baseFile = safeGetElementValue('baseFile');
         vscode.postMessage({
           command: 'getCurrentFile',
           fileType: type,
@@ -410,7 +409,7 @@ export function setupUIHandlers() {
   addEventListenerSafely('instructionInput', 'input', saveState);
   addEventListenerSafely('outputNameOverride', 'input', saveState);
 
-  new Sortable(safeGetElementById('multipleOutputFilesSelect'), {
+  new Sortable(safeGetElementById('multipleOutputFiles'), {
     animation: 150,
     onEnd: saveState,
   });
@@ -429,28 +428,28 @@ export function setupUIHandlers() {
 
   // Add event listeners for current file buttons
   ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
-    addEventListenerSafely(`current${type}FileButton`, 'click', () => {
+    const currentFileButtonId = `current${capitalize(type)}FileButton`;
+    addEventListenerSafely(currentFileButtonId, 'click', () => {
       vscode.postMessage({
         command: 'getCurrentFile',
-        fileType: type.toLowerCase(),
+        fileType: uncapitalize(type),
       });
     });
   });
 
   // Add event listener for base file select
-  addEventListenerSafely('baseFileSelect', 'change', function () {
-    const baseFile = this.value;
+  addEventListenerSafely('baseFile', 'change', function () {
+    const baseFile = safeGetElementValue('baseFile');
     vscode.postMessage({
       command: 'requestEditedFile',
       baseFile: baseFile,
     });
     updateEditedFileSelect(baseFile);
-    // sus
   });
 
   // Add event listener for the refresh button
   addEventListenerSafely('refreshEditedFileButton', 'click', function () {
-    const baseFile = safeGetElementById('baseFileSelect').value;
+    const baseFile = safeGetElementValue('baseFile');
     if (baseFile) {
       vscode.postMessage({
         command: 'requestEditedFile',
@@ -471,8 +470,7 @@ export function setupUIHandlers() {
   );
 
   MULTIPLE_SELECTIONS.forEach((id) => {
-    const baseId = id.replace('Select', '');
-    const toggleId = `toggle${baseId.charAt(0).toUpperCase() + baseId.slice(1)}`;
+    const toggleId = `toggle${capitalize(id)}`;
     addEventListenerSafely(toggleId, 'click', () =>
       toggleMultipleFiles(id, toggleId),
     );
