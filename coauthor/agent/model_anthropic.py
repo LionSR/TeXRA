@@ -14,7 +14,7 @@ from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
-from .agent_state import ToolState
+from .tool_handler import ToolState
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import AnthropicResponseUsage
 
