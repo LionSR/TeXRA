@@ -27,10 +27,12 @@ from .logdb import (
 )
 
 # Model infrastructure
-from .model_base import ModelHandler, ModelProvider, ModelCapabilities
-from .model_anthropic import AnthropicModelHandler
-from .model_openai import OpenAIModelHandler, OpenAICompatibleModelHandler
-from .model_registry import MODEL_HANDLERS
+from .model_config import ModelConfig, ModelProvider, ModelCapabilities
+from .model_operations import ModelOperations
+from .model_operations_anthropic import AnthropicOperations
+from .model_operations_openai import OpenAIOperations, OpenAICompatibleOperations
+from .model_registry import MODEL_CONFIGS
+from .model_factory import ModelFactory
 
 
 __all__ = [
@@ -58,12 +60,14 @@ __all__ = [
     "update_log_output_files",
     "get_log_entry",
     # Model infrastructure
-    "ModelHandler",
+    "ModelConfig",
     "ModelProvider",
     "ModelCapabilities",
-    "MODEL_HANDLERS",
+    "ModelOperations",
+    "MODEL_CONFIGS",
+    "ModelFactory",
     # Model implementations
-    "AnthropicModelHandler",
-    "OpenAIModelHandler",
-    "OpenAICompatibleModelHandler",
+    "AnthropicOperations",
+    "OpenAIOperations",
+    "OpenAICompatibleOperations",
 ]
