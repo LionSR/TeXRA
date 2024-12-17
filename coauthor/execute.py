@@ -1,31 +1,32 @@
 import os
+from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from pathlib import Path
 
 from .agent.agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent.agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
 from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
-
-from .logger import logger
 from .agent.model_registry import MODEL_HANDLERS
+from .logger import logger
 
 load_dotenv()
 
 
-def get_agent_dir_from_env():
+def get_agent_dir_from_env() -> str:
+    """Get the agent directory path from environment or default location."""
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/agents")
     return agents_dir
 
 
-def create_agent_config(**kwargs) -> AgentConfig:
-    """Create AgentConfig from CLI kwargs."""
+def create_agent_config(**kwargs: Any) -> AgentConfig:
+    """Create and return AgentConfig object from CLI kwargs, converting string lists as needed."""
     required_fields = ["model", "agent"]
-    for field in required_fields:
-        if field not in kwargs:
-            raise ValueError(f"Missing required field: {field}")
+    missing_fields = [field for field in required_fields if field not in kwargs]
+    if missing_fields:
+        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
     # Convert comma-separated strings to lists
     list_fields = ["input_files", "reference_files", "auxiliary_files", "figure_files", "output_files"]
@@ -39,76 +40,70 @@ def create_agent_config(**kwargs) -> AgentConfig:
 
 
 def get_agent_class(agent_path: str, agent: str) -> type[BaseReflectChainAgent]:
-    """Determine agent class based on yaml settings."""
+    """Return DirectWrite or ThinkAndWrite agent class based on yaml settings."""
     settings_dict, _ = load_agent_settings_and_prompts(agent_path, agent)
     return DirectWrite if settings_dict.get("agent_type") == "direct" else ThinkAndWrite
 
 
 def get_agent_name(base_agent: str, output_files: list[str] | None = None) -> str:
-    """Get agent name, appending _multiple if output_files exist."""
+    """Return agent name with '_multiple' suffix if output files exist."""
     return f"{base_agent}_multiple" if output_files else base_agent
 
 
 def get_agent_path(agent_name: str) -> str:
-    """Get agent path from yaml location."""
+    """Find and return the path to agent's yaml configuration file."""
     agents_dir = Path(get_agent_dir_from_env())
-    for yaml_file in agents_dir.rglob(f"{agent_name}.yaml"):
-        return str(yaml_file.parent)
-    logger.error(f"Could not find yaml file for agent: {agent_name} from {agents_dir}")
-    raise ValueError(f"Could not find yaml file for agent: {agent_name}")
+    if yaml_path := next((p for p in agents_dir.rglob(f"{agent_name}.yaml")), None):
+        return str(yaml_path.parent)
+
+    error_msg = f"Could not find yaml file for agent: {agent_name}"
+    logger.error(f"{error_msg} from {agents_dir}")
+    raise ValueError(error_msg)
 
 
-def run_agent(agent: str, **kwargs):
-    """Run any agent except merge. Can be called from both CLI and Python."""
-    # Core arguments
+def run_agent(agent: str, **kwargs: Any) -> None:
+    """Initialize and run the specified agent with given configuration."""
     agent_name = get_agent_name(agent, kwargs.get("output_files"))
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    # Get model handler
     if agent_config.model not in MODEL_HANDLERS:
         raise ValueError(f"Model {agent_config.model} not found in MODEL_HANDLERS")
     model_handler = MODEL_HANDLERS[agent_config.model]
 
-    # Load settings and prompts
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
-    # Initialize and run agent
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
-        model_handler=model_handler,  # Core dependency
-        agent_config=agent_config,  # Config objects
+        model_handler=model_handler,
+        agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,
-        agent_path=agent_path,  # Required path
+        agent_path=agent_path,
     )
     agent_instance.run()
 
 
-def run_merge(model: str, input_file: str, edited_file: str):
-    """Run merge agent. Can be called from both CLI and Python."""
-    # Core arguments
+def run_merge(model: str, input_file: str, edited_file: str) -> None:
+    """Initialize and run merge agent to handle file merging operations."""
     agent_config = create_agent_config(agent="merge", model=model, input_file=input_file, edited_file=edited_file)
 
-    # Get model handler
     if model not in MODEL_HANDLERS:
         raise ValueError(f"Model {model} not found in MODEL_HANDLERS")
     model_handler = MODEL_HANDLERS[model]
 
-    # Load settings and prompts
     agent_path = get_agent_path("merge")
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, "merge")
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
-    # Initialize and run merge agent
     agent = AgentMerge(
-        model_handler=model_handler,  # Core dependency
-        agent_config=agent_config,  # Config objects
+        model_handler=model_handler,
+        agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,
-        agent_path=agent_path,  # Required path
+        agent_path=agent_path,
     )
     agent.run()

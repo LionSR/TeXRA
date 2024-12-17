@@ -7,7 +7,8 @@ from ..logger import logger
 from .constants import TEMP_EXTENSIONS
 
 
-def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
+def run_pack_latexdiff_vc(input_file: str, commit_hash: str, clean: bool = False) -> None:
+    """Pack or clean latexdiff-vc output files into timestamped directory or remove them."""
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     input_dir = os.path.dirname(input_file)
     output_folder = None if clean else os.path.join(input_dir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{base_name}_{commit_hash}")
@@ -44,6 +45,7 @@ def run_pack_latexdiff_vc(input_file, commit_hash, clean=False):
         logger.warning("No files found to process.")
 
 
-def run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean=False):
+def run_pack_latexdiff_vc_multiple(input_files: list[str], commit_hash: str, clean: bool = False) -> None:
+    """Pack or clean latexdiff-vc output files for multiple input files."""
     for input_file in input_files:
         run_pack_latexdiff_vc(input_file, commit_hash, clean)

@@ -1,8 +1,8 @@
+import json
+import logging
 import os
 import sqlite3
-import json
 from datetime import datetime
-import logging
 
 from .agent_dataclass import AgentConfig, AgentSettings
 from .agent_state import AgentGlobalState, AgentRoundState
@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_db_path() -> str:
-    """Get path to SQLite database in current working directory"""
+    """Get path to SQLite database in current working directory."""
     if not os.path.exists(HISTORY_DIR):
         os.makedirs(HISTORY_DIR, exist_ok=True)
     return os.path.join(os.getcwd(), f"{HISTORY_DIR}/logs.db")
 
 
 def init_db() -> None:
-    """Initialize SQLite database with a single comprehensive table"""
+    """Initialize SQLite database with a single comprehensive table."""
     db_path = get_db_path()
     try:
         with sqlite3.connect(db_path) as conn:
@@ -58,13 +58,12 @@ def init_db() -> None:
 
 
 def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -> int:
-    """Create a new log entry and return its ID"""
+    """Create a new log entry and return its ID."""
     init_db()
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
 
-            # Convert lists to JSON strings for storage
             input_files = json.dumps(agent_config.input_files) if agent_config.input_files else None
             auxiliary_files = json.dumps(agent_config.auxiliary_files) if agent_config.auxiliary_files else None
             figure_files = json.dumps(agent_config.figure_files) if agent_config.figure_files else None
@@ -72,7 +71,6 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
             output_files = json.dumps(agent_config.output_files) if agent_config.output_files else None
             actual_output_files = json.dumps([])
 
-            # Consolidate tool flags into a single JSON object
             tool_flags = json.dumps(
                 {
                     "reflect": agent_config.reflect,
@@ -85,7 +83,6 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
                 }
             )
 
-            # Initialize empty state objects
             global_state = json.dumps({})
             round_states = json.dumps({})
 
@@ -187,7 +184,6 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
 
-            # Get existing output files
             c.execute("SELECT actual_output_files FROM coauthor_logs WHERE id = ?", (log_id,))
             row = c.fetchone()
             if not row:
@@ -196,82 +192,82 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
 
             actual_files = json.loads(row[0]) if row[0] else []
 
-            # Add new output files if not already present
             if all_output_files:
                 for file in all_output_files:
                     if file not in actual_files:
                         actual_files.append(file)
-            elif output_file not in actual_files:
+            elif output_file and output_file not in actual_files:
                 actual_files.append(output_file)
 
-            # Update the database
+            actual_files_json = json.dumps(actual_files)
             c.execute(
                 """UPDATE coauthor_logs SET
+                output_file = ?,
                 actual_output_files = ?
                 WHERE id = ?""",
-                (json.dumps(actual_files), log_id),
+                (output_file, actual_files_json, log_id),
             )
 
             conn.commit()
     except sqlite3.Error as e:
-        logger.error(f"Failed to update log output files: {e}")
+        logger.error(f"Failed to update output files: {e}")
         raise
 
 
-def get_log_entry(log_id: int):
-    """Retrieve complete log entry information for a specific ID"""
+def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict]:
+    """Retrieve complete log entry information for a specific ID."""
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
-
-            c.execute(
-                """SELECT 
-                timestamp, agent, model, temperature,
-                input_file, output_file, instruction,
-                global_state, round_states,
-                tool_flags,
-                input_files, auxiliary_file, auxiliary_files,
-                figure_file, figure_files, reference_file, reference_files,
-                edited_file, output_files, output_name_override,
-                actual_output_files
-                FROM coauthor_logs WHERE id = ?""",
-                (log_id,),
-            )
-
+            c.execute("SELECT * FROM coauthor_logs WHERE id = ?", (log_id,))
             row = c.fetchone()
             if not row:
-                logger.warning(f"No log entry found for ID {log_id}")
-                return None
+                raise ValueError(f"No log entry found for ID {log_id}")
 
-            global_state = json.loads(row[7]) if row[7] else {}
-            round_states = json.loads(row[8]) if row[8] else {}
-            tool_flags = json.loads(row[9]) if row[9] else {}
+            columns = [
+                "id",
+                "timestamp",
+                "agent",
+                "model",
+                "temperature",
+                "input_file",
+                "input_files",
+                "auxiliary_file",
+                "auxiliary_files",
+                "figure_file",
+                "figure_files",
+                "reference_file",
+                "reference_files",
+                "edited_file",
+                "output_files",
+                "output_name_override",
+                "actual_output_files",
+                "output_file",
+                "instruction",
+                "tool_flags",
+                "global_state",
+                "round_states",
+            ]
 
-            return {
-                "timestamp": row[0],
-                "agent": row[1],
-                "model": row[2],
-                "temperature": row[3],
-                "input_file": row[4],
-                "output_file": row[5],
-                "instruction": row[6],
-                "global_state": global_state,
-                "round_states": round_states,
-                "flags": tool_flags,
-                "files": {
-                    "input_files": json.loads(row[10]) if row[10] else [],
-                    "auxiliary_file": row[11],
-                    "auxiliary_files": json.loads(row[12]) if row[12] else [],
-                    "figure_file": row[13],
-                    "figure_files": json.loads(row[14]) if row[14] else [],
-                    "reference_file": row[15],
-                    "reference_files": json.loads(row[16]) if row[16] else [],
-                    "edited_file": row[17],
-                    "output_files": json.loads(row[18]) if row[18] else [],
-                    "output_name_override": row[19],
-                    "actual_output_files": json.loads(row[20]) if row[20] else [],
-                },
-            }
+            entry = {columns[i]: row[i] for i in range(len(columns))}
+
+            json_fields = [
+                "input_files",
+                "auxiliary_files",
+                "figure_files",
+                "reference_files",
+                "output_files",
+                "actual_output_files",
+                "tool_flags",
+                "global_state",
+                "round_states",
+            ]
+
+            for field in json_fields:
+                if entry[field]:
+                    entry[field] = json.loads(entry[field])
+
+            return entry
     except sqlite3.Error as e:
-        logger.error(f"Failed to get log entry: {e}")
+        logger.error(f"Failed to retrieve log entry: {e}")
         raise

@@ -1,10 +1,11 @@
 from typing import Any
 
+# Local imports
 from .agent_base import BaseReflectChainAgent
-from .agent_state import AgentRoundState, AgentGlobalState
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-from .output_handler import get_output_file_name
+from .agent_state import AgentRoundState, AgentGlobalState
 from .model_base import ModelHandler
+from .output_handler import get_output_file_name
 
 
 class ThinkAndWrite(BaseReflectChainAgent):
@@ -30,15 +31,11 @@ class ThinkAndWrite(BaseReflectChainAgent):
 
     def handle_output(
         self,
-        # State objects (required)
-        round_state: AgentRoundState,
-        global_state: AgentGlobalState,
-        # Processing parameters (required)
-        output_file: str,
-        # Processing flags
-        end_turn: bool,
-        # Optional metadata
-        round: int = 0,
+        round_state: AgentRoundState,  # Current round state object
+        global_state: AgentGlobalState,  # Global state object
+        output_file: str,  # Path to output file
+        end_turn: bool,  # Flag indicating end of turn
+        round: int = 0,  # Current round number
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
@@ -84,15 +81,11 @@ class DirectWrite(BaseReflectChainAgent):
 
     def handle_output(
         self,
-        # State objects (required)
-        round_state: AgentRoundState,
-        global_state: AgentGlobalState,
-        # Processing parameters (required)
-        output_file: str,
-        # Processing flags
-        end_turn: bool,
-        # Optional metadata
-        round: int = 0,
+        round_state: AgentRoundState,  # Current round state object
+        global_state: AgentGlobalState,  # Global state object
+        output_file: str,  # Path to output file
+        end_turn: bool,  # Flag indicating end of turn
+        round: int = 0,  # Current round number
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:

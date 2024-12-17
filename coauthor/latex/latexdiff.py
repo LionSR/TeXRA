@@ -11,6 +11,7 @@ from .tex_tools import run_external_command
 
 
 def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, suffix: str = "_diff", run_indent: bool = False) -> str | None:
+    """Run latexdiff between two LaTeX files with optional indentation and return diff file path."""
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
@@ -88,6 +89,7 @@ def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, s
 
 
 def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
+    """Run latexdiff-vc on LaTeX file using specified git commit hash and return diff file path."""
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
@@ -124,6 +126,7 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
 
 
 def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> None:
+    """Run latexdiff on multiple pairs of LaTeX files in parallel."""
     if len(input_files) != len(edited_files):
         logger.error("The number of input files must match the number of edited files. Stopping latexdiff.")
         return None
@@ -133,16 +136,13 @@ def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> N
 
 
 def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
+    """Run latexdiff-vc on multiple LaTeX files using specified git commit hash."""
     for input_file in input_files:
         _ = run_latexdiff_vc(input_file, commit_hash)
 
 
 def process_tikzpicture_endings_diff(file_path: str) -> None:
-    """
-    Process the file to fix tikzpicture endings with proper indentation.
-
-    :param file_path: Path to the LaTeX diff file
-    """
+    """Fix tikzpicture environment endings and indentation in LaTeX diff file."""
     if not os.path.exists(file_path):
         logger.warning(f"File {file_path} does not exist. Skipping.")
         return None
@@ -157,7 +157,7 @@ def process_tikzpicture_endings_diff(file_path: str) -> None:
 
 
 def process_diff_file(diff_file_name: str) -> None:
-    """Process the LaTeX diff file to fix formatting issues."""
+    """Process LaTeX diff file to fix formatting issues and apply replacements."""
     if not os.path.exists(diff_file_name):
         logger.warning(f"File {diff_file_name} does not exist. Skipping.")
         return None
@@ -197,6 +197,7 @@ def process_diff_file(diff_file_name: str) -> None:
 
 
 def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round: int) -> str | None:
+    """Run latexdiff between base and output LaTeX files for a specific round."""
     if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
         _ = run_latexdiff(base_file, output_file, agent, suffix="_diff")
     else:
@@ -204,6 +205,7 @@ def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round:
 
 
 def run_latexdiff_between_rounds(output_file1: str, output_file2: str, agent: str) -> str | None:
+    """Run latexdiff between two rounds of LaTeX edits and process the resulting diff."""
     if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
         first_round = re.search(r"_r(\d+)_", output_file1).group(1)
         second_round = re.search(r"_r(\d+)_", output_file2).group(1)

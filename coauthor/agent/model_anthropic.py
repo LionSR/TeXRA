@@ -6,19 +6,17 @@ from dataclasses import dataclass
 from typing import Any
 from anthropic import Anthropic
 
-from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
-
 from ..agent import AgentSettings, AgentConfig
 from ..agent.agent_state import AgentRoundState
 from ..logger import logger
-from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
-
+from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 from ..utils.file import read_file, write_file
+from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 from ..utils.xml import extract_text_from_tags, filter_tags_from_text
 
+from .agent_state import ToolState
 from .model_base import ModelHandler, ModelProvider
 from .response_usage import AnthropicResponseUsage
-from .agent_state import ToolState
 
 
 @dataclass
@@ -27,19 +25,15 @@ class AnthropicModelHandler(ModelHandler):
 
     provider: ModelProvider = ModelProvider.ANTHROPIC
 
-    def get_client(self):
+    def get_client(self) -> Anthropic:
         """Get Anthropic client."""
         return Anthropic(api_key=self.provider.get_api_key())
 
     def create_response(
         self,
-        # Core client (required)
         client: Anthropic,
-        # Content (required)
         messages: list[dict],
-        # Processing parameters (required)
         temperature: float,
-        # Optional parameters
         system_prompt: str | None = None,
         end_tag: str | None = None,
     ) -> Any:
@@ -62,10 +56,8 @@ class AnthropicModelHandler(ModelHandler):
 
     def initialize_messages(
         self,
-        # Core content (required)
         user_prefix: str,
         user_request: str,
-        # Optional content
         figure_files: list[str] | None = None,
         system_prompt: str | None = None,
     ) -> list[dict]:
@@ -86,10 +78,8 @@ class AnthropicModelHandler(ModelHandler):
 
     def create_reflection_message(
         self,
-        # Core content (required)
         messages: list[dict],
         user_message: str,
-        # Optional content
         figure_files: list[str] | None = None,
     ) -> list[dict]:
         """Create a reflection message for Anthropic models."""
@@ -143,11 +133,8 @@ class AnthropicModelHandler(ModelHandler):
 
     def extract_response(
         self,
-        # Core content (required)
         response_object: Any,
-        # Processing parameters (required)
         end_tag: str,
-        # Optional flags
         auto_confirmation: bool = False,
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from Anthropic response object."""
@@ -190,17 +177,13 @@ class AnthropicModelHandler(ModelHandler):
 
     def handle_continuation(
         self,
-        # Core content (required)
         messages: list[dict],
-        # State objects (required)
         round_state: AgentRoundState,
         tool_state: ToolState,
-        # Configuration (required)
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
     ) -> None:
         """Handle continuation for Anthropic models."""
-        # add a flag for enabling this mode
         if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
             output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
             if round_state.continuation_count <= 1:
@@ -256,13 +239,10 @@ class AnthropicModelHandler(ModelHandler):
 
     def initialize_output_and_prefill(
         self,
-        # Core configs (required)
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
-        # State/content (required)
         messages: list[dict],
         tool_state: ToolState,
-        # Processing parameters (required)
         output_file: str,
         prefill: str,
     ) -> tuple[bool, list[dict]]:
@@ -270,7 +250,9 @@ class AnthropicModelHandler(ModelHandler):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            file_content = filter_tags_from_text(file_content, "monologue").strip()
+            if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
+                file_content = filter_tags_from_text(file_content, "monologue")
+
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
             file_content = file_content.strip()
 
@@ -308,7 +290,6 @@ class AnthropicModelHandler(ModelHandler):
         """Compute the price for token usage."""
         base_price = (response_usage.input_tokens * self.input_price + response_usage.output_tokens * self.output_price) / 1e6
 
-        # Add caching costs if supported
         if self.capabilities.supports_prompt_caching:
             if hasattr(response_usage, "cache_creation_input_tokens"):
                 base_price += (response_usage.cache_creation_input_tokens * self.input_price * 1.25) / 1e6

@@ -6,6 +6,7 @@ from ..logger import logger
 
 def best_connection_method(str1: str, str2: str, openai_api_key: str | None = None) -> tuple[str, str]:
     """
+    Use GPT-4 turbo to determine optimal string concatenation method (direct, space, newline) for LaTeX text.
     Example usage
     str1 = "Hello"
     # str2 = "world"
