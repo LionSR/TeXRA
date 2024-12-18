@@ -67,10 +67,18 @@ class OpenAIHandler(ModelHandler):
             if system_prompt:
                 # note that for openai native models, they have been renamed to "developer" but "system" still works
                 messages.append({"role": "system", "content": system_prompt})
+
+            # Create content list with user prefix
             content = [{"type": "text", "text": user_prefix}]
+
+            # Add images if provided
             if figure_files:
                 content.extend(self.create_image_message(figure_files))
-            content.append({"type": "text", "text": user_request})
+
+            # Add user request
+            request = {"type": "text", "text": user_request}
+            content.append(request)
+
             messages.append({"role": "user", "content": content})
 
         return messages
@@ -92,10 +100,9 @@ class OpenAIHandler(ModelHandler):
 
     def create_image_content(self, image_contents: list) -> list[dict]:
         """Create image content for OpenAI models."""
-        return [
-            item
-            for image in image_contents
-            for item in [
+
+        def create_content_pair(image: dict) -> list[dict]:
+            return [
                 {"type": "text", "text": f"Image: {image['file_name']}"},
                 {
                     "type": "image_url",
@@ -106,7 +113,8 @@ class OpenAIHandler(ModelHandler):
                     },
                 },
             ]
-        ]
+
+        return [item for image in image_contents for item in create_content_pair(image)]
 
     def extract_response(
         self,
@@ -140,11 +148,12 @@ class OpenAIHandler(ModelHandler):
         agent_config: AgentConfig,
     ) -> None:
         """Handle continuation for OpenAI models."""
+        # Skip if model supports assistant prefill
         if self.config.capabilities.supports_assistant_prefill:
             logger.debug("Skipping continuation - assistant prefill is supported")
             return
 
-        # Create continuation message
+        # Create continuation message with last K tokens
         prefill_tokens = tool_state.last_response[-agent_config.K :]
         user_message_continuation = (
             f"Your response got cut off, because you only have limited response space. "
@@ -211,6 +220,7 @@ class OpenAIHandler(ModelHandler):
     def update_message_content(
         self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState, auto_confirmation: bool = False
     ) -> None:
+        """Update message content for OpenAI models."""
         logger.debug("Updating message content for OpenAI models")
 
         # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
@@ -224,6 +234,7 @@ class OpenAIHandler(ModelHandler):
                     else:
                         logger.error("Second last message content is not a list")
                         messages[-2]["content"] = best_connector + new_response
+                    # Remove continuation prompt
                     messages.pop()
             else:
                 logger.debug("Last message is a request message rather than a ask to continue after cut off")
