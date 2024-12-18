@@ -191,6 +191,7 @@ class OpenAIHandler(ModelHandler):
         messages.append({"role": "assistant", "content": file_content})
 
         if agent_settings.has_end_tag(file_content):
+            logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
                 messages[-1]["content"][-1]["text"] = file_content
             else:
@@ -202,6 +203,9 @@ class OpenAIHandler(ModelHandler):
         state = AgentStateRound.initialize(0)
         tool_state.last_response = tool_state.accumulated_output
         self.add_continue_message(messages, state, tool_state, agent_settings, agent_config)
+
+        # here state is somehow not possible to be passed outside?
+        # also here continue message is added here, not like later it was handled separately. We should make them consistent...
         return False, messages
 
     def compute_price(self, response_usage: Any) -> float:
