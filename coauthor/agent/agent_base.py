@@ -77,6 +77,9 @@ class BaseReflectChainAgent(ABC):
             "MODEL": self.agent_config.model,
             "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_operations.config.capabilities.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
+            "IS_OPENAI_MODEL": self.model_operations.is_openai,
+            "IS_ANTHROPIC_MODEL": self.model_operations.is_anthropic,
+            "IS_GOOGLE_MODEL": self.model_operations.is_google,
         }
 
     def _get_file_vars(self) -> dict[str, Any]:
@@ -252,7 +255,7 @@ class BaseReflectChainAgent(ABC):
 
     def _process_response_cycle(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[dict],
         round_state: AgentRoundState,
         global_state: AgentGlobalState,
         tool_state: ToolState,
@@ -336,7 +339,7 @@ class BaseReflectChainAgent(ABC):
                     self.model_operations.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_operations.is_anthropic and self.model_operations.capabilities.likes_to_ask_for_confirmation:
+            if self.model_operations.is_anthropic and self.model_operations.config.capabilities.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
                     self.model_operations.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
@@ -346,13 +349,13 @@ class BaseReflectChainAgent(ABC):
 
     def process_first_round(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[dict],
         user_vars: dict[str, str],
         global_state: AgentGlobalState,
         tool_state: ToolState,
         output_file: str,
         round: int = 0,
-    ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
+    ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict]]:
         """Process the first round."""
         logger.info(f"\n\nProcessing round {round}")
 
@@ -400,13 +403,13 @@ class BaseReflectChainAgent(ABC):
 
     def process_reflection_round(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[dict],
         user_vars: dict[str, str],
         global_state: AgentGlobalState,
         tool_state: ToolState,
         output_file: str,
         round: int = 1,
-    ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict[str, Any]]]:
+    ) -> tuple[AgentRoundState, AgentGlobalState, ToolState, bool, list[dict]]:
         """Process the reflection round."""
         logger.info(f"\n\nProcessing round {round}")
 
@@ -469,7 +472,8 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.figure_files:
             tool_state.add_figure_files(self.agent_config.figure_files)
 
-        # Extract figures if configured
+        # if the model does not support vision, then we do not need to extract normal and tikz figures?
+
         if self.agent_config.tool_config.auto_extract_figure:
             if extracted_figures := extract_figure_paths_from_latex(self.agent_config.input_file):
                 tool_state.add_figure_files(extracted_figures)
@@ -501,6 +505,9 @@ class BaseReflectChainAgent(ABC):
         return round_state, global_state, messages, end_turn, tool_state
 
     def reflect(self, global_state: AgentGlobalState, messages, tool_state: ToolState, round: int = 1):
+
+        # if the model does not support vision, then we do not need to extract normal and tikz figures?
+
         if self.agent_config.output_files:
             # Handle multiple output files
             if self.agent_config.tool_config.include_tex_count:
@@ -550,10 +557,10 @@ class BaseReflectChainAgent(ABC):
 
     def run(self):
         round_state, global_state, messages, end_turn, tool_state = self.process()
+
         if self.agent_config.reflect and end_turn:
             # Create a new ToolState for reflection round
             reflection_tool_state = ToolState.initialize()
             reflection_round_state, global_state, reflection_messages, end_turn_reflection = self.reflect(
                 global_state, messages, reflection_tool_state
             )
-            messages = reflection_messages

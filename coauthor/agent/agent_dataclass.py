@@ -165,7 +165,7 @@ class AgentConfig:
             model=kwargs.get("model", "sonnet+"),
             reflect=kwargs.get("reflect", False),
             agent=kwargs.get("agent", ""),
-            instruction=kwargs.get("instruction"),
+            instruction=kwargs.get("instruction", ""),
             # Input/Output configuration
             input_file=kwargs.get("input_file", ""),
             input_files=kwargs.get("input_files", []),
