@@ -249,44 +249,47 @@ class AnthropicHandler(ModelHandler):
         prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for Anthropic models."""
-        if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
-            # try to get prefill from existing file
-            file_content = read_file(output_file)
-
-            if self.config.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
-                file_content = filter_tags_from_text(file_content, "monologue")
-                file_content = apply_replacement_regex(file_content, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
-            file_content = file_content.strip()
-
-            if agent_settings.has_end_tag(file_content):
-                logger.debug("End tag detected - skipping continuation")
-                if messages[-1]["content"][-1].get("cache_control"):
-                    messages[-1]["content"][-1].pop("cache_control")
-                if isinstance(messages[-1]["content"], list):
-                    messages[-1]["content"][-1]["text"] = file_content
-                else:
-                    messages[-1]["content"] = file_content
-                return True, messages
-            else:
-                logger.warning("Output file exists but no end tag found - continuing from file")
-                tool_state.update_accumulated_output(file_content)
-                if self.config.capabilities.supports_prompt_caching:
-                    content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
-                else:
-                    content = file_content
-                logger.debug(f"Using existing content as prefill: {output_file}")
-        else:
+        if not os.path.exists(output_file) or os.path.getsize(output_file) <= 15:
             if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_chars_from_input:
                 prefill += tool_state.first_k_chars_from_input
                 tool_state.update_accumulated_output(tool_state.first_k_chars_from_input)
 
-            content = prefill
             logger.debug(f"Anthropic prefill: {prefill}")
 
             if tool_state.accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
                 write_file(output_file, prefill)
             elif agent_settings.output_ext == "xml":
                 write_file(output_file, prefill + "\n")
+
+            messages.append({"role": "assistant", "content": prefill})
+            return False, messages
+
+        # Get prefill from existing and non-trivial file
+        file_content = read_file(output_file)
+
+        if self.config.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
+            file_content = filter_tags_from_text(file_content, "monologue")
+            file_content = apply_replacement_regex(file_content, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
+        file_content = file_content.strip()
+
+        if agent_settings.has_end_tag(file_content):
+            logger.debug("End tag detected - skipping continuation")
+            if isinstance(messages[-1]["content"], list):
+                messages[-1]["content"][-1]["text"] = file_content
+            else:
+                messages[-1]["content"] = file_content
+
+            if messages[-1]["content"][-1].get("cache_control"):
+                messages[-1]["content"][-1].pop("cache_control")
+            return True, messages
+
+        logger.warning("Output file exists but no end tag found - continuing from file")
+        tool_state.update_accumulated_output(file_content)
+        if self.config.capabilities.supports_prompt_caching:
+            content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
+        else:
+            content = file_content
+        logger.debug(f"Using existing content as prefill: {output_file}")
 
         messages.append({"role": "assistant", "content": content})
         return False, messages
