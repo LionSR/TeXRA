@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any
 
 
@@ -22,6 +22,10 @@ class ResponseUsageBase:
             return self[key]
         except AttributeError:
             return default
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
 
 
 @dataclass
