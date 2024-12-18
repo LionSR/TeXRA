@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 from ..logger import logger
 from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
@@ -36,13 +36,11 @@ class AgentStateRound:
 
     def to_dict(self) -> dict:
         """Convert round state to dictionary format."""
-        return {
-            "curr_round": self.curr_round,
-            "continuation_count": self.continuation_count,
-            "response_time": self.response_time,
-            "output_file": self.output_file,
-            "model_usage": self.model_usage,
-        }
+        state_dict = asdict(self)
+        # Handle model_usage separately since it's a custom dataclass
+        if self.model_usage:
+            state_dict["model_usage"] = self.model_usage.to_dict()
+        return state_dict
 
 
 @dataclass
@@ -78,13 +76,11 @@ class AgentStateGlobal:
 
     def to_dict(self) -> dict:
         """Convert global state to dictionary format."""
-        return {
-            "first_input_tokens": self.first_input_tokens,
-            "total_response_time": self.total_response_time,
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "model_usage": self.model_usage,
-        }
+        state_dict = asdict(self)
+        # Handle model_usage separately since it's a custom dataclass
+        if self.model_usage:
+            state_dict["model_usage"] = self.model_usage.to_dict()
+        return state_dict
 
     @classmethod
     def from_dict(cls, state_dict: dict | None) -> "AgentStateGlobal":
