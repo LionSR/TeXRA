@@ -4,7 +4,7 @@ import re
 from ..logger import logger
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_reflect import DirectWrite
-from .agent_state import AgentRoundState, AgentGlobalState
+from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 
 
@@ -23,7 +23,7 @@ class AgentMerge(DirectWrite):
         super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
         self.output_file = [self.get_output_file(r) for r in range(2)]
 
-    def get_output_file(self, round: int) -> str:
+    def get_output_file(self, curr_round: int) -> str:
         """Generate output filename for merged content from base_agent_r1_model or MutualInfo_restructured_polish_r1_sonnet++ formats."""
         input_file = self.agent_config.input_file
         edited_file = self.agent_config.edited_file
@@ -76,15 +76,15 @@ class AgentMerge(DirectWrite):
 
     def handle_output(
         self,
-        round_state: AgentRoundState,
-        global_state: AgentGlobalState,
+        state_round: AgentStateRound,
+        state_global: AgentStateGlobal,
         output_file: str,
         end_turn: bool,
-        round: int = 0,
+        curr_round: int = 0,
     ) -> list[str]:
         """Process and handle output files for the current round."""
         if end_turn:
-            _files = super().handle_output(round_state, global_state, output_file, end_turn, round)
+            _files = super().handle_output(state_round, state_global, output_file, end_turn, curr_round)
             logger.info(f"Output file: {output_file}")
             return _files
         return []

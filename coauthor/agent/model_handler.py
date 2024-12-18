@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from ..agent import AgentSettings, AgentConfig
-from ..agent.agent_state import AgentRoundState, AgentGlobalState
+from ..agent.agent_state import AgentStateRound, AgentStateGlobal
 from ..logger import logger
 from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
 
@@ -110,8 +110,8 @@ class ModelHandler(ABC):
         self,
         stop_reason: str,
         new_response: str,
-        round_state: AgentRoundState,
-        global_state: AgentGlobalState,
+        state_round: AgentStateRound,
+        state_global: AgentStateGlobal,
         agent_settings: AgentSettings,
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop and print debug info if stopping.
@@ -119,26 +119,26 @@ class ModelHandler(ABC):
         Args:
             stop_reason: The reason for stopping from the model response
             new_response: The new response text
-            round_state: The current round state
-            global_state: The global conversation state
+            state_round: The current round state
+            state_global: The global conversation state
             agent_settings: The agent settings
 
         Returns:
             Tuple of (end_turn: bool, should_stop: bool)
         """
         output_token_limit = (
-            self.config.output_token_limit_factor * global_state.first_input_tokens if global_state.first_input_tokens > 0 else float("inf")
+            self.config.output_token_limit_factor * state_global.first_input_tokens if state_global.first_input_tokens > 0 else float("inf")
         )
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
-        continuation_limit = round_state.continuation_count > self.config.continue_limit
-        input_token_limit = global_state.total_input_tokens > self.config.input_token_limit
-        output_token_limit = global_state.total_output_tokens > output_token_limit
+        continuation_limit = state_round.continuation_count > self.config.continue_limit
+        input_token_limit = state_global.total_input_tokens > self.config.input_token_limit
+        output_token_limit = state_global.total_output_tokens > output_token_limit
 
         if output_token_limit:
             logger.error(f"Output tokens exceed {self.config.output_token_limit_factor}x input tokens - halting process")
-            logger.error(f"Total output tokens: {global_state.total_output_tokens}, " f"First input tokens: {global_state.first_input_tokens}")
+            logger.error(f"Total output tokens: {state_global.total_output_tokens}, " f"First input tokens: {state_global.first_input_tokens}")
 
         should_stop = encounter_document_tag or continuation_limit or input_token_limit
         # or output_token_limit
@@ -210,10 +210,10 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def handle_continuation(
+    def add_continue_message(
         self,
         messages: list[dict],
-        round_state: AgentRoundState,
+        state_round: AgentStateRound,
         tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,

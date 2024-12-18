@@ -1,3 +1,4 @@
+<root>
 <scratchpad>
 <reflection>
 1. The modifications partially address the instruction, but the logical flow still needs improvement.
@@ -91,3 +92,4 @@ The partition function $Z$ can be estimated using importance sampling:
 \end{align}
 This estimation of $Z$ is performed after the Boltzmann Generator has been trained and is separate from the training process.
 </latex_document>
+</root>
