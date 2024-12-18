@@ -2,8 +2,13 @@
 
 from .model_config import ModelConfig, ModelProvider
 from .model_handler import ModelHandler
+from .model_handler_openai import OpenAIHandler
 from .model_handler_anthropic import AnthropicHandler
-from .model_handler_openai import OpenAIHandler, GoogleviaOpenAIHandler, OpenRouterHandler
+from .model_handler_others import (
+    GoogleviaOpenAIHandler,
+    OpenRouterHandler,
+    AnthropicviaOpenrouterHandler,
+)
 
 
 class ModelFactory:
@@ -18,6 +23,9 @@ class ModelFactory:
             config.use_openrouter = True
             if config.name.endswith("OR"):
                 config.name = config.name[:-2]  # Remove OR suffix
+
+            if config.provider == ModelProvider.ANTHROPIC:
+                return AnthropicviaOpenrouterHandler(config)
             return OpenRouterHandler(config)
 
         # Map providers to their handler classes
