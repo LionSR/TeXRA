@@ -1,4 +1,4 @@
-"""Anthropic-specific model operations."""
+"""Anthropic-specific model handlers."""
 
 import os
 import re
@@ -11,7 +11,7 @@ from ..utils.xml import filter_tags_from_text, extract_text_from_tags
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
-from .model_operations import ModelOperations
+from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import AnthropicResponseUsage
 
@@ -20,8 +20,8 @@ from ..agent import AgentSettings, AgentConfig
 from .tool_handler import ToolState
 
 
-class AnthropicOperations(ModelOperations):
-    """Anthropic-specific operations."""
+class AnthropicHandler(ModelHandler):
+    """Anthropic-specific handlers."""
 
     def __init__(self, config: ModelConfig):
         super().__init__(config)
