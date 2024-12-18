@@ -1,4 +1,4 @@
-"""Model-specific operations."""
+"""Model-specific handlers."""
 
 import os
 from abc import ABC, abstractmethod
@@ -13,16 +13,16 @@ from .model_config import ModelConfig, ModelProvider
 from .tool_handler import ToolState
 
 
-class ModelOperations(ABC):
-    """Base class for model-specific operations."""
+class ModelHandler(ABC):
+    """Base class for model-specific handlers."""
 
     def __init__(self, config: ModelConfig):
         self.config = config
 
     @property
     def is_openai_compatible(self) -> bool:
-        """Check if this is an OpenAI-compatible model."""
-        return self.config.provider in [ModelProvider.OPENAI, ModelProvider.GOOGLE]
+        """Check if this is using an OpenAI-compatible API."""
+        return self.config.provider in [ModelProvider.OPENAI, ModelProvider.GOOGLE, ModelProvider.OTHERS]
 
     @property
     def is_anthropic(self) -> bool:
