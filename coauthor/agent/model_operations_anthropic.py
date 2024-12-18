@@ -1,33 +1,34 @@
-"""Anthropic-specific model configuration."""
+"""Anthropic-specific model operations."""
 
 import os
 import re
-from dataclasses import dataclass
-from typing import Any
 from anthropic import Anthropic
+from typing import Any
 
-from ..agent import AgentSettings, AgentConfig
-from ..agent.agent_state import AgentRoundState
 from ..logger import logger
-from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 from ..utils.file import read_file, write_file
+from ..utils.xml import filter_tags_from_text, extract_text_from_tags
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
-from ..utils.xml import extract_text_from_tags, filter_tags_from_text
+from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
-from .tool_handler import ToolState
-from .model_base import ModelHandler, ModelProvider
+from .model_operations import ModelOperations
+from .model_config import ModelConfig
 from .response_usage import AnthropicResponseUsage
 
+from ..agent.agent_state import AgentRoundState
+from ..agent import AgentSettings, AgentConfig
+from .tool_handler import ToolState
 
-@dataclass
-class AnthropicModelHandler(ModelHandler):
-    """Configuration for Anthropic models."""
 
-    provider: ModelProvider = ModelProvider.ANTHROPIC
+class AnthropicOperations(ModelOperations):
+    """Anthropic-specific operations."""
+
+    def __init__(self, config: ModelConfig):
+        super().__init__(config)
 
     def get_client(self) -> Anthropic:
         """Get Anthropic client."""
-        return Anthropic(api_key=self.provider.get_api_key())
+        return Anthropic(api_key=self.config.get_api_key())
 
     def create_response(
         self,
@@ -39,8 +40,8 @@ class AnthropicModelHandler(ModelHandler):
     ) -> Any:
         """Create a response using Anthropic's API."""
         return client.beta.messages.create(
-            model=self.full_name,
-            max_tokens=self.max_output_tokens,
+            model=self.config.full_name,
+            max_tokens=self.config.max_output_tokens,
             messages=messages,
             temperature=temperature,
             stop_sequences=[end_tag] if end_tag else None,
@@ -64,7 +65,7 @@ class AnthropicModelHandler(ModelHandler):
         request = {
             "type": "text",
             "text": user_request,
-            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
+            **({"cache_control": {"type": "ephemeral"}} if self.config.capabilities.supports_prompt_caching else {}),
         }
         content.append(request)
 
@@ -84,12 +85,12 @@ class AnthropicModelHandler(ModelHandler):
         message = {
             "type": "text",
             "text": user_message,
-            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
+            **({"cache_control": {"type": "ephemeral"}} if self.config.capabilities.supports_prompt_caching else {}),
         }
         content.append(message)
 
         # Manage cache control for previous messages
-        if self.capabilities.supports_prompt_caching and isinstance(messages[-1]["content"], list):
+        if self.config.capabilities.supports_prompt_caching and isinstance(messages[-1]["content"], list):
             prev_content = messages[-1]["content"]
             if len(prev_content) >= 2:
                 prev_content[-2].pop("cache_control", None)
@@ -103,7 +104,7 @@ class AnthropicModelHandler(ModelHandler):
         """Create image content for Anthropic models."""
 
         def create_content_pair(image: dict) -> list[dict]:
-            is_pdf = self.capabilities.supports_native_pdf and image["media_type"] == "application/pdf"
+            is_pdf = self.config.capabilities.supports_native_pdf and image["media_type"] == "application/pdf"
             return [
                 {"type": "text", "text": f"{'Document' if is_pdf else 'Image'}: {image['file_name']}"},
                 {"type": "document" if is_pdf else "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
@@ -133,7 +134,7 @@ class AnthropicModelHandler(ModelHandler):
         # Extract base response
         stop_reason = response_object.stop_reason
         new_response = response_object.content[0].text.strip()
-        if self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
+        if self.config.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
 
         # Check for confirmation patterns
@@ -141,7 +142,7 @@ class AnthropicModelHandler(ModelHandler):
             stop_reason = "ask_for_confirmation"
 
         # Handle output tags if present
-        if "<output>" in new_response and self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
+        if "<output>" in new_response and self.config.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
             new_response = extract_text_from_tags(new_response, "output")
             logger.warning("No <output> tags found in response" if new_response == new_response else "Extracted content from <output> tags")
@@ -165,7 +166,7 @@ class AnthropicModelHandler(ModelHandler):
         agent_config: AgentConfig,
     ) -> None:
         """Handle continuation for Anthropic models."""
-        if self.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
+        if self.config.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
             output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
             if round_state.continuation_count <= 1:
                 user_message_continuation = (
@@ -231,7 +232,7 @@ class AnthropicModelHandler(ModelHandler):
         if os.path.exists(output_file) and os.path.getsize(output_file) > 15:
             # try to get prefill from existing file
             file_content = read_file(output_file)
-            if self.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
+            if self.config.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
                 file_content = filter_tags_from_text(file_content, "monologue")
 
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
@@ -246,7 +247,7 @@ class AnthropicModelHandler(ModelHandler):
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
                 tool_state.update_accumulated_output(file_content)
-                if self.capabilities.supports_prompt_caching:
+                if self.config.capabilities.supports_prompt_caching:
                     content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
                 else:
                     content = file_content
@@ -269,13 +270,13 @@ class AnthropicModelHandler(ModelHandler):
 
     def compute_price(self, response_usage: Any) -> float:
         """Compute the price for token usage."""
-        base_price = (response_usage.input_tokens * self.input_price + response_usage.output_tokens * self.output_price) / 1e6
+        base_price = (response_usage.input_tokens * self.config.input_price + response_usage.output_tokens * self.config.output_price) / 1e6
 
-        if self.capabilities.supports_prompt_caching:
+        if self.config.capabilities.supports_prompt_caching:
             if hasattr(response_usage, "cache_creation_input_tokens"):
-                base_price += (response_usage.cache_creation_input_tokens * self.input_price * 1.25) / 1e6
+                base_price += (response_usage.cache_creation_input_tokens * self.config.input_price * 1.25) / 1e6
             if hasattr(response_usage, "cache_read_input_tokens"):
-                base_price += (response_usage.cache_read_input_tokens * self.input_price * 0.1) / 1e6
+                base_price += (response_usage.cache_read_input_tokens * self.config.input_price * 0.1) / 1e6
 
         return base_price
 
@@ -289,7 +290,7 @@ class AnthropicModelHandler(ModelHandler):
         if messages[-1]["role"] == "assistant":
             last_message = messages[-1]
 
-            if self.capabilities.supports_prompt_caching:
+            if self.config.capabilities.supports_prompt_caching:
                 if isinstance(last_message["content"], list):
                     # Remove cache_control from previous message if it exists
                     if len(last_message["content"]) >= 2 and isinstance(last_message["content"][-2], dict):
