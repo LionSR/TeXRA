@@ -53,6 +53,7 @@ class AgentGlobalState:
     total_response_time: float = 0  # Cumulative response time
     total_input_tokens: int = 0  # Total tokens consumed
     total_output_tokens: int = 0  # Total tokens generated
+    total_round_number: int = 0  # Total number of rounds
     model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None  # Overall usage stats
 
     @classmethod

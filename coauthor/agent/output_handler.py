@@ -9,6 +9,7 @@ from ..logger import logger
 from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
 from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
+
 from .logdb import update_log_output_files
 
 

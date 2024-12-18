@@ -166,7 +166,7 @@ class AnthropicOperations(ModelOperations):
         agent_config: AgentConfig,
     ) -> None:
         """Handle continuation for Anthropic models."""
-        if self.config.capabilities.likes_to_ask_for_confirmation and agent_settings.auto_confirmation:
+        if self.config.capabilities.likes_to_ask_for_confirmation and self.config.capabilities.likes_to_ask_for_confirmation:
             output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
             if round_state.continuation_count <= 1:
                 user_message_continuation = (

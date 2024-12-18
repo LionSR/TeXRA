@@ -22,7 +22,7 @@ class ModelOperations(ABC):
     @property
     def is_openai_compatible(self) -> bool:
         """Check if this is an OpenAI-compatible model."""
-        return self.config.provider in [ModelProvider.OPENAI, ModelProvider.GOOGLE, ModelProvider.OPENROUTER]
+        return self.config.provider in [ModelProvider.OPENAI, ModelProvider.GOOGLE]
 
     @property
     def is_anthropic(self) -> bool:

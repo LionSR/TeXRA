@@ -68,7 +68,7 @@ prompts:
 
     Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format for your output:
     <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}. As mentioned previously in the system prompt, you should not wrap any monologue here.
+    % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}.
     </latex_document>
 
   user_reflect: |
