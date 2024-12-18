@@ -10,7 +10,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     "opus": ModelConfig(
         name="opus",
         full_name="claude-3-opus-20240229",
-        openrouter_full_name="anthropic/claude-3-opus-20240229",
+        openrouter_full_name="anthropic/claude-3-opus:beta",
         provider=ModelProvider.ANTHROPIC,
         max_output_tokens=4096,
         context_window=200000,
@@ -37,7 +37,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     "sonnet+": ModelConfig(
         name="sonnet+",
         full_name="claude-3-5-sonnet-20240620",
-        openrouter_full_name="anthropic/claude-3.5-sonnet-20240620",
+        openrouter_full_name="anthropic/claude-3.5-sonnet-20240620:beta",
         provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
@@ -48,7 +48,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     "sonnet": ModelConfig(
         name="sonnet",
         full_name="claude-3-sonnet-20240229",
-        openrouter_full_name="anthropic/claude-3.5-sonnet-20240229",
+        openrouter_full_name="anthropic/claude-3.5-sonnet-20240229:beta",
         provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
@@ -59,7 +59,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     "haiku+": ModelConfig(
         name="haiku+",
         full_name="claude-3-5-haiku-20241022",
-        openrouter_full_name="anthropic/claude-3.5-haiku-20241022",
+        openrouter_full_name="anthropic/claude-3.5-haiku:beta",
         provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,
@@ -75,7 +75,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
     "haiku": ModelConfig(
         name="haiku",
         full_name="claude-3-haiku-20240307",
-        openrouter_full_name="anthropic/claude-3.5-haiku-20240307",
+        openrouter_full_name="anthropic/claude-3.5-haiku-20240307:beta",
         provider=ModelProvider.ANTHROPIC,
         max_output_tokens=8192,
         context_window=200000,

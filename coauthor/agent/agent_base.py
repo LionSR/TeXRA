@@ -46,9 +46,9 @@ class BaseReflectChainAgent(ABC):
         self.agent_prompts = agent_prompts
         self.agent_path = agent_path
 
-        logger.debug(f"Model operations: {self.model_operations}")
-        logger.debug(f"Agent config: {self.agent_config}")
-        logger.debug(f"Agent settings: {self.agent_settings}")
+        logger.debug(f"Model config: {self.model_operations.config}\n")
+        logger.debug(f"Agent config: {self.agent_config}\n")
+        logger.debug(f"Agent settings: {self.agent_settings}\n")
 
         # Initialize basic attributes
         self.output_file = ["", ""]

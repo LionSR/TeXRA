@@ -70,10 +70,13 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    if agent_config.model not in MODEL_CONFIGS:
+    model_name = agent_config.model.strip("OR")
+    if model_name not in MODEL_CONFIGS:
         raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
 
-    model_config = MODEL_CONFIGS[agent_config.model]
+    model_config = MODEL_CONFIGS[model_name]
+    model_config.use_openrouter = "OR" in agent_config.model
+
     model_operations = ModelFactory.create_operations(model_config)
 
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
