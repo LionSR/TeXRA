@@ -13,10 +13,10 @@ class ModelFactory:
     def create_operations(config: ModelConfig) -> ModelOperations:
         """Create model operations based on provider and OpenRouter configuration."""
         # Handle OpenRouter configuration - this takes precedence over provider
-        if config.use_openrouter or config.name.endswith('OR'):
+        if config.use_openrouter or config.name.endswith("OR"):
             # Ensure use_openrouter is set if name ends with OR
             config.use_openrouter = True
-            if config.name.endswith('OR'):
+            if config.name.endswith("OR"):
                 config.name = config.name[:-2]  # Remove OR suffix
             return OpenRouterOperations(config)
 
