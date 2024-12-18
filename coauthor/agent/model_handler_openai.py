@@ -206,7 +206,15 @@ class OpenAIHandler(ModelHandler):
 
     def compute_price(self, response_usage: Any) -> float:
         """Compute price for OpenAI token usage."""
-        base_price = (response_usage.prompt_tokens * self.config.input_price + response_usage.completion_tokens * self.config.output_price) / 1e6
+        # Handle Google models that return None for usage
+        if response_usage is None:
+            return 0.0
+
+        # Get token counts with defaults for Google models
+        prompt_tokens = getattr(response_usage, "prompt_tokens", 0)
+        completion_tokens = getattr(response_usage, "completion_tokens", 0)
+
+        base_price = (prompt_tokens * self.config.input_price + completion_tokens * self.config.output_price) / 1e6
 
         # Handle special token types
         if hasattr(response_usage, "reasoning_tokens"):
@@ -218,13 +226,32 @@ class OpenAIHandler(ModelHandler):
 
     def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage:
         """Compute OpenAI-specific statistics."""
+        # For Google models, create a minimal usage object with zeros
+        if response_usage is None:
+            return OpenAIResponseUsage.from_response(
+                type(
+                    "EmptyUsage",
+                    (),
+                    {
+                        "prompt_tokens": 0,
+                        "completion_tokens": 0,
+                        "prompt_tokens_details": type("Details", (), {"cached_tokens": 0})(),
+                        "completion_tokens_details": type(
+                            "Details", (), {"reasoning_tokens": 0, "accepted_prediction_tokens": None, "rejected_prediction_tokens": None}
+                        )(),
+                    },
+                )(),
+                self.compute_price(response_usage),
+                response_time,
+            )
+
         return OpenAIResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
     def update_message_content(
         self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState, auto_confirmation: bool = False
     ) -> None:
         """Update message content for OpenAI models."""
-        logger.debug("Updating message content for OpenAI models")
+        logger.debug("Updating message content for OpenAI API compatible models")
 
         # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
         if messages[-1]["role"] == "user":
@@ -243,3 +270,7 @@ class OpenAIHandler(ModelHandler):
                 logger.debug("Last message is a request message rather than a ask to continue after cut off")
                 # otherwise last message is a request message rather than a ask to continue after cut off
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})
+
+    def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
+        """Determine if OpenAI model should continue generating."""
+        return stop_reason == "length" and not agent_settings.has_end_tag(new_response)
