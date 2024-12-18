@@ -352,111 +352,6 @@ class BaseReflectChainAgent(ABC):
 
         return state_round, state_global, tool_state, end_turn
 
-    def process_first_round(
-        self,
-        messages: list[dict],
-        user_vars: dict[str, str],
-        state_global: AgentStateGlobal,
-        tool_state: ToolState,
-        output_file: str,
-        curr_round: int = 0,
-    ) -> tuple[AgentStateRound, AgentStateGlobal, ToolState, bool, list[dict]]:
-        """Process the first round."""
-        logger.info(f"\n\nProcessing round {curr_round}")
-
-        system_prompt = render_prompt(self.agent_prompts.system_prompt, user_vars)
-        user_request = render_prompt(self.agent_prompts.user_request, user_vars)
-        user_prefix = render_prompt(self.agent_prompts.user_prefix, user_vars)
-
-        if tool_state.tex_count_stats:
-            user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
-
-        messages = self.model_handler.initialize_messages(
-            user_prefix,
-            user_request,
-            figure_files=tool_state.figure_files,
-            system_prompt=system_prompt,
-        )
-
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
-
-        end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            self.agent_config,
-            self.agent_settings,
-            messages,
-            tool_state,
-            output_file,
-            prefill,
-        )
-
-        if end_turn:
-            state_round = AgentStateRound.initialize(curr_round)
-            return state_round, state_global, tool_state, end_turn, messages
-
-        state_round = AgentStateRound.initialize(curr_round)
-
-        state_round, state_global, tool_state, end_turn = self._process_response_cycle(
-            messages,
-            state_round,
-            state_global,
-            tool_state,
-            output_file,
-        )
-
-        return state_round, state_global, tool_state, end_turn, messages
-
-    def process_reflection_round(
-        self,
-        messages: list[dict],
-        user_vars: dict[str, str],
-        state_global: AgentStateGlobal,
-        tool_state: ToolState,
-        output_file: str,
-        curr_round: int = 1,
-    ) -> tuple[AgentStateRound, AgentStateGlobal, ToolState, bool, list[dict]]:
-        """Process the reflection round."""
-        logger.info(f"\n\nProcessing round {curr_round}")
-
-        state_round = AgentStateRound.initialize(curr_round)
-
-        user_request_reflect = render_prompt(self.agent_prompts.user_reflect, user_vars)
-        user_message = f"{user_request_reflect}\n" if user_request_reflect else ""
-        if tool_state.tex_count_stats:
-            user_message = f"{tool_state.tex_count_stats}{user_message}"
-
-        # Only create reflection message if there's actual content
-        if user_message.strip():
-            messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
-        else:
-            return state_round, state_global, tool_state, True, messages
-
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
-
-        end_turn, messages = self.model_handler.initialize_output_and_prefill(
-            self.agent_config,
-            self.agent_settings,
-            messages,
-            tool_state,
-            output_file,
-            prefill,
-        )
-
-        if end_turn:
-            state_round = AgentStateRound.initialize(curr_round)
-            return state_round, state_global, tool_state, end_turn, messages
-
-        state_round, state_global, tool_state, end_turn = self._process_response_cycle(
-            messages,
-            state_round,
-            state_global,
-            tool_state,
-            output_file,
-        )
-
-        return state_round, state_global, tool_state, end_turn, messages
-
     def process(self):
         """Process the input files and generate output."""
         # Initialize input files list
@@ -471,9 +366,8 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
-        # Merge figure_file into figure_files if it exists
+        # Handle figure extraction for vision-capable models
         if self.model_handler.config.capabilities.supports_vision:
-
             if self.agent_config.figure_file and self.agent_config.figure_file not in tool_state.figure_files:
                 tool_state.add_figure_files([self.agent_config.figure_file])
             if self.agent_config.figure_files:
@@ -492,11 +386,50 @@ class BaseReflectChainAgent(ABC):
         # Initialize state and messages
         state_global = AgentStateGlobal.initialize()
         messages = []
+        curr_round = 0
+        logger.info(f"\n\nProcessing round {curr_round}")
 
-        # Process first round
-        state_round, state_global, tool_state, end_turn, messages = self.process_first_round(
-            messages, self.user_vars, state_global, tool_state, self.output_file[0]
+        # Set up initial prompts
+        system_prompt = render_prompt(self.agent_prompts.system_prompt, self.user_vars)
+        user_request = render_prompt(self.agent_prompts.user_request, self.user_vars)
+        user_prefix = render_prompt(self.agent_prompts.user_prefix, self.user_vars)
+
+        if tool_state.tex_count_stats:
+            user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
+
+        # Initialize messages with prompts
+        messages = self.model_handler.initialize_messages(
+            user_prefix,
+            user_request,
+            figure_files=tool_state.figure_files,
+            system_prompt=system_prompt,
         )
+
+        # Handle prefill
+        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        tool_state.update_accumulated_output(prefill if prefill else "")
+
+        # Initialize output and handle prefill
+        end_turn, messages = self.model_handler.initialize_output_and_prefill(
+            self.agent_config,
+            self.agent_settings,
+            messages,
+            tool_state,
+            self.output_file[0],
+            prefill,
+        )
+
+        if not end_turn:
+            state_round = AgentStateRound.initialize(curr_round)
+            state_round, state_global, tool_state, end_turn = self._process_response_cycle(
+                messages,
+                state_round,
+                state_global,
+                tool_state,
+                self.output_file[0],
+            )
+        else:
+            state_round = AgentStateRound.initialize(curr_round)
 
         # Handle output and logging
         self.handle_output(state_round, state_global, self.output_file[0], end_turn, curr_round=0)
@@ -509,58 +442,83 @@ class BaseReflectChainAgent(ABC):
 
         return state_round, state_global, messages, end_turn, tool_state
 
-    def reflect(self, state_global: AgentStateGlobal, messages, tool_state: ToolState, curr_round: int = 1):
-
-        # if the model does not support vision, then we do not need to extract normal and tikz figures?
-
+    def reflect(self, state_global: AgentStateGlobal, messages: list[dict], tool_state: ToolState, curr_round: int = 1):
+        """Process reflection round."""
+        # Handle tex count for output files
         if self.agent_config.output_files:
-            # Handle multiple output files
             if self.agent_config.tool_config.include_tex_count:
                 tool_state.tex_count_stats = get_tex_count_stats(self.agent_config.output_files)
 
+            # Extract TikZ figures from output files if supported
             if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
-                # Handle multiple output files
                 for output_file in self.output_handler.output_files[curr_round]:
                     logger.debug(f"Extracting TikZ figures from {output_file}")
-                    extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(output_file)
-                    if extracted_tikz_figures:
+                    if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
                         tool_state.add_figure_files(extracted_tikz_figures)
         else:
             # Handle single output file
-            logger.debug(f"Output files: {self.output_handler.output_files[0]}")
             generated_output_file = self.output_handler.output_files[0][0]
             if self.agent_config.tool_config.include_tex_count:
                 tool_state.tex_count_stats = get_tex_count_stats(generated_output_file)
             if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
                 logger.debug(f"Extracting TikZ figures from {generated_output_file}")
-                extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(generated_output_file)
-                if extracted_tikz_figures:
+                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(generated_output_file):
                     tool_state.add_figure_files(extracted_tikz_figures)
 
         if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
-        state_round, state_global, tool_state, end_turn, messages = self.process_reflection_round(
+        # Initialize reflection round
+        logger.info(f"\n\nProcessing round {curr_round}")
+        state_round = AgentStateRound.initialize(curr_round)
+
+        # Prepare reflection message
+        user_request_reflect = render_prompt(self.agent_prompts.user_reflect, self.user_vars)
+        user_message = f"{user_request_reflect}\n" if user_request_reflect else ""
+        if tool_state.tex_count_stats:
+            user_message = f"{tool_state.tex_count_stats}{user_message}"
+
+        # Only proceed if there's actual content
+        if not user_message.strip():
+            return state_round, state_global, messages, True
+
+        messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
+
+        # Handle prefill for reflection round
+        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        tool_state.update_accumulated_output(prefill if prefill else "")
+
+        end_turn, messages = self.model_handler.initialize_output_and_prefill(
+            self.agent_config,
+            self.agent_settings,
             messages,
-            self.user_vars,
-            state_global,
             tool_state,
             self.output_file[1],
+            prefill,
         )
 
-        self.handle_output(state_round, state_global, self.output_file[1], end_turn, curr_round=1)
+        if not end_turn:
+            state_round, state_global, tool_state, end_turn = self._process_response_cycle(
+                messages,
+                state_round,
+                state_global,
+                tool_state,
+                self.output_file[1],
+            )
 
+        # Handle output and logging
+        self.handle_output(state_round, state_global, self.output_file[1], end_turn, curr_round=1)
         logger.info(
             f"\n\nProcessed input file {self.agent_config.input_file} "
             f"and/or input files {self.agent_config.input_files}. "
             f"The round 1 output was saved as {self.output_file[1]}"
         )
-
         logger.info("Completed round 1")
 
         return state_round, state_global, messages, end_turn
 
     def run(self):
+        """Run the agent processing pipeline."""
         state_round, state_global, messages, end_turn, tool_state = self.process()
 
         if self.agent_config.reflect and end_turn:

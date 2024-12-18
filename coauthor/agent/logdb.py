@@ -155,7 +155,12 @@ def update_log_statistics(log_id: int, state_global: AgentStateGlobal, state_rou
             # Get the output file from the current round state
             output_file = state_round.output_file
 
-            state_global_json = json.dumps(state_global.to_dict())
+            # Convert state_global to dict before JSON serialization
+            state_global_dict = state_global.to_dict()
+            if state_global_dict.get("model_usage"):
+                state_global_dict["model_usage"] = state_global_dict["model_usage"].to_dict()
+
+            state_global_json = json.dumps(state_global_dict)
             state_rounds_json = json.dumps(existing_state_rounds)
 
             # Update the database

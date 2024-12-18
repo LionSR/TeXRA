@@ -18,6 +18,7 @@ class ModelHandler(ABC):
 
     def __init__(self, config: ModelConfig):
         self.config = config
+        self.capabilities = config.capabilities
 
     @property
     def is_openai_compatible(self) -> bool:
