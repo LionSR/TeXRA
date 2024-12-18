@@ -45,7 +45,7 @@ class OpenAIHandler(ModelHandler):
         if end_tag and "o1" not in self.config.name.lower():
             kwargs["stop"] = [end_tag]
 
-        if "o1" in self.config.name.lower():
+        if self.config.name.lower() == "o1":
             kwargs["reasoning_effort"] = "high"
 
         return client.chat.completions.create(**kwargs)
@@ -182,7 +182,7 @@ class OpenAIHandler(ModelHandler):
             if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_chars_from_input:
                 prefill += tool_state.first_k_chars_from_input
                 tool_state.update_accumulated_output("")
-                prefill = f"<latex_document>{tool_state.first_k_chars_from_input}"
+                prefill = f"<{agent_settings.document_tag}>{tool_state.first_k_chars_from_input}"
 
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
