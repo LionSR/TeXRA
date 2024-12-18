@@ -145,6 +145,7 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
         "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
         "</scratchpad>\n    \n```latex": "</scratchpad>\n\n<latex_document>",
         "```\n</latex_document>": "</latex_document>",
+        "</scratchpad>\n\\begin{document}": "</scratchpad>\n<latex_document>\n\\begin{document}",
     },
 )
 
