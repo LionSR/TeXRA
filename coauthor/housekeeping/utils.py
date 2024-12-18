@@ -14,20 +14,20 @@ def get_agent_first_name_chunk(agent: str) -> str:
         return agent
 
 
-def get_file_patterns(base: str, model: str, agent: str, num_rounds: int = 4) -> list[str]:
+def get_file_patterns(base: str, model: str, agent: str, total_rounds: int = 4) -> list[str]:
     """Generate list of file patterns for LaTeX outputs across multiple rounds."""
     patterns = []
-    for round in range(num_rounds):
-        base_pattern = f"{base}_{agent}_r{round}_{model}"
-        full_pattern = f"{base}_{agent}_r{round}_full_{model}"
+    for curr_round in range(total_rounds):
+        base_pattern = f"{base}_{agent}_r{curr_round}_{model}"
+        full_pattern = f"{base}_{agent}_r{curr_round}_full_{model}"
         patterns.extend(
             [
                 base_pattern,
                 f"{base_pattern}_diff",
-                f"{base_pattern}_diffr{round}r{round-1}",
+                f"{base_pattern}_diffr{curr_round}r{curr_round-1}",
                 full_pattern,
                 f"{full_pattern}_diff",
-                f"{full_pattern}_diffr{round}r{round-1}",
+                f"{full_pattern}_diffr{curr_round}r{curr_round-1}",
                 f"{base_pattern}_thinking",
             ]
         )
