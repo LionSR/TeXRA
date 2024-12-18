@@ -1,8 +1,10 @@
-from typing import TypedDict, Any
+from dataclasses import dataclass
+from typing import Any
 
 
-class ResponseUsageBase(TypedDict):
-    """Base type for response usage statistics."""
+@dataclass
+class ResponseUsageBase:
+    """Base class for response usage statistics."""
 
     total_input_tokens: int
     total_output_tokens: int
@@ -10,9 +12,21 @@ class ResponseUsageBase(TypedDict):
     cost: float
     response_time: float
 
+    def __getitem__(self, key: str) -> Any:
+        """Enable dictionary-style access (config['input_file'])"""
+        return getattr(self, key)
 
+    def get(self, key: str, default: Any = None) -> Any:
+        """Dictionary-style get with default value"""
+        try:
+            return self[key]
+        except AttributeError:
+            return default
+
+
+@dataclass
 class OpenAIResponseUsage(ResponseUsageBase):
-    """Type for OpenAI response usage statistics."""
+    """Class for OpenAI response usage statistics."""
 
     prompt_tokens: int
     completion_tokens: int
@@ -50,8 +64,9 @@ class OpenAIResponseUsage(ResponseUsageBase):
         )
 
 
+@dataclass
 class AnthropicResponseUsage(ResponseUsageBase):
-    """Type for Anthropic response usage statistics."""
+    """Class for Anthropic response usage statistics."""
 
     input_tokens: int
     output_tokens: int
