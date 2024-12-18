@@ -209,12 +209,12 @@ class BaseReflectChainAgent(ABC):
     def _get_tool_flags(self) -> dict[str, Any]:
         """Get variables related to tool usage flags."""
         return {
-            "AUTO_CONFIRMATION": self.agent_config.tool_config.auto_confirmation,
-            "USE_PREFILL_FROM_INPUT": self.agent_config.tool_config.use_prefill_from_input,
             "AUTO_EXTRACT_FIGURE": self.agent_config.tool_config.auto_extract_figure,
             "AUTO_EXTRACT_TIKZ_FIGURE": self.agent_config.tool_config.auto_extract_tikz_figure,
             "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": self.agent_config.tool_config.auto_extract_tikz_figure_reflect,
             "INCLUDE_TEX_COUNT": self.agent_config.tool_config.include_tex_count,
+            "AUTO_CONFIRMATION": self.agent_config.tool_config.auto_confirmation,
+            "USE_PREFILL_FROM_INPUT": self.agent_config.tool_config.use_prefill_from_input,
         }
 
     def setup(self):
@@ -283,13 +283,13 @@ class BaseReflectChainAgent(ABC):
                 response_object, self.agent_settings.end_tag, self.agent_config.tool_config.auto_confirmation
             )
 
+            logger.info(f"Stop reason: {stop_reason}")
+            logger.info(f"Token usage: {response_usage}")
+
             # Compute statistics and update states
             model_usage = self.model_handler.compute_statistics(response_usage, response_time)
             state_round.update_token_counts(model_usage)
             state_global.update_from_curr_round(state_round)
-
-            logger.info(f"Stop reason: {stop_reason}")
-            logger.info(f"Token usage: {response_object.usage}")
 
             # Early exit for repetition
             if check_for_massive_repetition(tool_state.last_response, new_response):
@@ -338,17 +338,10 @@ class BaseReflectChainAgent(ABC):
             state_round.increment_continuation()
             logger.info(f"Starting continuation #{state_round.continuation_count}")
 
-            # the following two should be handled in a unified way as self.model_handler_add_continue_message(...) etc
-            if self.model_handler.is_openai_compatible:
-                if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
-                    self.model_handler.add_continue_message(messages, state_round, tool_state, self.agent_settings, self.agent_config)
-                    continue
-
-            if self.model_handler.is_anthropic:
-                if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
-                    end_turn = False
-                    self.model_handler.add_continue_message(messages, state_round, tool_state, self.agent_settings, self.agent_config)
-                    continue
+            # Check if model should continue generating
+            if self.model_handler.should_continue(stop_reason, new_response, self.agent_settings):
+                self.model_handler.add_continue_message(messages, state_round, tool_state, self.agent_settings, self.agent_config)
+                continue
 
         return state_round, state_global, tool_state, end_turn
 

@@ -256,3 +256,8 @@ class ModelHandler(ABC):
     ) -> None:
         """Update message content."""
         pass
+
+    @abstractmethod
+    def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
+        """Determine if the model should continue generating based on stop reason and response."""
+        pass
