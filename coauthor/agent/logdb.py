@@ -216,6 +216,9 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
 
 def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict]:
     """Retrieve complete log entry information for a specific ID."""
+
+    # the idea is that we can retrive the state of panel by using JSON.parse
+
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
