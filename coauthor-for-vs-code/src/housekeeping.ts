@@ -55,6 +55,7 @@ const MODELS = [
   'haiku+',
   'haiku',
   'o1',
+  'o1preview',
   'o1-',
   'gpt4ol',
   'gpt4o',
