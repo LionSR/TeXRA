@@ -2,7 +2,7 @@
 from .agent_base import BaseReflectChainAgent
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_state import AgentRoundState, AgentGlobalState
-from .model_operations import ModelOperations
+from .model_handler import ModelHandler
 from .output_handler import get_output_file_name
 
 
@@ -10,21 +10,21 @@ class ThinkAndWrite(BaseReflectChainAgent):
     def __init__(
         self,
         # Core handlers/configs (required)
-        model_operations: ModelOperations,
+        model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         # Path info (required)
         agent_path: str,
     ) -> None:
-        super().__init__(model_operations, agent_config, agent_settings, agent_prompts, agent_path)
+        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
 
     def get_output_file(self, round: int) -> str:
         """Get the output file name for the given round."""
         base_output_file = self.agent_config.output_name_override or self.agent_config.input_file
         file_extension = "xml" if self.use_scratchpad else self.agent_settings.output_ext
         return get_output_file_name(
-            base_output_file, self.agent_config.agent, self.model_operations.config.name, file_extension, round, self.agent_config.edited_file
+            base_output_file, self.agent_config.agent, self.model_handler.config.name, file_extension, round, self.agent_config.edited_file
         )
 
     def handle_output(
@@ -59,14 +59,14 @@ class DirectWrite(BaseReflectChainAgent):
     def __init__(
         self,
         # Core handlers/configs (required)
-        model_operations: ModelOperations,
+        model_handler: ModelHandler,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         # Path info (required)
         agent_path: str,
     ) -> None:
-        super().__init__(model_operations, agent_config, agent_settings, agent_prompts, agent_path)
+        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
 
     def get_output_file(self, round: int) -> str:
         """Get the output file name for the given round."""
@@ -74,7 +74,7 @@ class DirectWrite(BaseReflectChainAgent):
         return get_output_file_name(
             base_output_file,
             self.agent_config.agent,
-            self.model_operations.config.name,
+            self.model_handler.config.name,
             self.agent_settings.output_ext,
             round,
             self.agent_config.edited_file,
