@@ -16,7 +16,7 @@ def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
     return rendered_prompt.strip()
 
 
-def get_first_k_from_document(input_file: str, k: int) -> str | None:
+def get_first_k_chars_from_document(input_file: str, k: int) -> str | None:
     """Get the first K characters from a document.
 
     Args:
