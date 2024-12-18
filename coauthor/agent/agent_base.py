@@ -30,7 +30,7 @@ from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_state import AgentRoundState, AgentGlobalState
 from .tool_handler import ToolState
 from .logdb import create_log_entry, update_log_statistics, update_log_output_files
-from .model_base import ModelHandler
+from .model_operations import ModelOperations
 from .output_handler import OutputHandler
 
 
@@ -38,15 +38,15 @@ class BaseReflectChainAgent(ABC):
     """Abstract base class for reflect chain agents."""
 
     def __init__(
-        self, model_handler: ModelHandler, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str
+        self, model_operations: ModelOperations, agent_config: AgentConfig, agent_settings: AgentSettings, agent_prompts: AgentPrompts, agent_path: str
     ) -> None:
-        self.model_handler = model_handler
+        self.model_operations = model_operations
         self.agent_config = agent_config
         self.agent_settings = agent_settings
         self.agent_prompts = agent_prompts
         self.agent_path = agent_path
 
-        logger.debug(f"Model handler: {self.model_handler}")
+        logger.debug(f"Model operations: {self.model_operations}")
         logger.debug(f"Agent config: {self.agent_config}")
         logger.debug(f"Agent settings: {self.agent_settings}")
 
@@ -57,7 +57,7 @@ class BaseReflectChainAgent(ABC):
 
         self.setup()
         self.user_vars = self.get_user_vars()
-        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_handler, self.log_id)
+        self.output_handler = OutputHandler(self.agent_settings, self.agent_config, self.model_operations, self.log_id)
 
     def get_user_vars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
@@ -75,7 +75,7 @@ class BaseReflectChainAgent(ABC):
         """Get basic model and instruction variables."""
         return {
             "MODEL": self.agent_config.model,
-            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.capabilities.likes_to_ask_for_confirmation,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_operations.config.capabilities.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
         }
 
@@ -221,7 +221,7 @@ class BaseReflectChainAgent(ABC):
         logger.info(f"Processing file: {self.agent_config.input_file}")
 
         # Initialize client and check scratchpad usage
-        self.client = self.model_handler.get_client()
+        self.client = self.model_operations.get_client()
 
         self.use_scratchpad = "<scratchpad>" in self.agent_settings.prefills if self.agent_settings.prefills else False
         self.output_file[0] = self.get_output_file(round=0)
@@ -264,7 +264,7 @@ class BaseReflectChainAgent(ABC):
         while not end_turn:
             file_exists = os.path.exists(output_file)
             start_time = time.time()
-            response_object = self.model_handler.create_response(
+            response_object = self.model_operations.create_response(
                 self.client,
                 messages,
                 self.agent_settings.temperature or 0.0,
@@ -276,12 +276,12 @@ class BaseReflectChainAgent(ABC):
             logger.info(f"Response time: {response_time:.2f}s")
 
             # Extract and validate response
-            new_response, response_usage, stop_reason = self.model_handler.extract_response(
+            new_response, response_usage, stop_reason = self.model_operations.extract_response(
                 response_object, self.agent_settings.end_tag, self.agent_config.tool_config.auto_confirmation
             )
 
             # Compute statistics and update states
-            model_usage = self.model_handler.compute_statistics(response_usage, response_time)
+            model_usage = self.model_operations.compute_statistics(response_usage, response_time)
             round_state.update_token_counts(model_usage)
             global_state.update_from_round(round_state)
 
@@ -297,7 +297,7 @@ class BaseReflectChainAgent(ABC):
             # Chain response processing operations
             new_response = (
                 apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
-                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
+                if self.model_operations.config.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
                 else new_response
             )
             new_response = apply_replacements(new_response, get_all_replacements()).strip()
@@ -318,10 +318,12 @@ class BaseReflectChainAgent(ABC):
             logger.debug(f"Last {k_slice} chars: {new_response[-k_slice:]}")
 
             # Update message content
-            self.model_handler.update_message_content(messages, best_connector, new_response, tool_state)
+            self.model_operations.update_message_content(messages, best_connector, new_response, tool_state)
 
             # Check stop conditions
-            end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, round_state, global_state, self.agent_settings)
+            end_turn, should_stop = self.model_operations.check_stop_conditions(
+                stop_reason, new_response, round_state, global_state, self.agent_settings
+            )
             if should_stop:
                 break
 
@@ -329,15 +331,15 @@ class BaseReflectChainAgent(ABC):
             round_state.increment_continuation()
             logger.info(f"Starting continuation #{round_state.continuation_count}")
 
-            if self.model_handler.is_openai_compatible:
+            if self.model_operations.is_openai_compatible:
                 if stop_reason == "length" and not self.agent_settings.has_end_tag(new_response):
-                    self.model_handler.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
+                    self.model_operations.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_handler.is_anthropic and self.model_handler.capabilities.likes_to_ask_for_confirmation:
+            if self.model_operations.is_anthropic and self.model_operations.capabilities.likes_to_ask_for_confirmation:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
-                    self.model_handler.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
+                    self.model_operations.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
                     continue
 
         return round_state, global_state, tool_state, end_turn
@@ -361,7 +363,7 @@ class BaseReflectChainAgent(ABC):
         if tool_state.tex_count_stats:
             user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
 
-        messages = self.model_handler.initialize_messages(
+        messages = self.model_operations.initialize_messages(
             user_prefix,
             user_request,
             figure_files=tool_state.figure_files,
@@ -371,7 +373,7 @@ class BaseReflectChainAgent(ABC):
         prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
         tool_state.update_accumulated_output(prefill if prefill else "")
 
-        end_turn, messages = self.model_handler.initialize_output_and_prefill(
+        end_turn, messages = self.model_operations.initialize_output_and_prefill(
             self.agent_config,
             self.agent_settings,
             messages,
@@ -417,14 +419,14 @@ class BaseReflectChainAgent(ABC):
 
         # Only create reflection message if there's actual content
         if user_message.strip():
-            messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
+            messages = self.model_operations.create_reflection_message(messages, user_message, tool_state.figure_files)
         else:
             return round_state, global_state, tool_state, True, messages
 
         prefill = self.agent_settings.prefills[round] if round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
         tool_state.update_accumulated_output(prefill if prefill else "")
 
-        end_turn, messages = self.model_handler.initialize_output_and_prefill(
+        end_turn, messages = self.model_operations.initialize_output_and_prefill(
             self.agent_config,
             self.agent_settings,
             messages,
