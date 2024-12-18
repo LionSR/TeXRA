@@ -55,9 +55,11 @@ class AnthropicHandler(ModelHandler):
         figure_files: list[str] | None = None,
         system_prompt: str | None = None,
     ) -> list[dict]:
-        """Initialize messages for the conversation."""
+        """Initialize messages for Anthropic models."""
+        # Create content list with user prefix
         content = [{"type": "text", "text": user_prefix}]
 
+        # Add images if provided
         if figure_files:
             content.extend(self.create_image_message(figure_files))
 
@@ -69,6 +71,7 @@ class AnthropicHandler(ModelHandler):
         }
         content.append(request)
 
+        # Note: Anthropic handles system prompts differently via create_response()
         return [{"role": "user", "content": content}]
 
     def create_reflection_message(
@@ -78,10 +81,14 @@ class AnthropicHandler(ModelHandler):
         figure_files: list[str] | None = None,
     ) -> list[dict]:
         """Create a reflection message for Anthropic models."""
+        # Create content list
         content = []
+
+        # Add images if provided
         if figure_files:
             content.extend(self.create_image_message(figure_files))
 
+        # Add message with optional caching
         message = {
             "type": "text",
             "text": user_message,
@@ -119,12 +126,13 @@ class AnthropicHandler(ModelHandler):
         end_tag: str,
         auto_confirmation: bool = False,
     ) -> tuple[str, Any, str]:
-        """Extract response text and usage statistics from Anthropic response object."""
+        """Extract response text and usage statistics from Anthropic response."""
         if hasattr(response_object, "error"):
             error_msg = f"API error: {response_object.error}"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        # Check for empty response
         if response_object.usage.output_tokens == 3:  # Anthropic specific empty response check
             error_msg = "No output generated - API returned empty response"
             logger.error(error_msg)
@@ -136,7 +144,7 @@ class AnthropicHandler(ModelHandler):
         stop_reason = response_object.stop_reason
         new_response = response_object.content[0].text.strip()
 
-        # handle auto confirmation
+        # Handle auto confirmation
         if self.config.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
 
@@ -171,10 +179,13 @@ class AnthropicHandler(ModelHandler):
         agent_config: AgentConfig,
     ) -> None:
         """Handle continuation for Anthropic models."""
-        if not self.config.capabilities.likes_to_ask_for_confirmation or not self.config.capabilities.likes_to_ask_for_confirmation:
+        # Skip if model doesn't need confirmation
+        if not self.config.capabilities.likes_to_ask_for_confirmation or not agent_config.tool_config.auto_confirmation:
             return
 
+        # Create continuation message based on round count
         output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
+
         if round_state.continuation_count <= 1:
             user_message_continuation = (
                 "Proceed. "
@@ -182,7 +193,7 @@ class AnthropicHandler(ModelHandler):
                 "please start from the very beginning of the document and work through the full document systematically. "
                 "Note that you have an effectively infinite token response limit "
                 "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                "The total number of tokens you output in the last turn is " + str(output_tokens) + ", "
+                f"The total number of tokens you output in the last turn is {output_tokens}, "
                 "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                 "Respond the latex code of the next section in the <output> ... </output> tags."
             )
@@ -194,24 +205,28 @@ class AnthropicHandler(ModelHandler):
                 "Remember to stay professional and write latex code all the time. "
                 "Note that you have an effectively infinite token response limit "
                 "because the system that you are part of handles continuations automatically. Therefore, just output the complete document. "
-                "The total number of tokens you output in the last turn is " + str(output_tokens) + ", "
+                f"The total number of tokens you output in the last turn is {output_tokens}, "
                 "but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. "
                 "Respond the latex code of the next section in the <output> ... </output> tags."
             )
-            # this should also consider what if continue from existing output of a document
-            document_tag_start_string = f"<{agent_settings.document_tag}>"
-            first_lines = tool_state.last_response.split("\n")[:10]
-            for line in first_lines:
-                if line.strip().startswith(document_tag_start_string):
-                    logger.warning(f"Removing document tag prefix {document_tag_start_string} from response")
-                    tool_state.last_response = tool_state.last_response.replace(line, "", 1).strip()
-                    break
 
+        # Handle document tag if present
+        document_tag_start = f"<{agent_settings.document_tag}>"
+        first_lines = tool_state.last_response.split("\n")[:10]
+        for line in first_lines:
+            if line.strip().startswith(document_tag_start):
+                logger.warning(f"Removing document tag prefix {document_tag_start} from response")
+                tool_state.last_response = tool_state.last_response.replace(line, "", 1).strip()
+                break
+
+        # Filter monologue tags
+        tool_state.last_response = filter_tags_from_text(tool_state.last_response, "monologue")
+
+        # Update messages
         logger.info("Adding User message")
         logger.debug(user_message_continuation)
 
-        tool_state.last_response = filter_tags_from_text(tool_state.last_response, "monologue")
-
+        # better to merge with extract_response?
         # Solution 1: keep updating the last assistant message
         if messages[-1]["role"] == "user":
             if messages[-2]["role"] == "assistant":
