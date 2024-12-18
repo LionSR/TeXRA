@@ -11,7 +11,7 @@ from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import OpenAIResponseUsage
 
-from ..agent.agent_state import AgentRoundState
+from ..agent.agent_state import AgentStateRound
 from ..agent import AgentSettings, AgentConfig
 from .tool_handler import ToolState
 
@@ -139,10 +139,10 @@ class OpenAIHandler(ModelHandler):
 
         return new_response, response_object.usage, stop_reason
 
-    def handle_continuation(
+    def add_continue_message(
         self,
         messages: list[dict],
-        round_state: AgentRoundState,
+        state_round: AgentStateRound,
         tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
@@ -191,14 +191,17 @@ class OpenAIHandler(ModelHandler):
         messages.append({"role": "assistant", "content": file_content})
 
         if agent_settings.has_end_tag(file_content):
-            messages[-1]["content"][-1]["text"] = file_content
+            if isinstance(messages[-1]["content"], list):
+                messages[-1]["content"][-1]["text"] = file_content
+            else:
+                messages[-1]["content"] = file_content
             return True, messages
 
         logger.warning("Output file exists but no end tag found - continuing from file")
         tool_state.update_accumulated_output(file_content)
-        state = AgentRoundState.initialize(0)
+        state = AgentStateRound.initialize(0)
         tool_state.last_response = tool_state.accumulated_output
-        self.handle_continuation(messages, state, tool_state, agent_settings, agent_config)
+        self.add_continue_message(messages, state, tool_state, agent_settings, agent_config)
         return False, messages
 
     def compute_price(self, response_usage: Any) -> float:
@@ -233,7 +236,7 @@ class OpenAIHandler(ModelHandler):
                         messages[-2]["content"].append({"type": "text", "text": best_connector + new_response})
                     else:
                         logger.error("Second last message content is not a list")
-                        messages[-2]["content"] = best_connector + new_response
+                        messages[-2]["content"] = tool_state.accumulated_output
                     # Remove continuation prompt
                     messages.pop()
             else:
