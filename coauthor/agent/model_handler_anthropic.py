@@ -339,3 +339,7 @@ class AnthropicHandler(ModelHandler):
         #         messages[-1]["content"] = new_response
         #     if messages[-2]["role"] == "assistant":
         #         messages[-2]["content"] = best_connector + new_response
+
+    def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
+        """Determine if Anthropic model should continue generating."""
+        return stop_reason not in ("max_tokens", "stop_sequence") and not agent_settings.has_end_tag(new_response)
