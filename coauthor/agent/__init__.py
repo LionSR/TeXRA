@@ -28,9 +28,9 @@ from .logdb import (
 
 # Model infrastructure
 from .model_config import ModelConfig, ModelProvider, ModelCapabilities
-from .model_operations import ModelOperations
-from .model_operations_anthropic import AnthropicOperations
-from .model_operations_openai import OpenAIOperations, OpenAICompatibleOperations
+from .model_handler import ModelHandler
+from .model_handler_anthropic import AnthropicHandler
+from .model_handler_openai import OpenAIHandler, GoogleviaOpenAIHandler
 from .model_registry import MODEL_CONFIGS
 from .model_factory import ModelFactory
 
@@ -63,11 +63,11 @@ __all__ = [
     "ModelConfig",
     "ModelProvider",
     "ModelCapabilities",
-    "ModelOperations",
+    "ModelHandler",
     "MODEL_CONFIGS",
     "ModelFactory",
     # Model implementations
-    "AnthropicOperations",
-    "OpenAIOperations",
-    "OpenAICompatibleOperations",
+    "AnthropicHandler",
+    "OpenAIHandler",
+    "GoogleviaOpenAIHandler",
 ]

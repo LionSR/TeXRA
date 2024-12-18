@@ -1,4 +1,4 @@
-"""OpenAI-specific model operations."""
+"""OpenAI-specific model handlers."""
 
 import os
 from openai import OpenAI
@@ -7,7 +7,7 @@ from typing import Any
 from ..logger import logger
 from ..utils.file import read_file
 
-from .model_operations import ModelOperations
+from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import OpenAIResponseUsage
 
@@ -16,8 +16,8 @@ from ..agent import AgentSettings, AgentConfig
 from .tool_handler import ToolState
 
 
-class OpenAIOperations(ModelOperations):
-    """OpenAI-specific operations."""
+class OpenAIHandler(ModelHandler):
+    """OpenAI-specific handlers."""
 
     def __init__(self, config: ModelConfig):
         super().__init__(config)
@@ -235,8 +235,8 @@ class OpenAIOperations(ModelOperations):
                     messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})
 
 
-class OpenAICompatibleOperations(OpenAIOperations):
-    """Operations for Google models using OpenAI-compatible API."""
+class GoogleviaOpenAIHandler(OpenAIHandler):
+    """Handler for Google models using OpenAI-compatible API."""
 
     def get_client(self) -> OpenAI:
         """Get OpenAI client with Google's base URL."""
@@ -246,8 +246,8 @@ class OpenAICompatibleOperations(OpenAIOperations):
         )
 
 
-class OpenRouterOperations(OpenAIOperations):
-    """Operations for models accessed through OpenRouter."""
+class OpenRouterHandler(OpenAIHandler):
+    """Handler for models accessed through OpenRouter."""
 
     def get_client(self) -> OpenAI:
         """Get OpenAI client with OpenRouter configuration."""
