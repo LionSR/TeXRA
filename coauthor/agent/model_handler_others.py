@@ -5,6 +5,7 @@ from openai import OpenAI
 
 from .model_handler_openai import OpenAIHandler
 from .tool_handler import ToolState
+from .response_usage import OpenAIResponseUsage
 
 
 class GoogleviaOpenAIHandler(OpenAIHandler):
@@ -16,6 +17,33 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
             api_key=self.config.get_api_key(),
             base_url=self.config.get_base_url(),
         )
+
+    def compute_price(self, response_usage: Any) -> float:
+        """Compute price for Google token usage."""
+        # Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
+        prompt_tokens = getattr(response_usage, "promptTokens", 0)
+        completion_tokens = getattr(response_usage, "completionTokens", 0)
+
+        return (prompt_tokens * self.config.input_price + completion_tokens * self.config.output_price) / 1e6
+
+    def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage:
+        """Compute statistics for Google models."""
+        # Create a minimal usage object with Google's token counts
+        usage_obj = type(
+            "GoogleUsage",
+            (),
+            {
+                "prompt_tokens": getattr(response_usage, "promptTokens", 0),
+                "completion_tokens": getattr(response_usage, "completionTokens", 0),
+                "total_tokens": getattr(response_usage, "totalTokens", 0),
+                "prompt_tokens_details": type("Details", (), {"cached_tokens": 0})(),
+                "completion_tokens_details": type(
+                    "Details", (), {"reasoning_tokens": 0, "accepted_prediction_tokens": None, "rejected_prediction_tokens": None}
+                )(),
+            },
+        )()
+
+        return OpenAIResponseUsage.from_response(usage_obj, self.compute_price(response_usage), response_time)
 
 
 class OpenRouterHandler(OpenAIHandler):

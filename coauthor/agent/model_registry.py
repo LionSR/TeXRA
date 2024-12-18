@@ -187,7 +187,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=2097152,
         input_price=1.25,
         output_price=5.0,
-        capabilities=ModelCapabilities(),
+        capabilities=ModelCapabilities(supports_vision=True),
     ),
     "gemini2f": ModelConfig(
         name="gemini2f",
@@ -198,7 +198,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        capabilities=ModelCapabilities(supports_native_pdf=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True, supports_vision=True),
     ),
     "gemini1p+": ModelConfig(
         name="gemini1p+",
@@ -209,7 +209,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=1.25,
         output_price=5.0,
-        capabilities=ModelCapabilities(supports_native_pdf=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True, supports_vision=True),
     ),
     "gemini1f+": ModelConfig(
         name="gemini1f+",
@@ -220,7 +220,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        capabilities=ModelCapabilities(supports_native_pdf=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True, supports_vision=True),
     ),
     # ===== OpenRouter Models =====
     "llama3+OR": ModelConfig(
