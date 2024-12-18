@@ -83,7 +83,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         output_price=1.25,
         capabilities=ANTHROPIC_BASE_CAPABILITIES,
     ),
-    # ===== OpenAI Models =====
+    # ===== OpenAI Reasoning Models =====
     "o1": ModelConfig(
         name="o1",
         full_name="o1-2024-12-17",
@@ -124,11 +124,12 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         input_price=3.0,
         output_price=12.0,
         capabilities=ModelCapabilities(
-            supports_prompt_caching=True,
+            supports_auto_prompt_caching=True,
             supports_vision=False,
             supports_reasoning=True,
         ),
     ),
+    # ===== OpenAI Models =====
     "gpt4o": ModelConfig(
         name="gpt4o",
         full_name="gpt-4o-2024-08-06",
@@ -186,10 +187,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=2097152,
         input_price=1.25,
         output_price=5.0,
-        capabilities=ModelCapabilities(
-            supports_prompt_caching=True,
-            supports_assistant_prefill=True,
-        ),
+        capabilities=ModelCapabilities(),
     ),
     "gemini2f": ModelConfig(
         name="gemini2f",
@@ -211,7 +209,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=1.25,
         output_price=5.0,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True),
     ),
     "gemini1f+": ModelConfig(
         name="gemini1f+",
@@ -222,7 +220,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=1048576,
         input_price=0.075,
         output_price=0.3,
-        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_native_pdf=True),
+        capabilities=ModelCapabilities(supports_native_pdf=True),
     ),
     # ===== OpenRouter Models =====
     "llama3+OR": ModelConfig(

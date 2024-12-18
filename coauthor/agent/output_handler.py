@@ -193,7 +193,8 @@ class OutputHandler:
                     content += f"\n</{document_tag}>"
                 else:
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
-                    content += f"\n</{document_tag}>"
+                    if f"<{document_tag}>" in content:
+                        content += f"\n<{document_tag}>"
 
             content = self._process_xml_content(content)
 
