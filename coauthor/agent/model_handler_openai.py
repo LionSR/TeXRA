@@ -65,6 +65,7 @@ class OpenAIHandler(ModelHandler):
             messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
         else:
             if system_prompt:
+                # note that for openai native models, they have been renamed to "developer" but "system" still works
                 messages.append({"role": "system", "content": system_prompt})
             content = [{"type": "text", "text": user_prefix}]
             if figure_files:
@@ -169,18 +170,19 @@ class OpenAIHandler(ModelHandler):
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for OpenAI-compatible models."""
         if not os.path.exists(output_file) or os.path.getsize(output_file) <= 15:
-            if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_tex_document:
-                prefill += tool_state.first_k_tex_document
+            if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_chars_from_input:
+                prefill += tool_state.first_k_chars_from_input
                 tool_state.update_accumulated_output("")
-                if agent_settings.output_ext == "tex":
-                    prefill = f"<latex_document>{tool_state.first_k_tex_document}"
+                prefill = f"<latex_document>{tool_state.first_k_chars_from_input}"
+
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
 
-        file_content = read_file(output_file).strip()
+        file_content = read_file(output_file)
         messages.append({"role": "assistant", "content": file_content})
 
         if agent_settings.has_end_tag(file_content):
+            messages[-1]["content"][-1]["text"] = file_content
             return True, messages
 
         logger.warning("Output file exists but no end tag found - continuing from file")
@@ -206,74 +208,24 @@ class OpenAIHandler(ModelHandler):
         """Compute OpenAI-specific statistics."""
         return OpenAIResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
 
-    def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
+    def update_message_content(
+        self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState, auto_confirmation: bool = False
+    ) -> None:
         logger.debug("Updating message content for OpenAI models")
 
-        last_message = messages[-1]
-        if self.config.capabilities.supports_assistant_prefill:
-            # although OpenAI models do not support assistant prefill, some models via OpenRouter might do
-            if last_message["role"] == "assistant":
-                messages[-1]["content"] = tool_state.accumulated_output
-            elif last_message["role"] == "user":
-                messages.append({"role": "assistant", "content": tool_state.accumulated_output})
-        else:
-            # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
-            if last_message["role"] == "user":
-                logger.debug("Last message is a user message")
-                if "Your response got cut off" in last_message["content"]:
-                    # the second last message is an assistant message must be a assistant message
-                    if messages[-2]["role"] == "assistant":
-                        if isinstance(messages[-2]["content"], list):
-                            messages[-2]["content"].append({"type": "text", "text": best_connector + new_response})
-                        else:
-                            logger.error("Second last message content is not a list")
-                            messages[-2]["content"] = best_connector + new_response
-                        messages.pop()
-                else:
-                    logger.debug("Last message is a request message rather than a ask to continue after cut off")
-                    # otherwise last message is a request message rather than a ask to continue after cut off
-                    messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})
-
-
-class GoogleviaOpenAIHandler(OpenAIHandler):
-    """Handler for Google models using OpenAI-compatible API."""
-
-    def get_client(self) -> OpenAI:
-        """Get OpenAI client with Google's base URL."""
-        return OpenAI(
-            api_key=self.config.get_api_key(),
-            base_url=self.config.get_base_url(),
-        )
-
-
-class OpenRouterHandler(OpenAIHandler):
-    """Handler for models accessed through OpenRouter."""
-
-    def get_client(self) -> OpenAI:
-        """Get OpenAI client with OpenRouter configuration."""
-        return OpenAI(
-            api_key=self.config.get_api_key(),
-            base_url=self.config.get_base_url(),
-        )
-
-    def create_response(
-        self,
-        client: OpenAI,
-        messages: list[dict],
-        temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
-    ) -> Any:
-        """Create a response using OpenRouter's API."""
-        kwargs = {
-            "model": self.config.openrouter_full_name,  # Use OpenRouter model name
-            "messages": messages,
-            "max_tokens": self.config.max_output_tokens,
-            "temperature": temperature,
-            "extra_headers": {"X-Title": "CoA"},
-        }
-
-        if end_tag:
-            kwargs["stop"] = [end_tag]
-
-        return client.chat.completions.create(**kwargs)
+        # for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
+        if messages[-1]["role"] == "user":
+            logger.debug("Last message is a user message")
+            if "Your response got cut off" in messages[-1]["content"]:
+                # the second last message is an assistant message must be a assistant message
+                if messages[-2]["role"] == "assistant":
+                    if isinstance(messages[-2]["content"], list):
+                        messages[-2]["content"].append({"type": "text", "text": best_connector + new_response})
+                    else:
+                        logger.error("Second last message content is not a list")
+                        messages[-2]["content"] = best_connector + new_response
+                    messages.pop()
+            else:
+                logger.debug("Last message is a request message rather than a ask to continue after cut off")
+                # otherwise last message is a request message rather than a ask to continue after cut off
+                messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})

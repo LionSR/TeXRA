@@ -20,7 +20,7 @@ from ..latex import (
 
 # Local imports - utilities
 from ..utils.file import read_file, write_to_output_file
-from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_from_document
+from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
 from ..utils.xml import get_xml_format_from_files
@@ -299,7 +299,7 @@ class BaseReflectChainAgent(ABC):
 
             # Chain response processing operations
             new_response = (
-                apply_replacement_regex(new_response, get_replacements_by_category("lazy"), flags=re.DOTALL | re.MULTILINE)
+                apply_replacement_regex(new_response, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
                 if self.model_handler.config.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
                 else new_response
             )
@@ -321,7 +321,13 @@ class BaseReflectChainAgent(ABC):
             logger.debug(f"Last {k_slice} chars: {new_response[-k_slice:]}")
 
             # Update message content
-            self.model_handler.update_message_content(messages, best_connector, new_response, tool_state)
+            self.model_handler.update_message_content(
+                messages,
+                best_connector,
+                new_response,
+                tool_state,
+                auto_confirmation=self.agent_config.tool_config.auto_confirmation,
+            )
 
             # Check stop conditions
             end_turn, should_stop = self.model_handler.check_stop_conditions(stop_reason, new_response, round_state, global_state, self.agent_settings)
@@ -337,7 +343,7 @@ class BaseReflectChainAgent(ABC):
                     self.model_handler.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
                     continue
 
-            if self.model_handler.is_anthropic and self.model_handler.config.capabilities.likes_to_ask_for_confirmation:
+            if self.model_handler.is_anthropic:
                 if stop_reason != "max_tokens" and stop_reason != "stop_sequence" and not self.agent_settings.has_end_tag(new_response):
                     end_turn = False
                     self.model_handler.handle_continuation(messages, round_state, tool_state, self.agent_settings, self.agent_config)
@@ -462,7 +468,7 @@ class BaseReflectChainAgent(ABC):
 
         # Handle prefill from input if enabled
         if self.agent_config.tool_config.use_prefill_from_input:
-            tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
+            tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
         # Merge figure_file into figure_files if it exists
         if self.agent_config.figure_file and self.agent_config.figure_file not in tool_state.figure_files:
@@ -531,7 +537,7 @@ class BaseReflectChainAgent(ABC):
                     tool_state.add_figure_files(extracted_tikz_figures)
 
         if self.agent_config.tool_config.use_prefill_from_input:
-            tool_state.first_k_tex_document = get_first_k_from_document(self.agent_config.input_file, self.agent_config.K)
+            tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
         round_state, global_state, tool_state, end_turn, messages = self.process_reflection_round(
             messages,

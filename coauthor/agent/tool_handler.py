@@ -6,7 +6,7 @@ class ToolState:
     """State for tool-specific runtime data that doesn't need to be logged. [Per round]"""
 
     tex_count_stats: str | None = None  # Statistics about TeX document structure
-    first_k_tex_document: str | None = None  # First K lines of TeX document
+    first_k_chars_from_input: str | None = None  # First K lines of TeX document
     last_response: str = ""  # Most recent model response
     accumulated_output: str = ""  # Combined output from all responses
     figure_files: list[str] = field(default_factory=list)  # Paths to figure files

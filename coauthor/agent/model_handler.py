@@ -251,6 +251,7 @@ class ModelHandler(ABC):
         best_connector: str,
         new_response: str,
         tool_state: ToolState,
+        auto_confirmation: bool = False,
     ) -> None:
         """Update message content."""
         pass
