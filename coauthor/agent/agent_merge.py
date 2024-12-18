@@ -5,7 +5,7 @@ from ..logger import logger
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_reflect import DirectWrite
 from .agent_state import AgentRoundState, AgentGlobalState
-from .model_base import ModelHandler
+from .model_operations import ModelOperations
 
 
 class AgentMerge(DirectWrite):
@@ -13,14 +13,14 @@ class AgentMerge(DirectWrite):
 
     def __init__(
         self,
-        model_handler: ModelHandler,
+        model_operations: ModelOperations,
         agent_config: AgentConfig,
         agent_settings: AgentSettings,
         agent_prompts: AgentPrompts,
         agent_path: str,
     ) -> None:
-        """Initialize merge agent with model handler, configs, settings, prompts and path."""
-        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
+        """Initialize merge agent with model operations, configs, settings, prompts and path."""
+        super().__init__(model_operations, agent_config, agent_settings, agent_prompts, agent_path)
         self.output_file = [self.get_output_file(r) for r in range(2)]
 
     def get_output_file(self, round: int) -> str:
