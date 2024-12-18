@@ -15,7 +15,7 @@ from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import AnthropicResponseUsage
 
-from ..agent.agent_state import AgentRoundState
+from ..agent.agent_state import AgentStateRound
 from ..agent import AgentSettings, AgentConfig
 from .tool_handler import ToolState
 
@@ -170,10 +170,10 @@ class AnthropicHandler(ModelHandler):
 
         return new_response, response_object.usage, stop_reason
 
-    def handle_continuation(
+    def add_continue_message(
         self,
         messages: list[dict],
-        round_state: AgentRoundState,
+        state_round: AgentStateRound,
         tool_state: ToolState,
         agent_settings: AgentSettings,
         agent_config: AgentConfig,
@@ -184,9 +184,9 @@ class AnthropicHandler(ModelHandler):
             return
 
         # Create continuation message based on round count
-        output_tokens = round_state.model_usage.get("output_tokens", 0) if round_state.model_usage else 0
+        output_tokens = state_round.model_usage.get("output_tokens", 0) if state_round.model_usage else 0
 
-        if round_state.continuation_count <= 1:
+        if state_round.continuation_count <= 1:
             user_message_continuation = (
                 "Proceed. "
                 "If no previous revised output of the document is provided, "
@@ -262,7 +262,10 @@ class AnthropicHandler(ModelHandler):
                 logger.debug("End tag detected - skipping continuation")
                 if messages[-1]["content"][-1].get("cache_control"):
                     messages[-1]["content"][-1].pop("cache_control")
-                messages[-1]["content"][-1]["text"] = file_content
+                if isinstance(messages[-1]["content"], list):
+                    messages[-1]["content"][-1]["text"] = file_content
+                else:
+                    messages[-1]["content"] = file_content
                 return True, messages
             else:
                 logger.warning("Output file exists but no end tag found - continuing from file")
