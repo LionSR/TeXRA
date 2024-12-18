@@ -1,44 +1,26 @@
+# Build and version directories
 build/
-build/*
 Versions/
 History/
 
+# Backup and recording files
 *.bak0
 recordings/
-*_opus.tex
-*_sonnet.tex
-*_haiku.tex
-*_haiku*.tex
-main.pdf
-*_gpt4o.txt
-*_gpt4t.txt
-*_gpt4t.tex  
-*_gpt4t-.txt
-*_gpt4t-.tex  
-*_gpt4o.tex  
-*_opus.txt
-*_opus.xml
-*_gpt4o.pdf
-*_gpt4t.pdf
-*_opus.pdf
-*_sonnet*.pdf
-*_haiku.pdf
-*diffHEAD
-*diffHEAD.tex
-*_sonnet.txt
-*_sonnet*.txt
-*_thinking.xml
-*opus*.*
-*sonnet*.*
-*haiku*.*
-*gpt4o*.*
-*gpt4t*.*
-*gpt4ol*.*
-*diff*.*
-*_sonnet+.tex
-*_sonnet+.txt
 FiguresEx/
-Diffs
-git_dropbox_sync.sh
+Diffs/
 
+# Generated model outputs
+*_opus.*
+*_sonnet.*
+*_haiku.*
+*_gpt4*.*
+*gemini*.*
+*o1*.*
+*diff*.*
+
+# Main outputs
+main.pdf
+
+# Utility files
+git_dropbox_sync.sh
 coauthor_logs.db
