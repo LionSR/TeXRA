@@ -64,8 +64,17 @@ export const executeCommand = {
         terminal_new.sendText(virtualEnvString);
       }
     }
+    let command = `coauthor run ${agent}`;
+    if (inputFile) {
+      command += ` --input_file="${inputFile}"`;
+    }
 
-    let command = `coauthor run ${agent} --input_file="${inputFile}"`;
+    if (model) {
+      command += ` --model=${model}`;
+    }
+    if (reflect !== 'default') {
+      command += ` --reflect=${reflect}`;
+    }
 
     // Add single files if they exist
     if (referenceFile) {
@@ -90,21 +99,6 @@ export const executeCommand = {
     addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
     addFilesToCommand(ensureArray(figureFiles), '--figure_files');
 
-    if (instructions) {
-      const escapedInstructions = instructions
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/{/g, '\\{')
-        .replace(/}/g, '\\}');
-      command += ` --instruction="${escapedInstructions}"`;
-    }
-    if (model) {
-      command += ` --model=${model}`;
-    }
-    if (reflect !== 'default') {
-      command += ` --reflect=${reflect}`;
-    }
-
     if (outputFiles && outputFiles.length > 0) {
       command += ` --output_files="${outputFiles.join(',')}"`;
     }
@@ -128,6 +122,15 @@ export const executeCommand = {
         command += ` ${flag}`;
       }
     });
+
+    if (instructions) {
+      const escapedInstructions = instructions
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/{/g, '\\{')
+        .replace(/}/g, '\\}');
+      command += ` --instruction="${escapedInstructions}"`;
+    }
 
     terminal_new.sendText(command);
   },
