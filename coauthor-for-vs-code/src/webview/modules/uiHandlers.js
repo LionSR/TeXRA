@@ -117,14 +117,6 @@ export function setupUIHandlers() {
     );
   });
 
-  addEventListenerSafely(
-    'emptyMultipleOutputFilesButton',
-    'click',
-    function () {
-      emptyMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
-    },
-  );
-
   CHECK_BOXES.forEach((id) => {
     addEventListenerSafely(id, 'change', handleCheckboxChange);
   });
