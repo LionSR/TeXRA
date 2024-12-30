@@ -191,12 +191,15 @@ export function setupUIHandlers() {
       (file) => file !== figureFile,
     );
 
-    const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
+    const outputFilesContainerDiv = safeGetElementById(
+      'multipleOutputFilesContainer',
+    );
     const outputFiles =
       outputFilesContainerDiv &&
       outputFilesContainerDiv.style.display === 'block'
         ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
         : null;
+
     const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
     const outputNameOverride =
       outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'

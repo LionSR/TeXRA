@@ -26,7 +26,7 @@ export function setDefaultState() {
 
   // Hide multiple file output by default
   const outputFilesContainerDiv = document.getElementById(
-    'outputFilesContainer',
+    'multipleOutputFilesContainer',
   );
   const toggleMultipleOutputFilesDiv = document.getElementById(
     'toggleMultipleOutputFiles',
@@ -83,7 +83,7 @@ export function restoreState() {
     });
 
     const outputFilesContainerDiv = document.getElementById(
-      'outputFilesContainer',
+      'multipleOutputFilesContainer',
     );
     const toggleIconDiv = document.getElementById('toggleMultipleOutputFiles');
 
@@ -148,19 +148,19 @@ export function saveState() {
     state[id] = getSelectedFiles(elementDiv);
   });
 
-  const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
+  const outputFilesContainerDiv = safeGetElementById(
+    'multipleOutputFilesContainer',
+  );
   const multipleOutputFilesDiv = safeGetElementById('multipleOutputFiles');
-  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-
   if (outputFilesContainerDiv) {
     state.outputFilesContainerVisible =
       outputFilesContainerDiv.style.display === 'block';
   }
-
   if (multipleOutputFilesDiv) {
     state.outputFiles = getSelectedFiles(multipleOutputFilesDiv);
   }
 
+  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
   if (outputNameOverrideDiv) {
     state.outputNameOverrideVisible =
       outputNameOverrideDiv.style.display !== 'none';
