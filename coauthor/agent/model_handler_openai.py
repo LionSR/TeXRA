@@ -278,4 +278,5 @@ class OpenAIHandler(ModelHandler):
 
     def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
         """Determine if OpenAI model should continue generating."""
+        logger.info("Determining if should continue for OpenAI model via OpenAI API")
         return stop_reason == "length" and not agent_settings.has_end_tag(new_response)
