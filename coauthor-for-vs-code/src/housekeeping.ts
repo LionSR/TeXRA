@@ -407,7 +407,6 @@ export async function runCleanBuild(): Promise<void> {
     try {
       const entries = await readDirectory(dirPath);
       for (const [name, type] of entries) {
-        // here one should include the build directory
         if (
           type === vscode.FileType.Directory &&
           !EXCLUDED_DIRS.has(name.toLowerCase())
@@ -426,6 +425,9 @@ export async function runCleanBuild(): Promise<void> {
   }
 
   try {
+    // Clean root build directory first
+    await cleanBuildDir('.');
+    // Then process subdirectories
     await processDirectory('.');
     info(CHANNEL, 'Build directories cleaned');
   } catch (err) {
