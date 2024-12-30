@@ -3,10 +3,11 @@
 from typing import Any
 from openai import OpenAI
 
+from ..logger import logger
+
 from .model_handler_openai import OpenAIHandler
 from .tool_handler import ToolState
 from .response_usage import OpenAIResponseUsage
-from ..logger import logger
 
 
 class GoogleviaOpenAIHandler(OpenAIHandler):
