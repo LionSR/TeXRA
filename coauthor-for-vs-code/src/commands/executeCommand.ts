@@ -65,10 +65,6 @@ export const executeCommand = {
       }
     }
     let command = `coauthor run ${agent}`;
-    if (inputFile) {
-      command += ` --input_file="${inputFile}"`;
-    }
-
     if (model) {
       command += ` --model=${model}`;
     }
@@ -76,16 +72,16 @@ export const executeCommand = {
       command += ` --reflect=${reflect}`;
     }
 
-    // Add single files if they exist
-    if (referenceFile) {
-      command += ` --reference_file="${referenceFile}"`;
-    }
-    if (auxiliaryFile) {
-      command += ` --auxiliary_file="${auxiliaryFile}"`;
-    }
-    if (figureFile) {
-      command += ` --figure_file="${figureFile}"`;
-    }
+    // Add selected file if they exist
+    const addSelectedFileToCommand = (file: string | null, flag: string) => {
+      if (file) {
+        command += ` ${flag}="${file}"`;
+      }
+    };
+    addSelectedFileToCommand(inputFile, '--input_file');
+    addSelectedFileToCommand(referenceFile, '--reference_file');
+    addSelectedFileToCommand(auxiliaryFile, '--auxiliary_file');
+    addSelectedFileToCommand(figureFile, '--figure_file');
 
     // Add multiple files if they exist
     const addFilesToCommand = (files: string[] | null, flag: string) => {
@@ -93,18 +89,13 @@ export const executeCommand = {
         command += ` ${flag}="${files.join(',')}"`;
       }
     };
-
     addFilesToCommand(ensureArray(inputFiles), '--input_files');
     addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
     addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
     addFilesToCommand(ensureArray(figureFiles), '--figure_files');
+    addFilesToCommand(ensureArray(outputFiles), '--output_files');
 
-    if (outputFiles && outputFiles.length > 0) {
-      command += ` --output_files="${outputFiles.join(',')}"`;
-    }
-    if (outputNameOverride) {
-      command += ` --output_name_override="${outputNameOverride}"`;
-    }
+    addSelectedFileToCommand(outputNameOverride, '--output_name_override');
 
     const flagsToAdd = [
       { condition: autoExtractFigure, flag: '--auto_extract_figure' },
@@ -128,7 +119,8 @@ export const executeCommand = {
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
         .replace(/{/g, '\\{')
-        .replace(/}/g, '\\}');
+        .replace(/}/g, '\\}')
+        .trim();
       command += ` --instruction="${escapedInstructions}"`;
     }
 
