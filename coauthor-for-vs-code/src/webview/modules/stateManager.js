@@ -24,20 +24,14 @@ export function setDefaultState() {
   outputNameOverrideDiv.style.display = 'none';
   toggleOutputNameOverrideDiv.textContent = '▼';
 
-  // Hide multiple file output by default
-  const outputFilesContainerDiv = document.getElementById(
-    'multipleOutputFilesContainer',
-  );
-  const toggleMultipleOutputFilesDiv = document.getElementById(
-    'toggleMultipleOutputFiles',
-  );
-  outputFilesContainerDiv.style.display = 'none';
-  toggleMultipleOutputFilesDiv.textContent = '▼';
-  document.getElementById('multipleOutputFiles').innerHTML = '';
-
+  // Initialize all multiple file selections to hidden
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
     setMultipleFileSelectVisibility(id, toggleId, false);
+    const listDiv = safeGetElementById(id);
+    if (listDiv) {
+      listDiv.innerHTML = '';
+    }
   });
 
   saveState();
@@ -82,28 +76,6 @@ export function restoreState() {
       }
     });
 
-    const outputFilesContainerDiv = document.getElementById(
-      'multipleOutputFilesContainer',
-    );
-    const toggleIconDiv = document.getElementById('toggleMultipleOutputFiles');
-
-    if (
-      previousState.outputFilesContainerVisible &&
-      previousState.outputFiles &&
-      previousState.outputFiles.length > 0
-    ) {
-      outputFilesContainerDiv.style.display = 'block';
-      toggleIconDiv.textContent = '▲';
-      const outputFilesDiv = document.getElementById('multipleOutputFiles');
-      outputFilesDiv.innerHTML = '';
-      previousState.outputFiles.forEach((file) => {
-        addFileToList('multipleOutputFiles', file);
-      });
-    } else {
-      outputFilesContainerDiv.style.display = 'none';
-      toggleIconDiv.textContent = '▼';
-    }
-
     const outputNameOverrideDiv = document.getElementById('outputNameOverride');
     const toggleOutputNameOverrideDiv = document.getElementById(
       'toggleOutputNameOverride',
@@ -147,18 +119,6 @@ export function saveState() {
       containerDiv && containerDiv.style.display === 'block';
     state[id] = getSelectedFiles(elementDiv);
   });
-
-  const outputFilesContainerDiv = safeGetElementById(
-    'multipleOutputFilesContainer',
-  );
-  const multipleOutputFilesDiv = safeGetElementById('multipleOutputFiles');
-  if (outputFilesContainerDiv) {
-    state.outputFilesContainerVisible =
-      outputFilesContainerDiv.style.display === 'block';
-  }
-  if (multipleOutputFilesDiv) {
-    state.outputFiles = getSelectedFiles(multipleOutputFilesDiv);
-  }
 
   const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
   if (outputNameOverrideDiv) {
