@@ -13,7 +13,7 @@ def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
 
     if massive_repetition_detected:
         logger.error(f"Repetition ratio: {repetition_ratio}")
-        logger.error(f"Longest matching substring: {longest_matching_substring}")
+        logger.error(f"Longest matching substring(preview): {longest_matching_substring[:400]}")
         logger.error("Massive repetition detected - stopping process.")
 
     return massive_repetition_detected
