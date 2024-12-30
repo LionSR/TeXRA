@@ -2,6 +2,7 @@ import os
 import re
 
 from ..logger import logger
+
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_reflect import DirectWrite
 from .agent_state import AgentStateRound, AgentStateGlobal
@@ -23,8 +24,30 @@ class AgentMerge(DirectWrite):
         super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
         self.output_file = [self.get_output_file(r) for r in range(2)]
 
+    def _parse_filename_parts(self, edited_base: str) -> tuple[str, str, int, str]:
+        """Parse filename parts to extract base name, agent, round number and model."""
+        parts = edited_base.split("_")
+        underscore_count = edited_base.count("_")
+        base = parts[0]
+
+        # Extract agent name
+        agent = self._extract_agent_name(parts, underscore_count)
+        if agent is None:
+            raise ValueError(f"Could not extract agent name from edited base: {edited_base}")
+
+        # Extract round number
+        round_match = re.search(r"_r(\d+)_", edited_base)
+        if not round_match:
+            raise ValueError(f"Could not extract round number from edited base: {edited_base}")
+        round_num = int(round_match.group(1))
+
+        # Get model name (last part)
+        model = parts[-1]
+
+        return base, agent, round_num, model
+
     def get_output_file(self, curr_round: int) -> str:
-        """Generate output filename for merged content from base_agent_r1_model or MutualInfo_restructured_polish_r1_sonnet++ formats."""
+        """Generate output filename for merged content."""
         input_file = self.agent_config.input_file
         edited_file = self.agent_config.edited_file
 
@@ -35,38 +58,31 @@ class AgentMerge(DirectWrite):
         input_base, _ = os.path.splitext(os.path.basename(input_file))
         edited_base, _ = os.path.splitext(os.path.basename(edited_file))
 
-        parts = edited_base.split("_")
-        underscore_count = edited_base.count("_")
-        edited_base_override = parts[0]
+        # Parse filename components
+        base, agent, round_num, model = self._parse_filename_parts(edited_base)
 
-        # Extract agent name based on filename pattern
-        agent = self._extract_agent_name(parts, underscore_count)
-        if agent is None:
-            raise ValueError(f"Could not extract agent name from edited file: {edited_file}")
+        # Use original input base if it differs from edited base
+        if input_base != base:
+            base = input_base
 
-        # Use override base name if different from input
-        base = edited_base_override if input_base != edited_base_override else input_base
-
-        # Extract round number
-        round_match = re.search(r"_r(\d+)_", edited_base)
-        if not round_match:
-            raise ValueError(f"Could not extract round number from edited file: {edited_file}")
-
-        round_num = int(round_match.group(1))
-        model = parts[-1]
-
+        # Construct output filename
         output_file = f"{base}_{agent}_r{round_num}_full_{model}.tex"
-        output_file = os.path.join(input_dir, output_file)
-        logger.info(f"Merge output file: {output_file}")
-        return output_file
+        output_path = os.path.join(input_dir, output_file)
+        logger.info(f"Merge output file: {output_path}")
+        return output_path
 
     def _extract_agent_name(self, parts: list[str], underscore_count: int) -> str | None:
-        """Extract agent name from filename parts based on standard (base_agent_r1_model) or complex (MutualInfo_restructured_polish_r1_sonnet++) formats."""
+        """Extract agent name from filename parts.
+
+        Handles two formats:
+        - Standard: base_agent_r1_model
+        - Complex: MutualInfo_restructured_polish_r1_sonnet++
+        """
         if underscore_count == 3:
-            # Standard format: "base_agent_r1_model"
+            # Standard format
             return parts[1]
 
-        # Complex format: "MutualInfo_restructured_polish_r1_sonnet++"
+        # Complex format - collect parts until round number
         agent_parts = []
         for i, part in enumerate(parts[1:], 1):
             if part.startswith("r") and part[1:].isdigit():
