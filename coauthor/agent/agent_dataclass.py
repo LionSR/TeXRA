@@ -24,7 +24,7 @@ class ToolConfig:
             auto_extract_tikz_figure_reflect=config_dict.get("auto_extract_tikz_figure_reflect", False),
             include_tex_count=config_dict.get("include_tex_count", False),
             auto_confirmation=config_dict.get("auto_confirmation", False),
-            print_input_prompt=config_dict.get("print_input_prompt", True),
+            print_input_prompt=config_dict.get("print_input_prompt", False),
         )
 
 
