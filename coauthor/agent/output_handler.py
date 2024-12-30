@@ -9,15 +9,16 @@ from ..logger import logger
 from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
 from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
+
 from .logdb import update_log_output_files
 
 
-def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, round: int, edited_file: str | None = None) -> str:
+def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, curr_round: int, edited_file: str | None = None) -> str:
     """Generate output filename based on input parameters."""
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
 
-    new_round = round
+    new_round = curr_round
     if edited_file:
         match = re.search(r"_r(\d+)_", edited_file)
         edited_round = int(match.group(1)) if match else 0
@@ -163,7 +164,7 @@ class OutputHandler:
         model = output_parts[-1].split(".")[0]
 
         round_match = re.search(r"_r(\d+)_", output_file)
-        round = int(round_match.group(1)) if round_match else 0
+        curr_round = int(round_match.group(1)) if round_match else 0
 
         for doc in latex_documents.findall("document"):
             source = doc.get("name")
@@ -173,7 +174,7 @@ class OutputHandler:
             if source is not None and content is not None:
                 base_name, extension = os.path.splitext(source)
                 extension = extension.strip(".")
-                tex_file = get_output_file_name(base_name, agent, model, extension, round=round)
+                tex_file = get_output_file_name(base_name, agent, model, extension, curr_round=curr_round)
                 write_file(tex_file, content.strip())
                 output_files.append(tex_file)
                 logger.debug(f"TeX file written: {tex_file}")
@@ -192,24 +193,25 @@ class OutputHandler:
                     content += f"\n</{document_tag}>"
                 else:
                     content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
-                    content += f"\n</{document_tag}>"
+                    if f"<{document_tag}>" in content:
+                        content += f"\n<{document_tag}>"
 
             content = self._process_xml_content(content)
 
         write_file(file_path, content)
 
-    def _handle_latexdiff(self, round: int) -> None:
+    def _handle_latexdiff(self, curr_round: int) -> None:
         """Handle LaTeX diff generation between files and rounds."""
-        logger.info(f"Running latexdiff for {self.agent_config.agent} round {round}")
+        logger.info(f"Running latexdiff for {self.agent_config.agent} round {curr_round}")
         logger.debug(f"Base files: {self.base_files}")
-        logger.debug(f"Round {round} output files: {self.output_files[round]}")
+        logger.debug(f"Round {curr_round} output files: {self.output_files[curr_round]}")
 
         # Generate diffs between base files and current round
-        for base_file, output_file in zip(self.base_files, self.output_files[round]):
-            run_latexdiff_for_round(base_file, output_file, self.agent_config.agent, round)
+        for base_file, output_file in zip(self.base_files, self.output_files[curr_round]):
+            run_latexdiff_for_round(base_file, output_file, self.agent_config.agent, curr_round)
 
         # Generate diffs between consecutive rounds
-        for r in range(1, round + 1):
+        for r in range(1, curr_round + 1):
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
                 run_latexdiff_between_rounds(output_file1, output_file2, self.agent_config.agent)
 
