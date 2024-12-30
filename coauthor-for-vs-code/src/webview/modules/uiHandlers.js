@@ -194,6 +194,7 @@ export function setupUIHandlers() {
     const includeTexCount = safeGetElementChecked('includeTexCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');
+    const printInputPrompt = safeGetElementChecked('printInputPrompt');
 
     vscode.postMessage({
       command: 'execute',
@@ -219,6 +220,7 @@ export function setupUIHandlers() {
       includeTexCount: includeTexCount,
       usePrefillFromInput: usePrefillFromInput,
       autoConfirmation: autoConfirmation,
+      printInputPrompt: printInputPrompt,
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,

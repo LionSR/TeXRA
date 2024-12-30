@@ -12,6 +12,7 @@ class ToolConfig:
     auto_extract_tikz_figure_reflect: bool = False
     include_tex_count: bool = False
     auto_confirmation: bool = False
+    print_input_prompt: bool = False
 
     @classmethod
     def from_dict(cls, config_dict: dict[str, bool]) -> "ToolConfig":
@@ -23,6 +24,7 @@ class ToolConfig:
             auto_extract_tikz_figure_reflect=config_dict.get("auto_extract_tikz_figure_reflect", False),
             include_tex_count=config_dict.get("include_tex_count", False),
             auto_confirmation=config_dict.get("auto_confirmation", False),
+            print_input_prompt=config_dict.get("print_input_prompt", True),
         )
 
 
@@ -157,15 +159,16 @@ class AgentConfig:
                 "auto_extract_tikz_figure_reflect",
                 "include_tex_count",
                 "auto_confirmation",
+                "print_input_prompt",
             ]
         }
 
         agent_config = cls(
             # Core configuration
             model=kwargs.get("model", "sonnet+"),
+            # parameters
             reflect=kwargs.get("reflect", False),
             agent=kwargs.get("agent", ""),
-            instruction=kwargs.get("instruction", ""),
             # Input/Output configuration
             input_file=kwargs.get("input_file", ""),
             input_files=kwargs.get("input_files", []),
@@ -175,6 +178,9 @@ class AgentConfig:
             auxiliary_files=kwargs.get("auxiliary_files", []),
             figure_file=kwargs.get("figure_file"),
             figure_files=kwargs.get("figure_files", []),
+            # instruction
+            instruction=kwargs.get("instruction", ""),
+            # output
             output_files=kwargs.get("output_files"),
             output_name_override=kwargs.get("output_name_override"),
             edited_file=kwargs.get("edited_file"),
