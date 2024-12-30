@@ -156,7 +156,8 @@ export function setupUIHandlers() {
     // Get multiple files
     const getMultipleFiles = (selectId) => {
       const selectDiv = safeGetElementById(selectId);
-      return selectDiv && selectDiv.style.display === 'block'
+      const containerDiv = safeGetElementById(`${selectId}Container`);
+      return selectDiv && containerDiv && containerDiv.style.display === 'block'
         ? getSelectedFiles(selectDiv)
         : [];
     };
@@ -173,15 +174,7 @@ export function setupUIHandlers() {
     const figureFiles = getMultipleFiles('multipleFigures').filter(
       (file) => file !== figureFile,
     );
-
-    const outputFilesContainerDiv = safeGetElementById(
-      'multipleOutputFilesContainer',
-    );
-    const outputFiles =
-      outputFilesContainerDiv &&
-      outputFilesContainerDiv.style.display === 'block'
-        ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
-        : null;
+    const outputFiles = getMultipleFiles('multipleOutputFiles');
 
     const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
     const outputNameOverride =
