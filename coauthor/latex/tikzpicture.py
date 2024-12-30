@@ -2,10 +2,11 @@ import re
 import os
 
 from ..logger import logger
-from .tex_tools import run_external_command
 
 from ..utils.file import read_file, write_file
 from ..utils.prompt import render_prompt
+
+from .tex_tools import run_external_command
 
 
 # maybe in the future move to a separate file in the agent path

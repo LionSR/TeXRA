@@ -20,7 +20,7 @@ from ..latex import (
 
 # Local imports - utilities
 from ..utils.file import read_file, write_to_output_file
-from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document
+from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
 from ..utils.xml import get_xml_format_from_files
@@ -340,10 +340,25 @@ class BaseReflectChainAgent(ABC):
 
             # Check if model should continue generating
             if self.model_handler.should_continue(stop_reason, new_response, self.agent_settings):
+                logger.info("Should continue - adding continuation message to conversation")
                 self.model_handler.add_continue_message(messages, state_round, tool_state, self.agent_settings, self.agent_config)
                 continue
 
         return state_round, state_global, tool_state, end_turn
+
+    def _get_prefill_for_round(self, curr_round: int) -> str:
+        """Get prefill content for the current round."""
+        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        return prefill if prefill else ""
+
+    def _handle_round_completion(
+        self, state_round: AgentStateRound, state_global: AgentStateGlobal, output_file: str, end_turn: bool, curr_round: int
+    ):
+        """Handle output and logging for round completion."""
+        self.handle_output(state_round, state_global, output_file, end_turn, curr_round=curr_round)
+        input_info = f"input file {self.agent_config.input_file} " f"and/or input files {self.agent_config.input_files}"
+        logger.info(f"\n\nProcessed {input_info}. The round {curr_round} output was saved as {output_file}")
+        logger.info(f"Completed round {curr_round}")
 
     def process(self):
         """Process the input files and generate output."""
@@ -377,10 +392,11 @@ class BaseReflectChainAgent(ABC):
                         tool_state.add_figure_files(extracted_tikz_figures)
 
         # Initialize state and messages
-        state_global = AgentStateGlobal.initialize()
-        messages = []
         curr_round = 0
         logger.info(f"\n\nProcessing round {curr_round}")
+        state_global = AgentStateGlobal.initialize()
+
+        messages = []
 
         # Set up initial prompts
         system_prompt = render_prompt(self.agent_prompts.system_prompt, self.user_vars)
@@ -389,6 +405,10 @@ class BaseReflectChainAgent(ABC):
 
         if tool_state.tex_count_stats:
             user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
+
+        # Write prompt to file if requested
+        if self.agent_config.tool_config.print_input_prompt:
+            write_prompt_to_xml(system_prompt, user_prefix, user_request, self.agent_config.input_file, self.agent_config.agent)
 
         # Initialize messages with prompts
         messages = self.model_handler.initialize_messages(
@@ -399,8 +419,8 @@ class BaseReflectChainAgent(ABC):
         )
 
         # Handle prefill
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
+        prefill = self._get_prefill_for_round(curr_round)
+        tool_state.update_accumulated_output(prefill)
 
         # Initialize output and handle prefill
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
@@ -412,8 +432,8 @@ class BaseReflectChainAgent(ABC):
             prefill,
         )
 
+        state_round = AgentStateRound.initialize(curr_round)
         if not end_turn:
-            state_round = AgentStateRound.initialize(curr_round)
             state_round, state_global, tool_state, end_turn = self._process_response_cycle(
                 messages,
                 state_round,
@@ -421,42 +441,32 @@ class BaseReflectChainAgent(ABC):
                 tool_state,
                 self.output_file[0],
             )
-        else:
-            state_round = AgentStateRound.initialize(curr_round)
 
         # Handle output and logging
-        self.handle_output(state_round, state_global, self.output_file[0], end_turn, curr_round=0)
-        logger.info(
-            f"\n\nProcessed input file {self.agent_config.input_file} "
-            f"and/or input files {self.agent_config.input_files}. "
-            f"The round 0 output was saved as {self.output_file[1]}"
-        )
-        logger.info("Completed round 0")
+        self._handle_round_completion(state_round, state_global, self.output_file[0], end_turn, curr_round)
 
         return state_round, state_global, messages, end_turn, tool_state
 
+    def _handle_output_file_processing(self, output_files: list[str], curr_round: int, tool_state: ToolState):
+        """Helper method to handle tex count and TikZ figure extraction for output files."""
+        if self.agent_config.tool_config.include_tex_count:
+            tool_state.tex_count_stats = get_tex_count_stats(output_files)
+
+        if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
+            for output_file in output_files:
+                logger.debug(f"Extracting TikZ figures from {output_file}")
+                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
+                    tool_state.add_figure_files(extracted_tikz_figures)
+
     def reflect(self, state_global: AgentStateGlobal, messages: list[dict], tool_state: ToolState, curr_round: int = 1):
         """Process reflection round."""
-        # Handle tex count for output files
+        # Handle output file processing
         if self.agent_config.output_files:
-            if self.agent_config.tool_config.include_tex_count:
-                tool_state.tex_count_stats = get_tex_count_stats(self.agent_config.output_files)
-
-            # Extract TikZ figures from output files if supported
-            if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
-                for output_file in self.output_handler.output_files[curr_round]:
-                    logger.debug(f"Extracting TikZ figures from {output_file}")
-                    if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
-                        tool_state.add_figure_files(extracted_tikz_figures)
+            self._handle_output_file_processing(self.agent_config.output_files, curr_round, tool_state)
         else:
             # Handle single output file
             generated_output_file = self.output_handler.output_files[0][0]
-            if self.agent_config.tool_config.include_tex_count:
-                tool_state.tex_count_stats = get_tex_count_stats(generated_output_file)
-            if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
-                logger.debug(f"Extracting TikZ figures from {generated_output_file}")
-                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(generated_output_file):
-                    tool_state.add_figure_files(extracted_tikz_figures)
+            self._handle_output_file_processing([generated_output_file], curr_round, tool_state)
 
         if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
@@ -478,8 +488,8 @@ class BaseReflectChainAgent(ABC):
         messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
 
         # Handle prefill for reflection round
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
+        prefill = self._get_prefill_for_round(curr_round)
+        tool_state.update_accumulated_output(prefill)
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
             self.agent_config,
@@ -500,13 +510,7 @@ class BaseReflectChainAgent(ABC):
             )
 
         # Handle output and logging
-        self.handle_output(state_round, state_global, self.output_file[1], end_turn, curr_round=1)
-        logger.info(
-            f"\n\nProcessed input file {self.agent_config.input_file} "
-            f"and/or input files {self.agent_config.input_files}. "
-            f"The round 1 output was saved as {self.output_file[1]}"
-        )
-        logger.info("Completed round 1")
+        self._handle_round_completion(state_round, state_global, self.output_file[1], end_turn, curr_round)
 
         return state_round, state_global, messages, end_turn
 
@@ -520,3 +524,24 @@ class BaseReflectChainAgent(ABC):
             reflection_state_round, state_global, reflection_messages, end_turn_reflection = self.reflect(
                 state_global, messages, reflection_tool_state
             )
+
+    def _process_output_files(self, output_file: str, curr_round: int):
+        """Process output files for the current round.
+
+        Handles both single and multiple output file cases, including:
+        - Processing outputs
+        - Handling file operations
+        - Managing output file tracking
+        - Handling LaTeX diff if needed
+        """
+        if self.agent_config.output_files:
+            processed_files = self.output_handler._process_multiple_outputs(output_file)
+            self.output_handler._handle_multiple_outputs(processed_files)
+            self.output_handler.output_files[curr_round] = processed_files
+            self.output_handler._replace_input_commands(self.base_files, processed_files)
+        else:
+            processed_file = self.output_handler._process_single_output(output_file)
+            self.output_handler._handle_single_output(processed_file)
+            self.output_handler.output_files[curr_round] = [processed_file]
+
+        self.output_handler._handle_latexdiff(curr_round)

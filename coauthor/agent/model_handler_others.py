@@ -3,6 +3,8 @@
 from typing import Any
 from openai import OpenAI
 
+from ..logger import logger
+
 from .model_handler_openai import OpenAIHandler
 from .tool_handler import ToolState
 from .response_usage import OpenAIResponseUsage
@@ -44,6 +46,11 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
         )()
 
         return OpenAIResponseUsage.from_response(usage_obj, self.compute_price(response_usage), response_time)
+
+    def should_continue(self, stop_reason: str, new_response: str, agent_settings) -> bool:
+        """Determine if OpenAI model should continue generating."""
+        logger.info("Determining if should continue for Google model via OpenAI API")
+        return not agent_settings.has_end_tag(new_response)
 
 
 class OpenRouterHandler(OpenAIHandler):

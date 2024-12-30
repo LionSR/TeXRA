@@ -75,8 +75,8 @@ export class WebviewMessageHandler {
       case 'cleanBuild':
       case 'indentTex':
         return this.handleHousekeeping(message);
-      case 'cleanSingle':
       case 'packSingle':
+      case 'cleanSingle':
         return this.handleSingleOperation(message);
       case 'packMultiple':
       case 'cleanMultiple':
@@ -148,6 +148,7 @@ export class WebviewMessageHandler {
         message.includeTexCount,
         message.usePrefillFromInput,
         message.autoConfirmation,
+        message.printInputPrompt,
         // output options
         getFilesIfNotEmpty(message.outputFiles),
         message.outputNameOverride,
