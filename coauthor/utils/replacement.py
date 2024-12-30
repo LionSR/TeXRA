@@ -98,6 +98,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         "\\end{scratchpad>": "</scratchpad>",
         "</figure>\n": "\\end{figure}\n",
         "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
+        "<scratchpad>\n```latex\n": "<scratchpad>\n<latex_document>\n",
+        "```\n</scratchpad>\n</latex_document>": "</latex_document>",
         "\\end{document}\n\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{document}\n\\<document name=": "\\end{document}\n</document>\n\\<document name=",
         "\\end{latex_document}\n</latex_document>": "\\end{document}\n</latex_document>",
