@@ -64,9 +64,9 @@ class AgentStateGlobal:
         if state_round.model_usage:
             if self.first_input_tokens == 0:
                 self.first_input_tokens = state_round.model_usage.get("total_input_tokens", 0)
-                cache_read = state_round.model_usage.get("cache_read_input_tokens", 0) or 0
-                self.first_input_tokens += cache_read
-                logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
+            cache_read = state_round.model_usage.get("cache_read_input_tokens", 0) or 0
+            self.first_input_tokens += cache_read
+            logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
 
             # Update global totals (using total_input_tokens without cache adjustment)
             self.total_input_tokens += state_round.model_usage.get("total_input_tokens", 0)
