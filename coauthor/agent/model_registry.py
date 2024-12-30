@@ -189,6 +189,17 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         output_price=5.0,
         capabilities=ModelCapabilities(supports_vision=True),
     ),
+    "gemini2fthinking": ModelConfig(
+        name="gemini2fthinking",
+        full_name="gemini-2.0-flash-thinking-exp-1219",
+        openrouter_full_name="google/gemini-2.0-flash-thinking-exp-1219",
+        provider=ModelProvider.GOOGLE,
+        max_output_tokens=8192,
+        context_window=32768,
+        input_price=0.075,
+        output_price=0.3,
+        capabilities=ModelCapabilities(supports_native_pdf=False, supports_vision=True),
+    ),
     "gemini2f": ModelConfig(
         name="gemini2f",
         full_name="gemini-2.0-flash-exp",
