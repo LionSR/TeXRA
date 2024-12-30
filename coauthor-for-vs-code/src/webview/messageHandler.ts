@@ -75,8 +75,8 @@ export class WebviewMessageHandler {
       case 'cleanBuild':
       case 'indentTex':
         return this.handleHousekeeping(message);
-      case 'cleanSingle':
       case 'packSingle':
+      case 'cleanSingle':
         return this.handleSingleOperation(message);
       case 'packMultiple':
       case 'cleanMultiple':

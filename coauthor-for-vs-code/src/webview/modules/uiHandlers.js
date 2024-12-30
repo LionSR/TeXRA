@@ -266,8 +266,15 @@ export function setupUIHandlers() {
       );
 
       // BUG: Determine if we should use multiple or single mode
-      // only activate if are toggled!!
-      const useMultiple = inputFiles.length > 0 || outputFiles.length > 0;
+      // Note: inputFiles.length>0 is reserved for agents with default output files
+      // but this is not currently supported due to back-front end separation
+      const outputFilesContainer = safeGetElementById(
+        'multipleOutputFilesContainer',
+      );
+      const useMultiple =
+        outputFilesContainer &&
+        outputFilesContainer.style.display === 'block' &&
+        outputFiles.length > 0;
 
       if (useMultiple) {
         vscode.postMessage({
