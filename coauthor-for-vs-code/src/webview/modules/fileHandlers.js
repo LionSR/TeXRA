@@ -41,11 +41,7 @@ export function addFileToList(containerId, file) {
     addEventListenerSafely(removeButton, 'click', () => {
       container.removeChild(fileElement);
       if (container.children.length === 0) {
-        containerId === 'multipleOutputFiles'
-          ? handleEmptyOutputFiles()
-          : ((container.style.display = 'none'),
-            (toggleIcon.textContent = '▼'),
-            saveState());
+        emptyMultipleFiles(containerId, `toggle${capitalize(containerId)}`);
       }
     });
   }
@@ -82,10 +78,6 @@ export function getSelectedFiles(multipleFilesDiv) {
   return Array.from(fileElements).map(
     (el) => el.textContent.replace(' -', '') || '',
   );
-}
-
-export function handleEmptyOutputFiles() {
-  emptyMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
 }
 
 export function hideEmptyMultipleFileSelects() {
@@ -214,18 +206,12 @@ export function initializeOutputFiles() {
 }
 
 export function toggleMultipleOutputFiles() {
-  const outputFilesContainerDiv = safeGetElementById(
-    'multipleOutputFilesContainer',
-  );
-  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
-  if (!outputFilesContainerDiv || !toggleIcon) return;
-
-  const isVisible = outputFilesContainerDiv.style.display !== 'none';
+  const isVisible =
+    safeGetElementById('multipleOutputFilesContainer').style.display !== 'none';
   if (!isVisible) {
     initializeOutputFiles();
   } else {
-    outputFilesContainerDiv.style.display = 'none';
-    toggleIcon.textContent = '▼';
+    toggleMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
   }
   saveState();
 }
