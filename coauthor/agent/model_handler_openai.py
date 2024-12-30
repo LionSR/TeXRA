@@ -126,6 +126,7 @@ class OpenAIHandler(ModelHandler):
         if not (hasattr(response_object, "choices") and response_object.choices):
             error_msg = "Invalid response from API: missing choices"
             logger.error(error_msg)
+            logger.debug(response_object.error)
             raise ValueError(error_msg)
 
         # Extract base response
