@@ -3,9 +3,11 @@
 import os
 from jinja2 import Template
 from typing import Any
-from .file import read_file
+
 from ..housekeeping.utils import get_agent_first_name_chunk
 from ..logger import logger
+
+from .file import read_file
 
 
 def get_list_of_files(files: list[str] | None) -> str:
