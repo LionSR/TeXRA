@@ -440,28 +440,26 @@ class BaseReflectChainAgent(ABC):
 
         return state_round, state_global, messages, end_turn, tool_state
 
+    def _handle_output_file_processing(self, output_files: list[str], curr_round: int, tool_state: ToolState):
+        """Helper method to handle tex count and TikZ figure extraction for output files."""
+        if self.agent_config.tool_config.include_tex_count:
+            tool_state.tex_count_stats = get_tex_count_stats(output_files)
+
+        if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
+            for output_file in output_files:
+                logger.debug(f"Extracting TikZ figures from {output_file}")
+                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
+                    tool_state.add_figure_files(extracted_tikz_figures)
+
     def reflect(self, state_global: AgentStateGlobal, messages: list[dict], tool_state: ToolState, curr_round: int = 1):
         """Process reflection round."""
-        # Handle tex count for output files
+        # Handle output file processing
         if self.agent_config.output_files:
-            if self.agent_config.tool_config.include_tex_count:
-                tool_state.tex_count_stats = get_tex_count_stats(self.agent_config.output_files)
-
-            # Extract TikZ figures from output files if supported
-            if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
-                for output_file in self.output_handler.output_files[curr_round]:
-                    logger.debug(f"Extracting TikZ figures from {output_file}")
-                    if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
-                        tool_state.add_figure_files(extracted_tikz_figures)
+            self._handle_output_file_processing(self.agent_config.output_files, curr_round, tool_state)
         else:
             # Handle single output file
             generated_output_file = self.output_handler.output_files[0][0]
-            if self.agent_config.tool_config.include_tex_count:
-                tool_state.tex_count_stats = get_tex_count_stats(generated_output_file)
-            if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
-                logger.debug(f"Extracting TikZ figures from {generated_output_file}")
-                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(generated_output_file):
-                    tool_state.add_figure_files(extracted_tikz_figures)
+            self._handle_output_file_processing([generated_output_file], curr_round, tool_state)
 
         if self.agent_config.tool_config.use_prefill_from_input:
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
