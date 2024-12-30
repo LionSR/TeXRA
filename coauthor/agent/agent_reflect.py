@@ -38,18 +38,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
         """Handle the output for the given round."""
         if end_turn:
             self.output_handler.ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
-
-            if self.agent_config.output_files:
-                processed_files = self.output_handler._process_multiple_outputs(output_file)
-                self.output_handler._handle_multiple_outputs(processed_files)
-                self.output_handler.output_files[curr_round] = processed_files
-                self.output_handler._replace_input_commands(self.base_files, processed_files)
-            else:
-                processed_file = self.output_handler._process_single_output(output_file)
-                self.output_handler._handle_single_output(processed_file)
-                self.output_handler.output_files[curr_round] = [processed_file]
-
-            self.output_handler._handle_latexdiff(curr_round)
+            self._process_output_files(output_file, curr_round)
 
         # Call base implementation for database updates
         return super().handle_output(state_round, state_global, output_file, end_turn, curr_round)
@@ -90,17 +79,7 @@ class DirectWrite(BaseReflectChainAgent):
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
-            if self.agent_config.output_files:
-                processed_files = self.output_handler._process_multiple_outputs(output_file)
-                self.output_handler._handle_multiple_outputs(processed_files)
-                self.output_handler.output_files[curr_round] = processed_files
-                self.output_handler._replace_input_commands(self.base_files, processed_files)
-            else:
-                processed_file = self.output_handler._process_single_output(output_file)
-                self.output_handler._handle_single_output(processed_file)
-                self.output_handler.output_files[curr_round] = [processed_file]
-
-            self.output_handler._handle_latexdiff(curr_round)
+            self._process_output_files(output_file, curr_round)
 
         # Call base implementation for database updates
         return super().handle_output(state_round, state_global, output_file, end_turn, curr_round)
