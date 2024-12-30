@@ -457,16 +457,14 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely(
-    'toggleMultipleOutputFiles',
-    'click',
-    toggleMultipleOutputFiles,
-  );
-
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
-    addEventListenerSafely(toggleId, 'click', () =>
-      toggleMultipleFiles(id, toggleId),
-    );
+    addEventListenerSafely(toggleId, 'click', () => {
+      if (id === 'multipleOutputFiles') {
+        toggleMultipleOutputFiles();
+      } else {
+        toggleMultipleFiles(id, toggleId);
+      }
+    });
   });
 }
