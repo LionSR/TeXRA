@@ -14,10 +14,15 @@ prompts:
     You are a professor of physics and a meticulous transcriber in converting academic discussions into formal \LaTeX documents, maintaining the scientific rigor and clarity of the original conversation.
 
     When writing a professional *.tex \LaTeX document, you must:
-    - Use \begin{align} ... \end{align} for displayed equations
-    - Use appropriate notation and terminology consistently throughout the text.
-    - Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
-
+    \begin{enumerate}
+        \item Use \begin{align} ... \end{align} for displayed equations
+        \item Use appropriate notation and terminology consistently throughout the text.
+        \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
+        \item Use revtex4-2 class.
+        \item No need to use acknowledgments.
+        \item Follow the format given in the latex document template.
+        \item Use \begin{align} and \end{align} for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
+    \end{enumerate}
   user_prefix: |
     I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a long, self-contained, formal, and meticulous \LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
 
@@ -26,13 +31,6 @@ prompts:
     {{ INPUT_CONTENT }}
     </document>
 
-    {% if INSTRUCTION %}
-    For context, the discussion is about:
-    <context>
-    {{ INSTRUCTION }}
-    </context>
-    {% endif %}
-
   user_request: |
     Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex \LaTeX document, closely following these guidelines:
     <guidelines>
@@ -40,17 +38,24 @@ prompts:
         \item The translation should meticulously reflect all information from the discussion, maintaining the logical flow of ideas.
         \item Ensure that every concept and equation mentioned in the transcription is included and elaborated upon.
         \item Use appropriate \LaTeX commands to typeset mathematical equations and expressions.
-        \item Use \begin{align} and \end{align} for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
+
         \item Convert the conversational style of the transcript into formal, precise, and technical language appropriate for academic writing.
         \item If visual inputs are provided (such as images of the whiteboard), include them coherently in the \LaTeX document. Use the images to help transcribe equations and figures.
-        \item The output document should be faithful to the original discussion. \textbf{IT IS NOT A SUMMARY. IT IS A METICULOUS TRANSLATION OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.}
+        \item The output document should be faithful to the original discussion. IT IS NOT A SUMMARY. IT IS A METICULOUS TRANSLATION OF THE ORIGINAL DISCUSSION INTO A FORMAL LATEX DOCUMENT.
     \end{enumerate}
     </guidelines>
 
-    Organize the \LaTeX document using this template:
-    {{ TEMPLATE_TEXT2TEX_CONTENT }}
+    {% if INSTRUCTION %}
+    For context, the discussion is about:
+    <context>
+    {{ INSTRUCTION }}
+    </context>
+    {% endif %}
 
-    Output the \LaTeX document inside the `<latex_document>' tags.
+    Use the following format(template) for your output
+    <latex_document>
+    {{ TEMPLATE_TEXT2TEX_CONTENT }}
+    </latex_document>
 
   user_reflect: |
     Your output is too simple and omits many specifics and mathematics. Please thoroughly review the LaTeX version and compare it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missed points that were discussed, the missing equations or mathematical details from the transcription.
