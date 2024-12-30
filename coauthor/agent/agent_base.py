@@ -340,6 +340,7 @@ class BaseReflectChainAgent(ABC):
 
             # Check if model should continue generating
             if self.model_handler.should_continue(stop_reason, new_response, self.agent_settings):
+                logger.info("Should continue - adding continuation message to conversation")
                 self.model_handler.add_continue_message(messages, state_round, tool_state, self.agent_settings, self.agent_config)
                 continue
 
