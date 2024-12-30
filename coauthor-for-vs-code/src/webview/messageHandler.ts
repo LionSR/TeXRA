@@ -64,7 +64,7 @@ export class WebviewMessageHandler {
       case 'setMultipleInputFiles':
       case 'setMultipleReferenceFiles':
       case 'setMultipleAuxiliaryFiles':
-      case 'setMultipleFigures':
+      case 'setMultipleFigureFiles':
         return this.handleSetMultipleFiles(message, webviewView);
       case 'selectMultipleFiles':
         return this.handleSelectMultipleFiles(message, webviewView);
@@ -130,6 +130,7 @@ export class WebviewMessageHandler {
         message.agent,
         message.model,
         message.reflect,
+        // parameters
         message.inputFile,
         getFilesIfNotEmpty(message.inputFiles),
         message.referenceFile,
@@ -138,12 +139,17 @@ export class WebviewMessageHandler {
         getFilesIfNotEmpty(message.auxiliaryFiles),
         message.figureFile,
         getFilesIfNotEmpty(message.figureFiles),
+        // instructions
         message.instructions,
+        // tools
         message.autoExtractFigure,
         message.autoExtractTikzFigure,
         message.autoExtractTikzFigureReflect,
         message.includeTexCount,
-        message.outputFiles,
+        message.usePrefillFromInput,
+        message.autoConfirmation,
+        // output options
+        getFilesIfNotEmpty(message.outputFiles),
         message.outputNameOverride,
       );
     } else {

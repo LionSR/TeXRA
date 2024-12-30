@@ -50,9 +50,9 @@ CHARACTER_REPLACEMENTS = ReplacementCategory(
     },
 )
 
-LAZY_REPLACEMENTS = ReplacementCategory(
-    name="lazy",
-    description="Fixes for lazy writing with regex patterns",
+AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
+    name="auto_confirmation",
+    description="Fixes for auto confirmation writing with regex patterns",
     patterns={
         # Match the entire confirmation message block
         r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>\n<latex_code>",
@@ -112,8 +112,6 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         # new sonnet 3.5 problems
         "{\\today}\n\n[Previous": "{\\today}\n\n\\begin{document}\n\\makeheader[Previous",
         "</monologue><monologue>": "</monologue>\n<monologue>",
-        "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
-        "```\n</latex_document>": "</latex_document>",
     },
 )
 
@@ -144,6 +142,10 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
         "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "</scratchpad>\n\\section{": "</scratchpad>\n<\\latex_document>\n\\section{",
         "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
+        "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
+        "</scratchpad>\n    \n```latex": "</scratchpad>\n\n<latex_document>",
+        "```\n</latex_document>": "</latex_document>",
+        "</scratchpad>\n\\begin{document}": "</scratchpad>\n<latex_document>\n\\begin{document}",
     },
 )
 
@@ -156,7 +158,7 @@ def get_all_replacements() -> dict[str, str]:
         EQUATION_REPLACEMENTS,
         SECTION_REPLACEMENTS,
         CHARACTER_REPLACEMENTS,
-        # LAZY_REPLACEMENTS,
+        # AUTO_CONFIRM_REPLACEMENTS,
         STYLE_REPLACEMENTS,
         # FORMAT
         LATEX_XML_REPLACEMENTS,
@@ -178,7 +180,7 @@ def get_replacements_by_category(category_name: str) -> dict[str, str]:
         "latex_xml": LATEX_XML_REPLACEMENTS,
         "tikz": TIKZ_REPLACEMENTS,
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
-        "lazy": LAZY_REPLACEMENTS,
+        "auto_confirmation": AUTO_CONFIRM_REPLACEMENTS,
     }
     category = categories.get(category_name)
     return category.patterns if category else {}

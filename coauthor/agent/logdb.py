@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime
 
 from .agent_dataclass import AgentConfig, AgentSettings
-from .agent_state import AgentGlobalState, AgentRoundState
+from .agent_state import AgentStateGlobal, AgentStateRound
 
 
 HISTORY_DIR = "History"
@@ -47,8 +47,8 @@ def init_db() -> None:
                 output_file TEXT,
                 instruction TEXT,
                 tool_flags TEXT,  -- JSON object for all tool flags
-                global_state TEXT,  -- JSON object for global metrics
-                round_states TEXT   -- JSON array of round-specific metrics
+                state_global TEXT,  -- JSON object for global metrics
+                state_rounds TEXT   -- JSON array of round-specific metrics
             )"""
             )
             conn.commit()
@@ -83,8 +83,8 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
                 }
             )
 
-            global_state = json.dumps({})
-            round_states = json.dumps({})
+            state_global = json.dumps({})
+            state_rounds = json.dumps({})
 
             c.execute(
                 """INSERT INTO coauthor_logs (
@@ -93,7 +93,7 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
                 figure_file, figure_files, reference_file, reference_files,
                 edited_file, output_files, output_name_override,
                 actual_output_files, instruction,
-                tool_flags, global_state, round_states
+                tool_flags, state_global, state_rounds
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     datetime.now(),
@@ -114,8 +114,8 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
                     actual_output_files,
                     agent_config.instruction,
                     tool_flags,
-                    global_state,
-                    round_states,
+                    state_global,
+                    state_rounds,
                 ),
             )
 
@@ -130,7 +130,7 @@ def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -
         raise
 
 
-def update_log_statistics(log_id: int, global_state: AgentGlobalState, round_state: AgentRoundState, round: int) -> None:
+def update_log_statistics(log_id: int, state_global: AgentStateGlobal, state_round: AgentStateRound, round: int) -> None:
     """Update statistics in the database for a specific log entry."""
     if log_id is None:
         logger.warning("No log ID provided, skipping statistics update")
@@ -141,31 +141,36 @@ def update_log_statistics(log_id: int, global_state: AgentGlobalState, round_sta
             c = conn.cursor()
 
             # First, get existing round states
-            c.execute("SELECT round_states FROM coauthor_logs WHERE id = ?", (log_id,))
+            c.execute("SELECT state_rounds FROM coauthor_logs WHERE id = ?", (log_id,))
             row = c.fetchone()
             if not row:
                 logger.error(f"No log entry found for ID {log_id}")
                 return
 
-            existing_round_states = json.loads(row[0]) if row[0] else {}
+            existing_state_rounds = json.loads(row[0]) if row[0] else {}
 
             # Update the round states with the new state
-            existing_round_states[str(round)] = round_state.to_dict()
+            existing_state_rounds[str(round)] = state_round.to_dict()
 
             # Get the output file from the current round state
-            output_file = round_state.output_file
+            output_file = state_round.output_file
 
-            global_state_json = json.dumps(global_state.to_dict())
-            round_states_json = json.dumps(existing_round_states)
+            # Convert state_global to dict before JSON serialization
+            state_global_dict = state_global.to_dict()
+            if state_global_dict.get("model_usage"):
+                state_global_dict["model_usage"] = state_global_dict["model_usage"].to_dict()
+
+            state_global_json = json.dumps(state_global_dict)
+            state_rounds_json = json.dumps(existing_state_rounds)
 
             # Update the database
             c.execute(
                 """UPDATE coauthor_logs SET
-                global_state = ?,
-                round_states = ?,
+                state_global = ?,
+                state_rounds = ?,
                 output_file = ?
                 WHERE id = ?""",
-                (global_state_json, round_states_json, output_file, log_id),
+                (state_global_json, state_rounds_json, output_file, log_id),
             )
 
             conn.commit()
@@ -216,6 +221,9 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
 
 def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict]:
     """Retrieve complete log entry information for a specific ID."""
+
+    # the idea is that we can retrive the state of panel by using JSON.parse
+
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
@@ -245,8 +253,8 @@ def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict
                 "output_file",
                 "instruction",
                 "tool_flags",
-                "global_state",
-                "round_states",
+                "state_global",
+                "state_rounds",
             ]
 
             entry = {columns[i]: row[i] for i in range(len(columns))}
@@ -259,8 +267,8 @@ def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict
                 "output_files",
                 "actual_output_files",
                 "tool_flags",
-                "global_state",
-                "round_states",
+                "state_global",
+                "state_rounds",
             ]
 
             for field in json_fields:

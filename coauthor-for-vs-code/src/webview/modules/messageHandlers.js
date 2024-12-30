@@ -46,7 +46,7 @@ export function setupMessageHandlers() {
       case 'setMultipleInputFiles':
       case 'setMultipleReferenceFiles':
       case 'setMultipleAuxiliaryFiles':
-      case 'setMultipleFigures':
+      case 'setMultipleFigureFiles':
       case 'setMultipleOutputFiles':
         updateMultipleFileSelect(
           `${message.command.replace('setMultiple', 'multiple')}`,
