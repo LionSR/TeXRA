@@ -33,8 +33,8 @@ export function registerFileSelectionCommands(
       selectMultipleAuxiliaryFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleFigures',
-      selectMultipleFigures,
+      'coauthor.selectMultipleFigureFiles',
+      selectMultipleFigureFiles,
     ),
     vscode.commands.registerCommand(
       'coauthor.selectFigureFile',
@@ -235,7 +235,7 @@ async function selectMultipleAuxiliaryFiles(
   return null;
 }
 
-async function selectMultipleFigures(
+async function selectMultipleFigureFiles(
   currentFigureFile: string,
 ): Promise<string[] | null> {
   const workspacePath = getWorkspacePath();
@@ -360,7 +360,7 @@ export const fileSelectionCommands = {
   selectMultipleInputFiles,
   selectMultipleReferenceFiles,
   selectMultipleAuxiliaryFiles,
-  selectMultipleFigures,
+  selectMultipleFigureFiles,
   selectFigureFile,
   selectEditedFile,
   getCurrentFile,

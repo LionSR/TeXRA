@@ -90,7 +90,7 @@ export function setupUIHandlers() {
     { id: 'InputFiles', selectId: 'inputFile' },
     { id: 'ReferenceFiles', selectId: 'referenceFile' },
     { id: 'AuxiliaryFiles', selectId: 'auxiliaryFile' },
-    { id: 'Figures', selectId: 'figureFile' },
+    { id: 'FigureFiles', selectId: 'figureFile' },
     { id: 'OutputFiles', selectId: 'inputFile' }, // OutputFiles uses inputFile as reference
   ];
 
@@ -171,7 +171,7 @@ export function setupUIHandlers() {
     const auxiliaryFiles = getMultipleFiles('multipleAuxiliaryFiles').filter(
       (file) => file !== auxiliaryFile,
     );
-    const figureFiles = getMultipleFiles('multipleFigures').filter(
+    const figureFiles = getMultipleFiles('multipleFigureFiles').filter(
       (file) => file !== figureFile,
     );
     const outputFiles = getMultipleFiles('multipleOutputFiles');
