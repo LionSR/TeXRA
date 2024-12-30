@@ -70,11 +70,14 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    if agent_config.model not in MODEL_CONFIGS:
+    model_name = agent_config.model.strip("OR")
+    if model_name not in MODEL_CONFIGS:
         raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
 
-    model_config = MODEL_CONFIGS[agent_config.model]
-    model_operations = ModelFactory.create_operations(model_config)
+    model_config = MODEL_CONFIGS[model_name]
+    model_config.use_openrouter = "OR" in agent_config.model
+
+    model_handler = ModelFactory.create_handler(model_config)
 
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, agent_name)
     agent_settings = AgentSettings.from_dict(agent_settings_dict)
@@ -82,7 +85,7 @@ def run_agent(agent: str, **kwargs: Any) -> None:
 
     agent_class = get_agent_class(agent_path, agent_name)
     agent_instance = agent_class(
-        model_operations=model_operations,
+        model_handler=model_handler,
         agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,
@@ -99,7 +102,7 @@ def run_merge(model: str, input_file: str, edited_file: str) -> None:
         raise ValueError(f"Model {model} not found in MODEL_CONFIGS")
 
     model_config = MODEL_CONFIGS[model]
-    model_operations = ModelFactory.create_operations(model_config)
+    model_handler = ModelFactory.create_handler(model_config)
 
     agent_path = get_agent_path("merge")
     agent_settings_dict, agent_prompts_dict = load_agent_settings_and_prompts(agent_path, "merge")
@@ -107,7 +110,7 @@ def run_merge(model: str, input_file: str, edited_file: str) -> None:
     agent_prompts = AgentPrompts.from_dict(agent_prompts_dict)
 
     agent = AgentMerge(
-        model_operations=model_operations,
+        model_handler=model_handler,
         agent_config=agent_config,
         agent_settings=agent_settings,
         agent_prompts=agent_prompts,

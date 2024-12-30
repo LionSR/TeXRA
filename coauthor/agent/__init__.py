@@ -5,7 +5,7 @@ This module provides the core agent functionality for academic writing assistanc
 
 # Core dataclasses and configurations
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-from .agent_state import AgentRoundState, AgentGlobalState
+from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_handler import ToolState
 
 # Base agent implementations
@@ -28,9 +28,14 @@ from .logdb import (
 
 # Model infrastructure
 from .model_config import ModelConfig, ModelProvider, ModelCapabilities
-from .model_operations import ModelOperations
-from .model_operations_anthropic import AnthropicOperations
-from .model_operations_openai import OpenAIOperations, OpenAICompatibleOperations
+from .model_handler import ModelHandler
+from .model_handler_anthropic import AnthropicHandler
+from .model_handler_openai import OpenAIHandler
+from .model_handler_others import (
+    GoogleviaOpenAIHandler,
+    OpenRouterHandler,
+    AnthropicviaOpenrouterHandler,
+)
 from .model_registry import MODEL_CONFIGS
 from .model_factory import ModelFactory
 
@@ -40,8 +45,8 @@ __all__ = [
     "AgentConfig",
     "AgentSettings",
     "AgentPrompts",
-    "AgentRoundState",
-    "AgentGlobalState",
+    "AgentStateRound",
+    "AgentStateGlobal",
     "ToolState",
     # Base agent class
     "BaseReflectChainAgent",
@@ -63,11 +68,12 @@ __all__ = [
     "ModelConfig",
     "ModelProvider",
     "ModelCapabilities",
-    "ModelOperations",
+    "ModelHandler",
     "MODEL_CONFIGS",
     "ModelFactory",
     # Model implementations
-    "AnthropicOperations",
-    "OpenAIOperations",
-    "OpenAICompatibleOperations",
+    "AnthropicHandler",
+    "OpenAIHandler",
+    "GoogleviaOpenAIHandler",
+    "OpenRouterHandler",
 ]

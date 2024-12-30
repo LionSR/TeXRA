@@ -64,40 +64,7 @@ export const executeCommand = {
         terminal_new.sendText(virtualEnvString);
       }
     }
-
-    let command = `coauthor run ${agent} --input_file="${inputFile}"`;
-
-    // Add single files if they exist
-    if (referenceFile) {
-      command += ` --reference_file="${referenceFile}"`;
-    }
-    if (auxiliaryFile) {
-      command += ` --auxiliary_file="${auxiliaryFile}"`;
-    }
-    if (figureFile) {
-      command += ` --figure_file="${figureFile}"`;
-    }
-
-    // Add multiple files if they exist
-    const addFilesToCommand = (files: string[] | null, flag: string) => {
-      if (files && files.length > 0) {
-        command += ` ${flag}="${files.join(',')}"`;
-      }
-    };
-
-    addFilesToCommand(ensureArray(inputFiles), '--input_files');
-    addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
-    addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
-    addFilesToCommand(ensureArray(figureFiles), '--figure_files');
-
-    if (instructions) {
-      const escapedInstructions = instructions
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/{/g, '\\{')
-        .replace(/}/g, '\\}');
-      command += ` --instruction="${escapedInstructions}"`;
-    }
+    let command = `coauthor run ${agent}`;
     if (model) {
       command += ` --model=${model}`;
     }
@@ -105,12 +72,30 @@ export const executeCommand = {
       command += ` --reflect=${reflect}`;
     }
 
-    if (outputFiles && outputFiles.length > 0) {
-      command += ` --output_files="${outputFiles.join(',')}"`;
-    }
-    if (outputNameOverride) {
-      command += ` --output_name_override="${outputNameOverride}"`;
-    }
+    // Add selected file if they exist
+    const addSelectedFileToCommand = (file: string | null, flag: string) => {
+      if (file) {
+        command += ` ${flag}="${file}"`;
+      }
+    };
+    addSelectedFileToCommand(inputFile, '--input_file');
+    addSelectedFileToCommand(referenceFile, '--reference_file');
+    addSelectedFileToCommand(auxiliaryFile, '--auxiliary_file');
+    addSelectedFileToCommand(figureFile, '--figure_file');
+
+    // Add multiple files if they exist
+    const addFilesToCommand = (files: string[] | null, flag: string) => {
+      if (files && files.length > 0) {
+        command += ` ${flag}="${files.join(',')}"`;
+      }
+    };
+    addFilesToCommand(ensureArray(inputFiles), '--input_files');
+    addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
+    addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
+    addFilesToCommand(ensureArray(figureFiles), '--figure_files');
+    addFilesToCommand(ensureArray(outputFiles), '--output_files');
+
+    addSelectedFileToCommand(outputNameOverride, '--output_name_override');
 
     const flagsToAdd = [
       { condition: autoExtractFigure, flag: '--auto_extract_figure' },
@@ -128,6 +113,16 @@ export const executeCommand = {
         command += ` ${flag}`;
       }
     });
+
+    if (instructions) {
+      const escapedInstructions = instructions
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/{/g, '\\{')
+        .replace(/}/g, '\\}')
+        .trim();
+      command += ` --instruction="${escapedInstructions}"`;
+    }
 
     terminal_new.sendText(command);
   },

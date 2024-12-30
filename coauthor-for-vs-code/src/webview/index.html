@@ -294,18 +294,21 @@
               >
                 <i class="fas fa-file-code"></i>
               </button>
-              <span id="toggleMultipleFigures" class="toggle-icon" title="More"
+              <span
+                id="toggleMultipleFigureFiles"
+                class="toggle-icon"
+                title="More"
                 >▼</span
               >
               <button
-                id="emptyMultipleFiguresButton"
+                id="emptyMultipleFigureFilesButton"
                 class="icon-button"
                 title="Empty"
               >
                 <i class="fas fa-trash-alt"></i>
               </button>
               <button
-                id="selectMultipleFiguresButton"
+                id="selectMultipleFigureFilesButton"
                 class="icon-button"
                 title="Add"
               >
@@ -317,12 +320,12 @@
             <option value="">None</option>
           </select>
           <div
-            id="multipleFiguresContainer"
+            id="multipleFigureFilesContainer"
             class="multiple-files-container"
             style="display: none"
           >
             <div class="multiple-files-content">
-              <div id="multipleFigures" class="multiple-files-list"></div>
+              <div id="multipleFigureFiles" class="multiple-files-list"></div>
             </div>
           </div>
         </div>
@@ -353,8 +356,14 @@
               </button>
             </div>
           </div>
-          <div id="outputFilesContainer" style="display: none">
-            <div id="multipleOutputFiles" class="multiple-files-list"></div>
+          <div
+            id="multipleOutputFilesContainer"
+            class="multiple-files-container"
+            style="display: none"
+          >
+            <div class="multiple-files-content">
+              <div id="multipleOutputFiles" class="multiple-files-list"></div>
+            </div>
           </div>
         </div>
       </div>
