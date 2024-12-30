@@ -20,9 +20,8 @@ import {
 } from './utils.js';
 
 export function setupUIHandlers() {
-  const sortableElements = [...MULTIPLE_SELECTIONS, 'multipleOutputFiles'];
-
-  sortableElements.forEach((id) => {
+  // Make all multiple file selections sortable
+  MULTIPLE_SELECTIONS.forEach((id) => {
     const element = safeGetElementById(id);
     if (element) {
       new Sortable(element, {
@@ -86,11 +85,13 @@ export function setupUIHandlers() {
     });
   });
 
+  // Handle multiple file selection buttons
   const multipleFileSelectors = [
     { id: 'InputFiles', selectId: 'inputFile' },
     { id: 'ReferenceFiles', selectId: 'referenceFile' },
     { id: 'AuxiliaryFiles', selectId: 'auxiliaryFile' },
-    { id: 'Figures', selectId: 'figureFile' },
+    { id: 'FigureFiles', selectId: 'figureFile' },
+    { id: 'OutputFiles', selectId: 'inputFile' }, // OutputFiles uses inputFile as reference
   ];
 
   multipleFileSelectors.forEach(({ id, selectId }) => {
@@ -105,34 +106,16 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely(
-    'selectMultipleOutputFilesButton',
-    'click',
-    function () {
-      const inputFile = safeGetElementValue('inputFile');
-      vscode.postMessage({
-        command: 'selectMultipleFiles',
-        fileType: 'OutputFiles',
-        currentFile: inputFile,
-      });
-    },
-  );
-
+  // Handle empty buttons and toggles for all multiple selections
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
+    const emptyButtonId = `empty${capitalize(id)}Button`;
 
-    addEventListenerSafely(`empty${capitalize(id)}Button`, 'click', () =>
+    // Empty button handler
+    addEventListenerSafely(emptyButtonId, 'click', () =>
       emptyMultipleFiles(id, toggleId),
     );
   });
-
-  addEventListenerSafely(
-    'emptyMultipleOutputFilesButton',
-    'click',
-    function () {
-      emptyMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
-    },
-  );
 
   CHECK_BOXES.forEach((id) => {
     addEventListenerSafely(id, 'change', handleCheckboxChange);
@@ -173,7 +156,8 @@ export function setupUIHandlers() {
     // Get multiple files
     const getMultipleFiles = (selectId) => {
       const selectDiv = safeGetElementById(selectId);
-      return selectDiv && selectDiv.style.display === 'block'
+      const containerDiv = safeGetElementById(`${selectId}Container`);
+      return selectDiv && containerDiv && containerDiv.style.display === 'block'
         ? getSelectedFiles(selectDiv)
         : [];
     };
@@ -187,16 +171,11 @@ export function setupUIHandlers() {
     const auxiliaryFiles = getMultipleFiles('multipleAuxiliaryFiles').filter(
       (file) => file !== auxiliaryFile,
     );
-    const figureFiles = getMultipleFiles('multipleFigures').filter(
+    const figureFiles = getMultipleFiles('multipleFigureFiles').filter(
       (file) => file !== figureFile,
     );
+    const outputFiles = getMultipleFiles('multipleOutputFiles');
 
-    const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
-    const outputFiles =
-      outputFilesContainerDiv &&
-      outputFilesContainerDiv.style.display === 'block'
-        ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
-        : null;
     const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
     const outputNameOverride =
       outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
@@ -463,16 +442,14 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely(
-    'toggleMultipleOutputFiles',
-    'click',
-    toggleMultipleOutputFiles,
-  );
-
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
-    addEventListenerSafely(toggleId, 'click', () =>
-      toggleMultipleFiles(id, toggleId),
-    );
+    addEventListenerSafely(toggleId, 'click', () => {
+      if (id === 'multipleOutputFiles') {
+        toggleMultipleOutputFiles();
+      } else {
+        toggleMultipleFiles(id, toggleId);
+      }
+    });
   });
 }
