@@ -85,7 +85,9 @@ export function getSelectedFiles(multipleFilesDiv) {
 }
 
 export function handleEmptyOutputFiles() {
-  const outputFilesContainer = safeGetElementById('outputFilesContainer');
+  const outputFilesContainer = safeGetElementById(
+    'multipleOutputFilesContainer',
+  );
   const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
   if (!outputFilesContainer || !toggleIcon) return;
   outputFilesContainer.style.display = 'none';
@@ -195,7 +197,9 @@ export function initializeOutputFiles() {
 }
 
 export function toggleMultipleOutputFiles() {
-  const outputFilesContainerDiv = safeGetElementById('outputFilesContainer');
+  const outputFilesContainerDiv = safeGetElementById(
+    'multipleOutputFilesContainer',
+  );
   const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
   if (!outputFilesContainerDiv || !toggleIcon) return;
   if (outputFilesContainerDiv.style.display === 'none') {
