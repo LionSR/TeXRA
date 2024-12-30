@@ -35,6 +35,7 @@ export const executeCommand = {
     includeTexCount: boolean,
     usePrefillFromInput: boolean,
     autoConfirmation: boolean,
+    printInputPrompt: boolean,
     // output options
     outputFiles: string[],
     outputNameOverride: string,
@@ -107,6 +108,7 @@ export const executeCommand = {
       { condition: includeTexCount, flag: '--include_tex_count' },
       { condition: usePrefillFromInput, flag: '--use_prefill_from_input' },
       { condition: autoConfirmation, flag: '--auto_confirmation' },
+      { condition: printInputPrompt, flag: '--print_input_prompt' },
     ];
     flagsToAdd.forEach(({ condition, flag }) => {
       if (condition) {

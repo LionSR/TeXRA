@@ -20,7 +20,7 @@ from ..latex import (
 
 # Local imports - utilities
 from ..utils.file import read_file, write_to_output_file
-from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document
+from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
 from ..utils.xml import get_xml_format_from_files
@@ -389,6 +389,10 @@ class BaseReflectChainAgent(ABC):
 
         if tool_state.tex_count_stats:
             user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
+
+        # Write prompt to file if requested
+        if self.agent_config.tool_config.print_input_prompt:
+            write_prompt_to_xml(system_prompt, user_prefix, user_request, self.agent_config.input_file, self.agent_config.agent)
 
         # Initialize messages with prompts
         messages = self.model_handler.initialize_messages(
