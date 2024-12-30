@@ -524,3 +524,24 @@ class BaseReflectChainAgent(ABC):
             reflection_state_round, state_global, reflection_messages, end_turn_reflection = self.reflect(
                 state_global, messages, reflection_tool_state
             )
+
+    def _process_output_files(self, output_file: str, curr_round: int):
+        """Process output files for the current round.
+
+        Handles both single and multiple output file cases, including:
+        - Processing outputs
+        - Handling file operations
+        - Managing output file tracking
+        - Handling LaTeX diff if needed
+        """
+        if self.agent_config.output_files:
+            processed_files = self.output_handler._process_multiple_outputs(output_file)
+            self.output_handler._handle_multiple_outputs(processed_files)
+            self.output_handler.output_files[curr_round] = processed_files
+            self.output_handler._replace_input_commands(self.base_files, processed_files)
+        else:
+            processed_file = self.output_handler._process_single_output(output_file)
+            self.output_handler._handle_single_output(processed_file)
+            self.output_handler.output_files[curr_round] = [processed_file]
+
+        self.output_handler._handle_latexdiff(curr_round)
