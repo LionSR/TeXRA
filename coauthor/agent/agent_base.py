@@ -346,6 +346,20 @@ class BaseReflectChainAgent(ABC):
 
         return state_round, state_global, tool_state, end_turn
 
+    def _get_prefill_for_round(self, curr_round: int) -> str:
+        """Get prefill content for the current round."""
+        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
+        return prefill if prefill else ""
+
+    def _handle_round_completion(
+        self, state_round: AgentStateRound, state_global: AgentStateGlobal, output_file: str, end_turn: bool, curr_round: int
+    ):
+        """Handle output and logging for round completion."""
+        self.handle_output(state_round, state_global, output_file, end_turn, curr_round=curr_round)
+        input_info = f"input file {self.agent_config.input_file} " f"and/or input files {self.agent_config.input_files}"
+        logger.info(f"\n\nProcessed {input_info}. The round {curr_round} output was saved as {output_file}")
+        logger.info(f"Completed round {curr_round}")
+
     def process(self):
         """Process the input files and generate output."""
         # Initialize input files list
@@ -378,10 +392,11 @@ class BaseReflectChainAgent(ABC):
                         tool_state.add_figure_files(extracted_tikz_figures)
 
         # Initialize state and messages
-        state_global = AgentStateGlobal.initialize()
-        messages = []
         curr_round = 0
         logger.info(f"\n\nProcessing round {curr_round}")
+        state_global = AgentStateGlobal.initialize()
+
+        messages = []
 
         # Set up initial prompts
         system_prompt = render_prompt(self.agent_prompts.system_prompt, self.user_vars)
@@ -404,8 +419,8 @@ class BaseReflectChainAgent(ABC):
         )
 
         # Handle prefill
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
+        prefill = self._get_prefill_for_round(curr_round)
+        tool_state.update_accumulated_output(prefill)
 
         # Initialize output and handle prefill
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
@@ -417,8 +432,8 @@ class BaseReflectChainAgent(ABC):
             prefill,
         )
 
+        state_round = AgentStateRound.initialize(curr_round)
         if not end_turn:
-            state_round = AgentStateRound.initialize(curr_round)
             state_round, state_global, tool_state, end_turn = self._process_response_cycle(
                 messages,
                 state_round,
@@ -426,17 +441,9 @@ class BaseReflectChainAgent(ABC):
                 tool_state,
                 self.output_file[0],
             )
-        else:
-            state_round = AgentStateRound.initialize(curr_round)
 
         # Handle output and logging
-        self.handle_output(state_round, state_global, self.output_file[0], end_turn, curr_round=0)
-        logger.info(
-            f"\n\nProcessed input file {self.agent_config.input_file} "
-            f"and/or input files {self.agent_config.input_files}. "
-            f"The round 0 output was saved as {self.output_file[1]}"
-        )
-        logger.info("Completed round 0")
+        self._handle_round_completion(state_round, state_global, self.output_file[0], end_turn, curr_round)
 
         return state_round, state_global, messages, end_turn, tool_state
 
@@ -481,8 +488,8 @@ class BaseReflectChainAgent(ABC):
         messages = self.model_handler.create_reflection_message(messages, user_message, tool_state.figure_files)
 
         # Handle prefill for reflection round
-        prefill = self.agent_settings.prefills[curr_round] if curr_round < len(self.agent_settings.prefills) else self.agent_settings.prefills[0]
-        tool_state.update_accumulated_output(prefill if prefill else "")
+        prefill = self._get_prefill_for_round(curr_round)
+        tool_state.update_accumulated_output(prefill)
 
         end_turn, messages = self.model_handler.initialize_output_and_prefill(
             self.agent_config,
@@ -503,13 +510,7 @@ class BaseReflectChainAgent(ABC):
             )
 
         # Handle output and logging
-        self.handle_output(state_round, state_global, self.output_file[1], end_turn, curr_round=1)
-        logger.info(
-            f"\n\nProcessed input file {self.agent_config.input_file} "
-            f"and/or input files {self.agent_config.input_files}. "
-            f"The round 1 output was saved as {self.output_file[1]}"
-        )
-        logger.info("Completed round 1")
+        self._handle_round_completion(state_round, state_global, self.output_file[1], end_turn, curr_round)
 
         return state_round, state_global, messages, end_turn
 
