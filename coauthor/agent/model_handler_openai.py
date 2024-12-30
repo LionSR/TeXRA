@@ -5,14 +5,15 @@ from openai import OpenAI
 from typing import Any
 
 from ..logger import logger
+
+from ..agent.agent_state import AgentStateRound
+from ..agent import AgentSettings, AgentConfig
 from ..utils.file import read_file
 
 from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import OpenAIResponseUsage
 
-from ..agent.agent_state import AgentStateRound
-from ..agent import AgentSettings, AgentConfig
 from .tool_handler import ToolState
 
 
@@ -126,6 +127,7 @@ class OpenAIHandler(ModelHandler):
         if not (hasattr(response_object, "choices") and response_object.choices):
             error_msg = "Invalid response from API: missing choices"
             logger.error(error_msg)
+            logger.debug(response_object)
             raise ValueError(error_msg)
 
         # Extract base response
@@ -277,4 +279,5 @@ class OpenAIHandler(ModelHandler):
 
     def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
         """Determine if OpenAI model should continue generating."""
+        logger.info("Determining if should continue for OpenAI model via OpenAI API")
         return stop_reason == "length" and not agent_settings.has_end_tag(new_response)

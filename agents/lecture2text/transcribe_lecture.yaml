@@ -1,4 +1,4 @@
-name: transcribe
+name: transcribe_lecture
 
 settings:
   document_tag: improved_document
