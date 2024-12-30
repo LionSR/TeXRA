@@ -58,7 +58,7 @@ def write_prompt_to_xml(system_prompt: str, user_prefix: str, user_request: str,
     logger.info(f"Writing input prompt to {output_file}")
 
     # Combine prompts
-    full_prompt = f"<prompt>\n<system>{system_prompt}</system>\n<user>{user_prefix}\n{user_request}</user>\n</prompt>"
+    full_prompt = f"\n<system>{system_prompt}</system>\n\n{user_prefix}\n{user_request}\n"
 
     # Write to file
     with open(output_file, "w") as f:
