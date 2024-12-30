@@ -64,7 +64,7 @@ export class WebviewMessageHandler {
       case 'setMultipleInputFiles':
       case 'setMultipleReferenceFiles':
       case 'setMultipleAuxiliaryFiles':
-      case 'setMultipleFigures':
+      case 'setMultipleFigureFiles':
         return this.handleSetMultipleFiles(message, webviewView);
       case 'selectMultipleFiles':
         return this.handleSelectMultipleFiles(message, webviewView);

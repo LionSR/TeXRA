@@ -2,7 +2,7 @@ export const MULTIPLE_SELECTIONS = [
   'multipleInputFiles',
   'multipleReferenceFiles',
   'multipleAuxiliaryFiles',
-  'multipleFigures',
+  'multipleFigureFiles',
   'multipleOutputFiles',
 ];
 
