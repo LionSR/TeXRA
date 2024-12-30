@@ -85,14 +85,7 @@ export function getSelectedFiles(multipleFilesDiv) {
 }
 
 export function handleEmptyOutputFiles() {
-  const outputFilesContainer = safeGetElementById(
-    'multipleOutputFilesContainer',
-  );
-  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
-  if (!outputFilesContainer || !toggleIcon) return;
-  outputFilesContainer.style.display = 'none';
-  toggleIcon.textContent = '▼';
-  saveState();
+  emptyMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
 }
 
 export function hideEmptyMultipleFileSelects() {
@@ -175,25 +168,49 @@ export function handleCheckboxChange(event) {
 }
 
 export function initializeOutputFiles() {
-  const inputFileDiv = safeGetElementById('inputFile');
-  const multipleInputFilesDiv = safeGetElementById('multipleInputFiles');
   const outputFilesDiv = safeGetElementById('multipleOutputFiles');
   if (!outputFilesDiv) return;
 
-  outputFilesDiv.innerHTML = '';
+  // Check if there are saved output files
+  const state = vscode.getState();
+  if (
+    state &&
+    state.multipleOutputFiles &&
+    state.multipleOutputFiles.length > 0
+  ) {
+    // Use saved values
+    outputFilesDiv.innerHTML = '';
+    state.multipleOutputFiles.forEach((file) => {
+      addFileToList('multipleOutputFiles', file);
+    });
+  } else {
+    // Initialize from input files
+    outputFilesDiv.innerHTML = '';
+    const inputFileDiv = safeGetElementById('inputFile');
+    const multipleInputFilesDiv = safeGetElementById('multipleInputFiles');
 
-  // Add the main input file
-  if (inputFileDiv && inputFileDiv.value) {
-    addFileToList('multipleOutputFiles', inputFileDiv.value);
+    // Add the main input file
+    if (inputFileDiv && inputFileDiv.value) {
+      addFileToList('multipleOutputFiles', inputFileDiv.value);
+    }
+
+    // Add multiple input files
+    if (multipleInputFilesDiv) {
+      const additionalFiles = getSelectedFiles(multipleInputFilesDiv);
+      additionalFiles.forEach((file) => {
+        addFileToList('multipleOutputFiles', file);
+      });
+    }
   }
 
-  // Add multiple input files
-  const additionalFilesDiv = multipleInputFilesDiv
-    ? getSelectedFiles(multipleInputFilesDiv)
-    : [];
-  additionalFilesDiv.forEach((file) => {
-    addFileToList('multipleOutputFiles', file);
-  });
+  // Show the container if files were added
+  const container = safeGetElementById('multipleOutputFilesContainer');
+  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
+  if (container && toggleIcon && outputFilesDiv.children.length > 0) {
+    container.style.display = 'block';
+    toggleIcon.textContent = '▲';
+  }
+  saveState();
 }
 
 export function toggleMultipleOutputFiles() {
@@ -202,9 +219,9 @@ export function toggleMultipleOutputFiles() {
   );
   const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
   if (!outputFilesContainerDiv || !toggleIcon) return;
-  if (outputFilesContainerDiv.style.display === 'none') {
-    outputFilesContainerDiv.style.display = 'block';
-    toggleIcon.textContent = '▲';
+
+  const isVisible = outputFilesContainerDiv.style.display !== 'none';
+  if (!isVisible) {
     initializeOutputFiles();
   } else {
     outputFilesContainerDiv.style.display = 'none';
