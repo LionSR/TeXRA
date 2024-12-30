@@ -3,6 +3,7 @@ export const MULTIPLE_SELECTIONS = [
   'multipleReferenceFiles',
   'multipleAuxiliaryFiles',
   'multipleFigures',
+  'multipleOutputFiles',
 ];
 
 export const CHECK_BOXES = [

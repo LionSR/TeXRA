@@ -20,9 +20,8 @@ import {
 } from './utils.js';
 
 export function setupUIHandlers() {
-  const sortableElements = [...MULTIPLE_SELECTIONS, 'multipleOutputFiles'];
-
-  sortableElements.forEach((id) => {
+  // Make all multiple file selections sortable
+  MULTIPLE_SELECTIONS.forEach((id) => {
     const element = safeGetElementById(id);
     if (element) {
       new Sortable(element, {
@@ -86,11 +85,13 @@ export function setupUIHandlers() {
     });
   });
 
+  // Handle multiple file selection buttons
   const multipleFileSelectors = [
     { id: 'InputFiles', selectId: 'inputFile' },
     { id: 'ReferenceFiles', selectId: 'referenceFile' },
     { id: 'AuxiliaryFiles', selectId: 'auxiliaryFile' },
     { id: 'Figures', selectId: 'figureFile' },
+    { id: 'OutputFiles', selectId: 'inputFile' }, // OutputFiles uses inputFile as reference
   ];
 
   multipleFileSelectors.forEach(({ id, selectId }) => {
@@ -105,23 +106,13 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely(
-    'selectMultipleOutputFilesButton',
-    'click',
-    function () {
-      const inputFile = safeGetElementValue('inputFile');
-      vscode.postMessage({
-        command: 'selectMultipleFiles',
-        fileType: 'OutputFiles',
-        currentFile: inputFile,
-      });
-    },
-  );
-
+  // Handle empty buttons and toggles for all multiple selections
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
+    const emptyButtonId = `empty${capitalize(id)}Button`;
 
-    addEventListenerSafely(`empty${capitalize(id)}Button`, 'click', () =>
+    // Empty button handler
+    addEventListenerSafely(emptyButtonId, 'click', () =>
       emptyMultipleFiles(id, toggleId),
     );
   });
