@@ -3,9 +3,10 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from ..logger import logger
+
 from ..agent import AgentConfig, AgentSettings
 from ..latex import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds
-from ..logger import logger
 from ..utils.file import read_file, write_file
 from ..utils.replacement import apply_replacements, get_replacements_by_category
 from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_tags_from_text
