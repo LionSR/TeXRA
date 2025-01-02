@@ -179,7 +179,7 @@ export async function copyFile(
   }
 }
 
-export async function findFile(
+export async function findFileInBuild(
   inputDir: string,
   pattern: string,
   ext?: string,
@@ -245,7 +245,7 @@ export async function findFile(
   } catch (err) {
     error(
       CHANNEL,
-      `Error in findFile: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in findFileInBuild: ${err instanceof Error ? err.message : String(err)}`,
     );
     return null;
   }
