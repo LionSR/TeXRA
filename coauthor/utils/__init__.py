@@ -11,7 +11,6 @@ from .file import (
     delete_file,
     move_file,
     find_file,
-    write_to_output_file,
 )
 
 from .img import (
@@ -57,7 +56,6 @@ __all__ = [
     "delete_file",
     "move_file",
     "find_file",
-    "write_to_output_file",
     "get_list_of_files",
     # Image and PDF processing
     "get_base64_encoded_image",
