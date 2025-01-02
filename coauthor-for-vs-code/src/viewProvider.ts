@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { WebviewMessageHandler } from './webview/messageHandler';
 import { WebviewContentProvider } from './webview/webviewContentProvider';
-import { initializeLogging } from './utils/logUtils';
+import { initializeLogging } from './logger/logUtils';
 
 const CHANNEL = 'ViewProvider';
 initializeLogging(CHANNEL);

@@ -35,6 +35,8 @@ from .prompt import (
     render_prompt,
 )
 
+from .exec import execute_command, truncate_output
+
 from .confirmation import wrap_confirmation_prompts, CONFIRMATION_PROMPT_PATTERNS
 
 from .replacement import (
@@ -80,4 +82,7 @@ __all__ = [
     "render_prompt",
     "wrap_confirmation_prompts",
     "CONFIRMATION_PROMPT_PATTERNS",
+    # Execution
+    "execute_command",
+    "truncate_output",
 ]

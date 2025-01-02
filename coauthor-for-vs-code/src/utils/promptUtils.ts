@@ -1,10 +1,10 @@
 import * as nunjucks from 'nunjucks';
-import { debug, error, initializeLogging } from './logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 import { readFile } from './fileUtils';
 import * as yaml from 'yaml';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getConfig } from './commonUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'PromptUtils';
 initializeLogging(CHANNEL);

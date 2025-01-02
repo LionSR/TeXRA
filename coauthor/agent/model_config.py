@@ -59,6 +59,7 @@ class ModelConfig:
         self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
 
         # If model name ends with OR, it should use OpenRouter
+        # there are some duplications with the model_factory.py and execute.py
         if self.name.endswith("OR"):
             self.use_openrouter = True
             self.name = self.name[:-2]  # Remove OR suffix

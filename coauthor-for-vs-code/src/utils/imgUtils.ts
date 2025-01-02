@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import { fromPath } from 'pdf2pic';
-import { debug, error, warn, initializeLogging } from './logUtils';
+import { debug, error, warn, initializeLogging } from '../logger/logUtils';
 import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
 import * as path from 'path';
 import * as fs from 'fs';

@@ -28,11 +28,13 @@ After installation, you need to set up your API keys. Create a `.env` file in th
 ```bash
 OPENAI_API_KEY=your_actual_openai_api_key_here
 ANTHROPIC_API_KEY=your_actual_anthropic_api_key_here
+OPENROUTER_API_KEY=your_actual_openrouter_api_key_here
+GOOGLE_API_KEY=your_actual_google_api_key_here
 ```
 
 4. Optionally, you can change the default model or set a custom `LATEXINDENT_CONFIG` path.
 
-This `.env` file will be automatically loaded when you run CoAuthor, providing the necessary API keys for OpenAI and Anthropic services.
+This `.env` file will be automatically loaded when you run CoAuthor, providing the necessary API keys for the services.
 
 To ease the installation and usage of the front end + backend, we recommend using a git client such as tower or github desktop to track the diffs, and working on your papers/lecture notes in a git-tracked folder.
 
@@ -77,13 +79,6 @@ CoAuthor provides various CLI commands for different tasks:
   - `coauthor run convert_tex`: Convert LaTeX documents
   - `coauthor run ocr_tex`: OCR processing for LaTeX
 
-- Lecture Notes:
-
-  - `coauthor run correct_qi`: Correct QI lecture notes
-  - `coauthor run polish_qi`: Polish QI lecture notes
-  - `coauthor run revise_qi`: Revise QI lecture notes
-  - `coauthor run draw_qi`: Draw figures for QI lecture notes
-
 - Document Conversion:
 
   - `coauthor run meeting2text`: Convert meeting transcripts to text
@@ -97,7 +92,7 @@ CoAuthor provides various CLI commands for different tasks:
   - `coauthor run paper2cover`: Convert paper to cover letter
   - `coauthor run translate2chn`: Translate to Chinese
 
-- PRL Paper Tools:
+- Paper Tools:
 
   - `coauthor run correct_prl`: Correct PRL papers
   - `coauthor run polish_prl`: Polish PRL papers
@@ -109,7 +104,6 @@ CoAuthor provides various CLI commands for different tasks:
 
   - `coauthor run paper2referee`: Write referee reports
   - `coauthor run revise_referee_report`: Revise referee reports
-
   - `coauthor run statement`: Write academic statements
   - `coauthor run revise_nsf_grant`: Revise NSF grants
   - `coauthor run revise_marie_curie`: Revise Marie Curie grants
@@ -325,14 +319,56 @@ This design allows CoAuthor to produce more thoughtful, accurate, and refined ou
 
 ## Advanced Features
 
+### Common Flags
+
+CoAuthor supports various flags that can be used with most commands:
+
+- Model and Processing:
+
+  - `--model`: Model to use (default: "sonnet+")
+  - `--reflect`: Enable reflection round after initial processing
+  - `--instruction`: Provide specific instructions for processing
+
+- Input Files:
+
+  - `--input_file`: Path to the main input file
+  - `--input_files`: Multiple input files (comma-separated)
+  - `--reference_file`: Path to a reference file
+  - `--reference_files`: Multiple reference files (comma-separated)
+  - `--auxiliary_file`: Path to an auxiliary file
+  - `--auxiliary_files`: Multiple auxiliary files (comma-separated)
+  - `--figure_file`: Path to a figure file
+  - `--figure_files`: Multiple figure files (comma-separated)
+
+- Output Control:
+
+  - `--output_files`: Specify output file paths (comma-separated)
+  - `--output_name_override`: Override the default output name
+  - `--edited_file`: Path to a file that has already been edited
+
+- Tool Usage:
+  - `--use_prefill_from_input`: Use the prefill from the input file
+  - `--auto_extract_figure`: Automatically extract figures from input
+  - `--auto_extract_tikz_figure`: Extract and compile TikZ figures
+  - `--auto_extract_tikz_figure_reflect`: Include TikZ reflection
+  - `--include_tex_count`: Include tex count statistics
+  - `--auto_confirmation`: Automatically confirm model's questions
+  - `--print_input_prompt`: Print the input prompt to an XML file
+
+Example usage:
+
+```bash
+coauthor run polish_tex --input_file paper.tex --reflect --auto_extract_figure --include_tex_count
+```
+
 ### Figure and TikZ Extraction
 
 CoAuthor can automatically extract and process figures from your LaTeX documents:
 
-- Use `--auto_extract_figure` to automatically extract the list of figures from the input file.
-- Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file.
-- Use `--auto_extract_tikz_figure_reflect` to include TikZ reflection in the output.
-- Use `--include_tex_count` to include the tex count statistics in the user message.
+- Use `--auto_extract_figure` to automatically extract the list of figures from the input file
+- Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file
+- Use `--auto_extract_tikz_figure_reflect` to include TikZ reflection in the output
+- Use `--include_tex_count` to include the tex count statistics in the user message
 
 Example:
 
@@ -348,30 +384,20 @@ For complex projects, CoAuthor supports processing multiple input files:
 coauthor run polish_tex --input_file main.tex --input_files chapter1.tex,chapter2.tex
 ```
 
-### Tex Count Integration
-
-CoAuthor can provide LaTeX document statistics using the `texcount` tool:
-
-```bash
-coauthor tex-count your_file.tex
-```
-
-This command will output statistics like word count, number of headers, number of floats, etc.
-
-## Version Control Integration
+### Version Control Integration
 
 CoAuthor integrates with version control systems:
 
-- Use `coauthor latexdiff input.tex edited.tex` to generate a diff between two LaTeX files.
-- Use `coauthor latexdiff-vc input.tex commit_hash` to generate a diff against a specific git commit.
+- Use `coauthor latexdiff input.tex edited.tex` to generate a diff between two LaTeX files
+- Use `coauthor latexdiff-vc input.tex commit_hash` to generate a diff against a specific git commit
 
-## Cleaning and Packing
+### Cleaning and Packing
 
 CoAuthor provides utilities for cleaning up and packing your work:
 
-- `coauthor clean-output`: Cleans up output files.
-- `coauthor clean-build`: Cleans up build directories.
-- `coauthor pack-single input.tex --agent polish --model opus`: Packs the output files for a specific Agent into a versioned folder.
+- `coauthor clean-output`: Cleans up output files
+- `coauthor clean-build`: Cleans up build directories
+- `coauthor pack-single input.tex --agent polish --model opus`: Packs the output files for a specific Agent into a versioned folder
 
 ## Environment Variables
 
@@ -409,5 +435,5 @@ To add a new Agent to CoAuthor:
 
 ## Known Issues
 
-- If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name.
-- Make sure your VS code installation is newer than 1.89.0.
+- If your frontend version is older than 0.5.6, you need to uninstall and reinstall the extension due to a change in the creator's name
+- Make sure your VS code installation is newer than 1.93.1

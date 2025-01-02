@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { workspace } from 'vscode';
-import { debug, info, warn, error } from '../utils/logUtils';
+import { debug, info, warn, error } from '../logger/logUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import {
   listInputFiles,
@@ -10,8 +10,8 @@ import {
   listFigureFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../utils';
-import { capitalize, uncapitalize } from '../utils/commonUtils';
+} from '../frontend-utils/fileListingUtils';
+import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'MessageHandler';
 
