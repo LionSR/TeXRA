@@ -6,7 +6,7 @@ import { registerPackCommands } from './commands/packCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './viewProvider';
-import { initializeLogging } from './utils/logUtils';
+import { initializeLogging } from './logger/logUtils';
 import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';

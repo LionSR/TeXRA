@@ -8,7 +8,7 @@ import {
   runCleanSingle,
   runCleanMultiple,
 } from '../housekeeping';
-import { debug, error } from '../utils/logUtils';
+import { debug, error } from '../logger/logUtils';
 
 const CHANNEL = 'PackCommands';
 
