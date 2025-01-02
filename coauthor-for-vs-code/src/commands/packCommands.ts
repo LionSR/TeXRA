@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import {
   runPackSingle,
   runPackMultiple,
-  runCleanOutput,
-  runCleanBuild,
-  runIndentTex,
   runCleanSingle,
   runCleanMultiple,
+  runCleanBuild,
+  runCleanOutput,
+  runIndentTex,
 } from '../housekeeping';
 import { debug, error } from '../logger/logUtils';
 

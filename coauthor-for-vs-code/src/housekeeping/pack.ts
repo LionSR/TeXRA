@@ -1,0 +1,198 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { debug, info, warn, error } from '../logger/logUtils';
+import {
+  deleteFile,
+  moveFile,
+  copyFile,
+  findFileInBuild,
+  createDirectory,
+  fileExists,
+} from '../utils/fileUtils';
+import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
+import { getAgentFirstNameChunk, getFilePatterns } from './utils';
+
+const CHANNEL = 'Housekeeping';
+
+export async function runPackSingle(
+  model: string,
+  inputFile: string,
+  agent: string,
+  outputFolder?: string,
+): Promise<string> {
+  info(
+    CHANNEL,
+    `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
+  );
+
+  if (!inputFile || !model || !agent) {
+    error(
+      CHANNEL,
+      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+    );
+    vscode.window.showErrorMessage(
+      'Missing required parameters for pack single',
+    );
+    return '';
+  }
+
+  const baseName = path.parse(inputFile).name;
+  const inputDir = path.dirname(inputFile);
+  debug(CHANNEL, `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
+
+  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+  const filePatterns = [
+    ...getFilePatterns(baseName, model, agentFirstNameChunk),
+    baseName,
+  ];
+  debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+
+  const movedFiles: string[] = [];
+  const copiedFiles: string[] = [];
+
+  // Find files to move or copy
+  for (const pattern of filePatterns) {
+    for (const ext of PACK_EXTENSIONS) {
+      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      if (filePath) {
+        debug(CHANNEL, `Found file: ${filePath}`);
+        if (filePath === inputFile || pattern === baseName) {
+          copiedFiles.push(filePath);
+        } else {
+          movedFiles.push(filePath);
+        }
+      }
+    }
+  }
+
+  debug(CHANNEL, `Files to move: ${movedFiles}`);
+  debug(CHANNEL, `Files to copy: ${copiedFiles}`);
+
+  if (movedFiles.length > 0 || copiedFiles.length > 0) {
+    const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+    outputFolder =
+      outputFolder ||
+      path.join(inputDir, HISTORY_DIR, `${now}_${baseName}_${agent}_${model}`);
+    debug(CHANNEL, `Output folder: ${outputFolder}`);
+
+    try {
+      // Use the new helper function
+      await createDirectory(outputFolder);
+      debug(CHANNEL, `Created output directory: ${outputFolder}`);
+
+      // Move and copy files
+      for (const file of movedFiles) {
+        const destination = path.join(outputFolder, path.basename(file));
+        debug(CHANNEL, `Moving file from ${file} to ${destination}`);
+        await moveFile(file, destination);
+      }
+      for (const file of copiedFiles) {
+        const destination = path.join(outputFolder, path.basename(file));
+        debug(CHANNEL, `Copying file from ${file} to ${destination}`);
+        await copyFile(file, destination);
+      }
+
+      info(CHANNEL, `Files packed into ${outputFolder}`);
+      vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
+    } catch (err) {
+      error(
+        CHANNEL,
+        `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      vscode.window.showErrorMessage(`Error during packing: ${err}`);
+      return '';
+    }
+  } else {
+    warn(CHANNEL, `No files found to pack for ${inputFile}`);
+    vscode.window.showInformationMessage(
+      `No files found to pack for ${inputFile}`,
+    );
+  }
+
+  // Clean up temporary files
+  for (const pattern of filePatterns) {
+    for (const ext of TEMP_EXTENSIONS) {
+      const filePath = await findFileInBuild(inputDir, pattern, ext);
+      if (filePath && filePath !== inputFile) {
+        await deleteFile(filePath);
+      }
+    }
+  }
+
+  return outputFolder || '';
+}
+
+export async function runPackMultiple(
+  model: string,
+  inputFile: string,
+  agent: string,
+  inputFiles: string[],
+  outputNameOverride?: string,
+): Promise<string> {
+  debug(
+    CHANNEL,
+    `Starting multiple packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+  );
+  debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+
+  let baseName: string;
+  let outputDir: string;
+
+  if (outputNameOverride) {
+    baseName = path.parse(outputNameOverride).name;
+    outputDir = path.dirname(outputNameOverride);
+  } else {
+    baseName = path.parse(inputFile).name;
+    outputDir = path.dirname(inputFile);
+  }
+
+  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
+  const commonOutputFolder =
+    outputNameOverride ||
+    path.join(
+      outputDir,
+      HISTORY_DIR,
+      `${now}_${baseName}_multiple_${agent}_${model}`,
+    );
+  debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
+
+  try {
+    await createDirectory(commonOutputFolder);
+    debug(CHANNEL, `Created output directory: ${commonOutputFolder}`);
+
+    // Pack the main input file
+    await runPackSingle(model, inputFile, agent, commonOutputFolder);
+
+    // Pack additional files
+    if (inputFiles && inputFiles.length > 0) {
+      for (const file of inputFiles) {
+        debug(CHANNEL, `Packing input file: ${file}`);
+        await runPackSingle(model, file, agent, commonOutputFolder);
+      }
+    }
+
+    // Pack additional XML files
+    const agentFirstNameChunk = getAgentFirstNameChunk(agent);
+    const additionalPatterns = [
+      `${baseName}_${agentFirstNameChunk}_r0_${model}.xml`,
+      `${baseName}_${agentFirstNameChunk}_r1_${model}.xml`,
+    ];
+
+    for (const pattern of additionalPatterns) {
+      const filePath = path.join(outputDir, pattern);
+      if (await fileExists(filePath)) {
+        debug(CHANNEL, `Found additional XML file: ${filePath}`);
+        await moveFile(filePath, path.join(commonOutputFolder, pattern));
+      }
+    }
+
+    info(CHANNEL, `All files packed into ${commonOutputFolder}`);
+    return commonOutputFolder;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error during multiple pack operation: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
