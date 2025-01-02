@@ -30,19 +30,6 @@ def append_file(file_path: str, content: str) -> None:
         file.write(content)
 
 
-def write_to_output_file(file_exists: bool, best_connector: str, new_response: str, output_file: str) -> bool:
-    """Write or append content to output file and return updated file existence status."""
-    if not file_exists:
-        logger.debug(f"Creating new file: {output_file}")
-        write_file(output_file, new_response)
-        file_exists = True
-    else:
-        logger.debug(f"Appending to existing file: {output_file}")
-        append_file(output_file, best_connector + new_response)
-
-    return file_exists
-
-
 def delete_file(file_path: str) -> None:
     """Delete a file or directory, handling potential permission errors."""
     try:
