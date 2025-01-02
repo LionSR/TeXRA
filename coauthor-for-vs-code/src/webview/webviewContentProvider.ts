@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { getConfig } from '../utils/commonUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 
 const CHANNEL = 'WebviewContent';
