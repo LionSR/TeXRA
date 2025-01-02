@@ -6,7 +6,7 @@ import {
   getConfig,
 } from '../utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import { debug, info, error, initializeLogging } from '../utils/logUtils';
+import { debug, info, error, initializeLogging } from '../logger/logUtils';
 import { listInputFiles } from '../utils';
 
 const CHANNEL = 'FileSelection';

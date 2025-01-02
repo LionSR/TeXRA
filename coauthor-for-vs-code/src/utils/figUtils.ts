@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { debug, error, initializeLogging } from './logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 import {
   readFile,
   fileExists,

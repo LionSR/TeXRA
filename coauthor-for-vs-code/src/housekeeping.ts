@@ -13,7 +13,7 @@ import {
   readDirectory,
   fileExists,
 } from './utils/fileUtils';
-import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
+import { debug, info, warn, error, initializeLogging } from './logger/logUtils';
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'Housekeeping';
