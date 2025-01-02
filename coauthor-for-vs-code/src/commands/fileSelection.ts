@@ -4,10 +4,10 @@ import {
   showInfoMessage,
   showErrorMessage,
   getConfig,
-} from '../utils/commonUtils';
+} from '../frontend-utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import { debug, info, error, initializeLogging } from '../utils/logUtils';
-import { listInputFiles } from '../utils';
+import { debug, info, error, initializeLogging } from '../logger/logUtils';
+import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
 const CHANNEL = 'FileSelection';
 initializeLogging(CHANNEL);

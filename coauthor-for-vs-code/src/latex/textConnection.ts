@@ -1,9 +1,10 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
-import { debug, error } from './utils/logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 
-const CHANNEL = 'TextConnection';
+const CHANNEL = 'LaTeX';
+initializeLogging(CHANNEL);
 
 interface ConnectionResult {
   connector: string;
