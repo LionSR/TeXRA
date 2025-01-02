@@ -1,11 +1,13 @@
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import { getWorkspacePath } from './fileUtils';
-import { debug, warn, error } from '../logger/logUtils';
+import { debug, warn, error, initializeLogging } from '../logger/logUtils';
 
 const execAsync = promisify(cp.exec);
 
-const CHANNEL = 'ExecUtils';
+const CHANNEL = 'Utils';
+initializeLogging(CHANNEL);
+
 const MAX_OUTPUT_LENGTH = 150;
 
 /**

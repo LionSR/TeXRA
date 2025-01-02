@@ -1,7 +1,10 @@
 import * as nunjucks from 'nunjucks';
 import { debug, error, initializeLogging } from '../logger/logUtils';
+import { readFile, writeFile } from './fileUtils';
+import * as path from 'path';
+import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
-const CHANNEL = 'PromptUtils';
+const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);
 
 /**
@@ -43,6 +46,64 @@ export async function renderPrompt(
     error(
       CHANNEL,
       `Error rendering prompt: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * Get the first K characters from a document
+ * @param inputFile Path to the input file
+ * @param k Number of characters to return
+ * @returns First K characters from the document, stripped of whitespace, or null if file cannot be read
+ */
+export async function getFirstKCharsFromDocument(
+  inputFile: string,
+  k: number,
+): Promise<string | null> {
+  try {
+    const content = await readFile(inputFile);
+    return content ? content.slice(0, k).trim() : null;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error reading first ${k} chars from ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Write the model's input prompt to an XML file
+ * @param systemPrompt The system prompt
+ * @param userPrefix The user prefix
+ * @param userRequest The user request
+ * @param inputFile Path to the input file
+ * @param agent Name of the agent
+ * @returns Path to the created XML file
+ */
+export async function writePromptToXml(
+  systemPrompt: string,
+  userPrefix: string,
+  userRequest: string,
+  inputFile: string,
+  agent: string,
+): Promise<string> {
+  try {
+    const { dir, name } = path.parse(inputFile);
+    const agentName = getAgentFirstNameChunk(agent);
+    const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
+
+    debug(CHANNEL, `Writing input prompt to ${outputFile}`);
+
+    const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
+    await writeFile(outputFile, fullPrompt);
+
+    return outputFile;
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error writing prompt to XML: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

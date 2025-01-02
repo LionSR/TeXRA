@@ -1,9 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { debug, info, warn, error } from '../logger/logUtils';
+import {
+  debug,
+  info,
+  warn,
+  error,
+  initializeLogging,
+} from '../logger/logUtils';
 import * as fs from 'fs';
 
-const CHANNEL = 'FileUtils';
+const CHANNEL = 'Utils';
+initializeLogging(CHANNEL);
 
 export function getRelativePath(filePath: string): string {
   const workspacePath = getWorkspacePath();
