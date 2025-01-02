@@ -8,7 +8,7 @@ from ..logger import logger
 
 from ..agent import AgentSettings, AgentConfig
 from ..agent.agent_state import AgentStateRound, AgentStateGlobal
-from ..utils.img import get_base64_encoded_image, page_count_pdf, process_pdf_input
+from ..utils.img import get_base64_encoded_image, count_pdf_pages, process_pdf_input
 
 from .model_config import ModelConfig, ModelProvider
 from .tool_handler import ToolState
@@ -58,7 +58,7 @@ class ModelHandler(ABC):
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
             ".png": "image/png",
-            ".pdf": "application/pdf" if (self.config.capabilities.supports_native_pdf and page_count_pdf(figure_file) > 1) else "image/png",
+            ".pdf": "application/pdf" if (self.config.capabilities.supports_native_pdf and count_pdf_pages(figure_file) > 1) else "image/png",
         }
 
         if ext not in media_types:
