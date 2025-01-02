@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { promisify } from 'util';
-import * as cp from 'child_process';
 import { sync as globSync } from 'glob';
-import { getWorkspacePath, deleteFile } from '../utils/fileUtils';
+import { deleteFile } from '../utils/fileUtils';
+import { executeCommand } from '../utils/execUtils';
 import {
   debug,
   info,
@@ -12,18 +11,11 @@ import {
   initializeLogging,
 } from '../logger/logUtils';
 
-const execAsync = promisify(cp.exec);
-
 const CHANNEL = 'LaTeX';
 initializeLogging(CHANNEL);
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     // Get latexindent config from settings
     const config = vscode.workspace.getConfiguration('coauthor.latex');
     const latexindentConfig = config.get<string>('latexindentConfig');
@@ -35,15 +27,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
     command.push(`"${filePath}"`);
 
-    debug(CHANNEL, `Running command: ${command.join(' ')}`);
-
-    // Execute latexindent from workspace root
-    const { stdout, stderr } = await execAsync(command.join(' '), {
-      cwd: workspacePath,
-    });
-
-    if (stderr && stderr.trim()) {
-      warn(CHANNEL, `Latexindent stderr: ${stderr}`);
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (!result.success) {
+      return false;
     }
 
     // Wait a moment for the file system to stabilize
@@ -64,7 +50,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     // Clean up backup files from workspace directory
     for (const pattern of backupPatterns) {
       const backupFiles = globSync(pattern, {
-        cwd: workspacePath,
+        cwd: process.cwd(),
         absolute: false,
       });
 
