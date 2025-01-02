@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ensureArray, getConfig } from '../utils/commonUtils';
+import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 import { debug, initializeLogging } from '../logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
