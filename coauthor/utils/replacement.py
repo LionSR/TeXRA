@@ -49,8 +49,8 @@ TIKZ_REPLACEMENTS = ReplacementCategory(
         r"(?P<indent>[\t ]*)}\s*\end{tikzpicture};\s*\end{tikzpicture}": r"\g<indent>\end{tikzpicture}\n\g<indent>};\n\g<indent>\end{tikzpicture}",
         r"\end{document}\s*\chapter": r"\chapter",
         r"\end{document}\s*\addcontentsline": r"\addcontentsline",
-        r"}(\s*)\end{tikzpicture};": r"};\1\end{tikzpicture}",
-        r"}(\s*)\end{tikzpicture}\DIFaddendFL ;": r"\1\end{tikzpicture}};\DIFaddendFL",
+        r"}(\s*)\end{tikzpicture};": r"};$1\end{tikzpicture}",
+        r"}(\s*)\end{tikzpicture}\DIFaddendFL ;": r"$1\end{tikzpicture}};\DIFaddendFL",
     },
 )
 
@@ -105,7 +105,8 @@ LATEX_XML_REPLACEMENTS = ReplacementCategory(
         r"\end{document}\n</rebuttal_package>": r"\end{document}\n</document>\n</rebuttal_package>",
         # Special cases
         r"{\today}\n\n[Previous": r"{\today}\n\n\begin{document}\n\makeheader[Previous",
-        "</monologue><monologue>": "</monologue>\n<monologue>",
+        # Special cases for monologue handling
+        "</monologue><monologue>": "</monologue>\n<monologue>",  # Add newline between monologues
     },
 )
 
@@ -113,16 +114,16 @@ SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
     name="scratchpad_xml",
     description="Fixes for scratchpad XML processing",
     patterns={
-        # Duplicate scratchpad tag fixes
+        # Duplicate scratchpad tag fixes - remove redundant tags
         "<scratchpad><scratchpad>": "<scratchpad>",
         "<scratchpad> <scratchpad>": "<scratchpad>",
         "<scratchpad>\n<scratchpad>": "<scratchpad>",
-        # Scratchpad to latex_document transitions
+        # Scratchpad to latex_document transitions - ensure proper nesting
         "<scratchpad>\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "<scratchpad><latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "<scratchpad><cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
         "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
-        # Code block to latex_document conversions
+        # Code block to latex_document conversions - handle markdown code blocks
         "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
         "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
         "</scratchpad>\n    \n```latex": "</scratchpad>\n\n<latex_document>",
@@ -157,11 +158,15 @@ AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
     name="auto_confirmation",
     description="Fixes for auto confirmation writing with regex patterns",
     patterns={
-        # Match the entire confirmation message block
-        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>[Due to length limits,\1</monologue>\n<latex_code>",
+        # Match the entire confirmation message block and reformat
+        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": (
+            r"<monologue>[Due to length limits,\1</monologue>\n<latex_code>"
+        ),
         # Handle case where latex_document tag precedes the monologue
-        # r"<latex_code>\s*(<monologue>[Due to length limits,.*?</monologue>)": r"\1",
-        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
+        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": (
+            r"<monologue>[I apologize, but I notice this is a very long document\1</monologue><latex_code>"
+        ),
+        # Handle truncated request messages
         r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
     },
 )
