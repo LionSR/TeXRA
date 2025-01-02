@@ -5,7 +5,7 @@ import {
   processPdfInput,
   singlePagePdfToPng,
 } from '../utils/imgUtils';
-import { debug, error, initializeLogging } from '../utils/logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'ImageCommands';

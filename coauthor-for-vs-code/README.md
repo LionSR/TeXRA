@@ -19,20 +19,20 @@ The extension is organized into several key components:
 
 ```
 src/
-├── commands.ts        # Command registration and handlers
-├── extension.ts       # Extension entry point and lifecycle
-├── housekeeping.ts   # File management operations
-├── terminal.ts       # Terminal integration
-├── utils/
-│   ├── commonUtils.ts # Shared utility functions
-│   ├── fileUtils.ts   # File operation utilities
-│   ├── logUtils.ts    # Logging system
-│   └── texUtils.ts    # LaTeX-specific utilities
-├── viewProvider.ts   # WebView management
-└── webview/         # Frontend UI components
-    ├── index.html
-    ├── script.js
-    └── styles.css
+├── commands/         # Command implementations
+├── models/          # Model-specific implementations
+├── types/           # TypeScript type definitions
+├── utils/           # Utility functions and helpers
+├── logView/         # Logging view implementation
+├── webview/         # Frontend UI components
+├── commands.ts      # Command registration
+├── extension.ts     # Extension entry point
+├── folderExplorer.ts # Folder exploration functionality
+├── housekeeping.ts  # File management operations
+├── terminal.ts      # Terminal integration
+├── textConnection.ts # Text processing utilities
+├── utils.ts         # Common utilities
+└── viewProvider.ts  # WebView management
 ```
 
 ## Installation
@@ -122,40 +122,39 @@ The CoAuthor sidebar provides several buttons and controls for easy interaction:
 
 ### Command System
 
-The extension provides various commands through `commands.ts`, including:
+The extension's commands are organized in the `commands/` directory and registered through `commands.ts`, including:
 
 - Document processing commands
 - File management operations
 - Configuration commands
 - Housekeeping utilities
+- LaTeX diff and merge operations
+
+### Models
+
+The `models/` directory contains model-specific implementations for different AI providers and capabilities.
 
 ### Utility Modules
 
-#### Common Utilities (`commonUtils.ts`)
+The `utils/` directory contains various utility modules for:
 
-- Workspace path management
+- File system operations and path management (`fileUtils`)
 - Configuration handling
 - Message display functions
-- Array and data structure utilities
-
-#### File Utilities (`fileUtils.ts`)
-
-- File system operations
-- Path management
-- File type detection
-
-#### Logging System (`logUtils.ts`)
-
-- Structured logging with timestamps
-- Multiple output channels
-- Error and success logging
-- Debug information tracking
-
-#### TeX Utilities (`texUtils.ts`)
-
+- Logging system with structured output (`logUtils`)
+- Type checking and validation
 - LaTeX-specific operations
-- Document processing
-- TeX file manipulation
+- Common utility functions
+
+### Log View
+
+The `logView/` directory implements the visual logging interface:
+
+- Log viewer UI components
+- Log filtering and display
+- Real-time log updates
+- Log level management
+- Search and navigation features
 
 ### Terminal Integration
 
@@ -173,6 +172,24 @@ The UI is implemented as a WebView (`viewProvider.ts` and `webview/` directory):
 - Real-time updates
 - Theme-aware styling
 - Two-way communication with extension
+
+### Folder Explorer
+
+The `folderExplorer.ts` provides:
+
+- Directory tree visualization
+- File selection interface
+- Path management utilities
+- Workspace navigation
+
+### Text Connection
+
+The `textConnection.ts` handles:
+
+- Text processing operations
+- Content transformation
+- Document manipulation
+- String utilities
 
 ## Configuration
 

@@ -6,7 +6,7 @@ from ..logger import logger
 from ..utils.file import read_file, write_file
 from ..utils.prompt import render_prompt
 
-from .tex_tools import run_external_command
+from .tex_tools import compile_latex_to_pdf
 
 
 # maybe in the future move to a separate file in the agent path
@@ -23,24 +23,6 @@ TIKZ_TEMPLATE = r"""
 {{ tikzpicture }}
 \end{document}
 """
-
-
-def compile_latex_to_pdf(tex_file: str) -> bool:
-    """Compile a LaTeX file to PDF using pdflatex."""
-    output_directory = os.path.dirname(tex_file)
-    command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, tex_file]
-
-    try:
-        success, stdout, stderr = run_external_command(command, capture_output=True)
-        if success:
-            logger.info(f"Compiled {tex_file} successfully.")
-            return True
-        else:
-            logger.error(f"Error compiling {tex_file}")
-            return False
-    except ValueError as e:
-        logger.error(f"Error compiling {tex_file}: {str(e)}")
-        return False
 
 
 def extract_tikzpictures_with_labels(latex_file: str) -> list[tuple[str, list[str]]]:
