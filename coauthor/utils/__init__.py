@@ -18,7 +18,7 @@ from .img import (
     single_page_pdf_to_png,
     multi_page_pdf_to_png,
     process_pdf_input,
-    page_count_pdf,
+    count_pdf_pages,
 )
 
 from .xml import (
@@ -62,7 +62,7 @@ __all__ = [
     "single_page_pdf_to_png",
     "multi_page_pdf_to_png",
     "process_pdf_input",
-    "page_count_pdf",
+    "count_pdf_pages",
     # XML handling
     "get_xml_format_from_file",
     "get_xml_format_from_files",
