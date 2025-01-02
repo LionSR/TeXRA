@@ -9,7 +9,13 @@ import {
   deleteFile,
   fileExists,
 } from './fileUtils';
-import { debug, info, warn, error, initializeLogging } from './logUtils';
+import {
+  debug,
+  info,
+  warn,
+  error,
+  initializeLogging,
+} from '../logger/logUtils';
 import { sync as globSync } from 'glob';
 
 const execAsync = promisify(cp.exec);
