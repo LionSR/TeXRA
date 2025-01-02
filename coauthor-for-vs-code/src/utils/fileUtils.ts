@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { debug, info, warn, error } from './logUtils';
+import { debug, info, warn, error } from '../logger/logUtils';
 import * as fs from 'fs';
 
 const CHANNEL = 'FileUtils';

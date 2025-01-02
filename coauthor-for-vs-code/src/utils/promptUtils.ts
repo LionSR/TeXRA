@@ -1,5 +1,5 @@
 import * as nunjucks from 'nunjucks';
-import { debug, error, initializeLogging } from './logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 import { readFile } from './fileUtils';
 import * as yaml from 'yaml';
 import * as vscode from 'vscode';

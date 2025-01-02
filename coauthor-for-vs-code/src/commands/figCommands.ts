@@ -4,7 +4,7 @@ import {
   extractTikzpicturesWithLabels,
   extractAndCompileTikzpicturesWithLabels,
 } from '../utils/figUtils';
-import { debug, error, initializeLogging } from '../utils/logUtils';
+import { debug, error, initializeLogging } from '../logger/logUtils';
 import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
 import * as path from 'path';
 
