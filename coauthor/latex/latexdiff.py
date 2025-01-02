@@ -1,13 +1,67 @@
 import os
 import re
 
-
 from ..logger import logger
 from ..utils.file import write_file, read_file
 from ..utils.replacement import get_replacements_by_category, apply_replacement_regex
 
 from .latexindent import run_latexindent
 from .tex_tools import run_external_command
+
+
+def process_diff_file(diff_file_name: str) -> None:
+    """Process LaTeX diff file to fix formatting issues and apply replacements."""
+    if not os.path.exists(diff_file_name):
+        logger.warning(f"File {diff_file_name} does not exist. Skipping.")
+        return None
+
+    content = read_file(diff_file_name)
+    lines = content.splitlines()
+
+    add_block = False
+    PACKAGES_TO_ADD_NEWLINE = [
+        "\\usepackage{tikz}",
+        "\\usepackage{pgfplots}",
+        "\\providecommand{\\DIFaddbegin}",
+        "\\RequirePackage[normalem]{ulem}",
+        "\\usetikzlibrary",
+        "\\RequirePackage{color}",
+    ]
+
+    document_started = False
+    processed_lines = []
+    for line in lines:
+        if line.startswith("%!TEX root") or line.startswith("% !TEX root") or line.startswith("%! TEX root"):
+            continue
+
+        if any(pkg in line for pkg in PACKAGES_TO_ADD_NEWLINE):
+            processed_lines.append("")
+
+        if "\\documentclass" in line or "\\input" in line:
+            add_block = False
+            document_started = True
+        elif ("%DIF ADD" in line or "Here is" in line) and not document_started:
+            add_block = True
+
+        if not add_block:
+            processed_lines.append(line)
+
+    write_file(diff_file_name, "\n".join(processed_lines))
+
+
+def process_tikzpicture_endings_diff(file_path: str) -> None:
+    """Fix tikzpicture environment endings and indentation in LaTeX diff file."""
+    if not os.path.exists(file_path):
+        logger.warning(f"File {file_path} does not exist. Skipping.")
+        return None
+
+    content = read_file(file_path)
+
+    # Apply tikz-specific replacements
+    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
+
+    write_file(file_path, content)
+    # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
 def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, suffix: str = "_diff", run_indent: bool = False) -> str | None:
@@ -139,61 +193,6 @@ def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
     """Run latexdiff-vc on multiple LaTeX files using specified git commit hash."""
     for input_file in input_files:
         _ = run_latexdiff_vc(input_file, commit_hash)
-
-
-def process_tikzpicture_endings_diff(file_path: str) -> None:
-    """Fix tikzpicture environment endings and indentation in LaTeX diff file."""
-    if not os.path.exists(file_path):
-        logger.warning(f"File {file_path} does not exist. Skipping.")
-        return None
-
-    content = read_file(file_path)
-
-    # Apply tikz-specific replacements
-    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
-
-    write_file(file_path, content)
-    # logger.info(f"Tikzpicture endings fixed in {file_path}")
-
-
-def process_diff_file(diff_file_name: str) -> None:
-    """Process LaTeX diff file to fix formatting issues and apply replacements."""
-    if not os.path.exists(diff_file_name):
-        logger.warning(f"File {diff_file_name} does not exist. Skipping.")
-        return None
-
-    content = read_file(diff_file_name)
-    lines = content.splitlines()
-
-    add_block = False
-    PACKAGES_TO_ADD_NEWLINE = [
-        "\\usepackage{tikz}",
-        "\\usepackage{pgfplots}",
-        "\\providecommand{\\DIFaddbegin}",
-        "\\RequirePackage[normalem]{ulem}",
-        "\\usetikzlibrary",
-        "\\RequirePackage{color}",
-    ]
-
-    document_started = False
-    processed_lines = []
-    for line in lines:
-        if line.startswith("%!TEX root") or line.startswith("% !TEX root") or line.startswith("%! TEX root"):
-            continue
-
-        if any(pkg in line for pkg in PACKAGES_TO_ADD_NEWLINE):
-            processed_lines.append("")
-
-        if "\\documentclass" in line or "\\input" in line:
-            add_block = False
-            document_started = True
-        elif ("%DIF ADD" in line or "Here is" in line) and not document_started:
-            add_block = True
-
-        if not add_block:
-            processed_lines.append(line)
-
-    write_file(diff_file_name, "\n".join(processed_lines))
 
 
 def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round: int) -> str | None:
