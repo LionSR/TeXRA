@@ -64,15 +64,11 @@ def process_tikzpicture_endings_diff(file_path: str) -> None:
     # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
-def run_latexdiff(input_file: str, output_file: str, agent: str | None = None, suffix: str = "_diff", run_indent: bool = False) -> str | None:
+def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
     """Run latexdiff between two LaTeX files with optional indentation and return diff file path."""
     if not input_file:
         logger.warning("Input file is None or empty")
         return None
-
-    if agent is not None:
-        if "draw" in agent:
-            return None
 
     if run_indent:
         if not run_latexindent(input_file) or not run_latexindent(output_file):
@@ -195,20 +191,20 @@ def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
         _ = run_latexdiff_vc(input_file, commit_hash)
 
 
-def run_latexdiff_for_round(base_file: str, output_file: str, agent: str, round: int) -> str | None:
+def run_latexdiff_for_round(base_file: str, output_file: str, round: int) -> str | None:
     """Run latexdiff between base and output LaTeX files for a specific round."""
     if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
-        _ = run_latexdiff(base_file, output_file, agent, suffix="_diff")
+        _ = run_latexdiff(base_file, output_file, suffix="_diff")
     else:
         logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
 
 
-def run_latexdiff_between_rounds(output_file1: str, output_file2: str, agent: str) -> str | None:
+def run_latexdiff_between_rounds(output_file1: str, output_file2: str) -> str | None:
     """Run latexdiff between two rounds of LaTeX edits and process the resulting diff."""
     if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
         first_round = re.search(r"_r(\d+)_", output_file1).group(1)
         second_round = re.search(r"_r(\d+)_", output_file2).group(1)
         diff_suffix = f"_diffr{second_round}r{first_round}"
-        _ = run_latexdiff(output_file1, output_file2, agent, suffix=diff_suffix)
+        _ = run_latexdiff(output_file1, output_file2, suffix=diff_suffix)
     else:
         logger.warning(f"Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")

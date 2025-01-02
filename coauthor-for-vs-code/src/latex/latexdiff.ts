@@ -2,7 +2,12 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { promisify } from 'util';
 import * as cp from 'child_process';
-import { getWorkspacePath, readFile, writeFile } from '../utils/fileUtils';
+import {
+  getWorkspacePath,
+  readFile,
+  writeFile,
+  fileExists,
+} from '../utils/fileUtils';
 import {
   debug,
   info,
@@ -10,6 +15,7 @@ import {
   error,
   initializeLogging,
 } from '../logger/logUtils';
+import { runLatexIndent } from './latexindent';
 
 const execAsync = promisify(cp.exec);
 
@@ -110,11 +116,40 @@ async function processTikzpictureEndings(filePath: string): Promise<void> {
 export async function runLatexDiff(
   inputFile: string,
   editedFile: string,
-): Promise<string> {
+  suffix: string = '_diff',
+  runIndent: boolean = false,
+): Promise<string | undefined> {
   try {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
+    }
+
+    if (!inputFile) {
+      warn(CHANNEL, 'Input file is empty or undefined');
+      return undefined;
+    }
+
+    // Check if both files exist
+    if (!(await fileExists(inputFile)) || !(await fileExists(editedFile))) {
+      warn(
+        CHANNEL,
+        `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`,
+      );
+      return undefined;
+    }
+
+    if (runIndent) {
+      // Import and run latexindent if needed
+      if (
+        !(await runLatexIndent(inputFile)) ||
+        !(await runLatexIndent(editedFile))
+      ) {
+        warn(
+          CHANNEL,
+          'Failed to indent one or both files. Proceeding with latexdiff anyway.',
+        );
+      }
     }
 
     // Files are now relative to workspace, no need for extra path joining
@@ -127,11 +162,12 @@ export async function runLatexDiff(
       !editedContent.includes('\\begin{document}') ||
       !editedContent.includes('\\end{document}')
     ) {
-      error(CHANNEL, 'Files missing document environment');
-      vscode.window.showWarningMessage(
-        'Files must contain \\begin{document} and \\end{document}',
+      warn(
+        CHANNEL,
+        'One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.',
       );
-      throw new Error('Files missing document environment');
+      warn(CHANNEL, `Input file: ${inputFile}, Output file: ${editedFile}`);
+      return undefined;
     }
 
     const editedFileName = path.basename(editedFile);
@@ -170,7 +206,7 @@ export async function runLatexDiff(
       }
     } else {
       // Use the default naming convention
-      diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
+      diffFileName = `${path.parse(editedFileName).name}${suffix}.tex`;
     }
 
     const outputPath = path.join(path.dirname(inputFile), diffFileName);
@@ -289,4 +325,99 @@ export async function runLatexDiffVCMultiple(
   }
 
   info(CHANNEL, 'All LaTeX diff operations completed');
+}
+
+export async function runLatexDiffForRound(
+  baseFile: string,
+  outputFile: string,
+  round: number,
+): Promise<string | undefined> {
+  try {
+    if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
+      return await runLatexDiff(baseFile, outputFile, '_diff');
+    } else {
+      warn(
+        CHANNEL,
+        `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`,
+      );
+      return undefined;
+    }
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in runLatexDiffForRound: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
+}
+
+export async function runLatexDiffBetweenRounds(
+  outputFile1: string,
+  outputFile2: string,
+): Promise<string | undefined> {
+  try {
+    if ((await fileExists(outputFile1)) && (await fileExists(outputFile2))) {
+      const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
+      const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
+
+      if (!firstRoundMatch || !secondRoundMatch) {
+        warn(CHANNEL, 'Could not extract round numbers from file names');
+        return undefined;
+      }
+
+      const firstRound = firstRoundMatch[1];
+      const secondRound = secondRoundMatch[1];
+      const diffSuffix = `_diffr${secondRound}r${firstRound}`;
+
+      return await runLatexDiff(outputFile1, outputFile2, diffSuffix);
+    } else {
+      warn(
+        CHANNEL,
+        `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`,
+      );
+      return undefined;
+    }
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in runLatexDiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
+}
+
+export async function runLatexDiffMultiple(
+  inputFiles: string[],
+  editedFiles: string[],
+): Promise<void> {
+  try {
+    if (inputFiles.length !== editedFiles.length) {
+      error(
+        CHANNEL,
+        'The number of input files must match the number of edited files. Stopping latexdiff.',
+      );
+      vscode.window.showErrorMessage(
+        'The number of input files must match the number of edited files',
+      );
+      return;
+    }
+
+    for (let i = 0; i < inputFiles.length; i++) {
+      try {
+        await runLatexDiff(inputFiles[i], editedFiles[i]);
+      } catch (err) {
+        error(
+          CHANNEL,
+          `Error processing file pair ${i + 1}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    info(CHANNEL, 'All LaTeX diff operations completed');
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error in runLatexDiffMultiple: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
