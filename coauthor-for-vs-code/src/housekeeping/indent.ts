@@ -4,7 +4,7 @@ import { promisify } from 'util';
 import * as cp from 'child_process';
 import { debug, info, warn, error } from '../logger/logUtils';
 import { deleteFile, readDirectory, fileExists } from '../utils/fileUtils';
-import { getConfig } from '../utils/commonUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 import { EXCLUDED_DIRS } from './constants';
 

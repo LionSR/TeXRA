@@ -10,8 +10,8 @@ import {
   listFigureFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
-} from '../utils';
-import { capitalize, uncapitalize } from '../utils/commonUtils';
+} from '../frontend-utils/fileListingUtils';
+import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'MessageHandler';
 
