@@ -8,7 +8,7 @@ import {
   runCleanLatexDiffVC,
   runCleanLatexDiffVCMultiple,
 } from '../housekeeping';
-import { debug } from '../utils/logUtils';
+import { debug } from '../logger/logUtils';
 
 const CHANNEL = 'LatexDiff';
 

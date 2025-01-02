@@ -1,7 +1,7 @@
 // folderExplorer.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { debug, info, warn, error, initializeLogging } from './utils/logUtils';
+import { debug, info, warn, error, initializeLogging } from './logger/logUtils';
 import { getConfig } from './utils/commonUtils';
 
 const CHANNEL = 'FolderExplorer';

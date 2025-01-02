@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import * as vscode from 'vscode';
-import { debug, error } from './utils/logUtils';
+import { debug, error } from '../logger/logUtils';
 
 const CHANNEL = 'TextConnection';
 
