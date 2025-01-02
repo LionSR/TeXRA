@@ -13,6 +13,8 @@ class ReplacementCategory:
     patterns: dict[str, str]
 
 
+# ===== LaTeX Content Formatting =====
+
 # Common LaTeX equation spacing fixes
 EQUATION_REPLACEMENTS = ReplacementCategory(
     name="equations",
@@ -39,6 +41,19 @@ SECTION_REPLACEMENTS = ReplacementCategory(
     },
 )
 
+# TikZ picture fixes
+TIKZ_REPLACEMENTS = ReplacementCategory(
+    name="tikz",
+    description="Fixes for TikZ picture formatting and structure",
+    patterns={
+        r"(?P<indent>[\t ]*)}\s*\end{tikzpicture};\s*\end{tikzpicture}": r"\g<indent>\end{tikzpicture}\n\g<indent>};\n\g<indent>\end{tikzpicture}",
+        r"\end{document}\s*\chapter": r"\chapter",
+        r"\end{document}\s*\addcontentsline": r"\addcontentsline",
+        r"}(\s*)\end{tikzpicture};": r"};\1\end{tikzpicture}",
+        r"}(\s*)\end{tikzpicture}\DIFaddendFL ;": r"\1\end{tikzpicture}};\DIFaddendFL",
+    },
+)
+
 # Special character replacements
 CHARACTER_REPLACEMENTS = ReplacementCategory(
     name="characters",
@@ -50,18 +65,77 @@ CHARACTER_REPLACEMENTS = ReplacementCategory(
     },
 )
 
-AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
-    name="auto_confirmation",
-    description="Fixes for auto confirmation writing with regex patterns",
+# ===== XML/Structural Formatting =====
+
+# XML structure fixes specifically for output processing
+LATEX_XML_REPLACEMENTS = ReplacementCategory(
+    name="latex_xml",
+    description="Fixes specific to XML output processing",
     patterns={
-        # Match the entire confirmation message block
-        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>[Due to length limits,\1</monologue>\n<latex_code>",
-        # Handle case where latex_document tag precedes the monologue
-        # r"<latex_code>\s*(<monologue>[Due to length limits,.*?</monologue>)": r"\1",
-        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
-        r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
+        # Basic tag fixes
+        r"\end{document>}": r"\end{document}",
+        r"\end{figure>}": r"\end{figure}",
+        r"\end{tikzpicture>}": r"\end{tikzpicture}",
+        r"\end{revised_statement>}": "</revised_statement>",
+        r"\end{scope>}": r"\end{scope}",
+        r"\end{latex_document>}": "</latex_document>\n",
+        r"\end{output>}": r"\end{output}",
+        r"\end{response>}": r"\end{response}",
+        r"\end{scratchpad>}": "</scratchpad>",
+        r"\end{itemize>}": r"\end{itemize}",
+        # LaTeX to XML conversions
+        r"\end{scratchpad}": "</scratchpad>",
+        r"\end\n": r"\end{document}\n",
+        "</figure>\n": r"\end{figure}\n",
+        r"\begin{latex_document}": "<latex_document>",
+        # Scratchpad and latex_document handling
+        "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
+        "<scratchpad>\n```latex\n": "<scratchpad>\n<latex_document>\n",
+        "```\n</scratchpad>\n</latex_document>": "</latex_document>",
+        "</latex_document>\n```\n</latex_document>": "</latex_document>\n",
+        "</latex_document>\n</latex_document>": "</latex_document>\n",
+        "</latex_document>\n\n</latex_document>": "</latex_document>\n",
+        # Document nesting and structure
+        r"\end{document}\n\n\<document name=": r"\end{document}\n</document>\n\<document name=",
+        r"\end{document}\n\<document name=": r"\end{document}\n</document>\n\<document name=",
+        r"\end{latex_document}\n</latex_document>": r"\end{document}\n</latex_document>",
+        r"\end{document}\n</latex_documents>": r"\end{document}\n</document>\n</latex_documents>",
+        r"\end{document}\n\n<document name": r"\end{document}\n</document>\n\n<document name",
+        r"\end{document}\n<document name": r"\end{document}\n</document>\n<document name",
+        r"\end{document}\n</rebuttal_package>": r"\end{document}\n</document>\n</rebuttal_package>",
+        # Special cases
+        r"{\today}\n\n[Previous": r"{\today}\n\n\begin{document}\n\makeheader[Previous",
+        "</monologue><monologue>": "</monologue>\n<monologue>",
     },
 )
+
+SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
+    name="scratchpad_xml",
+    description="Fixes for scratchpad XML processing",
+    patterns={
+        # Duplicate scratchpad tag fixes
+        "<scratchpad><scratchpad>": "<scratchpad>",
+        "<scratchpad> <scratchpad>": "<scratchpad>",
+        "<scratchpad>\n<scratchpad>": "<scratchpad>",
+        # Scratchpad to latex_document transitions
+        "<scratchpad>\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
+        "<scratchpad><latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
+        "<scratchpad><cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
+        "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
+        # Code block to latex_document conversions
+        "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
+        "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
+        "</scratchpad>\n    \n```latex": "</scratchpad>\n\n<latex_document>",
+        "```\n</latex_document>": "</latex_document>",
+        # Special LaTeX content handling
+        r"</scratchpad>\n\section{": r"</scratchpad>\n<\latex_document>\n\section{",
+        r"</scratchpad>\n\begin{document}": r"</scratchpad>\n<latex_document>\n\begin{document}",
+        # Rebuttal package fixes
+        "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
+    },
+)
+
+# ===== Style and Content Improvements =====
 
 # Style improvements
 STYLE_REPLACEMENTS = ReplacementCategory(
@@ -79,76 +153,16 @@ STYLE_REPLACEMENTS = ReplacementCategory(
     },
 )
 
-
-# XML structure fixes specifically for output processing
-LATEX_XML_REPLACEMENTS = ReplacementCategory(
-    name="latex_xml",
-    description="Fixes specific to XML output processing",
+AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
+    name="auto_confirmation",
+    description="Fixes for auto confirmation writing with regex patterns",
     patterns={
-        r"\end{document>}": r"\end{document}",
-        r"\end{figure>}": r"\end{figure}",
-        r"\end{tikzpicture>}": r"\end{tikzpicture}",
-        r"\end{revised_statement>}": "</revised_statement>",
-        r"\end{scope>}": r"\end{scope}",
-        r"\end{latex_document>}": "</latex_document>\n",
-        r"\end{output>}": r"\end{output}",
-        r"\end{response>}": r"\end{response}",
-        r"\end{scratchpad>}": "</scratchpad>",
-        r"\end{itemize>}": r"\end{itemize}",
-        r"\end{scratchpad}": "</scratchpad>",
-        r"\end\n": r"\end{document}\n",
-        "</figure>\n": r"\end{figure}\n",
-        "<scratchpad>\n<scratchpad>\n": "<scratchpad>\n",
-        "<scratchpad>\n```latex\n": "<scratchpad>\n<latex_document>\n",
-        "```\n</scratchpad>\n</latex_document>": "</latex_document>",
-        r"\end{document}\n\n\<document name=": r"\end{document}\n</document>\n\<document name=",
-        r"\end{document}\n\<document name=": r"\end{document}\n</document>\n\<document name=",
-        r"\end{latex_document}\n</latex_document>": r"\end{document}\n</latex_document>",
-        "</latex_document>\n```\n</latex_document>": "</latex_document>\n",
-        r"\begin{latex_document}": "<latex_document>",
-        r"\end{document}\n</latex_documents>": r"\end{document}\n</document>\n</latex_documents>",
-        r"\end{document}\n\n<document name": r"\end{document}\n</document>\n\n<document name",
-        r"\end{document}\n<document name": r"\end{document}\n</document>\n<document name",
-        "</latex_document>\n</latex_document>": "</latex_document>\n",
-        "</latex_document>\n\n</latex_document>": "</latex_document>\n",
-        r"\end{document}\n</rebuttal_package>": r"\end{document}\n</document>\n</rebuttal_package>",
-        # new sonnet 3.5 problems
-        r"{\today}\n\n[Previous": r"{\today}\n\n\begin{document}\n\makeheader[Previous",
-        "</monologue><monologue>": "</monologue>\n<monologue>",
-    },
-)
-
-# TikZ picture fixes
-TIKZ_REPLACEMENTS = ReplacementCategory(
-    name="tikz",
-    description="Fixes for TikZ picture formatting and structure",
-    patterns={
-        r"(?P<indent>[\t ]*)}\s*\end{tikzpicture};\s*\end{tikzpicture}": r"\g<indent>\end{tikzpicture}\n\g<indent>};\n\g<indent>\end{tikzpicture}",
-        r"\end{document}\s*\chapter": r"\chapter",
-        r"\end{document}\s*\addcontentsline": r"\addcontentsline",
-        r"}(\s*)\end{tikzpicture};": r"};\1\end{tikzpicture}",
-        r"}(\s*)\end{tikzpicture}\DIFaddendFL ;": r"\1\end{tikzpicture}};\DIFaddendFL",
-    },
-)
-
-SCRATCHPAD_XML_REPLACEMENTS = ReplacementCategory(
-    name="scratchpad_xml",
-    description="Fixes for scratchpad XML processing",
-    patterns={
-        "<scratchpad><scratchpad>": "<scratchpad>",
-        "<scratchpad> <scratchpad>": "<scratchpad>",
-        "<scratchpad>\n<scratchpad>": "<scratchpad>",
-        "<scratchpad>\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-        "<scratchpad><latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-        "<scratchpad><cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
-        "<scratchpad>\n<cover_letter>": "<scratchpad>\n</scratchpad>\n<cover_letter>",
-        "<scratchpad>\n```latex\n<latex_document>": "<scratchpad>\n</scratchpad>\n<latex_document>",
-        r"</scratchpad>\n\section{": r"</scratchpad>\n<\latex_document>\n\section{",
-        "<rebuttal_package><scratchpad>\n\n<rebuttal_package><scratchpad>": "<rebuttal_package><scratchpad>",
-        "</scratchpad>\n\n```latex": "</scratchpad>\n\n<latex_document>",
-        "</scratchpad>\n    \n```latex": "</scratchpad>\n\n<latex_document>",
-        "```\n</latex_document>": "</latex_document>",
-        r"</scratchpad>\n\begin{document}": r"</scratchpad>\n<latex_document>\n\begin{document}",
+        # Match the entire confirmation message block
+        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>[Due to length limits,\1</monologue>\n<latex_code>",
+        # Handle case where latex_document tag precedes the monologue
+        # r"<latex_code>\s*(<monologue>[Due to length limits,.*?</monologue>)": r"\1",
+        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
+        r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
     },
 )
 
@@ -157,15 +171,17 @@ def get_all_replacements() -> dict[str, str]:
     """Get all replacement patterns combined into a single dictionary."""
     all_replacements: dict[str, str] = {}
     categories = [
-        # STYLE CHOICES
+        # LaTeX Content Formatting
         EQUATION_REPLACEMENTS,
         SECTION_REPLACEMENTS,
-        CHARACTER_REPLACEMENTS,
-        # AUTO_CONFIRM_REPLACEMENTS,
-        STYLE_REPLACEMENTS,
-        # FORMAT
-        LATEX_XML_REPLACEMENTS,
         TIKZ_REPLACEMENTS,
+        CHARACTER_REPLACEMENTS,
+        # XML/Structural Formatting
+        LATEX_XML_REPLACEMENTS,
+        SCRATCHPAD_XML_REPLACEMENTS,
+        # Style and Content Improvements
+        STYLE_REPLACEMENTS,
+        # AUTO_CONFIRM_REPLACEMENTS is commented out as in original
     ]
 
     for category in categories:
@@ -176,13 +192,16 @@ def get_all_replacements() -> dict[str, str]:
 def get_replacements_by_category(category_name: str) -> dict[str, str]:
     """Get replacement patterns for a specific category."""
     categories = {
+        # LaTeX Content Formatting
         "equations": EQUATION_REPLACEMENTS,
         "sections": SECTION_REPLACEMENTS,
-        "characters": CHARACTER_REPLACEMENTS,
-        "style": STYLE_REPLACEMENTS,
-        "latex_xml": LATEX_XML_REPLACEMENTS,
         "tikz": TIKZ_REPLACEMENTS,
+        "characters": CHARACTER_REPLACEMENTS,
+        # XML/Structural Formatting
+        "latex_xml": LATEX_XML_REPLACEMENTS,
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
+        # Style and Content Improvements
+        "style": STYLE_REPLACEMENTS,
         "auto_confirmation": AUTO_CONFIRM_REPLACEMENTS,
     }
     category = categories.get(category_name)
