@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
+import { extractFigurePathsFromLatex } from '../latex/extractFigure';
 import {
-  extractFigurePathsFromLatex,
   extractTikzpicturesWithLabels,
   extractAndCompileTikzpicturesWithLabels,
-} from '../utils/figUtils';
+} from '../latex/tikzPicture';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
 import * as path from 'path';
@@ -102,11 +102,13 @@ async function handleExtractTikzFigures(): Promise<void> {
 
     if (labeledTikzpictures.length > 0) {
       // Create QuickPick items from the labels
-      const items = labeledTikzpictures.map(([label, tikzPictures]) => ({
-        label: `${label} (${tikzPictures.length} TikZ picture${tikzPictures.length > 1 ? 's' : ''})`,
-        description: `Figure with label: ${label}`,
-        detail: tikzPictures[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
-      }));
+      const items = labeledTikzpictures.map(
+        ([label, tikzPictures]: [string, string[]]) => ({
+          label: `${label} (${tikzPictures.length} TikZ picture${tikzPictures.length > 1 ? 's' : ''})`,
+          description: `Figure with label: ${label}`,
+          detail: tikzPictures[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
+        }),
+      );
 
       // Show results in QuickPick
       const selected = await vscode.window.showQuickPick(items, {
@@ -171,10 +173,10 @@ async function handleCompileTikzFigures(): Promise<void> {
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files
-          const items = compiledFiles.map((file) => ({
-            label: path.basename(file),
-            description: file,
-            file: file,
+          const items = compiledFiles.map((filePath: string) => ({
+            label: path.basename(filePath),
+            description: filePath,
+            file: filePath,
           }));
 
           // Show results in QuickPick
