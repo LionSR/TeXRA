@@ -1,16 +1,6 @@
 import * as path from 'path';
-import { promisify } from 'util';
-import * as cp from 'child_process';
-import { getWorkspacePath } from '../utils/fileUtils';
-import {
-  debug,
-  info,
-  warn,
-  error,
-  initializeLogging,
-} from '../logger/logUtils';
-
-const execAsync = promisify(cp.exec);
+import { executeCommand } from '../utils/execUtils';
+import { info, error, initializeLogging } from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
 initializeLogging(CHANNEL);
@@ -22,30 +12,20 @@ initializeLogging(CHANNEL);
  */
 export async function compileLatexToPdf(texFile: string): Promise<boolean> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     const outputDirectory = path.dirname(texFile);
     const command = [
       'pdflatex',
       '-interaction=nonstopmode',
       `-output-directory="${outputDirectory}"`,
       `"${texFile}"`,
-    ].join(' ');
+    ];
 
-    debug(CHANNEL, `Running command: ${command}`);
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: workspacePath,
-    });
-
-    if (stderr && stderr.trim()) {
-      warn(CHANNEL, `pdflatex stderr: ${stderr}`);
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (result.success) {
+      info(CHANNEL, `Successfully compiled ${texFile}`);
+      return true;
     }
-
-    info(CHANNEL, `Successfully compiled ${texFile}`);
-    return true;
+    return false;
   } catch (err) {
     error(
       CHANNEL,
