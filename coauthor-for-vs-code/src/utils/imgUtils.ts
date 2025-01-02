@@ -10,7 +10,7 @@ import * as os from 'os';
 
 const execAsync = promisify(exec);
 
-const CHANNEL = 'ImageUtils';
+const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);
 
 // Define the temporary directory path

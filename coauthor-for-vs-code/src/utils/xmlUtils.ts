@@ -1,7 +1,7 @@
 import { debug, error, initializeLogging } from '../logger/logUtils';
 import { readFile } from './fileUtils';
 
-const CHANNEL = 'XMLUtils';
+const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);
 
 /**
