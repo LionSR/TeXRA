@@ -4,9 +4,9 @@ import re
 from ..logger import logger
 from ..utils.file import write_file, read_file
 from ..utils.replacement import get_replacements_by_category, apply_replacement_regex
+from ..utils.exec import execute_command
 
 from .latexindent import run_latexindent
-from .tex_tools import run_external_command
 
 
 def process_diff_file(diff_file_name: str) -> None:
@@ -128,7 +128,7 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
         output_file,
     ]
 
-    success, _, _ = run_external_command(latexdiff_command, diff_file_name)
+    success, _, _ = execute_command(latexdiff_command, diff_file_name)
     if not success:
         return None
 
@@ -165,7 +165,7 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
         input_file,
     ]
 
-    success, _, _ = run_external_command(latexdiff_vc_command)
+    success, _, _ = execute_command(latexdiff_vc_command)
     if not success:
         return None
 

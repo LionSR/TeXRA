@@ -1,13 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { promisify } from 'util';
-import * as cp from 'child_process';
-import {
-  getWorkspacePath,
-  readFile,
-  writeFile,
-  fileExists,
-} from '../utils/fileUtils';
+import { readFile, writeFile, fileExists } from '../utils/fileUtils';
+import { executeCommand } from '../utils/execUtils';
 import {
   debug,
   info,
@@ -16,8 +10,6 @@ import {
   initializeLogging,
 } from '../logger/logUtils';
 import { runLatexIndent } from './latexindent';
-
-const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'LaTeX';
 initializeLogging(CHANNEL);
@@ -120,11 +112,6 @@ export async function runLatexDiff(
   runIndent: boolean = false,
 ): Promise<string | undefined> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     if (!inputFile) {
       warn(CHANNEL, 'Input file is empty or undefined');
       return undefined;
@@ -219,13 +206,15 @@ export async function runLatexDiff(
       '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
       `"${inputFile}"`,
       `"${editedFile}"`,
-    ].join(' ');
+    ];
 
-    debug(CHANNEL, `Running command: ${command}`);
-    const { stdout } = await execAsync(command, { cwd: workspacePath });
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (!result.success || !result.stdout) {
+      throw new Error('Failed to run latexdiff');
+    }
 
     // Write the output to the diff file
-    await writeFile(outputPath, stdout);
+    await writeFile(outputPath, result.stdout);
 
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
@@ -246,11 +235,6 @@ export async function runLatexDiffVC(
   commitHash: string,
 ): Promise<string> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     // Use readFile which now handles workspace paths
     const inputContent = await readFile(inputFile);
 
@@ -282,10 +266,12 @@ export async function runLatexDiffVC(
       '-r',
       commitHash,
       `"${inputFile}"`,
-    ].join(' ');
+    ];
 
-    debug(CHANNEL, `Running command: ${command}`);
-    await execAsync(command, { cwd: workspacePath }); // Execute from workspace root
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (!result.success) {
+      throw new Error('Failed to run latexdiff-vc');
+    }
 
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
