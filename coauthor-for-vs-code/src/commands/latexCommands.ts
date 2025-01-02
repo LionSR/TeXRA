@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { runLatexIndent, getTexCount } from '../utils/texUtils';
+import { runLatexIndent } from '../latex/latexindent';
+import { getTexCount } from '../latex/texcount';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 import { fileSelectionCommands } from './fileSelection';
 import { getRelativePath } from '../utils/fileUtils';
