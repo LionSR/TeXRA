@@ -70,7 +70,7 @@ class OutputHandler:
     def _handle_single_output(self, output_file: str) -> None:
         """Generate LaTeX diff for single output file."""
         if ".tex" in self.agent_config.input_file and ".tex" in output_file:
-            _ = run_latexdiff(self.agent_config.input_file, output_file, self.agent_config.agent)
+            _ = run_latexdiff(self.agent_config.input_file, output_file)
 
     def _handle_multiple_outputs(self, output_files: list[str]) -> None:
         """Generate LaTeX diffs for multiple output files."""
@@ -79,7 +79,7 @@ class OutputHandler:
             for input_file, output_file in zip(self.agent_config.output_files, output_files):
                 update_log_output_files(self.log_id, output_file)
                 if ".tex" in input_file and ".tex" in output_file:
-                    _ = run_latexdiff(input_file, output_file, self.agent_config.agent)
+                    _ = run_latexdiff(input_file, output_file)
 
     def _process_single_output(self, output_file: str) -> str:
         """Process single output file and return processed file path."""
@@ -209,12 +209,12 @@ class OutputHandler:
 
         # Generate diffs between base files and current round
         for base_file, output_file in zip(self.base_files, self.output_files[curr_round]):
-            run_latexdiff_for_round(base_file, output_file, self.agent_config.agent, curr_round)
+            run_latexdiff_for_round(base_file, output_file, curr_round)
 
         # Generate diffs between consecutive rounds
         for r in range(1, curr_round + 1):
             for output_file1, output_file2 in zip(self.output_files[r - 1], self.output_files[r]):
-                run_latexdiff_between_rounds(output_file1, output_file2, self.agent_config.agent)
+                run_latexdiff_between_rounds(output_file1, output_file2)
 
     def _replace_input_commands(self, base_files: list[str], output_files: list[str]) -> None:
         """Replace LaTeX input commands with updated file names."""

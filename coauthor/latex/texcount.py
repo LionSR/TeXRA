@@ -2,7 +2,7 @@ import os
 
 from ..logger import logger
 
-from .tex_tools import run_external_command
+from ..utils.exec import execute_command
 
 
 def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | None:
@@ -25,7 +25,7 @@ def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | Non
             command.append("-merge")
         command.append(file_path)
 
-        success, stdout, stderr = run_external_command(command, capture_output=True)
+        success, stdout, stderr = execute_command(command, capture_output=True)
         if success:
             all_outputs.append(f"Tex Count Results for {file_path}:\n{stdout}")
         else:

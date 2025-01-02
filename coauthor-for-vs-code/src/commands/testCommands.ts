@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
-} from '../textConnection';
-import { info, debug, error, initializeLogging } from '../utils/logUtils';
+} from '../latex/textConnection';
+import { info, debug, error, initializeLogging } from '../logger/logUtils';
 
 const CHANNEL = 'TestCommands';
 initializeLogging(CHANNEL);
