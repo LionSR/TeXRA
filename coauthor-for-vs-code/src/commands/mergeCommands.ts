@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { getConfig } from '../utils/commonUtils';
-import { debug } from '../utils/logUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
+import { debug } from '../logger/logUtils';
 
 const CHANNEL = 'MergeCommands';
 

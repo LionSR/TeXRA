@@ -1,20 +1,17 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { promisify } from 'util';
-import * as cp from 'child_process';
+import { readFile, writeFile, fileExists } from '../utils/fileUtils';
+import { executeCommand } from '../utils/execUtils';
 import {
-  getWorkspacePath,
-  readFile,
-  writeFile,
-  deleteFile,
-  fileExists,
-} from './fileUtils';
-import { debug, info, warn, error, initializeLogging } from './logUtils';
-import { sync as globSync } from 'glob';
+  debug,
+  info,
+  warn,
+  error,
+  initializeLogging,
+} from '../logger/logUtils';
+import { runLatexIndent } from './latexindent';
 
-const execAsync = promisify(cp.exec);
-
-const CHANNEL = 'TexUtils';
+const CHANNEL = 'LaTeX';
 initializeLogging(CHANNEL);
 
 async function processDiffFile(diffFileName: string): Promise<void> {
@@ -111,11 +108,35 @@ async function processTikzpictureEndings(filePath: string): Promise<void> {
 export async function runLatexDiff(
   inputFile: string,
   editedFile: string,
-): Promise<string> {
+  suffix: string = '_diff',
+  runIndent: boolean = false,
+): Promise<string | undefined> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
+    if (!inputFile) {
+      warn(CHANNEL, 'Input file is empty or undefined');
+      return undefined;
+    }
+
+    // Check if both files exist
+    if (!(await fileExists(inputFile)) || !(await fileExists(editedFile))) {
+      warn(
+        CHANNEL,
+        `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`,
+      );
+      return undefined;
+    }
+
+    if (runIndent) {
+      // Import and run latexindent if needed
+      if (
+        !(await runLatexIndent(inputFile)) ||
+        !(await runLatexIndent(editedFile))
+      ) {
+        warn(
+          CHANNEL,
+          'Failed to indent one or both files. Proceeding with latexdiff anyway.',
+        );
+      }
     }
 
     // Files are now relative to workspace, no need for extra path joining
@@ -128,11 +149,12 @@ export async function runLatexDiff(
       !editedContent.includes('\\begin{document}') ||
       !editedContent.includes('\\end{document}')
     ) {
-      error(CHANNEL, 'Files missing document environment');
-      vscode.window.showWarningMessage(
-        'Files must contain \\begin{document} and \\end{document}',
+      warn(
+        CHANNEL,
+        'One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.',
       );
-      throw new Error('Files missing document environment');
+      warn(CHANNEL, `Input file: ${inputFile}, Output file: ${editedFile}`);
+      return undefined;
     }
 
     const editedFileName = path.basename(editedFile);
@@ -171,7 +193,7 @@ export async function runLatexDiff(
       }
     } else {
       // Use the default naming convention
-      diffFileName = `${path.parse(editedFileName).name}_diff.tex`;
+      diffFileName = `${path.parse(editedFileName).name}${suffix}.tex`;
     }
 
     const outputPath = path.join(path.dirname(inputFile), diffFileName);
@@ -184,13 +206,15 @@ export async function runLatexDiff(
       '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
       `"${inputFile}"`,
       `"${editedFile}"`,
-    ].join(' ');
+    ];
 
-    debug(CHANNEL, `Running command: ${command}`);
-    const { stdout } = await execAsync(command, { cwd: workspacePath });
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (!result.success || !result.stdout) {
+      throw new Error('Failed to run latexdiff');
+    }
 
     // Write the output to the diff file
-    await writeFile(outputPath, stdout);
+    await writeFile(outputPath, result.stdout);
 
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
@@ -211,11 +235,6 @@ export async function runLatexDiffVC(
   commitHash: string,
 ): Promise<string> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     // Use readFile which now handles workspace paths
     const inputContent = await readFile(inputFile);
 
@@ -247,10 +266,12 @@ export async function runLatexDiffVC(
       '-r',
       commitHash,
       `"${inputFile}"`,
-    ].join(' ');
+    ];
 
-    debug(CHANNEL, `Running command: ${command}`);
-    await execAsync(command, { cwd: workspacePath }); // Execute from workspace root
+    const result = await executeCommand(command, { channel: CHANNEL });
+    if (!result.success) {
+      throw new Error('Failed to run latexdiff-vc');
+    }
 
     await processDiffFile(outputPath);
     await processTikzpictureEndings(outputPath);
@@ -292,198 +313,97 @@ export async function runLatexDiffVCMultiple(
   info(CHANNEL, 'All LaTeX diff operations completed');
 }
 
-export async function runLatexIndent(filePath: string): Promise<boolean> {
+export async function runLatexDiffForRound(
+  baseFile: string,
+  outputFile: string,
+  round: number,
+): Promise<string | undefined> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
+    if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
+      return await runLatexDiff(baseFile, outputFile, '_diff');
+    } else {
+      warn(
+        CHANNEL,
+        `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`,
+      );
+      return undefined;
     }
-
-    // Get latexindent config from settings
-    const config = vscode.workspace.getConfiguration('coauthor.latex');
-    const latexindentConfig = config.get<string>('latexindentConfig');
-
-    // Build command array - note we're using -w (overwrite) and -s (silent)
-    const command = ['latexindent', '-w', '-s'];
-    if (latexindentConfig) {
-      command.push(`-l=${latexindentConfig}`);
-    }
-    command.push(`"${filePath}"`);
-
-    debug(CHANNEL, `Running command: ${command.join(' ')}`);
-
-    // Execute latexindent from workspace root
-    const { stdout, stderr } = await execAsync(command.join(' '), {
-      cwd: workspacePath,
-    });
-
-    if (stderr && stderr.trim()) {
-      warn(CHANNEL, `Latexindent stderr: ${stderr}`);
-    }
-
-    // Wait a moment for the file system to stabilize
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    // Setup cleanup patterns relative to workspace
-    const fileBaseName = path.basename(filePath, '.tex');
-    const fileDir = path.dirname(filePath);
-
-    // Get all backup files matching the patterns, relative to workspace
-    const backupPatterns = [
-      path.join(fileDir, `${fileBaseName}.tex.bak*`),
-      path.join(fileDir, `${fileBaseName}.tex.bak`),
-      path.join(fileDir, `${fileBaseName}.bak*`),
-      path.join(fileDir, `${fileBaseName}.bak`),
-    ];
-
-    // Clean up backup files from workspace directory
-    for (const pattern of backupPatterns) {
-      const backupFiles = globSync(pattern, {
-        cwd: workspacePath,
-        absolute: false,
-      });
-
-      for (const backupFile of backupFiles) {
-        try {
-          await deleteFile(backupFile);
-          debug(CHANNEL, `Removed backup file: ${backupFile}`);
-        } catch (err) {
-          warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
-        }
-      }
-    }
-
-    // Clean up indent.log
-    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
-    try {
-      await deleteFile(indentLogPath);
-      debug(CHANNEL, 'Removed indent.log');
-    } catch (err) {
-      // Ignore error if indent.log doesn't exist
-      warn(CHANNEL, `Error removing indent.log: ${err}`);
-    }
-
-    info(CHANNEL, `Indented ${filePath}`);
-    return true;
   } catch (err) {
     error(
       CHANNEL,
-      `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexDiffForRound: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return false;
+    return undefined;
   }
 }
 
-/**
- * Compile a LaTeX file to PDF
- * @param texFile Path to the LaTeX file
- * @returns Promise<boolean> True if compilation succeeded
- */
-export async function compileLatexToPdf(texFile: string): Promise<boolean> {
+export async function runLatexDiffBetweenRounds(
+  outputFile1: string,
+  outputFile2: string,
+): Promise<string | undefined> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
+    if ((await fileExists(outputFile1)) && (await fileExists(outputFile2))) {
+      const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
+      const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
+
+      if (!firstRoundMatch || !secondRoundMatch) {
+        warn(CHANNEL, 'Could not extract round numbers from file names');
+        return undefined;
+      }
+
+      const firstRound = firstRoundMatch[1];
+      const secondRound = secondRoundMatch[1];
+      const diffSuffix = `_diffr${secondRound}r${firstRound}`;
+
+      return await runLatexDiff(outputFile1, outputFile2, diffSuffix);
+    } else {
+      warn(
+        CHANNEL,
+        `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`,
+      );
+      return undefined;
     }
-
-    const outputDirectory = path.dirname(texFile);
-    const command = [
-      'pdflatex',
-      '-interaction=nonstopmode',
-      `-output-directory="${outputDirectory}"`,
-      `"${texFile}"`,
-    ].join(' ');
-
-    debug(CHANNEL, `Running command: ${command}`);
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: workspacePath,
-    });
-
-    if (stderr && stderr.trim()) {
-      warn(CHANNEL, `pdflatex stderr: ${stderr}`);
-    }
-
-    info(CHANNEL, `Successfully compiled ${texFile}`);
-    return true;
   } catch (err) {
     error(
       CHANNEL,
-      `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexDiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return false;
+    return undefined;
   }
 }
 
-/**
- * Get full statistics for LaTeX documents using the texcount Perl script
- * @param filePaths Single file path or array of file paths
- * @param merge Whether to merge included files in the count
- * @returns Promise<string | null> String containing full texcount output for all files, or null if an error occurred
- */
-export async function getTexCount(
-  filePaths: string | string[],
-  merge: boolean = false,
-): Promise<string | null> {
+export async function runLatexDiffMultiple(
+  inputFiles: string[],
+  editedFiles: string[],
+): Promise<void> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
+    if (inputFiles.length !== editedFiles.length) {
+      error(
+        CHANNEL,
+        'The number of input files must match the number of edited files. Stopping latexdiff.',
+      );
+      vscode.window.showErrorMessage(
+        'The number of input files must match the number of edited files',
+      );
+      return;
     }
 
-    // Convert single path to array
-    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-    const allOutputs: string[] = [];
-
-    for (const filePath of paths) {
-      if (!(await fileExists(filePath))) {
-        warn(CHANNEL, `Warning: File ${filePath} does not exist.`);
-        continue;
-      }
-
-      if (!filePath.endsWith('.tex')) {
-        warn(CHANNEL, `Error: File ${filePath} is not a LaTeX file. Skipping.`);
-        continue;
-      }
-
-      const command = ['texcount'];
-      if (merge) {
-        command.push('-merge');
-      }
-      command.push(`"${filePath}"`);
-
-      debug(CHANNEL, `Running command: ${command.join(' ')}`);
+    for (let i = 0; i < inputFiles.length; i++) {
       try {
-        const { stdout, stderr } = await execAsync(command.join(' '), {
-          cwd: workspacePath,
-        });
-
-        if (stderr && stderr.trim()) {
-          warn(CHANNEL, `texcount stderr: ${stderr}`);
-        }
-
-        allOutputs.push(`Tex Count Results for ${filePath}:\n${stdout}`);
-        debug(CHANNEL, `Successfully counted ${filePath}`);
+        await runLatexDiff(inputFiles[i], editedFiles[i]);
       } catch (err) {
-        error(CHANNEL, `Error getting tex count for ${filePath}`);
         error(
           CHANNEL,
-          `Error: ${err instanceof Error ? err.message : String(err)}`,
+          `Error processing file pair ${i + 1}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
 
-    if (allOutputs.length > 0) {
-      const combinedOutput = allOutputs.join('\n\n');
-      info(CHANNEL, `Combined Tex Count Results:\n${combinedOutput}`);
-      return combinedOutput;
-    }
-
-    return null;
+    info(CHANNEL, 'All LaTeX diff operations completed');
   } catch (err) {
     error(
       CHANNEL,
-      `Error in getTexCount: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexDiffMultiple: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return null;
   }
 }

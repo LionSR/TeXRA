@@ -382,6 +382,7 @@ class BaseReflectChainAgent(ABC):
                 tool_state.add_figure_files(self.agent_config.figure_files)
 
             if self.agent_config.tool_config.auto_extract_figure:
+                # this now only works for single input file. In the future, we should support multiple input files.
                 if extracted_figures := extract_figure_paths_from_latex(self.agent_config.input_file):
                     tool_state.add_figure_files(extracted_figures)
 

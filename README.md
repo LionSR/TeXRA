@@ -13,8 +13,6 @@ See [PHILOSOPHY.md](PHILOSOPHY.md).
 
 For detailed information on these new features and improvements, please refer to the [CoAuthor Frontend README](coauthor-for-vs-code/README.md).
 
-Note: The multiple file output functionality is currently implemented in the frontend. Backend support for this feature will be fully integrated in upcoming releases.
-
 ## Components
 
 ### 1. CoAuthor Backend
