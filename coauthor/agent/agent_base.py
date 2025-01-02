@@ -19,7 +19,7 @@ from ..latex import (
 )
 
 # Local imports - utilities
-from ..utils.file import read_file, write_to_output_file
+from ..utils.file import read_file, write_file, append_file
 from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
@@ -313,7 +313,15 @@ class BaseReflectChainAgent(ABC):
 
             # Update state and file atomically
             tool_state.update_accumulated_output(tool_state.accumulated_output + best_connector + new_response)
-            file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
+
+            # Write or append to output file
+            if not file_exists:
+                logger.debug(f"Creating new file: {output_file}")
+                write_file(output_file, new_response)
+                file_exists = True
+            else:
+                logger.debug(f"Appending to existing file: {output_file}")
+                append_file(output_file, best_connector + new_response)
 
             # Log response boundaries
             logger.info("Response preview:")
