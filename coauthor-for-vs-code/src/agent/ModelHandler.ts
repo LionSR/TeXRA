@@ -26,11 +26,11 @@ const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
  * Base class for model-specific handlers.
  */
 export abstract class ModelHandler {
-  protected config: ModelConfig;
-  protected capabilities: ModelCapabilities;
-  protected continueLimit: number;
-  protected inputTokenLimit: number;
-  protected maxOutputTokensFactor: number;
+  public config: ModelConfig;
+  public capabilities: ModelCapabilities;
+  public continueLimit: number;
+  public inputTokenLimit: number;
+  public maxOutputTokensFactor: number;
 
   constructor(config: ModelConfig) {
     this.config = config;
@@ -45,7 +45,7 @@ export abstract class ModelHandler {
   /**
    * Get API key based on provider and OpenRouter configuration.
    */
-  protected getApiKey(): string {
+  public getApiKey(): string {
     if (this.config.useOpenrouter) {
       const key = process.env.OPENROUTER_API_KEY;
       if (!key) {
@@ -65,7 +65,7 @@ export abstract class ModelHandler {
   /**
    * Get base URL based on provider and OpenRouter configuration.
    */
-  protected getBaseUrl(): string | null {
+  public getBaseUrl(): string | null {
     if (this.config.useOpenrouter) {
       return 'https://openrouter.ai/api/v1';
     }
@@ -114,7 +114,7 @@ export abstract class ModelHandler {
    * @param agentSettings The agent settings
    * @returns Tuple of [endTurn: boolean, shouldStop: boolean]
    */
-  protected checkStopConditions(
+  public checkStopConditions(
     stopReason: string,
     newResponse: string,
     stateRound: AgentStateRound,
