@@ -30,9 +30,6 @@ class AgentConfig:
     # Tool configuration
     toolConfig: ToolConfig = field(default_factory=ToolConfig)
 
-    # Processing configuration
-    K: int = 200
-
     def __getitem__(self, key: str) -> Any:
         """Enable dictionary-style access (config['inputFile'])"""
         # Handle nested toolConfig attributes
