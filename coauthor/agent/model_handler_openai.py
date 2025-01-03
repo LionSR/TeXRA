@@ -30,8 +30,8 @@ class OpenAIHandler(ModelHandler):
         client: OpenAI,
         messages: list[dict],
         temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
+        systemPrompt: str | None = None,
+        endTag: str | None = None,
     ) -> Any:
         """Create a response using OpenAI's API."""
         kwargs = {
@@ -41,8 +41,8 @@ class OpenAIHandler(ModelHandler):
             "temperature": 1.0 if "o1" in self.config.name.lower() else temperature,
         }
 
-        if end_tag and "o1" not in self.config.name.lower():
-            kwargs["stop"] = [end_tag]
+        if endTag and "o1" not in self.config.name.lower():
+            kwargs["stop"] = [endTag]
 
         if self.config.name.lower() == "o1":
             kwargs["reasoning_effort"] = "high"
@@ -51,31 +51,31 @@ class OpenAIHandler(ModelHandler):
 
     def initialize_messages(
         self,
-        user_prefix: str,
-        user_request: str,
+        userPrefix: str,
+        userRequest: str,
         figure_files: list[str] | None = None,
-        system_prompt: str | None = None,
+        systemPrompt: str | None = None,
     ) -> list[dict]:
         """Initialize messages for OpenAI models."""
         messages = []
 
         # Handle system prompt differently for O1 models
         if self.config.name in ["o1-", "o1preview"]:
-            messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
+            messages = [{"role": "user", "content": [{"type": "text", "text": systemPrompt}, {"type": "text", "text": userPrefix}]}]
         else:
-            if system_prompt:
+            if systemPrompt:
                 # note that for openai native models, they have been renamed to "developer" but "system" still works
-                messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "system", "content": systemPrompt})
 
             # Create content list with user prefix
-            content = [{"type": "text", "text": user_prefix}]
+            content = [{"type": "text", "text": userPrefix}]
 
             # Add images if provided
             if figure_files:
                 content.extend(self.create_image_message(figure_files))
 
             # Add user request
-            request = {"type": "text", "text": user_request}
+            request = {"type": "text", "text": userRequest}
             content.append(request)
 
             messages.append({"role": "user", "content": content})
@@ -118,7 +118,7 @@ class OpenAIHandler(ModelHandler):
     def extract_response(
         self,
         response_object: Any,
-        end_tag: str,
+        endTag: str,
         auto_confirmation: bool = False,
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from OpenAI response."""
@@ -134,8 +134,8 @@ class OpenAIHandler(ModelHandler):
         new_response = choice.message.content.strip()
 
         # Add end tag if response was stopped and tag isn't present
-        if all([stop_reason == "stop", end_tag]) and end_tag not in new_response:
-            new_response = f"{new_response}\n{end_tag}"
+        if all([stop_reason == "stop", endTag]) and endTag not in new_response:
+            new_response = f"{new_response}\n{endTag}"
 
         return new_response, response_object.usage, stop_reason
 
@@ -158,7 +158,7 @@ class OpenAIHandler(ModelHandler):
         user_message_continuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
-            f"marked by {agent_settings.end_tag}. "
+            f"marked by {agent_settings.endTag}. "
             "Avoid repeat yourself and avoid starting over. "
             f'Start your response at the next token after: "{prefill_tokens}"'
         )
@@ -182,7 +182,7 @@ class OpenAIHandler(ModelHandler):
             if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_chars_from_input:
                 prefill += tool_state.first_k_chars_from_input
                 tool_state.update_accumulated_output("")
-                prefill = f"<{agent_settings.document_tag}>{tool_state.first_k_chars_from_input}"
+                prefill = f"<{agent_settings.documentTag}>{tool_state.first_k_chars_from_input}"
 
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
@@ -190,7 +190,7 @@ class OpenAIHandler(ModelHandler):
         file_content = read_file(output_file)
         messages.append({"role": "assistant", "content": file_content})
 
-        if agent_settings.has_end_tag(file_content):
+        if agent_settings.has_endTag(file_content):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
                 messages[-1]["content"][-1]["text"] = file_content
@@ -278,4 +278,4 @@ class OpenAIHandler(ModelHandler):
     def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
         """Determine if OpenAI model should continue generating."""
         logger.info("Determining if should continue for OpenAI model via OpenAI API")
-        return stop_reason == "length" and not agent_settings.has_end_tag(new_response)
+        return stop_reason == "length" and not agent_settings.has_endTag(new_response)

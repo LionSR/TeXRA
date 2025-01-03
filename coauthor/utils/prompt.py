@@ -37,13 +37,13 @@ def get_first_k_chars_from_document(input_file: str, k: int) -> str | None:
     return content[:k].strip() if content else None
 
 
-def write_prompt_to_xml(system_prompt: str, user_prefix: str, user_request: str, input_file: str, agent: str) -> str:
+def write_prompt_to_xml(systemPrompt: str, userPrefix: str, userRequest: str, input_file: str, agent: str) -> str:
     """Write the model's input prompt to an XML file.
 
     Args:
-        system_prompt: The system prompt
-        user_prefix: The user prefix
-        user_request: The user request
+        systemPrompt: The system prompt
+        userPrefix: The user prefix
+        userRequest: The user request
         input_file: Path to the input file
         agent: Name of the agent
 
@@ -60,7 +60,7 @@ def write_prompt_to_xml(system_prompt: str, user_prefix: str, user_request: str,
     logger.info(f"Writing input prompt to {output_file}")
 
     # Combine prompts
-    full_prompt = f"\n<system>{system_prompt}</system>\n\n{user_prefix}\n{user_request}\n"
+    full_prompt = f"\n<system>{systemPrompt}</system>\n\n{userPrefix}\n{userRequest}\n"
 
     # Write to file
     with open(output_file, "w") as f:

@@ -38,8 +38,8 @@ class AnthropicHandler(ModelHandler):
         client: Anthropic,
         messages: list[dict],
         temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
+        systemPrompt: str | None = None,
+        endTag: str | None = None,
     ) -> Any:
         """Create a response using Anthropic's API."""
         return client.beta.messages.create(
@@ -47,20 +47,20 @@ class AnthropicHandler(ModelHandler):
             max_tokens=self.config.max_output_tokens,
             messages=messages,
             temperature=temperature,
-            stop_sequences=[end_tag] if end_tag else None,
-            system=system_prompt,
+            stop_sequences=[endTag] if endTag else None,
+            system=systemPrompt,
         )
 
     def initialize_messages(
         self,
-        user_prefix: str,
-        user_request: str,
+        userPrefix: str,
+        userRequest: str,
         figure_files: list[str] | None = None,
-        system_prompt: str | None = None,
+        systemPrompt: str | None = None,
     ) -> list[dict]:
         """Initialize messages for Anthropic models."""
         # Create content list with user prefix
-        content = [{"type": "text", "text": user_prefix}]
+        content = [{"type": "text", "text": userPrefix}]
 
         # Add images if provided
         if figure_files:
@@ -69,7 +69,7 @@ class AnthropicHandler(ModelHandler):
         # Add user request with optional caching
         request = {
             "type": "text",
-            "text": user_request,
+            "text": userRequest,
             **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
         }
         content.append(request)
@@ -126,7 +126,7 @@ class AnthropicHandler(ModelHandler):
     def extract_response(
         self,
         response_object: Any,
-        end_tag: str,
+        endTag: str,
         auto_confirmation: bool = False,
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from Anthropic response."""
@@ -168,8 +168,8 @@ class AnthropicHandler(ModelHandler):
             new_response = filter_tags_from_text(new_response, "monologue")
 
         # Add end tag if needed
-        if stop_reason == "stop_sequence" and end_tag not in new_response:
-            new_response += f"\n{end_tag}"
+        if stop_reason == "stop_sequence" and endTag not in new_response:
+            new_response += f"\n{endTag}"
 
         return new_response, response_object.usage, stop_reason
 
@@ -214,11 +214,11 @@ class AnthropicHandler(ModelHandler):
             )
 
         # Handle document tag if present
-        document_tag_start = f"<{agent_settings.document_tag}>"
+        documentTag_start = f"<{agent_settings.documentTag}>"
         first_lines = tool_state.last_response.split("\n")[:10]
         for line in first_lines:
-            if line.strip().startswith(document_tag_start):
-                logger.warning(f"Removing document tag prefix {document_tag_start} from response")
+            if line.strip().startswith(documentTag_start):
+                logger.warning(f"Removing document tag prefix {documentTag_start} from response")
                 tool_state.last_response = tool_state.last_response.replace(line, "", 1).strip()
                 break
 
@@ -261,7 +261,7 @@ class AnthropicHandler(ModelHandler):
 
             if tool_state.accumulated_output == "<scratchpad>" and prefill == "<scratchpad>":
                 write_file(output_file, prefill)
-            elif agent_settings.output_ext == "xml":
+            elif agent_settings.outputExt == "xml":
                 write_file(output_file, prefill + "\n")
 
             messages.append({"role": "assistant", "content": prefill})
@@ -275,7 +275,7 @@ class AnthropicHandler(ModelHandler):
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
         file_content = file_content.strip()
 
-        if agent_settings.has_end_tag(file_content):
+        if agent_settings.has_endTag(file_content):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
                 messages[-1]["content"][-1]["text"] = file_content
@@ -349,4 +349,4 @@ class AnthropicHandler(ModelHandler):
     def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
         """Determine if Anthropic model should continue generating."""
         logger.info("Determining if should continue for Anthropic model via Anthropic API")
-        return stop_reason not in ("max_tokens", "stop_sequence") and not agent_settings.has_end_tag(new_response)
+        return stop_reason not in ("max_tokens", "stop_sequence") and not agent_settings.has_endTag(new_response)

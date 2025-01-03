@@ -240,7 +240,7 @@
 - Added new 'polish_multiple_tex' command in CLI
 - Created 'polish_multiple' agent settings in edit_tex.py
 - Implemented 'handle_multiple_input' function for processing multiple input files
-- Fixed end_tag detection issue in split_scratchpad_output
+- Fixed endTag detection issue in split_scratchpad_output
 - Updated main function in edit_tex.py to support 'polish_multiple' agent
 - Enhanced error handling for multi-file input validation
 
@@ -454,7 +454,7 @@
 ## [0.7.9]
 
 - Refactored continuation logic for improved handling of existing files
-- Implemented new has_end_tag function to check for end tags in file content
+- Implemented new has_endTag function to check for end tags in file content
 - Removed append_mode from output settings and related command-line arguments
 - Improved handling of existing files in both initial and reflection rounds
 - Enhanced "continue to reflect" functionality
