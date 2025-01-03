@@ -5,12 +5,12 @@ from ..logger import logger
 
 from .agent_config import AgentConfig
 from .agent_dataclass import AgentSettings, AgentPrompts
-from .agent_reflect import DirectWrite
+from .agent_reflect import DirectAgent
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 
 
-class AgentMerge(DirectWrite):
+class AgentMerge(DirectAgent):
     """Agent for merging multiple edited files into a single output."""
 
     def __init__(
