@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import {
   readFile,
   fileExists,
@@ -12,7 +12,7 @@ import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '../utils/promptUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 // Configure nunjucks
 nunjucks.configure({ autoescape: false });
@@ -63,13 +63,13 @@ export async function extractTikzPicturesWithLabels(
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        debug(CHANNEL, `Found TikZ picture with label: ${label}`);
+        logger.debug(CHANNEL, `Found TikZ picture with label: ${label}`);
       }
     }
 
     return labeledTikzPictures;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error extracting TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -103,11 +103,11 @@ export async function createStandaloneLatexWithLabels(
 
     // Write file
     await writeFile(filePath, standaloneContent);
-    debug(CHANNEL, `Created standalone LaTeX file: ${filePath}`);
+    logger.debug(CHANNEL, `Created standalone LaTeX file: ${filePath}`);
 
     return filePath;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error creating standalone LaTeX: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -130,9 +130,12 @@ export async function extractAndCompileTikzPicturesWithLabels(
     const buildDir = path.join(inputDir, 'build', inputName);
     await createDirectory(buildDir);
 
-    debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
+    logger.debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
     const labeledTikzPictures = await extractTikzPicturesWithLabels(latexFile);
-    debug(CHANNEL, `Found ${labeledTikzPictures.length} labeled TikZ pictures`);
+    logger.debug(
+      CHANNEL,
+      `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
+    );
 
     const compiledFiles: string[] = [];
 
@@ -159,14 +162,14 @@ export async function extractAndCompileTikzPicturesWithLabels(
         const pdfFile = texFile.replace(/\.tex$/, '.pdf');
         if (await fileExists(pdfFile)) {
           compiledFiles.push(pdfFile);
-          debug(CHANNEL, `Successfully compiled: ${pdfFile}`);
+          logger.debug(CHANNEL, `Successfully compiled: ${pdfFile}`);
         }
       }
     }
 
     return compiledFiles;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error extracting and compiling TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );

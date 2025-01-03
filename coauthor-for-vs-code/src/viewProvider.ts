@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
-import { initializeLogging } from './logger/logUtils';
+import * as logger from './logger/logUtils';
 
 const CHANNEL = 'ViewProvider';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;
