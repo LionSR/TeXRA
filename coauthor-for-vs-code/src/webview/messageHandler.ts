@@ -4,6 +4,7 @@ import { workspace } from 'vscode';
 import { debug, info, warn, error } from '../logger/logUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import { ToolConfig } from '../agent/ToolConfig';
+import { AgentConfig } from '../agent/AgentConfig';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -137,28 +138,26 @@ export class WebviewMessageHandler {
         useOpenrouter: message.useOpenrouter,
       };
 
-      vscode.commands.executeCommand(
-        'coauthor.execute',
-        message.agent,
-        message.model,
-        message.reflect,
-        // parameters
-        message.inputFile,
-        getFilesIfNotEmpty(message.inputFiles),
-        message.referenceFile,
-        getFilesIfNotEmpty(message.referenceFiles),
-        message.auxiliaryFile,
-        getFilesIfNotEmpty(message.auxiliaryFiles),
-        message.figureFile,
-        getFilesIfNotEmpty(message.figureFiles),
-        // instructions
-        message.instructions,
-        // tools
+      const agentConfig: AgentConfig = {
+        agent: message.agent,
+        model: message.model,
+        reflect: message.reflect,
+        instruction: message.instructions,
+        inputFile: message.inputFile,
+        inputFiles: getFilesIfNotEmpty(message.inputFiles),
+        referenceFile: message.referenceFile,
+        referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
+        auxiliaryFile: message.auxiliaryFile,
+        auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
+        figureFile: message.figureFile,
+        figureFiles: getFilesIfNotEmpty(message.figureFiles),
+        outputFiles: getFilesIfNotEmpty(message.outputFiles),
+        outputNameOverride: message.outputNameOverride,
+        editedFile: null,
         toolConfig,
-        // output options
-        getFilesIfNotEmpty(message.outputFiles),
-        message.outputNameOverride,
-      );
+      };
+
+      vscode.commands.executeCommand('coauthor.execute', agentConfig);
     } else {
       vscode.window.showErrorMessage(
         'Please select an input file or provide an output name override.',
