@@ -51,13 +51,11 @@ class AgentConfig:
     def from_kwargs(cls, **kwargs) -> "AgentConfig":
         """Create AgentConfig from keyword arguments"""
 
-        # Create dict with default values for all fields
+        # Default configuration
         config_defaults = {
-            # Core configuration
             "model": "sonnet+",
             "reflect": False,
             "agent": "",
-            # Input/Output configuration
             "inputFile": "",
             "inputFiles": [],
             "referenceFile": None,
@@ -66,35 +64,32 @@ class AgentConfig:
             "auxiliaryFiles": [],
             "figureFile": None,
             "figureFiles": [],
-            # Instruction
             "instruction": "",
-            # Output
             "outputFiles": None,
             "outputNameOverride": None,
             "editedFile": None,
         }
 
-        # Extract tool configuration fields
-        toolConfig_fields = {
-            k: kwargs.pop(k.lower(), False)
-            for k in [
-                "usePrefillFromInput",
-                "autoExtractFigure",
-                "autoExtractTikzFigure",
-                "autoExtractTikzFigureReflect",
-                "includeTexCount",
-                "autoConfirmation",
-                "printInputPrompt",
-            ]
+        # Extract tool config fields and create tool config
+        tool_fields = {
+            "usePrefillFromInput",
+            "autoExtractFigure",
+            "autoExtractTikzFigure",
+            "autoExtractTikzFigureReflect",
+            "includeTexCount",
+            "autoConfirmation",
+            "printInputPrompt",
         }
+        # Keep original PascalCase for tool config fields while searching in lowercase
+        tool_config = {k: kwargs.pop(k.lower(), False) for k in tool_fields}
 
-        # Update defaults with provided kwargs, handling case-insensitive keys
-        config = {key: kwargs.get(key.lower(), default) for key, default in config_defaults.items()}
+        # Update defaults with provided kwargs (case-insensitive)
+        config = {**config_defaults, **{k: kwargs.get(k.lower(), config_defaults[k]) for k in config_defaults}}
 
-        # Create instance with unpacked config dict and tool config
-        agentConfig = cls(**config, toolConfig=ToolConfig.from_dict(toolConfig_fields))
-        agentConfig.validate()
-        return agentConfig
+        # Create instance with config dict and tool config
+        agent_config = cls(**config, toolConfig=ToolConfig(**tool_config))
+        agent_config.validate()
+        return agent_config
 
     def validate(self):
         """Validate the configuration."""
