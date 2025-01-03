@@ -14,12 +14,18 @@ from .model_config import ModelConfig, ModelProvider
 from .tool_handler import ToolState
 
 
+# Default continuation limits
+DEFAULT_CONTINUE_LIMIT = 10
+CONFIRMATION_CONTINUE_LIMIT = 20
+
+
 class ModelHandler(ABC):
     """Base class for model-specific handlers."""
 
     def __init__(self, config: ModelConfig):
         self.config = config
         self.capabilities = config.capabilities
+        self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
@@ -159,7 +165,7 @@ class ModelHandler(ABC):
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
-        continuation_limit = state_round.continuation_count > self.config.continue_limit
+        continuation_limit = state_round.continuation_count > self.continue_limit
         input_token_limit = state_global.total_input_tokens > self.config.input_token_limit
         output_token_limit = state_global.total_output_tokens > output_token_limit
 
