@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { debug, info, warn, error } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import {
   deleteFile,
   moveFile,
@@ -11,24 +11,28 @@ import {
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
+logger.initializeLogging(CHANNEL);
 
 export async function runPackLatexDiffVC(
   inputFile: string,
   commitHash: string,
   clean: boolean = false,
 ): Promise<void> {
-  debug(
+  logger.debug(
     CHANNEL,
     `Starting LaTeX diff packing with inputFile=${inputFile}, commitHash=${commitHash}, clean=${clean}`,
   );
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  debug(CHANNEL, `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
+  logger.debug(
+    CHANNEL,
+    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
+  );
 
   // Define patterns for files to process
   const filePatterns = [`${baseName}-diff${commitHash}`];
-  debug(CHANNEL, `File patterns: ${filePatterns}`);
+  logger.debug(CHANNEL, `File patterns: ${filePatterns}`);
 
   const filesToProcess: string[] = [];
   const filesToDelete: string[] = [];
@@ -38,7 +42,7 @@ export async function runPackLatexDiffVC(
     for (const ext of ['.tex', '.pdf']) {
       const filePath = await findFileInBuild(inputDir, pattern, ext);
       if (filePath) {
-        debug(CHANNEL, `Found file to process: ${filePath}`);
+        logger.debug(CHANNEL, `Found file to process: ${filePath}`);
         filesToProcess.push(filePath);
 
         // Find associated temporary files
@@ -48,7 +52,7 @@ export async function runPackLatexDiffVC(
             `${pattern}${tempExt}`,
           );
           if (await fileExists(tempFile)) {
-            debug(CHANNEL, `Found temporary file: ${tempFile}`);
+            logger.debug(CHANNEL, `Found temporary file: ${tempFile}`);
             filesToDelete.push(tempFile);
           }
         }
@@ -62,7 +66,7 @@ export async function runPackLatexDiffVC(
       for (const file of [...filesToProcess, ...filesToDelete]) {
         await deleteFile(file);
       }
-      info(CHANNEL, 'Cleanup complete.');
+      logger.info(CHANNEL, 'Cleanup complete.');
       vscode.window.showInformationMessage('LaTeX diff files cleaned');
     } else {
       // Move files to output folder
@@ -75,7 +79,7 @@ export async function runPackLatexDiffVC(
 
       try {
         await createDirectory(outputFolder);
-        debug(CHANNEL, `Created output directory: ${outputFolder}`);
+        logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
 
         // Move main files
         for (const file of filesToProcess) {
@@ -87,9 +91,9 @@ export async function runPackLatexDiffVC(
           await deleteFile(file);
         }
 
-        info(CHANNEL, `Files packed into ${outputFolder}`);
+        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
       } catch (err) {
-        error(
+        logger.error(
           CHANNEL,
           `Error during packing: ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -97,7 +101,7 @@ export async function runPackLatexDiffVC(
       }
     }
   } else {
-    warn(CHANNEL, 'No files found to process.');
+    logger.warn(CHANNEL, 'No files found to process.');
     vscode.window.showInformationMessage(
       'No LaTeX diff files found to process',
     );
@@ -109,14 +113,14 @@ export async function runPackLatexDiffVCMultiple(
   commitHash: string,
   clean: boolean = false,
 ): Promise<void> {
-  debug(
+  logger.debug(
     CHANNEL,
     `Starting multiple LaTeX diff packing with commitHash=${commitHash}, clean=${clean}`,
   );
-  debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    error(CHANNEL, 'No input files provided');
+    logger.error(CHANNEL, 'No input files provided');
     vscode.window.showErrorMessage(
       'No input files provided for multiple LaTeX diff packing',
     );
@@ -124,29 +128,32 @@ export async function runPackLatexDiffVCMultiple(
   }
 
   for (const inputFile of inputFiles) {
-    debug(CHANNEL, `Processing file: ${inputFile}`);
+    logger.debug(CHANNEL, `Processing file: ${inputFile}`);
     await runPackLatexDiffVC(inputFile, commitHash, clean);
   }
 
-  info(CHANNEL, 'Multiple LaTeX diff files processed');
+  logger.info(CHANNEL, 'Multiple LaTeX diff files processed');
 }
 
 export async function runCleanLatexDiffVC(
   inputFile: string,
   commitHash: string,
 ): Promise<void> {
-  debug(
+  logger.debug(
     CHANNEL,
     `Starting LaTeX diff cleaning with inputFile=${inputFile}, commitHash=${commitHash}`,
   );
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  debug(CHANNEL, `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
+  logger.debug(
+    CHANNEL,
+    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
+  );
 
   // Define patterns for files to process
   const filePatterns = [`${baseName}-diff${commitHash}`];
-  debug(CHANNEL, `File patterns: ${filePatterns}`);
+  logger.debug(CHANNEL, `File patterns: ${filePatterns}`);
 
   const filesToDelete: string[] = [];
 
@@ -156,7 +163,7 @@ export async function runCleanLatexDiffVC(
     for (const ext of ['.tex', '.pdf']) {
       const filePath = await findFileInBuild(inputDir, pattern, ext);
       if (filePath) {
-        debug(CHANNEL, `Found main file to delete: ${filePath}`);
+        logger.debug(CHANNEL, `Found main file to delete: ${filePath}`);
         filesToDelete.push(filePath);
       }
     }
@@ -165,7 +172,7 @@ export async function runCleanLatexDiffVC(
     for (const tempExt of TEMP_EXTENSIONS) {
       const filePath = await findFileInBuild(inputDir, pattern, tempExt);
       if (filePath) {
-        debug(CHANNEL, `Found temporary file to delete: ${filePath}`);
+        logger.debug(CHANNEL, `Found temporary file to delete: ${filePath}`);
         filesToDelete.push(filePath);
       }
     }
@@ -176,10 +183,10 @@ export async function runCleanLatexDiffVC(
     for (const file of filesToDelete) {
       await deleteFile(file);
     }
-    info(CHANNEL, 'Cleanup complete.');
+    logger.info(CHANNEL, 'Cleanup complete.');
     vscode.window.showInformationMessage('LaTeX diff files cleaned');
   } else {
-    warn(CHANNEL, 'No files found to clean.');
+    logger.warn(CHANNEL, 'No files found to clean.');
     vscode.window.showInformationMessage('No LaTeX diff files found to clean');
   }
 }
@@ -188,14 +195,14 @@ export async function runCleanLatexDiffVCMultiple(
   inputFiles: string[],
   commitHash: string,
 ): Promise<void> {
-  debug(
+  logger.debug(
     CHANNEL,
     `Starting multiple LaTeX diff cleaning with commitHash=${commitHash}`,
   );
-  debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    error(CHANNEL, 'No input files provided');
+    logger.error(CHANNEL, 'No input files provided');
     vscode.window.showErrorMessage(
       'No input files provided for multiple LaTeX diff cleaning',
     );
@@ -203,9 +210,9 @@ export async function runCleanLatexDiffVCMultiple(
   }
 
   for (const inputFile of inputFiles) {
-    debug(CHANNEL, `Processing file: ${inputFile}`);
+    logger.debug(CHANNEL, `Processing file: ${inputFile}`);
     await runCleanLatexDiffVC(inputFile, commitHash);
   }
 
-  info(CHANNEL, 'Multiple LaTeX diff files cleaned');
+  logger.info(CHANNEL, 'Multiple LaTeX diff files cleaned');
 }

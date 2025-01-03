@@ -1,11 +1,11 @@
 import * as nunjucks from 'nunjucks';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { readFile, writeFile } from './fileUtils';
 import * as path from 'path';
 import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Convert a list of files to a comma-separated string
@@ -19,7 +19,7 @@ export function getListOfFiles(files: string[] | null | undefined): string {
     }
     return files.filter((f) => f !== null).join(', ');
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error creating file list: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -43,7 +43,7 @@ export async function renderPrompt(
     // debug(CHANNEL, `Rendered prompt: ${renderedPrompt}`);
     return renderedPrompt;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error rendering prompt: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -65,7 +65,7 @@ export async function getFirstKCharsFromDocument(
     const content = await readFile(inputFile);
     return content ? content.slice(0, k).trim() : null;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error reading first ${k} chars from ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -94,14 +94,14 @@ export async function writePromptToXml(
     const agentName = getAgentFirstNameChunk(agent);
     const outputFile = path.join(dir, `${name}_${agentName}_input.xml`);
 
-    debug(CHANNEL, `Writing input prompt to ${outputFile}`);
+    logger.debug(CHANNEL, `Writing input prompt to ${outputFile}`);
 
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
     await writeFile(outputFile, fullPrompt);
 
     return outputFile;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error writing prompt to XML: ${err instanceof Error ? err.message : String(err)}`,
     );

@@ -1,4 +1,4 @@
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import * as yaml from 'yaml';
 import * as vscode from 'vscode';
 import * as path from 'path';
@@ -12,7 +12,7 @@ import {
 } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Load a YAML file and return its contents as a dictionary
@@ -46,11 +46,11 @@ export async function loadYaml(
         await vscode.workspace.fs.createDirectory(
           vscode.Uri.file(path.dirname(fullPath)),
         );
-        debug(CHANNEL, `Using global storage path: ${fullPath}`);
+        logger.debug(CHANNEL, `Using global storage path: ${fullPath}`);
 
         absolutePath = fullPath;
       } catch (err) {
-        error(CHANNEL, `Error with global storage path: ${err}`);
+        logger.error(CHANNEL, `Error with global storage path: ${err}`);
         throw err;
       }
     }
@@ -59,24 +59,24 @@ export async function loadYaml(
       // Verify the path exists before trying to read it
       const fileUri = vscode.Uri.file(absolutePath);
       await vscode.workspace.fs.stat(fileUri);
-      debug(CHANNEL, `Reading from: ${absolutePath}`);
+      logger.debug(CHANNEL, `Reading from: ${absolutePath}`);
 
       // Read and parse YAML
       const fileContent = await vscode.workspace.fs.readFile(fileUri);
       const yamlContent = Buffer.from(fileContent).toString('utf-8');
       const parsedYaml = yaml.parse(yamlContent);
 
-      debug(CHANNEL, `Successfully loaded YAML from: ${filePath}`);
+      logger.debug(CHANNEL, `Successfully loaded YAML from: ${filePath}`);
       return parsedYaml;
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Path does not exist or is not accessible: ${absolutePath}`,
       );
       throw err;
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error loading YAML file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -110,7 +110,7 @@ export function mergeDicts(
     }
     return result;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -170,7 +170,7 @@ export async function loadAgentSettingsAndPrompts(
 
     return [settings, prompts];
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error loading agent settings and prompts: ${err instanceof Error ? err.message : String(err)}`,
     );

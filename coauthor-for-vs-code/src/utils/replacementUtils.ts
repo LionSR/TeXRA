@@ -2,10 +2,10 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 interface ReplacementCategory {
   name: string;
@@ -246,7 +246,7 @@ export function applyReplacements(
     }
     return text;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error applying replacements: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -268,7 +268,7 @@ export function applyReplacementRegex(
         text = text.replace(new RegExp(pattern, flags), repl);
       } catch (regexErr) {
         // Log specific regex errors but continue with other replacements
-        error(
+        logger.error(
           CHANNEL,
           `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
         );
@@ -276,7 +276,7 @@ export function applyReplacementRegex(
     }
     return text;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error applying regex replacements: ${err instanceof Error ? err.message : String(err)}`,
     );

@@ -1,16 +1,9 @@
-import * as vscode from 'vscode';
 import { fileExists } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
-import {
-  debug,
-  info,
-  warn,
-  error,
-  initializeLogging,
-} from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Get full statistics for LaTeX documents using the texcount Perl script
@@ -29,12 +22,15 @@ export async function getTexCount(
 
     for (const filePath of paths) {
       if (!(await fileExists(filePath))) {
-        warn(CHANNEL, `Warning: File ${filePath} does not exist.`);
+        logger.warn(CHANNEL, `Warning: File ${filePath} does not exist.`);
         continue;
       }
 
       if (!filePath.endsWith('.tex')) {
-        warn(CHANNEL, `Error: File ${filePath} is not a LaTeX file. Skipping.`);
+        logger.warn(
+          CHANNEL,
+          `Error: File ${filePath} is not a LaTeX file. Skipping.`,
+        );
         continue;
       }
 
@@ -50,23 +46,23 @@ export async function getTexCount(
       });
       if (result.success && result.stdout) {
         allOutputs.push(`Tex Count Results for ${filePath}:\n${result.stdout}`);
-        debug(CHANNEL, `Successfully counted ${filePath}`);
+        logger.debug(CHANNEL, `Successfully counted ${filePath}`);
       } else {
-        error(CHANNEL, `Error getting tex count for ${filePath}`);
-        if (result.stdout) error(CHANNEL, `Stdout: ${result.stdout}`);
-        if (result.stderr) error(CHANNEL, `Stderr: ${result.stderr}`);
+        logger.error(CHANNEL, `Error getting tex count for ${filePath}`);
+        if (result.stdout) logger.error(CHANNEL, `Stdout: ${result.stdout}`);
+        if (result.stderr) logger.error(CHANNEL, `Stderr: ${result.stderr}`);
       }
     }
 
     if (allOutputs.length > 0) {
       const combinedOutput = allOutputs.join('\n\n');
-      info(CHANNEL, `Combined Tex Count Results:\n${combinedOutput}`);
+      logger.info(CHANNEL, `Combined Tex Count Results:\n${combinedOutput}`);
       return combinedOutput;
     }
 
     return null;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in getTexCount: ${err instanceof Error ? err.message : String(err)}`,
     );
