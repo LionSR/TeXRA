@@ -68,29 +68,29 @@ export const executeCommand = {
       command += ` --reflect=${reflect}`;
     }
 
-    // Add selected file if they exist
-    const addSelectedFileToCommand = (file: string | null, flag: string) => {
-      if (file) {
-        command += ` ${flag}="${file}"`;
-      }
+    // Add all file parameters
+    const fileConfig = {
+      input: { file: inputFile, files: inputFiles },
+      reference: { file: referenceFile, files: referenceFiles },
+      auxiliary: { file: auxiliaryFile, files: auxiliaryFiles },
+      figure: { file: figureFile, files: figureFiles },
+      output: { files: outputFiles },
     };
-    addSelectedFileToCommand(inputFile, '--inputFile');
-    addSelectedFileToCommand(referenceFile, '--referenceFile');
-    addSelectedFileToCommand(auxiliaryFile, '--auxiliaryFile');
-    addSelectedFileToCommand(figureFile, '--figureFile');
-    addSelectedFileToCommand(outputNameOverride, '--outputNameOverride');
 
-    // Add multiple files if they exist
-    const addFilesToCommand = (files: string[] | null, flag: string) => {
-      if (files && files.length > 0) {
-        command += ` ${flag}="${files.join(',')}"`;
+    // Add single files
+    Object.entries(fileConfig).forEach(([type, config]) => {
+      if ('file' in config && config.file) {
+        command += ` --${type}File="${config.file}"`;
       }
-    };
-    addFilesToCommand(ensureArray(inputFiles), '--inputFiles');
-    addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliaryFiles');
-    addFilesToCommand(ensureArray(referenceFiles), '--referenceFiles');
-    addFilesToCommand(ensureArray(figureFiles), '--figureFiles');
-    addFilesToCommand(ensureArray(outputFiles), '--outputFiles');
+      if (config.files && config.files.length > 0) {
+        command += ` --${type}Files="${ensureArray(config.files).join(',')}"`;
+      }
+    });
+
+    // Add output name override separately as it doesn't follow the pattern
+    if (outputNameOverride) {
+      command += ` --outputNameOverride="${outputNameOverride}"`;
+    }
 
     // Add flags for enabled tools
     Object.entries(toolConfig).forEach(([key, value]) => {
