@@ -97,6 +97,7 @@ def add_common_arguments(parser):
     tool_group.add_argument("--include_tex_count", action="store_true", help="Include the tex count statistics in the user message")
     tool_group.add_argument("--auto_confirmation", action="store_true", help="Automatically confirm model's questions")
     tool_group.add_argument("--print_input_prompt", action="store_true", help="Print the input prompt to an XML file")
+    tool_group.add_argument("--use_openrouter", action="store_true", help="Use OpenRouter for model inference")
 
     # Other arguments
     parser.add_argument("--edited_file", type=str, help="Path to the file that are already edited")

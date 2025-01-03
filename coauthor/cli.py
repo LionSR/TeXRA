@@ -68,6 +68,7 @@ def shared_arguments(func):
         click.option("--use_prefill_from_input", is_flag=True, help="Use the prefill from the input file"),
         click.option("--auto_confirmation", is_flag=True, help="Automatically confirm model's questions"),
         click.option("--print_input_prompt", is_flag=True, help="Print the input prompt to an XML file"),
+        click.option("--use_openrouter", is_flag=True, help="Use OpenRouter for model inference"),
     ]
     for option in options:
         func = option(func)

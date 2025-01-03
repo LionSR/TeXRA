@@ -70,13 +70,14 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    model_name = agent_config.model.strip("OR")
+    model_name = agent_config.model
     if model_name not in MODEL_CONFIGS:
-        raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
+        raise ValueError(f"Model {model_name} not found in MODEL_CONFIGS")
 
     model_config = MODEL_CONFIGS[model_name]
+    # Only override use_openrouter if it's not already True in the model config
     if not model_config.use_openrouter:
-        model_config.use_openrouter = "OR" in agent_config.model
+        model_config.use_openrouter = kwargs.get("use_openrouter", False)
 
     model_handler = ModelFactory.create_handler(model_config)
 

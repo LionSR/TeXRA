@@ -16,7 +16,7 @@ class OpenRouterHandler(OpenAIHandler):
         """Get OpenAI client with OpenRouter configuration."""
         api_key = self.get_api_key()
         base_url = self.get_base_url()
-        logger.info(f"Using OpenRouter API key: {api_key} and base URL: {base_url}")
+        logger.info(f"Using OpenRouter API key. Base URL: {base_url}")
         return OpenAI(
             api_key=api_key,
             base_url=base_url,
