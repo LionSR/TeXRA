@@ -78,6 +78,7 @@ export const executeCommand = {
     addSelectedFileToCommand(referenceFile, '--referenceFile');
     addSelectedFileToCommand(auxiliaryFile, '--auxiliaryFile');
     addSelectedFileToCommand(figureFile, '--figureFile');
+    addSelectedFileToCommand(outputNameOverride, '--outputNameOverride');
 
     // Add multiple files if they exist
     const addFilesToCommand = (files: string[] | null, flag: string) => {
@@ -91,30 +92,10 @@ export const executeCommand = {
     addFilesToCommand(ensureArray(figureFiles), '--figureFiles');
     addFilesToCommand(ensureArray(outputFiles), '--outputFiles');
 
-    addSelectedFileToCommand(outputNameOverride, '--outputNameOverride');
-
-    const flagsToAdd = [
-      { condition: toolConfig.autoExtractFigure, flag: '--autoExtractFigure' },
-      {
-        condition: toolConfig.autoExtractTikzFigure,
-        flag: '--autoExtractTikzFigure',
-      },
-      {
-        condition: toolConfig.autoExtractTikzFigureReflect,
-        flag: '--autoExtractTikzFigureReflect',
-      },
-      { condition: toolConfig.includeTexCount, flag: '--includeTexCount' },
-      {
-        condition: toolConfig.usePrefillFromInput,
-        flag: '--usePrefillFromInput',
-      },
-      { condition: toolConfig.autoConfirmation, flag: '--autoConfirmation' },
-      { condition: toolConfig.printInputPrompt, flag: '--printInputPrompt' },
-      { condition: toolConfig.useOpenrouter, flag: '--useOpenrouter' },
-    ];
-    flagsToAdd.forEach(({ condition, flag }) => {
-      if (condition) {
-        command += ` ${flag}`;
+    // Add flags for enabled tools
+    Object.entries(toolConfig).forEach(([key, value]) => {
+      if (value) {
+        command += ` --${key}`;
       }
     });
 
