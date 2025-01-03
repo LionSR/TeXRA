@@ -1,3 +1,4 @@
+// Local imports - agent components
 import { ToolConfig } from './ToolConfig';
 
 /**
