@@ -149,6 +149,7 @@ export class WebviewMessageHandler {
         message.usePrefillFromInput,
         message.autoConfirmation,
         message.printInputPrompt,
+        message.useOpenrouter,
         // output options
         getFilesIfNotEmpty(message.outputFiles),
         message.outputNameOverride,

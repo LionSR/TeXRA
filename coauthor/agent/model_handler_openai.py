@@ -21,7 +21,9 @@ class OpenAIHandler(ModelHandler):
 
     def get_client(self) -> OpenAI:
         """Get OpenAI client."""
-        return OpenAI(api_key=self.get_api_key())
+        api_key = self.get_api_key()
+        logger.info("Using OpenAI API key.")
+        return OpenAI(api_key=api_key)
 
     def create_response(
         self,
