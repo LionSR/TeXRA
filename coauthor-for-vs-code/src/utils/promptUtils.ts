@@ -40,10 +40,10 @@ export function getListOfFiles(files: string[] | null | undefined): string {
  * @param variables Variables to use in template rendering
  * @returns Rendered prompt string
  */
-export async function renderPrompt(
+export function renderPrompt(
   prompt: string,
   variables: { [key: string]: any },
-): Promise<string> {
+): string {
   try {
     const env = nunjucks.configure({ autoescape: false });
     const renderedPrompt = env.renderString(prompt, variables);

@@ -10,7 +10,7 @@ from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 
 
-class AgentMerge(DirectAgent):
+class MergeAgent(DirectAgent):
     """Agent for merging multiple edited files into a single output."""
 
     def __init__(
