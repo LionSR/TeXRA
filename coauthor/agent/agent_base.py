@@ -221,6 +221,8 @@ class BaseReflectionAgent(ABC):
             "INCLUDE_TEX_COUNT": self.agentConfig.toolConfig.includeTexCount,
             "AUTO_CONFIRMATION": self.agentConfig.toolConfig.autoConfirmation,
             "USE_PREFILL_FROM_INPUT": self.agentConfig.toolConfig.usePrefillFromInput,
+            "PRINT_INPUT_PROMPT": self.agentConfig.toolConfig.printInputPrompt,
+            "USE_OPENROUTER": self.agentConfig.toolConfig.useOpenRouter,
         }
 
     def setup(self):
