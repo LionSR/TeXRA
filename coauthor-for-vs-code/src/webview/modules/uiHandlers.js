@@ -195,6 +195,7 @@ export function setupUIHandlers() {
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');
     const printInputPrompt = safeGetElementChecked('printInputPrompt');
+    const useOpenrouter = safeGetElementChecked('useOpenrouter');
 
     vscode.postMessage({
       command: 'execute',
@@ -221,6 +222,7 @@ export function setupUIHandlers() {
       usePrefillFromInput: usePrefillFromInput,
       autoConfirmation: autoConfirmation,
       printInputPrompt: printInputPrompt,
+      useOpenrouter: useOpenrouter,
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,

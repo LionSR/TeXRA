@@ -4,16 +4,18 @@ This module provides the core agent functionality for academic writing assistanc
 """
 
 # Core dataclasses and configurations
-from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 # Base agent implementations
-from .agent_base import BaseReflectChainAgent
+from .agent_base import BaseReflectionAgent
 
 # Specialized agent implementations
-from .agent_reflect import ThinkAndWrite, DirectWrite
-from .agent_merge import AgentMerge
+from .agent_class_cot import CoTAgent
+from .agent_class_direct import DirectAgent
+from .agent_class_merge import AgentMerge
 
 # Utility and loading functions
 from .agent_load import load_agent_settings_and_prompts
@@ -31,11 +33,8 @@ from .model_config import ModelConfig, ModelProvider, ModelCapabilities
 from .model_handler import ModelHandler
 from .model_handler_anthropic import AnthropicHandler
 from .model_handler_openai import OpenAIHandler
-from .model_handler_others import (
-    GoogleviaOpenAIHandler,
-    OpenRouterHandler,
-    AnthropicviaOpenrouterHandler,
-)
+from .model_handler_google import GoogleviaOpenAIHandler
+from .model_handler_openrouter import OpenRouterHandler, AnthropicviaOpenrouterHandler
 from .model_registry import MODEL_CONFIGS
 from .model_factory import ModelFactory
 
@@ -49,10 +48,10 @@ __all__ = [
     "AgentStateGlobal",
     "ToolState",
     # Base agent class
-    "BaseReflectChainAgent",
+    "BaseReflectionAgent",
     # Agent implementations
-    "ThinkAndWrite",
-    "DirectWrite",
+    "CoTAgent",
+    "DirectAgent",
     "AgentMerge",
     # Utility and infrastructure
     "load_agent_settings_and_prompts",
