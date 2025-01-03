@@ -1,5 +1,5 @@
 """
-Coauthor: AI-powered academic writing assistant.
+CoAuthor: AI-powered academic writing assistant.
 """
 
 from . import agent, latex, logger, utils
