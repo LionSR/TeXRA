@@ -1,8 +1,17 @@
-import * as logger from '../logger/logUtils';
-import * as yaml from 'yaml';
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import * as yaml from 'yaml';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - agent components
 import {
   AgentSettings,
   AgentPrompts,

@@ -1,7 +1,15 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
 import OpenAI from 'openai';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
-import * as logger from '../logger/logUtils';
 
 /**
  * Handler for models accessed through OpenRouter.

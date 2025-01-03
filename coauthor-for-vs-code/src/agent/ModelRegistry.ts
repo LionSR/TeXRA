@@ -2,6 +2,7 @@
  * Registry of available model configurations.
  */
 
+// Local imports - agent components
 import {
   ModelConfig,
   ModelProvider,

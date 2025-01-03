@@ -1,12 +1,22 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
 import OpenAI from 'openai';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { readFile } from '../utils/fileUtils';
+
+// Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSettings, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateRoundImpl } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
-import * as logger from '../logger/logUtils';
-import { readFile } from '../utils/fileUtils';
 
 const K_SLICE = 200;
 

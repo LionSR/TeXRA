@@ -1,6 +1,13 @@
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import {
   applyReplacements,
@@ -16,6 +23,8 @@ import {
   runLatexDiffForRound,
   runLatexDiffBetweenRounds,
 } from '../latex/latexdiff';
+
+// Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSettings } from './AgentDataclass';
 
