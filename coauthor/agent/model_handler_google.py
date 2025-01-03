@@ -14,9 +14,12 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
 
     def get_client(self) -> OpenAI:
         """Get OpenAI client with Google's base URL."""
+        api_key = self.get_api_key()
+        base_url = self.get_base_url()
+        logger.info(f"Using Google API key. Base URL: {base_url}")
         return OpenAI(
-            api_key=self.get_api_key(),
-            base_url=self.get_base_url(),
+            api_key=api_key,
+            base_url=base_url,
         )
 
     def compute_price(self, response_usage: Any) -> float:
