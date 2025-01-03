@@ -32,7 +32,7 @@ src/
 ├── terminal.ts      # Terminal integration
 ├── textConnection.ts # Text processing utilities
 ├── utils.ts         # Common utilities
-└── viewProvider.ts  # WebView management
+└── ViewProvider.ts  # WebView management
 ```
 
 ## Installation
@@ -138,10 +138,10 @@ The `models/` directory contains model-specific implementations for different AI
 
 The `utils/` directory contains various utility modules for:
 
-- File system operations and path management (`fileUtils`)
+- File system operations and path management (`file`)
 - Configuration handling
 - Message display functions
-- Logging system with structured output (`logUtils`)
+- Logging system with structured output (`log`)
 - Type checking and validation
 - LaTeX-specific operations
 - Common utility functions
@@ -166,7 +166,7 @@ The extension provides integrated terminal support through `terminal.ts`:
 
 ### WebView Interface
 
-The UI is implemented as a WebView (`viewProvider.ts` and `webview/` directory):
+The UI is implemented as a WebView (`ViewProvider.ts` and `webview/` directory):
 
 - Modern, responsive design
 - Real-time updates

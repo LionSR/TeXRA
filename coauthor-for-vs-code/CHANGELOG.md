@@ -26,12 +26,12 @@
   - Optimized state management and event handling in WebView
 - **Refactored:**
   - Unified message passing for multiple file selection functions
-  - Consolidated logic for file selection cases in viewProvider.ts
+  - Consolidated logic for file selection cases in ViewProvider.ts
   - Improved conciseness in script.js for file selection and handling
   - Reorganized CSS variables for better maintainability
-  - Enhanced error handling and variable naming in viewProvider.ts
+  - Enhanced error handling and variable naming in ViewProvider.ts
 - **Fixed:**
-  - Resolved issues with variable redeclaration in viewProvider.ts
+  - Resolved issues with variable redeclaration in ViewProvider.ts
   - Fixed Content Security Policy in index.html to allow loading Sortable.js from CDN
 - Aider wrote most of the codes.
 
@@ -186,7 +186,7 @@
 ## [0.6.7]
 
 - Refactored 'getCurrentEditedFile' command to 'requestEditedFile' in script.js
-- Removed unused 'getCurrentEditedFile' case in viewProvider.ts
+- Removed unused 'getCurrentEditedFile' case in ViewProvider.ts
 - Improved code formatting in terminal.ts
 
 ## [0.6.6]
@@ -208,7 +208,7 @@
 
 - Refactored WebView implementation for improved maintainability
 - Split HTML, CSS, and JavaScript into separate files
-- Updated viewProvider.ts to load content from separate files
+- Updated ViewProvider.ts to load content from separate files
 - Improved code organization and readability
 - This version is broken and only fixed in the next version
 

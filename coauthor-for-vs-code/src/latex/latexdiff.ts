@@ -75,7 +75,7 @@ async function processDiffFile(diffFileName: string): Promise<void> {
   }
 }
 
-async function processTikzpictureEndings(filePath: string): Promise<void> {
+async function processTikzPictureEndings(filePath: string): Promise<void> {
   try {
     const content = await readFile(filePath);
 
@@ -217,7 +217,7 @@ export async function runLatexDiff(
     await writeFile(outputPath, result.stdout);
 
     await processDiffFile(outputPath);
-    await processTikzpictureEndings(outputPath);
+    await processTikzPictureEndings(outputPath);
 
     info(CHANNEL, 'LaTeX diff completed successfully');
     return diffFileName;
@@ -274,7 +274,7 @@ export async function runLatexDiffVC(
     }
 
     await processDiffFile(outputPath);
-    await processTikzpictureEndings(outputPath);
+    await processTikzPictureEndings(outputPath);
 
     info(CHANNEL, 'LaTeX diff VC completed successfully');
     return path.basename(diffFileName);

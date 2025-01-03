@@ -2,7 +2,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 
-const CHANNEL = 'RepetitionUtils';
+const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);
 
 export interface RepetitionResult {
