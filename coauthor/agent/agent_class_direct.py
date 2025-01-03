@@ -21,12 +21,12 @@ class DirectAgent(BaseReflectionAgent):
         stateRound: AgentStateRound,  # Current round state object
         stateGlobal: AgentStateGlobal,  # Global state object
         outputFile: str,  # Path to output file
-        end_turn: bool,  # Flag indicating end of turn
+        endTurn: bool,  # Flag indicating end of turn
         currRound: int = 0,  # Current round number
     ) -> list[str]:
         """Handle the output for the given round."""
-        if end_turn:
+        if endTurn:
             self._process_outputFiles(outputFile, currRound)
 
         # Call base implementation for database updates
-        return super().handle_output(stateRound, stateGlobal, outputFile, end_turn, currRound)
+        return super().handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound)
