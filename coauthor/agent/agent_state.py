@@ -65,7 +65,9 @@ class AgentStateGlobal:
         if stateRound.APIUsage:
             if self.firstInputTokens == 0:
                 self.firstInputTokens = stateRound.APIUsage.get("totalInputTokens", 0)
+
             # potential mixed use here
+            # for anthropic api
             cache_read = stateRound.APIUsage.get("cache_read_input_tokens", 0) or 0
             self.firstInputTokens += cache_read
             cache_creation = stateRound.APIUsage.get("cache_creation_input_tokens", 0) or 0
