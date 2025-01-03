@@ -46,11 +46,11 @@ TIKZ_REPLACEMENTS = ReplacementCategory(
     name="tikz",
     description="Fixes for TikZ picture formatting and structure",
     patterns={
-        r"(?P<indent>[\t ]*)}\s*\end{tikzpicture};\s*\end{tikzpicture}": r"\g<indent>\end{tikzpicture}\n\g<indent>};\n\g<indent>\end{tikzpicture}",
-        r"\end{document}\s*\chapter": r"\chapter",
-        r"\end{document}\s*\addcontentsline": r"\addcontentsline",
-        r"}(\s*)\end{tikzpicture};": r"};$1\end{tikzpicture}",
-        r"}(\s*)\end{tikzpicture}\DIFaddendFL ;": r"$1\end{tikzpicture}};\DIFaddendFL",
+        r"(?P<indent>[\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}": r"\g<indent>\\end{tikzpicture}\n\g<indent>};\n\g<indent>\\end{tikzpicture}",
+        r"\\end\{document\}\s*\\chapter": r"\\chapter",
+        r"\\end\{document\}\s*\\addcontentsline": r"\\addcontentsline",
+        r"\}(\s*)\\end\{tikzpicture\};": r"};\1\\end{tikzpicture}",
+        r"\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;": r"\1\\end{tikzpicture}};\\DIFaddendFL",
     },
 )
 
@@ -159,13 +159,9 @@ AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
     description="Fixes for auto confirmation writing with regex patterns",
     patterns={
         # Match the entire confirmation message block and reformat
-        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": (
-            r"<monologue>[Due to length limits,\1</monologue>\n<latex_code>"
-        ),
+        r"<latex_code>\s*<monologue>\[Due to length limits,[^\n]*\n(.*?)</monologue>": r"<monologue>\[Due to length limits,\1</monologue>\n<latex_code>",
         # Handle case where latex_document tag precedes the monologue
-        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": (
-            r"<monologue>[I apologize, but I notice this is a very long document\1</monologue><latex_code>"
-        ),
+        r"<latex_code>\s*<monologue>\[I apologize, but I notice this is a very long document,[^\n]*\n(.*?)</monologue>": r"<monologue>\[I apologize, but I notice this is a very long document\1</monologue><latex_code>",
         # Handle truncated request messages
         r"<latex_code>\s*(<monologue>\[Previous request was truncated due to length,[^\n]*\n(.*?)</monologue>)": r"\1",
     },
