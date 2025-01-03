@@ -35,7 +35,7 @@ from .model_handler import ModelHandler
 from .output_handler import OutputHandler
 
 
-class BaseReflectChainAgent(ABC):
+class BaseReflectionAgent(ABC):
     """Abstract base class for reflect chain agents."""
 
     def __init__(

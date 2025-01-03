@@ -19,8 +19,8 @@ class AgentSettings:
 
     def __post_init__(self):
         """Validate settings after initialization."""
-        if self.agent_type not in ["think", "direct"]:
-            raise ValueError(f"Invalid agent_type: {self.agent_type}. Must be 'think' or 'direct'")
+        if self.agent_type not in ["CoT", "direct"]:
+            raise ValueError(f"Invalid agent_type: {self.agent_type}. Must be 'CoT' or 'direct'")
 
         if self.temperature is not None and not 0.0 <= self.temperature <= 1.0:
             raise ValueError(f"Temperature must be between 0.0 and 1.0, got {self.temperature}")
@@ -33,7 +33,7 @@ class AgentSettings:
         """Create an AgentSettings from a dictionary."""
         settings = cls(
             # Core settings
-            agent_type=settings_dict.get("agent_type", "think"),
+            agent_type=settings_dict.get("agent_type", "CoT"),
             document_tag=settings_dict.get("document_tag", "document"),
             temperature=settings_dict.get("temperature", 0.0),
             # Generation settings
