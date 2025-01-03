@@ -228,7 +228,7 @@ class OpenAIHandler(ModelHandler):
 
         return basePrice
 
-    def compute_statistics(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
+    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
         """Compute OpenAI-specific statistics."""
         # For Google models, create a minimal usage object with zeros
         if responseUsage is None:
