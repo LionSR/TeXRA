@@ -1,18 +1,18 @@
 name: txt2tex
 
 settings:
-  document_tag: txt_content
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: txt_content
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <latex_document> \chapter
     - <latex_document>
-  required_files:
+  requiredFiles:
     - DOCUMENT_CLS: lecture.cls
     - COMMANDS_FILE: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Act as an expert LaTeX typesetter and a physics professor tasked with converting plain text content (generated from the pdf version of the content) into LaTeX format. Your goal is to accurately generate a new LaTeX file based on the provided text content while maintaining consistency with the given style and formatting guidelines.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -33,7 +33,7 @@ prompts:
     - Use It\^o instead of Ito.
     - When adding citations use commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use Non-breaking space (`~') before \cite such as ``~\cite{...}'' when appropriate.
 
-  user_prefix: |
+  userPrefix: |
     You are provided with the following text content:
     <txt_content>
     {{ INPUT_CONTENT }}
@@ -56,7 +56,7 @@ prompts:
     {{ COMMAND_CONTENT }}
     </command>
 
-  user_request: |
+  userRequest: |
     The main LaTeX file has the following structure:
 
     <main_tex>
@@ -106,7 +106,7 @@ prompts:
     % Your LaTeX source here
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Your initial LaTeX conversion from the provided text file has some issues:
 
     <issues>

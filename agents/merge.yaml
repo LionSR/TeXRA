@@ -1,18 +1,18 @@
 name: merge
 
 settings:
-  agent_type: direct
-  document_tag: full_edited_latex
-  end_tag: </full_edited_latex>
-  output_ext: tex
+  agentType: direct
+  documentTag: full_edited_latex
+  endTag: </full_edited_latex>
+  outputExt: tex
   prefills:
     - <full_edited_latex>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert LaTeX editor tasked with merging changes from an edited version of a \LaTeX document back into the original document. Your goal is to produce an accurate and complete representation of the edited document, incorporating all changes while maintaining the original structure and formatting.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with creating a full version of an edited \LaTeX document by combining information from two sources: an original \LaTeX document and an edited version of that document. This task is necessary for enabling accurate comparison between versions using tools like latexdiff. Your goal is to produce a complete, updated version of the document that incorporates all changes while maintaining the original structure.
 
     Here is the original \LaTeX document {{ INPUT_FILE }}:
@@ -25,7 +25,7 @@ prompts:
     {{ EDITED_CONTENT }}
     </edited_latex>
 
-  user_request: |
+  userRequest: |
     Follow these steps to create the full version of the edited document:
     1. Carefully read through both the original and edited versions of the document.
     2. For parts indicated as ``unchanged'' or ``previous parts remain unchanged'' in the edited version, copy the corresponding sections from the original document verbatim.
@@ -43,7 +43,7 @@ prompts:
     % Your merged \LaTeX document here
     </full_edited_latex>
 
-  user_reflect: |
+  userReflect: |
     After thoroughly reviewing the original \LaTeX document (under the <original_latex> tag), the edited version of the document (under the `<edited_latex>' tag), and your generated merged document (under the `<full_edited_latex>' tag), please critically check that your output satisfies the following requirements:
 
     <requirements>

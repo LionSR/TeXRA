@@ -1,14 +1,14 @@
 name: revise_nsf_grant
 settings:
-  document_tag: nsf_grant_documents
-  end_tag: </nsf_grant_documents>
-  output_ext: tex
+  documentTag: nsf_grant_documents
+  endTag: </nsf_grant_documents>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert grant writer specializing in National Science Foundation (NSF) proposals for US universities. Your task is to revise and improve multiple components of an NSF grant proposal, focusing on addressing the given instructions and enhancing the overall quality and competitiveness of the proposal.
 
     \begin{itemize}
@@ -34,7 +34,7 @@ prompts:
         \end{itemize}
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you multiple \LaTeX documents that comprise an NSF grant proposal. Please read all documents carefully.
 
     Here are the \LaTeX documents with additional LaTeX auxiliary files:
@@ -49,7 +49,7 @@ prompts:
 
     Please carefully read through all the components of the NSF grant proposal above and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance these documents. 
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
@@ -102,7 +102,7 @@ prompts:
 
     </nsf_grant_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to the NSF grant proposal components, please reflect on your changes and consider any additional improvements that could further enhance the quality and competitiveness of the proposal while staying focused on the original instruction.
 
     <scratchpad>

@@ -1,21 +1,21 @@
 name: paper2note
 
 settings:
-  document_tag: lecture_note
-  end_tag: </lecture_note>
-  output_ext: tex
+  documentTag: lecture_note
+  endTag: </lecture_note>
+  outputExt: tex
   prefills:
     - |
       Here is the output lecture note <lecture_note>.
       \documentclass{lecture}
       \input{command}
       \course
-  required_files:
+  requiredFiles:
     - DOCUMENT_CLS: lecture.cls
     - COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Your task is to adapt research papers into lecture notes for a book entitled ``Stochastic Thermodynamics in the World of Machine Learning''.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -25,7 +25,7 @@ prompts:
     - Label referenced equations using \label{eqn:...} commands, choosing condensed and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
     - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to "'.
 
-  user_prefix: |
+  userPrefix: |
     You are provided with the paper {{ INPUT_FILE }}and the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
 
     Here are the the document class and custom commands for the LaTeX file are as follows:
@@ -47,7 +47,7 @@ prompts:
     {{ INPUT_CONTENT }}
     </research_paper>
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow during the adaptation:
     <instruction>
@@ -85,7 +85,7 @@ prompts:
     % Your LaTeX source here
     </lecture_note>
 
-  user_reflect: |
+  userReflect: |
     Your output lecture notes adapted from the research paper are too generic, not specific and not mathematical enough, with some parts of the paper missing from the notes.
 
     After thoroughly and critically reviewing the research paper, the sample chapters, the sample paper-notes pair, and your generated lecture notes, please revise the lecture notes to satisfy the previous requirements under the <requirements> tag and the following instructions:
