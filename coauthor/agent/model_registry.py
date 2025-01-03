@@ -234,20 +234,22 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         capabilities=ModelCapabilities(supports_native_pdf=True, supports_vision=True),
     ),
     # ===== OpenRouter Models =====
-    "llama3+OR": ModelConfig(
-        name="llama3+OR",
+    "llama3+": ModelConfig(
+        name="llama3+",
         full_name="meta-llama/llama-3.1-405b-instruct",
         provider=ModelProvider.OTHERS,
+        use_openrouter=True,
         openrouter_full_name="meta-llama/llama-3.1-405b-instruct",
         max_output_tokens=131072,
         context_window=131072,
         input_price=3.0,
         output_price=3.0,
     ),
-    "qwq-32bOR": ModelConfig(
+    "qwq-32b": ModelConfig(
         name="qwq-32b",
         full_name="qwen/qwq-32b-preview",
         provider=ModelProvider.OTHERS,
+        use_openrouter=True,
         openrouter_full_name="qwen/qwq-32b-preview",
         max_output_tokens=32768,
         context_window=32768,
