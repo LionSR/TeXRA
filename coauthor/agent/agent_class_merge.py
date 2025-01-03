@@ -96,12 +96,12 @@ class AgentMerge(DirectAgent):
         stateRound: AgentStateRound,
         stateGlobal: AgentStateGlobal,
         outputFile: str,
-        end_turn: bool,
+        endTurn: bool,
         currRound: int = 0,
     ) -> list[str]:
         """Process and handle output files for the current round."""
-        if end_turn:
-            _files = super().handle_output(stateRound, stateGlobal, outputFile, end_turn, currRound)
+        if endTurn:
+            _files = super().handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound)
             logger.info(f"Output file: {outputFile}")
             return _files
         return []
