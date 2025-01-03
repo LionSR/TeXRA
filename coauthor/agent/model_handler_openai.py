@@ -15,6 +15,8 @@ from .response_usage import OpenAIAPIResponseUsage
 
 from .tool_state import ToolState
 
+K_SLICE = 200
+
 
 class OpenAIHandler(ModelHandler):
     """OpenAI-specific handlers."""
@@ -154,7 +156,7 @@ class OpenAIHandler(ModelHandler):
             return
 
         # Create continuation message with last K tokens
-        prefill_tokens = toolState.lastResponse[-agentConfig.K :]
+        prefill_tokens = toolState.lastResponse[-K_SLICE:]
         userMessageContinuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
