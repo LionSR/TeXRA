@@ -6,7 +6,8 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from .agent.agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent.agent_dataclass import AgentSettings, AgentPrompts
+from .agent.agent_config import AgentConfig
 from .agent.agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
 from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
