@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 import { debug, initializeLogging } from '../logger/logUtils';
+import { ToolConfig } from '../agent/ToolConfig';
 
 const CHANNEL = 'ExecuteCommand';
 initializeLogging(CHANNEL);
@@ -29,14 +30,7 @@ export const executeCommand = {
     // instructions
     instructions: string,
     // tools
-    autoExtractFigure: boolean,
-    autoExtractTikzFigure: boolean,
-    autoExtractTikzFigureReflect: boolean,
-    includeTexCount: boolean,
-    usePrefillFromInput: boolean,
-    autoConfirmation: boolean,
-    printInputPrompt: boolean,
-    useOpenrouter: boolean,
+    toolConfig: ToolConfig,
     // output options
     outputFiles: string[],
     outputNameOverride: string,
@@ -100,17 +94,23 @@ export const executeCommand = {
     addSelectedFileToCommand(outputNameOverride, '--outputNameOverride');
 
     const flagsToAdd = [
-      { condition: autoExtractFigure, flag: '--autoExtractFigure' },
-      { condition: autoExtractTikzFigure, flag: '--autoExtractTikzFigure' },
+      { condition: toolConfig.autoExtractFigure, flag: '--autoExtractFigure' },
       {
-        condition: autoExtractTikzFigureReflect,
+        condition: toolConfig.autoExtractTikzFigure,
+        flag: '--autoExtractTikzFigure',
+      },
+      {
+        condition: toolConfig.autoExtractTikzFigureReflect,
         flag: '--autoExtractTikzFigureReflect',
       },
-      { condition: includeTexCount, flag: '--includeTexCount' },
-      { condition: usePrefillFromInput, flag: '--usePrefillFromInput' },
-      { condition: autoConfirmation, flag: '--autoConfirmation' },
-      { condition: printInputPrompt, flag: '--printInputPrompt' },
-      { condition: useOpenrouter, flag: '--useOpenrouter' },
+      { condition: toolConfig.includeTexCount, flag: '--includeTexCount' },
+      {
+        condition: toolConfig.usePrefillFromInput,
+        flag: '--usePrefillFromInput',
+      },
+      { condition: toolConfig.autoConfirmation, flag: '--autoConfirmation' },
+      { condition: toolConfig.printInputPrompt, flag: '--printInputPrompt' },
+      { condition: toolConfig.useOpenrouter, flag: '--useOpenrouter' },
     ];
     flagsToAdd.forEach(({ condition, flag }) => {
       if (condition) {
