@@ -9,7 +9,7 @@ import * as logger from '../logger/logUtils';
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);
 
-interface ConnectionResult {
+export interface ConnectionResult {
   connector: string;
   choice: string;
 }
