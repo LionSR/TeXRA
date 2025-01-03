@@ -3,7 +3,8 @@ import re
 
 from ..logger import logger
 
-from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_reflect import DirectWrite
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
