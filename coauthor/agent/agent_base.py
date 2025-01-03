@@ -34,6 +34,8 @@ from .logdb import create_log_entry, update_log_statistics, update_log_outputFil
 from .model_handler import ModelHandler
 from .output_handler import OutputHandler
 
+K_SLICE = 200
+
 
 class BaseReflectionAgent(ABC):
     """Abstract base class for reflect chain agents."""
@@ -317,8 +319,7 @@ class BaseReflectionAgent(ABC):
             toolState.update_lastResponse(newResponse)
 
             # Process response connection with proper slicing
-            k_slice = self.agentConfig.K
-            bestConnector, _ = best_connection_method(toolState.lastResponse[-k_slice:], newResponse[:k_slice])
+            bestConnector, _ = best_connection_method(toolState.lastResponse[-K_SLICE:], newResponse[:K_SLICE])
 
             # Update state and file atomically
             toolState.update_accumulatedOutput(toolState.accumulatedOutput + bestConnector + newResponse)
@@ -334,8 +335,8 @@ class BaseReflectionAgent(ABC):
 
             # Log response boundaries
             logger.info("Response preview:")
-            logger.debug(f"First {k_slice} chars: {newResponse[:k_slice]}")
-            logger.debug(f"Last {k_slice} chars: {newResponse[-k_slice:]}")
+            logger.debug(f"First {K_SLICE} chars: {newResponse[:K_SLICE]}")
+            logger.debug(f"Last {K_SLICE} chars: {newResponse[-K_SLICE:]}")
 
             # Update message content
             self.modelHandler.update_message_content(
@@ -387,7 +388,7 @@ class BaseReflectionAgent(ABC):
 
         # Handle prefill from input if enabled
         if self.agentConfig.toolConfig.usePrefillFromInput:
-            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, self.agentConfig.K)
+            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, K_SLICE)
 
         # Handle figure extraction for vision-capable models
         if self.modelHandler.capabilities.supportsVision:
@@ -485,7 +486,7 @@ class BaseReflectionAgent(ABC):
             self._handle_outputFile_processing([generated_outputFile], currRound, toolState)
 
         if self.agentConfig.toolConfig.usePrefillFromInput:
-            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, self.agentConfig.K)
+            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, K_SLICE)
 
         # Initialize reflection round
         logger.info(f"\n\nProcessing round {currRound}")
