@@ -1,0 +1,12 @@
+/**
+ * Configuration for tool usage and automation features
+ */
+export interface ToolConfig {
+  usePrefillFromInput: boolean;
+  autoExtractFigure: boolean;
+  autoExtractTikzFigure: boolean;
+  autoExtractTikzFigureReflect: boolean;
+  includeTexCount: boolean;
+  autoConfirmation: boolean;
+  printInputPrompt: boolean;
+}

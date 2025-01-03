@@ -1,7 +1,7 @@
 /**
- * State for tool-specific runtime data that doesn't need to be logged. [Per round]
+ * Interface defining the shape of tool-specific runtime data that doesn't need to be logged
  */
-export class ToolState {
+export interface ToolState {
   /** Statistics about TeX document structure */
   texCountStats: string | null;
 
@@ -17,6 +17,21 @@ export class ToolState {
   /** Paths to figure files */
   figureFiles: string[];
 
+  updateLastResponse(response: string): void;
+  updateAccumulatedOutput(output: string): void;
+  addFigureFiles(files: string[]): void;
+}
+
+/**
+ * Implementation of tool-specific runtime data that doesn't need to be logged. [Per round]
+ */
+export class ToolStateImpl implements ToolState {
+  texCountStats: string | null;
+  firstKCharsFromInput: string | null;
+  lastResponse: string;
+  accumulatedOutput: string;
+  figureFiles: string[];
+
   private constructor() {
     this.texCountStats = null;
     this.firstKCharsFromInput = null;
@@ -29,7 +44,7 @@ export class ToolState {
    * Initialize a new ToolState object
    */
   static initialize(): ToolState {
-    return new ToolState();
+    return new ToolStateImpl();
   }
 
   /**
