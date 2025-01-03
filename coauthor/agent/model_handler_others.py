@@ -98,7 +98,7 @@ class AnthropicviaOpenrouterHandler(OpenRouterHandler):
 
     def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
         last_message = messages[-1]
-        if self.config.capabilities.supports_assistant_prefill:
+        if self.capabilities.supports_assistant_prefill:
             # although OpenAI models do not support assistant prefill, some models (such as Anthropic) via OpenRouter might do
             if last_message["role"] == "assistant":
                 if isinstance(messages[-1]["content"], list):

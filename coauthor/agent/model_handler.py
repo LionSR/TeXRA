@@ -89,7 +89,7 @@ class ModelHandler(ABC):
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
             ".png": "image/png",
-            ".pdf": "application/pdf" if (self.config.capabilities.supports_native_pdf and count_pdf_pages(figure_file) > 1) else "image/png",
+            ".pdf": "application/pdf" if (self.capabilities.supports_native_pdf and count_pdf_pages(figure_file) > 1) else "image/png",
         }
 
         if ext not in media_types:
