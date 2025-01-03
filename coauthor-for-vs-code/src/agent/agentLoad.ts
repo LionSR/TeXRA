@@ -52,6 +52,7 @@ export async function loadYaml(
         const fullPath = path.join(globalStoragePath, rootPath, filePath);
 
         // Ensure the directory exists
+        // why do you have to create the directory?
         await vscode.workspace.fs.createDirectory(
           vscode.Uri.file(path.dirname(fullPath)),
         );

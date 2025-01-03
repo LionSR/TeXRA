@@ -47,6 +47,9 @@ import { OutputHandler } from './OutputHandler';
 
 const K_SLICE = 200;
 
+const CHANNEL = 'Agent';
+logger.initializeLogging(CHANNEL);
+
 /**
  * Abstract base class for reflection chain agents.
  */
