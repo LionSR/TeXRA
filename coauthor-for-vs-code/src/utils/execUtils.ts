@@ -1,12 +1,12 @@
 import * as cp from 'child_process';
 import { promisify } from 'util';
 import { getWorkspacePath } from './fileUtils';
-import { debug, warn, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
 
@@ -48,7 +48,10 @@ export async function executeCommand(
     }
 
     const finalCommand = Array.isArray(command) ? command.join(' ') : command;
-    debug(options.channel || CHANNEL, `Running command: ${finalCommand}`);
+    logger.debug(
+      options.channel || CHANNEL,
+      `Running command: ${finalCommand}`,
+    );
 
     const { stdout, stderr } = await execAsync(finalCommand, {
       cwd: workspacePath,
@@ -62,14 +65,14 @@ export async function executeCommand(
         : output?.trim() || null;
 
     if (stderr && stderr.trim()) {
-      warn(
+      logger.warn(
         options.channel || CHANNEL,
         `Command stderr: ${processOutput(stderr)}`,
       );
     }
 
     if (stdout && stdout.trim()) {
-      debug(
+      logger.debug(
         options.channel || CHANNEL,
         `Command stdout: ${processOutput(stdout)}`,
       );
@@ -82,7 +85,7 @@ export async function executeCommand(
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    error(
+    logger.error(
       options.channel || CHANNEL,
       `Error executing command: ${errorMessage}`,
     );

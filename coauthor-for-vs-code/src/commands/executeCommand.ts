@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
-import { debug, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { ToolConfig } from '../agent/ToolConfig';
 import { AgentConfig } from '../agent/AgentConfig';
 
 const CHANNEL = 'ExecuteCommand';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {

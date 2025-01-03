@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { FolderExplorer } from './FolderExplorer';
 import { LogViewProvider } from './logView/LogViewProvider';
-import { setLogViewProvider } from './logger/logUtils';
+import * as logger from './logger/logUtils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create and register the log view provider
   const logViewProvider = new LogViewProvider(context);
-  setLogViewProvider(logViewProvider);
+  logger.setLogViewProvider(logViewProvider);
 
   // Register the tree data provider and log view provider
   context.subscriptions.push(

@@ -3,13 +3,13 @@ import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
 } from '../latex/textConnection';
-import { info, debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { loadYaml, loadAgentSettingsAndPrompts } from '../agent/agentLoad';
 import * as path from 'path';
 import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'TestCommands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerTestCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -24,7 +24,7 @@ export function registerTestCommands(context: vscode.ExtensionContext) {
       handleTestLoadSpecificAgent(context),
     ),
   );
-  debug(CHANNEL, 'Test commands registered');
+  logger.debug(CHANNEL, 'Test commands registered');
 }
 
 async function handleTestConnection(): Promise<void> {
@@ -37,22 +37,28 @@ async function handleTestConnection(): Promise<void> {
       { str1: '\\section{Introduction}', str2: 'This paper presents' },
     ];
 
-    info(CHANNEL, 'Testing OpenAI implementation:');
+    logger.info(CHANNEL, 'Testing OpenAI implementation:');
     for (const { str1, str2 } of testCases) {
-      debug(CHANNEL, `\nTesting: "${str1}" + "${str2}"`);
+      logger.debug(CHANNEL, `\nTesting: "${str1}" + "${str2}"`);
       const result = await bestConnectionMethod(str1, str2);
-      info(CHANNEL, `Result: ${JSON.stringify(result)}`);
-      info(CHANNEL, `Connected text: "${str1}${result.connector}${str2}"`);
+      logger.info(CHANNEL, `Result: ${JSON.stringify(result)}`);
+      logger.info(
+        CHANNEL,
+        `Connected text: "${str1}${result.connector}${str2}"`,
+      );
     }
 
-    info(CHANNEL, '\n-------------------\n');
+    logger.info(CHANNEL, '\n-------------------\n');
 
-    info(CHANNEL, 'Testing Anthropic implementation:');
+    logger.info(CHANNEL, 'Testing Anthropic implementation:');
     for (const { str1, str2 } of testCases) {
-      debug(CHANNEL, `\nTesting: "${str1}" + "${str2}"`);
+      logger.debug(CHANNEL, `\nTesting: "${str1}" + "${str2}"`);
       const result = await bestConnectionMethodAnthropic(str1, str2);
-      info(CHANNEL, `Result: ${JSON.stringify(result)}`);
-      info(CHANNEL, `Connected text: "${str1}${result.connector}${str2}"`);
+      logger.info(CHANNEL, `Result: ${JSON.stringify(result)}`);
+      logger.info(
+        CHANNEL,
+        `Connected text: "${str1}${result.connector}${str2}"`,
+      );
     }
 
     vscode.window.showInformationMessage(
@@ -60,9 +66,9 @@ async function handleTestConnection(): Promise<void> {
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    error(CHANNEL, `Test failed: ${errorMessage}`);
+    logger.error(CHANNEL, `Test failed: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
-      debug(CHANNEL, `Stack trace: ${err.stack}`);
+      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
     }
     vscode.window.showErrorMessage(`Test failed: ${errorMessage}`);
   }
@@ -72,7 +78,7 @@ async function handleTestAgentLoading(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    info(CHANNEL, 'Testing YAML loading:');
+    logger.info(CHANNEL, 'Testing YAML loading:');
 
     // Test basic YAML loading
     const testYaml = {
@@ -126,24 +132,27 @@ async function handleTestAgentLoading(
     );
 
     // Test loading base agent
-    info(CHANNEL, '\nTesting base agent loading:');
+    logger.info(CHANNEL, '\nTesting base agent loading:');
     const baseYaml = await loadYaml(baseYamlPath);
-    info(CHANNEL, `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`);
+    logger.info(
+      CHANNEL,
+      `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`,
+    );
 
     const [baseSettings, basePrompts] = await loadAgentSettingsAndPrompts(
       testDir,
       'base',
       context,
     );
-    info(CHANNEL, 'Base agent settings loaded:');
-    info(CHANNEL, JSON.stringify(baseSettings, null, 2));
-    info(CHANNEL, 'Base agent prompts loaded:');
-    info(CHANNEL, JSON.stringify(basePrompts, null, 2));
+    logger.info(CHANNEL, 'Base agent settings loaded:');
+    logger.info(CHANNEL, JSON.stringify(baseSettings, null, 2));
+    logger.info(CHANNEL, 'Base agent prompts loaded:');
+    logger.info(CHANNEL, JSON.stringify(basePrompts, null, 2));
 
     // Test loading child agent with inheritance
-    info(CHANNEL, '\nTesting child agent loading with inheritance:');
+    logger.info(CHANNEL, '\nTesting child agent loading with inheritance:');
     const childYamlContent = await loadYaml(childYamlPath);
-    info(
+    logger.info(
       CHANNEL,
       `Child YAML loaded: ${JSON.stringify(childYamlContent, null, 2)}`,
     );
@@ -153,10 +162,16 @@ async function handleTestAgentLoading(
       'child',
       context,
     );
-    info(CHANNEL, 'Child agent settings loaded (should inherit from base):');
-    info(CHANNEL, JSON.stringify(childSettings, null, 2));
-    info(CHANNEL, 'Child agent prompts loaded (should inherit from base):');
-    info(CHANNEL, JSON.stringify(childPrompts, null, 2));
+    logger.info(
+      CHANNEL,
+      'Child agent settings loaded (should inherit from base):',
+    );
+    logger.info(CHANNEL, JSON.stringify(childSettings, null, 2));
+    logger.info(
+      CHANNEL,
+      'Child agent prompts loaded (should inherit from base):',
+    );
+    logger.info(CHANNEL, JSON.stringify(childPrompts, null, 2));
 
     // Cleanup test files
     await vscode.workspace.fs.delete(vscode.Uri.file(baseYamlPath));
@@ -170,9 +185,9 @@ async function handleTestAgentLoading(
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    error(CHANNEL, `Agent loading test failed: ${errorMessage}`);
+    logger.error(CHANNEL, `Agent loading test failed: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
-      debug(CHANNEL, `Stack trace: ${err.stack}`);
+      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
     }
     vscode.window.showErrorMessage(
       `Agent loading test failed: ${errorMessage}`,
@@ -191,18 +206,18 @@ async function handleTestLoadSpecificAgent(
     });
 
     if (!agentName) {
-      debug(CHANNEL, 'No agent name provided, cancelling test');
+      logger.debug(CHANNEL, 'No agent name provided, cancelling test');
       return;
     }
 
-    info(CHANNEL, `Testing loading of agent: ${agentName}`);
+    logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
     // Get the configured root path
     const rootPath = getConfig<string>('explorer.rootPath', 'agents');
     const agentPath = path.join(context.globalStorageUri.fsPath, rootPath);
 
     // Load and display the agent configuration
-    info(CHANNEL, `Loading from path: ${agentPath}`);
+    logger.info(CHANNEL, `Loading from path: ${agentPath}`);
 
     const [settings, prompts] = await loadAgentSettingsAndPrompts(
       agentPath,
@@ -211,16 +226,19 @@ async function handleTestLoadSpecificAgent(
     );
 
     // Display the results
-    info(CHANNEL, '\nAgent settings loaded:');
-    info(CHANNEL, JSON.stringify(settings, null, 2));
-    info(CHANNEL, '\nAgent prompts loaded:');
-    info(CHANNEL, JSON.stringify(prompts, null, 2));
+    logger.info(CHANNEL, '\nAgent settings loaded:');
+    logger.info(CHANNEL, JSON.stringify(settings, null, 2));
+    logger.info(CHANNEL, '\nAgent prompts loaded:');
+    logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
 
     // If the agent inherits from another, show the inheritance chain
     const agentFile = path.join(agentPath, `${agentName}.yaml`);
     const config = (await loadYaml(agentFile, context)) as any;
     if (config?.inherits) {
-      info(CHANNEL, `\nInheritance chain: ${agentName} -> ${config.inherits}`);
+      logger.info(
+        CHANNEL,
+        `\nInheritance chain: ${agentName} -> ${config.inherits}`,
+      );
     }
 
     vscode.window.showInformationMessage(
@@ -228,9 +246,9 @@ async function handleTestLoadSpecificAgent(
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    error(CHANNEL, `Failed to load agent: ${errorMessage}`);
+    logger.error(CHANNEL, `Failed to load agent: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
-      debug(CHANNEL, `Stack trace: ${err.stack}`);
+      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
     }
     vscode.window.showErrorMessage(`Failed to load agent: ${errorMessage}`);
   }

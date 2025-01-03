@@ -6,14 +6,15 @@ import { registerPackCommands } from './commands/packCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './ViewProvider';
-import { initializeLogging } from './logger/logUtils';
 import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';
 import { registerTestCommands } from './commands/testCommands';
 
+import * as logger from './logger/logUtils';
+
 const CHANNEL = 'Commands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Register all extension commands

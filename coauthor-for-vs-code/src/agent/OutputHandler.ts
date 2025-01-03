@@ -1,12 +1,6 @@
 import * as path from 'path';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import {
-  debug,
-  info,
-  warn,
-  error,
-  initializeLogging,
-} from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import {
   applyReplacements,
@@ -26,7 +20,7 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSettings } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function getOutputFileName(
   inputFile: string,
@@ -47,7 +41,7 @@ export function getOutputFileName(
   }
 
   const outputFile = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  debug(CHANNEL, `Output file: ${outputFile}`);
+  logger.debug(CHANNEL, `Output file: ${outputFile}`);
   return outputFile;
 }
 
@@ -94,7 +88,7 @@ export class OutputHandler {
     if (latexDocument) {
       return latexDocument.trim();
     }
-    error(CHANNEL, `No ${documentTag} found in output file`);
+    logger.error(CHANNEL, `No ${documentTag} found in output file`);
     return null;
   }
 
@@ -106,7 +100,7 @@ export class OutputHandler {
   ): Promise<void> {
     if (splitAndSaveThinking) {
       const logFileThinking = `${baseName}_thinking.xml`;
-      debug(CHANNEL, `Thinking file: ${logFileThinking}`);
+      logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
       const scratchpad = root[thinkingTag];
       if (scratchpad) {
         const scratchpadContent = scratchpad.trim();
@@ -128,7 +122,7 @@ export class OutputHandler {
   }
 
   private async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
-    debug(
+    logger.debug(
       CHANNEL,
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
@@ -151,11 +145,11 @@ export class OutputHandler {
     thinkingTag: string = 'scratchpad',
     splitAndSaveThinking: boolean = false,
   ): Promise<string> {
-    debug(CHANNEL, `Splitting scratchpad output XML: ${outputFile}`);
+    logger.debug(CHANNEL, `Splitting scratchpad output XML: ${outputFile}`);
 
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
-    debug(CHANNEL, `TeX file: ${texFile}`);
+    logger.debug(CHANNEL, `TeX file: ${texFile}`);
 
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
@@ -184,7 +178,7 @@ export class OutputHandler {
         await writeFile(texFile, latexDocument);
       }
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -199,7 +193,10 @@ export class OutputHandler {
     thinkingTag: string = 'scratchpad',
     splitAndSaveThinking: boolean = false,
   ): Promise<string[]> {
-    debug(CHANNEL, `Splitting multiple scratchpad output XML: ${outputFile}`);
+    logger.debug(
+      CHANNEL,
+      `Splitting multiple scratchpad output XML: ${outputFile}`,
+    );
     const { dir, name } = path.parse(outputFile);
 
     let outputContent = await readFile(outputFile);
@@ -229,10 +226,10 @@ export class OutputHandler {
         return this.processLatexDocuments(latexDocuments, outputFile);
       }
 
-      error(CHANNEL, `No ${documentTag} found in output file.`);
+      logger.error(CHANNEL, `No ${documentTag} found in output file.`);
       return [];
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -254,7 +251,7 @@ export class OutputHandler {
 
     for (const doc of latexDocuments) {
       const source = doc.name;
-      debug(CHANNEL, `XML Source: ${source}`);
+      logger.debug(CHANNEL, `XML Source: ${source}`);
       const content = doc.content;
 
       if (source && content) {
@@ -269,9 +266,12 @@ export class OutputHandler {
         );
         await writeFile(texFile, content.trim());
         outputFiles.push(texFile);
-        debug(CHANNEL, `TeX file written: ${texFile}`);
+        logger.debug(CHANNEL, `TeX file written: ${texFile}`);
       } else {
-        error(CHANNEL, `Invalid document structure in ${latexDocuments.tag}`);
+        logger.error(
+          CHANNEL,
+          `Invalid document structure in ${latexDocuments.tag}`,
+        );
       }
     }
 
@@ -282,7 +282,7 @@ export class OutputHandler {
     filePath: string,
     documentTag: string,
   ): Promise<void> {
-    debug(CHANNEL, `Ensuring correct XML structure: ${filePath}`);
+    logger.debug(CHANNEL, `Ensuring correct XML structure: ${filePath}`);
     let content = await readFile(filePath);
 
     if (
@@ -313,12 +313,12 @@ export class OutputHandler {
   }
 
   private async handleLatexDiff(currRound: number): Promise<void> {
-    info(
+    logger.info(
       CHANNEL,
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
     );
-    debug(CHANNEL, `Base files: ${this.baseFiles}`);
-    debug(
+    logger.debug(CHANNEL, `Base files: ${this.baseFiles}`);
+    logger.debug(
       CHANNEL,
       `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
     );
@@ -359,7 +359,7 @@ export class OutputHandler {
 
       if (newContent !== content) {
         await writeFile(outputFile, newContent);
-        debug(CHANNEL, `Updated input commands in ${outputFile}`);
+        logger.debug(CHANNEL, `Updated input commands in ${outputFile}`);
       }
     }
   }

@@ -2,7 +2,7 @@ import {
   OpenAIAPIResponseUsage,
   AnthropicAPIResponseUsage,
 } from './ResponseUsage';
-import { debug } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 /**
  * State for a single round (first round or reflection round)
@@ -126,7 +126,7 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
         const cacheCreation =
           stateRound.APIUsage.cache_creation_input_tokens ?? 0;
         this.firstInputTokens += cacheRead + cacheCreation;
-        debug(
+        logger.debug(
           'AgentState',
           `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}, cache_creation: ${cacheCreation}`,
         );
