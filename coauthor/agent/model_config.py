@@ -1,6 +1,5 @@
 """Model configuration data structures."""
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -68,28 +67,3 @@ class ModelConfig:
         if self.use_openrouter and not self.openrouter_full_name:
             # Default format is "{provider}/{model_name}"
             self.openrouter_full_name = f"{self.provider.value}/{self.full_name}"
-
-    def get_api_key(self) -> str:
-        """Get API key based on provider and OpenRouter configuration."""
-        if self.use_openrouter:
-            if key := os.getenv("OPENROUTER_API_KEY"):
-                return key
-            raise ValueError("Missing OPENROUTER_API_KEY in environment")
-
-        env_key = f"{self.provider.value.upper()}_API_KEY"
-        if key := os.getenv(env_key):
-            return key
-        raise ValueError(f"Missing {env_key} in environment")
-
-    def get_base_url(self) -> str | None:
-        """Get base URL based on provider and OpenRouter configuration."""
-        if self.use_openrouter:
-            return "https://openrouter.ai/api/v1"
-
-        # Provider-specific base URLs
-        BASE_URLS = {
-            ModelProvider.GOOGLE: "https://generativelanguage.googleapis.com/v1beta/openai/",
-            ModelProvider.OPENAI: None,  # OpenAI uses default base URL
-            ModelProvider.ANTHROPIC: None,  # Anthropic uses default base URL
-        }
-        return BASE_URLS.get(self.provider)
