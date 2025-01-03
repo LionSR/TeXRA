@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
 import { extractFigurePathsFromLatex } from '../latex/extractFigure';
 import {
-  extractTikzpicturesWithLabels,
-  extractAndCompileTikzpicturesWithLabels,
-} from '../latex/tikzPicture';
+  extractTikzPicturesWithLabels,
+  extractAndCompileTikzPicturesWithLabels,
+} from '../latex/tikzpicture';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
 import * as path from 'path';
@@ -98,11 +98,11 @@ async function handleExtractTikzFigures(): Promise<void> {
     debug(CHANNEL, `Processing LaTeX file for TikZ figures: ${filePath}`);
 
     // Extract TikZ pictures with labels
-    const labeledTikzpictures = await extractTikzpicturesWithLabels(filePath);
+    const labeledTikzPictures = await extractTikzPicturesWithLabels(filePath);
 
-    if (labeledTikzpictures.length > 0) {
+    if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels
-      const items = labeledTikzpictures.map(
+      const items = labeledTikzPictures.map(
         ([label, tikzPictures]: [string, string[]]) => ({
           label: `${label} (${tikzPictures.length} TikZ picture${tikzPictures.length > 1 ? 's' : ''})`,
           description: `Figure with label: ${label}`,
@@ -169,7 +169,7 @@ async function handleCompileTikzFigures(): Promise<void> {
 
         // Extract and compile TikZ pictures
         const compiledFiles =
-          await extractAndCompileTikzpicturesWithLabels(filePath);
+          await extractAndCompileTikzPicturesWithLabels(filePath);
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files

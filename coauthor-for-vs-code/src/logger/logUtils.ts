@@ -1,7 +1,7 @@
 import * as winston from 'winston';
 import * as vscode from 'vscode';
 import { Writable } from 'stream';
-import { LogViewProvider } from '../logView/logViewProvider';
+import { LogViewProvider } from '../logView/LogViewProvider';
 
 const { combine, timestamp, printf, json } = winston.format;
 

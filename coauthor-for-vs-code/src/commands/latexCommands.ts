@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { runLatexIndent } from '../latex/latexindent';
 import { getTexCount } from '../latex/texcount';
 import { debug, error, initializeLogging } from '../logger/logUtils';
-import { fileSelectionCommands } from './fileSelection';
+import { fileSelectionCommands } from './fileSelectionCommands';
 import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeXCommands';

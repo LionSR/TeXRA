@@ -73,7 +73,7 @@ def process_pdf_input(
     max_pages = max_pages or 100
 
     try:
-        page_count = page_count_pdf(pdf_path)
+        page_count = count_pdf_pages(pdf_path)
         if page_count == 1:
             return single_page_pdf_to_png(pdf_path, quality=quality, max_size=max_size)
         else:
@@ -83,7 +83,7 @@ def process_pdf_input(
         return []
 
 
-def page_count_pdf(pdf_path: str) -> int:
+def count_pdf_pages(pdf_path: str) -> int:
     """Return the number of pages in a PDF file."""
     try:
         doc = fitz.open(pdf_path)
