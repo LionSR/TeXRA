@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 import { debug, initializeLogging } from '../logger/logUtils';
 import { ToolConfig } from '../agent/ToolConfig';
+import { AgentConfig } from '../agent/AgentConfig';
 
 const CHANNEL = 'ExecuteCommand';
 initializeLogging(CHANNEL);
@@ -14,28 +15,8 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 }
 
 export const executeCommand = {
-  execute: async (
-    agent: string,
-    model: string,
-    reflect: string,
-    // parameters
-    inputFile: string,
-    inputFiles: string[] | null,
-    referenceFile: string | null,
-    referenceFiles: string[] | null,
-    auxiliaryFile: string | null,
-    auxiliaryFiles: string[] | null,
-    figureFile: string | null,
-    figureFiles: string[] | null,
-    // instructions
-    instructions: string,
-    // tools
-    toolConfig: ToolConfig,
-    // output options
-    outputFiles: string[],
-    outputNameOverride: string,
-  ) => {
-    const terminalName = `${agent}@${model}`;
+  execute: async (config: AgentConfig) => {
+    const terminalName = `${config.agent}@${config.model}`;
     const terminal_new = vscode.window.createTerminal(terminalName);
     terminal_new.show();
 
@@ -60,21 +41,22 @@ export const executeCommand = {
         terminal_new.sendText(virtualEnvString);
       }
     }
-    let command = `coauthor run ${agent}`;
-    if (model) {
-      command += ` --model=${model}`;
+
+    let command = `coauthor run ${config.agent}`;
+    if (config.model) {
+      command += ` --model=${config.model}`;
     }
-    if (reflect !== 'default') {
-      command += ` --reflect=${reflect}`;
+    if (config.reflect) {
+      command += ` --reflect=true`;
     }
 
     // Add all file parameters
     const fileConfig = {
-      input: { file: inputFile, files: inputFiles },
-      reference: { file: referenceFile, files: referenceFiles },
-      auxiliary: { file: auxiliaryFile, files: auxiliaryFiles },
-      figure: { file: figureFile, files: figureFiles },
-      output: { files: outputFiles },
+      input: { file: config.inputFile, files: config.inputFiles },
+      reference: { file: config.referenceFile, files: config.referenceFiles },
+      auxiliary: { file: config.auxiliaryFile, files: config.auxiliaryFiles },
+      figure: { file: config.figureFile, files: config.figureFiles },
+      output: { files: config.outputFiles },
     };
 
     // Add single files
@@ -88,19 +70,19 @@ export const executeCommand = {
     });
 
     // Add output name override separately as it doesn't follow the pattern
-    if (outputNameOverride) {
-      command += ` --outputNameOverride="${outputNameOverride}"`;
+    if (config.outputNameOverride) {
+      command += ` --outputNameOverride="${config.outputNameOverride}"`;
     }
 
     // Add flags for enabled tools
-    Object.entries(toolConfig).forEach(([key, value]) => {
+    Object.entries(config.toolConfig).forEach(([key, value]) => {
       if (value) {
         command += ` --${key}`;
       }
     });
 
-    if (instructions) {
-      const escapedInstructions = instructions
+    if (config.instruction) {
+      const escapedInstructions = config.instruction
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
         .replace(/{/g, '\\{')
