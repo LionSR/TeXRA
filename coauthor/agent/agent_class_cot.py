@@ -7,7 +7,7 @@ class CoTAgent(BaseReflectionAgent):
     def get_output_file(self, curr_round: int) -> str:
         """Get the output file name for the given round."""
         base_output_file = self.agent_config.output_name_override or self.agent_config.input_file
-        file_extension = "xml" if self.use_scratchpad else self.agent_settings.output_ext
+        file_extension = "xml" if self.use_scratchpad else self.agent_settings.outputExt
         return get_output_file_name(
             base_output_file, self.agent_config.agent, self.model_handler.config.name, file_extension, curr_round, self.agent_config.edited_file
         )
@@ -22,7 +22,7 @@ class CoTAgent(BaseReflectionAgent):
     ) -> list[str]:
         """Handle the output for the given round."""
         if end_turn:
-            self.output_handler.ensure_correct_xml_structure(output_file, self.agent_settings.document_tag)
+            self.output_handler.ensure_correct_xml_structure(output_file, self.agent_settings.documentTag)
             self._process_output_files(output_file, curr_round)
 
         # Call base implementation for database updates

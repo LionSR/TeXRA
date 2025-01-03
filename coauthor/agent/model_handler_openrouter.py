@@ -27,8 +27,8 @@ class OpenRouterHandler(OpenAIHandler):
         client: OpenAI,
         messages: list[dict],
         temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
+        systemPrompt: str | None = None,
+        endTag: str | None = None,
     ) -> Any:
         """Create a response using OpenRouter's API."""
         kwargs = {
@@ -39,8 +39,8 @@ class OpenRouterHandler(OpenAIHandler):
             "extra_headers": {"X-Title": "CoA"},
         }
 
-        if end_tag:
-            kwargs["stop"] = [end_tag]
+        if endTag:
+            kwargs["stop"] = [endTag]
 
         return client.chat.completions.create(**kwargs)
 

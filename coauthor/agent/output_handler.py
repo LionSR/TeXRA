@@ -14,7 +14,7 @@ from ..utils.xml import add_cdata_to_tags, add_cdata_to_tags_multiple, filter_ta
 from .logdb import update_log_output_files
 
 
-def get_output_file_name(input_file: str, agent: str, model: str, output_ext: str, curr_round: int, edited_file: str | None = None) -> str:
+def get_output_file_name(input_file: str, agent: str, model: str, outputExt: str, curr_round: int, edited_file: str | None = None) -> str:
     """Generate output filename based on input parameters."""
     file_name, _ = os.path.splitext(input_file)
     agent_first_name_chunk = agent.split("_")[0]
@@ -25,7 +25,7 @@ def get_output_file_name(input_file: str, agent: str, model: str, output_ext: st
         edited_round = int(match.group(1)) if match else 0
         new_round += edited_round + 1
 
-    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{output_ext}"
+    output_file = f"{file_name}_{agent_first_name_chunk}_r{new_round}_{model}.{outputExt}"
     logger.debug(f"Output file: {output_file}")
     return output_file
 
@@ -49,12 +49,12 @@ class OutputHandler:
         output_content = apply_replacements(output_content, get_replacements_by_category("scratchpad_xml"))
         return output_content
 
-    def _extract_document_content(self, root: ET.Element, document_tag: str) -> str | None:
+    def _extract_document_content(self, root: ET.Element, documentTag: str) -> str | None:
         """Extract content from XML document element."""
-        latex_document = root.find(document_tag)
+        latex_document = root.find(documentTag)
         if latex_document is not None:
             return ET.tostring(latex_document, encoding="unicode", method="text").strip()
-        logger.error(f"No {document_tag} found in output file")
+        logger.error(f"No {documentTag} found in output file")
         return None
 
     def _handle_scratchpad(self, root: ET.Element, base_name: str, thinking_tag: str, split_and_save_thinking: bool) -> None:
@@ -83,7 +83,7 @@ class OutputHandler:
 
     def _process_single_output(self, output_file: str) -> str:
         """Process single output file and return processed file path."""
-        processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+        processed_output_file = self.split_scratchpad_output_xml(output_file, self.agent_settings.documentTag)
         content = read_file(processed_output_file)
         filtered_content = filter_tags_from_text(content, "monologue")
         write_file(processed_output_file, filtered_content)
@@ -91,7 +91,7 @@ class OutputHandler:
 
     def _process_multiple_outputs(self, output_file: str) -> list[str]:
         """Process file containing multiple outputs and return processed file paths."""
-        processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.document_tag)
+        processed_output_files = self.split_multiple_scratchpad_output_xml(output_file, self.agent_settings.documentTag)
         for processed_output_file in processed_output_files:
             content = read_file(processed_output_file)
             filtered_content = filter_tags_from_text(content, "monologue")
@@ -99,7 +99,7 @@ class OutputHandler:
         return processed_output_files
 
     def split_scratchpad_output_xml(
-        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
+        self, output_file: str, documentTag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
     ) -> str:
         """Split scratchpad output XML into separate files."""
         logger.debug(f"Splitting scratchpad output XML: {output_file}")
@@ -111,7 +111,7 @@ class OutputHandler:
         output_content = read_file(output_file)
         output_content = self._process_xml_content(output_content)
 
-        tags_to_wrap = [document_tag, thinking_tag]
+        tags_to_wrap = [documentTag, thinking_tag]
         output_content = add_cdata_to_tags(output_content, tags_to_wrap)
 
         root_content = f"<root>{output_content}</root>"
@@ -120,7 +120,7 @@ class OutputHandler:
             root = ET.fromstring(root_content)
             self._handle_scratchpad(root, base_name, thinking_tag, split_and_save_thinking)
 
-            latex_document = self._extract_document_content(root, document_tag)
+            latex_document = self._extract_document_content(root, documentTag)
             if latex_document:
                 write_file(tex_file, latex_document)
         except ET.ParseError as e:
@@ -129,7 +129,7 @@ class OutputHandler:
         return tex_file
 
     def split_multiple_scratchpad_output_xml(
-        self, output_file: str, document_tag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
+        self, output_file: str, documentTag: str, thinking_tag: str = "scratchpad", split_and_save_thinking: bool = False
     ) -> list[str]:
         """Split multiple scratchpad output XML into separate files."""
         logger.debug(f"Splitting multiple scratchpad output XML: {output_file}")
@@ -147,11 +147,11 @@ class OutputHandler:
             root = ET.fromstring(root_content)
             self._handle_scratchpad(root, base_name, thinking_tag, split_and_save_thinking)
 
-            latex_documents = root.find(document_tag)
+            latex_documents = root.find(documentTag)
             if latex_documents is not None:
                 return self._process_latex_documents(latex_documents, output_file)
 
-            logger.error(f"No {document_tag} found in output file.")
+            logger.error(f"No {documentTag} found in output file.")
             return []
         except ET.ParseError as e:
             logger.error(f"Failed to parse XML content: {str(e)}")
@@ -184,18 +184,18 @@ class OutputHandler:
 
         return output_files
 
-    def ensure_correct_xml_structure(self, file_path: str, document_tag: str) -> None:
+    def ensure_correct_xml_structure(self, file_path: str, documentTag: str) -> None:
         """Ensure correct XML structure in file."""
         logger.debug(f"Ensuring correct XML structure: {file_path}")
         content = read_file(file_path)
         if content.startswith("<scratchpad>") or content.startswith("<rebuttal_package>"):
-            if not content.endswith(f"</{document_tag}>"):
-                if "</{document_tag}>" not in content and f"<{document_tag}>" in content:
-                    content += f"\n</{document_tag}>"
+            if not content.endswith(f"</{documentTag}>"):
+                if "</{documentTag}>" not in content and f"<{documentTag}>" in content:
+                    content += f"\n</{documentTag}>"
                 else:
-                    content = re.sub(f"</{document_tag}>.*$", "", content, flags=re.DOTALL)
-                    if f"<{document_tag}>" in content:
-                        content += f"\n<{document_tag}>"
+                    content = re.sub(f"</{documentTag}>.*$", "", content, flags=re.DOTALL)
+                    if f"<{documentTag}>" in content:
+                        content += f"\n<{documentTag}>"
 
             content = self._process_xml_content(content)
 
