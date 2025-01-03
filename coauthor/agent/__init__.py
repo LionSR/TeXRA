@@ -15,7 +15,7 @@ from .agent_base import BaseReflectionAgent
 # Specialized agent implementations
 from .agent_class_cot import CoTAgent
 from .agent_class_direct import DirectAgent
-from .agent_class_merge import AgentMerge
+from .agent_class_merge import MergeAgent
 
 # Utility and loading functions
 from .agent_load import load_agent_settings_and_prompts
@@ -52,7 +52,7 @@ __all__ = [
     # Agent implementations
     "CoTAgent",
     "DirectAgent",
-    "AgentMerge",
+    "MergeAgent",
     # Utility and infrastructure
     "load_agent_settings_and_prompts",
     "ResponseUsageBase",
