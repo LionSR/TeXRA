@@ -10,9 +10,13 @@ from .logger import logger
 
 from .agent.agent_dataclass import AgentSettings, AgentPrompts
 from .agent.agent_config import AgentConfig
-from .agent.agent_reflect import CoTAgent, DirectAgent, BaseReflectionAgent
-from .agent.agent_merge import AgentMerge
 from .agent.agent_load import load_agent_settings_and_prompts
+
+from .agent.agent_base import BaseReflectionAgent
+from .agent.agent_cot import CoTAgent
+from .agent.agent_direct import DirectAgent
+from .agent.agent_merge import AgentMerge
+
 from .agent.model_registry import MODEL_CONFIGS
 from .agent.model_factory import ModelFactory
 
