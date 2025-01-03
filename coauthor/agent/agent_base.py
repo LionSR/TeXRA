@@ -293,6 +293,8 @@ class BaseReflectChainAgent(ABC):
             state_global.update_from_curr_round(state_round)
 
             # Early exit for repetition
+            # maybe this should be checked with the accumulated output instead of the last response...
+            # if the model starts all over again from the beginning, this leads to a bug
             if check_for_massive_repetition(tool_state.last_response, new_response):
                 logger.error(f"The new response is: {new_response}")
                 logger.error("Massive repetition detected - skipping this response")
