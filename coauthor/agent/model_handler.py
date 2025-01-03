@@ -21,6 +21,31 @@ class ModelHandler(ABC):
         self.config = config
         self.capabilities = config.capabilities
 
+    def get_api_key(self) -> str:
+        """Get API key based on provider and OpenRouter configuration."""
+        if self.config.use_openrouter:
+            if key := os.getenv("OPENROUTER_API_KEY"):
+                return key
+            raise ValueError("Missing OPENROUTER_API_KEY in environment")
+
+        env_key = f"{self.config.provider.value.upper()}_API_KEY"
+        if key := os.getenv(env_key):
+            return key
+        raise ValueError(f"Missing {env_key} in environment")
+
+    def get_base_url(self) -> str | None:
+        """Get base URL based on provider and OpenRouter configuration."""
+        if self.config.use_openrouter:
+            return "https://openrouter.ai/api/v1"
+
+        # Provider-specific base URLs
+        BASE_URLS = {
+            ModelProvider.GOOGLE: "https://generativelanguage.googleapis.com/v1beta/openai/",
+            ModelProvider.OPENAI: None,  # OpenAI uses default base URL
+            ModelProvider.ANTHROPIC: None,  # Anthropic uses default base URL
+        }
+        return BASE_URLS.get(self.config.provider)
+
     @property
     def is_openai_compatible(self) -> bool:
         """Check if this is using an OpenAI-compatible API."""

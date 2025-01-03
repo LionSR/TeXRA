@@ -29,7 +29,7 @@ class AnthropicHandler(ModelHandler):
 
     def get_client(self) -> Anthropic:
         """Get Anthropic client."""
-        return Anthropic(api_key=self.config.get_api_key())
+        return Anthropic(api_key=self.get_api_key())
 
     def create_response(
         self,
