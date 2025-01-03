@@ -16,8 +16,8 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
     def get_client(self) -> OpenAI:
         """Get OpenAI client with Google's base URL."""
         return OpenAI(
-            api_key=self.config.get_api_key(),
-            base_url=self.config.get_base_url(),
+            api_key=self.get_api_key(),
+            base_url=self.get_base_url(),
         )
 
     def compute_price(self, response_usage: Any) -> float:
@@ -59,8 +59,8 @@ class OpenRouterHandler(OpenAIHandler):
     def get_client(self) -> OpenAI:
         """Get OpenAI client with OpenRouter configuration."""
         return OpenAI(
-            api_key=self.config.get_api_key(),
-            base_url=self.config.get_base_url(),
+            api_key=self.get_api_key(),
+            base_url=self.get_base_url(),
         )
 
     def create_response(
@@ -92,8 +92,8 @@ class AnthropicviaOpenrouterHandler(OpenRouterHandler):
     def get_client(self) -> OpenAI:
         """Get OpenAI client with Google's base URL."""
         return OpenAI(
-            api_key=self.config.get_api_key(),
-            base_url=self.config.get_base_url(),
+            api_key=self.get_api_key(),
+            base_url=self.get_base_url(),
         )
 
     def update_message_content(self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState) -> None:
