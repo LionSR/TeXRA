@@ -6,13 +6,19 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from .agent.agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
-from .agent.agent_reflect import ThinkAndWrite, DirectWrite, BaseReflectChainAgent
-from .agent.agent_merge import AgentMerge
+from .logger import logger
+
+from .agent.agent_dataclass import AgentSettings, AgentPrompts
+from .agent.agent_config import AgentConfig
 from .agent.agent_load import load_agent_settings_and_prompts
+
 from .agent.model_registry import MODEL_CONFIGS
 from .agent.model_factory import ModelFactory
-from .logger import logger
+
+from .agent.agent_base import BaseReflectionAgent
+from .agent.agent_class_cot import CoTAgent
+from .agent.agent_class_direct import DirectAgent
+from .agent.agent_class_merge import AgentMerge
 
 load_dotenv()
 
@@ -42,10 +48,10 @@ def create_agent_config(**kwargs: Any) -> AgentConfig:
     return AgentConfig.from_kwargs(**kwargs)
 
 
-def get_agent_class(agent_path: str, agent: str) -> type[BaseReflectChainAgent]:
-    """Return DirectWrite or ThinkAndWrite agent class based on yaml settings."""
+def get_agent_class(agent_path: str, agent: str) -> type[BaseReflectionAgent]:
+    """Return DirectAgent or CoTAgent agent class based on yaml settings."""
     settings_dict, _ = load_agent_settings_and_prompts(agent_path, agent)
-    return DirectWrite if settings_dict.get("agent_type") == "direct" else ThinkAndWrite
+    return DirectAgent if settings_dict.get("agent_type") == "direct" else CoTAgent
 
 
 def get_agent_name(base_agent: str, output_files: list[str] | None = None) -> str:
@@ -70,12 +76,14 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_path = get_agent_path(agent_name)
     agent_config = create_agent_config(agent=agent_name, **kwargs)
 
-    model_name = agent_config.model.strip("OR")
+    model_name = agent_config.model
     if model_name not in MODEL_CONFIGS:
-        raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
+        raise ValueError(f"Model {model_name} not found in MODEL_CONFIGS")
 
     model_config = MODEL_CONFIGS[model_name]
-    model_config.use_openrouter = "OR" in agent_config.model
+    # Only override use_openrouter if it's not already True in the model config
+    if not model_config.use_openrouter:
+        model_config.use_openrouter = kwargs.get("use_openrouter", False)
 
     model_handler = ModelFactory.create_handler(model_config)
 

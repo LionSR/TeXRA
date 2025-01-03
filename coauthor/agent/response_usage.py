@@ -13,7 +13,7 @@ class ResponseUsageBase:
     response_time: float
 
     def __getitem__(self, key: str) -> Any:
-        """Enable dictionary-style access (config['input_file'])"""
+        """Enable dictionary-style access (config['cost'])"""
         return getattr(self, key)
 
     def get(self, key: str, default: Any = None) -> Any:

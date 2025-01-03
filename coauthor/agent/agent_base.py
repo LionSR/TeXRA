@@ -19,22 +19,23 @@ from ..latex import (
 )
 
 # Local imports - utilities
-from ..utils.file import read_file, write_to_output_file
+from ..utils.file import read_file, write_file, append_file
 from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
 from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
 from ..utils.xml import get_xml_format_from_files
 
 # Local imports - agent components
-from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
-from .tool_handler import ToolState
+from .tool_state import ToolState
 from .logdb import create_log_entry, update_log_statistics, update_log_output_files
 from .model_handler import ModelHandler
 from .output_handler import OutputHandler
 
 
-class BaseReflectChainAgent(ABC):
+class BaseReflectionAgent(ABC):
     """Abstract base class for reflect chain agents."""
 
     def __init__(
@@ -49,6 +50,7 @@ class BaseReflectChainAgent(ABC):
         logger.debug(f"Model config: {self.model_handler.config}\n")
         logger.debug(f"Agent config: {self.agent_config}\n")
         logger.debug(f"Agent settings: {self.agent_settings}\n")
+        logger.debug(f"Model Handler: {self.model_handler}\n")
 
         # Initialize basic attributes
         self.output_file = ["", ""]
@@ -75,7 +77,7 @@ class BaseReflectChainAgent(ABC):
         """Get basic model and instruction variables."""
         return {
             "MODEL": self.agent_config.model,
-            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.config.capabilities.likes_to_ask_for_confirmation,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.capabilities.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
             "IS_OPENAI_MODEL": self.model_handler.is_openai,
             "IS_ANTHROPIC_MODEL": self.model_handler.is_anthropic,
@@ -292,6 +294,8 @@ class BaseReflectChainAgent(ABC):
             state_global.update_from_curr_round(state_round)
 
             # Early exit for repetition
+            # maybe this should be checked with the accumulated output instead of the last response...
+            # if the model starts all over again from the beginning, this leads to a bug
             if check_for_massive_repetition(tool_state.last_response, new_response):
                 logger.error(f"The new response is: {new_response}")
                 logger.error("Massive repetition detected - skipping this response")
@@ -300,7 +304,7 @@ class BaseReflectChainAgent(ABC):
             # Chain response processing operations
             new_response = (
                 apply_replacement_regex(new_response, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
-                if self.model_handler.config.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
+                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
                 else new_response
             )
             new_response = apply_replacements(new_response, get_all_replacements()).strip()
@@ -313,7 +317,15 @@ class BaseReflectChainAgent(ABC):
 
             # Update state and file atomically
             tool_state.update_accumulated_output(tool_state.accumulated_output + best_connector + new_response)
-            file_exists = write_to_output_file(file_exists, best_connector, new_response, output_file)
+
+            # Write or append to output file
+            if not file_exists:
+                logger.debug(f"Creating new file: {output_file}")
+                write_file(output_file, new_response)
+                file_exists = True
+            else:
+                logger.debug(f"Appending to existing file: {output_file}")
+                append_file(output_file, best_connector + new_response)
 
             # Log response boundaries
             logger.info("Response preview:")
@@ -375,7 +387,7 @@ class BaseReflectChainAgent(ABC):
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
         # Handle figure extraction for vision-capable models
-        if self.model_handler.config.capabilities.supports_vision:
+        if self.model_handler.capabilities.supports_vision:
             if self.agent_config.figure_file and self.agent_config.figure_file not in tool_state.figure_files:
                 tool_state.add_figure_files([self.agent_config.figure_file])
             if self.agent_config.figure_files:
@@ -453,7 +465,7 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.tool_config.include_tex_count:
             tool_state.tex_count_stats = get_tex_count_stats(output_files)
 
-        if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
+        if self.model_handler.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
             for output_file in output_files:
                 logger.debug(f"Extracting TikZ figures from {output_file}")
                 if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):

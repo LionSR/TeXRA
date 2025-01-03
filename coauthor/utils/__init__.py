@@ -11,7 +11,6 @@ from .file import (
     delete_file,
     move_file,
     find_file,
-    write_to_output_file,
 )
 
 from .img import (
@@ -19,7 +18,7 @@ from .img import (
     single_page_pdf_to_png,
     multi_page_pdf_to_png,
     process_pdf_input,
-    page_count_pdf,
+    count_pdf_pages,
 )
 
 from .xml import (
@@ -57,14 +56,13 @@ __all__ = [
     "delete_file",
     "move_file",
     "find_file",
-    "write_to_output_file",
     "get_list_of_files",
     # Image and PDF processing
     "get_base64_encoded_image",
     "single_page_pdf_to_png",
     "multi_page_pdf_to_png",
     "process_pdf_input",
-    "page_count_pdf",
+    "count_pdf_pages",
     # XML handling
     "get_xml_format_from_file",
     "get_xml_format_from_files",

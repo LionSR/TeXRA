@@ -36,6 +36,7 @@ export const executeCommand = {
     usePrefillFromInput: boolean,
     autoConfirmation: boolean,
     printInputPrompt: boolean,
+    useOpenrouter: boolean,
     // output options
     outputFiles: string[],
     outputNameOverride: string,
@@ -109,6 +110,7 @@ export const executeCommand = {
       { condition: usePrefillFromInput, flag: '--use_prefill_from_input' },
       { condition: autoConfirmation, flag: '--auto_confirmation' },
       { condition: printInputPrompt, flag: '--print_input_prompt' },
+      { condition: useOpenrouter, flag: '--use_openrouter' },
     ];
     flagsToAdd.forEach(({ condition, flag }) => {
       if (condition) {

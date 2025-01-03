@@ -11,21 +11,19 @@ from ..agent import AgentSettings, AgentConfig
 from ..utils.file import read_file
 
 from .model_handler import ModelHandler
-from .model_config import ModelConfig
 from .response_usage import OpenAIResponseUsage
 
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 
 class OpenAIHandler(ModelHandler):
     """OpenAI-specific handlers."""
 
-    def __init__(self, config: ModelConfig):
-        super().__init__(config)
-
     def get_client(self) -> OpenAI:
         """Get OpenAI client."""
-        return OpenAI(api_key=self.config.get_api_key())
+        api_key = self.get_api_key()
+        logger.info("Using OpenAI API key.")
+        return OpenAI(api_key=api_key)
 
     def create_response(
         self,
@@ -151,7 +149,7 @@ class OpenAIHandler(ModelHandler):
     ) -> None:
         """Handle continuation for OpenAI models."""
         # Skip if model supports assistant prefill
-        if self.config.capabilities.supports_assistant_prefill:
+        if self.capabilities.supports_assistant_prefill:
             logger.debug("Skipping continuation - assistant prefill is supported")
             return
 
