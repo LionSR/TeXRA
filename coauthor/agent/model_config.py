@@ -54,16 +54,5 @@ class ModelConfig:
     openrouter_full_name: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
 
     def __post_init__(self):
-        """Initialize continue_limit and handle OpenRouter configuration."""
+        """Initialize continue_limit."""
         self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
-
-        # If model name ends with OR, it should use OpenRouter
-        # there are some duplications with the model_factory.py and execute.py
-        if self.name.endswith("OR"):
-            self.use_openrouter = True
-            self.name = self.name[:-2]  # Remove OR suffix
-
-        # Set OpenRouter model name if not provided
-        if self.use_openrouter and not self.openrouter_full_name:
-            # Default format is "{provider}/{model_name}"
-            self.openrouter_full_name = f"{self.provider.value}/{self.full_name}"

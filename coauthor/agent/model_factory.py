@@ -17,13 +17,15 @@ class ModelFactory:
     @staticmethod
     def create_handler(config: ModelConfig) -> ModelHandler:
         """Create model handler based on provider and OpenRouter configuration."""
-        # Handle OpenRouter configuration - this takes precedence over provider
-        if config.use_openrouter or config.name.endswith("OR"):
-            # Ensure use_openrouter is set if name ends with OR
+        # Handle OpenRouter configuration
+        if config.name.endswith("OR"):
             config.use_openrouter = True
-            if config.name.endswith("OR"):
-                config.name = config.name[:-2]  # Remove OR suffix
+            config.name = config.name[:-2]  # Remove OR suffix
+            # Set OpenRouter model name if not provided
+            if not config.openrouter_full_name:
+                config.openrouter_full_name = f"{config.provider.value}/{config.full_name}"
 
+            # Route to appropriate OpenRouter handler
             if config.provider == ModelProvider.ANTHROPIC:
                 return AnthropicviaOpenrouterHandler(config)
             return OpenRouterHandler(config)
