@@ -79,14 +79,14 @@ export async function extractTikzPicturesWithLabels(
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
- * @param tikzPicture TikZ picture content
+ * @param tikzpictures TikZ picture content
  * @param label Label for the figure
  * @param buildDir Build directory path
  * @param suffix Optional suffix for multiple pictures with same label
  * @returns Path to created LaTeX file
  */
 export async function createStandaloneLatexWithLabels(
-  tikzPicture: string,
+  tikzpictures: string,
   label: string,
   buildDir: string,
   suffix?: string,
@@ -94,7 +94,7 @@ export async function createStandaloneLatexWithLabels(
   try {
     // Use renderPrompt instead of nunjucks directly
     const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, {
-      tikzpicture: tikzPicture,
+      tikzpicture: tikzpictures,
     });
 
     // Create filename
@@ -136,20 +136,20 @@ export async function extractAndCompileTikzPicturesWithLabels(
 
     const compiledFiles: string[] = [];
 
-    for (const [label, tikzPictures] of labeledTikzPictures) {
+    for (const [label, tikzpicturess] of labeledTikzPictures) {
       // Generate suffixes for multiple pictures with same label
       const suffixes =
-        tikzPictures.length > 1
-          ? tikzPictures.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
+        tikzpicturess.length > 1
+          ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
           : [undefined];
 
-      for (let i = 0; i < tikzPictures.length; i++) {
-        const tikzPicture = tikzPictures[i];
+      for (let i = 0; i < tikzpicturess.length; i++) {
+        const tikzpictures = tikzpicturess[i];
         const suffix = suffixes[i];
 
         // Create and compile standalone LaTeX file
         const texFile = await createStandaloneLatexWithLabels(
-          tikzPicture,
+          tikzpictures,
           label,
           buildDir,
           suffix,

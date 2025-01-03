@@ -6,10 +6,10 @@ settings:
   prefills:
     - <scratchpad>
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "main"
-    - var_name: "PAPER"
-    - categories: ["input_file", "input_files"]
+    - varName: "PAPER"
+    - categories: ["inputFile", "inputFiles"]
 
 prompts:
   systemPrompt: |
