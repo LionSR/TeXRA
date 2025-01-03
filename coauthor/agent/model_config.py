@@ -43,5 +43,5 @@ class ModelConfig:
     baseUrl: str | None = None
     contextWindow: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
-    useOpenrouter: bool = False  # Whether to use OpenRouter for this model
+    useOpenRouter: bool = False  # Whether to use OpenRouter for this model
     openrouterFullName: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")

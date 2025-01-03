@@ -16,7 +16,7 @@ import {
 /**
  * State for a single round (first round or reflection round)
  */
-export interface AgentStateRound {
+export interface IAgentStateRound {
   currRound: number;
   continuationCount: number;
   responseTime: number;
@@ -24,7 +24,7 @@ export interface AgentStateRound {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-export class AgentStateRoundImpl implements AgentStateRound {
+export class AgentStateRound implements IAgentStateRound {
   currRound: number;
   continuationCount: number;
   responseTime: number;
@@ -43,7 +43,7 @@ export class AgentStateRoundImpl implements AgentStateRound {
    * Initialize a new AgentStateRound object
    */
   static initialize(currRound: number): AgentStateRound {
-    return new AgentStateRoundImpl(currRound);
+    return new AgentStateRound(currRound);
   }
 
   /**
@@ -87,7 +87,7 @@ export class AgentStateRoundImpl implements AgentStateRound {
 /**
  * Global state tracking metrics across all rounds
  */
-export interface AgentStateGlobal {
+export interface IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
@@ -96,7 +96,7 @@ export interface AgentStateGlobal {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-export class AgentStateGlobalImpl implements AgentStateGlobal {
+export class AgentStateGlobal implements IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
@@ -117,7 +117,7 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
    * Initialize a new AgentStateGlobal object
    */
   static initialize(): AgentStateGlobal {
-    return new AgentStateGlobalImpl();
+    return new AgentStateGlobal();
   }
 
   /**
@@ -168,10 +168,10 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
    */
   static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
     if (!stateObj) {
-      return AgentStateGlobalImpl.initialize();
+      return AgentStateGlobal.initialize();
     }
 
-    const state = new AgentStateGlobalImpl();
+    const state = new AgentStateGlobal();
     state.firstInputTokens = stateObj.firstInputTokens ?? 0;
     state.totalResponseTime = stateObj.totalResponseTime ?? 0;
     state.totalInputTokens = stateObj.totalInputTokens ?? 0;
