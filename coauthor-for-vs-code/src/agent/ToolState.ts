@@ -1,7 +1,7 @@
 /**
  * Interface defining the shape of tool-specific runtime data that doesn't need to be logged
  */
-export interface ToolState {
+export interface IToolState {
   /** Statistics about TeX document structure */
   texCountStats: string | null;
 
@@ -25,7 +25,7 @@ export interface ToolState {
 /**
  * Implementation of tool-specific runtime data that doesn't need to be logged. [Per round]
  */
-export class ToolStateImpl implements ToolState {
+export class ToolState implements IToolState {
   texCountStats: string | null;
   firstKCharsFromInput: string | null;
   lastResponse: string;
@@ -44,7 +44,7 @@ export class ToolStateImpl implements ToolState {
    * Initialize a new ToolState object
    */
   static initialize(): ToolState {
-    return new ToolStateImpl();
+    return new ToolState();
   }
 
   /**

@@ -81,9 +81,9 @@ def run_agent(agent: str, **kwargs: Any) -> None:
         raise ValueError(f"Model {model_name} not found in MODEL_CONFIGS")
 
     modelConfig = MODEL_CONFIGS[model_name]
-    # Only override useOpenrouter if it's not already True in the model config
-    if not modelConfig.useOpenrouter:
-        modelConfig.useOpenrouter = kwargs.get("useOpenrouter", False)
+    # Only override useOpenRouter if it's not already True in the model config
+    if not modelConfig.useOpenRouter:
+        modelConfig.useOpenRouter = kwargs.get("useOpenRouter", False)
 
     modelHandler = ModelFactory.create_handler(modelConfig)
 

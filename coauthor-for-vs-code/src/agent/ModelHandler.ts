@@ -46,7 +46,7 @@ export abstract class ModelHandler {
    * Get API key based on provider and OpenRouter configuration.
    */
   public getApiKey(): string {
-    if (this.config.useOpenrouter) {
+    if (this.config.useOpenRouter) {
       const key = process.env.OPENROUTER_API_KEY;
       if (!key) {
         throw new Error('Missing OPENROUTER_API_KEY in environment');
@@ -66,7 +66,7 @@ export abstract class ModelHandler {
    * Get base URL based on provider and OpenRouter configuration.
    */
   public getBaseUrl(): string | null {
-    if (this.config.useOpenrouter) {
+    if (this.config.useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
     }
 

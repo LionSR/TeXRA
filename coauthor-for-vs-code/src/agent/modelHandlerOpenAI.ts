@@ -13,7 +13,7 @@ import { readFile } from '../utils/fileUtils';
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSettings, hasEndTag } from './AgentDataclass';
-import { AgentStateRound, AgentStateRoundImpl } from './AgentState';
+import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
@@ -249,7 +249,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         'Output file exists but no end tag found - continuing from file',
       );
       toolState.updateAccumulatedOutput(fileContent);
-      const state = AgentStateRoundImpl.initialize(0);
+      const state = AgentStateRound.initialize(0);
       toolState.lastResponse = toolState.accumulatedOutput;
       this.addContinueMessage(
         messages,
