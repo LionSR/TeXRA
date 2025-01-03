@@ -3,6 +3,7 @@ import * as path from 'path';
 import { workspace } from 'vscode';
 import { debug, info, warn, error } from '../logger/logUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
+import { ToolConfig } from '../agent/ToolConfig';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -125,6 +126,17 @@ export class WebviewMessageHandler {
 
   private async handleExecute(message: any) {
     if (message.inputFile || message.outputNameOverride) {
+      const toolConfig: ToolConfig = {
+        autoExtractFigure: message.autoExtractFigure,
+        autoExtractTikzFigure: message.autoExtractTikzFigure,
+        autoExtractTikzFigureReflect: message.autoExtractTikzFigureReflect,
+        includeTexCount: message.includeTexCount,
+        usePrefillFromInput: message.usePrefillFromInput,
+        autoConfirmation: message.autoConfirmation,
+        printInputPrompt: message.printInputPrompt,
+        useOpenrouter: message.useOpenrouter,
+      };
+
       vscode.commands.executeCommand(
         'coauthor.execute',
         message.agent,
@@ -142,14 +154,7 @@ export class WebviewMessageHandler {
         // instructions
         message.instructions,
         // tools
-        message.autoExtractFigure,
-        message.autoExtractTikzFigure,
-        message.autoExtractTikzFigureReflect,
-        message.includeTexCount,
-        message.usePrefillFromInput,
-        message.autoConfirmation,
-        message.printInputPrompt,
-        message.useOpenrouter,
+        toolConfig,
         // output options
         getFilesIfNotEmpty(message.outputFiles),
         message.outputNameOverride,
