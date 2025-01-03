@@ -1,6 +1,7 @@
 # Local imports
 from .agent_base import BaseReflectChainAgent
-from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 from .output_handler import get_output_file_name

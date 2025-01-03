@@ -4,7 +4,8 @@ This module provides the core agent functionality for academic writing assistanc
 """
 
 # Core dataclasses and configurations
-from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 
