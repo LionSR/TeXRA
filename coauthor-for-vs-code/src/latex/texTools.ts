@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { executeCommand } from '../utils/execUtils';
-import { info, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Compile a LaTeX file to PDF
@@ -22,12 +22,12 @@ export async function compileLatexToPdf(texFile: string): Promise<boolean> {
 
     const result = await executeCommand(command, { channel: CHANNEL });
     if (result.success) {
-      info(CHANNEL, `Successfully compiled ${texFile}`);
+      logger.info(CHANNEL, `Successfully compiled ${texFile}`);
       return true;
     }
     return false;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
     );

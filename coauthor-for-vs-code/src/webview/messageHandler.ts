@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { workspace } from 'vscode';
-import { debug, info, warn, error } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import { ToolConfig } from '../agent/ToolConfig';
 import { AgentConfig } from '../agent/AgentConfig';
@@ -21,7 +21,7 @@ export class WebviewMessageHandler {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async handleMessage(message: any, webviewView: vscode.WebviewView) {
-    debug(CHANNEL, `Received message: ${message.command}`);
+    logger.debug(CHANNEL, `Received message: ${message.command}`);
 
     switch (message.command) {
       case 'showInformationMessage':
@@ -105,7 +105,7 @@ export class WebviewMessageHandler {
 
   private async handleInfoMessage(message: any) {
     vscode.window.showInformationMessage(message.text);
-    debug(CHANNEL, `Information message: ${message.text}`);
+    logger.debug(CHANNEL, `Information message: ${message.text}`);
   }
 
   private handleThemeRequest(webviewView: vscode.WebviewView) {
@@ -179,13 +179,13 @@ export class WebviewMessageHandler {
     webviewView: vscode.WebviewView,
   ) {
     const singleFileType = message.command.replace('select', '');
-    debug(CHANNEL, `Selecting ${singleFileType}`);
+    logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
     const file = await vscode.commands.executeCommand<string>(
       `coauthor.${message.command}`,
     );
     if (file) {
-      debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
+      logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
       webviewView.webview.postMessage({
         command: `${uncapitalize(singleFileType)}Selected`,
         filePath: file,
@@ -347,7 +347,7 @@ export class WebviewMessageHandler {
       ? message.outputFiles.join(', ')
       : '';
 
-    info(
+    logger.info(
       CHANNEL,
       `${capitalize(operation)} multiple files: ${message.inputFile}, ${outputFilesStr}`,
     );
@@ -497,7 +497,7 @@ export class WebviewMessageHandler {
 
   private async updateBaseFileSelect(webviewView: vscode.WebviewView) {
     const baseFiles = await listInputFiles();
-    debug(CHANNEL, `Updating base files: ${baseFiles.join(', ')}`);
+    logger.debug(CHANNEL, `Updating base files: ${baseFiles.join(', ')}`);
     webviewView.webview.postMessage({
       command: 'setBaseFile',
       files: baseFiles,
@@ -507,7 +507,7 @@ export class WebviewMessageHandler {
   private async getOpenedFiles(): Promise<string[]> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
-      warn(CHANNEL, 'No workspace path found for opened files');
+      logger.warn(CHANNEL, 'No workspace path found for opened files');
       return [];
     }
 
@@ -520,7 +520,7 @@ export class WebviewMessageHandler {
       )
       .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
 
-    debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
+    logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
   }
 
@@ -529,7 +529,7 @@ export class WebviewMessageHandler {
   ): Promise<string[] | null> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
-      error(CHANNEL, 'No workspace folder open');
+      logger.error(CHANNEL, 'No workspace folder open');
       vscode.window.showErrorMessage('No workspace folder open');
       return null;
     }
@@ -555,13 +555,16 @@ export class WebviewMessageHandler {
       if (!fileUris || fileUris.length === 0) return null;
 
       const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
-      info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
+      logger.info(
+        CHANNEL,
+        `Selected output files: ${relativePaths.join(', ')}`,
+      );
       vscode.window.showInformationMessage(
         `Selected output files: ${relativePaths.join(', ')}`,
       );
       return relativePaths;
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
       );
