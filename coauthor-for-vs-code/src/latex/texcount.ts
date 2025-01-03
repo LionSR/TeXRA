@@ -72,3 +72,17 @@ export async function getTexCount(
     return null;
   }
 }
+
+/**
+ * Run texcount on LaTeX files and return formatted statistics with XML-style tags
+ * @param filePaths Single file path or array of file paths
+ * @returns Promise<string | null> String containing formatted texcount statistics with XML tags, or null if an error occurred
+ */
+export async function getTexCountStats(
+  filePaths: string | string[],
+): Promise<string | null> {
+  const texCountStats = await getTexCount(filePaths);
+  return texCountStats
+    ? `Tex Count Statistics:<texcount>\n${texCountStats}\n</texcount>\n\n`
+    : null;
+}

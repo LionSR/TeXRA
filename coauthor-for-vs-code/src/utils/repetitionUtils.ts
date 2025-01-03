@@ -17,7 +17,7 @@ export interface RepetitionResult {
 /**
  * Checks for massive repetition using diff-match-patch
  */
-export function checkRepetitionDMP(
+export function checkForMassiveRepetition(
   lastResponse: string,
   newResponse: string,
 ): RepetitionResult {
