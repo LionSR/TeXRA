@@ -1,5 +1,5 @@
 # Local imports
-from .agent_base import BaseReflectChainAgent
+from .agent_base import BaseReflectionAgent
 from .agent_config import AgentConfig
 from .agent_dataclass import AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
@@ -7,7 +7,7 @@ from .model_handler import ModelHandler
 from .output_handler import get_output_file_name
 
 
-class ThinkAndWrite(BaseReflectChainAgent):
+class CoTAgent(BaseReflectionAgent):
     def __init__(
         self,
         # Core handlers/configs (required)
@@ -45,7 +45,7 @@ class ThinkAndWrite(BaseReflectChainAgent):
         return super().handle_output(state_round, state_global, output_file, end_turn, curr_round)
 
 
-class DirectWrite(BaseReflectChainAgent):
+class DirectAgent(BaseReflectionAgent):
     def __init__(
         self,
         # Core handlers/configs (required)
