@@ -151,7 +151,7 @@ class OpenAIHandler(ModelHandler):
     ) -> None:
         """Handle continuation for OpenAI models."""
         # Skip if model supports assistant prefill
-        if self.config.capabilities.supports_assistant_prefill:
+        if self.capabilities.supports_assistant_prefill:
             logger.debug("Skipping continuation - assistant prefill is supported")
             return
 
