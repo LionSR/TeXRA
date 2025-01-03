@@ -455,7 +455,11 @@
       },
       {
         "command": "coauthor.testConnection",
-        "title": "Coauthor: Test Text Connection Methods"
+        "title": "CoAuthor: Test Text Connection Methods"
+      },
+      {
+        "command": "coauthor.testAgentLoading",
+        "title": "CoAuthor: Test Agent Loading"
       }
     ],
     "viewsContainers": {
