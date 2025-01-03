@@ -28,7 +28,7 @@ from ..utils.xml import get_xml_format_from_files
 # Local imports - agent components
 from .agent_dataclass import AgentConfig, AgentSettings, AgentPrompts
 from .agent_state import AgentStateRound, AgentStateGlobal
-from .tool_handler import ToolState
+from .tool_state import ToolState
 from .logdb import create_log_entry, update_log_statistics, update_log_output_files
 from .model_handler import ModelHandler
 from .output_handler import OutputHandler

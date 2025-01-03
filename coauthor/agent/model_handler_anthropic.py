@@ -18,7 +18,7 @@ from .model_handler import ModelHandler
 from .model_config import ModelConfig
 from .response_usage import AnthropicResponseUsage
 
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 
 class AnthropicHandler(ModelHandler):

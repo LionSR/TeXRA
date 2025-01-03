@@ -4,7 +4,7 @@ from typing import Any
 from openai import OpenAI
 
 from .model_handler_openai import OpenAIHandler
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 from ..logger import logger
 

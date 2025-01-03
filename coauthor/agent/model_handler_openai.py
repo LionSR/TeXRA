@@ -13,7 +13,7 @@ from ..utils.file import read_file
 from .model_handler import ModelHandler
 from .response_usage import OpenAIResponseUsage
 
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 
 class OpenAIHandler(ModelHandler):
