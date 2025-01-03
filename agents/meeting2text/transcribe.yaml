@@ -10,13 +10,13 @@ settings:
   requiredFiles:
     EXAMPLE_TRANSCRIPT: example_transcript.txt
     EXAMPLE_EDITED_TRANSCRIPT: example_edited.txt
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "example"
-      var_name: "EXAMPLE_TRANSCRIPT"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_TRANSCRIPT"
+      categories: ["referenceFile", "referenceFiles"]
     - pattern: "edited"
-      var_name: "EXAMPLE_EDITED_TRANSCRIPT"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_EDITED_TRANSCRIPT"
+      categories: ["referenceFile", "referenceFiles"]
 
 prompts:
   systemPrompt: |

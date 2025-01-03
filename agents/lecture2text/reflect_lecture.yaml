@@ -10,10 +10,10 @@ settings:
   requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "converted"
-      var_name: "CONVERTED_TEX"
-      categories: ["input_file", "input_files"]
+      varName: "CONVERTED_TEX"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
   systemPrompt: |

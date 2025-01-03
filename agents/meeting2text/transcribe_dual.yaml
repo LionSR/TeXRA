@@ -9,13 +9,13 @@ settings:
       <edited_transcript>
   requiredFiles:
     OTTER_INPUT_FILE: otter_transcript.txt
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "otter"
-      var_name: "OTTER_INPUT"
-      categories: ["input_file", "input_files"]
+      varName: "OTTER_INPUT"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "whisper"
-      var_name: "WHISPER_INPUT"
-      categories: ["input_file", "input_files"]
+      varName: "WHISPER_INPUT"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
   systemPrompt: |

@@ -5,13 +5,13 @@ settings:
   requiredFiles:
     - DOCUMENT_CLS: lecture.cls
     - COMMAND: command.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "example_paper"
-      var_name: "EXAMPLE_PAPER"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_PAPER"
+      categories: ["referenceFile", "referenceFiles"]
     - pattern: "example_note"
-      var_name: "EXAMPLE_NOTE"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_NOTE"
+      categories: ["referenceFile", "referenceFiles"]
 
 prompts:
   userPrefix: |

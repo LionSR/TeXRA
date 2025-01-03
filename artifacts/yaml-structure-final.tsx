@@ -171,15 +171,15 @@ export default function YamlStructureVisualization() {
         <div className="mt-4">
           <h4 className="font-medium mb-2">File Inputs</h4>
           <FileInput
-            name="input_file/input_files"
+            name="inputFile/inputFiles"
             description="Main content file(s)"
           />
           <FileInput
-            name="reference_file/reference_files"
+            name="referenceFile/referenceFiles"
             description="Reference materials"
           />
           <FileInput
-            name="auxiliary_file/auxiliary_files"
+            name="auxiliaryFile/auxiliaryFiles"
             description="Support files"
           />
         </div>
@@ -253,7 +253,7 @@ export default function YamlStructureVisualization() {
             <FileMapping
               title="Pattern Matched Files"
               example={{
-                raw: 'pattern: "main"\nvar_name: "MAIN"\ncategories: ["input_file"]',
+                raw: 'pattern: "main"\nvarName: "MAIN"\ncategories: ["inputFile"]',
                 wrapped:
                   '<document name="paper.tex">\n  \\documentclass{article}\n  % Main paper content\n</document>',
               }}

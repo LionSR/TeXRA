@@ -187,7 +187,7 @@ async function handleTestLoadSpecificAgent(
     // Get agent name from user
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter the agent name to load (e.g., "polish", "corect")',
-      placeHolder: 'agent_name',
+      placeHolder: 'agentName',
     });
 
     if (!agentName) {

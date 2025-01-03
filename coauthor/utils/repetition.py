@@ -3,12 +3,12 @@ import difflib
 from ..logger import logger
 
 
-def check_for_massive_repetition(last_response: str, new_response: str) -> bool:
+def check_for_massive_repetition(lastResponse: str, newResponse: str) -> bool:
     """Check if there is significant text repetition between responses."""
-    sequence_matcher = difflib.SequenceMatcher(None, last_response, new_response)
+    sequence_matcher = difflib.SequenceMatcher(None, lastResponse, newResponse)
     repetition_ratio = sequence_matcher.ratio()
-    longest_match = sequence_matcher.find_longest_match(0, len(last_response), 0, len(new_response))
-    longest_matching_substring = last_response[longest_match.a : longest_match.a + longest_match.size]
+    longest_match = sequence_matcher.find_longest_match(0, len(lastResponse), 0, len(newResponse))
+    longest_matching_substring = lastResponse[longest_match.a : longest_match.a + longest_match.size]
     massive_repetition_detected = len(longest_matching_substring) > 1000
 
     if massive_repetition_detected:

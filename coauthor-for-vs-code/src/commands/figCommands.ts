@@ -103,10 +103,10 @@ async function handleExtractTikzFigures(): Promise<void> {
     if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels
       const items = labeledTikzPictures.map(
-        ([label, tikzPictures]: [string, string[]]) => ({
-          label: `${label} (${tikzPictures.length} TikZ picture${tikzPictures.length > 1 ? 's' : ''})`,
+        ([label, tikzpicturess]: [string, string[]]) => ({
+          label: `${label} (${tikzpicturess.length} TikZ picture${tikzpicturess.length > 1 ? 's' : ''})`,
           description: `Figure with label: ${label}`,
-          detail: tikzPictures[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
+          detail: tikzpicturess[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
         }),
       );
 
