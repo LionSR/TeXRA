@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WebviewContentProvider } from '../webview/webviewContentProvider';
+import { WebviewContentProvider } from '../webview/WebviewContentProvider';
 
 interface ColoredLogMessage {
   message: string;
