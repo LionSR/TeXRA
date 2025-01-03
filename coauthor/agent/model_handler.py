@@ -11,7 +11,7 @@ from ..agent.agent_state import AgentStateRound, AgentStateGlobal
 from ..utils.img import get_base64_encoded_image, count_pdf_pages, process_pdf_input
 
 from .model_config import ModelConfig, ModelProvider
-from .tool_handler import ToolState
+from .tool_state import ToolState
 
 
 # Default continuation limits
