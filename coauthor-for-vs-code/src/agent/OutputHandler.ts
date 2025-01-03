@@ -55,12 +55,12 @@ export function getOutputFileName(
 }
 
 export class OutputHandler {
-  private agentSettings: AgentSettings;
-  private agentConfig: AgentConfig;
-  private modelHandler: any;
-  private logId: number;
-  private outputFiles: { [key: number]: string[] };
-  private baseFiles: string[];
+  public agentSettings: AgentSettings;
+  public agentConfig: AgentConfig;
+  public modelHandler: any;
+  public logId: number;
+  public outputFiles: { [key: number]: string[] };
+  public baseFiles: string[];
 
   constructor(
     agentSettings: AgentSettings,
@@ -76,7 +76,7 @@ export class OutputHandler {
     this.baseFiles = [];
   }
 
-  private async processXmlContent(outputContent: string): Promise<string> {
+  public async processXmlContent(outputContent: string): Promise<string> {
     outputContent = filterTagsFromText(outputContent, 'monologue');
     outputContent = applyReplacements(
       outputContent,
@@ -89,10 +89,7 @@ export class OutputHandler {
     return outputContent;
   }
 
-  private extractDocumentContent(
-    root: any,
-    documentTag: string,
-  ): string | null {
+  public extractDocumentContent(root: any, documentTag: string): string | null {
     const latexDocument = root[documentTag];
     if (latexDocument) {
       return latexDocument.trim();
@@ -101,7 +98,7 @@ export class OutputHandler {
     return null;
   }
 
-  private async handleScratchpad(
+  public async handleScratchpad(
     root: any,
     baseName: string,
     thinkingTag: string,
@@ -121,7 +118,7 @@ export class OutputHandler {
     }
   }
 
-  private async handleSingleOutput(outputFile: string): Promise<void> {
+  public async handleSingleOutput(outputFile: string): Promise<void> {
     if (
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
@@ -130,7 +127,7 @@ export class OutputHandler {
     }
   }
 
-  private async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
+  public async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
     logger.debug(
       CHANNEL,
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
@@ -246,7 +243,7 @@ export class OutputHandler {
     }
   }
 
-  private async processLatexDocuments(
+  public async processLatexDocuments(
     latexDocuments: any,
     outputFile: string,
   ): Promise<string[]> {
@@ -321,7 +318,7 @@ export class OutputHandler {
     await writeFile(filePath, content);
   }
 
-  private async handleLatexDiff(currRound: number): Promise<void> {
+  public async handleLatexDiff(currRound: number): Promise<void> {
     logger.info(
       CHANNEL,
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
@@ -349,7 +346,7 @@ export class OutputHandler {
     }
   }
 
-  private async replaceInputCommands(
+  public async replaceInputCommands(
     baseFiles: string[],
     outputFiles: string[],
   ): Promise<void> {
