@@ -1,5 +1,10 @@
+// Standard library imports
 import * as path from 'path';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile, fileExists } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeX';

@@ -1,12 +1,19 @@
+// Standard library imports
+import { exec } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { promisify } from 'util';
+
+// Third-party imports
 import { PDFDocument } from 'pdf-lib';
 import { fromPath } from 'pdf2pic';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
-import * as path from 'path';
-import * as fs from 'fs';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-import * as os from 'os';
 
 const execAsync = promisify(exec);
 

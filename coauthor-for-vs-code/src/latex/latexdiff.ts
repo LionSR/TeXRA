@@ -1,8 +1,17 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
-import * as logger from '../logger/logUtils';
+
+// Local imports - latex utils
 import { runLatexIndent } from './latexindent';
 
 const CHANNEL = 'LaTeX';

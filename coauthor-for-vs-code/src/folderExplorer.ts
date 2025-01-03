@@ -1,6 +1,6 @@
 // folderExplorer.ts
-import * as vscode from 'vscode';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
 import { getConfig } from './frontend-utils/commonUtils';
 

@@ -1,12 +1,21 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   deleteFile,
   readDirectory,
   fileExists,
   findFileInBuild,
 } from '../utils/fileUtils';
+
+// Local imports - housekeeping
 import {
   EXCLUDED_DIRS,
   TEMP_EXTENSIONS,
