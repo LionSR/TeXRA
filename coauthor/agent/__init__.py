@@ -13,7 +13,8 @@ from .tool_state import ToolState
 from .agent_base import BaseReflectionAgent
 
 # Specialized agent implementations
-from .agent_reflect import CoTAgent, DirectAgent
+from .agent_cot import CoTAgent
+from .agent_direct import DirectAgent
 from .agent_merge import AgentMerge
 
 # Utility and loading functions
