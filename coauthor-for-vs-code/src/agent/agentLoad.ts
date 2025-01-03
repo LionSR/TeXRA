@@ -1,9 +1,13 @@
-import * as nunjucks from 'nunjucks';
 import { debug, error, initializeLogging } from '../logger/logUtils';
 import * as yaml from 'yaml';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { getConfig } from '../frontend-utils/commonUtils';
+import {
+  AgentSettings,
+  AgentPrompts,
+  validateAgentSettings,
+} from './AgentDataclass';
 
 const CHANNEL = 'Agent';
 initializeLogging(CHANNEL);
@@ -107,6 +111,63 @@ export function mergeDicts(
     error(
       CHANNEL,
       `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * Load agent settings and prompts from YAML file with inheritance support
+ * @param agentPath Path to the agent directory
+ * @param agentName Name of the agent
+ * @param context Extension context (required for relative paths)
+ * @returns Promise<[AgentSettings, AgentPrompts]> Tuple of settings and prompts
+ */
+export async function loadAgentSettingsAndPrompts(
+  agentPath: string,
+  agentName: string,
+  context?: vscode.ExtensionContext,
+): Promise<[AgentSettings, AgentPrompts]> {
+  try {
+    const agentFile = path.join(agentPath, `${agentName}.yaml`);
+    const config = (await loadYaml(agentFile, context)) as any;
+    const parent = config?.inherits;
+
+    let settings: AgentSettings;
+    let prompts: AgentPrompts;
+
+    if (parent) {
+      // Load parent settings and prompts recursively
+      const [parentSettings, parentPrompts] = await loadAgentSettingsAndPrompts(
+        agentPath,
+        parent,
+        context,
+      );
+
+      // Get current settings and prompts, defaulting to empty objects
+      const agentSettings = (config?.settings || {}) as Partial<AgentSettings>;
+      const agentPrompts = (config?.prompts || {}) as Partial<AgentPrompts>;
+
+      // Merge with parent settings and prompts
+      settings = mergeDicts(parentSettings, agentSettings) as AgentSettings;
+      prompts = mergeDicts(parentPrompts, agentPrompts) as AgentPrompts;
+    } else {
+      // No inheritance, use settings and prompts directly
+      settings = (config?.settings || {}) as AgentSettings;
+      prompts = (config?.prompts || {}) as AgentPrompts;
+
+      // Initialize prefills if not present
+      settings.prefills = settings.prefills || [];
+    }
+
+    // Validate settings
+    validateAgentSettings(settings);
+
+    return [settings, prompts];
+  } catch (err) {
+    error(
+      CHANNEL,
+      `Error loading agent settings and prompts: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }
