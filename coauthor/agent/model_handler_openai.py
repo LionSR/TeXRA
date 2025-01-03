@@ -11,7 +11,6 @@ from ..agent import AgentSettings, AgentConfig
 from ..utils.file import read_file
 
 from .model_handler import ModelHandler
-from .model_config import ModelConfig
 from .response_usage import OpenAIResponseUsage
 
 from .tool_handler import ToolState
@@ -19,9 +18,6 @@ from .tool_handler import ToolState
 
 class OpenAIHandler(ModelHandler):
     """OpenAI-specific handlers."""
-
-    def __init__(self, config: ModelConfig):
-        super().__init__(config)
 
     def get_client(self) -> OpenAI:
         """Get OpenAI client."""
