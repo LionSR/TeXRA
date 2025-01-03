@@ -58,6 +58,6 @@ export interface ModelConfig {
   baseUrl?: string; // Optional base URL
   contextWindow: number;
   capabilities: ModelCapabilities;
-  useOpenrouter: boolean; // Whether to use OpenRouter for this model
+  useOpenRouter: boolean; // Whether to use OpenRouter for this model
   openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
 }
