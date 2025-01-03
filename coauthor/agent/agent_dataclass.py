@@ -14,8 +14,8 @@ class AgentSettings:
     endTag: str = "\\end{document}"
     requiredFiles: dict[str, str] = field(default_factory=dict)  # File configurations
     requiredFilesInternal: dict[str, str] = field(default_factory=dict)
-    default_output_files: list[str] = field(default_factory=list)
-    file_patterns_contain: list[dict[str, str]] = field(default_factory=list)
+    defaultOutputFiles: list[str] = field(default_factory=list)
+    filePatternsContain: list[dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self):
         """Validate settings after initialization."""
@@ -43,8 +43,8 @@ class AgentSettings:
             # File configurations
             requiredFiles=settings_dict.get("requiredFiles", {}),
             requiredFilesInternal=settings_dict.get("requiredFilesInternal", {}),
-            default_output_files=settings_dict.get("default_output_files", []),
-            file_patterns_contain=settings_dict.get("file_patterns_contain", []),
+            defaultOutputFiles=settings_dict.get("defaultOutputFiles", []),
+            filePatternsContain=settings_dict.get("filePatternsContain", []),
         )
         return settings
 
@@ -73,5 +73,5 @@ class AgentPrompts:
         )
 
     def __getitem__(self, key: str) -> Any:
-        """Enable dictionary-style access (config['input_file'])"""
+        """Enable dictionary-style access (config['inputFile'])"""
         return getattr(self, key)

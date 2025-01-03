@@ -80,10 +80,10 @@ export const executeCommand = {
         command += ` ${flag}="${file}"`;
       }
     };
-    addSelectedFileToCommand(inputFile, '--input_file');
-    addSelectedFileToCommand(referenceFile, '--reference_file');
-    addSelectedFileToCommand(auxiliaryFile, '--auxiliary_file');
-    addSelectedFileToCommand(figureFile, '--figure_file');
+    addSelectedFileToCommand(inputFile, '--inputFile');
+    addSelectedFileToCommand(referenceFile, '--referenceFile');
+    addSelectedFileToCommand(auxiliaryFile, '--auxiliaryFile');
+    addSelectedFileToCommand(figureFile, '--figureFile');
 
     // Add multiple files if they exist
     const addFilesToCommand = (files: string[] | null, flag: string) => {
@@ -91,26 +91,26 @@ export const executeCommand = {
         command += ` ${flag}="${files.join(',')}"`;
       }
     };
-    addFilesToCommand(ensureArray(inputFiles), '--input_files');
-    addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliary_files');
-    addFilesToCommand(ensureArray(referenceFiles), '--reference_files');
-    addFilesToCommand(ensureArray(figureFiles), '--figure_files');
-    addFilesToCommand(ensureArray(outputFiles), '--output_files');
+    addFilesToCommand(ensureArray(inputFiles), '--inputFiles');
+    addFilesToCommand(ensureArray(auxiliaryFiles), '--auxiliaryFiles');
+    addFilesToCommand(ensureArray(referenceFiles), '--referenceFiles');
+    addFilesToCommand(ensureArray(figureFiles), '--figureFiles');
+    addFilesToCommand(ensureArray(outputFiles), '--outputFiles');
 
-    addSelectedFileToCommand(outputNameOverride, '--output_name_override');
+    addSelectedFileToCommand(outputNameOverride, '--outputNameOverride');
 
     const flagsToAdd = [
-      { condition: autoExtractFigure, flag: '--auto_extract_figure' },
-      { condition: autoExtractTikzFigure, flag: '--auto_extract_tikz_figure' },
+      { condition: autoExtractFigure, flag: '--autoExtractFigure' },
+      { condition: autoExtractTikzFigure, flag: '--autoExtractTikzFigure' },
       {
         condition: autoExtractTikzFigureReflect,
-        flag: '--auto_extract_tikz_figure_reflect',
+        flag: '--autoExtractTikzFigureReflect',
       },
-      { condition: includeTexCount, flag: '--include_tex_count' },
-      { condition: usePrefillFromInput, flag: '--use_prefill_from_input' },
-      { condition: autoConfirmation, flag: '--auto_confirmation' },
-      { condition: printInputPrompt, flag: '--print_input_prompt' },
-      { condition: useOpenrouter, flag: '--use_openrouter' },
+      { condition: includeTexCount, flag: '--includeTexCount' },
+      { condition: usePrefillFromInput, flag: '--usePrefillFromInput' },
+      { condition: autoConfirmation, flag: '--autoConfirmation' },
+      { condition: printInputPrompt, flag: '--printInputPrompt' },
+      { condition: useOpenrouter, flag: '--useOpenrouter' },
     ];
     flagsToAdd.forEach(({ condition, flag }) => {
       if (condition) {

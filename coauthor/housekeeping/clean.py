@@ -5,15 +5,15 @@ from ..logger import logger
 from ..utils import delete_file
 
 from .constants import EXCLUDED_DIRS, TEMP_EXTENSIONS, PACK_EXTENSIONS, MODELS
-from .utils import get_agent_first_name_chunk, get_file_patterns
+from .utils import getAgent_first_name_chunk, get_file_patterns
 
 
-def run_clean_single(model: str, input_file: str, agent: str) -> None:
+def run_clean_single(model: str, inputFile: str, agent: str) -> None:
     """Clean temporary and packed files for a single LaTeX file based on model and agent."""
-    base_name = os.path.splitext(os.path.basename(input_file))[0]
-    input_dir = os.path.dirname(input_file)
+    base_name = os.path.splitext(os.path.basename(inputFile))[0]
+    input_dir = os.path.dirname(inputFile)
 
-    agent_first_name_chunk = get_agent_first_name_chunk(agent)
+    agent_first_name_chunk = getAgent_first_name_chunk(agent)
     file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
     file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_r0_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_r1_{model}_thinking"])
 
@@ -26,13 +26,13 @@ def run_clean_single(model: str, input_file: str, agent: str) -> None:
                 if os.path.exists(file_path):
                     delete_file(file_path)
 
-    logger.info(f"Cleanup finished: {input_file}.")
+    logger.info(f"Cleanup finished: {inputFile}.")
 
 
-def run_clean_multiple(model: str, input_file: str, input_files: list[str], agent: str) -> None:
+def run_clean_multiple(model: str, inputFile: str, inputFiles: list[str], agent: str) -> None:
     """Clean temporary and packed files for multiple LaTeX files based on model and agent."""
-    run_clean_single(model, input_file, agent)
-    for f in input_files:
+    run_clean_single(model, inputFile, agent)
+    for f in inputFiles:
         run_clean_single(model, f, agent)
     logger.info("Multi-file cleanup finished")
 

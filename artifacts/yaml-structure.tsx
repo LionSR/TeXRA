@@ -129,19 +129,19 @@ export default function YamlStructureVisualization() {
         <div className="mt-4">
           <h4 className="font-medium mb-2">File Pattern Matching</h4>
           <YamlField
-            name="file_patterns_contain"
+            name="filePatternsContain"
             value="List[Dict[str, str]]"
             description="Define patterns to match file types and assign variables"
           />
 
           <ExampleBlock title="Pattern Configuration">
-            {`file_patterns_contain:
+            {`filePatternsContain:
   - pattern: "command"
-    var_name: "COMMANDS"
-    categories: ["auxiliary_file", "auxiliary_files"]
+    varName: "COMMANDS"
+    categories: ["auxiliaryFile", "auxiliaryFiles"]
   - pattern: "template"
-    var_name: "TEMPLATE" 
-    categories: ["reference_file", "reference_files"]`}
+    varName: "TEMPLATE" 
+    categories: ["referenceFile", "referenceFiles"]`}
           </ExampleBlock>
         </div>
       </YamlSection>
@@ -207,9 +207,9 @@ export default function YamlStructureVisualization() {
               description="Initial content for output generations"
             />
             <YamlField
-              name="default_output_files"
+              name="defaultOutputFiles"
               value="List[str]"
-              description="Default files when no output_files specified"
+              description="Default files when no outputFiles specified"
             />
           </div>
 

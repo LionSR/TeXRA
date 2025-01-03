@@ -23,7 +23,7 @@ async function handleMerge(
   if (editedFile && (baseFile || inputFile)) {
     const fileToUse = baseFile || inputFile;
     terminal_new.sendText(
-      `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model}`,
+      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
     );
   } else {
     vscode.window.showErrorMessage(

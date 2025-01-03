@@ -7,6 +7,8 @@ import {
   AgentSettings,
   AgentPrompts,
   validateAgentSettings,
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
@@ -153,33 +155,12 @@ export async function loadAgentSettingsAndPrompts(
       prompts = mergeDicts(parentPrompts, agentPrompts) as AgentPrompts;
     } else {
       // No inheritance, use settings and prompts directly with defaults
-      const defaultSettings: AgentSettings = {
-        agentType: 'CoT',
-        documentTag: 'document',
-        temperature: 0.0,
-        prefills: [],
-        outputExt: 'txt',
-        endTag: '\\end{document}',
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-      };
-
-      const defaultPrompts: AgentPrompts = {
-        systemPrompt: '',
-        userPrefix: '',
-        userRequest: '',
-        userReflect: '',
-      };
-
-      // Merge defaults with provided settings
       settings = mergeDicts(
-        defaultSettings,
+        DEFAULT_AGENT_SETTINGS,
         (config?.settings || {}) as Partial<AgentSettings>,
       ) as AgentSettings;
       prompts = mergeDicts(
-        defaultPrompts,
+        DEFAULT_AGENT_PROMPTS,
         (config?.prompts || {}) as Partial<AgentPrompts>,
       ) as AgentPrompts;
     }
