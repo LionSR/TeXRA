@@ -38,7 +38,7 @@ const TIKZ_TEMPLATE = `
  * @param latexFile Path to the LaTeX file
  * @returns Array of [label, tikzpictures] tuples
  */
-export async function extractTikzpicturesWithLabels(
+export async function extractTikzPicturesWithLabels(
   latexFile: string,
 ): Promise<[string, string[]][]> {
   try {
@@ -49,7 +49,7 @@ export async function extractTikzpicturesWithLabels(
       /\\begin{figure}.*?\\label\{(.*?)\}.*?\\end{figure}/gs;
     const tikzPattern = /\\begin{tikzpicture}.*?\\end{tikzpicture}/gs;
 
-    const labeledTikzpictures: [string, string[]][] = [];
+    const labeledTikzPictures: [string, string[]][] = [];
 
     let figureMatch;
     while ((figureMatch = figurePattern.exec(content)) !== null) {
@@ -62,12 +62,12 @@ export async function extractTikzpicturesWithLabels(
       );
 
       if (tikzMatches.length > 0) {
-        labeledTikzpictures.push([label, tikzMatches]);
+        labeledTikzPictures.push([label, tikzMatches]);
         debug(CHANNEL, `Found TikZ picture with label: ${label}`);
       }
     }
 
-    return labeledTikzpictures;
+    return labeledTikzPictures;
   } catch (err) {
     error(
       CHANNEL,
@@ -79,14 +79,14 @@ export async function extractTikzpicturesWithLabels(
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
- * @param tikzpicture TikZ picture content
+ * @param tikzPicture TikZ picture content
  * @param label Label for the figure
  * @param buildDir Build directory path
  * @param suffix Optional suffix for multiple pictures with same label
  * @returns Path to created LaTeX file
  */
 export async function createStandaloneLatexWithLabels(
-  tikzpicture: string,
+  tikzPicture: string,
   label: string,
   buildDir: string,
   suffix?: string,
@@ -94,7 +94,7 @@ export async function createStandaloneLatexWithLabels(
   try {
     // Use renderPrompt instead of nunjucks directly
     const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, {
-      tikzpicture,
+      tikzpicture: tikzPicture,
     });
 
     // Create filename
@@ -120,7 +120,7 @@ export async function createStandaloneLatexWithLabels(
  * @param latexFile Path to the LaTeX file
  * @returns Array of paths to compiled PDF files
  */
-export async function extractAndCompileTikzpicturesWithLabels(
+export async function extractAndCompileTikzPicturesWithLabels(
   latexFile: string,
 ): Promise<string[]> {
   try {
@@ -131,25 +131,25 @@ export async function extractAndCompileTikzpicturesWithLabels(
     await createDirectory(buildDir);
 
     debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
-    const labeledTikzpictures = await extractTikzpicturesWithLabels(latexFile);
-    debug(CHANNEL, `Found ${labeledTikzpictures.length} labeled TikZ pictures`);
+    const labeledTikzPictures = await extractTikzPicturesWithLabels(latexFile);
+    debug(CHANNEL, `Found ${labeledTikzPictures.length} labeled TikZ pictures`);
 
     const compiledFiles: string[] = [];
 
-    for (const [label, tikzpictures] of labeledTikzpictures) {
+    for (const [label, tikzPictures] of labeledTikzPictures) {
       // Generate suffixes for multiple pictures with same label
       const suffixes =
-        tikzpictures.length > 1
-          ? tikzpictures.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
+        tikzPictures.length > 1
+          ? tikzPictures.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
           : [undefined];
 
-      for (let i = 0; i < tikzpictures.length; i++) {
-        const tikzpicture = tikzpictures[i];
+      for (let i = 0; i < tikzPictures.length; i++) {
+        const tikzPicture = tikzPictures[i];
         const suffix = suffixes[i];
 
         // Create and compile standalone LaTeX file
         const texFile = await createStandaloneLatexWithLabels(
-          tikzpicture,
+          tikzPicture,
           label,
           buildDir,
           suffix,
