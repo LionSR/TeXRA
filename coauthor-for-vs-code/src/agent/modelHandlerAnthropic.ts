@@ -1,13 +1,13 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
-import { AgentConfig } from './AgentConfig';
-import { AgentSettings, hasEndTag } from './AgentDataclass';
-import { ModelHandler } from './ModelHandler';
-import {
-  AnthropicAPIResponseUsage,
-  ResponseUsageFactory,
-} from './ResponseUsage';
-import { ToolState } from './ToolState';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile, writeFile } from '../utils/fileUtils';
 import { filterTagsFromText, extractTextFromTags } from '../utils/xmlUtils';
 import {
@@ -18,6 +18,16 @@ import {
   CONFIRMATION_PROMPT_PATTERNS,
   wrapConfirmationPrompts,
 } from '../utils/confirmationUtils';
+
+// Local imports - agent components
+import { AgentConfig } from './AgentConfig';
+import { AgentSettings, hasEndTag } from './AgentDataclass';
+import { ModelHandler } from './ModelHandler';
+import {
+  AnthropicAPIResponseUsage,
+  ResponseUsageFactory,
+} from './ResponseUsage';
+import { ToolState } from './ToolState';
 
 /**
  * Anthropic-specific handlers.

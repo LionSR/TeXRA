@@ -1,9 +1,18 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
+// (none needed)
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - agent components
 import { AgentConfig } from './AgentConfig';
+import { AgentSettings } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ModelConfig, ModelProvider, ModelCapabilities } from './ModelConfig';
 import { ToolState } from './ToolState';
-import { AgentSettings } from './AgentDataclass';
-import * as logger from '../logger/logUtils';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
