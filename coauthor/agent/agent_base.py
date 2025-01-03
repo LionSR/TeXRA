@@ -242,7 +242,7 @@ class BaseReflectionAgent(ABC):
         stateRound: AgentStateRound,
         stateGlobal: AgentStateGlobal,
         outputFile: str,
-        end_turn: bool,
+        endTurn: bool,
         currRound: int = 0,
     ) -> list[str]:
         """Handle the output for the given round."""
@@ -266,9 +266,9 @@ class BaseReflectionAgent(ABC):
         outputFile: str,
     ) -> tuple[AgentStateRound, AgentStateGlobal, ToolState, bool]:
         """Process a single response cycle."""
-        end_turn = False
+        endTurn = False
 
-        while not end_turn:
+        while not endTurn:
             file_exists = os.path.exists(outputFile)
             start_time = time.time()
             responseObject = self.modelHandler.create_response(
@@ -344,7 +344,7 @@ class BaseReflectionAgent(ABC):
             )
 
             # Check stop conditions
-            end_turn, should_stop = self.modelHandler.check_stop_conditions(stopReason, newResponse, stateRound, stateGlobal, self.agentSettings)
+            endTurn, should_stop = self.modelHandler.check_stop_conditions(stopReason, newResponse, stateRound, stateGlobal, self.agentSettings)
             if should_stop:
                 break
 
@@ -358,16 +358,16 @@ class BaseReflectionAgent(ABC):
                 self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSettings, self.agentConfig)
                 continue
 
-        return stateRound, stateGlobal, toolState, end_turn
+        return stateRound, stateGlobal, toolState, endTurn
 
     def _get_prefill_for_round(self, currRound: int) -> str:
         """Get prefill content for the current round."""
         prefill = self.agentSettings.prefills[currRound] if currRound < len(self.agentSettings.prefills) else self.agentSettings.prefills[0]
         return prefill if prefill else ""
 
-    def _handle_round_completion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, end_turn: bool, currRound: int):
+    def _handle_round_completion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
         """Handle output and logging for round completion."""
-        self.handle_output(stateRound, stateGlobal, outputFile, end_turn, currRound=currRound)
+        self.handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound=currRound)
         input_info = f"input file {self.agentConfig.inputFile} " f"and/or input files {self.agentConfig.inputFiles}"
         logger.info(f"\n\nProcessed {input_info}. The round {currRound} output was saved as {outputFile}")
         logger.info(f"Completed round {currRound}")
@@ -436,7 +436,7 @@ class BaseReflectionAgent(ABC):
         toolState.update_accumulatedOutput(prefill)
 
         # Initialize output and handle prefill
-        end_turn, messages = self.modelHandler.initialize_output_and_prefill(
+        endTurn, messages = self.modelHandler.initialize_output_and_prefill(
             self.agentConfig,
             self.agentSettings,
             messages,
@@ -446,8 +446,8 @@ class BaseReflectionAgent(ABC):
         )
 
         stateRound = AgentStateRound.initialize(currRound)
-        if not end_turn:
-            stateRound, stateGlobal, toolState, end_turn = self._process_response_cycle(
+        if not endTurn:
+            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -456,9 +456,9 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[0], end_turn, currRound)
+        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[0], endTurn, currRound)
 
-        return stateRound, stateGlobal, messages, end_turn, toolState
+        return stateRound, stateGlobal, messages, endTurn, toolState
 
     def _handle_outputFile_processing(self, outputFiles: list[str], currRound: int, toolState: ToolState):
         """Helper method to handle tex count and TikZ figure extraction for output files."""
@@ -504,7 +504,7 @@ class BaseReflectionAgent(ABC):
         prefill = self._get_prefill_for_round(currRound)
         toolState.update_accumulatedOutput(prefill)
 
-        end_turn, messages = self.modelHandler.initialize_output_and_prefill(
+        endTurn, messages = self.modelHandler.initialize_output_and_prefill(
             self.agentConfig,
             self.agentSettings,
             messages,
@@ -513,8 +513,8 @@ class BaseReflectionAgent(ABC):
             prefill,
         )
 
-        if not end_turn:
-            stateRound, stateGlobal, toolState, end_turn = self._process_response_cycle(
+        if not endTurn:
+            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -523,18 +523,18 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[1], end_turn, currRound)
+        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[1], endTurn, currRound)
 
-        return stateRound, stateGlobal, messages, end_turn
+        return stateRound, stateGlobal, messages, endTurn
 
     def run(self):
         """Run the agent processing pipeline."""
-        stateRound, stateGlobal, messages, end_turn, toolState = self.process()
+        stateRound, stateGlobal, messages, endTurn, toolState = self.process()
 
-        if self.agentConfig.reflect and end_turn:
+        if self.agentConfig.reflect and endTurn:
             # Create a new ToolState for reflection round
             reflection_toolState = ToolState.initialize()
-            reflection_stateRound, stateGlobal, reflection_messages, end_turn_reflection = self.reflect(stateGlobal, messages, reflection_toolState)
+            reflection_stateRound, stateGlobal, reflection_messages, endTurn_reflection = self.reflect(stateGlobal, messages, reflection_toolState)
 
     def _process_outputFiles(self, outputFile: str, currRound: int):
         """Process output files for the current round.

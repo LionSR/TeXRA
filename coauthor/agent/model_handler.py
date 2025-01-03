@@ -163,11 +163,11 @@ class ModelHandler(ABC):
             agentSettings: The agent settings
 
         Returns:
-            Tuple of (end_turn: bool, should_stop: bool)
+            Tuple of (endTurn: bool, should_stop: bool)
         """
         outputTokenLimit = self.outputTokenLimit_factor * stateGlobal.firstInputTokens if stateGlobal.firstInputTokens > 0 else float("inf")
 
-        end_turn = stopReason in ["end_turn", "stop_sequence", "stop"]
+        endTurn = stopReason in ["end_turn", "stop_sequence", "stop"]  # end_turn/stop_sequence is correct as this is what api returns
         encounterDocumentTag = f"</{agentSettings.documentTag}>" in newResponse
         continuation_limit = stateRound.continuationCount > self.continue_limit
         inputTokenLimit = stateGlobal.totalInputTokens > self.inputTokenLimit
@@ -182,15 +182,15 @@ class ModelHandler(ABC):
         # Print debug info if stopping
         if should_stop:
             logger.debug(
-                f"Stop flags:\n"
-                f"end_turn: {end_turn}\n"
+                f"StopFlags:\n"
+                f"endTurn: {endTurn}\n"
                 f"encounterDocumentTag: {encounterDocumentTag}\n"
                 f"continuation_limit: {continuation_limit}\n"
                 f"inputTokenLimit: {inputTokenLimit}\n"
                 f"outputTokenLimit: {outputTokenLimit}\n"
             )
 
-        return end_turn, should_stop
+        return endTurn, should_stop
 
     @abstractmethod
     def get_client(self) -> Any:
