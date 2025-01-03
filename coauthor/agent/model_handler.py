@@ -276,8 +276,8 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def compute_statistics(self, responseUsage: Any, responseTime: float) -> Any:
-        """Compute model-specific statistics."""
+    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> Any:
+        """Compute model-specific response usage."""
         pass
 
     @abstractmethod

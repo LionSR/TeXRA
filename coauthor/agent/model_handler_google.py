@@ -30,7 +30,7 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
 
         return (prompt_tokens * self.config.inputPrice + completion_tokens * self.config.outputPrice) / 1e6
 
-    def compute_statistics(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
+    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
         """Compute statistics for Google models."""
         # Create a minimal usage object with Google's token counts
         usage_obj = type(

@@ -64,19 +64,17 @@ class AgentStateGlobal:
         """Update global metrics based on round state."""
         if stateRound.APIUsage:
             if self.firstInputTokens == 0:
-                self.firstInputTokens = stateRound.APIUsage.get("totalInputTokens", 0)
+                self.firstInputTokens = stateRound.APIUsage.totalInputTokens
 
-            # potential mixed use here
-            # for anthropic api
-            cache_read = stateRound.APIUsage.get("cache_read_input_tokens", 0) or 0
-            self.firstInputTokens += cache_read
-            cache_creation = stateRound.APIUsage.get("cache_creation_input_tokens", 0) or 0
-            self.firstInputTokens += cache_creation
+            # For Anthropic API, handle cache tokens
+            cache_read = getattr(stateRound.APIUsage, "cache_read_input_tokens", 0) or 0
+            cache_creation = getattr(stateRound.APIUsage, "cache_creation_input_tokens", 0) or 0
+            self.firstInputTokens += cache_read + cache_creation
             logger.debug(f"First input tokens: {self.firstInputTokens}, cache_read: {cache_read}, cache_creation: {cache_creation}")
 
             # Update global totals (using totalInputTokens without cache adjustment)
-            self.totalInputTokens += stateRound.APIUsage.get("totalInputTokens", 0)
-            self.totalOutputTokens += stateRound.APIUsage.get("totalOutputTokens", 0)
+            self.totalInputTokens += stateRound.APIUsage.totalInputTokens
+            self.totalOutputTokens += stateRound.APIUsage.totalOutputTokens
 
         self.totalResponseTime += stateRound.responseTime
 
