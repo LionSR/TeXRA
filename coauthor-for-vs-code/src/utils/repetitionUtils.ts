@@ -1,9 +1,9 @@
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export interface RepetitionResult {
   massiveRepetitionDetected: boolean;
@@ -45,7 +45,7 @@ export function checkRepetitionDMP(
       longestMatch,
     };
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error checking repetition with DMP: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -77,12 +77,12 @@ export function checkRepetitionDifflib(
     const massiveRepetitionDetected = longestMatch.length > 1000;
 
     if (massiveRepetitionDetected) {
-      debug(CHANNEL, `Repetition ratio: ${ratio}`);
-      debug(
+      logger.debug(CHANNEL, `Repetition ratio: ${ratio}`);
+      logger.debug(
         CHANNEL,
         `Longest matching substring (preview): ${longestMatch.slice(0, 400)}`,
       );
-      debug(CHANNEL, 'Massive repetition detected - stopping process.');
+      logger.debug(CHANNEL, 'Massive repetition detected - stopping process.');
     }
 
     return {
@@ -91,7 +91,7 @@ export function checkRepetitionDifflib(
       longestMatch,
     };
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error checking repetition with difflib: ${err instanceof Error ? err.message : String(err)}`,
     );

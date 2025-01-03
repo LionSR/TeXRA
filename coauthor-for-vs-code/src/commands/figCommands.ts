@@ -4,12 +4,12 @@ import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
 } from '../latex/tikzpicture';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+import * as logger from '../logger/logUtils';
 import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
 import * as path from 'path';
 
 const CHANNEL = 'FigureCommands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerFigureCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -26,7 +26,7 @@ export function registerFigureCommands(context: vscode.ExtensionContext) {
       handleCompileTikzFigures,
     ),
   );
-  debug(CHANNEL, 'Figure commands registered');
+  logger.debug(CHANNEL, 'Figure commands registered');
 }
 
 async function handleExtractFigurePaths(): Promise<void> {
@@ -47,7 +47,7 @@ async function handleExtractFigurePaths(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
+    logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
     const figurePaths = await extractFigurePathsFromLatex(filePath);
@@ -69,7 +69,7 @@ async function handleExtractFigurePaths(): Promise<void> {
       );
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in extractFigurePaths command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -95,7 +95,10 @@ async function handleExtractTikzFigures(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file for TikZ figures: ${filePath}`);
+    logger.debug(
+      CHANNEL,
+      `Processing LaTeX file for TikZ figures: ${filePath}`,
+    );
 
     // Extract TikZ pictures with labels
     const labeledTikzPictures = await extractTikzPicturesWithLabels(filePath);
@@ -127,7 +130,7 @@ async function handleExtractTikzFigures(): Promise<void> {
       );
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in extractTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -153,7 +156,10 @@ async function handleCompileTikzFigures(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file for TikZ compilation: ${filePath}`);
+    logger.debug(
+      CHANNEL,
+      `Processing LaTeX file for TikZ compilation: ${filePath}`,
+    );
 
     // Show progress indicator
     await vscode.window.withProgress(
@@ -204,7 +210,7 @@ async function handleCompileTikzFigures(): Promise<void> {
       },
     );
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in compileTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );
