@@ -1,6 +1,28 @@
 import { ToolConfig } from './ToolConfig';
 
 /**
+ * Default configuration for task execution and tool usage
+ */
+export const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  model: 'sonnet+',
+  reflect: false,
+  agent: '',
+  instruction: '',
+  inputFile: '',
+  inputFiles: [],
+  referenceFile: null,
+  referenceFiles: [],
+  auxiliaryFile: null,
+  auxiliaryFiles: [],
+  figureFile: null,
+  figureFiles: [],
+  outputFiles: null,
+  outputNameOverride: null,
+  editedFile: null,
+  toolConfig: {} as ToolConfig,
+};
+
+/**
  * Configuration for task execution and tool usage
  */
 export interface AgentConfig {
@@ -31,28 +53,8 @@ export interface AgentConfig {
  * Create AgentConfig from partial configuration
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
-  // Default configuration
-  const defaultConfig: AgentConfig = {
-    model: 'sonnet+',
-    reflect: false,
-    agent: '',
-    inputFile: '',
-    inputFiles: [],
-    referenceFile: null,
-    referenceFiles: [],
-    auxiliaryFile: null,
-    auxiliaryFiles: [],
-    figureFile: null,
-    figureFiles: [],
-    instruction: '',
-    outputFiles: null,
-    outputNameOverride: null,
-    editedFile: null,
-    toolConfig: {} as ToolConfig,
-  };
-
   // Merge provided config with defaults
-  return { ...defaultConfig, ...config };
+  return { ...DEFAULT_AGENT_CONFIG, ...config };
 }
 
 /**
