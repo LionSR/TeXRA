@@ -15,9 +15,7 @@ class ModelFactory:
     def create_handler(config: ModelConfig) -> ModelHandler:
         """Create model handler based on provider and OpenRouter configuration."""
         # Handle OpenRouter configuration
-        if config.name.endswith("OR"):
-            config.use_openrouter = True
-            config.name = config.name[:-2]  # Remove OR suffix
+        if config.use_openrouter:
             # Set OpenRouter model name if not provided
             if not config.openrouter_full_name:
                 config.openrouter_full_name = f"{config.provider.value}/{config.full_name}"
