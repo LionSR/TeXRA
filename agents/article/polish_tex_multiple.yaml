@@ -1,15 +1,16 @@
 name: polish_tex_multiple
 inherits: polish_tex
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
-  output_ext: tex
+  agentType: CoT
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve a LaTeX research paper consisting of multiple documents focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -23,7 +24,7 @@ prompts:
         \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you multiple \LaTeX documents to revise. Please read all documents carefully.
 
     Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
@@ -38,7 +39,7 @@ prompts:
 
     Please carefully read through all the research papers above and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance these papers focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -88,7 +89,7 @@ prompts:
     ... (repeat for all output files)
     </latex_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to the papers, please reflect on your changes and consider any additional improvements that could further enhance the quality of the papers while staying focused on the original instruction.
 
     <scratchpad>

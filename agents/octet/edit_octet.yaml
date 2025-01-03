@@ -1,15 +1,15 @@
 name: correct_octet
 
 settings:
-  agent_type: direct
-  document_tag: latex_code
-  end_tag: </latex_code>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_code
+  endTag: </latex_code>
+  outputExt: tex
   prefills:
     - "Here is the revised code of the \\LaTeX document. <latex_code>"
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a large language model configured specifically for LaTeX document processing. Unlike conversational AI systems, you are being part of the system that functions as a one-shot document processor:
     - Input: Complete LaTeX documents and specific enhancement requirements
     - Output: Complete enhanced LaTeX documents
@@ -59,7 +59,7 @@ prompts:
     - Prevents fragmentation of the output
     - Maintains professional document structure
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -72,7 +72,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow closely:
     <instruction>

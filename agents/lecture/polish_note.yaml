@@ -1,18 +1,18 @@
 name: polish
 
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     When writing a professional *.tex \LaTeX document, you must:
     - Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations.
     - Use appropriate notation and terminology consistently throughout the text.
@@ -24,7 +24,7 @@ prompts:
     - Label equations and figures that are mentioned in the text using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Never add \label{} to any equation or figure that is not mentioned in the text.
     - Use ``\\'' sparingly for paragraph breaks. Do not remove any existing ``\\''.
 
-  user_prefix: |
+  userPrefix: |
     You will be given a \LaTeX document of a working draft textbook chapter. Read the document carefully before proceeding to revise it.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where the math commands you should use are defined):
@@ -49,7 +49,7 @@ prompts:
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  user_request: |
+  userRequest: |
     First, brainstorm concrete ways to improve the chapter quality, focusing strictly on the given instruction. Use the scratchpad to formulate detailed action plans (so that a graduate student can also perform the revisions independently):
 
     <scratchpad>
@@ -78,7 +78,7 @@ prompts:
     % 1ST_UPDATED_LATEX_DOCUMENT HERE
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect like a harsh professor on the changes made according to the given instructions. Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 
     Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.

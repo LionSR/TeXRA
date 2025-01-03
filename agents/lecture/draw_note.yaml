@@ -1,17 +1,17 @@
 name: draw_note
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert professor and LaTeX/TikZ specialist. Your task is to create or enhance figures for a research paper, ensuring they are informative, condensed, and visually appealing, following the design principles of Edward Tufte.
 
     Key requirements:
@@ -32,7 +32,7 @@ prompts:
 
     Remember to balance detail with clarity, aiming for figures that effectively communicate complex concepts in a visually appealing and easily understandable manner.
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with a \LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
@@ -77,7 +77,7 @@ prompts:
 
     Prepare to analyze, brainstorm, and implement improvements to the figures in this chapter, keeping the specific instruction as your sole focus. If I ask you to revise figure 1 only, do not create a figure 2.
 
-  user_request: |
+  userRequest: |
     Analyze the existing figures in the document and propose improvements. Based on the analysis and the specific instruction provided, brainstorm concrete ways to create or significantly improve the figures in the chapter. Be as specific as possible in your proposals. 
 
     Use the following format for thinking:
@@ -109,7 +109,7 @@ prompts:
     % 1ST_UPDATED_LATEX_DOCUMENT HERE
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made to the figures. Based on this reflection, propose targeted improvements. Use the following format for thinking:
     <scratchpad>
     <figure_analysis>

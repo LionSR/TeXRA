@@ -1,18 +1,18 @@
 name: revise_rebuttal
 
 settings:
-  document_tag: rebuttal_package
-  end_tag: </rebuttal_package>
-  output_ext: xml
+  documentTag: rebuttal_package
+  endTag: </rebuttal_package>
+  outputExt: xml
   prefills:
     - <rebuttal_package>\n<scratchpad>
     - <rebuttal_package>\n<scratchpad>
-  required_files:
+  requiredFiles:
     COVER_LETTER: replies/cover_letter.txt
     EDITOR_LETTER: replies/editor_letter.txt
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
-  required_files_internal:
+  requiredFilesInternal:
     EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
   default_output_files:
     - replies/reply_to_editor.tex
@@ -51,7 +51,7 @@ settings:
       categories: ["input_files"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist Prof. Ignacio Cirac.
     Your task is to revise and improve a comprehensive rebuttal package for a research paper submitted to Physical Review Letters. This includes refining the response to referee comments, the letter to the editor, the list of major changes, and the revised versions of the main paper and supplementary materials. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
 
@@ -78,7 +78,7 @@ prompts:
       \item Contents wrapped inside \begin{referee}{A} (or B) and \end{referee} environments come from the referee report. You should not make any changes to them.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     You will be revising a rebuttal package for a paper submitted to Physical Review Letters. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
 
     <documents>
@@ -134,7 +134,7 @@ prompts:
     {% endif %}
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated. You should include all the changes you added in the previous step.
 
     After your planning, revise the rebuttal package further to include the following improvements:
@@ -196,7 +196,7 @@ prompts:
 
     Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Letters. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
 
-  user_reflect: |
+  userReflect: |
     Your revised output is still not specific enough to the paper and doesn't show sufficient improvement over the original version.
     After thoroughly and critically reviewing the original rebuttal package, the referee reports, and the example, write a new revised rebuttal package that satisfies the following requirements:
     <requirements>

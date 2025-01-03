@@ -123,8 +123,8 @@ class BaseReflectionAgent(ABC):
         user_vars = {}
 
         # Add variables for required files
-        if self.agent_settings.required_files:
-            for var_name, file_path in self.agent_settings.required_files.items():
+        if self.agent_settings.requiredFiles:
+            for var_name, file_path in self.agent_settings.requiredFiles.items():
                 if file_path is not None and os.path.exists(file_path):
                     file_content = read_file(file_path)
                     user_vars[f"{var_name}_FILE"] = file_path
@@ -134,8 +134,8 @@ class BaseReflectionAgent(ABC):
                     logger.warning(f"[Required file] {file_path} not found from [VAR '{var_name}']")
 
         # Add variables for internal required files (from prompt directory)
-        if self.agent_settings.required_files_internal:
-            for var_name, file_path in self.agent_settings.required_files_internal.items():
+        if self.agent_settings.requiredFilesInternal:
+            for var_name, file_path in self.agent_settings.requiredFilesInternal.items():
                 full_path = os.path.join(self.agent_path, file_path)
                 if os.path.exists(full_path) and full_path:
                     file_content = read_file(full_path)
@@ -273,8 +273,8 @@ class BaseReflectionAgent(ABC):
                 self.client,
                 messages,
                 self.agent_settings.temperature or 0.0,
-                render_prompt(self.agent_prompts.system_prompt, self.user_vars),
-                self.agent_settings.end_tag,
+                render_prompt(self.agent_prompts.systemPrompt, self.user_vars),
+                self.agent_settings.endTag,
             )
             response_time = time.time() - start_time
             state_round.update_response_time(response_time)
@@ -282,7 +282,7 @@ class BaseReflectionAgent(ABC):
 
             # Extract and validate response
             new_response, response_usage, stop_reason = self.model_handler.extract_response(
-                response_object, self.agent_settings.end_tag, self.agent_config.tool_config.auto_confirmation
+                response_object, self.agent_settings.endTag, self.agent_config.tool_config.auto_confirmation
             )
 
             logger.info(f"Stop reason: {stop_reason}")
@@ -412,23 +412,23 @@ class BaseReflectionAgent(ABC):
         messages = []
 
         # Set up initial prompts
-        system_prompt = render_prompt(self.agent_prompts.system_prompt, self.user_vars)
-        user_request = render_prompt(self.agent_prompts.user_request, self.user_vars)
-        user_prefix = render_prompt(self.agent_prompts.user_prefix, self.user_vars)
+        systemPrompt = render_prompt(self.agent_prompts.systemPrompt, self.user_vars)
+        userRequest = render_prompt(self.agent_prompts.userRequest, self.user_vars)
+        userPrefix = render_prompt(self.agent_prompts.userPrefix, self.user_vars)
 
         if tool_state.tex_count_stats:
-            user_prefix = f"{tool_state.tex_count_stats}{user_prefix}"
+            userPrefix = f"{tool_state.tex_count_stats}{userPrefix}"
 
         # Write prompt to file if requested
         if self.agent_config.tool_config.print_input_prompt:
-            write_prompt_to_xml(system_prompt, user_prefix, user_request, self.agent_config.input_file, self.agent_config.agent)
+            write_prompt_to_xml(systemPrompt, userPrefix, userRequest, self.agent_config.input_file, self.agent_config.agent)
 
         # Initialize messages with prompts
         messages = self.model_handler.initialize_messages(
-            user_prefix,
-            user_request,
+            userPrefix,
+            userRequest,
             figure_files=tool_state.figure_files,
-            system_prompt=system_prompt,
+            systemPrompt=systemPrompt,
         )
 
         # Handle prefill
@@ -489,8 +489,8 @@ class BaseReflectionAgent(ABC):
         state_round = AgentStateRound.initialize(curr_round)
 
         # Prepare reflection message
-        user_request_reflect = render_prompt(self.agent_prompts.user_reflect, self.user_vars)
-        user_message = f"{user_request_reflect}\n" if user_request_reflect else ""
+        userRequest_reflect = render_prompt(self.agent_prompts.userReflect, self.user_vars)
+        user_message = f"{userRequest_reflect}\n" if userRequest_reflect else ""
         if tool_state.tex_count_stats:
             user_message = f"{tool_state.tex_count_stats}{user_message}"
 

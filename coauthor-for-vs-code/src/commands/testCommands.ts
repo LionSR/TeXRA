@@ -6,6 +6,7 @@ import {
 import { info, debug, error, initializeLogging } from '../logger/logUtils';
 import { loadYaml, loadAgentSettingsAndPrompts } from '../agent/agentLoad';
 import * as path from 'path';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'TestCommands';
 initializeLogging(CHANNEL);
@@ -18,6 +19,9 @@ export function registerTestCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('coauthor.testAgentLoading', () =>
       handleTestAgentLoading(context),
+    ),
+    vscode.commands.registerCommand('coauthor.testLoadSpecificAgent', () =>
+      handleTestLoadSpecificAgent(context),
     ),
   );
   debug(CHANNEL, 'Test commands registered');
@@ -176,7 +180,64 @@ async function handleTestAgentLoading(
   }
 }
 
+async function handleTestLoadSpecificAgent(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    // Get agent name from user
+    const agentName = await vscode.window.showInputBox({
+      prompt: 'Enter the agent name to load (e.g., "polish", "corect")',
+      placeHolder: 'agent_name',
+    });
+
+    if (!agentName) {
+      debug(CHANNEL, 'No agent name provided, cancelling test');
+      return;
+    }
+
+    info(CHANNEL, `Testing loading of agent: ${agentName}`);
+
+    // Get the configured root path
+    const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+    const agentPath = path.join(context.globalStorageUri.fsPath, rootPath);
+
+    // Load and display the agent configuration
+    info(CHANNEL, `Loading from path: ${agentPath}`);
+
+    const [settings, prompts] = await loadAgentSettingsAndPrompts(
+      agentPath,
+      agentName,
+      context,
+    );
+
+    // Display the results
+    info(CHANNEL, '\nAgent settings loaded:');
+    info(CHANNEL, JSON.stringify(settings, null, 2));
+    info(CHANNEL, '\nAgent prompts loaded:');
+    info(CHANNEL, JSON.stringify(prompts, null, 2));
+
+    // If the agent inherits from another, show the inheritance chain
+    const agentFile = path.join(agentPath, `${agentName}.yaml`);
+    const config = (await loadYaml(agentFile, context)) as any;
+    if (config?.inherits) {
+      info(CHANNEL, `\nInheritance chain: ${agentName} -> ${config.inherits}`);
+    }
+
+    vscode.window.showInformationMessage(
+      `Successfully loaded agent "${agentName}". Check Debug Console for details.`,
+    );
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    error(CHANNEL, `Failed to load agent: ${errorMessage}`);
+    if (err instanceof Error && err.stack) {
+      debug(CHANNEL, `Stack trace: ${err.stack}`);
+    }
+    vscode.window.showErrorMessage(`Failed to load agent: ${errorMessage}`);
+  }
+}
+
 export const testCommands = {
   handleTestConnection,
   handleTestAgentLoading,
+  handleTestLoadSpecificAgent,
 };

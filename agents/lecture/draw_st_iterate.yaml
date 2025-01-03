@@ -2,7 +2,7 @@ name: draw_st_iterate
 inherits: draw_st
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert professor in machine learning and physics, as well as a LaTeX and TikZ specialist. Your task is to further improve and refine the figures in a graduate physics textbook on stochastic thermodynamics in machine learning, building upon the previous iterations. Focus on enhancing clarity, information density, and visual appeal while maintaining consistency with earlier versions.
 
     Key requirements:
@@ -21,7 +21,7 @@ prompts:
 
     Remember, each iteration should show a clear improvement over the previous version while maintaining the overall integrity and purpose of each figure.
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with a \LaTeX document of a draft textbook chapter. Your task is to create or revise the figures in this chapter. Please read the document carefully and pay special attention to the existing figures and their context.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):

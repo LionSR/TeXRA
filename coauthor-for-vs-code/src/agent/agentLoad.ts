@@ -152,12 +152,36 @@ export async function loadAgentSettingsAndPrompts(
       settings = mergeDicts(parentSettings, agentSettings) as AgentSettings;
       prompts = mergeDicts(parentPrompts, agentPrompts) as AgentPrompts;
     } else {
-      // No inheritance, use settings and prompts directly
-      settings = (config?.settings || {}) as AgentSettings;
-      prompts = (config?.prompts || {}) as AgentPrompts;
+      // No inheritance, use settings and prompts directly with defaults
+      const defaultSettings: AgentSettings = {
+        agentType: 'CoT',
+        documentTag: 'document',
+        temperature: 0.0,
+        prefills: [],
+        outputExt: 'txt',
+        endTag: '\\end{document}',
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: [],
+        filePatternsContain: [],
+      };
 
-      // Initialize prefills if not present
-      settings.prefills = settings.prefills || [];
+      const defaultPrompts: AgentPrompts = {
+        systemPrompt: '',
+        userPrefix: '',
+        userRequest: '',
+        userReflect: '',
+      };
+
+      // Merge defaults with provided settings
+      settings = mergeDicts(
+        defaultSettings,
+        (config?.settings || {}) as Partial<AgentSettings>,
+      ) as AgentSettings;
+      prompts = mergeDicts(
+        defaultPrompts,
+        (config?.prompts || {}) as Partial<AgentPrompts>,
+      ) as AgentPrompts;
     }
 
     // Validate settings
