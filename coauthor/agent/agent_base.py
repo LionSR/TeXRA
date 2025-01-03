@@ -75,7 +75,7 @@ class BaseReflectChainAgent(ABC):
         """Get basic model and instruction variables."""
         return {
             "MODEL": self.agent_config.model,
-            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.config.capabilities.likes_to_ask_for_confirmation,
+            "MODEL_LIKES_TO_ASK_FOR_CONFIRMATION": self.model_handler.capabilities.likes_to_ask_for_confirmation,
             "INSTRUCTION": self.agent_config.instruction,
             "IS_OPENAI_MODEL": self.model_handler.is_openai,
             "IS_ANTHROPIC_MODEL": self.model_handler.is_anthropic,
@@ -300,7 +300,7 @@ class BaseReflectChainAgent(ABC):
             # Chain response processing operations
             new_response = (
                 apply_replacement_regex(new_response, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
-                if self.model_handler.config.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
+                if self.model_handler.capabilities.likes_to_ask_for_confirmation and self.agent_config.tool_config.auto_confirmation
                 else new_response
             )
             new_response = apply_replacements(new_response, get_all_replacements()).strip()
@@ -383,7 +383,7 @@ class BaseReflectChainAgent(ABC):
             tool_state.first_k_chars_from_input = get_first_k_chars_from_document(self.agent_config.input_file, self.agent_config.K)
 
         # Handle figure extraction for vision-capable models
-        if self.model_handler.config.capabilities.supports_vision:
+        if self.model_handler.capabilities.supports_vision:
             if self.agent_config.figure_file and self.agent_config.figure_file not in tool_state.figure_files:
                 tool_state.add_figure_files([self.agent_config.figure_file])
             if self.agent_config.figure_files:
@@ -461,7 +461,7 @@ class BaseReflectChainAgent(ABC):
         if self.agent_config.tool_config.include_tex_count:
             tool_state.tex_count_stats = get_tex_count_stats(output_files)
 
-        if self.model_handler.config.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
+        if self.model_handler.capabilities.supports_vision and self.agent_config.tool_config.auto_extract_tikz_figure_reflect:
             for output_file in output_files:
                 logger.debug(f"Extracting TikZ figures from {output_file}")
                 if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(output_file):
