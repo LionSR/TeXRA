@@ -1,9 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { debug, info, warn, error } from '../logger/logUtils';
+import {
+  debug,
+  info,
+  warn,
+  error,
+  initializeLogging,
+} from '../logger/logUtils';
 import * as fs from 'fs';
 
-const CHANNEL = 'FileUtils';
+const CHANNEL = 'Utils';
+initializeLogging(CHANNEL);
 
 export function getRelativePath(filePath: string): string {
   const workspacePath = getWorkspacePath();
@@ -329,13 +336,4 @@ export function readFileBytesSync(filePath: string): Buffer {
     );
     throw err;
   }
-}
-
-export function extractTextFromTags(
-  inputContent: string,
-  documentTag: string,
-): string {
-  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
-  const match = inputContent.match(regex);
-  return match ? match[1] : inputContent;
 }

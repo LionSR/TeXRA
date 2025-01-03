@@ -2,8 +2,6 @@
 
 from .model_config import ModelConfig, ModelProvider, ModelCapabilities
 
-# Common capabilities
-ANTHROPIC_BASE_CAPABILITIES = ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True)
 
 MODEL_CONFIGS: dict[str, ModelConfig] = {
     # ===== Anthropic Claude Models =====
@@ -16,7 +14,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=200000,
         input_price=15.0,
         output_price=75.0,
-        capabilities=ANTHROPIC_BASE_CAPABILITIES,
+        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
     "sonnet++": ModelConfig(
         name="sonnet++",
@@ -43,7 +41,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=200000,
         input_price=3.0,
         output_price=15.0,
-        capabilities=ANTHROPIC_BASE_CAPABILITIES,
+        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
     "sonnet": ModelConfig(
         name="sonnet",
@@ -81,7 +79,7 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=200000,
         input_price=0.25,
         output_price=1.25,
-        capabilities=ANTHROPIC_BASE_CAPABILITIES,
+        capabilities=ModelCapabilities(supports_prompt_caching=True, supports_assistant_prefill=True),
     ),
     # ===== OpenAI Reasoning Models =====
     "o1": ModelConfig(
@@ -234,20 +232,22 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         capabilities=ModelCapabilities(supports_native_pdf=True, supports_vision=True),
     ),
     # ===== OpenRouter Models =====
-    "llama3+OR": ModelConfig(
-        name="llama3+OR",
+    "llama3+": ModelConfig(
+        name="llama3+",
         full_name="meta-llama/llama-3.1-405b-instruct",
         provider=ModelProvider.OTHERS,
+        use_openrouter=True,
         openrouter_full_name="meta-llama/llama-3.1-405b-instruct",
         max_output_tokens=131072,
         context_window=131072,
         input_price=3.0,
         output_price=3.0,
     ),
-    "qwq-32bOR": ModelConfig(
+    "qwq-32b": ModelConfig(
         name="qwq-32b",
         full_name="qwen/qwq-32b-preview",
         provider=ModelProvider.OTHERS,
+        use_openrouter=True,
         openrouter_full_name="qwen/qwq-32b-preview",
         max_output_tokens=32768,
         context_window=32768,

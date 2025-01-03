@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { registerCommands } from './commands';
-import { FolderExplorer } from './folderExplorer';
-import { LogViewProvider } from './logView/logViewProvider';
+import { FolderExplorer } from './FolderExplorer';
+import { LogViewProvider } from './logView/LogViewProvider';
 import { setLogViewProvider } from './logger/logUtils';
 import * as fs from 'fs';
 import * as path from 'path';
