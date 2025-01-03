@@ -1,7 +1,5 @@
 // Standard library imports
-import * as cp from 'child_process';
 import * as path from 'path';
-import { promisify } from 'util';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -17,15 +15,13 @@ import {
   getWorkspacePath,
 } from '../utils/fileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
+import { executeCommand } from '../utils/execUtils';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
 
 const CHANNEL = 'Housekeeping';
 logger.initializeLogging(CHANNEL);
-
-// we should use executeCommand instead of execAsync from @utils/execUtils
-const execAsync = promisify(cp.exec);
 
 export async function runIndentTex(): Promise<void> {
   logger.debug(CHANNEL, 'Starting LaTeX indentation process');
@@ -85,27 +81,18 @@ export async function runIndentTex(): Promise<void> {
               .join(' ');
 
             logger.debug(CHANNEL, `Executing command: ${command}`);
-            try {
-              const { stdout, stderr } = await execAsync(command, {
-                cwd: workspacePath,
-              });
-              if (stdout) {
-                logger.debug(CHANNEL, `Command output: ${stdout}`);
-              }
-              if (stderr) {
-                logger.warn(CHANNEL, `Command stderr: ${stderr}`);
-              }
-              logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
-            } catch (execError) {
-              logger.error(CHANNEL, `Command error: ${execError}`);
-              if (execError instanceof Error && 'stderr' in execError) {
-                logger.error(
-                  CHANNEL,
-                  `Command stderr: ${(execError as any).stderr}`,
-                );
-              }
+            const result = await executeCommand(command, { channel: CHANNEL });
+            if (!result.success) {
+              logger.error(CHANNEL, `Command error: ${result.stderr}`);
               continue;
             }
+            if (result.stdout) {
+              logger.debug(CHANNEL, `Command output: ${result.stdout}`);
+            }
+            if (result.stderr) {
+              logger.warn(CHANNEL, `Command stderr: ${result.stderr}`);
+            }
+            logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
           } catch (err) {
             logger.error(CHANNEL, `Error indenting file ${fullPath}: ${err}`);
             continue;
