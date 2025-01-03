@@ -194,9 +194,9 @@ export default function YamlStructureVisualization() {
 
         <YamlField
           name="agent_type"
-          value="direct | think"
+          value="direct | CoT"
           required={true}
-          description="Processing approach - 'direct' for immediate output, 'think' for scratchpad-based"
+          description="Processing approach - 'direct' for immediate output, 'CoT' for scratchpad-based"
         />
 
         <YamlField
