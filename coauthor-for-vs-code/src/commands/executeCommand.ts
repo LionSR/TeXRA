@@ -8,7 +8,6 @@ import * as logger from '../logger/logUtils';
 import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent components
-import { ToolConfig } from '../agent/ToolConfig';
 import { AgentConfig } from '../agent/AgentConfig';
 
 const CHANNEL = 'ExecuteCommand';
@@ -17,12 +16,15 @@ logger.initializeLogging(CHANNEL);
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.execute', executeCommand.execute),
+    vscode.commands.registerCommand(
+      'coauthor.execute',
+      executeCommand.executeCommandViaTerminal,
+    ),
   );
 }
 
 export const executeCommand = {
-  execute: async (config: AgentConfig) => {
+  executeCommandViaTerminal: async (config: AgentConfig) => {
     const terminalName = `${config.agent}@${config.model}`;
     const terminal_new = vscode.window.createTerminal(terminalName);
     terminal_new.show();
