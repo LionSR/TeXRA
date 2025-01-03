@@ -31,11 +31,8 @@ from .model_config import ModelConfig, ModelProvider, ModelCapabilities
 from .model_handler import ModelHandler
 from .model_handler_anthropic import AnthropicHandler
 from .model_handler_openai import OpenAIHandler
-from .model_handler_others import (
-    GoogleviaOpenAIHandler,
-    OpenRouterHandler,
-    AnthropicviaOpenrouterHandler,
-)
+from .model_handler_google import GoogleviaOpenAIHandler
+from .model_handler_openrouter import OpenRouterHandler, AnthropicviaOpenrouterHandler
 from .model_registry import MODEL_CONFIGS
 from .model_factory import ModelFactory
 
