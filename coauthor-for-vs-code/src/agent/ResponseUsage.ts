@@ -16,7 +16,7 @@ export interface ResponseUsageBase {
 /**
  * OpenAI response usage statistics.
  */
-export interface OpenAIResponseUsage extends ResponseUsageBase {
+export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   promptTokens: number;
   completionTokens: number;
   cachedTokens: number;
@@ -28,7 +28,7 @@ export interface OpenAIResponseUsage extends ResponseUsageBase {
 /**
  * Anthropic response usage statistics.
  */
-export interface AnthropicResponseUsage extends ResponseUsageBase {
+export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   inputTokens: number;
   outputTokens: number;
   cacheReadInputTokens: number | null;
@@ -43,7 +43,7 @@ export class ResponseUsageFactory {
     responseUsage: any,
     cost: number,
     responseTime: number,
-  ): OpenAIResponseUsage {
+  ): OpenAIAPIResponseUsage {
     const cachedTokens =
       responseUsage.prompt_tokens_details?.cached_tokens ?? 0;
     const completionDetails = responseUsage.completion_tokens_details;
@@ -77,7 +77,7 @@ export class ResponseUsageFactory {
     responseUsage: any,
     cost: number,
     responseTime: number,
-  ): AnthropicResponseUsage {
+  ): AnthropicAPIResponseUsage {
     const cacheReadInputTokens = responseUsage.cache_read_input_tokens ?? null;
     const cacheCreationInputTokens =
       responseUsage.cache_creation_input_tokens ?? null;

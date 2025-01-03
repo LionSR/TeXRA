@@ -14,41 +14,41 @@ settings:
     REFEREE_REPORT_B: replies/report_b.txt
   requiredFilesInternal:
     EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
-  default_output_files:
+  defaultOutputFiles:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
     - replies/list_of_major_changes.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "Paper"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "instruction"
-      var_name: "FILE_INSTRUCTION"
-      categories: ["input_files", "auxiliary_file", "auxiliary_files"]
+      varName: "FILE_INSTRUCTION"
+      categories: ["inputFiles", "auxiliaryFile", "auxiliaryFiles"]
     - pattern: "reply_to_editor"
-      var_name: "REPLY_TO_EDITOR"
-      categories: ["input_files"]
+      varName: "REPLY_TO_EDITOR"
+      categories: ["inputFiles"]
     - pattern: "reply_to_referees"
-      var_name: "REPLY_TO_REFEREES"
-      categories: ["input_files"]
+      varName: "REPLY_TO_REFEREES"
+      categories: ["inputFiles"]
     - pattern: "list_of_major_changes"
-      var_name: "LIST_OF_MAJOR_CHANGES"
-      categories: ["input_files"]
+      varName: "LIST_OF_MAJOR_CHANGES"
+      categories: ["inputFiles"]
     - pattern: "editor_letter"
-      var_name: "EDITOR_LETTER_CONTENT"
-      categories: ["input_files"]
+      varName: "EDITOR_LETTER_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_a"
-      var_name: "REFEREE_REPORT_A_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_b"
-      var_name: "REFEREE_REPORT_B_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
 
 prompts:
   systemPrompt: |

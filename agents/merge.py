@@ -7,7 +7,7 @@ def main():
     args = parser.parse_args()
     logger.debug(f"Args: {args}")
 
-    coa.run_merge(model=args.model, input_file=args.input_file, edited_file=args.edited_file)
+    coa.run_merge_agent(model=args.model, inputFile=args.inputFile, editedFile=args.editedFile)
 
 
 if __name__ == "__main__":

@@ -6,13 +6,13 @@ settings:
   outputExt: tex
   prefills:
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "iclr"
-      var_name: "ICLR_TEMPLATE"
-      categories: ["input_file", "input_files"]
+      varName: "ICLR_TEMPLATE"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "neurips"
-      var_name: "NeurIPS_PAPER"
-      categories: ["input_file", "input_files"]
+      varName: "NeurIPS_PAPER"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
   systemPrompt: |

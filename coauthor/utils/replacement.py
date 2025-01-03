@@ -155,7 +155,7 @@ STYLE_REPLACEMENTS = ReplacementCategory(
 )
 
 AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
-    name="auto_confirmation",
+    name="autoConfirmation",
     description="Fixes for auto confirmation writing with regex patterns",
     patterns={
         # Match the entire confirmation message block and reformat
@@ -203,7 +203,7 @@ def get_replacements_by_category(category_name: str) -> dict[str, str]:
         "scratchpad_xml": SCRATCHPAD_XML_REPLACEMENTS,
         # Style and Content Improvements
         "style": STYLE_REPLACEMENTS,
-        "auto_confirmation": AUTO_CONFIRM_REPLACEMENTS,
+        "autoConfirmation": AUTO_CONFIRM_REPLACEMENTS,
     }
     category = categories.get(category_name)
     return category.patterns if category else {}
