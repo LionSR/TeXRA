@@ -4,6 +4,8 @@ import {
   bestConnectionMethodAnthropic,
 } from '../latex/textConnection';
 import { info, debug, error, initializeLogging } from '../logger/logUtils';
+import { loadYaml, loadAgentSettingsAndPrompts } from '../agent/agentLoad';
+import * as path from 'path';
 
 const CHANNEL = 'TestCommands';
 initializeLogging(CHANNEL);
@@ -13,6 +15,9 @@ export function registerTestCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.testConnection',
       handleTestConnection,
+    ),
+    vscode.commands.registerCommand('coauthor.testAgentLoading', () =>
+      handleTestAgentLoading(context),
     ),
   );
   debug(CHANNEL, 'Test commands registered');
@@ -59,6 +64,119 @@ async function handleTestConnection(): Promise<void> {
   }
 }
 
+async function handleTestAgentLoading(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    info(CHANNEL, 'Testing YAML loading:');
+
+    // Test basic YAML loading
+    const testYaml = {
+      settings: {
+        agentType: 'direct',
+        documentTag: 'test_doc',
+        temperature: 0.7,
+        prefills: ['test prefill'],
+        outputExt: 'tex',
+        endTag: '</test_doc>',
+        requiredFiles: {},
+        requiredFilesInternal: {},
+        defaultOutputFiles: [],
+        filePatternsContain: [],
+      },
+      prompts: {
+        systemPrompt: 'Test system prompt',
+        userPrefix: 'Test prefix',
+        userRequest: 'Test request',
+        userReflect: 'Test reflect',
+      },
+    };
+
+    // Create a temporary test YAML file
+    const testDir = path.join(context.globalStorageUri.fsPath, 'test_agents');
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(testDir));
+
+    // Create base agent
+    const baseYamlPath = path.join(testDir, 'base.yaml');
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.file(baseYamlPath),
+      Buffer.from(JSON.stringify(testYaml)),
+    );
+
+    // Create child agent that inherits from base
+    const childYaml = {
+      inherits: 'base',
+      settings: {
+        documentTag: 'child_doc',
+        temperature: 0.5,
+      },
+      prompts: {
+        systemPrompt: 'Child system prompt',
+      },
+    };
+
+    const childYamlPath = path.join(testDir, 'child.yaml');
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.file(childYamlPath),
+      Buffer.from(JSON.stringify(childYaml)),
+    );
+
+    // Test loading base agent
+    info(CHANNEL, '\nTesting base agent loading:');
+    const baseYaml = await loadYaml(baseYamlPath);
+    info(CHANNEL, `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`);
+
+    const [baseSettings, basePrompts] = await loadAgentSettingsAndPrompts(
+      testDir,
+      'base',
+      context,
+    );
+    info(CHANNEL, 'Base agent settings loaded:');
+    info(CHANNEL, JSON.stringify(baseSettings, null, 2));
+    info(CHANNEL, 'Base agent prompts loaded:');
+    info(CHANNEL, JSON.stringify(basePrompts, null, 2));
+
+    // Test loading child agent with inheritance
+    info(CHANNEL, '\nTesting child agent loading with inheritance:');
+    const childYamlContent = await loadYaml(childYamlPath);
+    info(
+      CHANNEL,
+      `Child YAML loaded: ${JSON.stringify(childYamlContent, null, 2)}`,
+    );
+
+    const [childSettings, childPrompts] = await loadAgentSettingsAndPrompts(
+      testDir,
+      'child',
+      context,
+    );
+    info(CHANNEL, 'Child agent settings loaded (should inherit from base):');
+    info(CHANNEL, JSON.stringify(childSettings, null, 2));
+    info(CHANNEL, 'Child agent prompts loaded (should inherit from base):');
+    info(CHANNEL, JSON.stringify(childPrompts, null, 2));
+
+    // Cleanup test files
+    await vscode.workspace.fs.delete(vscode.Uri.file(baseYamlPath));
+    await vscode.workspace.fs.delete(vscode.Uri.file(childYamlPath));
+    await vscode.workspace.fs.delete(vscode.Uri.file(testDir), {
+      recursive: true,
+    });
+
+    vscode.window.showInformationMessage(
+      'Agent loading tests completed. Check Debug Console for results.',
+    );
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    error(CHANNEL, `Agent loading test failed: ${errorMessage}`);
+    if (err instanceof Error && err.stack) {
+      debug(CHANNEL, `Stack trace: ${err.stack}`);
+    }
+    vscode.window.showErrorMessage(
+      `Agent loading test failed: ${errorMessage}`,
+    );
+  }
+}
+
 export const testCommands = {
   handleTestConnection,
+  handleTestAgentLoading,
 };
