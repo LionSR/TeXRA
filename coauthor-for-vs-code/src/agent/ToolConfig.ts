@@ -9,5 +9,5 @@ export interface ToolConfig {
   includeTexCount: boolean;
   autoConfirmation: boolean;
   printInputPrompt: boolean;
-  useOpenrouter: boolean;
+  useOpenRouter: boolean;
 }

@@ -35,7 +35,7 @@ class ModelHandler(ABC):
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
-        if self.config.useOpenrouter:
+        if self.config.useOpenRouter:
             if key := os.getenv("OPENROUTER_API_KEY"):
                 return key
             raise ValueError("Missing OPENROUTER_API_KEY in environment")
@@ -47,7 +47,7 @@ class ModelHandler(ABC):
 
     def get_baseUrl(self) -> str | None:
         """Get base URL based on provider and OpenRouter configuration."""
-        if self.config.useOpenrouter:
+        if self.config.useOpenRouter:
             return "https://openrouter.ai/api/v1"
 
         # Provider-specific base URLs

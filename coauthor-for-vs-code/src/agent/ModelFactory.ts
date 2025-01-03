@@ -18,7 +18,7 @@ export class ModelFactory {
    */
   static createHandler(config: ModelConfig): ModelHandler {
     // Handle OpenRouter configuration
-    if (config.useOpenrouter) {
+    if (config.useOpenRouter) {
       // Set OpenRouter model name if not provided
       if (!config.openrouterFullName) {
         config.openrouterFullName = `${config.provider}/${config.fullName}`;
