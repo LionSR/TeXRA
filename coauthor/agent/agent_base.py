@@ -288,12 +288,15 @@ class BaseReflectionAgent(ABC):
             )
 
             logger.info(f"Stop reason: {stopReason}")
+
             logger.info(f"Token usage: {responseUsage}")
 
             # Compute statistics and update states
-            APIUsage = self.modelHandler.compute_statistics(responseUsage, responseTime)
+            APIUsage = self.modelHandler.compute_response_usage(responseUsage, responseTime)
             stateRound.update_token_counts(APIUsage)
             stateGlobal.update_from_currRound(stateRound)
+            logger.debug(f"State round: {stateRound}")
+            logger.debug(f"State global: {stateGlobal}")
 
             # Early exit for repetition
             # maybe this should be checked with the accumulated output instead of the last response...

@@ -121,12 +121,14 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
       }
 
       // For Anthropic models, handle cache tokens
-      if ('cacheReadInputTokens' in stateRound.APIUsage) {
-        const cacheRead = stateRound.APIUsage.cacheReadInputTokens ?? 0;
-        this.firstInputTokens += cacheRead;
+      if ('cache_read_input_tokens' in stateRound.APIUsage) {
+        const cacheRead = stateRound.APIUsage.cache_read_input_tokens ?? 0;
+        const cacheCreation =
+          stateRound.APIUsage.cache_creation_input_tokens ?? 0;
+        this.firstInputTokens += cacheRead + cacheCreation;
         debug(
           'AgentState',
-          `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}`,
+          `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}, cache_creation: ${cacheCreation}`,
         );
       }
 

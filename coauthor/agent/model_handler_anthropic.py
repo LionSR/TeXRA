@@ -310,8 +310,8 @@ class AnthropicHandler(ModelHandler):
 
         return basePrice
 
-    def compute_statistics(self, responseUsage: Any, responseTime: float) -> AnthropicAPIResponseUsage:
-        """Compute model-specific statistics from response usage object."""
+    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> AnthropicAPIResponseUsage:
+        """Compute model-specific response usage from response usage object."""
         return AnthropicAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
 
     def update_message_content(
