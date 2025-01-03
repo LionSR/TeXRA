@@ -2,11 +2,11 @@ name: polish_st_multiple
 inherits: polish_st
 
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
+  documentTag: latex_documents
+  endTag: </latex_documents>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist and machine learning professor Prof. Max Welling. Your task is to enhance multiple chapters of a textbook titled ``Stochastic Thermodynamics in the World of Machine Learning'', focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -29,7 +29,7 @@ prompts:
         \item Ensure that you maintain the structure and formatting of each individual chapter while making improvements.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     You will be given multiple \LaTeX documents representing chapters of the textbook ``Stochastic Thermodynamics in the World of Machine Learning''. Read all documents carefully before proceeding to revise them.
 
     Here are the \LaTeX documents with additional \LaTeX document class and commands (where the math commands you should use are defined):
@@ -49,7 +49,7 @@ prompts:
 
     Please carefully read through all the chapters and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance these chapters focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -92,7 +92,7 @@ prompts:
     ... (repeat for all output files)
     </latex_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to the chapters, please brutally honestly reflect on your changes and consider any additional improvements that could further enhance the quality of the chapters while staying focused on the original instruction.
 
     <scratchpad>

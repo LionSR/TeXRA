@@ -1,17 +1,17 @@
 name: paper2cover
 settings:
-  document_tag: cover_letter
-  end_tag: </cover_letter>
-  output_ext: tex
+  documentTag: cover_letter
+  endTag: </cover_letter>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_COVER_LETTER: template_cover_letter.txt
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an experienced physicist and scientific writer. Your task is to write a compelling cover letter for a research paper to be submitted to a Physical Review journal. The cover letter should highlight the significance and novelty of the research, and explain why it is suitable for the chosen journal.
 
     When writing the cover letter:
@@ -22,7 +22,7 @@ prompts:
     - Address the letter to the editor of the journal.
     - Include all necessary components of a cover letter, such as paper title, authors, and contact information.
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to write a cover letter for this paper to submit to a Physical Review journal.
 
     Here is the \LaTeX document of the research paper:
@@ -37,7 +37,7 @@ prompts:
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details. Your task is to write a cover letter for this paper.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -66,7 +66,7 @@ prompts:
     {{ TEMPLATE_COVER_LETTER_CONTENT }}
     </cover_letter>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the cover letter we've written. Consider these points and brainstorm potential improvements in the scratchpad below:
 
     <scratchpad>

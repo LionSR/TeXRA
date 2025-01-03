@@ -168,7 +168,7 @@ class ModelHandler(ABC):
         output_token_limit = self.output_token_limit_factor * state_global.first_input_tokens if state_global.first_input_tokens > 0 else float("inf")
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
-        encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
+        encounter_documentTag = f"</{agent_settings.documentTag}>" in new_response
         continuation_limit = state_round.continuation_count > self.continue_limit
         input_token_limit = state_global.total_input_tokens > self.input_token_limit
         output_token_limit = state_global.total_output_tokens > output_token_limit
@@ -177,14 +177,14 @@ class ModelHandler(ABC):
             logger.warning(f"Output tokens exceed {self.output_token_limit_factor}x input tokens")
             logger.warning(f"Total output tokens: {state_global.total_output_tokens}, " f"First input tokens: {state_global.first_input_tokens}")
 
-        should_stop = encounter_document_tag or continuation_limit or input_token_limit
+        should_stop = encounter_documentTag or continuation_limit or input_token_limit
 
         # Print debug info if stopping
         if should_stop:
             logger.debug(
                 f"Stop flags:\n"
                 f"end_turn: {end_turn}\n"
-                f"encounter_document_tag: {encounter_document_tag}\n"
+                f"encounter_documentTag: {encounter_documentTag}\n"
                 f"continuation_limit: {continuation_limit}\n"
                 f"input_token_limit: {input_token_limit}\n"
                 f"output_token_limit: {output_token_limit}\n"
@@ -203,8 +203,8 @@ class ModelHandler(ABC):
         client: Any,
         messages: list[dict],
         temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
+        systemPrompt: str | None = None,
+        endTag: str | None = None,
     ) -> Any:
         """Create a response using the model's API."""
         pass
@@ -212,10 +212,10 @@ class ModelHandler(ABC):
     @abstractmethod
     def initialize_messages(
         self,
-        user_prefix: str,
-        user_request: str,
+        userPrefix: str,
+        userRequest: str,
         figure_files: list[str] | None = None,
-        system_prompt: str | None = None,
+        systemPrompt: str | None = None,
     ) -> list[dict]:
         """Initialize messages for the conversation."""
         pass
@@ -239,7 +239,7 @@ class ModelHandler(ABC):
     def extract_response(
         self,
         response_object: Any,
-        end_tag: str,
+        endTag: str,
         auto_confirmation: bool = False,
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics."""

@@ -200,27 +200,27 @@ Example YAML structure:
 ```yaml
 name: paper2cover
 settings:
-  document_tag: cover_letter
-  end_tag: </cover_letter>
-  output_ext: tex
+  documentTag: cover_letter
+  endTag: </cover_letter>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_COVER_LETTER: template_cover_letter.txt
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert academic writer. Your task is to...
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a LaTeX document...
 
-  user_request: |
+  userRequest: |
     Based on the document provided, please...
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on what we've written...
 ```
 
@@ -239,12 +239,12 @@ Parent prompt (`agent_polish.yaml`):
 ```yaml
 name: polish
 settings:
-  document_tag: polish
-  output_ext: tex
+  documentTag: polish
+  outputExt: tex
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a computer scientist and expert writer.
-  user_prefix: |
+  userPrefix: |
     Polish this text:
 ```
 
@@ -254,9 +254,9 @@ Child prompt (`agent_polish_physics.yaml`):
 name: polish_physics
 inherits: polish
 settings:
-  document_tag: polish_physics # Override parent setting
+  documentTag: polish_physics # Override parent setting
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a physicist and expert writer.
     # Other prompts are inherited from parent
 ```

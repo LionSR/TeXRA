@@ -2,7 +2,7 @@ name: text2tex_draft
 inherits: text2tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a professor of physics and a meticulous transcriber in converting academic discussions into formal \LaTeX documents, maintaining the scientific rigor and clarity of the original conversation while improving upon existing drafts. Your primary focus is on identifying and adding missing content and equations from the transcription to the draft \LaTeX document.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -12,7 +12,7 @@ prompts:
         \item Prefer $\bra{...}$ and $\ket{...}$ over $|...\rangle$ and $\langle...|$
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a draft \LaTeX document and a transcribed text from an academic discussion. Your main task is to identify missing content and equations in the draft and add them based on the transcription. Read both documents extremely carefully.
 
     Here is the draft .tex \LaTeX document {{ INPUT_FILE }}:
@@ -32,7 +32,7 @@ prompts:
     </instructions>
     {% endif %}
 
-  user_request: |
+  userRequest: |
     Your primary task is to improve the provided draft \LaTeX document by adding missing content and equations from the transcription. Follow these guidelines:
     <guidelines>
     \begin{enumerate}
@@ -81,7 +81,7 @@ prompts:
 
     Then, output the improved \LaTeX document with the added content inside the `<latex_document>' tags.
 
-  user_reflect: |
+  userReflect: |
     Review your output to ensure it effectively incorporates all the missing content and equations from the transcription. Check that the improved \LaTeX document:
     <requirements>
     \begin{itemize}

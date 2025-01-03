@@ -11,7 +11,7 @@ class DirectAgent(BaseReflectionAgent):
             base_output_file,
             self.agent_config.agent,
             self.model_handler.config.name,
-            self.agent_settings.output_ext,
+            self.agent_settings.outputExt,
             curr_round,
             self.agent_config.edited_file,
         )

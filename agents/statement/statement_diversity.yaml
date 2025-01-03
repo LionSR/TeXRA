@@ -1,14 +1,14 @@
 name: statement_diversity
 settings:
-  document_tag: revised_statement
-  end_tag: </revised_statement>
-  output_ext: tex
+  documentTag: revised_statement
+  endTag: </revised_statement>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an academic advisor specializing in faculty job applications for US universities. Your task is to revise a diversity statement for an academic position. Maintain professionalism, emphasize the applicant's commitment to diversity, equity, and inclusion (DEI), and align content with expectations of US academic institutions.
 
     Revision guidelines:
@@ -22,7 +22,7 @@ prompts:
     - Adhere to specified word or page limits (typically around one page)
     - Respect and work with the existing experiences provided in the input document; do not invent or add any new information
 
-  user_prefix: |
+  userPrefix: |
     Another document from the application package: {{ REFERENCE_FILE }}
     <sample_document>
     {{ REFERENCE_CONTENT }}
@@ -35,7 +35,7 @@ prompts:
 
     Review the document carefully before revising. Respect and work with the existing experiences provided; do not invent new experiences or add any information not present in the original document.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow during the revision:
     <instruction>
@@ -62,7 +62,7 @@ prompts:
 
     Output the revised document within <revised_statement> tags. Maintain professionalism and adhere to the typical one-page limit. Ensure all information is based solely on the input document; do not add or invent any new experiences or details.
 
-  user_reflect: |
+  userReflect: |
     Review your revised diversity statement critically:
 
     <scratchpad>

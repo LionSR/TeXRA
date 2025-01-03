@@ -1,13 +1,13 @@
 name: polish_octet
 settings:
-  document_tag: latex_code
-  end_tag: </latex_code>
+  documentTag: latex_code
+  endTag: </latex_code>
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to write a research paper.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -60,7 +60,7 @@ prompts:
     - Maintains professional document structure
     {% endif %}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you the \LaTeX code of a research paper draft. Read the document carefully before proceeding.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -80,7 +80,7 @@ prompts:
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  user_request: |
+  userRequest: |
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document. 
 
     Then, following your plan in the scratchpad, please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. 
@@ -97,7 +97,7 @@ prompts:
     % 1ST_UPDATED_LATEX_CODE HERE. Follow the order and the format of {{ INPUT_FILE }}.
     </latex_code>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made according to the given instructions. 
     Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 

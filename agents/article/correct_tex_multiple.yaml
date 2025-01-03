@@ -1,15 +1,15 @@
 name: correct_tex_multiple
 inherits: correct_tex
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
-  output_ext: tex
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to write a research paper.
 
     When writing a professional \LaTeX document, you must:
@@ -28,7 +28,7 @@ prompts:
         \item Use the math commands defined in the auxiliary file command.tex if provided.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
     Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
@@ -55,7 +55,7 @@ prompts:
     The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}.
     {% endif %}
 
-  user_request: |
+  userRequest: |
     In the scratchpad below, brainstorm concrete ways to significantly improve the quality of all latex documents that are directly relevant to the instruction above. Do not consider any other aspects of the papers. Be as concrete as to change what in which section of which paper in what ways. Use the scratchpad as an opportunity to formulate as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change, and the concrete steps to be taken to implement the changes starting from the beginning of each document.
 
     <scratchpad>
@@ -85,7 +85,7 @@ prompts:
     ... (repeat for all output files)
     </latex_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to the papers, please reflect on your changes and consider any additional improvements that could further enhance the quality of the papers while staying focused on the original instruction.
 
     <scratchpad>

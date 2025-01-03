@@ -1,15 +1,15 @@
 name: correct_tex
 
 settings:
-  agent_type: direct
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - "Here is the revised \\LaTeX document. <latex_document>"
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to write a research paper.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -28,7 +28,7 @@ prompts:
         \item Use the math commands defined in the auxiliary file command.tex if provided.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -41,7 +41,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
 
     As you review the document, make the following corrections and improvements:

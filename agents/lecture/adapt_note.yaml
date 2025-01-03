@@ -1,18 +1,18 @@
 name: adapt_note
 
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Act as Prof. Max Welling, an expert on combining advanced machine learning with physics. Your task is to write a long book entitled ``Stochastic Thermodynamics in the World of Machine Learning''.
 
     \begin{itemize}
@@ -24,7 +24,7 @@ prompts:
         \item Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like `cat' for `categorical', `gauss' for `gaussian', `exp' for `exponential', `var' for `variate', `opt' for `optimization', etc.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     You will be adapting a new lecture notes to match the notation, style, and level of detail of your existing long set of lecture notes on stochastic thermodynamics and machine learning. So please read the documents carefully.
 
     Here are your existing lecture notes with consistent notation and style with additional \LaTeX document class and commands:
@@ -42,7 +42,7 @@ prompts:
     {{ INPUT_CONTENT }}
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully read and understand both sets of lecture notes. Identify all the concepts, notations, and derivations in the new lecture notes. 
 
     You need to include the derivations of the path probability for the Langevin systems, including the forward and backward formulations using the Itô/Anti-Itô convention. Start with all the details of the derivation of the path probability for the overdamped Langevin systems. Include the difference between the forward and backward action, which will involve the Stratonovich integral. Then proceed to the first and second laws of the overdamped Langevin systems. Include all the derivational steps. Provide all the derivations for the expression of the total entropy production in terms of the probability current. Seamlessly incorporate the derivations from the appendix of the new lecture notes into your output.
@@ -67,7 +67,7 @@ prompts:
     % Updated LaTeX source here
     </adapted_lecture_notes>
 
-  user_reflect: |
+  userReflect: |
     Your adapted lecture notes are too generic and not specific enough, with some parts of the original lecture notes missing from the output, and some notations not consistent with the original lecture notes.
 
     After thoroughly reviewing the existing lecture notes (under the `<existing_notes>' tag), the new lecture notes (under the `<new_lecture_notes>' tag), and your generated lecture notes (under the `<adapted_lecture_notes>' tag), please revise the lecture notes to satisfy the previous requirements under the `<requirements>' tag and the following instructions:
