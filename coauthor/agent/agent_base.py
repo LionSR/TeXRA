@@ -49,6 +49,7 @@ class BaseReflectChainAgent(ABC):
         logger.debug(f"Model config: {self.model_handler.config}\n")
         logger.debug(f"Agent config: {self.agent_config}\n")
         logger.debug(f"Agent settings: {self.agent_settings}\n")
+        logger.debug(f"Model Handler: {self.model_handler}\n")
 
         # Initialize basic attributes
         self.output_file = ["", ""]

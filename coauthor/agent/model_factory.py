@@ -4,11 +4,8 @@ from .model_config import ModelConfig, ModelProvider
 from .model_handler import ModelHandler
 from .model_handler_openai import OpenAIHandler
 from .model_handler_anthropic import AnthropicHandler
-from .model_handler_others import (
-    GoogleviaOpenAIHandler,
-    OpenRouterHandler,
-    AnthropicviaOpenrouterHandler,
-)
+from .model_handler_google import GoogleviaOpenAIHandler
+from .model_handler_openrouter import OpenRouterHandler, AnthropicviaOpenrouterHandler
 
 
 class ModelFactory:

@@ -75,7 +75,8 @@ def run_agent(agent: str, **kwargs: Any) -> None:
         raise ValueError(f"Model {agent_config.model} not found in MODEL_CONFIGS")
 
     model_config = MODEL_CONFIGS[model_name]
-    model_config.use_openrouter = "OR" in agent_config.model
+    if not model_config.use_openrouter:
+        model_config.use_openrouter = "OR" in agent_config.model
 
     model_handler = ModelFactory.create_handler(model_config)
 
