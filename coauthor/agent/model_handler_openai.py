@@ -187,19 +187,19 @@ class OpenAIHandler(ModelHandler):
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
 
-        file_content = read_file(outputFile)
-        messages.append({"role": "assistant", "content": file_content})
+        fileContent = read_file(outputFile)
+        messages.append({"role": "assistant", "content": fileContent})
 
-        if agentSettings.has_endTag(file_content):
+        if agentSettings.has_endTag(fileContent):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
-                messages[-1]["content"][-1]["text"] = file_content
+                messages[-1]["content"][-1]["text"] = fileContent
             else:
-                messages[-1]["content"] = file_content
+                messages[-1]["content"] = fileContent
             return True, messages
 
         logger.warning("Output file exists but no end tag found - continuing from file")
-        toolState.update_accumulatedOutput(file_content)
+        toolState.update_accumulatedOutput(fileContent)
         state = AgentStateRound.initialize(0)
         toolState.lastResponse = toolState.accumulatedOutput
         self.add_continue_message(messages, state, toolState, agentSettings, agentConfig)

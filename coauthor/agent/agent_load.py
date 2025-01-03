@@ -24,19 +24,19 @@ def merge_dicts(base: dict, override: dict) -> dict:
 
 def load_agent_settings_and_prompts(agentPath: str, agentName: str) -> tuple[dict, dict]:
     """Load agent settings and prompts from YAML file with inheritance support."""
-    agent_file = os.path.join(agentPath, f"{agentName}.yaml")
-    if not os.path.exists(agent_file):
-        raise FileNotFoundError(f"Task prompt file not found: {agent_file}")
+    agentFile = os.path.join(agentPath, f"{agentName}.yaml")
+    if not os.path.exists(agentFile):
+        raise FileNotFoundError(f"Task prompt file not found: {agentFile}")
 
-    config = load_yaml(agent_file)
+    config = load_yaml(agentFile)
     parent = config.get("inherits")
 
     if parent:
-        parent_settings, parent_prompts = load_agent_settings_and_prompts(agentPath, parent)
+        parentSettings, parentPrompts = load_agent_settings_and_prompts(agentPath, parent)
         agentSettings = config.get("settings", {}) or {}
         agentPrompts = config.get("prompts", {}) or {}
-        settings = merge_dicts(parent_settings, agentSettings)
-        prompts = merge_dicts(parent_prompts, agentPrompts)
+        settings = merge_dicts(parentSettings, agentSettings)
+        prompts = merge_dicts(parentPrompts, agentPrompts)
     else:
         settings = config.get("settings", {}) or {}
         prompts = config.get("prompts", {}) or {}

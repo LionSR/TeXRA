@@ -41,14 +41,15 @@ class OpenAIAPIResponseUsage(ResponseUsageBase):
 
     @classmethod
     def from_response(cls, responseUsage: Any, cost: float, responseTime: float) -> "OpenAIAPIResponseUsage":
-        # Extract tokens from response usage
-        cached_tokens = getattr(responseUsage.prompt_tokens_details, "cached_tokens", 0) if hasattr(responseUsage, "prompt_tokens_details") else 0
+        # Extract tokens from response usag
+        prompt_tokens_details = getattr(responseUsage, "prompt_tokens_details", None)
+        cached_tokens = getattr(prompt_tokens_details, "cached_tokens", 0) if prompt_tokens_details else 0
 
         # Extract completion details
-        completion_details = getattr(responseUsage, "completion_tokens_details", None)
-        reasoning_tokens = getattr(completion_details, "reasoning_tokens", 0) if completion_details else 0
-        accepted_prediction_tokens = getattr(completion_details, "accepted_prediction_tokens", None) if completion_details else None
-        rejected_prediction_tokens = getattr(completion_details, "rejected_prediction_tokens", None) if completion_details else None
+        completion_tokens_details = getattr(responseUsage, "completion_tokens_details", None)
+        reasoning_tokens = getattr(completion_tokens_details, "reasoning_tokens", 0) if completion_tokens_details else 0
+        accepted_prediction_tokens = getattr(completion_tokens_details, "accepted_prediction_tokens", None) if completion_tokens_details else None
+        rejected_prediction_tokens = getattr(completion_tokens_details, "rejected_prediction_tokens", None) if completion_tokens_details else None
 
         # Calculate percentage cached
         percentageCached = (cached_tokens / responseUsage.prompt_tokens * 100) if responseUsage.prompt_tokens > 0 else 0
