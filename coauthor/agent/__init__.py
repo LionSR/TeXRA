@@ -10,10 +10,10 @@ from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 
 # Base agent implementations
-from .agent_base import BaseReflectChainAgent
+from .agent_base import BaseReflectionAgent
 
 # Specialized agent implementations
-from .agent_reflect import ThinkAndWrite, DirectWrite
+from .agent_reflect import CoTAgent, DirectAgent
 from .agent_merge import AgentMerge
 
 # Utility and loading functions
@@ -47,10 +47,10 @@ __all__ = [
     "AgentStateGlobal",
     "ToolState",
     # Base agent class
-    "BaseReflectChainAgent",
+    "BaseReflectionAgent",
     # Agent implementations
-    "ThinkAndWrite",
-    "DirectWrite",
+    "CoTAgent",
+    "DirectAgent",
     "AgentMerge",
     # Utility and infrastructure
     "load_agent_settings_and_prompts",
