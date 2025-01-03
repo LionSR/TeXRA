@@ -1,27 +1,19 @@
-// VS Code API
 import { vscode } from './vscodeApi.js';
-
-// File handling utilities
+import { MULTIPLE_SELECTIONS, CHECK_BOXES, VALUE_ELEMENTS } from './utils.js';
 import {
   hideEmptyMultipleFileSelects,
   setMultipleFileSelectVisibility,
   addFileToList,
   getSelectedFiles,
 } from './fileHandlers.js';
-
-// Common utilities
 import {
-  MULTIPLE_SELECTIONS,
-  CHECK_BOXES,
-  VALUE_ELEMENTS,
   safeGetElementValue,
   safeGetElementById,
   safeGetElementChecked,
   safeSetElementValue,
   safeSetElementChecked,
-  capitalize,
-  uncapitalize,
 } from './utils.js';
+import { capitalize, uncapitalize } from './utils.js';
 
 export function setDefaultState() {
   // Hide output name override by default
