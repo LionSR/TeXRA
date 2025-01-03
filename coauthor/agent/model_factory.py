@@ -4,11 +4,8 @@ from .model_config import ModelConfig, ModelProvider
 from .model_handler import ModelHandler
 from .model_handler_openai import OpenAIHandler
 from .model_handler_anthropic import AnthropicHandler
-from .model_handler_others import (
-    GoogleviaOpenAIHandler,
-    OpenRouterHandler,
-    AnthropicviaOpenrouterHandler,
-)
+from .model_handler_google import GoogleviaOpenAIHandler
+from .model_handler_openrouter import OpenRouterHandler, AnthropicviaOpenrouterHandler
 
 
 class ModelFactory:
@@ -17,13 +14,13 @@ class ModelFactory:
     @staticmethod
     def create_handler(config: ModelConfig) -> ModelHandler:
         """Create model handler based on provider and OpenRouter configuration."""
-        # Handle OpenRouter configuration - this takes precedence over provider
-        if config.use_openrouter or config.name.endswith("OR"):
-            # Ensure use_openrouter is set if name ends with OR
-            config.use_openrouter = True
-            if config.name.endswith("OR"):
-                config.name = config.name[:-2]  # Remove OR suffix
+        # Handle OpenRouter configuration
+        if config.use_openrouter:
+            # Set OpenRouter model name if not provided
+            if not config.openrouter_full_name:
+                config.openrouter_full_name = f"{config.provider.value}/{config.full_name}"
 
+            # Route to appropriate OpenRouter handler
             if config.provider == ModelProvider.ANTHROPIC:
                 return AnthropicviaOpenrouterHandler(config)
             return OpenRouterHandler(config)

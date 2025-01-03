@@ -4,7 +4,8 @@ import os
 import sqlite3
 from datetime import datetime
 
-from .agent_dataclass import AgentConfig, AgentSettings
+from .agent_config import AgentConfig
+from .agent_dataclass import AgentSettings
 from .agent_state import AgentStateGlobal, AgentStateRound
 
 
