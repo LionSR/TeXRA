@@ -5,8 +5,6 @@ from enum import Enum
 
 # Default configuration values
 DEFAULT_CONTEXT_WINDOW = 128000
-DEFAULT_INPUT_TOKEN_LIMIT = 1500000
-DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
 
 
 @dataclass
@@ -45,7 +43,5 @@ class ModelConfig:
     base_url: str | None = None
     context_window: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
-    input_token_limit: int = DEFAULT_INPUT_TOKEN_LIMIT
-    output_token_limit_factor: float = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
     use_openrouter: bool = False  # Whether to use OpenRouter for this model
     openrouter_full_name: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")

@@ -18,6 +18,10 @@ from .tool_handler import ToolState
 DEFAULT_CONTINUE_LIMIT = 10
 CONFIRMATION_CONTINUE_LIMIT = 20
 
+# Default token limits
+DEFAULT_INPUT_TOKEN_LIMIT = 1500000
+DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
+
 
 class ModelHandler(ABC):
     """Base class for model-specific handlers."""
@@ -26,6 +30,8 @@ class ModelHandler(ABC):
         self.config = config
         self.capabilities = config.capabilities
         self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
+        self.input_token_limit = DEFAULT_INPUT_TOKEN_LIMIT
+        self.output_token_limit_factor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
@@ -159,18 +165,16 @@ class ModelHandler(ABC):
         Returns:
             Tuple of (end_turn: bool, should_stop: bool)
         """
-        output_token_limit = (
-            self.config.output_token_limit_factor * state_global.first_input_tokens if state_global.first_input_tokens > 0 else float("inf")
-        )
+        output_token_limit = self.output_token_limit_factor * state_global.first_input_tokens if state_global.first_input_tokens > 0 else float("inf")
 
         end_turn = stop_reason in ["end_turn", "stop_sequence", "stop"]
         encounter_document_tag = f"</{agent_settings.document_tag}>" in new_response
         continuation_limit = state_round.continuation_count > self.continue_limit
-        input_token_limit = state_global.total_input_tokens > self.config.input_token_limit
+        input_token_limit = state_global.total_input_tokens > self.input_token_limit
         output_token_limit = state_global.total_output_tokens > output_token_limit
 
         if output_token_limit:
-            logger.warning(f"Output tokens exceed {self.config.output_token_limit_factor}x input tokens")
+            logger.warning(f"Output tokens exceed {self.output_token_limit_factor}x input tokens")
             logger.warning(f"Total output tokens: {state_global.total_output_tokens}, " f"First input tokens: {state_global.first_input_tokens}")
 
         should_stop = encounter_document_tag or continuation_limit or input_token_limit
