@@ -18,7 +18,7 @@ from .agent.model_factory import ModelFactory
 from .agent.agent_base import BaseReflectionAgent
 from .agent.agent_class_cot import CoTAgent
 from .agent.agent_class_direct import DirectAgent
-from .agent.agent_class_merge import AgentMerge
+from .agent.agent_class_merge import MergeAgent
 
 load_dotenv()
 
@@ -117,7 +117,7 @@ def run_merge_agent(model: str, inputFile: str, editedFile: str) -> None:
     agentSettings = AgentSettings.from_dict(agentSettings_dict)
     agentPrompts = AgentPrompts.from_dict(agentPrompts_dict)
 
-    agent = AgentMerge(
+    agent = MergeAgent(
         modelHandler=modelHandler,
         agentConfig=agentConfig,
         agentSettings=agentSettings,

@@ -12,10 +12,11 @@ export { extractFigurePathsFromLatex } from './extractFigure';
 export {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
+  ConnectionResult,
 } from './textConnection';
 
 // Export LaTeX compilation tools
 export { compileLatexToPdf } from './texTools';
 
-// Re-export types
-export type { ConnectionResult } from './textConnection';
+// Export texcount functionality
+export { getTexCountStats } from './texcount';
