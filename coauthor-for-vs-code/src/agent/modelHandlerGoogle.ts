@@ -1,8 +1,16 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
 import OpenAI from 'openai';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
-import * as logger from '../logger/logUtils';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
