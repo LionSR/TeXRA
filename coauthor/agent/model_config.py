@@ -7,8 +7,6 @@ from enum import Enum
 DEFAULT_CONTEXT_WINDOW = 128000
 DEFAULT_INPUT_TOKEN_LIMIT = 1500000
 DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5
-DEFAULT_CONTINUE_LIMIT = 10
-CONFIRMATION_CONTINUE_LIMIT = 20
 
 
 @dataclass
@@ -49,10 +47,5 @@ class ModelConfig:
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     input_token_limit: int = DEFAULT_INPUT_TOKEN_LIMIT
     output_token_limit_factor: float = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
-    continue_limit: int = field(init=False)
     use_openrouter: bool = False  # Whether to use OpenRouter for this model
     openrouter_full_name: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
-
-    def __post_init__(self):
-        """Initialize continue_limit."""
-        self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likes_to_ask_for_confirmation else DEFAULT_CONTINUE_LIMIT
