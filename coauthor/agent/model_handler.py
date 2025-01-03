@@ -29,9 +29,9 @@ class ModelHandler(ABC):
     def __init__(self, config: ModelConfig):
         self.config = config
         self.capabilities = config.capabilities
-        self.continue_limit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likesToAskForConfirmation else DEFAULT_CONTINUE_LIMIT
+        self.continueLimit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likesToAskForConfirmation else DEFAULT_CONTINUE_LIMIT
         self.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT
-        self.outputTokenLimit_factor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
+        self.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
@@ -165,16 +165,16 @@ class ModelHandler(ABC):
         Returns:
             Tuple of (endTurn: bool, should_stop: bool)
         """
-        outputTokenLimit = self.outputTokenLimit_factor * stateGlobal.firstInputTokens if stateGlobal.firstInputTokens > 0 else float("inf")
+        maxOutputTokens = self.maxOutputTokensFactor * stateGlobal.firstInputTokens if stateGlobal.firstInputTokens > 0 else float("inf")
 
         endTurn = stopReason in ["end_turn", "stop_sequence", "stop"]  # end_turn/stop_sequence is correct as this is what api returns
         encounterDocumentTag = f"</{agentSettings.documentTag}>" in newResponse
-        continuation_limit = stateRound.continuationCount > self.continue_limit
+        continuation_limit = stateRound.continuationCount > self.continueLimit
         inputTokenLimit = stateGlobal.totalInputTokens > self.inputTokenLimit
-        outputTokenLimit = stateGlobal.totalOutputTokens > outputTokenLimit
+        maxOutputTokensExceeded = stateGlobal.totalOutputTokens > maxOutputTokens
 
-        if outputTokenLimit:
-            logger.warning(f"Output tokens exceed {self.outputTokenLimit_factor}x input tokens")
+        if maxOutputTokensExceeded:
+            logger.warning(f"Output tokens exceed {self.maxOutputTokensFactor}x input tokens")
             logger.warning(f"Total output tokens: {stateGlobal.totalOutputTokens}, " f"First input tokens: {stateGlobal.firstInputTokens}")
 
         should_stop = encounterDocumentTag or continuation_limit or inputTokenLimit
@@ -187,7 +187,7 @@ class ModelHandler(ABC):
                 f"encounterDocumentTag: {encounterDocumentTag}\n"
                 f"continuation_limit: {continuation_limit}\n"
                 f"inputTokenLimit: {inputTokenLimit}\n"
-                f"outputTokenLimit: {outputTokenLimit}\n"
+                f"maxOutputTokens: {maxOutputTokens}\n"
             )
 
         return endTurn, should_stop

@@ -14,3 +14,4 @@ class ToolConfig:
     includeTexCount: bool = False
     autoConfirmation: bool = False
     printInputPrompt: bool = False
+    useOpenRouter: bool = False
