@@ -128,9 +128,9 @@ class BaseReflectionAgent(ABC):
         if self.agentSettings.requiredFiles:
             for varName, file_path in self.agentSettings.requiredFiles.items():
                 if file_path is not None and os.path.exists(file_path):
-                    file_content = read_file(file_path)
+                    fileContent = read_file(file_path)
                     user_vars[f"{varName}_FILE"] = file_path
-                    user_vars[f"{varName}_CONTENT"] = file_content
+                    user_vars[f"{varName}_CONTENT"] = fileContent
                     logger.info(f"Found from [Required Files] the [VAR '{varName}']: {file_path}")
                 else:
                     logger.warning(f"[Required file] {file_path} not found from [VAR '{varName}']")
@@ -140,9 +140,9 @@ class BaseReflectionAgent(ABC):
             for varName, file_path in self.agentSettings.requiredFilesInternal.items():
                 full_path = os.path.join(self.agentPath, file_path)
                 if os.path.exists(full_path) and full_path:
-                    file_content = read_file(full_path)
+                    fileContent = read_file(full_path)
                     user_vars[f"{varName}_FILE"] = full_path
-                    user_vars[f"{varName}_CONTENT"] = file_content
+                    user_vars[f"{varName}_CONTENT"] = fileContent
                     logger.info(f"Found from [Required Files Internal] the [VAR '{varName}']: {full_path}")
                 else:
                     logger.warning(f"[Required file internal] {full_path} not found from [VAR '{varName}']")
@@ -168,10 +168,10 @@ class BaseReflectionAgent(ABC):
                     if category.endswith("_file"):  # Single file categories
                         if category_value and pattern in category_value.lower():
                             if os.path.exists(category_value):
-                                file_content = read_file(category_value)
-                                if file_content:
+                                fileContent = read_file(category_value)
+                                if fileContent:
                                     user_vars[varName + "_FILE"] = category_value
-                                    user_vars[varName + "_CONTENT"] = file_content
+                                    user_vars[varName + "_CONTENT"] = fileContent
                                     logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{varName}']: {category_value}")
                                 else:
                                     logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
@@ -183,10 +183,10 @@ class BaseReflectionAgent(ABC):
                             for file in category_value:
                                 if pattern in file.lower():
                                     if os.path.exists(file):
-                                        file_content = read_file(file)
-                                        if file_content:
+                                        fileContent = read_file(file)
+                                        if fileContent:
                                             user_vars[varName + "_FILE"] = file
-                                            user_vars[varName + "_CONTENT"] = file_content
+                                            user_vars[varName + "_CONTENT"] = fileContent
                                             logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{varName}']: {file}")
                                         else:
                                             logger.warning(f"File {file} not found from [Pattern '{pattern}']")

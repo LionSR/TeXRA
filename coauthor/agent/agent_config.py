@@ -50,19 +50,6 @@ class AgentConfig:
     @classmethod
     def from_kwargs(cls, **kwargs) -> "AgentConfig":
         """Create AgentConfig from keyword arguments"""
-        # Extract tool configuration fields
-        toolConfig_fields = {
-            k: kwargs.pop(k.lower(), False)
-            for k in [
-                "usePrefillFromInput",
-                "autoExtractFigure",
-                "autoExtractTikzFigure",
-                "autoExtractTikzFigureReflect",
-                "includeTexCount",
-                "autoConfirmation",
-                "printInputPrompt",
-            ]
-        }
 
         # Create dict with default values for all fields
         config_defaults = {
@@ -85,6 +72,20 @@ class AgentConfig:
             "outputFiles": None,
             "outputNameOverride": None,
             "editedFile": None,
+        }
+
+        # Extract tool configuration fields
+        toolConfig_fields = {
+            k: kwargs.pop(k.lower(), False)
+            for k in [
+                "usePrefillFromInput",
+                "autoExtractFigure",
+                "autoExtractTikzFigure",
+                "autoExtractTikzFigureReflect",
+                "includeTexCount",
+                "autoConfirmation",
+                "printInputPrompt",
+            ]
         }
 
         # Update defaults with provided kwargs, handling case-insensitive keys

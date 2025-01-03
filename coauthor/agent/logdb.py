@@ -161,8 +161,8 @@ def update_log_statistics(logId: int, stateGlobal: AgentStateGlobal, stateRound:
             if stateGlobal_dict.get("APIUsage"):
                 stateGlobal_dict["APIUsage"] = stateGlobal_dict["APIUsage"].to_dict()
 
-            stateGlobal_json = json.dumps(stateGlobal_dict)
-            stateRounds_json = json.dumps(existing_stateRounds)
+            stateGlobalJson = json.dumps(stateGlobal_dict)
+            stateRoundsJson = json.dumps(existing_stateRounds)
 
             # Update the database
             c.execute(
@@ -171,7 +171,7 @@ def update_log_statistics(logId: int, stateGlobal: AgentStateGlobal, stateRound:
                 stateRounds = ?,
                 outputFile = ?
                 WHERE id = ?""",
-                (stateGlobal_json, stateRounds_json, outputFile, logId),
+                (stateGlobalJson, stateRoundsJson, outputFile, logId),
             )
 
             conn.commit()

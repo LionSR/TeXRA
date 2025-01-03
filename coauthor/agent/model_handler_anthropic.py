@@ -215,11 +215,11 @@ class AnthropicHandler(ModelHandler):
             )
 
         # Handle document tag if present
-        documentTag_start = f"<{agentSettings.documentTag}>"
+        documentTagStart = f"<{agentSettings.documentTag}>"
         first_lines = toolState.lastResponse.split("\n")[:10]
         for line in first_lines:
-            if line.strip().startswith(documentTag_start):
-                logger.warning(f"Removing document tag prefix {documentTag_start} from response")
+            if line.strip().startswith(documentTagStart):
+                logger.warning(f"Removing document tag prefix {documentTagStart} from response")
                 toolState.lastResponse = toolState.lastResponse.replace(line, "", 1).strip()
                 break
 
@@ -269,30 +269,30 @@ class AnthropicHandler(ModelHandler):
             return False, messages
 
         # Get prefill from existing and non-trivial file
-        file_content = read_file(outputFile)
+        fileContent = read_file(outputFile)
 
         if self.capabilities.likesToAskForConfirmation and agentConfig.toolConfig.autoConfirmation:
-            file_content = filter_tags_from_text(file_content, "monologue")
-            file_content = apply_replacement_regex(file_content, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
-        file_content = file_content.strip()
+            fileContent = filter_tags_from_text(fileContent, "monologue")
+            fileContent = apply_replacement_regex(fileContent, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
+        fileContent = fileContent.strip()
 
-        if agentSettings.has_endTag(file_content):
+        if agentSettings.has_endTag(fileContent):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
-                messages[-1]["content"][-1]["text"] = file_content
+                messages[-1]["content"][-1]["text"] = fileContent
             else:
-                messages[-1]["content"] = file_content
+                messages[-1]["content"] = fileContent
 
             if messages[-1]["content"][-1].get("cache_control"):
                 messages[-1]["content"][-1].pop("cache_control")
             return True, messages
 
         logger.warning("Output file exists but no end tag found - continuing from file")
-        toolState.update_accumulatedOutput(file_content)
+        toolState.update_accumulatedOutput(fileContent)
         if self.capabilities.supportsPromptCaching:
-            content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
+            content = [{"type": "text", "text": fileContent, "cache_control": {"type": "ephemeral"}}]
         else:
-            content = file_content
+            content = fileContent
         logger.debug(f"Using existing content as prefill: {outputFile}")
 
         messages.append({"role": "assistant", "content": content})
@@ -330,7 +330,7 @@ class AnthropicHandler(ModelHandler):
 
             if self.capabilities.supportsPromptCaching:
                 if isinstance(last_message["content"], list):
-                    # Add cache control to new message
+                    # Add cache_control(snake_case) to new message
                     last_message["content"][-1]["cache_control"] = {"type": "ephemeral"}
                     # Remove cache control from previous message if it exists
                     if len(last_message["content"]) >= 2 and isinstance(last_message["content"][-2], dict):
@@ -338,14 +338,6 @@ class AnthropicHandler(ModelHandler):
                 else:
                     # Initialize content list with single message
                     last_message["content"] = [{"type": "text", "text": toolState.accumulatedOutput, "cache_control": {"type": "ephemeral"}}]
-
-        # not finished
-        # elif messages[-1]["role"] == "user":
-        #     if self.config.capabilities.likesToAskForConfirmation and autoConfirmation:
-        #         newResponse = wrap_confirmation_prompts(newResponse)
-        #         messages[-1]["content"] = newResponse
-        #     if messages[-2]["role"] == "assistant":
-        #         messages[-2]["content"] = bestConnector + newResponse
 
     def should_continue(self, stopReason: str, newResponse: str, agentSettings: AgentSettings) -> bool:
         """Determine if Anthropic model should continue generating."""
