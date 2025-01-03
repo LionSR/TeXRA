@@ -1,8 +1,17 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
+// (none needed)
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - agent components
 import {
   OpenAIAPIResponseUsage,
   AnthropicAPIResponseUsage,
 } from './ResponseUsage';
-import * as logger from '../logger/logUtils';
 
 /**
  * State for a single round (first round or reflection round)
