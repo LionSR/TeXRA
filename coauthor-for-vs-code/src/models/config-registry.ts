@@ -1,4 +1,4 @@
-import { ModelConfig, ModelProvider } from './baseModel';
+import { ModelConfig, ModelProvider } from './base-model';
 
 /**
  * Anthropic-specific configuration

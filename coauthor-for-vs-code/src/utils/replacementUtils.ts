@@ -4,7 +4,7 @@
 
 import { debug, error, initializeLogging } from '../logger/logUtils';
 
-const CHANNEL = 'ReplacementUtils';
+const CHANNEL = 'Utils';
 initializeLogging(CHANNEL);
 
 interface ReplacementCategory {
