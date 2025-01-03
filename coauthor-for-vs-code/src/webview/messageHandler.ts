@@ -1,10 +1,16 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
 import { workspace } from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import { ToolConfig } from '../agent/ToolConfig';
-import { AgentConfig } from '../agent/AgentConfig';
+import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -13,7 +19,10 @@ import {
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
-import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
+
+// Local imports - agent
+import { ToolConfig } from '../agent/ToolConfig';
+import { AgentConfig } from '../agent/AgentConfig';
 
 const CHANNEL = 'MessageHandler';
 

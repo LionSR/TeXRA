@@ -1,7 +1,14 @@
-import * as nunjucks from 'nunjucks';
-import * as logger from '../logger/logUtils';
-import { readFile, writeFile } from './fileUtils';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as nunjucks from 'nunjucks';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { readFile, writeFile } from './fileUtils';
 import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'Utils';

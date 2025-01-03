@@ -1,7 +1,14 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as fs from 'fs';
-import { getConfig } from '../frontend-utils/commonUtils';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'WebviewContent';
 logger.initializeLogging(CHANNEL);

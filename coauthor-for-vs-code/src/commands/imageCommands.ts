@@ -1,12 +1,17 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getRelativePath } from '../utils/fileUtils';
 import {
   countPdfPages,
   getBase64EncodedImage,
   processPdfInput,
   singlePagePdfToPng,
 } from '../utils/imgUtils';
-import * as logger from '../logger/logUtils';
-import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'ImageCommands';
 logger.initializeLogging(CHANNEL);

@@ -1,14 +1,25 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getWorkspacePath } from '../utils/fileUtils';
+
+// Local imports - latex utils
 import { runLatexDiff, runLatexDiffVC } from '../latex/latexdiff';
+
+// Local imports - housekeeping
 import {
   runPackLatexDiffVC,
   runPackLatexDiffVCMultiple,
   runCleanLatexDiffVC,
   runCleanLatexDiffVCMultiple,
 } from '../housekeeping';
-import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LatexDiff';
 

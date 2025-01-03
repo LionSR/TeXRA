@@ -1,9 +1,16 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { deleteFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
-import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);
