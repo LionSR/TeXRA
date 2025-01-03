@@ -14,8 +14,8 @@ const CHANNEL = 'LatexDiff';
 
 export function registerLatexDiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.latexDiff', handleLatexDiff),
-    vscode.commands.registerCommand('coauthor.latexDiffVC', handleLatexDiffVC),
+    vscode.commands.registerCommand('coauthor.latexdiff', handleLatexDiff),
+    vscode.commands.registerCommand('coauthor.latexdiffVC', handleLatexDiffVC),
     vscode.commands.registerCommand(
       'coauthor.packLatexDiffVC',
       handlePackLatexDiffVC,
@@ -200,7 +200,7 @@ async function handleCleanLatexDiffVCMultiple(
   await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
 }
 
-export const latexDiffCommands = {
+export const latexdiffCommands = {
   handleLatexDiff,
   handleLatexDiffVC,
   handlePackLatexDiffVC,

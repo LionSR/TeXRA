@@ -82,9 +82,9 @@ export class WebviewMessageHandler {
       case 'cleanMultiple':
         return this.handleMultipleOperation(message);
       // Latex Diff cases
-      case 'latexDiff':
+      case 'latexdiff':
         return this.handleLatexDiff(message);
-      case 'latexDiffVC':
+      case 'latexdiffVC':
         return this.handleLatexDiffVC(message);
       case 'requestRecentCommits':
         return this.handleRequestRecentCommits(webviewView);
@@ -360,7 +360,7 @@ export class WebviewMessageHandler {
 
   private handleLatexDiff(message: any) {
     vscode.commands.executeCommand(
-      'coauthor.latexDiff',
+      'coauthor.latexdiff',
       message.inputFile,
       message.baseFile,
       message.editedFile,
@@ -369,7 +369,7 @@ export class WebviewMessageHandler {
 
   private handleLatexDiffVC(message: any) {
     vscode.commands.executeCommand(
-      'coauthor.latexDiffVC',
+      'coauthor.latexdiffVC',
       message.inputFile,
       message.baseFile,
       message.commitHash,

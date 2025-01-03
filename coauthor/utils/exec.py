@@ -12,18 +12,18 @@ def truncate_output(text: str | None, max_chars: int = 150) -> str | None:
 
 
 def execute_command(
-    command: list[str], output_file: str = "", encoding: str = "utf-8", capture_output: bool = True
+    command: list[str], outputFile: str = "", encoding: str = "utf-8", capture_output: bool = True
 ) -> tuple[bool, str | None, str | None]:
     """Execute external command with output handling, returns (success, stdout, stderr) or writes to file."""
 
     try:
         result = subprocess.run(command, text=True, capture_output=capture_output, encoding=encoding)
-        if output_file:
+        if outputFile:
             if result.returncode != 0:
                 logger.error(f"\nCommand failed with return code {result.returncode}")
                 return False, None, result.stderr.strip()
-            write_file(output_file, result.stdout)
-            logger.info("Command completed.\nOutput saved to " + output_file)
+            write_file(outputFile, result.stdout)
+            logger.info("Command completed.\nOutput saved to " + outputFile)
             return True, None, None
         else:
             if result.returncode == 0:

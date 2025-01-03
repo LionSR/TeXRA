@@ -173,7 +173,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
 };
 
 const AUTO_CONFIRM_REPLACEMENTS: ReplacementCategory = {
-  name: 'auto_confirmation',
+  name: 'autoConfirmation',
   description: 'Fixes for auto confirmation writing with regex patterns',
   patterns: {
     // Match the entire confirmation message block and reformat
@@ -227,7 +227,7 @@ export function getReplacementsByCategory(categoryName: string): {
     latex_xml: LATEX_XML_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
-    auto_confirmation: AUTO_CONFIRM_REPLACEMENTS,
+    autoConfirmation: AUTO_CONFIRM_REPLACEMENTS,
   };
 
   return categories[categoryName]?.patterns || {};
