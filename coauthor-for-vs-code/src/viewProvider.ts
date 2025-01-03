@@ -1,7 +1,12 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from './logger/logUtils';
+
+// Local imports - webview
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
-import * as logger from './logger/logUtils';
 
 const CHANNEL = 'ViewProvider';
 logger.initializeLogging(CHANNEL);

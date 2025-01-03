@@ -1,12 +1,19 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   showInfoMessage,
   showErrorMessage,
   getConfig,
 } from '../frontend-utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import * as logger from '../logger/logUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
 const CHANNEL = 'FileSelection';

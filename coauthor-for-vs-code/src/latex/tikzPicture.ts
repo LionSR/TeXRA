@@ -1,5 +1,13 @@
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as nunjucks from 'nunjucks';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   readFile,
   fileExists,
@@ -7,9 +15,10 @@ import {
   writeFile,
   createDirectory,
 } from '../utils/fileUtils';
-import { compileLatexToPdf } from './texTools';
-import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '../utils/promptUtils';
+
+// Local imports - latex utils
+import { compileLatexToPdf } from './texTools';
 
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);

@@ -1,5 +1,10 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import { exec } from 'child_process';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 

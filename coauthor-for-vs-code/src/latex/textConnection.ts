@@ -1,6 +1,9 @@
-import OpenAI from 'openai';
+// Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';

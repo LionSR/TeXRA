@@ -1,6 +1,13 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   deleteFile,
   moveFile,
@@ -8,6 +15,8 @@ import {
   createDirectory,
   fileExists,
 } from '../utils/fileUtils';
+
+// Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';

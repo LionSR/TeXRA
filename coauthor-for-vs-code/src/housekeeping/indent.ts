@@ -1,11 +1,24 @@
-import * as vscode from 'vscode';
+// Standard library imports
+import * as cp from 'child_process';
 import * as path from 'path';
 import { promisify } from 'util';
-import * as cp from 'child_process';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
-import { deleteFile, readDirectory, fileExists } from '../utils/fileUtils';
+
+// Local imports - utilities
+import {
+  deleteFile,
+  readDirectory,
+  fileExists,
+  getWorkspacePath,
+} from '../utils/fileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { getWorkspacePath } from '../utils/fileUtils';
+
+// Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
 
 const CHANNEL = 'Housekeeping';

@@ -1,4 +1,7 @@
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile } from './fileUtils';
 
 const CHANNEL = 'Utils';

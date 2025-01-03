@@ -1,7 +1,12 @@
+// Standard library imports
 import * as cp from 'child_process';
 import { promisify } from 'util';
-import { getWorkspacePath } from './fileUtils';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getWorkspacePath } from './fileUtils';
 
 const execAsync = promisify(cp.exec);
 

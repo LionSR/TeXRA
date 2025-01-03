@@ -1,6 +1,11 @@
+// Standard library imports
 import * as path from 'path';
-import { executeCommand } from '../utils/execUtils';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { executeCommand } from '../utils/execUtils';
 
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);
