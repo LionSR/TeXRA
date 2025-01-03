@@ -1,6 +1,9 @@
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { fileExists } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
-import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);

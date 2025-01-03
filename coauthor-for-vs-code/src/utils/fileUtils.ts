@@ -1,7 +1,12 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import * as logger from '../logger/logUtils';
+// Standard library imports
 import * as fs from 'fs';
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
 logger.initializeLogging(CHANNEL);

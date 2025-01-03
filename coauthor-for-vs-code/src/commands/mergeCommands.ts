@@ -1,6 +1,11 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - core
 import { debug } from '../logger/logUtils';
+
+// Local imports - utilities
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'MergeCommands';
 

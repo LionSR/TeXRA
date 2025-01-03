@@ -1,5 +1,8 @@
+// Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';

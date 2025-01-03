@@ -1,4 +1,10 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - housekeeping
 import {
   runPackSingle,
   runPackMultiple,
@@ -8,7 +14,6 @@ import {
   runCleanOutput,
   runIndentTex,
 } from '../housekeeping';
-import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'PackCommands';
 

@@ -1,6 +1,13 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - agent components
 import { ToolConfig } from '../agent/ToolConfig';
 import { AgentConfig } from '../agent/AgentConfig';
 

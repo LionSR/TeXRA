@@ -1,9 +1,18 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getRelativePath } from '../utils/fileUtils';
+
+// Local imports - latex utils
 import { runLatexIndent } from '../latex/latexindent';
 import { getTexCount } from '../latex/texcount';
-import * as logger from '../logger/logUtils';
+
+// Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
-import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initializeLogging(CHANNEL);
