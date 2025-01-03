@@ -2,7 +2,6 @@ import sys
 import os
 import click
 from dotenv import load_dotenv
-from coauthor.args import comma_separated_list
 from coauthor.latex import (
     extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
@@ -26,6 +25,11 @@ from coauthor.execute import run_agent, run_merge_agent
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
+
+
+def comma_separated_list(value):
+    items = [item.strip() for item in value.split(",")]
+    return [item.strip("'\"") for item in items]
 
 
 def shared_arguments(func):
