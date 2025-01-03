@@ -68,7 +68,7 @@ class AnthropicHandler(ModelHandler):
         request = {
             "type": "text",
             "text": user_request,
-            **({"cache_control": {"type": "ephemeral"}} if self.config.capabilities.supports_prompt_caching else {}),
+            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
         }
         content.append(request)
 
@@ -93,12 +93,12 @@ class AnthropicHandler(ModelHandler):
         message = {
             "type": "text",
             "text": user_message,
-            **({"cache_control": {"type": "ephemeral"}} if self.config.capabilities.supports_prompt_caching else {}),
+            **({"cache_control": {"type": "ephemeral"}} if self.capabilities.supports_prompt_caching else {}),
         }
         content.append(message)
 
         # Manage cache control for previous messages
-        if self.config.capabilities.supports_prompt_caching and isinstance(messages[-1]["content"], list):
+        if self.capabilities.supports_prompt_caching and isinstance(messages[-1]["content"], list):
             prev_content = messages[-1]["content"]
             if len(prev_content) >= 2:
                 prev_content[-2].pop("cache_control", None)
@@ -113,7 +113,7 @@ class AnthropicHandler(ModelHandler):
         """Create image content for Anthropic models."""
 
         def create_content_pair(image: dict) -> list[dict]:
-            is_pdf = self.config.capabilities.supports_native_pdf and image["media_type"] == "application/pdf"
+            is_pdf = self.capabilities.supports_native_pdf and image["media_type"] == "application/pdf"
             return [
                 {"type": "text", "text": f"{'Document' if is_pdf else 'Image'}: {image['file_name']}"},
                 {"type": "document" if is_pdf else "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
@@ -146,7 +146,7 @@ class AnthropicHandler(ModelHandler):
         new_response = response_object.content[0].text.strip()
 
         # Handle auto confirmation
-        if self.config.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             new_response = wrap_confirmation_prompts(new_response)
 
         # Check for confirmation patterns
@@ -154,7 +154,7 @@ class AnthropicHandler(ModelHandler):
             stop_reason = "ask_for_confirmation"
 
         # Handle output tags if present
-        if "<output>" in new_response and self.config.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
+        if "<output>" in new_response and self.capabilities.likes_to_ask_for_confirmation and auto_confirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
             new_response = extract_text_from_tags(new_response, "output")
             logger.warning("No <output> tags found in response" if new_response == new_response else "Extracted content from <output> tags")
@@ -181,7 +181,7 @@ class AnthropicHandler(ModelHandler):
     ) -> None:
         """Handle continuation for Anthropic models."""
         # Skip if model doesn't need confirmation
-        if not self.config.capabilities.likes_to_ask_for_confirmation or not agent_config.tool_config.auto_confirmation:
+        if not self.capabilities.likes_to_ask_for_confirmation or not agent_config.tool_config.auto_confirmation:
             return
 
         # Create continuation message based on round count
@@ -268,7 +268,7 @@ class AnthropicHandler(ModelHandler):
         # Get prefill from existing and non-trivial file
         file_content = read_file(output_file)
 
-        if self.config.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
+        if self.capabilities.likes_to_ask_for_confirmation and agent_config.tool_config.auto_confirmation:
             file_content = filter_tags_from_text(file_content, "monologue")
             file_content = apply_replacement_regex(file_content, get_replacements_by_category("auto_confirmation"), flags=re.DOTALL | re.MULTILINE)
         file_content = file_content.strip()
@@ -286,7 +286,7 @@ class AnthropicHandler(ModelHandler):
 
         logger.warning("Output file exists but no end tag found - continuing from file")
         tool_state.update_accumulated_output(file_content)
-        if self.config.capabilities.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             content = [{"type": "text", "text": file_content, "cache_control": {"type": "ephemeral"}}]
         else:
             content = file_content
@@ -299,7 +299,7 @@ class AnthropicHandler(ModelHandler):
         """Compute the price for token usage."""
         base_price = (response_usage.input_tokens * self.config.input_price + response_usage.output_tokens * self.config.output_price) / 1e6
 
-        if self.config.capabilities.supports_prompt_caching:
+        if self.capabilities.supports_prompt_caching:
             if hasattr(response_usage, "cache_creation_input_tokens"):
                 base_price += (response_usage.cache_creation_input_tokens * self.config.input_price * 1.25) / 1e6
             if hasattr(response_usage, "cache_read_input_tokens"):
@@ -325,7 +325,7 @@ class AnthropicHandler(ModelHandler):
             else:
                 last_message["content"] = tool_state.accumulated_output
 
-            if self.config.capabilities.supports_prompt_caching:
+            if self.capabilities.supports_prompt_caching:
                 if isinstance(last_message["content"], list):
                     # Add cache control to new message
                     last_message["content"][-1]["cache_control"] = {"type": "ephemeral"}
