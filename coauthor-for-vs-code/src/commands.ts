@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+
+// Local imports - commands
 import { registerFileSelectionCommands } from './commands/fileSelectionCommands';
 import { registerLatexDiffCommands } from './commands/latexdiffCommmands';
 import { registerGitCommands } from './commands/gitCommands';

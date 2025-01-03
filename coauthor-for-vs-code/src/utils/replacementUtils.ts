@@ -2,6 +2,7 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+// Local imports - core
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';

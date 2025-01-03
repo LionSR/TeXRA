@@ -1,7 +1,14 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
-import { getConfig } from './commonUtils';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getConfig } from './commonUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 
 const CHANNEL = 'FrontendUtils';

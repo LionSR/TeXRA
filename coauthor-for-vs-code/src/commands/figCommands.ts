@@ -1,12 +1,21 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
+
+// Local imports - latex utils
 import { extractFigurePathsFromLatex } from '../latex/extractFigure';
 import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
 } from '../latex/tikzpicture';
-import * as logger from '../logger/logUtils';
-import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
-import * as path from 'path';
 
 const CHANNEL = 'FigureCommands';
 logger.initializeLogging(CHANNEL);

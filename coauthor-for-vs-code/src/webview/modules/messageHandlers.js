@@ -1,3 +1,4 @@
+// File handling utilities
 import {
   updateFileSelect,
   updateEditedFileSelect,
@@ -5,14 +6,19 @@ import {
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
+
+// State management
+import { restoreState } from './stateManager.js';
+
+// Common utilities
 import {
+  MULTIPLE_SELECTIONS,
   safeSetElementValue,
   safeSetElementChecked,
   safeGetElementById,
+  capitalize,
+  uncapitalize,
 } from './utils.js';
-import { restoreState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS } from './utils.js';
-import { capitalize, uncapitalize } from './utils.js';
 
 export function setupMessageHandlers() {
   window.addEventListener('message', (event) => {
