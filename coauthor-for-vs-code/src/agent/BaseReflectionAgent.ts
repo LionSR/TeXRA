@@ -302,7 +302,7 @@ export abstract class BaseReflectionAgent {
           // Get the value from AgentConfig using dictionary-style access
           const categoryValue = (this.agentConfig as any)[category];
 
-          if (category.endsWith('_file')) {
+          if (category.endsWith('File')) {
             // Single file categories
             if (categoryValue && pattern in categoryValue.toLowerCase()) {
               try {
@@ -320,7 +320,7 @@ export abstract class BaseReflectionAgent {
                 );
               }
             }
-          } else if (category.endsWith('_files')) {
+          } else if (category.endsWith('Files')) {
             // Multiple file categories
             if (categoryValue) {
               for (const file of categoryValue) {
