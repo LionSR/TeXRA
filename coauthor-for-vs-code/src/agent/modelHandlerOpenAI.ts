@@ -8,7 +8,7 @@ import OpenAI from 'openai';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { readFile } from '../utils/fileUtils';
+import { readFile, fileExists } from '../utils/fileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -187,14 +187,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
       `Start your response at the next token after: "${prefillTokens}"`;
 
     // Add continuation message
-    logger.info(
-      CHANNEL,
-      'Adding continuation message to conversation',
-    );
-    logger.debug(
-      CHANNEL,
-      `Continuation message: ${userMessageContinuation}`,
-    );
+    logger.info(CHANNEL, 'Adding continuation message to conversation');
+    logger.debug(CHANNEL, `Continuation message: ${userMessageContinuation}`);
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
@@ -233,10 +227,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       messages.push({ role: 'assistant', content: fileContent });
 
       if (hasEndTag(agentSettings, fileContent)) {
-        logger.debug(
-          CHANNEL,
-          'End tag detected - skipping continuation',
-        );
+        logger.debug(CHANNEL, 'End tag detected - skipping continuation');
         if (Array.isArray(messages[messages.length - 1].content)) {
           messages[messages.length - 1].content[
             messages[messages.length - 1].content.length - 1
@@ -358,10 +349,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
               text: bestConnector + newResponse,
             });
           } else {
-            logger.error(
-              CHANNEL,
-              'Second last message content is not a list',
-            );
+            logger.error(CHANNEL, 'Second last message content is not a list');
             messages[messages.length - 2].content = toolState.accumulatedOutput;
           }
           // Remove continuation prompt
