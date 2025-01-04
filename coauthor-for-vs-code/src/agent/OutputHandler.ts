@@ -90,10 +90,18 @@ export class OutputHandler {
     return outputContent;
   }
 
-  public extractDocumentContent(root: any[], documentTag: string): string | null {
-    logger.debug(CHANNEL, `Extracting document content from root: ${JSON.stringify(root)}`);
+  public extractDocumentContent(
+    root: any[],
+    documentTag: string,
+  ): string | null {
+    logger.debug(
+      CHANNEL,
+      `Extracting document content from root: ${JSON.stringify(root)}`,
+    );
     // Find the object containing the documentTag
-    const docObj = root.find((item: { [key: string]: any }) => item[documentTag]);
+    const docObj = root.find(
+      (item: { [key: string]: any }) => item[documentTag],
+    );
     if (docObj && docObj[documentTag]) {
       const content = docObj[documentTag][0]?.content;
       if (content) {
@@ -115,7 +123,9 @@ export class OutputHandler {
       logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
 
       // Find the object containing the thinkingTag
-      const scratchpadObj = root.find((item: { [key: string]: any }) => item[thinkingTag]);
+      const scratchpadObj = root.find(
+        (item: { [key: string]: any }) => item[thinkingTag],
+      );
       if (scratchpadObj && scratchpadObj[thinkingTag]) {
         const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
         if (scratchpadContent) {
@@ -142,7 +152,12 @@ export class OutputHandler {
       CHANNEL,
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
-    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0 && Array.isArray(outputFiles) && outputFiles.length > 0) {
+    if (
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 0 &&
+      Array.isArray(outputFiles) &&
+      outputFiles.length > 0
+    ) {
       for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
         const inputFile = this.agentConfig.outputFiles[i];
         const outputFile = outputFiles[i];
@@ -209,7 +224,7 @@ export class OutputHandler {
       // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent);
 
-      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
+      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
       await this.handleScratchpad(
         root,
@@ -259,7 +274,7 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
+      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
       await this.handleScratchpad(
         root,
@@ -269,7 +284,9 @@ export class OutputHandler {
       );
 
       // Find the object containing the documentTag
-      const docObj = root.find((item: { [key: string]: any }) => item[documentTag]);
+      const docObj = root.find(
+        (item: { [key: string]: any }) => item[documentTag],
+      );
       if (docObj && docObj[documentTag] && Array.isArray(docObj[documentTag])) {
         return this.processLatexDocuments(docObj[documentTag], outputFile);
       }

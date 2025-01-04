@@ -194,7 +194,9 @@ export abstract class BaseReflectionAgent {
 
     for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
       userVars[`${prefix}_FILE`] = filePath;
-      userVars[`${prefix}_CONTENT`] = filePath ? await readFile(filePath) : null;
+      userVars[`${prefix}_CONTENT`] = filePath
+        ? await readFile(filePath)
+        : null;
     }
 
     // Handle file collections
@@ -222,7 +224,7 @@ export abstract class BaseReflectionAgent {
       const allXml = allFiles
         ? await getXmlFormatFromFiles(allFiles as string[])
         : null;
-      
+
       userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
       userVars[`ALL_${prefix}S`] = allXml;
       userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles as string[]);
@@ -273,7 +275,7 @@ export abstract class BaseReflectionAgent {
           userVars[`${varName}_CONTENT`] = fileContent;
           logger.info(
             CHANNEL,
-            `Found from [Required Files Internal] the [VAR '${varName}']: ${fullPath}`,
+            `Found from [requiredFilesInternal] the [VAR '${varName}']: ${fullPath}`,
           );
         } catch (err) {
           logger.warn(
@@ -361,12 +363,19 @@ export abstract class BaseReflectionAgent {
     const userVars: Record<string, any> = {};
 
     // Handle output files order - use defaultOutputFiles if no outputFiles specified
-    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0) {
+    if (
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 0
+    ) {
       userVars.OUTPUT_FILES_ORDER = this.agentConfig.outputFiles.join(', ');
-    } else if (Array.isArray(this.agentSettings.defaultOutputFiles) && this.agentSettings.defaultOutputFiles.length > 0) {
+    } else if (
+      Array.isArray(this.agentSettings.defaultOutputFiles) &&
+      this.agentSettings.defaultOutputFiles.length > 0
+    ) {
       // If no outputFiles specified but defaultOutputFiles exists in settings
       this.agentConfig.outputFiles = this.agentSettings.defaultOutputFiles;
-      userVars.OUTPUT_FILES_ORDER = this.agentSettings.defaultOutputFiles.join(', ');
+      userVars.OUTPUT_FILES_ORDER =
+        this.agentSettings.defaultOutputFiles.join(', ');
     }
 
     return userVars;
@@ -686,9 +695,9 @@ export abstract class BaseReflectionAgent {
       renderPrompt(this.agentPrompts.userPrefix, userVars),
     ]);
 
-    logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
-    logger.debug(CHANNEL, `User request: ${userRequest}`);
-    logger.debug(CHANNEL, `System prompt: ${systemPrompt}`);
+    // logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
+    // logger.debug(CHANNEL, `User request: ${userRequest}`);
+    // logger.debug(CHANNEL, `System prompt: ${systemPrompt}`);
 
     let prefixWithStats = userPrefix;
     if (toolState.texCountStats) {
@@ -707,7 +716,7 @@ export abstract class BaseReflectionAgent {
     }
 
     // Initialize messages with prompts
-    const initialMessages = this.modelHandler.initializeMessages(
+    const initialMessages = await this.modelHandler.initializeMessages(
       prefixWithStats,
       userRequest,
       toolState.figureFiles,
@@ -833,7 +842,7 @@ export abstract class BaseReflectionAgent {
       return [stateRound, stateGlobal, messages, true];
     }
 
-    const reflectionMessages = this.modelHandler.createReflectionMessage(
+    const reflectionMessages = await this.modelHandler.createReflectionMessage(
       messages,
       userMessage,
       toolState.figureFiles,
@@ -952,8 +961,11 @@ export abstract class BaseReflectionAgent {
     // logger.debug(CHANNEL, `processOutputFiles called with outputFile: ${outputFile}, currRound: ${currRound}`);
     // logger.debug(CHANNEL, `this.agentConfig.outputFiles type: ${typeof this.agentConfig.outputFiles}`);
     // logger.debug(CHANNEL, `this.agentConfig.outputFiles value: ${JSON.stringify(this.agentConfig.outputFiles)}`);
-    
-    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0) {
+
+    if (
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 0
+    ) {
       // Multiple output files case
       logger.debug(CHANNEL, `Processing multiple outputs for ${outputFile}`);
       logger.debug(CHANNEL, `Output files: ${this.agentConfig.outputFiles}`);
