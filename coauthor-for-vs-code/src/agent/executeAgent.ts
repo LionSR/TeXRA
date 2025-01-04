@@ -19,6 +19,9 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 
+const CHANNEL = 'ExecuteAgent';
+logger.initializeLogging(CHANNEL);
+
 type AgentConstructor = new (
   modelHandler: any,
   agentConfig: AgentConfig,
@@ -51,13 +54,13 @@ async function getAgentPath(
         return path.join(agentsDir, agentName);
       } catch {
         const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-        logger.error('Agent', `${errorMsg} from ${agentsDir}`);
+        logger.error(CHANNEL, `${errorMsg} from ${agentsDir}`);
         throw new Error(errorMsg);
       }
     }
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error('Agent', errorMsg);
+    logger.error(CHANNEL, errorMsg);
     throw new Error(errorMsg);
   }
 }
@@ -141,7 +144,7 @@ export async function executeAgent(
     await agent.run();
   } catch (err) {
     const errorMsg = `Error executing agent: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error('Agent', errorMsg);
+    logger.error(CHANNEL, errorMsg);
     throw new Error(errorMsg);
   }
 }

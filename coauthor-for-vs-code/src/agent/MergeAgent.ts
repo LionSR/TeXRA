@@ -11,6 +11,9 @@ import { ModelHandler } from './ModelHandler';
 import { AgentConfig } from './AgentConfig';
 import { AgentSettings, AgentPrompts } from './AgentDataclass';
 
+const CHANNEL = 'MergeAgent';
+logger.initializeLogging(CHANNEL);
+
 /**
  * Agent for merging multiple edited files into a single output.
  */
@@ -83,7 +86,7 @@ export class MergeAgent extends DirectAgent {
     // Construct output filename
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
-    logger.info('MergeAgent', `Merge output file: ${outputPath}`);
+    logger.info(CHANNEL, `Merge output file: ${outputPath}`);
     return outputPath;
   }
 
@@ -132,7 +135,7 @@ export class MergeAgent extends DirectAgent {
         endTurn,
         currRound,
       );
-      logger.info('MergeAgent', `Output file: ${outputFile}`);
+      logger.info(CHANNEL, `Output file: ${outputFile}`);
       return files;
     }
     return [];
