@@ -62,12 +62,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Initialize messages for Anthropic models. */
-  initializeMessages(
+  async initializeMessages(
     userPrefix: string,
     userRequest: string,
     figureFiles?: string[],
     systemPrompt?: string,
-  ): any[] {
+  ): Promise<any[]> {
     // Create content list with user prefix
     const content: any[] = [{ type: 'text', text: userPrefix }];
 

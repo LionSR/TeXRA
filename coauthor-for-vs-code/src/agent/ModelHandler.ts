@@ -183,7 +183,7 @@ export abstract class ModelHandler {
     userRequest: string,
     figureFiles?: string[],
     systemPrompt?: string,
-  ): any[];
+  ): Promise<any[]>;
 
   /** Create a reflection message. */
   abstract createReflectionMessage(
