@@ -2,7 +2,7 @@ name: txt2tex_paper
 inherits: txt2tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Act as an expert LaTeX typesetter tasked with converting a research paper from plain text (generated from a PDF) into LaTeX format. Your goal is to accurately generate a new LaTeX file based on the provided text content while maintaining consistency with the given style and formatting guidelines.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -18,7 +18,7 @@ prompts:
     - Include proper citations using \cite{} commands where appropriate
     - Remember that you are writing a professional \LaTeX document. You must not write casually like markdown.
 
-  user_prefix: |
+  userPrefix: |
     You are provided with the following text content of a research paper:
     <txt_content>
     {{ INPUT_CONTENT }}
@@ -42,7 +42,7 @@ prompts:
     {{ COMMAND_CONTENT }}
     </command>
 
-  user_request: |
+  userRequest: |
     Please carefully read the provided research paper text and convert its content into a LaTeX file, following the style and formatting of the provided sample LaTeX file.
 
     In your conversion, focus on the following:
@@ -65,7 +65,7 @@ prompts:
     % Your LaTeX source here
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Your initial LaTeX conversion of the research paper has some issues:
 
     <issues>

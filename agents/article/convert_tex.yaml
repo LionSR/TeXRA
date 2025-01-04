@@ -1,23 +1,24 @@
 name: convert_tex
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: CoT
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "iclr"
-      var_name: "ICLR_TEMPLATE"
-      categories: ["input_file", "input_files"]
+      varName: "ICLR_TEMPLATE"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "neurips"
-      var_name: "NeurIPS_PAPER"
-      categories: ["input_file", "input_files"]
+      varName: "NeurIPS_PAPER"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert LaTeX formatter specializing in academic conference paper formats. Your task is to convert a NeurIPS paper format to the ICLR conference format, ensuring all content is preserved and properly formatted according to ICLR guidelines.
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with the content of a NeurIPS paper (neurips_main.tex) and the ICLR conference template (iclr2025_conference.tex). Your task is to reformat the NeurIPS paper into the ICLR format. An existing outline is already provided in the ICLR conference template (iclr2025_conference.tex) and you must follow it. YOU MUST ALSO FOLLOW THE LATEX SYNTAX OF THE ICLR TEMPLATE.
 
     Here are the files:
@@ -37,7 +38,7 @@ prompts:
 
     Please carefully analyze both documents before proceeding with the conversion.
 
-  user_request: |
+  userRequest: |
     In the scratchpad below, outline your plan for converting the NeurIPS paper to the ICLR format. Include steps for handling the main sections, special formatting, figures, tables, and references.
 
     <scratchpad>
@@ -57,7 +58,7 @@ prompts:
     % BOTH THE MAIN TEXT AND THE APPENDIX MUST BE INCLUDED
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the conversion process and the resulting ICLR-formatted paper. Consider the following points and brainstorm any necessary adjustments or improvements in the scratchpad below:
 
     <scratchpad>

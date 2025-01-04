@@ -1,17 +1,17 @@
 name: paper2poster
 settings:
-  document_tag: beamer_poster
-  end_tag: </beamer_poster>
-  output_ext: tex
+  documentTag: beamer_poster
+  endTag: </beamer_poster>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_POSTER: template_poster.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a physics audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
 
     When creating the poster:
@@ -26,7 +26,7 @@ prompts:
     - Ensure the poster is visually appealing and readable at A5 size, despite the increased detail
     - Use the provided color scheme and design elements from the template
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with creating a detailed LaTeX Beamer poster based on the following research paper:
 
     <documents>
@@ -63,7 +63,7 @@ prompts:
     </instruction>
     {% endif %}
 
-  user_request: |
+  userRequest: |
     Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a physics audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
 
     <scratchpad>
@@ -85,7 +85,7 @@ prompts:
     {{ TEMPLATE_POSTER_CONTENT }}
     </beamer_poster>
 
-  user_reflect: |
+  userReflect: |
     Please review your draft LaTeX Beamer poster critically, focusing on the following points:
     <scratchpad>
     <reflection>

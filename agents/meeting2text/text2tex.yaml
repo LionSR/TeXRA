@@ -1,16 +1,16 @@
 name: text2tex
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files_internal:
+  requiredFilesInternal:
     TEMPLATE_TEXT2TEX: template_text2tex.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a professor of physics and a meticulous transcriber in converting academic discussions into formal \LaTeX documents, maintaining the scientific rigor and clarity of the original conversation.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -23,7 +23,7 @@ prompts:
         \item Follow the format given in the latex document template.
         \item Use \begin{align} and \end{align} for displayed multi-line equations. The converted document should be highly mathematical and technical. Use as many equations as possible.
     \end{enumerate}
-  user_prefix: |
+  userPrefix: |
     I am going to give you a transcribed text from an academic discussion. You are about to rewrite it into a long, self-contained, formal, and meticulous \LaTeX document following the order of the discussion without omitting any details, so read extremely carefully.
 
     Here is the transcription {{ INPUT_FILE }}:
@@ -31,7 +31,7 @@ prompts:
     {{ INPUT_CONTENT }}
     </document>
 
-  user_request: |
+  userRequest: |
     Your task is to translate the provided academic discussion transcript into a super long, self-contained, formal, and meticulous .tex \LaTeX document, closely following these guidelines:
     <guidelines>
     \begin{enumerate}
@@ -57,7 +57,7 @@ prompts:
     {{ TEMPLATE_TEXT2TEX_CONTENT }}
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Your output is too simple and omits many specifics and mathematics. Please thoroughly review the LaTeX version and compare it to the original transcription. You must increase the level of detail from low (3/10) to high (9/10), particularly by significantly adding back all of the missed points that were discussed, the missing equations or mathematical details from the transcription.
 
     Please output the revised \LaTeX document that meets the above requirements and is an accurate, detailed, and faithful representation of the original academic discussion, with a particular focus on including all the missing equations and maintaining mathematical rigor. Please think in <scratchpad> about your plan

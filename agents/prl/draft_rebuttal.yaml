@@ -1,48 +1,48 @@
 name: replies/draft_rebuttal
 
 settings:
-  document_tag: rebuttal_package
-  end_tag: </rebuttal_package>
-  output_ext: xml
+  documentTag: rebuttal_package
+  endTag: </rebuttal_package>
+  outputExt: xml
   prefills:
     - <rebuttal_package><scratchpad>
     - <rebuttal_package><scratchpad>
-  required_files:
+  requiredFiles:
     COVER_LETTER: replies/cover_letter.txt
     EDITOR_LETTER: replies/editor_letter.txt
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
-  required_files_internal:
+  requiredFilesInternal:
     EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
     TEMPLATE_REPLY_TO_EDITOR: template_reply_to_editor.tex
     TEMPLATE_REPLY_TO_REFEREES: template_reply_to_referees.tex
     TEMPLATE_LIST_OF_CHANGES: template_list_of_changes.tex
-  default_output_files:
+  defaultOutputFiles:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
     - replies/list_of_major_changes.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "instruction"
-      var_name: "FILE_INSTRUCTION"
-      categories: ["input_files", "auxiliary_file", "auxiliary_files"]
+      varName: "FILE_INSTRUCTION"
+      categories: ["inputFiles", "auxiliaryFile", "auxiliaryFiles"]
     - pattern: "editor_letter"
-      var_name: "EDITOR_LETTER_CONTENT"
-      categories: ["input_files"]
+      varName: "EDITOR_LETTER_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_a"
-      var_name: "REFEREE_REPORT_A_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_b"
-      var_name: "REFEREE_REPORT_B_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to draft a comprehensive rebuttal letter for a research paper submitted to a scientific journal. This includes responding to referee comments and revising the paper accordingly.
 
     When drafting the rebuttal and revising the paper, you must:
@@ -62,7 +62,7 @@ prompts:
     - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
     - Only use enumerate and itemize environments for lists.
 
-  user_prefix: |
+  userPrefix: |
     You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
 
     {% if EXAMPLE_REBUTTAL_PACKAGE_FILE %}
@@ -111,7 +111,7 @@ prompts:
     {% endif %}
     </documents>
 
-  user_request: |
+  userRequest: |
     Please read the paper, referee reports, and example reply carefully. Then, before drafting your full reply, write out your plan inside the `<scratchpad>' tag. Consider which comments from the referee you agree with and will address with changes, and which you will rebut and argue against changing. Refer to the example reply for guidance on tone and structure. 
 
     After your planning, draft a reply letter that includes the following:
@@ -165,7 +165,7 @@ prompts:
 
     Remember, the goal is to be respectful and appreciative of the referee's efforts, while still advocating firmly and persuasively for your work and only making changes you agree are necessary. Start with laying down your plan in the `<scratchpad>' tag. Then proceed to drafting the rebuttal letter in the format specified above.
 
-  user_reflect: |
+  userReflect: |
     Your output (cover letter to the editor and the response letter to the referees) is too generic and not specific enough.
     After thoroughly and critically reviewing the paper, the cover letters, the report, the reply letter, and the example, write a new reply letter that satisfies the following requirements:
     <requirements>

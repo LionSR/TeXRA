@@ -145,7 +145,7 @@ const PromptPreview = ({ expanded, onToggle }) => (
     {expanded && (
       <div className="mt-3 pl-4 text-sm space-y-2 border-l-2 border-blue-200">
         <div className="space-y-1">
-          <div className="font-medium text-blue-800">system_prompt:</div>
+          <div className="font-medium text-blue-800">systemPrompt:</div>
           <div className="pl-3 text-gray-600">
             Configure agent behavior for rebuttal package processing:
             <ul className="list-disc pl-4 mt-1">
@@ -156,7 +156,7 @@ const PromptPreview = ({ expanded, onToggle }) => (
           </div>
         </div>
         <div className="space-y-1">
-          <div className="font-medium text-blue-800">user_prefix:</div>
+          <div className="font-medium text-blue-800">userPrefix:</div>
           <div className="pl-3 text-gray-600">
             Load documents with XML structure:
             <div className="font-mono text-xs mt-1 bg-gray-100 p-1 rounded">
@@ -167,7 +167,7 @@ const PromptPreview = ({ expanded, onToggle }) => (
           </div>
         </div>
         <div className="space-y-1">
-          <div className="font-medium text-blue-800">user_request:</div>
+          <div className="font-medium text-blue-800">userRequest:</div>
           <div className="pl-3 text-gray-600">
             Process rebuttal package with focus on:
             <ul className="list-disc pl-4 mt-1">

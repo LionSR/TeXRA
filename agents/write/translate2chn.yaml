@@ -1,13 +1,13 @@
 name: translate2chn
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a professional translator specializing in translating scientific and academic articles from English/German to Chinese. Your task is to provide a faithful and accurate translation while adhering to specific guidelines.
 
     Translation Guidelines:
@@ -18,7 +18,7 @@ prompts:
 
     Maintain the academic tone and technical accuracy of the original text in your translation.
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with an academic article to translate into Chinese. Please read the document carefully before proceeding with the translation.
 
     Here is the Original document to be translated:
@@ -33,7 +33,7 @@ prompts:
 
     Please translate this document {{ INPUT_FILE }}into Chinese following the guidelines provided in the system prompt.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -69,7 +69,7 @@ prompts:
     [Notes on any errors detected in the original text]
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's review the translation to ensure it meets all the required guidelines and maintains high quality. Consider the following points:
 
     1. Have all parts of the document been translated, including title, authors, and figure captions?

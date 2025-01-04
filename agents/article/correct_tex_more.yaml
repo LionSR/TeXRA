@@ -2,7 +2,7 @@ name: correct_tex_more
 inherits: correct_tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to write a research paper.
 
     When writing a professional *.tex \LaTeX document, you must:

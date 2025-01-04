@@ -1,14 +1,14 @@
 name: statement_research
 settings:
-  document_tag: revised_statement
-  end_tag: </revised_statement>
-  output_ext: tex
+  documentTag: revised_statement
+  endTag: </revised_statement>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an academic advisor specializing in faculty job applications for US universities, particularly in the fields of Electrical Engineering and Computer Science (EECS). Your task is to revise a research statement for an assistant professorship. Maintain professionalism, emphasize the applicant's research strengths, and align content with expectations of US mathematics departments.
 
     Revision guidelines:
@@ -28,7 +28,7 @@ prompts:
         \item Emphasize the potential for securing external funding and collaborations
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     Revise the following research statement for an EECS assistant professorship in a US academic department:
 
     <original_document>
@@ -37,7 +37,7 @@ prompts:
 
     Review the document carefully before revising. Respect and work with the existing research provided; do not invent new results or add any information not present in the original document.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Specific instructions that you must follow during the revision:
     <instruction>
@@ -65,7 +65,7 @@ prompts:
 
     Output the revised document within <revised_statement> tags. Maintain professionalism and adhere to the typical five-page limit for EECS. Ensure all information is based solely on the input document; do not add or invent any new research or results.
 
-  user_reflect: |
+  userReflect: |
     Review your revised research statement critically:
 
     <scratchpad>

@@ -11,9 +11,11 @@ from ..agent import AgentSettings, AgentConfig
 from ..utils.file import read_file
 
 from .model_handler import ModelHandler
-from .response_usage import OpenAIResponseUsage
+from .response_usage import OpenAIAPIResponseUsage
 
 from .tool_state import ToolState
+
+K_SLICE = 200
 
 
 class OpenAIHandler(ModelHandler):
@@ -30,19 +32,19 @@ class OpenAIHandler(ModelHandler):
         client: OpenAI,
         messages: list[dict],
         temperature: float,
-        system_prompt: str | None = None,
-        end_tag: str | None = None,
+        systemPrompt: str | None = None,
+        endTag: str | None = None,
     ) -> Any:
         """Create a response using OpenAI's API."""
         kwargs = {
-            "model": self.config.full_name,
+            "model": self.config.fullName,
             "messages": messages,
-            "max_completion_tokens": self.config.max_output_tokens,
+            "max_completion_tokens": self.config.maxOutputTokens,
             "temperature": 1.0 if "o1" in self.config.name.lower() else temperature,
         }
 
-        if end_tag and "o1" not in self.config.name.lower():
-            kwargs["stop"] = [end_tag]
+        if endTag and "o1" not in self.config.name.lower():
+            kwargs["stop"] = [endTag]
 
         if self.config.name.lower() == "o1":
             kwargs["reasoning_effort"] = "high"
@@ -51,31 +53,31 @@ class OpenAIHandler(ModelHandler):
 
     def initialize_messages(
         self,
-        user_prefix: str,
-        user_request: str,
-        figure_files: list[str] | None = None,
-        system_prompt: str | None = None,
+        userPrefix: str,
+        userRequest: str,
+        figureFiles: list[str] | None = None,
+        systemPrompt: str | None = None,
     ) -> list[dict]:
         """Initialize messages for OpenAI models."""
         messages = []
 
         # Handle system prompt differently for O1 models
         if self.config.name in ["o1-", "o1preview"]:
-            messages = [{"role": "user", "content": [{"type": "text", "text": system_prompt}, {"type": "text", "text": user_prefix}]}]
+            messages = [{"role": "user", "content": [{"type": "text", "text": systemPrompt}, {"type": "text", "text": userPrefix}]}]
         else:
-            if system_prompt:
+            if systemPrompt:
                 # note that for openai native models, they have been renamed to "developer" but "system" still works
-                messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "system", "content": systemPrompt})
 
             # Create content list with user prefix
-            content = [{"type": "text", "text": user_prefix}]
+            content = [{"type": "text", "text": userPrefix}]
 
             # Add images if provided
-            if figure_files:
-                content.extend(self.create_image_message(figure_files))
+            if figureFiles:
+                content.extend(self.create_image_message(figureFiles))
 
             # Add user request
-            request = {"type": "text", "text": user_request}
+            request = {"type": "text", "text": userRequest}
             content.append(request)
 
             messages.append({"role": "user", "content": content})
@@ -85,15 +87,15 @@ class OpenAIHandler(ModelHandler):
     def create_reflection_message(
         self,
         messages: list[dict],
-        user_message: str,
-        figure_files: list[str] | None = None,
+        userMessage: str,
+        figureFiles: list[str] | None = None,
     ) -> list[dict]:
         """Create a reflection message for OpenAI models."""
         content = []
 
-        if figure_files:
-            content.extend(self.create_image_message(figure_files))
-        content.append({"type": "text", "text": user_message})
+        if figureFiles:
+            content.extend(self.create_image_message(figureFiles))
+        content.append({"type": "text", "text": userMessage})
         messages.append({"role": "user", "content": content})
         return messages
 
@@ -117,122 +119,122 @@ class OpenAIHandler(ModelHandler):
 
     def extract_response(
         self,
-        response_object: Any,
-        end_tag: str,
-        auto_confirmation: bool = False,
+        responseObject: Any,
+        endTag: str,
+        autoConfirmation: bool = False,
     ) -> tuple[str, Any, str]:
         """Extract response text and usage statistics from OpenAI response."""
-        if not (hasattr(response_object, "choices") and response_object.choices):
+        if not (hasattr(responseObject, "choices") and responseObject.choices):
             error_msg = "Invalid response from API: missing choices"
             logger.error(error_msg)
-            logger.debug(response_object)
+            logger.debug(responseObject)
             raise ValueError(error_msg)
 
         # Extract base response
-        choice = response_object.choices[0]
-        stop_reason = choice.finish_reason
-        new_response = choice.message.content.strip()
+        choice = responseObject.choices[0]
+        stopReason = choice.finish_reason
+        newResponse = choice.message.content.strip()
 
         # Add end tag if response was stopped and tag isn't present
-        if all([stop_reason == "stop", end_tag]) and end_tag not in new_response:
-            new_response = f"{new_response}\n{end_tag}"
+        if all([stopReason == "stop", endTag]) and endTag not in newResponse:
+            newResponse = f"{newResponse}\n{endTag}"
 
-        return new_response, response_object.usage, stop_reason
+        return newResponse, responseObject.usage, stopReason
 
     def add_continue_message(
         self,
         messages: list[dict],
-        state_round: AgentStateRound,
-        tool_state: ToolState,
-        agent_settings: AgentSettings,
-        agent_config: AgentConfig,
+        stateRound: AgentStateRound,
+        toolState: ToolState,
+        agentSettings: AgentSettings,
+        agentConfig: AgentConfig,
     ) -> None:
         """Handle continuation for OpenAI models."""
         # Skip if model supports assistant prefill
-        if self.capabilities.supports_assistant_prefill:
+        if self.capabilities.supportsAssistantPrefill:
             logger.debug("Skipping continuation - assistant prefill is supported")
             return
 
         # Create continuation message with last K tokens
-        prefill_tokens = tool_state.last_response[-agent_config.K :]
-        user_message_continuation = (
+        prefill_tokens = toolState.lastResponse[-K_SLICE:]
+        userMessageContinuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
-            f"marked by {agent_settings.end_tag}. "
+            f"marked by {agentSettings.endTag}. "
             "Avoid repeat yourself and avoid starting over. "
             f'Start your response at the next token after: "{prefill_tokens}"'
         )
 
         # Add continuation message
         logger.info("Adding continuation message to conversation")
-        logger.debug(f"Continuation message: {user_message_continuation}")
-        messages.append({"role": "user", "content": [{"type": "text", "text": user_message_continuation}]})
+        logger.debug(f"Continuation message: {userMessageContinuation}")
+        messages.append({"role": "user", "content": [{"type": "text", "text": userMessageContinuation}]})
 
     def initialize_output_and_prefill(
         self,
-        agent_config: AgentConfig,
-        agent_settings: AgentSettings,
+        agentConfig: AgentConfig,
+        agentSettings: AgentSettings,
         messages: list[dict],
-        tool_state: ToolState,
-        output_file: str,
+        toolState: ToolState,
+        outputFile: str,
         prefill: str,
     ) -> tuple[bool, list[dict]]:
         """Initialize output and handle prefill for OpenAI-compatible models."""
-        if not os.path.exists(output_file) or os.path.getsize(output_file) <= 15:
-            if agent_config.tool_config.use_prefill_from_input and tool_state.first_k_chars_from_input:
-                prefill += tool_state.first_k_chars_from_input
-                tool_state.update_accumulated_output("")
-                prefill = f"<{agent_settings.document_tag}>{tool_state.first_k_chars_from_input}"
+        if not os.path.exists(outputFile) or os.path.getsize(outputFile) <= 15:
+            if agentConfig.toolConfig.usePrefillFromInput and toolState.firstKCharsFromInput:
+                prefill += toolState.firstKCharsFromInput
+                toolState.update_accumulatedOutput("")
+                prefill = f"<{agentSettings.documentTag}>{toolState.firstKCharsFromInput}"
 
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
 
-        file_content = read_file(output_file)
-        messages.append({"role": "assistant", "content": file_content})
+        fileContent = read_file(outputFile)
+        messages.append({"role": "assistant", "content": fileContent})
 
-        if agent_settings.has_end_tag(file_content):
+        if agentSettings.has_endTag(fileContent):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
-                messages[-1]["content"][-1]["text"] = file_content
+                messages[-1]["content"][-1]["text"] = fileContent
             else:
-                messages[-1]["content"] = file_content
+                messages[-1]["content"] = fileContent
             return True, messages
 
         logger.warning("Output file exists but no end tag found - continuing from file")
-        tool_state.update_accumulated_output(file_content)
+        toolState.update_accumulatedOutput(fileContent)
         state = AgentStateRound.initialize(0)
-        tool_state.last_response = tool_state.accumulated_output
-        self.add_continue_message(messages, state, tool_state, agent_settings, agent_config)
+        toolState.lastResponse = toolState.accumulatedOutput
+        self.add_continue_message(messages, state, toolState, agentSettings, agentConfig)
 
         # here state is somehow not possible to be passed outside?
         # also here continue message is added here, not like later it was handled separately. We should make them consistent...
         return False, messages
 
-    def compute_price(self, response_usage: Any) -> float:
+    def compute_price(self, responseUsage: Any) -> float:
         """Compute price for OpenAI token usage."""
         # Handle Google models that return None for usage
-        if response_usage is None:
+        if responseUsage is None:
             return 0.0
 
         # Get token counts with defaults for Google models
-        prompt_tokens = getattr(response_usage, "prompt_tokens", 0)
-        completion_tokens = getattr(response_usage, "completion_tokens", 0)
+        prompt_tokens = getattr(responseUsage, "prompt_tokens", 0)
+        completion_tokens = getattr(responseUsage, "completion_tokens", 0)
 
-        base_price = (prompt_tokens * self.config.input_price + completion_tokens * self.config.output_price) / 1e6
+        basePrice = (prompt_tokens * self.config.inputPrice + completion_tokens * self.config.outputPrice) / 1e6
 
         # Handle special token types
-        if hasattr(response_usage, "reasoning_tokens"):
-            base_price += (response_usage.reasoning_tokens * self.config.output_price) / 1e6
-        if hasattr(response_usage, "cached_tokens"):
-            base_price -= (response_usage.cached_tokens * self.config.input_price * 0.5) / 1e6
+        if hasattr(responseUsage, "reasoning_tokens"):
+            basePrice += (responseUsage.reasoning_tokens * self.config.outputPrice) / 1e6
+        if hasattr(responseUsage, "cached_tokens"):
+            basePrice -= (responseUsage.cached_tokens * self.config.inputPrice * 0.5) / 1e6
 
-        return base_price
+        return basePrice
 
-    def compute_statistics(self, response_usage: Any, response_time: float) -> OpenAIResponseUsage:
+    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
         """Compute OpenAI-specific statistics."""
         # For Google models, create a minimal usage object with zeros
-        if response_usage is None:
-            return OpenAIResponseUsage.from_response(
+        if responseUsage is None:
+            return OpenAIAPIResponseUsage.from_response(
                 type(
                     "EmptyUsage",
                     (),
@@ -245,14 +247,14 @@ class OpenAIHandler(ModelHandler):
                         )(),
                     },
                 )(),
-                self.compute_price(response_usage),
-                response_time,
+                self.compute_price(responseUsage),
+                responseTime,
             )
 
-        return OpenAIResponseUsage.from_response(response_usage, self.compute_price(response_usage), response_time)
+        return OpenAIAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
 
     def update_message_content(
-        self, messages: list[dict], best_connector: str, new_response: str, tool_state: ToolState, auto_confirmation: bool = False
+        self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState, autoConfirmation: bool = False
     ) -> None:
         """Update message content for OpenAI models."""
         logger.debug("Updating message content for OpenAI API compatible models")
@@ -264,18 +266,18 @@ class OpenAIHandler(ModelHandler):
                 # the second last message is an assistant message must be a assistant message
                 if messages[-2]["role"] == "assistant":
                     if isinstance(messages[-2]["content"], list):
-                        messages[-2]["content"].append({"type": "text", "text": best_connector + new_response})
+                        messages[-2]["content"].append({"type": "text", "text": bestConnector + newResponse})
                     else:
                         logger.error("Second last message content is not a list")
-                        messages[-2]["content"] = tool_state.accumulated_output
+                        messages[-2]["content"] = toolState.accumulatedOutput
                     # Remove continuation prompt
                     messages.pop()
             else:
                 logger.debug("Last message is a request message rather than a ask to continue after cut off")
                 # otherwise last message is a request message rather than a ask to continue after cut off
-                messages.append({"role": "assistant", "content": [{"type": "text", "text": tool_state.accumulated_output}]})
+                messages.append({"role": "assistant", "content": [{"type": "text", "text": toolState.accumulatedOutput}]})
 
-    def should_continue(self, stop_reason: str, new_response: str, agent_settings: AgentSettings) -> bool:
+    def should_continue(self, stopReason: str, newResponse: str, agentSettings: AgentSettings) -> bool:
         """Determine if OpenAI model should continue generating."""
         logger.info("Determining if should continue for OpenAI model via OpenAI API")
-        return stop_reason == "length" and not agent_settings.has_end_tag(new_response)
+        return stopReason == "length" and not agentSettings.has_endTag(newResponse)

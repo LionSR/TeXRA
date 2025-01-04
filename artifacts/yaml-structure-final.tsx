@@ -85,7 +85,7 @@ const PromptFlow = () => (
         title="System Context"
         content={
           <div className="bg-blue-50 p-2 rounded">
-            <code>system_prompt</code>
+            <code>systemPrompt</code>
             <div className="text-xs mt-1">Sets behavior and requirements</div>
             <div className="text-xs italic mt-1">
               e.g., LaTeX formatting rules
@@ -97,7 +97,7 @@ const PromptFlow = () => (
         title="Document Loading"
         content={
           <div className="bg-green-50 p-2 rounded">
-            <code>user_prefix</code>
+            <code>userPrefix</code>
             <div className="text-xs mt-1">Loads and structures input files</div>
             <div className="text-xs italic mt-1">
               e.g., XML document wrapping
@@ -109,7 +109,7 @@ const PromptFlow = () => (
         title="Task Specification"
         content={
           <div className="bg-yellow-50 p-2 rounded">
-            <code>user_request</code>
+            <code>userRequest</code>
             <div className="text-xs mt-1">Defines specific tasks</div>
             <div className="text-xs italic mt-1">
               e.g., Revision instructions
@@ -134,7 +134,7 @@ const PromptFlow = () => (
         title="Structured Output"
         content={
           <div className="bg-orange-50 p-2 rounded">
-            <code>&lt;document_tag&gt;...&lt;/document_tag&gt;</code>
+            <code>&lt;documentTag&gt;...&lt;/documentTag&gt;</code>
             <div className="text-xs mt-1">Final formatted content</div>
             <div className="text-xs italic mt-1">
               e.g., &lt;latex_document&gt;
@@ -171,15 +171,15 @@ export default function YamlStructureVisualization() {
         <div className="mt-4">
           <h4 className="font-medium mb-2">File Inputs</h4>
           <FileInput
-            name="input_file/input_files"
+            name="inputFile/inputFiles"
             description="Main content file(s)"
           />
           <FileInput
-            name="reference_file/reference_files"
+            name="referenceFile/referenceFiles"
             description="Reference materials"
           />
           <FileInput
-            name="auxiliary_file/auxiliary_files"
+            name="auxiliaryFile/auxiliaryFiles"
             description="Support files"
           />
         </div>
@@ -193,21 +193,21 @@ export default function YamlStructureVisualization() {
         </div>
 
         <YamlField
-          name="agent_type"
+          name="agentType"
           value="direct | CoT"
           required={true}
           description="Processing approach - 'direct' for immediate output, 'CoT' for scratchpad-based"
         />
 
         <YamlField
-          name="document_tag"
+          name="documentTag"
           value="latex_document | rebuttal_package"
           required={true}
           description="XML wrapper for output content"
         />
 
         <YamlField
-          name="end_tag"
+          name="endTag"
           value="</latex_document> | </rebuttal_package>"
           required={true}
           description="Matching end tag"
@@ -221,10 +221,10 @@ export default function YamlStructureVisualization() {
 
         <ExampleBlock title="Example">
           {`settings:
-  agent_type: direct
-  document_tag: rebuttal_package
-  end_tag: </rebuttal_package>
-  output_ext: xml
+  agentType: direct
+  documentTag: rebuttal_package
+  endTag: </rebuttal_package>
+  outputExt: xml
   prefills: 
     - <rebuttal_package>\\n<scratchpad>`}
         </ExampleBlock>
@@ -253,7 +253,7 @@ export default function YamlStructureVisualization() {
             <FileMapping
               title="Pattern Matched Files"
               example={{
-                raw: 'pattern: "main"\nvar_name: "MAIN"\ncategories: ["input_file"]',
+                raw: 'pattern: "main"\nvarName: "MAIN"\ncategories: ["inputFile"]',
                 wrapped:
                   '<document name="paper.tex">\n  \\documentclass{article}\n  % Main paper content\n</document>',
               }}

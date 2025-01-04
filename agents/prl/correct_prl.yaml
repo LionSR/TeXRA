@@ -1,25 +1,25 @@
 name: correct
 
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
-  output_ext: xml
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: xml
   prefills:
     - Here are the revised \LaTeX documents. <latex_documents>
     - </latex_documents>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "preamble"
-      var_name: "PREAMBLE"
-      categories: ["auxiliary_file", "auxiliary_files"]
+      varName: "PREAMBLE"
+      categories: ["auxiliaryFile", "auxiliaryFiles"]
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist and scientific writer. Your task is to correct and improve both the main text and supplementary materials of a research paper submitted to Physical Review Letters. Ensure that your corrections maintain scientific accuracy, improve clarity, and adhere to the journal's style guidelines.
 
     When correcting a professional \LaTeX document, you must:
@@ -31,7 +31,7 @@ prompts:
         \item Preserve the overall structure of both documents while making improvements.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you the main text and supplementary materials of a research paper to correct. Please read both documents carefully.
 
     Here are the \LaTeX documents:
@@ -48,7 +48,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>

@@ -1,14 +1,14 @@
 name: polish_cover
 settings:
-  document_tag: cover_letter
-  end_tag: </cover_letter>
-  output_ext: tex
+  documentTag: cover_letter
+  endTag: </cover_letter>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an experienced academic editor specializing in scientific correspondence. Your task is to polish and enhance a cover letter for a research paper submission, focusing solely on addressing the given instructions.
 
     When polishing a cover letter, you must:
@@ -22,7 +22,7 @@ prompts:
         \item \textbf{IMPORTANT:} Keep the letter concise yet impactful, typically not exceeding one page
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a cover letter and its corresponding research paper. Read both documents carefully before proceeding.
 
     Here is the cover letter to be polished:
@@ -36,7 +36,7 @@ prompts:
     </research_paper>
 
     Please carefully read through both documents and ensure you fully understand all the details.
-  user_request: |
+  userRequest: |
     Your task is to enhance this cover letter focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -75,7 +75,7 @@ prompts:
     % 1ST_UPDATED_COVER_LETTER HERE
     </cover_letter>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made according to the given instructions. Be brutally honest in your self-assessment.
 
     Consider these points and brainstorm additional targeted improvements in the scratchpad below:

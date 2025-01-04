@@ -64,21 +64,21 @@ export default function YamlStructureVisualization() {
         </div>
 
         <YamlField
-          name="agent_type"
+          name="agentType"
           value="direct | CoT"
           required={true}
           description="Determines processing approach - 'direct' for immediate output, 'CoT' for scratchpad-based processing"
         />
 
         <YamlField
-          name="document_tag"
+          name="documentTag"
           value="latex_document | latex_documents | rebuttal_package"
           required={true}
           description="XML wrapper tag for output content - 'latex_documents' for multiple files"
         />
 
         <YamlField
-          name="end_tag"
+          name="endTag"
           value="</latex_document> | \end{document}"
           required={true}
           description="Marker indicating document completion"
@@ -86,10 +86,10 @@ export default function YamlStructureVisualization() {
 
         <ExampleBlock title="Example">
           {`settings:
-  agent_type: direct
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - "Here is the revised LaTeX document: <latex_document>"`}
         </ExampleBlock>
@@ -106,7 +106,7 @@ export default function YamlStructureVisualization() {
           <div>
             <h4 className="font-medium mb-2">Required Files Pattern</h4>
             <YamlField
-              name="required_files"
+              name="requiredFiles"
               value="Dict[str, str]"
               description="Map variable names to external file paths"
             />
@@ -117,7 +117,7 @@ export default function YamlStructureVisualization() {
           <div>
             <h4 className="font-medium mb-2">Internal Required Files</h4>
             <YamlField
-              name="required_files_internal"
+              name="requiredFilesInternal"
               value="Dict[str, str]"
               description="Map variable names to files within agent directory"
             />
@@ -129,19 +129,19 @@ export default function YamlStructureVisualization() {
         <div className="mt-4">
           <h4 className="font-medium mb-2">File Pattern Matching</h4>
           <YamlField
-            name="file_patterns_contain"
+            name="filePatternsContain"
             value="List[Dict[str, str]]"
             description="Define patterns to match file types and assign variables"
           />
 
           <ExampleBlock title="Pattern Configuration">
-            {`file_patterns_contain:
+            {`filePatternsContain:
   - pattern: "command"
-    var_name: "COMMANDS"
-    categories: ["auxiliary_file", "auxiliary_files"]
+    varName: "COMMANDS"
+    categories: ["auxiliaryFile", "auxiliaryFiles"]
   - pattern: "template"
-    var_name: "TEMPLATE" 
-    categories: ["reference_file", "reference_files"]`}
+    varName: "TEMPLATE" 
+    categories: ["referenceFile", "referenceFiles"]`}
           </ExampleBlock>
         </div>
       </YamlSection>
@@ -176,7 +176,7 @@ export default function YamlStructureVisualization() {
         </div>
 
         <ExampleBlock title="Variable Usage in Prompts">
-          {`user_prefix: |
+          {`userPrefix: |
   Here is the LaTeX document with auxiliary files:
   <documents>
   {{ AUXILIARY_FILES }}
@@ -197,7 +197,7 @@ export default function YamlStructureVisualization() {
         <div className="grid grid-cols-2 gap-6">
           <div>
             <YamlField
-              name="output_ext"
+              name="outputExt"
               value="tex | txt | md"
               description="Output file extension (default: tex)"
             />
@@ -207,9 +207,9 @@ export default function YamlStructureVisualization() {
               description="Initial content for output generations"
             />
             <YamlField
-              name="default_output_files"
+              name="defaultOutputFiles"
               value="List[str]"
-              description="Default files when no output_files specified"
+              description="Default files when no outputFiles specified"
             />
           </div>
 

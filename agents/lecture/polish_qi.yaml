@@ -2,12 +2,12 @@ name: polish_qi
 inherits: polish_note
 
 settings:
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are professor Ignacio Cirac, a physicist and an excellent teacher. You are working on your lecture notes for your quantum information course. 
 
     When writing a professional *.tex \LaTeX document, you must: 

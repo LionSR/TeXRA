@@ -1,57 +1,57 @@
 name: revise_rebuttal
 
 settings:
-  document_tag: rebuttal_package
-  end_tag: </rebuttal_package>
-  output_ext: xml
+  documentTag: rebuttal_package
+  endTag: </rebuttal_package>
+  outputExt: xml
   prefills:
     - <rebuttal_package>\n<scratchpad>
     - <rebuttal_package>\n<scratchpad>
-  required_files:
+  requiredFiles:
     COVER_LETTER: replies/cover_letter.txt
     EDITOR_LETTER: replies/editor_letter.txt
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
-  required_files_internal:
+  requiredFilesInternal:
     EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
-  default_output_files:
+  defaultOutputFiles:
     - replies/reply_to_editor.tex
     - replies/reply_to_referees.tex
     - replies/list_of_major_changes.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "Paper"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "instruction"
-      var_name: "FILE_INSTRUCTION"
-      categories: ["input_files", "auxiliary_file", "auxiliary_files"]
+      varName: "FILE_INSTRUCTION"
+      categories: ["inputFiles", "auxiliaryFile", "auxiliaryFiles"]
     - pattern: "reply_to_editor"
-      var_name: "REPLY_TO_EDITOR"
-      categories: ["input_files"]
+      varName: "REPLY_TO_EDITOR"
+      categories: ["inputFiles"]
     - pattern: "reply_to_referees"
-      var_name: "REPLY_TO_REFEREES"
-      categories: ["input_files"]
+      varName: "REPLY_TO_REFEREES"
+      categories: ["inputFiles"]
     - pattern: "list_of_major_changes"
-      var_name: "LIST_OF_MAJOR_CHANGES"
-      categories: ["input_files"]
+      varName: "LIST_OF_MAJOR_CHANGES"
+      categories: ["inputFiles"]
     - pattern: "editor_letter"
-      var_name: "EDITOR_LETTER_CONTENT"
-      categories: ["input_files"]
+      varName: "EDITOR_LETTER_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_a"
-      var_name: "REFEREE_REPORT_A_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
     - pattern: "report_b"
-      var_name: "REFEREE_REPORT_B_CONTENT"
-      categories: ["input_files"]
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist Prof. Ignacio Cirac.
     Your task is to revise and improve a comprehensive rebuttal package for a research paper submitted to Physical Review Letters. This includes refining the response to referee comments, the letter to the editor, the list of major changes, and the revised versions of the main paper and supplementary materials. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
 
@@ -78,7 +78,7 @@ prompts:
       \item Contents wrapped inside \begin{referee}{A} (or B) and \end{referee} environments come from the referee report. You should not make any changes to them.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     You will be revising a rebuttal package for a paper submitted to Physical Review Letters. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
 
     <documents>
@@ -134,7 +134,7 @@ prompts:
     {% endif %}
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated. You should include all the changes you added in the previous step.
 
     After your planning, revise the rebuttal package further to include the following improvements:
@@ -196,7 +196,7 @@ prompts:
 
     Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Letters. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
 
-  user_reflect: |
+  userReflect: |
     Your revised output is still not specific enough to the paper and doesn't show sufficient improvement over the original version.
     After thoroughly and critically reviewing the original rebuttal package, the referee reports, and the example, write a new revised rebuttal package that satisfies the following requirements:
     <requirements>

@@ -2,12 +2,11 @@ import sys
 import os
 import click
 from dotenv import load_dotenv
-from coauthor.args import comma_separated_list
 from coauthor.latex import (
     extract_figure_paths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_tex_count
+from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_texcount
 from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
@@ -21,11 +20,16 @@ from coauthor.housekeeping import (
 )
 from coauthor.logger import logger
 
-from coauthor.execute import run_agent, run_merge
+from coauthor.execute import run_agent, run_merge_agent
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
+
+
+def comma_separated_list(value):
+    items = [item.strip() for item in value.split(",")]
+    return [item.strip("'\"") for item in items]
 
 
 def shared_arguments(func):
@@ -35,40 +39,40 @@ def shared_arguments(func):
         click.option("--reflect", required=False, type=click.BOOL, default=False, help="Reflect on the changes"),
         click.option("--instruction", required=False, default=None, help="Instruction for processing"),
         # Input file arguments
-        click.option("--input_file", required=True, help="Path to the input file"),
-        click.option("--input_files", default=None, help="Path to the multiple input files"),
+        click.option("--inputFile", required=True, type=str, help="Path to the input file"),
+        click.option("--inputFiles", default=None, type=comma_separated_list, help="Path to the multiple input files"),
         # Reference file arguments
-        click.option("--reference_file", default=None, help="Path to the reference file"),
-        click.option("--reference_files", default=None, help="Path to the multiple reference files"),
+        click.option("--referenceFile", default=None, type=str, help="Path to the reference file"),
+        click.option("--referenceFiles", default=None, type=comma_separated_list, help="Path to the multiple reference files"),
         # Auxiliary file arguments
-        click.option("--auxiliary_file", default=None, help="Path to the auxiliary file"),
-        click.option("--auxiliary_files", default=None, help="Path to the multiple auxiliary files"),
+        click.option("--auxiliaryFile", default=None, type=str, help="Path to the auxiliary file"),
+        click.option("--auxiliaryFiles", default=None, type=comma_separated_list, help="Path to the multiple auxiliary files"),
         # Figure file arguments
         click.option(
-            "--figure_file",
+            "--figureFile",
             required=False,
             default=None,
             help="Path to the figure file",
         ),
         click.option(
-            "--figure_files",
+            "--figureFiles",
             required=False,
             default=None,
             help="Path to the figure file(s). Multiple files can be specified as a comma-separated list.",
         ),
         # Output file arguments
-        click.option("--output_files", type=comma_separated_list, default=None, help="Paths to the output files"),
-        click.option("--output_name_override", type=str, default=None, help="Override base output name"),
+        click.option("--outputFiles", default=None, type=comma_separated_list, help="Paths to the output files"),
+        click.option("--outputNameOverride", type=str, default=None, help="Override base output name"),
+        click.option("--editedFile", default=None, type=str, help="Path to the file that are already edited"),
         # Tool usage arguments
-        click.option("--edited_file", default=None, help="Path to the file that are already edited"),
-        click.option("--auto_extract_figure", is_flag=True, help="Automatically extract the list of figures from the input file"),
-        click.option("--auto_extract_tikz_figure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
-        click.option("--auto_extract_tikz_figure_reflect", is_flag=True, help="Include TikZ reflection in the output"),
-        click.option("--include_tex_count", is_flag=True, help="Include the tex count statistics in the user message"),
-        click.option("--use_prefill_from_input", is_flag=True, help="Use the prefill from the input file"),
-        click.option("--auto_confirmation", is_flag=True, help="Automatically confirm model's questions"),
-        click.option("--print_input_prompt", is_flag=True, help="Print the input prompt to an XML file"),
-        click.option("--use_openrouter", is_flag=True, help="Use OpenRouter for model inference"),
+        click.option("--autoExtractFigure", is_flag=True, help="Automatically extract the list of figures from the input file"),
+        click.option("--autoExtractTikzFigure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
+        click.option("--autoExtractTikzFigureReflect", is_flag=True, help="Include TikZ reflection in the output"),
+        click.option("--includeTexCount", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--usePrefillFromInput", is_flag=True, help="Use the prefill from the input file"),
+        click.option("--autoConfirmation", is_flag=True, help="Automatically confirm model's questions"),
+        click.option("--printInputPrompt", is_flag=True, help="Print the input prompt to an XML file"),
+        click.option("--useOpenRouter", is_flag=True, help="Use OpenRouter for model inference"),
     ]
     for option in options:
         func = option(func)
@@ -84,11 +88,11 @@ def cli():
 
 @cli.command()
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--edited_file", required=True, help="Path to the edited file")
-def merge(model, input_file, edited_file):
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--editedFile", required=True, help="Path to the edited file")
+def merge(model, inputFile, editedFile):
     """Run merge agent from CLI"""
-    run_merge(model, input_file, edited_file)
+    run_merge_agent(model, inputFile, editedFile)
 
 
 @cli.command()
@@ -96,6 +100,7 @@ def merge(model, input_file, edited_file):
 @click.argument("agent")
 def run(agent: str, **kwargs):
     """Run any agent except merge from CLI"""
+    print(kwargs)
     run_agent(agent, **kwargs)
 
 
@@ -120,89 +125,89 @@ def indent_tex():
 @cli.command()
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-def clean_single(model, input_file, agent):
-    run_clean_single(model, input_file, agent)
+@click.option("--inputFile", required=True, help="Path to the input file")
+def clean_single(model, inputFile, agent):
+    run_clean_single(model, inputFile, agent)
 
 
 @cli.command()
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_single(model, input_file, agent, output_name_override):
-    run_pack_single(model, input_file, agent, output_name_override)
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--outputNameOverride", type=str, default=None, help="Override base output name")
+def pack_single(model, inputFile, agent, outputNameOverride):
+    run_pack_single(model, inputFile, agent, outputNameOverride)
 
 
 @cli.command()
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-def clean_multiple(model, input_file, input_files, agent):
-    run_clean_multiple(model, input_file, input_files, agent)
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--inputFiles", required=True, help="Paths to the input files")
+def clean_multiple(model, inputFile, inputFiles, agent):
+    run_clean_multiple(model, inputFile, inputFiles, agent)
 
 
 @cli.command()
 @click.option("--agent", required=True, help="Agent to choose")
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--output_name_override", type=str, default=None, help="Override base output name")
-def pack_multiple(model, input_file, input_files, agent, output_name_override):
-    run_pack_multiple(model, input_file, input_files, agent, output_name_override)
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--inputFiles", required=True, help="Paths to the input files")
+@click.option("--outputNameOverride", type=str, default=None, help="Override base output name")
+def pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride):
+    run_pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride)
 
 
 @cli.command()
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--edited_file", required=True, help="Path to the edited file")
-def latexdiff(input_file, edited_file):
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--editedFile", required=True, help="Path to the edited file")
+def latexdiff(inputFile, editedFile):
     """Run latexdiff on the given input and edited files."""
-    diff_file = run_latexdiff(input_file, edited_file)
+    diff_file = run_latexdiff(inputFile, editedFile)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
 
 @cli.command()
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--commit_hash", required=True, help="Commit hash to compare against")
-def latexdiff_vc(input_file, commit_hash):
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--commitHash", required=True, help="Commit hash to compare against")
+def latexdiff_vc(inputFile, commitHash):
     """Run latexdiff-vc on the given input file and commit hash."""
-    diff_file = run_latexdiff_vc(input_file, commit_hash)
+    diff_file = run_latexdiff_vc(inputFile, commitHash)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
 
 @cli.command()
-@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--commit_hash", required=True, help="Commit hash to compare against")
-def latexdiff_vc_multiple(input_files, commit_hash):
+@click.option("--inputFiles", required=True, help="Paths to the input files")
+@click.option("--commitHash", required=True, help="Commit hash to compare against")
+def latexdiff_vc_multiple(inputFiles, commitHash):
     """Run latexdiff-vc on multiple input files and commit hash."""
-    run_latexdiff_vc_multiple(input_files, commit_hash)
+    run_latexdiff_vc_multiple(inputFiles, commitHash)
 
 
 @cli.command()
-@click.option("--input_file", required=True, help="Path to the input file")
-@click.option("--commit_hash", required=True, help="Commit hash to compare against")
+@click.option("--inputFile", required=True, help="Path to the input file")
+@click.option("--commitHash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
-def pack_latexdiff_vc(input_file, commit_hash, clean):
-    run_pack_latexdiff_vc(input_file, commit_hash, clean)
+def pack_latexdiff_vc(inputFile, commitHash, clean):
+    run_pack_latexdiff_vc(inputFile, commitHash, clean)
 
 
 @cli.command()
-@click.option("--input_files", required=True, type=comma_separated_list, help="Paths to the input files")
-@click.option("--commit_hash", required=True, help="Commit hash to compare against")
+@click.option("--inputFiles", required=True, help="Paths to the input files")
+@click.option("--commitHash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
-def pack_latexdiff_vc_multiple(input_files, commit_hash, clean):
-    run_pack_latexdiff_vc_multiple(input_files, commit_hash, clean)
+def pack_latexdiff_vc_multiple(inputFiles, commitHash, clean):
+    run_pack_latexdiff_vc_multiple(inputFiles, commitHash, clean)
 
 
 @cli.command()
 @click.argument("latex_file")
-def tex_count(latex_file):
-    tex_count_stats = get_tex_count(latex_file)
-    if tex_count_stats is not None:
-        logger.info(f"Statistics for {latex_file}:\n {tex_count_stats}")
+def texcount(latex_file):
+    texCountStats = get_texcount(latex_file)
+    if texCountStats is not None:
+        logger.info(f"Statistics for {latex_file}:\n {texCountStats}")
 
 
 @cli.command()

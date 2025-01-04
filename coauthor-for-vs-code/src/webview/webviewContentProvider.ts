@@ -1,10 +1,17 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as fs from 'fs';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
-import { debug, error, initializeLogging } from '../logger/logUtils';
 
 const CHANNEL = 'WebviewContent';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 export class WebviewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -42,7 +49,7 @@ export class WebviewContentProvider {
         .join('\n');
 
       // Replace placeholders in HTML with actual content
-      debug(CHANNEL, 'Generated HTML content for webview');
+      logger.debug(CHANNEL, 'Generated HTML content for webview');
       return htmlContent
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
@@ -56,7 +63,7 @@ export class WebviewContentProvider {
         .replace('${uiHandlersUri}', uiHandlersUri.toString())
         .replace('${vscodeApiUri}', vscodeApiUri.toString());
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
       );

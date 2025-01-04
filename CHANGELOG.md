@@ -240,7 +240,7 @@
 - Added new 'polish_multiple_tex' command in CLI
 - Created 'polish_multiple' agent settings in edit_tex.py
 - Implemented 'handle_multiple_input' function for processing multiple input files
-- Fixed end_tag detection issue in split_scratchpad_output
+- Fixed endTag detection issue in split_scratchpad_output
 - Updated main function in edit_tex.py to support 'polish_multiple' agent
 - Enhanced error handling for multi-file input validation
 
@@ -267,7 +267,7 @@
 - Enhanced error handling for new output file functionality
 - Improved modularity and organization of the codebase
 - Various minor code improvements and optimizations
-- Added output_name_override option to pack-single and clean-single CLI commands
+- Added outputNameOverride option to pack-single and clean-single CLI commands
 - Updated pack_single and clean_single functions to use output name override
 - Improved file naming logic to support custom output names
 - Enhanced error handling for new output name override functionality
@@ -289,16 +289,16 @@
 
 - Added intelligent merge functionality for LaTeX documents
 - Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command
-- Added new function get_output_file_name_merge in output_utils.py
+- Added new function get_outputFile_name_merge in output_utils.py
 - Improved pattern handling in clean_single and pack_single functions in cli.py
 - Added process_tikzpicture_endings function in tex_tools.py for better TikZ handling
 - Updated process_first_round and process_reflection_round functions in process.py to handle scratchpad output
-- Updated merge.py to use get_output_file_name_merge function
+- Updated merge.py to use get_outputFile_name_merge function
 
 ## [0.9.5]
 
-- Updated CLI commands to use --input_file and --edited_file options for improved clarity and consistency
-- Changed default model in get_agent_dir_from_env function from "opus" to "sonnet+"
+- Updated CLI commands to use --inputFile and --editedFile options for improved clarity and consistency
+- Changed default model in getAgent_dir_from_env function from "opus" to "sonnet+"
 - Refactored CLI commands to use new input file options
 - Improved error handling and input validation for file paths
 - Various minor code improvements and optimizations
@@ -314,7 +314,7 @@
 - Added new write-cover and write_proposal agents
 - Implemented write_tex.py for handling new writing agents
 - Fixed bug in scratchpad output handling in output_utils.py
-- Enhanced agent handling with get_agent_first_name_chunk function in cli.py
+- Enhanced agent handling with getAgent_first_name_chunk function in cli.py
 - Updated CLI to support new writing agents
 - Improved file handling for sample/reference files
 - Refactored code for better modularity and consistency
@@ -324,7 +324,7 @@
 ## [0.9.2]
 
 - Refactored `process_first_round` function to return fewer values
-- Moved system prompt loading to `get_agent_prompts` for better organization
+- Moved system prompt loading to `getAgent_prompts` for better organization
 - Updated all agent files to use the new `process_first_round` function signature
 - Improved handling of scratchpad content in `split_scratchpad_output`
 - Minor code improvements and optimizations
@@ -454,7 +454,7 @@
 ## [0.7.9]
 
 - Refactored continuation logic for improved handling of existing files
-- Implemented new has_end_tag function to check for end tags in file content
+- Implemented new has_endTag function to check for end tags in file content
 - Removed append_mode from output settings and related command-line arguments
 - Improved handling of existing files in both initial and reflection rounds
 - Enhanced "continue to reflect" functionality
@@ -530,8 +530,8 @@
   - Added comprehensive type hints throughout the file
   - Reorganized and optimized import statements
   - Created new helper functions to reduce code duplication
-- Added --auto_extract_figure option to automatically extract the list of figures from input files
-- Added --include_tex_count option to include tex count statistics in user messages
+- Added --autoExtractFigure option to automatically extract the list of figures from input files
+- Added --includeTexCount option to include tex count statistics in user messages
 - Updated CLI commands to support new options
 - Improved error handling and logging for better user feedback and debugging
 - Various minor improvements and bug fixes

@@ -2,7 +2,7 @@ name: txt2tex_example
 inherits: txt2tex
 
 prompts:
-  user_prefix: |
+  userPrefix: |
     You are provided with the following:
     <txt_content>
     {{ INPUT_CONTENT }}

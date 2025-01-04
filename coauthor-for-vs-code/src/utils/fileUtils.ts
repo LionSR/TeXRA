@@ -1,16 +1,15 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import {
-  debug,
-  info,
-  warn,
-  error,
-  initializeLogging,
-} from '../logger/logUtils';
+// Standard library imports
 import * as fs from 'fs';
+import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function getRelativePath(filePath: string): string {
   const workspacePath = getWorkspacePath();
@@ -73,9 +72,9 @@ export async function appendFile(
     // Append new content
     const newContent = existingContent + content;
     await vscode.workspace.fs.writeFile(uri, Buffer.from(newContent, 'utf-8'));
-    debug(CHANNEL, `Successfully appended to file: ${filePath}`);
+    logger.debug(CHANNEL, `Successfully appended to file: ${filePath}`);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error appending to file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -92,15 +91,15 @@ export async function deleteFile(filePath: string): Promise<void> {
     const fullPath = path.join(workspacePath, filePath);
     const uri = vscode.Uri.file(fullPath);
     await vscode.workspace.fs.delete(uri, { useTrash: false });
-    debug(CHANNEL, `Deleted: ${filePath}`);
+    logger.debug(CHANNEL, `Deleted: ${filePath}`);
   } catch (err) {
     if (err instanceof vscode.FileSystemError) {
-      warn(CHANNEL, `Unable to delete ${filePath}. It may be in use.`);
+      logger.warn(CHANNEL, `Unable to delete ${filePath}. It may be in use.`);
       vscode.window.showWarningMessage(
         `Unable to delete ${filePath}. It may be in use.`,
       );
     } else {
-      error(
+      logger.error(
         CHANNEL,
         `Error deleting ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -113,7 +112,7 @@ export async function moveFile(
   source: string,
   destination: string,
 ): Promise<void> {
-  debug(CHANNEL, `Moving file from ${source} to ${destination}`);
+  logger.debug(CHANNEL, `Moving file from ${source} to ${destination}`);
   try {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
@@ -131,14 +130,14 @@ export async function moveFile(
       () => false,
     );
     if (!sourceExists) {
-      warn(CHANNEL, `Source file doesn't exist: ${source}`);
+      logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
       return;
     }
 
     await vscode.workspace.fs.rename(sourceUri, destUri);
-    info(CHANNEL, `Successfully moved: ${source} to ${destination}`);
+    logger.info(CHANNEL, `Successfully moved: ${source} to ${destination}`);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error moving file from ${source} to ${destination}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -150,7 +149,7 @@ export async function copyFile(
   source: string,
   destination: string,
 ): Promise<void> {
-  debug(CHANNEL, `Copying file from ${source} to ${destination}`);
+  logger.debug(CHANNEL, `Copying file from ${source} to ${destination}`);
   try {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
@@ -168,17 +167,17 @@ export async function copyFile(
       () => false,
     );
     if (!sourceExists) {
-      warn(CHANNEL, `Source file doesn't exist: ${source}`);
+      logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
       return;
     }
 
     await vscode.workspace.fs.copy(sourceUri, destUri, { overwrite: true });
-    info(
+    logger.info(
       CHANNEL,
       `Successfully copied: source=${source} to destination=${destination}`,
     );
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error copying file from source=${source} to destination=${destination}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -212,7 +211,7 @@ export async function findFileInBuild(
           () => false,
         );
         if (!exists) {
-          debug(CHANNEL, `Directory doesn't exist: ${searchDir}`);
+          logger.debug(CHANNEL, `Directory doesn't exist: ${searchDir}`);
           continue;
         }
 
@@ -226,7 +225,7 @@ export async function findFileInBuild(
                   workspacePath,
                   path.join(searchDir, fileName),
                 );
-                debug(CHANNEL, `Found file: ${relativePath}`);
+                logger.debug(CHANNEL, `Found file: ${relativePath}`);
                 return relativePath;
               }
             } else if (fileName.startsWith(pattern)) {
@@ -235,13 +234,13 @@ export async function findFileInBuild(
                 workspacePath,
                 path.join(searchDir, fileName),
               );
-              debug(CHANNEL, `Found file: ${relativePath}`);
+              logger.debug(CHANNEL, `Found file: ${relativePath}`);
               return relativePath;
             }
           }
         }
       } catch (err) {
-        warn(
+        logger.warn(
           CHANNEL,
           `Error searching directory searchDir=${searchDir}: ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -250,7 +249,7 @@ export async function findFileInBuild(
     }
     return null;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in findFileInBuild: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -266,10 +265,10 @@ export async function createDirectory(relativePath: string): Promise<void> {
     }
     const fullPath = path.join(workspacePath, relativePath);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
-    debug(CHANNEL, `Created directory: ${relativePath}`);
+    logger.debug(CHANNEL, `Created directory: ${relativePath}`);
   } catch (err) {
     if (err instanceof vscode.FileSystemError) {
-      error(
+      logger.error(
         CHANNEL,
         `Unable to create directory ${relativePath}. Permission denied.`,
       );
@@ -277,7 +276,7 @@ export async function createDirectory(relativePath: string): Promise<void> {
         `Unable to create directory ${relativePath}. Permission denied.`,
       );
     } else {
-      error(
+      logger.error(
         CHANNEL,
         `Error creating directory ${relativePath}: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -298,7 +297,7 @@ export async function readDirectory(
     const dirUri = vscode.Uri.file(fullPath);
     return await vscode.workspace.fs.readDirectory(dirUri);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error reading directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -330,7 +329,7 @@ export function readFileBytesSync(filePath: string): Buffer {
     const fullPath = path.join(workspacePath, filePath);
     return fs.readFileSync(fullPath);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error reading file bytes: ${err instanceof Error ? err.message : String(err)}`,
     );

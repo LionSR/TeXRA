@@ -15,10 +15,10 @@ class ModelFactory:
     def create_handler(config: ModelConfig) -> ModelHandler:
         """Create model handler based on provider and OpenRouter configuration."""
         # Handle OpenRouter configuration
-        if config.use_openrouter:
+        if config.useOpenRouter:
             # Set OpenRouter model name if not provided
-            if not config.openrouter_full_name:
-                config.openrouter_full_name = f"{config.provider.value}/{config.full_name}"
+            if not config.openrouterFullName:
+                config.openrouterFullName = f"{config.provider.value}/{config.fullName}"
 
             # Route to appropriate OpenRouter handler
             if config.provider == ModelProvider.ANTHROPIC:
