@@ -138,13 +138,13 @@ export abstract class BaseReflectionAgent {
   /**
    * Get basic user variables common across agents.
    */
-  protected getUserVars(): Record<string, any> {
+  protected async getUserVars(): Promise<Record<string, any>> {
     // Build user variables incrementally with clear categories
     const userVars: Record<string, any> = {};
     Object.assign(userVars, this.getBasicVars());
-    Object.assign(userVars, this.getFileVars());
-    Object.assign(userVars, this.getRequiredFileVars());
-    Object.assign(userVars, this.getPatternBasedFileVars());
+    Object.assign(userVars, await this.getFileVars());
+    Object.assign(userVars, await this.getRequiredFileVars());
+    Object.assign(userVars, await this.getPatternBasedFileVars());
     Object.assign(userVars, this.getOutputFilesOrder());
     Object.assign(userVars, this.getToolFlags());
     return userVars;
@@ -168,7 +168,7 @@ export abstract class BaseReflectionAgent {
   /**
    * Get input, reference, and auxiliary file variables.
    */
-  private getFileVars(): Record<string, any> {
+  private async getFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
 
     const allInputFiles = [
@@ -194,7 +194,7 @@ export abstract class BaseReflectionAgent {
 
     for (const [prefix, filePath] of Object.entries(singleFileMappings)) {
       userVars[`${prefix}_FILE`] = filePath;
-      userVars[`${prefix}_CONTENT`] = filePath ? readFile(filePath) : null;
+      userVars[`${prefix}_CONTENT`] = filePath ? await readFile(filePath) : null;
     }
 
     // Handle file collections
@@ -216,12 +216,15 @@ export abstract class BaseReflectionAgent {
     for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
       collectionMappings,
     )) {
-      userVars[`ADDITIONAL_${prefix}S`] = additionalFiles
-        ? getXmlFormatFromFiles(additionalFiles as string[])
+      const additionalXml = additionalFiles
+        ? await getXmlFormatFromFiles(additionalFiles as string[])
         : null;
-      userVars[`ALL_${prefix}S`] = allFiles
-        ? getXmlFormatFromFiles(allFiles as string[])
+      const allXml = allFiles
+        ? await getXmlFormatFromFiles(allFiles as string[])
         : null;
+      
+      userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
+      userVars[`ALL_${prefix}S`] = allXml;
       userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles as string[]);
     }
 
@@ -231,7 +234,7 @@ export abstract class BaseReflectionAgent {
   /**
    * Get variables from required files specified in agent settings.
    */
-  private getRequiredFileVars(): Record<string, any> {
+  private async getRequiredFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
 
     // Add variables for required files
@@ -241,12 +244,12 @@ export abstract class BaseReflectionAgent {
       )) {
         if (filePath) {
           try {
-            const fileContent = readFile(filePath);
+            const fileContent = await readFile(filePath);
             userVars[`${varName}_FILE`] = filePath;
             userVars[`${varName}_CONTENT`] = fileContent;
             logger.info(
               CHANNEL,
-              `Found from [Required Files] the [VAR '${varName}']: ${filePath}`,
+              `Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`,
             );
           } catch (err) {
             logger.warn(
@@ -265,7 +268,7 @@ export abstract class BaseReflectionAgent {
       )) {
         const fullPath = `${this.agentPath}/${filePath}`;
         try {
-          const fileContent = readFile(fullPath);
+          const fileContent = await readFile(fullPath);
           userVars[`${varName}_FILE`] = fullPath;
           userVars[`${varName}_CONTENT`] = fileContent;
           logger.info(
@@ -287,7 +290,7 @@ export abstract class BaseReflectionAgent {
   /**
    * Get variables from pattern-based file mappings specified in agent settings.
    */
-  private getPatternBasedFileVars(): Record<string, any> {
+  private async getPatternBasedFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
 
     // Handle pattern-based file mappings if defined in settings
@@ -306,7 +309,7 @@ export abstract class BaseReflectionAgent {
             // Single file categories
             if (categoryValue && pattern in categoryValue.toLowerCase()) {
               try {
-                const fileContent = readFile(categoryValue);
+                const fileContent = await readFile(categoryValue);
                 userVars[`${varName}_FILE`] = categoryValue;
                 userVars[`${varName}_CONTENT`] = fileContent;
                 logger.info(
@@ -326,7 +329,7 @@ export abstract class BaseReflectionAgent {
               for (const file of categoryValue) {
                 if (pattern in file.toLowerCase()) {
                   try {
-                    const fileContent = readFile(file);
+                    const fileContent = await readFile(file);
                     userVars[`${varName}_FILE`] = file;
                     userVars[`${varName}_CONTENT`] = fileContent;
                     logger.info(
@@ -402,7 +405,7 @@ export abstract class BaseReflectionAgent {
     while (!endTurn) {
       const exists = await fileExists(outputFile);
       const startTime = Date.now();
-      const systemPrompt = renderPrompt(
+      const systemPrompt = await renderPrompt(
         this.agentPrompts.systemPrompt,
         this.getUserVars(),
       );
@@ -676,18 +679,16 @@ export abstract class BaseReflectionAgent {
     const messages: any[] = [];
 
     // Set up initial prompts
-    const systemPrompt = renderPrompt(
-      this.agentPrompts.systemPrompt,
-      this.getUserVars(),
-    );
-    const userRequest = renderPrompt(
-      this.agentPrompts.userRequest,
-      this.getUserVars(),
-    );
-    const userPrefix = renderPrompt(
-      this.agentPrompts.userPrefix,
-      this.getUserVars(),
-    );
+    const userVars = await this.getUserVars();
+    const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+      renderPrompt(this.agentPrompts.systemPrompt, userVars),
+      renderPrompt(this.agentPrompts.userRequest, userVars),
+      renderPrompt(this.agentPrompts.userPrefix, userVars),
+    ]);
+
+    logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
+    logger.debug(CHANNEL, `User request: ${userRequest}`);
+    logger.debug(CHANNEL, `System prompt: ${systemPrompt}`);
 
     let prefixWithStats = userPrefix;
     if (toolState.texCountStats) {
@@ -817,9 +818,10 @@ export abstract class BaseReflectionAgent {
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
-    const userRequestReflect = renderPrompt(
+    const userVars = await this.getUserVars();
+    const userRequestReflect = await renderPrompt(
       this.agentPrompts.userReflect,
-      this.getUserVars(),
+      userVars,
     );
     let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
     if (toolState.texCountStats) {
