@@ -946,11 +946,8 @@ export abstract class BaseReflectionAgent {
     currRound: number,
   ): Promise<void> {
     if (this.agentConfig.outputFiles) {
-      const processedFiles =
-        await this.outputHandler.splitMultipleScratchpadOutputXml(
-          outputFile,
-          'document',
-        );
+      // Multiple output files case
+      const processedFiles = await this.outputHandler.processMultipleOutputs(outputFile);
       await this.outputHandler.handleMultipleOutputs(processedFiles);
       this.outputHandler.outputFiles[currRound] = processedFiles;
       await this.outputHandler.replaceInputCommands(
@@ -958,10 +955,8 @@ export abstract class BaseReflectionAgent {
         processedFiles,
       );
     } else {
-      const processedFile = await this.outputHandler.splitScratchpadOutputXml(
-        outputFile,
-        'document',
-      );
+      // Single output file case
+      const processedFile = await this.outputHandler.processSingleOutput(outputFile);
       await this.outputHandler.handleSingleOutput(processedFile);
       this.outputHandler.outputFiles[currRound] = [processedFile];
     }
