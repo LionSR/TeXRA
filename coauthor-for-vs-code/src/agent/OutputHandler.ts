@@ -202,10 +202,7 @@ export class OutputHandler {
       // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent)[0];
 
-      logger.debug(
-        CHANNEL,
-        `Root: ${JSON.stringify(root)}`,
-      );
+      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
       await this.handleScratchpad(
         root,
@@ -246,8 +243,6 @@ export class OutputHandler {
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
-    // const rootContent = `<root>${outputContent}</root>`;
-
     try {
       const parser = new XMLParser({
         ignoreAttributes: false,
@@ -255,11 +250,9 @@ export class OutputHandler {
         parseTagValue: false,
         textNodeName: 'content',
       });
-      // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent)[0];
 
       logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-
 
       // Handle scratchpad
       await this.handleScratchpad(
@@ -270,9 +263,9 @@ export class OutputHandler {
       );
 
       // Find all document elements
-      const documents = root.find((item: any) => item[documentTag]);
-      if (documents) {
-        return this.processLatexDocuments(documents[documentTag], outputFile);
+      const documents = root.filter((item: any) => item[documentTag]);
+      if (documents && documents.length > 0) {
+        return this.processLatexDocuments(documents, outputFile);
       }
 
       logger.error(CHANNEL, `No ${documentTag} found in output file.`);
