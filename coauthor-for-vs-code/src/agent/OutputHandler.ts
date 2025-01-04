@@ -39,7 +39,7 @@ export function getOutputFileName(
   currRound: number,
   editedFile?: string,
 ): string {
-  const { name: fileName } = path.parse(inputFile);
+  const { dir, name: fileName } = path.parse(inputFile);
   const agentFirstNameChunk = agent.split('_')[0];
 
   let newRound = currRound;
@@ -49,7 +49,8 @@ export function getOutputFileName(
     newRound += editedRound + 1;
   }
 
-  const outputFile = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
+  const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
+  const outputFile = path.join(dir, outputBaseName);
   logger.debug(CHANNEL, `Output file: ${outputFile}`);
   return outputFile;
 }
