@@ -40,14 +40,34 @@ export function getListOfFiles(files: string[] | null | undefined): string {
  * @param variables Variables to use in template rendering
  * @returns Rendered prompt string
  */
-export function renderPrompt(
+export async function renderPrompt(
   prompt: string,
   variables: { [key: string]: any },
-): string {
+): Promise<string> {
   try {
+    // First resolve any Promise values in the variables
+    const resolvedVariables: { [key: string]: any } = {};
+    for (const [key, value] of Object.entries(variables)) {
+      if (value instanceof Promise) {
+        resolvedVariables[key] = await value;
+      } else if (typeof value === 'object' && value !== null) {
+        // Handle nested objects that might contain promises
+        const resolved: { [key: string]: any } = {};
+        for (const [nestedKey, nestedValue] of Object.entries(value)) {
+          if (nestedValue instanceof Promise) {
+            resolved[nestedKey] = await nestedValue;
+          } else {
+            resolved[nestedKey] = nestedValue;
+          }
+        }
+        resolvedVariables[key] = resolved;
+      } else {
+        resolvedVariables[key] = value;
+      }
+    }
+
     const env = nunjucks.configure({ autoescape: false });
-    const renderedPrompt = env.renderString(prompt, variables);
-    // debug(CHANNEL, `Rendered prompt: ${renderedPrompt}`);
+    const renderedPrompt = env.renderString(prompt, resolvedVariables);
     return renderedPrompt;
   } catch (err) {
     logger.error(
