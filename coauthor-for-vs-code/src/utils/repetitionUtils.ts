@@ -1,3 +1,6 @@
+// Standard library imports
+// (none needed)
+
 // Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
@@ -5,7 +8,7 @@ import * as difflib from 'difflib';
 // Local imports - core
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'Repetition';
 logger.initializeLogging(CHANNEL);
 
 export interface RepetitionResult {
@@ -41,6 +44,12 @@ export function checkForMassiveRepetition(
     const ratio =
       (2.0 * matchLength) / (lastResponse.length + newResponse.length);
     const massiveRepetitionDetected = longestMatch.length > 1000;
+
+    if (massiveRepetitionDetected) {
+      logger.error(CHANNEL, `Repetition ratio: ${ratio}`);
+      logger.error(CHANNEL, `Longest matching substring(preview): ${longestMatch.slice(0, 400)}`);
+      logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
+    }
 
     return {
       massiveRepetitionDetected,
