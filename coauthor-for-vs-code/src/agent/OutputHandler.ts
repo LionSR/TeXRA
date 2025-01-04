@@ -90,17 +90,22 @@ export class OutputHandler {
     return outputContent;
   }
 
-  public extractDocumentContent(root: any, documentTag: string): string | null {
-    const latexDocument = root.find(documentTag);
-    if (latexDocument) {
-      return latexDocument.content.trim();
+  public extractDocumentContent(root: any[], documentTag: string): string | null {
+    logger.debug(CHANNEL, `Extracting document content from root: ${JSON.stringify(root)}`);
+    // Find the object containing the documentTag
+    const docObj = root.find((item: { [key: string]: any }) => item[documentTag]);
+    if (docObj && docObj[documentTag]) {
+      const content = docObj[documentTag][0]?.content;
+      if (content) {
+        return content.trim();
+      }
     }
     logger.error(CHANNEL, `No ${documentTag} found in output file`);
     return null;
   }
 
   public async handleScratchpad(
-    root: any,
+    root: any[],
     baseName: string,
     thinkingTag: string,
     splitAndSaveThinking: boolean,
@@ -109,14 +114,16 @@ export class OutputHandler {
       const logFileThinking = `${baseName}_thinking.xml`;
       logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
 
-      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-      const scratchpad = root.find(thinkingTag);
-      if (scratchpad) {
-        const scratchpadContent = scratchpad.content.trim();
-        await writeFile(
-          logFileThinking,
-          `<scratchpad>\n${scratchpadContent}\n</scratchpad>\n`,
-        );
+      // Find the object containing the thinkingTag
+      const scratchpadObj = root.find((item: { [key: string]: any }) => item[thinkingTag]);
+      if (scratchpadObj && scratchpadObj[thinkingTag]) {
+        const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
+        if (scratchpadContent) {
+          await writeFile(
+            logFileThinking,
+            `<scratchpad>\n${scratchpadContent.trim()}\n</scratchpad>\n`,
+          );
+        }
       }
     }
   }
@@ -190,7 +197,7 @@ export class OutputHandler {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    // const rootContent = `<root>${outputContent}</root>`;
+    const rootContent = `<root>${outputContent}</root>`;
 
     try {
       const parser = new XMLParser({
@@ -200,7 +207,7 @@ export class OutputHandler {
         textNodeName: 'content',
       });
       // const root = parser.parse(rootContent);
-      const root = parser.parse(outputContent)[0];
+      const root = parser.parse(outputContent);
 
       logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
@@ -250,11 +257,10 @@ export class OutputHandler {
         parseTagValue: false,
         textNodeName: 'content',
       });
-      const root = parser.parse(outputContent)[0];
+      const root = parser.parse(outputContent);
 
       logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
-      // Handle scratchpad
       await this.handleScratchpad(
         root,
         name,
@@ -262,10 +268,10 @@ export class OutputHandler {
         splitAndSaveThinking,
       );
 
-      // Find all document elements
-      const documents = root.filter((item: any) => item[documentTag]);
-      if (documents && documents.length > 0) {
-        return this.processLatexDocuments(documents, outputFile);
+      // Find the object containing the documentTag
+      const docObj = root.find((item: { [key: string]: any }) => item[documentTag]);
+      if (docObj && docObj[documentTag] && Array.isArray(docObj[documentTag])) {
+        return this.processLatexDocuments(docObj[documentTag], outputFile);
       }
 
       logger.error(CHANNEL, `No ${documentTag} found in output file.`);
@@ -292,10 +298,10 @@ export class OutputHandler {
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
-      if (doc.document) {
-        const source = doc.document['@_name'] || '';
+      if (doc['@_name']) {
+        const source = doc['@_name'];
         logger.debug(CHANNEL, `XML Source: ${source}`);
-        const content = doc.document.content;
+        const content = doc.content;
 
         if (source && content) {
           const { name: baseName, ext } = path.parse(source);
