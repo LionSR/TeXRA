@@ -1,16 +1,16 @@
 name: proposal
 settings:
-  document_tag: research_proposal
-  end_tag: </research_proposal>
-  output_ext: tex
+  documentTag: research_proposal
+  endTag: </research_proposal>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files_internal:
+  requiredFilesInternal:
     TEMPLATE_PROPOSAL: template_proposal.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist specializing in quantum information and advanced experimental techniques. Your task is to write a detailed experimental proposal in LaTeX format. The proposal should describe a novel quantum experiment, focusing on the experimental setup, methodology, and expected outcomes. Maintain scientific rigor, clarity, and a high level of mathematical detail.
 
     When writing the proposal, follow these guidelines:
@@ -24,7 +24,7 @@ prompts:
     - When adding citations use commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include the last name of the first author, the year, and only the first word of the paper name. Use Non-breaking space (`~') before \cite such as "~\cite{...}" when appropriate.
     - Please be reminded that you will be writing a professional \LaTeX document so you should never use bare markdown style lists.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with writing an experimental physics proposal based on the following information:
 
     <proposal_draft>
@@ -38,7 +38,7 @@ prompts:
 
     Please carefully review the provided information and reference proposal (if available) before drafting your proposal.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -71,7 +71,7 @@ prompts:
 
     Please output your complete LaTeX proposal within the `<research_proposal>' tags.
 
-  user_reflect: |
+  userReflect: |
     Please review your draft experimental proposal critically, focusing on the following points:
 
     <scratchpad>

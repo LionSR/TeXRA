@@ -1,21 +1,32 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getWorkspacePath } from '../utils/fileUtils';
+
+// Local imports - latex utils
 import { runLatexDiff, runLatexDiffVC } from '../latex/latexdiff';
+
+// Local imports - housekeeping
 import {
   runPackLatexDiffVC,
   runPackLatexDiffVCMultiple,
   runCleanLatexDiffVC,
   runCleanLatexDiffVCMultiple,
 } from '../housekeeping';
-import { debug } from '../logger/logUtils';
 
 const CHANNEL = 'LatexDiff';
 
 export function registerLatexDiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.latexDiff', handleLatexDiff),
-    vscode.commands.registerCommand('coauthor.latexDiffVC', handleLatexDiffVC),
+    vscode.commands.registerCommand('coauthor.latexdiff', handleLatexDiff),
+    vscode.commands.registerCommand('coauthor.latexdiffVC', handleLatexDiffVC),
     vscode.commands.registerCommand(
       'coauthor.packLatexDiffVC',
       handlePackLatexDiffVC,
@@ -157,7 +168,7 @@ async function handlePackLatexDiffVC(
   commitHash: string,
   clean: boolean,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
   );
@@ -170,11 +181,11 @@ async function handlePackLatexDiffVCMultiple(
   commitHash: string,
   clean: boolean,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: commitHash=${commitHash}, clean=${clean}`,
   );
-  debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
   await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
 }
 
@@ -183,7 +194,7 @@ async function handleCleanLatexDiffVC(
   baseFile: string,
   commitHash: string,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
   );
@@ -195,12 +206,12 @@ async function handleCleanLatexDiffVCMultiple(
   inputFiles: string[],
   commitHash: string,
 ) {
-  debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
-  debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
+  logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
   await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
 }
 
-export const latexDiffCommands = {
+export const latexdiffCommands = {
   handleLatexDiff,
   handleLatexDiffVC,
   handlePackLatexDiffVC,

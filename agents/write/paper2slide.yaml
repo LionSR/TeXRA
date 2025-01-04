@@ -1,17 +1,17 @@
 name: paper2slide
 settings:
-  document_tag: beamer_presentation
-  end_tag: </beamer_presentation>
-  output_ext: tex
+  documentTag: beamer_presentation
+  endTag: </beamer_presentation>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_SLIDE: template_slide.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist and scientific presenter. Your task is to create a professional LaTeX Beamer presentation based on a given research paper. The presentation should be tailored for a physics audience, highlighting the key points, methodology, results, and conclusions of the paper.
 
     When creating the presentation:
@@ -24,7 +24,7 @@ prompts:
     - Prioritize visual representations and key takeaways over verbose descriptions
     - Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
 
     <research_paper>
@@ -32,7 +32,7 @@ prompts:
     </research_paper>
 
     Please carefully review the provided research paper before creating the presentation.
-  user_request: |
+  userRequest: |
     Your task is to create a professional LaTeX Beamer presentation for a physics audience.
 
     When creating the presentation, please follow these guidelines:
@@ -77,7 +77,7 @@ prompts:
     {{ TEMPLATE_SLIDE_CONTENT }}
     </beamer_presentation>
 
-  user_reflect: |
+  userReflect: |
     Please review your draft LaTeX Beamer presentation critically, focusing on the following points:
 
     <scratchpad>

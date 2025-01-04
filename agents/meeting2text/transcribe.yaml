@@ -1,28 +1,28 @@
 name: transcribe
 settings:
-  document_tag: edited_transcript
-  end_tag: </edited_transcript>
-  output_ext: md
+  documentTag: edited_transcript
+  endTag: </edited_transcript>
+  outputExt: md
   prefills:
     - |
       Here is the faithfully and correctly edited transcript:
       <edited_transcript>
-  required_files:
+  requiredFiles:
     EXAMPLE_TRANSCRIPT: example_transcript.txt
     EXAMPLE_EDITED_TRANSCRIPT: example_edited.txt
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "example"
-      var_name: "EXAMPLE_TRANSCRIPT"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_TRANSCRIPT"
+      categories: ["referenceFile", "referenceFiles"]
     - pattern: "edited"
-      var_name: "EXAMPLE_EDITED_TRANSCRIPT"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_EDITED_TRANSCRIPT"
+      categories: ["referenceFile", "referenceFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a meticulous transcriber.
 
-  user_prefix: |
+  userPrefix: |
     You will be editing a noisy academic discussion transcript that has been transcribed using voice-to-text software and contains inaccuracies. Please read carefully, as the quality of my work depends on the results.
 
     <documents>
@@ -40,7 +40,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     Improve the given noisy transcription while sticking to the original sentences as much as possible by following these instructions:
     <instruction>
     - Be faithful to the original content.
@@ -75,7 +75,7 @@ prompts:
 
     Do not include the original transcript or the example transcripts in your response.
 
-  user_reflect: |
+  userReflect: |
     You missed some parts of the discussion and it still contains some errors and typos. Your output needs to be improved to ensure it adheres more closely to the original transcription while enhancing clarity and structure. After critically reviewing the edited document, make sure that the transcription:
     <requirements>
     - Accurately reflects the original content without adding or omitting any details. Ensure that the transcription maintains the original chronological order of information.

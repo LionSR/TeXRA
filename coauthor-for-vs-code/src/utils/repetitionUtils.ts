@@ -1,9 +1,15 @@
+// Standard library imports
+// (none needed)
+
+// Third-party imports
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
-import { debug, error, initializeLogging } from '../logger/logUtils';
 
-const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+const CHANNEL = 'Repetition';
+logger.initializeLogging(CHANNEL);
 
 export interface RepetitionResult {
   massiveRepetitionDetected: boolean;
@@ -14,7 +20,7 @@ export interface RepetitionResult {
 /**
  * Checks for massive repetition using diff-match-patch
  */
-export function checkRepetitionDMP(
+export function checkForMassiveRepetition(
   lastResponse: string,
   newResponse: string,
 ): RepetitionResult {
@@ -39,13 +45,22 @@ export function checkRepetitionDMP(
       (2.0 * matchLength) / (lastResponse.length + newResponse.length);
     const massiveRepetitionDetected = longestMatch.length > 1000;
 
+    if (massiveRepetitionDetected) {
+      logger.error(CHANNEL, `Repetition ratio: ${ratio}`);
+      logger.error(
+        CHANNEL,
+        `Longest matching substring(preview): ${longestMatch.slice(0, 400)}`,
+      );
+      logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
+    }
+
     return {
       massiveRepetitionDetected,
       ratio,
       longestMatch,
     };
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error checking repetition with DMP: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -77,12 +92,12 @@ export function checkRepetitionDifflib(
     const massiveRepetitionDetected = longestMatch.length > 1000;
 
     if (massiveRepetitionDetected) {
-      debug(CHANNEL, `Repetition ratio: ${ratio}`);
-      debug(
+      logger.debug(CHANNEL, `Repetition ratio: ${ratio}`);
+      logger.debug(
         CHANNEL,
         `Longest matching substring (preview): ${longestMatch.slice(0, 400)}`,
       );
-      debug(CHANNEL, 'Massive repetition detected - stopping process.');
+      logger.debug(CHANNEL, 'Massive repetition detected - stopping process.');
     }
 
     return {
@@ -91,7 +106,7 @@ export function checkRepetitionDifflib(
       longestMatch,
     };
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error checking repetition with difflib: ${err instanceof Error ? err.message : String(err)}`,
     );

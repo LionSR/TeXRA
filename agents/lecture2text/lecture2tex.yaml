@@ -1,21 +1,21 @@
 name: lecture2tex
 
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a professor of quantum information, a meticulous transcriber, and an expert physics graduate-level textbook writer.
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a transcribed txt from a lecture of a graduate quantum information course. You are about to rewrite it line by line into formal graduate textbook language using LaTeX, so read extremely carefully.
 
     Here is the transcription {{ INPUT_FILE }} with additional \LaTeX document class and commands (where has defined the math commands you should use):
@@ -32,7 +32,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     Your task is to rewrite the provided transcribed lecture into a long-formed graduate-level physics textbook style \LaTeX document, closely following these guidelines:
     <guidelines>
     \begin{enumerate}
@@ -187,7 +187,7 @@ prompts:
 
     Output the \LaTeX document.
 
-  user_reflect: |
+  userReflect: |
     After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX document:
     <requirements>
     \begin{itemize}

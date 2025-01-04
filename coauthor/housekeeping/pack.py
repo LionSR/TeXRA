@@ -5,15 +5,15 @@ from ..logger import logger
 from ..utils.file import delete_file, move_file, find_file
 
 from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
-from .utils import get_agent_first_name_chunk, get_file_patterns, get_folder_datetime
+from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_datetime
 
 
-def run_pack_single(model: str, input_file: str, agent: str, output_folder: str | None = None) -> None:
+def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str | None = None) -> None:
     """Pack LaTeX files and related outputs into timestamped history directory, cleaning temp files."""
-    base_name = os.path.splitext(os.path.basename(input_file))[0]
-    input_dir = os.path.dirname(input_file)
+    base_name = os.path.splitext(os.path.basename(inputFile))[0]
+    input_dir = os.path.dirname(inputFile)
 
-    agent_first_name_chunk = get_agent_first_name_chunk(agent)
+    agent_first_name_chunk = getAgent_first_name_chunk(agent)
 
     file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
     file_patterns.append(base_name)
@@ -24,7 +24,7 @@ def run_pack_single(model: str, input_file: str, agent: str, output_folder: str 
         for ext in PACK_EXTENSIONS:
             file_path = find_file(input_dir, pattern, ext)
             if file_path:
-                if file_path == input_file or pattern == base_name:
+                if file_path == inputFile or pattern == base_name:
                     copied_files.append(file_path)
                 else:
                     moved_files.append(file_path)
@@ -47,26 +47,26 @@ def run_pack_single(model: str, input_file: str, agent: str, output_folder: str 
     for pattern in file_patterns:
         for ext in TEMP_EXTENSIONS:
             file_path = find_file(input_dir, pattern, ext)
-            if file_path and file_path != input_file:
+            if file_path and file_path != inputFile:
                 delete_file(file_path)
 
-    logger.info(f"Packing finished: {input_file}.")
+    logger.info(f"Packing finished: {inputFile}.")
     return output_folder
 
 
-def run_pack_multiple(model: str, input_file: str, input_files: list[str], agent: str, output_name_override: str | None = None) -> None:
+def run_pack_multiple(model: str, inputFile: str, inputFiles: list[str], agent: str, outputNameOverride: str | None = None) -> None:
     """Pack multiple LaTeX files and their outputs into a single history directory."""
     # Initialize base_name and output_dir
-    if output_name_override:
-        base_name = os.path.splitext(os.path.basename(output_name_override))[0]
-        output_dir = os.path.dirname(output_name_override)
-    elif input_file:
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        output_dir = os.path.dirname(input_file)
+    if outputNameOverride:
+        base_name = os.path.splitext(os.path.basename(outputNameOverride))[0]
+        output_dir = os.path.dirname(outputNameOverride)
+    elif inputFile:
+        base_name = os.path.splitext(os.path.basename(inputFile))[0]
+        output_dir = os.path.dirname(inputFile)
     else:
-        raise ValueError("Either input_file or output_name_override must be provided")
+        raise ValueError("Either inputFile or outputNameOverride must be provided")
 
-    agent_first_name_chunk = get_agent_first_name_chunk(agent)
+    agent_first_name_chunk = getAgent_first_name_chunk(agent)
     file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
 
     # Add patterns for additional XML files
@@ -80,9 +80,9 @@ def run_pack_multiple(model: str, input_file: str, input_files: list[str], agent
     os.makedirs(common_output_folder, exist_ok=True)
 
     # Pack input files
-    for input_file in input_files:
+    for inputFile in inputFiles:
         logger.info(f"\nPacking files to: {common_output_folder}")
-        run_pack_single(model, input_file, agent, output_folder=common_output_folder)
+        run_pack_single(model, inputFile, agent, output_folder=common_output_folder)
 
     # Pack additional XML files
     for pattern in additional_patterns:

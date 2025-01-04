@@ -1,18 +1,18 @@
 name: correct_st
 
 settings:
-  agent_type: direct
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - Here is the revised \LaTeX document. <latex_document>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to edit a long book entitled ``Stochastic Thermodynamics in the World of Machine Learning''.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -25,7 +25,7 @@ prompts:
     - Label referenced equations and figures using \label{eqn:...} and \label{fig:...} commands, choosing condensed and descriptive labels. Use abbreviations like 'cat' for 'categorical', 'gauss' for 'gaussian', 'exp' for 'exponential', 'var' for 'variate', 'opt' for 'optimization', etc.
     - Use ``\\'' sparingly for paragraph breaks. Do not remove any existing ``\\''.
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a long \LaTeX document of a chapter on stochastic thermodynamics and machine learning. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
@@ -43,7 +43,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
 
     As you review the document, make the following corrections and improvements:

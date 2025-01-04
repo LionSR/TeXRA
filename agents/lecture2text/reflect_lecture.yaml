@@ -1,25 +1,25 @@
 name: reflect_lecture
 
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "converted"
-      var_name: "CONVERTED_TEX"
-      categories: ["input_file", "input_files"]
+      varName: "CONVERTED_TEX"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     As a professor of quantum information, a meticulous transcriber, and an expert physics graduate-level textbook writer, your task is to review and refine a LaTeX version of a transcribed graduate quantum information course lecture. The goal is to ensure that the \LaTeX document accurately and faithfully represents the original lecture content, structure, and detail, with a particular focus on including all relevant equations and maintaining mathematical rigor.
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with two pieces of information:
     1. A transcribed text from a lecture of a graduate quantum information course, enclosed in `<transcription>' tag
     2. A rewritten version of the lecture in LaTeX with formal language, enclosed in <latex> tag
@@ -47,7 +47,7 @@ prompts:
     {{ CONVERTED_FILE_CONTENT }}
     </latex>
 
-  user_request: |
+  userRequest: |
     Your output is too simplest and omitting many important specifics.
     After thoroughly and critically reviewing the LaTeX version and comparing it to the original transcription (enclosed in `<transcription>' tag), ensure that the \LaTeX document:
     <requirements>

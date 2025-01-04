@@ -1,8 +1,11 @@
-import { debug, error, initializeLogging } from '../logger/logUtils';
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile } from './fileUtils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Get XML formatted string from a single file
@@ -14,7 +17,7 @@ export async function getXmlFormatFromFile(file: string): Promise<string> {
     const content = await readFile(file);
     return `<document name="${file}">\n${content}\n</document>`;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error formatting file as XML: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -39,7 +42,7 @@ export async function getXmlFormatFromFiles(
     const xmlContents = await Promise.all(xmlPromises);
     return xmlContents.join('\n');
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error formatting files as XML: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -57,7 +60,7 @@ export function addCdataToTags(xmlData: string, tags: string[]): string {
       return result.replace(pattern, '$1<![CDATA[$2]]>$3');
     }, xmlData);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error adding CDATA to tags: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -81,7 +84,7 @@ export function addCdataToTagsMultiple(
       return result.replace(pattern, '$1<![CDATA[$2]]>$3');
     }, xmlData);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error adding CDATA to tags with attributes: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -112,7 +115,7 @@ export function filterTagsFromText(
       return result.replace(pattern, '');
     }, content);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error filtering tags from text: ${err instanceof Error ? err.message : String(err)}`,
     );

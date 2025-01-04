@@ -131,7 +131,7 @@ export function handleRecentCommits(message) {
   const commitButtons = [
     'packLatexDiffVCButton',
     'cleanLatexDiffVCButton',
-    'latexDiffVCButton',
+    'latexdiffVCButton',
   ];
   const commitDiv = document.getElementById('commit');
   commitDiv.innerHTML = '';

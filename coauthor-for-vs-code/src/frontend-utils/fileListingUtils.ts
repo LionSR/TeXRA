@@ -1,11 +1,18 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getConfig } from './commonUtils';
-import { initializeLogging } from '../logger/logUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 
-const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+const CHANNEL = 'FrontendUtils';
+logger.initializeLogging(CHANNEL);
 
 const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
   'files.ignored.fileExtensions',

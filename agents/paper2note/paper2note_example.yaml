@@ -2,19 +2,19 @@ name: paper2note_example
 inherits: paper2note
 
 settings:
-  required_files:
+  requiredFiles:
     - DOCUMENT_CLS: lecture.cls
     - COMMAND: command.tex
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "example_paper"
-      var_name: "EXAMPLE_PAPER"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_PAPER"
+      categories: ["referenceFile", "referenceFiles"]
     - pattern: "example_note"
-      var_name: "EXAMPLE_NOTE"
-      categories: ["reference_file", "reference_files"]
+      varName: "EXAMPLE_NOTE"
+      categories: ["referenceFile", "referenceFiles"]
 
 prompts:
-  user_prefix: |
+  userPrefix: |
     I am going to give you a research paper. You are about to convert it into a lecture note, so please read the document carefully.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):

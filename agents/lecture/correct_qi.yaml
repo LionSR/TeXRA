@@ -1,17 +1,17 @@
 name: correct_qi
 settings:
-  agent_type: direct
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - Here is the revised \LaTeX document. <latex_document>
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: commands_qi.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are professor Ignacio Cirac, a physicist and an excellent teacher. You are working on your lecture notes for your quantum information course. 
 
     When writing a professional *.tex \LaTeX document, you must: 
@@ -32,7 +32,7 @@ prompts:
     - Each sentence should be on a single line. For example, ``Show that the singlet state is the only one for which this probability is $0$ for all $\vec{a}$.'' should be on one line.
     - For Problems, name them condensedly, e.g, \begin{problem}[Pauli Matrices]\label{prob:pauli} ... \end{problem}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a graduate quantum information course. You are about to correct the typos and mistakes in the document. So please read the document carefully.
 
     Here is the \LaTeX document with additional \LaTeX document class and commands (where has defined the math commands you should use):
@@ -50,7 +50,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     Please carefully read through the entire document, looking for any typos, grammatical errors, formatting inconsistencies, incorrect math, or factual inaccuracies.
 
     As you review the document, make the following corrections and improvements:

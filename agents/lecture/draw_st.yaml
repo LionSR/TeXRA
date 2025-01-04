@@ -1,12 +1,12 @@
 name: draw_st
 inherits: draw_note
 settings:
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert professor in machine learning and physics, as well as a LaTeX and TikZ specialist. Your task is to create or enhance figures for a graduate physics textbook on stochastic thermodynamics in machine learning, ensuring they are informative, condensed, and visually appealing, following the design principles of Edward Tufte.
 
     Key requirements:

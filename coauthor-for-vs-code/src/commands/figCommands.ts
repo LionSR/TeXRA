@@ -1,15 +1,24 @@
+// Standard library imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
+
+// Local imports - latex utils
 import { extractFigurePathsFromLatex } from '../latex/extractFigure';
 import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
 } from '../latex/tikzpicture';
-import { debug, error, initializeLogging } from '../logger/logUtils';
-import { getRelativePath, getWorkspacePath } from '../utils/fileUtils';
-import * as path from 'path';
 
 const CHANNEL = 'FigureCommands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerFigureCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -26,7 +35,7 @@ export function registerFigureCommands(context: vscode.ExtensionContext) {
       handleCompileTikzFigures,
     ),
   );
-  debug(CHANNEL, 'Figure commands registered');
+  logger.debug(CHANNEL, 'Figure commands registered');
 }
 
 async function handleExtractFigurePaths(): Promise<void> {
@@ -47,7 +56,7 @@ async function handleExtractFigurePaths(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
+    logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
     const figurePaths = await extractFigurePathsFromLatex(filePath);
@@ -69,7 +78,7 @@ async function handleExtractFigurePaths(): Promise<void> {
       );
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in extractFigurePaths command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -95,7 +104,10 @@ async function handleExtractTikzFigures(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file for TikZ figures: ${filePath}`);
+    logger.debug(
+      CHANNEL,
+      `Processing LaTeX file for TikZ figures: ${filePath}`,
+    );
 
     // Extract TikZ pictures with labels
     const labeledTikzPictures = await extractTikzPicturesWithLabels(filePath);
@@ -103,10 +115,10 @@ async function handleExtractTikzFigures(): Promise<void> {
     if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels
       const items = labeledTikzPictures.map(
-        ([label, tikzPictures]: [string, string[]]) => ({
-          label: `${label} (${tikzPictures.length} TikZ picture${tikzPictures.length > 1 ? 's' : ''})`,
+        ([label, tikzpicturess]: [string, string[]]) => ({
+          label: `${label} (${tikzpicturess.length} TikZ picture${tikzpicturess.length > 1 ? 's' : ''})`,
           description: `Figure with label: ${label}`,
-          detail: tikzPictures[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
+          detail: tikzpicturess[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
         }),
       );
 
@@ -127,7 +139,7 @@ async function handleExtractTikzFigures(): Promise<void> {
       );
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in extractTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -153,7 +165,10 @@ async function handleCompileTikzFigures(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Processing LaTeX file for TikZ compilation: ${filePath}`);
+    logger.debug(
+      CHANNEL,
+      `Processing LaTeX file for TikZ compilation: ${filePath}`,
+    );
 
     // Show progress indicator
     await vscode.window.withProgress(
@@ -204,7 +219,7 @@ async function handleCompileTikzFigures(): Promise<void> {
       },
     );
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in compileTikzFigures command: ${err instanceof Error ? err.message : String(err)}`,
     );

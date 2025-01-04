@@ -1,27 +1,27 @@
 name: transcribe_dual
 settings:
-  document_tag: edited_transcript
-  end_tag: </edited_transcript>
-  output_ext: md
+  documentTag: edited_transcript
+  endTag: </edited_transcript>
+  outputExt: md
   prefills:
     - |
       Here is the faithfully and correctly edited transcript:
       <edited_transcript>
-  required_files:
+  requiredFiles:
     OTTER_INPUT_FILE: otter_transcript.txt
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "otter"
-      var_name: "OTTER_INPUT"
-      categories: ["input_file", "input_files"]
+      varName: "OTTER_INPUT"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "whisper"
-      var_name: "WHISPER_INPUT"
-      categories: ["input_file", "input_files"]
+      varName: "WHISPER_INPUT"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a professor of physics and a meticulous transcriber with expertise in academic discourse, LaTeX, and synergizing multiple transcription sources to create highly accurate lecture transcripts.
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you two transcriptions of an academic discussion. Both were transcribed using voice-to-text software and contain out of context inaccuracies.
     The first transcription is from Otter.ai, which is less accurate but includes speaker identification.
     The second transcription is from Whisper, which is more accurate but lacks speaker identification. 
@@ -42,7 +42,7 @@ prompts:
     {{ INSTRUCTION }}
     </context>
 
-  user_request: |
+  userRequest: |
     Create a highly accurate transcription by synergizing the Whisper and Otter.ai transcripts while following these instructions:
     <instruction>
     1. Use the Whisper transcript as the primary source for content accuracy.
@@ -79,7 +79,7 @@ prompts:
 
     Output the edited version of the document inside the <edited_transcript> tag.
 
-  user_reflect: |
+  userReflect: |
     Your output needs to be significantly improved to ensure it represents the best possible synergy of the two transcriptions and to make sure there is no missing information. Right now you have a transcript that is missing some information. After reviewing the edited transcript, make sure that the transcription:
     <requirements>
     - Accurately combines the content from both transcriptions, prioritizing the Whisper transcript for accuracy and the Otter.ai transcript for speaker identification.

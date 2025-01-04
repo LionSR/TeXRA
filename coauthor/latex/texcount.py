@@ -5,7 +5,7 @@ from ..logger import logger
 from ..utils.exec import execute_command
 
 
-def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | None:
+def get_texcount(file_paths: list[str] | str, merge: bool = False) -> str | None:
     """Run texcount on LaTeX files and return combined statistics output, optionally merging included files."""
     if not isinstance(file_paths, list):
         file_paths = [file_paths]
@@ -40,9 +40,9 @@ def get_tex_count(file_paths: list[str] | str, merge: bool = False) -> str | Non
     return None
 
 
-def get_tex_count_stats(input_files: str | list[str]) -> str | None:
+def get_texCountStats(inputFiles: str | list[str]) -> str | None:
     """Run texcount on LaTeX files and return formatted statistics with XML-style tags."""
-    if isinstance(input_files, str):
-        input_files = [input_files]
-    tex_count_stats = get_tex_count(input_files)
-    return f"Tex Count Statistics:<tex_count>\n{tex_count_stats}\n</tex_count>\n\n" if tex_count_stats else None
+    if isinstance(inputFiles, str):
+        inputFiles = [inputFiles]
+    texCountStats = get_texcount(inputFiles)
+    return f"Tex Count Statistics:<texcount>\n{texCountStats}\n</texcount>\n\n" if texCountStats else None

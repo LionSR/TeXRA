@@ -1,13 +1,13 @@
 name: polish_octet_backup
 settings:
-  document_tag: latex_code
-  end_tag: </latex_code>
+  documentTag: latex_code
+  endTag: </latex_code>
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to write a research paper.
 
     To ensure the highest quality of the final document and to better adapt to my working requirements, you must follow the following document processing framework:
@@ -79,7 +79,7 @@ prompts:
     - Efficient revision workflow
     - Reliable document handling
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you the \LaTeX code of a research paper draft. Read the document carefully before proceeding.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -94,7 +94,7 @@ prompts:
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance this paper focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -115,7 +115,7 @@ prompts:
     % 1ST_UPDATED_LATEX_CODE HERE. Include the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}.
     </latex_code>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made according to the given instructions. 
     Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 

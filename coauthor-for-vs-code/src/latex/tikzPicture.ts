@@ -1,5 +1,13 @@
+// Standard library imports
 import * as path from 'path';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+
+// Third-party imports
+import * as nunjucks from 'nunjucks';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   readFile,
   fileExists,
@@ -7,12 +15,13 @@ import {
   writeFile,
   createDirectory,
 } from '../utils/fileUtils';
-import { compileLatexToPdf } from './texTools';
-import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '../utils/promptUtils';
 
+// Local imports - latex utils
+import { compileLatexToPdf } from './texTools';
+
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 // Configure nunjucks
 nunjucks.configure({ autoescape: false });
@@ -63,13 +72,13 @@ export async function extractTikzPicturesWithLabels(
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        debug(CHANNEL, `Found TikZ picture with label: ${label}`);
+        logger.debug(CHANNEL, `Found TikZ picture with label: ${label}`);
       }
     }
 
     return labeledTikzPictures;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error extracting TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -79,14 +88,14 @@ export async function extractTikzPicturesWithLabels(
 
 /**
  * Create a standalone LaTeX file for a TikZ picture
- * @param tikzPicture TikZ picture content
+ * @param tikzpictures TikZ picture content
  * @param label Label for the figure
  * @param buildDir Build directory path
  * @param suffix Optional suffix for multiple pictures with same label
  * @returns Path to created LaTeX file
  */
 export async function createStandaloneLatexWithLabels(
-  tikzPicture: string,
+  tikzpictures: string,
   label: string,
   buildDir: string,
   suffix?: string,
@@ -94,7 +103,7 @@ export async function createStandaloneLatexWithLabels(
   try {
     // Use renderPrompt instead of nunjucks directly
     const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, {
-      tikzpicture: tikzPicture,
+      tikzpicture: tikzpictures,
     });
 
     // Create filename
@@ -103,11 +112,11 @@ export async function createStandaloneLatexWithLabels(
 
     // Write file
     await writeFile(filePath, standaloneContent);
-    debug(CHANNEL, `Created standalone LaTeX file: ${filePath}`);
+    logger.debug(CHANNEL, `Created standalone LaTeX file: ${filePath}`);
 
     return filePath;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error creating standalone LaTeX: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -130,26 +139,29 @@ export async function extractAndCompileTikzPicturesWithLabels(
     const buildDir = path.join(inputDir, 'build', inputName);
     await createDirectory(buildDir);
 
-    debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
+    logger.debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
     const labeledTikzPictures = await extractTikzPicturesWithLabels(latexFile);
-    debug(CHANNEL, `Found ${labeledTikzPictures.length} labeled TikZ pictures`);
+    logger.debug(
+      CHANNEL,
+      `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
+    );
 
     const compiledFiles: string[] = [];
 
-    for (const [label, tikzPictures] of labeledTikzPictures) {
+    for (const [label, tikzpicturess] of labeledTikzPictures) {
       // Generate suffixes for multiple pictures with same label
       const suffixes =
-        tikzPictures.length > 1
-          ? tikzPictures.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
+        tikzpicturess.length > 1
+          ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i)) // a, b, c, ...
           : [undefined];
 
-      for (let i = 0; i < tikzPictures.length; i++) {
-        const tikzPicture = tikzPictures[i];
+      for (let i = 0; i < tikzpicturess.length; i++) {
+        const tikzpictures = tikzpicturess[i];
         const suffix = suffixes[i];
 
         // Create and compile standalone LaTeX file
         const texFile = await createStandaloneLatexWithLabels(
-          tikzPicture,
+          tikzpictures,
           label,
           buildDir,
           suffix,
@@ -159,14 +171,14 @@ export async function extractAndCompileTikzPicturesWithLabels(
         const pdfFile = texFile.replace(/\.tex$/, '.pdf');
         if (await fileExists(pdfFile)) {
           compiledFiles.push(pdfFile);
-          debug(CHANNEL, `Successfully compiled: ${pdfFile}`);
+          logger.debug(CHANNEL, `Successfully compiled: ${pdfFile}`);
         }
       }
     }
 
     return compiledFiles;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error extracting and compiling TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );

@@ -1,10 +1,17 @@
-import * as vscode from 'vscode';
-import { registerCommands } from './commands';
-import { FolderExplorer } from './FolderExplorer';
-import { LogViewProvider } from './logView/LogViewProvider';
-import { setLogViewProvider } from './logger/logUtils';
+// Standard library imports
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from './logger/logUtils';
+
+// Local imports - components
+import { FolderExplorer } from './FolderExplorer';
+import { LogViewProvider } from './logView/LogViewProvider';
+import { registerCommands } from './commands';
 
 async function copyDefaultAgents(context: vscode.ExtensionContext) {
   const resourcesPath = path.join(context.extensionPath, 'resources', 'agents');
@@ -56,7 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create and register the log view provider
   const logViewProvider = new LogViewProvider(context);
-  setLogViewProvider(logViewProvider);
+  logger.setLogViewProvider(logViewProvider);
 
   // Register the tree data provider and log view provider
   context.subscriptions.push(

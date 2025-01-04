@@ -1,14 +1,15 @@
 name: polish_tex
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: CoT
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert in programming LaTeX and physics. Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -23,7 +24,7 @@ prompts:
         \item When you are referring to equations or figures, you should always use \cref{...} instead of a pure number, because for latex documents, the numbering are only generated after compiliation and can change.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you the \LaTeX code of a research paper draft. Read the document carefully before proceeding.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -38,7 +39,7 @@ prompts:
 
     Please carefully read through the entire research paper above and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance this paper focusing solely on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
@@ -71,7 +72,7 @@ prompts:
     % 1ST_UPDATED_LATEX_DOCUMENT HERE. Include a complete latex document with the \begin{document} and \end{document} tags following the format of {{ INPUT_FILE }}.
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made according to the given instructions. 
     Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 

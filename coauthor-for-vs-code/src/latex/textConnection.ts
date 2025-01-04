@@ -1,12 +1,15 @@
-import OpenAI from 'openai';
+// Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import * as vscode from 'vscode';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
-interface ConnectionResult {
+export interface ConnectionResult {
   connector: string;
   choice: string;
 }
@@ -70,7 +73,7 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
       choice: majorityChoice,
     };
   } else {
-    debug(
+    logger.debug(
       CHANNEL,
       `Invalid choice: ${majorityChoice}. Defaulting to adding a space.`,
     );
@@ -135,7 +138,7 @@ export async function bestConnectionMethod(
 
     return processMajorityChoice(choices);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in bestConnectionMethod: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -188,7 +191,7 @@ export async function bestConnectionMethodAnthropic(
 
     return processMajorityChoice(choices);
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in bestConnectionMethodAnthropic: ${err instanceof Error ? err.message : String(err)}`,
     );

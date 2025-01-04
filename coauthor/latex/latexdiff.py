@@ -64,19 +64,19 @@ def process_tikzpicture_endings_diff(file_path: str) -> None:
     # logger.info(f"Tikzpicture endings fixed in {file_path}")
 
 
-def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
+def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
     """Run latexdiff between two LaTeX files with optional indentation and return diff file path."""
-    if not input_file:
+    if not inputFile:
         logger.warning("Input file is None or empty")
         return None
 
     if run_indent:
-        if not run_latexindent(input_file) or not run_latexindent(output_file):
+        if not run_latexindent(inputFile) or not run_latexindent(outputFile):
             logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    input_content = read_file(input_file)
-    output_content = read_file(output_file)
+    input_content = read_file(inputFile)
+    output_content = read_file(outputFile)
     if (
         "\\begin{document}" not in input_content
         or "\\end{document}" not in input_content
@@ -84,12 +84,12 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
         or "\\end{document}" not in output_content
     ):
         logger.warning("One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.")
-        logger.warning(f"Input file: {input_file}, Output file: {output_file}")
+        logger.warning(f"Input file: {inputFile}, Output file: {outputFile}")
         return None
 
     # Check if both files have round numbers and model names
-    input_match = re.search(r"_r(\d+)_([^.]+)\.tex$", input_file)
-    output_match = re.search(r"_r(\d+)_([^.]+)\.tex$", output_file)
+    input_match = re.search(r"_r(\d+)_([^.]+)\.tex$", inputFile)
+    output_match = re.search(r"_r(\d+)_([^.]+)\.tex$", outputFile)
 
     if input_match and output_match:
         first_round = input_match.group(1)
@@ -100,7 +100,7 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
         # If models match, include it in the diff filename
         if first_model == second_model:
             # Get the base name up to the round number (inclusive)
-            base_match = re.match(r"^(.*?_r\d+)", os.path.splitext(output_file)[0])
+            base_match = re.match(r"^(.*?_r\d+)", os.path.splitext(outputFile)[0])
             if base_match:
                 diff_file_name = f"{base_match.group(1)}_{second_model}_diffr{second_round}r{first_round}.tex"
             else:
@@ -108,7 +108,7 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
                 return None
         else:
             # Models don't match, use standard pattern
-            base_match = re.match(r"^(.*?)_r\d+", os.path.splitext(output_file)[0])
+            base_match = re.match(r"^(.*?)_r\d+", os.path.splitext(outputFile)[0])
             if base_match:
                 diff_file_name = f"{base_match.group(1)}_diffr{second_round}r{first_round}.tex"
             else:
@@ -116,7 +116,7 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
                 return None
     else:
         # Use default naming convention
-        diff_file_name = output_file.replace(".tex", f"{suffix}.tex")
+        diff_file_name = outputFile.replace(".tex", f"{suffix}.tex")
 
     latexdiff_command = [
         "latexdiff",
@@ -124,8 +124,8 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
         "--encoding=utf8",
         "-c",
         "PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*",
-        input_file,
-        output_file,
+        inputFile,
+        outputFile,
     ]
 
     success, _, _ = execute_command(latexdiff_command, diff_file_name)
@@ -138,19 +138,19 @@ def run_latexdiff(input_file: str, output_file: str, suffix: str = "_diff", run_
     return diff_file_name
 
 
-def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
+def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
     """Run latexdiff-vc on LaTeX file using specified git commit hash and return diff file path."""
-    if not input_file:
+    if not inputFile:
         logger.warning("Input file is None or empty")
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
-    input_content = read_file(input_file)
+    input_content = read_file(inputFile)
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
         logger.warning("Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.")
         return None
 
-    diff_file_name = input_file.replace(".tex", f"-diff{commit_hash}.tex")
+    diff_file_name = inputFile.replace(".tex", f"-diff{commitHash}.tex")
 
     latexdiff_vc_command = [
         "latexdiff-vc",
@@ -161,8 +161,8 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
         "--flatten",
         "--git",
         "-r",
-        commit_hash,
-        input_file,
+        commitHash,
+        inputFile,
     ]
 
     success, _, _ = execute_command(latexdiff_vc_command)
@@ -175,36 +175,36 @@ def run_latexdiff_vc(input_file: str, commit_hash: str) -> str | None:
     return diff_file_name
 
 
-def run_latexdiff_multiple(input_files: list[str], edited_files: list[str]) -> None:
+def run_latexdiff_multiple(inputFiles: list[str], editedFiles: list[str]) -> None:
     """Run latexdiff on multiple pairs of LaTeX files in parallel."""
-    if len(input_files) != len(edited_files):
+    if len(inputFiles) != len(editedFiles):
         logger.error("The number of input files must match the number of edited files. Stopping latexdiff.")
         return None
 
-    for input_file, edited_file in zip(input_files, edited_files):
-        _ = run_latexdiff(input_file, edited_file)
+    for inputFile, editedFile in zip(inputFiles, editedFiles):
+        _ = run_latexdiff(inputFile, editedFile)
 
 
-def run_latexdiff_vc_multiple(input_files: list[str], commit_hash: str) -> None:
+def run_latexdiff_vc_multiple(inputFiles: list[str], commitHash: str) -> None:
     """Run latexdiff-vc on multiple LaTeX files using specified git commit hash."""
-    for input_file in input_files:
-        _ = run_latexdiff_vc(input_file, commit_hash)
+    for inputFile in inputFiles:
+        _ = run_latexdiff_vc(inputFile, commitHash)
 
 
-def run_latexdiff_for_round(base_file: str, output_file: str, round: int) -> str | None:
+def run_latexdiff_for_round(base_file: str, outputFile: str, round: int) -> str | None:
     """Run latexdiff between base and output LaTeX files for a specific round."""
-    if base_file and output_file and os.path.exists(base_file) and os.path.exists(output_file):
-        _ = run_latexdiff(base_file, output_file, suffix="_diff")
+    if base_file and outputFile and os.path.exists(base_file) and os.path.exists(outputFile):
+        _ = run_latexdiff(base_file, outputFile, suffix="_diff")
     else:
-        logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {output_file}")
+        logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {outputFile}")
 
 
-def run_latexdiff_between_rounds(output_file1: str, output_file2: str) -> str | None:
+def run_latexdiff_between_rounds(outputFile1: str, outputFile2: str) -> str | None:
     """Run latexdiff between two rounds of LaTeX edits and process the resulting diff."""
-    if output_file1 and output_file2 and os.path.exists(output_file1) and os.path.exists(output_file2):
-        first_round = re.search(r"_r(\d+)_", output_file1).group(1)
-        second_round = re.search(r"_r(\d+)_", output_file2).group(1)
+    if outputFile1 and outputFile2 and os.path.exists(outputFile1) and os.path.exists(outputFile2):
+        first_round = re.search(r"_r(\d+)_", outputFile1).group(1)
+        second_round = re.search(r"_r(\d+)_", outputFile2).group(1)
         diff_suffix = f"_diffr{second_round}r{first_round}"
-        _ = run_latexdiff(output_file1, output_file2, suffix=diff_suffix)
+        _ = run_latexdiff(outputFile1, outputFile2, suffix=diff_suffix)
     else:
-        logger.warning(f"Could not generate latexdiff between rounds. Files not found: {output_file1} or {output_file2}")
+        logger.warning(f"Could not generate latexdiff between rounds. Files not found: {outputFile1} or {outputFile2}")

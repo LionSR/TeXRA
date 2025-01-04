@@ -1,15 +1,15 @@
 name: revise_octet_bak
 
 settings:
-  agent_type: direct
-  document_tag: latex_code
-  end_tag: </latex_code>
-  output_ext: tex
+  agentType: direct
+  documentTag: latex_code
+  endTag: </latex_code>
+  outputExt: tex
   prefills:
     - "Here is the entire revised code of the \\LaTeX document. <latex_code>"
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Technical Role Definition:
     You are a language model configured to process and improve LaTeX code of research papers.
     - Primary function: Document processing and enhancement
@@ -94,7 +94,7 @@ prompts:
         \item Process the whole document at once, do not split it into multiple responses. Only output a revised section would be a wrong output.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to edit and polish the document by outputing fully revised \LaTeX code. So please read the document carefully.
 
     Here is the \LaTeX document with input files (which may include appendix, and LaTeX auxiliary files that define the math commands you should use):
@@ -115,7 +115,7 @@ prompts:
     For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
     {% endif %}
 
-  user_request: |
+  userRequest: |
     Please carefully read through the entire document.
     Please output an updated version of the \LaTeX code with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided in <instruction> tag. Refrain from making any changes that are not directly related to the instruction. Again, a revised section would be a wrong output because it is not a complete document.
 

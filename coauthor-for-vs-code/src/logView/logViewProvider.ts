@@ -1,4 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - webview
 import { WebviewContentProvider } from '../webview/WebviewContentProvider';
 
 interface ColoredLogMessage {

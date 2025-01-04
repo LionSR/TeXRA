@@ -2,15 +2,15 @@ name: txt2tex_article
 inherits: txt2tex
 
 settings:
-  document_tag: txt_content
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: txt_content
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <latex_document> \documentclass[11pt,a4paper]{article}
     - <latex_document>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Act as an expert LaTeX typesetter tasked with converting a popular science article from plain text (generated from a PDF) into LaTeX format. Your goal is to accurately generate a new LaTeX file based on the provided text content while maintaining consistency with the given style and formatting guidelines.
 
     When writing a \LaTeX document for a popular science article, you must:
@@ -26,7 +26,7 @@ prompts:
     - Use \cite{} for citations, if any are present in the original text
     - Remember that you are writing for a general audience, so complex mathematical notation should be minimized
 
-  user_prefix: |
+  userPrefix: |
     You are provided with the following text content of a popular science article:
     <txt_content>
     {{ INPUT_CONTENT }}
@@ -36,7 +36,7 @@ prompts:
 
     The LaTeX template for the article should use the usual article class.
 
-  user_request: |
+  userRequest: |
     Please carefully read the provided popular science article text and convert its content into a LaTeX file, following the style and formatting of the provided LaTeX template.
 
     In your conversion, focus on the following:
@@ -56,7 +56,7 @@ prompts:
     % Your LaTeX source here
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Your initial LaTeX conversion of the popular science article may have some technical issues that need to be addressed:
 
     <issues>

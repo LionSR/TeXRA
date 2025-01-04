@@ -2,45 +2,45 @@ from dataclasses import dataclass, asdict
 
 from ..logger import logger
 
-from .response_usage import OpenAIResponseUsage, AnthropicResponseUsage
+from .response_usage import OpenAIAPIResponseUsage, AnthropicAPIResponseUsage
 
 
 @dataclass
 class AgentStateRound:
     """State for a single round (first round or reflection round)."""
 
-    curr_round: int
-    continuation_count: int = 0
-    response_time: float = 0
-    output_file: str = ""
-    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None
+    currRound: int
+    continuationCount: int = 0
+    responseTime: float = 0
+    outputFile: str = ""
+    APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | None = None
 
     @classmethod
-    def initialize(cls, curr_round: int) -> "AgentStateRound":
+    def initialize(cls, currRound: int) -> "AgentStateRound":
         """Initialize a new AgentStateRound object."""
-        return cls(curr_round=curr_round)
+        return cls(currRound=currRound)
 
     def update_token_counts(
         self,
-        response_usage: OpenAIResponseUsage | AnthropicResponseUsage,  # Usage statistics from model response
+        responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,  # Usage statistics from model response
     ) -> None:
         """Update token counts based on model response usage."""
-        self.model_usage = response_usage
+        self.APIUsage = responseUsage
 
-    def update_response_time(self, response_time: float) -> None:
+    def update_responseTime(self, responseTime: float) -> None:
         """Update response time for this round."""
-        self.response_time += response_time
+        self.responseTime += responseTime
 
     def increment_continuation(self) -> None:
         """Increment continuation count for this round."""
-        self.continuation_count += 1
+        self.continuationCount += 1
 
     def to_dict(self) -> dict:
         """Convert round state to dictionary format."""
         state_dict = asdict(self)
-        # Handle model_usage separately since it's a custom dataclass
-        if self.model_usage:
-            state_dict["model_usage"] = self.model_usage.to_dict()
+        # Handle APIUsage separately since it's a custom dataclass
+        if self.APIUsage:
+            state_dict["APIUsage"] = self.APIUsage.to_dict()
         return state_dict
 
 
@@ -48,39 +48,42 @@ class AgentStateRound:
 class AgentStateGlobal:
     """Global state tracking metrics across all rounds."""
 
-    first_input_tokens: int = 0  # Token count of initial input
-    total_response_time: float = 0  # Cumulative response time
-    total_input_tokens: int = 0  # Total tokens consumed
-    total_output_tokens: int = 0  # Total tokens generated
-    total_rounds: int = 0  # Total number of rounds
-    model_usage: OpenAIResponseUsage | AnthropicResponseUsage | None = None  # Overall usage stats
+    firstInputTokens: int = 0  # Token count of initial input
+    totalResponseTime: float = 0  # Cumulative response time
+    totalInputTokens: int = 0  # Total tokens consumed
+    totalOutputTokens: int = 0  # Total tokens generated
+    totalRounds: int = 0  # Total number of rounds
+    APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | None = None  # Overall usage stats
 
     @classmethod
     def initialize(cls) -> "AgentStateGlobal":
         """Initialize a new AgentStateGlobal object."""
         return cls()
 
-    def update_from_curr_round(self, state_round: AgentStateRound) -> None:
+    def update_from_currRound(self, stateRound: AgentStateRound) -> None:
         """Update global metrics based on round state."""
-        if state_round.model_usage:
-            if self.first_input_tokens == 0:
-                self.first_input_tokens = state_round.model_usage.get("total_input_tokens", 0)
-            cache_read = state_round.model_usage.get("cache_read_input_tokens", 0) or 0
-            self.first_input_tokens += cache_read
-            logger.debug(f"First input tokens: {self.first_input_tokens}, cache_read: {cache_read}")
+        if stateRound.APIUsage:
+            if self.firstInputTokens == 0:
+                self.firstInputTokens = stateRound.APIUsage.totalInputTokens
 
-            # Update global totals (using total_input_tokens without cache adjustment)
-            self.total_input_tokens += state_round.model_usage.get("total_input_tokens", 0)
-            self.total_output_tokens += state_round.model_usage.get("total_output_tokens", 0)
+            # For Anthropic API, handle cache tokens
+            cache_read = getattr(stateRound.APIUsage, "cache_read_input_tokens", 0) or 0
+            cache_creation = getattr(stateRound.APIUsage, "cache_creation_input_tokens", 0) or 0
+            self.firstInputTokens += cache_read + cache_creation
+            logger.debug(f"First input tokens: {self.firstInputTokens}, cache_read: {cache_read}, cache_creation: {cache_creation}")
 
-        self.total_response_time += state_round.response_time
+            # Update global totals (using totalInputTokens without cache adjustment)
+            self.totalInputTokens += stateRound.APIUsage.totalInputTokens
+            self.totalOutputTokens += stateRound.APIUsage.totalOutputTokens
+
+        self.totalResponseTime += stateRound.responseTime
 
     def to_dict(self) -> dict:
         """Convert global state to dictionary format."""
         state_dict = asdict(self)
-        # Handle model_usage separately since it's a custom dataclass
-        if self.model_usage:
-            state_dict["model_usage"] = self.model_usage.to_dict()
+        # Handle APIUsage separately since it's a custom dataclass
+        if self.APIUsage:
+            state_dict["APIUsage"] = self.APIUsage.to_dict()
         return state_dict
 
     @classmethod
@@ -90,9 +93,9 @@ class AgentStateGlobal:
             return cls()
 
         state = cls()
-        state.first_input_tokens = state_dict.get("first_input_tokens", 0)
-        state.total_response_time = state_dict.get("total_response_time", 0)
-        state.total_input_tokens = state_dict.get("total_input_tokens", 0)
-        state.total_output_tokens = state_dict.get("total_output_tokens", 0)
-        state.model_usage = state_dict.get("model_usage")
+        state.firstInputTokens = state_dict.get("firstInputTokens", 0)
+        state.totalResponseTime = state_dict.get("totalResponseTime", 0)
+        state.totalInputTokens = state_dict.get("totalInputTokens", 0)
+        state.totalOutputTokens = state_dict.get("totalOutputTokens", 0)
+        state.APIUsage = state_dict.get("APIUsage")
         return state

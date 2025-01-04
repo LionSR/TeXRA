@@ -1,9 +1,14 @@
+// Standard library imports
 import * as path from 'path';
-import { debug, error, initializeLogging } from '../logger/logUtils';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { readFile, fileExists } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Parse graphicspath commands supporting both single and multiple path formats
@@ -66,10 +71,10 @@ export async function extractFigurePathsFromLatex(
         path.join(latexDir, p.replace(/^\/+|\/+$/g, '')),
       );
       graphicspaths.push(normalizedPath);
-      debug(CHANNEL, `Added graphicspath: ${normalizedPath}`);
+      logger.debug(CHANNEL, `Added graphicspath: ${normalizedPath}`);
     }
 
-    debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
+    logger.debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
 
     // Find all matches in the content for both patterns
     for (const pattern of figurePatterns) {
@@ -88,7 +93,7 @@ export async function extractFigurePathsFromLatex(
             const relPath = path.relative(latexDir, pathToCheck);
             if (await fileExists(relPath)) {
               figurePaths.push(relPath);
-              debug(CHANNEL, `Found figure: ${relPath}`);
+              logger.debug(CHANNEL, `Found figure: ${relPath}`);
               break;
             }
           }
@@ -96,10 +101,10 @@ export async function extractFigurePathsFromLatex(
       }
     }
 
-    debug(CHANNEL, `Found figures: ${figurePaths.join(', ')}`);
+    logger.debug(CHANNEL, `Found figures: ${figurePaths.join(', ')}`);
     return figurePaths;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error extracting figure paths: ${err instanceof Error ? err.message : String(err)}`,
     );

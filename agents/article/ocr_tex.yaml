@@ -1,14 +1,15 @@
 name: ocr_tex
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  agentType: CoT
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a LaTeX expert specializing in OCR (Optical Character Recognition) for mathematical content. Your task is to analyze handwritten mathematical content from images and convert it into LaTeX code that maintains consistency with the existing document's notation and style.
 
     When processing handwritten content, you must:
@@ -23,7 +24,7 @@ prompts:
         \item Handle subscripts, superscripts, fractions, and special symbols appropriately
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I will provide you with:
     1. The existing LaTeX document for context
     2. An image containing handwritten mathematical content to be converted
@@ -39,7 +40,7 @@ prompts:
     </document>
     </documents>
 
-  user_request: |
+  userRequest: |
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
@@ -81,7 +82,7 @@ prompts:
     </latex_document>
     Use the same documentclass as the existing document. Include \begin{document} and \end{document} tags so that the standalonefile can be compiled.
 
-  user_reflect: |
+  userReflect: |
     Let's review the OCR conversion and integration. Consider these aspects in the scratchpad:
 
     <scratchpad>

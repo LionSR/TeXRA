@@ -1,12 +1,21 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { runLatexIndent } from '../latex/latexindent';
-import { getTexCount } from '../latex/texcount';
-import { debug, error, initializeLogging } from '../logger/logUtils';
-import { fileSelectionCommands } from './fileSelectionCommands';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getRelativePath } from '../utils/fileUtils';
 
+// Local imports - latex utils
+import { runLatexIndent } from '../latex/latexindent';
+import { getTexCount } from '../latex/texcount';
+
+// Local imports - commands
+import { fileSelectionCommands } from './fileSelectionCommands';
+
 const CHANNEL = 'LaTeXCommands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerLatexCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -16,7 +25,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('coauthor.getTexCount', handleGetTexCount),
   );
-  debug(CHANNEL, 'LaTeX commands registered');
+  logger.debug(CHANNEL, 'LaTeX commands registered');
 }
 
 async function handleIndentCurrentTex(): Promise<void> {
@@ -34,7 +43,7 @@ async function handleIndentCurrentTex(): Promise<void> {
       return;
     }
 
-    debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
+    logger.debug(CHANNEL, `Indenting LaTeX file: ${relativePath}`);
 
     // Save any unsaved changes
     const editor = vscode.window.activeTextEditor;
@@ -54,7 +63,7 @@ async function handleIndentCurrentTex(): Promise<void> {
       vscode.window.showErrorMessage('Failed to indent LaTeX file');
     }
   } catch (err) {
-    error(CHANNEL, `Error in indentTex command: ${err}`);
+    logger.error(CHANNEL, `Error in indentTex command: ${err}`);
     vscode.window.showErrorMessage('Error indenting LaTeX file');
   }
 }
@@ -77,7 +86,7 @@ async function handleGetTexCount(): Promise<void> {
     }
 
     const filePath = getRelativePath(editor.document.fileName);
-    debug(CHANNEL, `Getting tex count for: ${filePath}`);
+    logger.debug(CHANNEL, `Getting tex count for: ${filePath}`);
 
     // Ask if user wants to merge included files
     const mergeOption = await vscode.window.showQuickPick(
@@ -140,7 +149,7 @@ async function handleGetTexCount(): Promise<void> {
       },
     );
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in getTexCount command: ${err instanceof Error ? err.message : String(err)}`,
     );

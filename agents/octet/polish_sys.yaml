@@ -1,14 +1,14 @@
 name: polish_sys
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to use your knowledge to improve a LaTeX research paper focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX code, you must:
@@ -81,10 +81,10 @@ prompts:
     As mentioned previously in the system prompt, you should not wrap any monologue here.
     {% endif %}
     </latex_document>
-  user_prefix: "Start"
-  user_request: " your response here."
+  userPrefix: "Start"
+  userRequest: " your response here."
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the changes made according to the given instructions. 
     Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 

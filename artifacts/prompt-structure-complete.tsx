@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 const PromptStructureComplete = () => {
-  const [activeSection, setActiveSection] = useState("system_prompt");
+  const [activeSection, setActiveSection] = useState("systemPrompt");
   const [selectedFile, setSelectedFile] = useState("paper.tex");
   const [selectedAux, setSelectedAux] = useState("commands.tex");
   const [instruction, setInstruction] = useState(
@@ -18,7 +18,7 @@ const PromptStructureComplete = () => {
   );
 
   const promptComponents = {
-    system_prompt: {
+    systemPrompt: {
       title: "System Prompt",
       icon: <Settings className="w-6 h-6 text-blue-600" />,
       description: "Sets core behavior and requirements",
@@ -26,7 +26,7 @@ const PromptStructureComplete = () => {
         "Expert LaTeX system setting: format rules, spacing requirements, reference handling with \\cref{}, quotes, and commands.tex usage",
       color: "blue",
     },
-    user_prefix: {
+    userPrefix: {
       title: "User Prefix",
       icon: <MessageSquare className="w-6 h-6 text-green-600" />,
       description: "Loads documents and context",
@@ -34,7 +34,7 @@ const PromptStructureComplete = () => {
         "Load and process document content: <documents><document name='paper.tex'>{{INPUT_CONTENT}}</document></documents>",
       color: "green",
     },
-    user_request: {
+    userRequest: {
       title: "User Request",
       icon: <Send className="w-6 h-6 text-orange-600" />,
       description: "Specifies task and instructions",
@@ -50,7 +50,7 @@ paper_correct_r0_sonnet++_diff.tex (vs input)
 • PDF preview available`,
       },
     },
-    user_reflect: {
+    userReflect: {
       title: "Reflection Phase",
       icon: <RefreshCcw className="w-6 h-6 text-purple-600" />,
       description: "Analysis and refinement",

@@ -1,4 +1,10 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - housekeeping
 import {
   runPackSingle,
   runPackMultiple,
@@ -8,7 +14,6 @@ import {
   runCleanOutput,
   runIndentTex,
 } from '../housekeeping';
-import { debug, error } from '../logger/logUtils';
 
 const CHANNEL = 'PackCommands';
 
@@ -36,13 +41,13 @@ async function handlePackSingle(
   model: string,
   outputNameOverride?: string,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
   );
 
   if (!inputFile || !agent || !model) {
-    error(
+    logger.error(
       CHANNEL,
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
@@ -61,14 +66,14 @@ async function handlePackMultiple(
   outputFiles: string[],
   outputNameOverride?: string,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
   );
-  debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if (!inputFile || !agent || !model) {
-    error(
+    logger.error(
       CHANNEL,
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
@@ -93,13 +98,13 @@ async function handleCleanSingle(
   model: string,
   outputNameOverride: string,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
   );
 
   if (!inputFile || !agent || !model) {
-    error(
+    logger.error(
       CHANNEL,
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
@@ -122,14 +127,14 @@ async function handleCleanMultiple(
   outputFiles: string[],
   outputNameOverride?: string,
 ) {
-  debug(
+  logger.debug(
     CHANNEL,
     `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}, outputNameOverride=${outputNameOverride}`,
   );
-  debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
   if (!inputFile || !agent || !model) {
-    error(
+    logger.error(
       CHANNEL,
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );

@@ -1,6 +1,11 @@
-import * as winston from 'winston';
-import * as vscode from 'vscode';
+// Standard library imports
 import { Writable } from 'stream';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import * as winston from 'winston';
+
+// Local imports - logView
 import { LogViewProvider } from '../logView/LogViewProvider';
 
 const { combine, timestamp, printf, json } = winston.format;

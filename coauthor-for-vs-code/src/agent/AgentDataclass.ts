@@ -1,4 +1,30 @@
 /**
+ * Default settings for agent configuration
+ */
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
+  agentType: 'CoT',
+  documentTag: 'document',
+  temperature: 0.0,
+  prefills: [],
+  outputExt: 'txt',
+  endTag: '\\end{document}',
+  requiredFiles: {},
+  requiredFilesInternal: {},
+  defaultOutputFiles: [],
+  filePatternsContain: [],
+};
+
+/**
+ * Default prompts for agent configuration
+ */
+export const DEFAULT_AGENT_PROMPTS: AgentPrompts = {
+  systemPrompt: '',
+  userPrefix: '',
+  userRequest: '',
+  userReflect: '',
+};
+
+/**
  * Configuration for agent behavior and generation settings
  */
 export interface AgentSettings {
