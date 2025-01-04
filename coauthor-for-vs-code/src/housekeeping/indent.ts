@@ -1,25 +1,37 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
-import { promisify } from 'util';
-import * as cp from 'child_process';
-import { debug, info, warn, error } from '../logger/logUtils';
-import { deleteFile, readDirectory, fileExists } from '../utils/fileUtils';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import {
+  deleteFile,
+  readDirectory,
+  fileExists,
+  getWorkspacePath,
+} from '../utils/fileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { getWorkspacePath } from '../utils/fileUtils';
+import { executeCommand } from '../utils/execUtils';
+
+// Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';
 
 const CHANNEL = 'Housekeeping';
-const execAsync = promisify(cp.exec);
+logger.initializeLogging(CHANNEL);
 
 export async function runIndentTex(): Promise<void> {
-  debug(CHANNEL, 'Starting LaTeX indentation process');
+  logger.debug(CHANNEL, 'Starting LaTeX indentation process');
 
   const config = getConfig<string>('latex.latexindentConfig', '');
-  debug(CHANNEL, `LaTeX indent config: ${config}`);
+  logger.debug(CHANNEL, `LaTeX indent config: ${config}`);
 
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
-    error(CHANNEL, 'No workspace path found');
+    logger.error(CHANNEL, 'No workspace path found');
     vscode.window.showErrorMessage('No workspace path found');
     return;
   }
@@ -29,7 +41,10 @@ export async function runIndentTex(): Promise<void> {
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(config));
     } catch (err) {
-      error(CHANNEL, `Error: Latexindent config file not found at ${config}`);
+      logger.error(
+        CHANNEL,
+        `Error: Latexindent config file not found at ${config}`,
+      );
       vscode.window.showErrorMessage(
         `Latexindent config file not found at ${config}`,
       );
@@ -53,7 +68,7 @@ export async function runIndentTex(): Promise<void> {
         if (type === vscode.FileType.Directory) {
           await processDirectory(fullPath);
         } else if (type === vscode.FileType.File && name.endsWith('.tex')) {
-          debug(CHANNEL, `Processing file: ${fullPath}`);
+          logger.debug(CHANNEL, `Processing file: ${fullPath}`);
           try {
             const command = [
               'latexindent',
@@ -65,33 +80,27 @@ export async function runIndentTex(): Promise<void> {
               .filter(Boolean)
               .join(' ');
 
-            debug(CHANNEL, `Executing command: ${command}`);
-            try {
-              const { stdout, stderr } = await execAsync(command, {
-                cwd: workspacePath,
-              });
-              if (stdout) {
-                debug(CHANNEL, `Command output: ${stdout}`);
-              }
-              if (stderr) {
-                warn(CHANNEL, `Command stderr: ${stderr}`);
-              }
-              info(CHANNEL, `Successfully indented: ${fullPath}`);
-            } catch (execError) {
-              error(CHANNEL, `Command error: ${execError}`);
-              if (execError instanceof Error && 'stderr' in execError) {
-                error(CHANNEL, `Command stderr: ${(execError as any).stderr}`);
-              }
+            logger.debug(CHANNEL, `Executing command: ${command}`);
+            const result = await executeCommand(command, { channel: CHANNEL });
+            if (!result.success) {
+              logger.error(CHANNEL, `Command error: ${result.stderr}`);
               continue;
             }
+            if (result.stdout) {
+              logger.debug(CHANNEL, `Command output: ${result.stdout}`);
+            }
+            if (result.stderr) {
+              logger.warn(CHANNEL, `Command stderr: ${result.stderr}`);
+            }
+            logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
           } catch (err) {
-            error(CHANNEL, `Error indenting file ${fullPath}: ${err}`);
+            logger.error(CHANNEL, `Error indenting file ${fullPath}: ${err}`);
             continue;
           }
         }
       }
     } catch (err) {
-      error(CHANNEL, `Error processing directory ${dirPath}: ${err}`);
+      logger.error(CHANNEL, `Error processing directory ${dirPath}: ${err}`);
     }
   };
 
@@ -122,22 +131,25 @@ export async function runIndentTex(): Promise<void> {
               name.endsWith('.bak1') ||
               name === 'indent.log'
             ) {
-              debug(CHANNEL, `Found cleanup file: ${fullPath}`);
+              logger.debug(CHANNEL, `Found cleanup file: ${fullPath}`);
               await deleteFile(fullPath);
             }
           }
         }
       } catch (err) {
-        error(CHANNEL, `Error during cleanup in directory ${dirPath}: ${err}`);
+        logger.error(
+          CHANNEL,
+          `Error during cleanup in directory ${dirPath}: ${err}`,
+        );
       }
     };
 
     // Start cleanup from workspace root
     await processCleanup('.');
 
-    info(CHANNEL, 'All .tex files have been indented');
+    logger.info(CHANNEL, 'All .tex files have been indented');
   } catch (err) {
-    error(CHANNEL, `Error during indentation process: ${err}`);
+    logger.error(CHANNEL, `Error during indentation process: ${err}`);
     vscode.window.showErrorMessage(`Error during indentation: ${err}`);
   }
 }

@@ -195,7 +195,7 @@ export function setupUIHandlers() {
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');
     const printInputPrompt = safeGetElementChecked('printInputPrompt');
-    const useOpenrouter = safeGetElementChecked('useOpenrouter');
+    const useOpenRouter = safeGetElementChecked('useOpenRouter');
 
     vscode.postMessage({
       command: 'execute',
@@ -222,7 +222,7 @@ export function setupUIHandlers() {
       usePrefillFromInput: usePrefillFromInput,
       autoConfirmation: autoConfirmation,
       printInputPrompt: printInputPrompt,
-      useOpenrouter: useOpenrouter,
+      useOpenRouter: useOpenRouter,
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,
@@ -317,13 +317,13 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('latexDiffButton', 'click', function () {
+  addEventListenerSafely('latexdiffButton', 'click', function () {
     const inputFile = safeGetElementValue('inputFile');
     const baseFile = safeGetElementValue('baseFile');
     const editedFile = safeGetElementValue('editedFile');
 
     vscode.postMessage({
-      command: 'latexDiff',
+      command: 'latexdiff',
       inputFile: inputFile,
       baseFile: baseFile,
       editedFile: editedFile,
@@ -335,13 +335,13 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('latexDiffVCButton', 'click', function () {
+  addEventListenerSafely('latexdiffVCButton', 'click', function () {
     const inputFile = safeGetElementValue('inputFile');
     const baseFile = safeGetElementValue('baseFile');
     const commitHash = safeGetElementValue('commit');
 
     vscode.postMessage({
-      command: 'latexDiffVC',
+      command: 'latexdiffVC',
       inputFile: inputFile,
       baseFile: baseFile,
       commitHash: commitHash,

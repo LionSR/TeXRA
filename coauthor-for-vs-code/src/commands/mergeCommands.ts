@@ -1,6 +1,11 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - core
 import { debug } from '../logger/logUtils';
+
+// Local imports - utilities
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'MergeCommands';
 
@@ -23,7 +28,7 @@ async function handleMerge(
   if (editedFile && (baseFile || inputFile)) {
     const fileToUse = baseFile || inputFile;
     terminal_new.sendText(
-      `coauthor merge --input_file="${fileToUse}" --edited_file="${editedFile}" --model=${model}`,
+      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
     );
   } else {
     vscode.window.showErrorMessage(

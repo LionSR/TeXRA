@@ -28,7 +28,7 @@ interface FormState {
 }
 
 const PROMPT_COMPONENTS: Record<string, PromptComponent> = {
-  system_prompt: {
+  systemPrompt: {
     title: "System Prompt",
     icon: <Settings className="w-6 h-6 text-blue-600" />,
     description: "Sets core behavior and requirements",
@@ -36,7 +36,7 @@ const PROMPT_COMPONENTS: Record<string, PromptComponent> = {
       "You are an expert in programming LaTeX and physics.\nYour task is to use your knowledge to improve a LaTeX research paper.\nWhen writing a professional *.tex document, you must:\n- Follow best practices that will result in zero chktex warnings\n- Use \\cref{} for references instead of pure numbers\n- Use commands defined in commands.tex",
     color: "blue",
   },
-  user_prefix: {
+  userPrefix: {
     title: "User Prefix",
     icon: <MessageSquare className="w-6 h-6 text-green-600" />,
     description: "Loads documents and context",
@@ -44,7 +44,7 @@ const PROMPT_COMPONENTS: Record<string, PromptComponent> = {
       "Here is the LaTeX document with input files:\n<documents>\n<document name='commands.tex'>\\newcommand{\\op}{\\hat{O}}</document>\n<document name='paper.tex'>\n{{INPUT_CONTENT}}\n</document>\n</documents>\n\nPlease read through the research paper and understand all details.",
     color: "green",
   },
-  user_request: {
+  userRequest: {
     title: "User Request",
     icon: <Send className="w-6 h-6 text-orange-600" />,
     description: "Specifies task and instructions",
@@ -57,7 +57,7 @@ const PROMPT_COMPONENTS: Record<string, PromptComponent> = {
         "paper_correct_r0_sonnet++.tex\npaper_correct_r0_sonnet++_diff.tex (vs paper.tex)\n• Red: Added content (e.g., +\\begin{equation})\n• Blue: Deleted content (e.g., -unclear explanation)\n• Generated using latexdiff with --flatten\n• PDF preview with highlighted changes",
     },
   },
-  user_reflect: {
+  userReflect: {
     title: "Reflection Phase",
     icon: <RefreshCcw className="w-6 h-6 text-purple-600" />,
     description: "Analysis and refinement",
@@ -161,7 +161,7 @@ const ProcessOverview: React.FC = () => (
 );
 
 const PromptStructureComplete: React.FC = () => {
-  const [activeSection, setActiveSection] = useState("system_prompt");
+  const [activeSection, setActiveSection] = useState("systemPrompt");
   const [formState, setFormState] = useState<FormState>({
     selectedFile: "paper.tex",
     selectedAux: "commands.tex",

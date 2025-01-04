@@ -1,15 +1,20 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { getRelativePath } from '../utils/fileUtils';
 import {
   countPdfPages,
   getBase64EncodedImage,
   processPdfInput,
   singlePagePdfToPng,
 } from '../utils/imgUtils';
-import { debug, error, initializeLogging } from '../logger/logUtils';
-import { getRelativePath } from '../utils/fileUtils';
 
 const CHANNEL = 'ImageCommands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -30,7 +35,7 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
       handleTestPdfToImage,
     ),
   );
-  debug(CHANNEL, 'Image commands registered');
+  logger.debug(CHANNEL, 'Image commands registered');
 }
 
 async function handleCountPdfPages(): Promise<void> {
@@ -51,7 +56,7 @@ async function handleCountPdfPages(): Promise<void> {
     }
 
     const selectedFile = getRelativePath(fileUris[0].fsPath);
-    debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
+    logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     const pageCount = await countPdfPages(selectedFile);
     if (pageCount > 0) {
@@ -60,7 +65,7 @@ async function handleCountPdfPages(): Promise<void> {
       vscode.window.showErrorMessage('Could not count pages in the PDF');
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in countPdfPages command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -86,20 +91,20 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
     }
 
     const selectedFile = getRelativePath(fileUris[0].fsPath);
-    debug(CHANNEL, `Processing image file: ${selectedFile}`);
+    logger.debug(CHANNEL, `Processing image file: ${selectedFile}`);
 
     const base64String = await getBase64EncodedImage(selectedFile);
 
     // Also show a truncated version in the debug log for quick verification
     const truncatedString = base64String.substring(0, 100) + '...';
-    debug(
+    logger.debug(
       CHANNEL,
       `Truncated base64 string (first 100 chars): ${truncatedString}`,
     );
 
     return base64String;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in encodeImageToBase64 command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -128,7 +133,7 @@ async function handleConvertPdfToImages(): Promise<
     }
 
     const selectedFile = getRelativePath(fileUris[0].fsPath);
-    debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
+    logger.debug(CHANNEL, `Processing PDF file: ${selectedFile}`);
 
     // Get quality from user
     const quality = await vscode.window.showInputBox({
@@ -172,7 +177,7 @@ async function handleConvertPdfToImages(): Promise<
       return undefined;
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error in convertPdfToImages command: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -199,7 +204,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     }
 
     const selectedFile = getRelativePath(fileUris[0].fsPath);
-    debug(CHANNEL, `Testing PDF to PNG conversion for: ${selectedFile}`);
+    logger.debug(CHANNEL, `Testing PDF to PNG conversion for: ${selectedFile}`);
 
     // Get page number from user
     const pageNum = await vscode.window.showInputBox({
@@ -225,7 +230,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
 
     // Show truncated result in debug log
     const truncatedString = base64String.substring(0, 100) + '...';
-    debug(
+    logger.debug(
       CHANNEL,
       `Truncated base64 string (first 100 chars): ${truncatedString}`,
     );
@@ -237,10 +242,10 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     return base64String;
   } catch (err) {
     if (err instanceof Error) {
-      error(CHANNEL, `Error in testPdfToImage command: ${err.message}`);
-      error(CHANNEL, `Error stack: ${err.stack}`); // Print stack trace
+      logger.error(CHANNEL, `Error in testPdfToImage command: ${err.message}`);
+      logger.error(CHANNEL, `Error stack: ${err.stack}`); // Print stack trace
     } else {
-      error(CHANNEL, `Error in testPdfToImage command: ${String(err)}`);
+      logger.error(CHANNEL, `Error in testPdfToImage command: ${String(err)}`);
     }
 
     // Show a more detailed error message if it's about missing dependencies

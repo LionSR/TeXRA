@@ -200,27 +200,27 @@ Example YAML structure:
 ```yaml
 name: paper2cover
 settings:
-  document_tag: cover_letter
-  end_tag: </cover_letter>
-  output_ext: tex
+  documentTag: cover_letter
+  endTag: </cover_letter>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_COVER_LETTER: template_cover_letter.txt
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert academic writer. Your task is to...
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you a LaTeX document...
 
-  user_request: |
+  userRequest: |
     Based on the document provided, please...
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on what we've written...
 ```
 
@@ -234,29 +234,29 @@ CoAuthor supports a hierarchical structure for prompts, allowing child prompts t
 
 Example:
 
-Parent prompt (`agent_polish.yaml`):
+Parent prompt (`polish.yaml`):
 
 ```yaml
 name: polish
 settings:
-  document_tag: polish
-  output_ext: tex
+  documentTag: polish
+  outputExt: tex
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a computer scientist and expert writer.
-  user_prefix: |
+  userPrefix: |
     Polish this text:
 ```
 
-Child prompt (`agent_polish_physics.yaml`):
+Child prompt (`polish_physics.yaml`):
 
 ```yaml
 name: polish_physics
 inherits: polish
 settings:
-  document_tag: polish_physics # Override parent setting
+  documentTag: polish_physics # Override parent setting
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are a physicist and expert writer.
     # Other prompts are inherited from parent
 ```
@@ -276,8 +276,8 @@ CoAuthor's Agent execution follows a sophisticated process inspired by advanced 
 3. **Continuation Handling**: If the initial generation is incomplete (e.g., due to token limits), the program automatically continues the generation in chunks. Each chunk is appended to the output file, ensuring a cohesive final result.
 
 4. **Output Files**: Several files are generated during this process:
-   - Main output file (e.g., `input_file_agent_model.tex`)
-   - Log file (e.g., `input_file_log.txt`) containing execution details and statistics
+   - Main output file (e.g., `inputFile_agent_model.tex`)
+   - Log file (e.g., `inputFile_log.txt`) containing execution details and statistics
 
 ### Reflection Mechanism
 
@@ -288,7 +288,7 @@ If the `--reflect` option is enabled, CoAuthor implements a self-reflection step
 2. **Refinement**: Based on these reflections, the model produces a refined version of the output.
 
 3. **Additional Output Files**:
-   - Reflection output file (e.g., `input_file_agent_reflect_model.tex`)
+   - Reflection output file (e.g., `inputFile_agent_reflect_model.tex`)
    - Updated log file with reflection statistics
 
 This reflection process embodies the principle of Chain of Thought, allowing the AI to explicitly reason about its own output and make improvements.
@@ -297,7 +297,7 @@ This reflection process embodies the principle of Chain of Thought, allowing the
 
 To facilitate easy comparison between versions, CoAuthor automatically generates LaTeX diff files:
 
-1. **Initial Diff**: A diff between the original input and the first output is generated (e.g., `input_file_agent_model_diff.tex`).
+1. **Initial Diff**: A diff between the original input and the first output is generated (e.g., `inputFile_agent_model_diff.tex`).
 
 2. **Reflection Diff**: If reflection is enabled, additional diffs are created:
    - Between the original input and the reflected output
@@ -331,49 +331,49 @@ CoAuthor supports various flags that can be used with most commands:
 
 - Input Files:
 
-  - `--input_file`: Path to the main input file
-  - `--input_files`: Multiple input files (comma-separated)
-  - `--reference_file`: Path to a reference file
-  - `--reference_files`: Multiple reference files (comma-separated)
-  - `--auxiliary_file`: Path to an auxiliary file
-  - `--auxiliary_files`: Multiple auxiliary files (comma-separated)
-  - `--figure_file`: Path to a figure file
-  - `--figure_files`: Multiple figure files (comma-separated)
+  - `--inputFile`: Path to the main input file
+  - `--inputFiles`: Multiple input files (comma-separated)
+  - `--referenceFile`: Path to a reference file
+  - `--referenceFiles`: Multiple reference files (comma-separated)
+  - `--auxiliaryFile`: Path to an auxiliary file
+  - `--auxiliaryFiles`: Multiple auxiliary files (comma-separated)
+  - `--figureFile`: Path to a figure file
+  - `--figureFiles`: Multiple figure files (comma-separated)
 
 - Output Control:
 
-  - `--output_files`: Specify output file paths (comma-separated)
-  - `--output_name_override`: Override the default output name
-  - `--edited_file`: Path to a file that has already been edited
+  - `--outputFiles`: Specify output file paths (comma-separated)
+  - `--outputNameOverride`: Override the default output name
+  - `--editedFile`: Path to a file that has already been edited
 
 - Tool Usage:
-  - `--use_prefill_from_input`: Use the prefill from the input file
-  - `--auto_extract_figure`: Automatically extract figures from input
-  - `--auto_extract_tikz_figure`: Extract and compile TikZ figures
-  - `--auto_extract_tikz_figure_reflect`: Include TikZ reflection
-  - `--include_tex_count`: Include tex count statistics
-  - `--auto_confirmation`: Automatically confirm model's questions
-  - `--print_input_prompt`: Print the input prompt to an XML file
+  - `--usePrefillFromInput`: Use the prefill from the input file
+  - `--autoExtractFigure`: Automatically extract figures from input
+  - `--autoExtractTikzFigure`: Extract and compile TikZ figures
+  - `--autoExtractTikzFigureReflect`: Include TikZ reflection
+  - `--includeTexCount`: Include tex count statistics
+  - `--autoConfirmation`: Automatically confirm model's questions
+  - `--printInputPrompt`: Print the input prompt to an XML file
 
 Example usage:
 
 ```bash
-coauthor run polish_tex --input_file paper.tex --reflect --auto_extract_figure --include_tex_count
+coauthor run polish_tex --inputFile paper.tex --reflect --autoExtractFigure --includeTexCount
 ```
 
 ### Figure and TikZ Extraction
 
 CoAuthor can automatically extract and process figures from your LaTeX documents:
 
-- Use `--auto_extract_figure` to automatically extract the list of figures from the input file
-- Use `--auto_extract_tikz_figure` to extract and compile TikZ figures from the input file
-- Use `--auto_extract_tikz_figure_reflect` to include TikZ reflection in the output
-- Use `--include_tex_count` to include the tex count statistics in the user message
+- Use `--autoExtractFigure` to automatically extract the list of figures from the input file
+- Use `--autoExtractTikzFigure` to extract and compile TikZ figures from the input file
+- Use `--autoExtractTikzFigureReflect` to include TikZ reflection in the output
+- Use `--includeTexCount` to include the tex count statistics in the user message
 
 Example:
 
 ```bash
-coauthor run polish_tex --input_file your_file.tex --auto_extract_figure --auto_extract_tikz_figure
+coauthor run polish_tex --inputFile your_file.tex --autoExtractFigure --autoExtractTikzFigure
 ```
 
 ### Multiple Input Files
@@ -381,7 +381,7 @@ coauthor run polish_tex --input_file your_file.tex --auto_extract_figure --auto_
 For complex projects, CoAuthor supports processing multiple input files:
 
 ```bash
-coauthor run polish_tex --input_file main.tex --input_files chapter1.tex,chapter2.tex
+coauthor run polish_tex --inputFile main.tex --inputFiles chapter1.tex,chapter2.tex
 ```
 
 ### Version Control Integration
@@ -389,7 +389,7 @@ coauthor run polish_tex --input_file main.tex --input_files chapter1.tex,chapter
 CoAuthor integrates with version control systems:
 
 - Use `coauthor latexdiff input.tex edited.tex` to generate a diff between two LaTeX files
-- Use `coauthor latexdiff-vc input.tex commit_hash` to generate a diff against a specific git commit
+- Use `coauthor latexdiff-vc input.tex commitHash` to generate a diff against a specific git commit
 
 ### Cleaning and Packing
 

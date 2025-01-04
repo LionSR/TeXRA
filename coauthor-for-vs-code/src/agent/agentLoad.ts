@@ -1,12 +1,27 @@
-import * as nunjucks from 'nunjucks';
-import { debug, error, initializeLogging } from '../logger/logUtils';
-import * as yaml from 'yaml';
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import * as yaml from 'yaml';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
+// Local imports - agent components
+import {
+  AgentSettings,
+  AgentPrompts,
+  validateAgentSettings,
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_AGENT_PROMPTS,
+} from './AgentDataclass';
+
 const CHANNEL = 'Agent';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Load a YAML file and return its contents as a dictionary
@@ -37,14 +52,15 @@ export async function loadYaml(
         const fullPath = path.join(globalStoragePath, rootPath, filePath);
 
         // Ensure the directory exists
+        // why do you have to create the directory?
         await vscode.workspace.fs.createDirectory(
           vscode.Uri.file(path.dirname(fullPath)),
         );
-        debug(CHANNEL, `Using global storage path: ${fullPath}`);
+        logger.debug(CHANNEL, `Using global storage path: ${fullPath}`);
 
         absolutePath = fullPath;
       } catch (err) {
-        error(CHANNEL, `Error with global storage path: ${err}`);
+        logger.error(CHANNEL, `Error with global storage path: ${err}`);
         throw err;
       }
     }
@@ -53,24 +69,24 @@ export async function loadYaml(
       // Verify the path exists before trying to read it
       const fileUri = vscode.Uri.file(absolutePath);
       await vscode.workspace.fs.stat(fileUri);
-      debug(CHANNEL, `Reading from: ${absolutePath}`);
+      logger.debug(CHANNEL, `Reading from: ${absolutePath}`);
 
       // Read and parse YAML
       const fileContent = await vscode.workspace.fs.readFile(fileUri);
       const yamlContent = Buffer.from(fileContent).toString('utf-8');
       const parsedYaml = yaml.parse(yamlContent);
 
-      debug(CHANNEL, `Successfully loaded YAML from: ${filePath}`);
+      logger.debug(CHANNEL, `Successfully loaded YAML from: ${filePath}`);
       return parsedYaml;
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Path does not exist or is not accessible: ${absolutePath}`,
       );
       throw err;
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error loading YAML file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -104,9 +120,69 @@ export function mergeDicts(
     }
     return result;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * Load agent settings and prompts from YAML file with inheritance support
+ * @param agentPath Path to the agent directory
+ * @param agentName Name of the agent
+ * @param context Extension context (required for relative paths)
+ * @returns Promise<[AgentSettings, AgentPrompts]> Tuple of settings and prompts
+ */
+export async function loadAgentSettingsAndPrompts(
+  agentPath: string,
+  agentName: string,
+  context?: vscode.ExtensionContext,
+): Promise<[AgentSettings, AgentPrompts]> {
+  try {
+    const agentFile = path.join(agentPath, `${agentName}.yaml`);
+    const config = (await loadYaml(agentFile, context)) as any;
+    const parent = config?.inherits;
+
+    let settings: AgentSettings;
+    let prompts: AgentPrompts;
+
+    if (parent) {
+      // Load parent settings and prompts recursively
+      const [parentSettings, parentPrompts] = await loadAgentSettingsAndPrompts(
+        agentPath,
+        parent,
+        context,
+      );
+
+      // Get current settings and prompts, defaulting to empty objects
+      const agentSettings = (config?.settings || {}) as Partial<AgentSettings>;
+      const agentPrompts = (config?.prompts || {}) as Partial<AgentPrompts>;
+
+      // Merge with parent settings and prompts
+      settings = mergeDicts(parentSettings, agentSettings) as AgentSettings;
+      prompts = mergeDicts(parentPrompts, agentPrompts) as AgentPrompts;
+    } else {
+      // No inheritance, use settings and prompts directly with defaults
+      settings = mergeDicts(
+        DEFAULT_AGENT_SETTINGS,
+        (config?.settings || {}) as Partial<AgentSettings>,
+      ) as AgentSettings;
+      prompts = mergeDicts(
+        DEFAULT_AGENT_PROMPTS,
+        (config?.prompts || {}) as Partial<AgentPrompts>,
+      ) as AgentPrompts;
+    }
+
+    // Validate settings
+    validateAgentSettings(settings);
+
+    return [settings, prompts];
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error loading agent settings and prompts: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

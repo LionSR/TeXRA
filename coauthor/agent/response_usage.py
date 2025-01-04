@@ -6,11 +6,11 @@ from typing import Any
 class ResponseUsageBase:
     """Base class for response usage statistics."""
 
-    total_input_tokens: int
-    total_output_tokens: int
-    percentage_cached: float
+    totalInputTokens: int
+    totalOutputTokens: int
+    percentageCached: float
     cost: float
-    response_time: float
+    responseTime: float
 
     def __getitem__(self, key: str) -> Any:
         """Enable dictionary-style access (config['cost'])"""
@@ -29,7 +29,7 @@ class ResponseUsageBase:
 
 
 @dataclass
-class OpenAIResponseUsage(ResponseUsageBase):
+class OpenAIAPIResponseUsage(ResponseUsageBase):
     """Class for OpenAI response usage statistics."""
 
     prompt_tokens: int
@@ -40,36 +40,39 @@ class OpenAIResponseUsage(ResponseUsageBase):
     rejected_prediction_tokens: int | None
 
     @classmethod
-    def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "OpenAIResponseUsage":
-        # Extract tokens from response usage
-        cached_tokens = getattr(response_usage.prompt_tokens_details, "cached_tokens", 0) if hasattr(response_usage, "prompt_tokens_details") else 0
+    def from_response(cls, responseUsage: Any, cost: float, responseTime: float) -> "OpenAIAPIResponseUsage":
+        # Extract tokens from response usag
+        prompt_tokens_details = getattr(responseUsage, "prompt_tokens_details", None)
+        cached_tokens = getattr(prompt_tokens_details, "cached_tokens", 0) if prompt_tokens_details else 0
 
         # Extract completion details
-        completion_details = getattr(response_usage, "completion_tokens_details", None)
-        reasoning_tokens = getattr(completion_details, "reasoning_tokens", 0) if completion_details else 0
-        accepted_prediction_tokens = getattr(completion_details, "accepted_prediction_tokens", None) if completion_details else None
-        rejected_prediction_tokens = getattr(completion_details, "rejected_prediction_tokens", None) if completion_details else None
+        completion_tokens_details = getattr(responseUsage, "completion_tokens_details", None)
+        reasoning_tokens = getattr(completion_tokens_details, "reasoning_tokens", 0) if completion_tokens_details else 0
+        accepted_prediction_tokens = getattr(completion_tokens_details, "accepted_prediction_tokens", None) if completion_tokens_details else None
+        rejected_prediction_tokens = getattr(completion_tokens_details, "rejected_prediction_tokens", None) if completion_tokens_details else None
 
         # Calculate percentage cached
-        percentage_cached = (cached_tokens / response_usage.prompt_tokens * 100) if response_usage.prompt_tokens > 0 else 0
+        percentageCached = (cached_tokens / responseUsage.prompt_tokens * 100) if responseUsage.prompt_tokens > 0 else 0
 
         return cls(
-            total_input_tokens=response_usage.prompt_tokens,
-            total_output_tokens=response_usage.completion_tokens,
-            prompt_tokens=response_usage.prompt_tokens,
-            completion_tokens=response_usage.completion_tokens,
+            # base fields
+            totalInputTokens=responseUsage.prompt_tokens,
+            totalOutputTokens=responseUsage.completion_tokens,
+            percentageCached=percentageCached,
+            cost=cost,
+            responseTime=responseTime,
+            # relevant fields from openai api response
+            prompt_tokens=responseUsage.prompt_tokens,
+            completion_tokens=responseUsage.completion_tokens,
             cached_tokens=cached_tokens,
             reasoning_tokens=reasoning_tokens,
             accepted_prediction_tokens=accepted_prediction_tokens,
             rejected_prediction_tokens=rejected_prediction_tokens,
-            percentage_cached=percentage_cached,
-            cost=cost,
-            response_time=response_time,
         )
 
 
 @dataclass
-class AnthropicResponseUsage(ResponseUsageBase):
+class AnthropicAPIResponseUsage(ResponseUsageBase):
     """Class for Anthropic response usage statistics."""
 
     input_tokens: int
@@ -78,23 +81,25 @@ class AnthropicResponseUsage(ResponseUsageBase):
     cache_creation_input_tokens: int | None
 
     @classmethod
-    def from_response(cls, response_usage: Any, cost: float, response_time: float) -> "AnthropicResponseUsage":
+    def from_response(cls, responseUsage: Any, cost: float, responseTime: float) -> "AnthropicAPIResponseUsage":
         # Extract cache-related tokens
-        cache_read_input_tokens = getattr(response_usage, "cache_read_input_tokens", None)
-        cache_creation_input_tokens = getattr(response_usage, "cache_creation_input_tokens", None)
+        cache_read_input_tokens = getattr(responseUsage, "cache_read_input_tokens", None)
+        cache_creation_input_tokens = getattr(responseUsage, "cache_creation_input_tokens", None)
 
         # Calculate percentage cached
         total_cache_tokens = (cache_read_input_tokens or 0) + (cache_creation_input_tokens or 0)
-        percentage_cached = (total_cache_tokens / response_usage.input_tokens * 100) if response_usage.input_tokens > 0 else 0
+        percentageCached = (total_cache_tokens / responseUsage.input_tokens * 100) if responseUsage.input_tokens > 0 else 0
 
         return cls(
-            total_input_tokens=response_usage.input_tokens,
-            total_output_tokens=response_usage.output_tokens,
-            input_tokens=response_usage.input_tokens,
-            output_tokens=response_usage.output_tokens,
+            # base fields
+            totalInputTokens=responseUsage.input_tokens,
+            totalOutputTokens=responseUsage.output_tokens,
+            percentageCached=percentageCached,
+            cost=cost,
+            responseTime=responseTime,
+            # relevant fields from anthropic api response
+            input_tokens=responseUsage.input_tokens,
+            output_tokens=responseUsage.output_tokens,
             cache_read_input_tokens=cache_read_input_tokens,
             cache_creation_input_tokens=cache_creation_input_tokens,
-            percentage_cached=percentage_cached,
-            cost=cost,
-            response_time=response_time,
         )

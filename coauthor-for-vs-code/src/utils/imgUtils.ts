@@ -1,17 +1,24 @@
+// Standard library imports
+import { exec } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { promisify } from 'util';
+
+// Third-party imports
 import { PDFDocument } from 'pdf-lib';
 import { fromPath } from 'pdf2pic';
-import { debug, error, warn, initializeLogging } from '../logger/logUtils';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
-import * as path from 'path';
-import * as fs from 'fs';
-import { promisify } from 'util';
-import { exec } from 'child_process';
-import * as os from 'os';
 
 const execAsync = promisify(exec);
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'coauthor-pdf-conversion');
@@ -47,13 +54,13 @@ async function cleanupTempFiles(
       const fullPath = path.join(basePath, file);
       try {
         fs.unlinkSync(fullPath);
-        debug(CHANNEL, `Cleaned up temporary file: ${file}`);
+        logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
       } catch (err) {
-        warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
+        logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
       }
     }
   } catch (err) {
-    warn(CHANNEL, `Error cleaning up temporary files: ${err}`);
+    logger.warn(CHANNEL, `Error cleaning up temporary files: ${err}`);
   }
 }
 
@@ -68,7 +75,7 @@ export async function getBase64EncodedImage(
   try {
     // Check if file exists
     if (!(await fileExists(imagePath))) {
-      error(CHANNEL, `Image file not found: ${imagePath}`);
+      logger.error(CHANNEL, `Image file not found: ${imagePath}`);
       throw new Error(`Image file not found: ${imagePath}`);
     }
 
@@ -78,10 +85,10 @@ export async function getBase64EncodedImage(
     // Convert to base64
     const base64String = imageBytes.toString('base64');
 
-    debug(CHANNEL, `Successfully encoded image: ${imagePath}`);
+    logger.debug(CHANNEL, `Successfully encoded image: ${imagePath}`);
     return base64String;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error encoding image to base64: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -98,13 +105,13 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
-      error(CHANNEL, 'No workspace path found');
+      logger.error(CHANNEL, 'No workspace path found');
       return 0;
     }
 
     // Check if file exists
     if (!(await fileExists(pdfPath))) {
-      error(CHANNEL, `PDF file not found: ${pdfPath}`);
+      logger.error(CHANNEL, `PDF file not found: ${pdfPath}`);
       return 0;
     }
 
@@ -116,10 +123,10 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
     });
     const pageCount = pdfDoc.getPageCount();
 
-    debug(CHANNEL, `PDF page count for ${pdfPath}: ${pageCount}`);
+    logger.debug(CHANNEL, `PDF page count for ${pdfPath}: ${pageCount}`);
     return pageCount;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error counting PDF pages: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -145,7 +152,7 @@ export async function singlePagePdfToPng(
   let tempFilePath: string | undefined;
 
   try {
-    debug(
+    logger.debug(
       CHANNEL,
       `Starting singlePagePdfToPng for ${pdfPath}, page ${pageNum}`,
     );
@@ -173,7 +180,7 @@ export async function singlePagePdfToPng(
     }
 
     const fullPath = path.join(workspacePath, pdfPath);
-    debug(CHANNEL, `Full path to PDF: ${fullPath}`);
+    logger.debug(CHANNEL, `Full path to PDF: ${fullPath}`);
 
     // Ensure the temporary directory exists
     if (!fs.existsSync(TEMP_DIR)) {
@@ -189,13 +196,13 @@ export async function singlePagePdfToPng(
       saveFilename: path.parse(tempFilePattern).name,
       savePath: TEMP_DIR,
     };
-    debug(CHANNEL, `pdf2pic options: ${JSON.stringify(options)}`);
+    logger.debug(CHANNEL, `pdf2pic options: ${JSON.stringify(options)}`);
 
     const convert = fromPath(fullPath, options);
-    debug(CHANNEL, `pdf2pic convert object created`);
+    logger.debug(CHANNEL, `pdf2pic convert object created`);
 
     const result = await convert(pageNum);
-    debug(CHANNEL, `pdf2pic convert result: ${JSON.stringify(result)}`);
+    logger.debug(CHANNEL, `pdf2pic convert result: ${JSON.stringify(result)}`);
 
     // Update tempFilePath to match pdf2pic's naming convention
     if (!result || !result.path) {
@@ -213,20 +220,20 @@ export async function singlePagePdfToPng(
     const imageBuffer = fs.readFileSync(tempFilePath);
     const base64String = imageBuffer.toString('base64');
 
-    debug(
+    logger.debug(
       CHANNEL,
       `Successfully converted page ${pageNum} of ${pdfPath} to PNG`,
     );
     return base64String;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error converting PDF page to PNG: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   } finally {
     // Always clean up all temporary files in the temporary directory
-    debug(CHANNEL, `Cleaning up temporary files in ${TEMP_DIR}`);
+    logger.debug(CHANNEL, `Cleaning up temporary files in ${TEMP_DIR}`);
     await cleanupTempFiles(TEMP_DIR, 'temp_');
   }
 }
@@ -260,13 +267,13 @@ export async function multiPagePdfToPng(
       base64Images.push(base64Image);
     }
 
-    debug(
+    logger.debug(
       CHANNEL,
       `Successfully converted ${base64Images.length} pages from ${pdfPath}`,
     );
     return base64Images;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error converting multiple PDF pages: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -291,7 +298,7 @@ export async function processPdfInput(
   try {
     // Verify file exists
     if (!(await fileExists(pdfPath))) {
-      debug(CHANNEL, `PDF file not found: ${pdfPath}`);
+      logger.debug(CHANNEL, `PDF file not found: ${pdfPath}`);
       return null;
     }
 
@@ -315,7 +322,7 @@ export async function processPdfInput(
       );
     }
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error processing PDF input: ${err instanceof Error ? err.message : String(err)}`,
     );

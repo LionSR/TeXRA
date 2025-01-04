@@ -2,13 +2,17 @@
  * Registry of available model configurations.
  */
 
+// Local imports - agent components
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
-  defaultModelCapabilities,
+  DEFAULT_MODEL_CAPABILITIES,
 } from './ModelConfig';
 
+/**
+ * Available model configurations
+ */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Anthropic Claude Models =====
   opus: {
@@ -21,11 +25,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 15.0,
     outputPrice: 75.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'sonnet++': {
     name: 'sonnet++',
@@ -37,13 +41,13 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 15.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
       supportsNativePdf: true,
       likesToAskForConfirmation: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'sonnet+': {
     name: 'sonnet+',
@@ -55,11 +59,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 15.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   sonnet: {
     name: 'sonnet',
@@ -71,10 +75,10 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 15.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAssistantPrefill: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'haiku+': {
     name: 'haiku+',
@@ -86,13 +90,13 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 1.0,
     outputPrice: 5.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
       supportsVision: false,
       likesToAskForConfirmation: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   haiku: {
     name: 'haiku',
@@ -104,11 +108,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.25,
     outputPrice: 1.25,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
 
   // ===== OpenAI Reasoning Models =====
@@ -122,12 +126,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 15.0,
     outputPrice: 60.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsVision: true,
       supportsReasoning: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   o1preview: {
     name: 'o1preview',
@@ -139,12 +143,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 15.0,
     outputPrice: 60.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsVision: false,
       supportsReasoning: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'o1-': {
     name: 'o1-',
@@ -156,12 +160,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 12.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsVision: false,
       supportsReasoning: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
 
   // ===== OpenAI Models =====
@@ -175,11 +179,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 2.5,
     outputPrice: 10.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsPredictiveOutput: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   gpt4t: {
     name: 'gpt4t',
@@ -191,11 +195,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 10.0,
     outputPrice: 30.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: false,
       supportsReasoning: false,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'gpt4o-': {
     name: 'gpt4o-',
@@ -207,11 +211,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.15,
     outputPrice: 0.6,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsPredictiveOutput: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   gpt4ol: {
     name: 'gpt4ol',
@@ -223,11 +227,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 5.0,
     outputPrice: 15.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
 
   // ===== Google Gemini Models =====
@@ -241,10 +245,10 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 1.25,
     outputPrice: 5.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsVision: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   gemini2fthinking: {
     name: 'gemini2fthinking',
@@ -256,11 +260,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.075,
     outputPrice: 0.3,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsNativePdf: false,
       supportsVision: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   gemini2f: {
     name: 'gemini2f',
@@ -272,11 +276,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.075,
     outputPrice: 0.3,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsNativePdf: true,
       supportsVision: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'gemini1p+': {
     name: 'gemini1p+',
@@ -288,11 +292,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 1.25,
     outputPrice: 5.0,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsNativePdf: true,
       supportsVision: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
   'gemini1f+': {
     name: 'gemini1f+',
@@ -304,11 +308,11 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.075,
     outputPrice: 0.3,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsNativePdf: true,
       supportsVision: true,
-    },
-    useOpenrouter: false,
+    } satisfies ModelCapabilities,
+    useOpenRouter: false,
   },
 
   // ===== OpenRouter Models =====
@@ -321,8 +325,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     contextWindow: 131072,
     inputPrice: 3.0,
     outputPrice: 3.0,
-    capabilities: defaultModelCapabilities,
-    useOpenrouter: true,
+    capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
+    useOpenRouter: true,
   },
   'qwq-32b': {
     name: 'qwq-32b',
@@ -334,9 +338,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 0.15,
     outputPrice: 0.6,
     capabilities: {
-      ...defaultModelCapabilities,
+      ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
-    },
-    useOpenrouter: true,
+    } satisfies ModelCapabilities,
+    useOpenRouter: true,
   },
 };

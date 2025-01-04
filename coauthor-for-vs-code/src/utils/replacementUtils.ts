@@ -2,10 +2,11 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-import { debug, error, initializeLogging } from '../logger/logUtils';
+// Local imports - core
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 interface ReplacementCategory {
   name: string;
@@ -173,7 +174,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
 };
 
 const AUTO_CONFIRM_REPLACEMENTS: ReplacementCategory = {
-  name: 'auto_confirmation',
+  name: 'autoConfirmation',
   description: 'Fixes for auto confirmation writing with regex patterns',
   patterns: {
     // Match the entire confirmation message block and reformat
@@ -227,7 +228,7 @@ export function getReplacementsByCategory(categoryName: string): {
     latex_xml: LATEX_XML_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
-    auto_confirmation: AUTO_CONFIRM_REPLACEMENTS,
+    autoConfirmation: AUTO_CONFIRM_REPLACEMENTS,
   };
 
   return categories[categoryName]?.patterns || {};
@@ -246,7 +247,7 @@ export function applyReplacements(
     }
     return text;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error applying replacements: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -268,7 +269,7 @@ export function applyReplacementRegex(
         text = text.replace(new RegExp(pattern, flags), repl);
       } catch (regexErr) {
         // Log specific regex errors but continue with other replacements
-        error(
+        logger.error(
           CHANNEL,
           `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
         );
@@ -276,7 +277,7 @@ export function applyReplacementRegex(
     }
     return text;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error applying regex replacements: ${err instanceof Error ? err.message : String(err)}`,
     );
