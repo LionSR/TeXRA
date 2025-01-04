@@ -63,12 +63,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Initialize messages for OpenAI models. */
-  initializeMessages(
+  async initializeMessages(
     userPrefix: string,
     userRequest: string,
     figureFiles?: string[],
     systemPrompt?: string,
-  ): any[] {
+  ): Promise<any[]> {
     const messages: any[] = [];
 
     // Handle system prompt differently for O1 models

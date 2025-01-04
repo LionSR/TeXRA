@@ -133,7 +133,7 @@ class BaseReflectionAgent(ABC):
                     fileContent = read_file(file_path)
                     user_vars[f"{varName}_FILE"] = file_path
                     user_vars[f"{varName}_CONTENT"] = fileContent
-                    logger.info(f"Found from [Required Files] the [VAR '{varName}']: {file_path}")
+                    logger.info(f"Found from [requiredFiles] the [VAR '{varName}']: {file_path}")
                 else:
                     logger.warning(f"[Required file] {file_path} not found from [VAR '{varName}']")
 
@@ -145,7 +145,7 @@ class BaseReflectionAgent(ABC):
                     fileContent = read_file(full_path)
                     user_vars[f"{varName}_FILE"] = full_path
                     user_vars[f"{varName}_CONTENT"] = fileContent
-                    logger.info(f"Found from [Required Files Internal] the [VAR '{varName}']: {full_path}")
+                    logger.info(f"Found from [requiredFilesInternal] the [VAR '{varName}']: {full_path}")
                 else:
                     logger.warning(f"[Required file internal] {full_path} not found from [VAR '{varName}']")
 
