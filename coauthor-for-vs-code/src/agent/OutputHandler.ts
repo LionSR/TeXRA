@@ -146,6 +146,30 @@ export class OutputHandler {
     }
   }
 
+  public async processSingleOutput(outputFile: string): Promise<string> {
+    const processedOutputFile = await this.splitScratchpadOutputXml(
+      outputFile,
+      this.agentSettings.documentTag,
+    );
+    const content = await readFile(processedOutputFile);
+    const filteredContent = filterTagsFromText(content, 'monologue');
+    await writeFile(processedOutputFile, filteredContent);
+    return processedOutputFile;
+  }
+
+  public async processMultipleOutputs(outputFile: string): Promise<string[]> {
+    const processedOutputFiles = await this.splitMultipleScratchpadOutputXml(
+      outputFile,
+      this.agentSettings.documentTag,
+    );
+    for (const processedOutputFile of processedOutputFiles) {
+      const content = await readFile(processedOutputFile);
+      const filteredContent = filterTagsFromText(content, 'monologue');
+      await writeFile(processedOutputFile, filteredContent);
+    }
+    return processedOutputFiles;
+  }
+
   async splitScratchpadOutputXml(
     outputFile: string,
     documentTag: string,
