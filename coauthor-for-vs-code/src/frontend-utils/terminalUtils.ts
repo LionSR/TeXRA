@@ -1,3 +1,4 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
 let terminal: vscode.Terminal | undefined;

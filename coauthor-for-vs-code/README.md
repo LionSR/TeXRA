@@ -199,7 +199,7 @@ You can customize the list of available agents in your VS Code settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`).
 2. Search for "CoAuthor" in the settings search bar.
-3. Look for the "Coauthor: agents" setting.
+3. Look for the "CoAuthor: agents" setting.
 4. Edit the agent list to add, remove, or modify agents.
 
 ```json

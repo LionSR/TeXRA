@@ -33,23 +33,23 @@ def init_db() -> None:
                 agent TEXT,
                 model TEXT,
                 temperature FLOAT,
-                input_file TEXT,
-                input_files TEXT,
-                auxiliary_file TEXT,
-                auxiliary_files TEXT,
-                figure_file TEXT,
-                figure_files TEXT,
-                reference_file TEXT,
-                reference_files TEXT,
-                edited_file TEXT,
-                output_files TEXT,
-                output_name_override TEXT,
-                actual_output_files TEXT,
-                output_file TEXT,
+                inputFile TEXT,
+                inputFiles TEXT,
+                auxiliaryFile TEXT,
+                auxiliaryFiles TEXT,
+                figureFile TEXT,
+                figureFiles TEXT,
+                referenceFile TEXT,
+                referenceFiles TEXT,
+                editedFile TEXT,
+                outputFiles TEXT,
+                outputNameOverride TEXT,
+                actualOutputFiles TEXT,
+                outputFile TEXT,
                 instruction TEXT,
-                tool_flags TEXT,  -- JSON object for all tool flags
-                state_global TEXT,  -- JSON object for global metrics
-                state_rounds TEXT   -- JSON array of round-specific metrics
+                toolFlags TEXT,  -- JSON object for all tool flags
+                stateGlobal TEXT,  -- JSON object for global metrics
+                stateRounds TEXT   -- JSON array of round-specific metrics
             )"""
             )
             conn.commit()
@@ -58,82 +58,82 @@ def init_db() -> None:
         raise
 
 
-def create_log_entry(agent_config: AgentConfig, agent_settings: AgentSettings) -> int:
+def create_log_entry(agentConfig: AgentConfig, agentSettings: AgentSettings) -> int:
     """Create a new log entry and return its ID."""
     init_db()
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
 
-            input_files = json.dumps(agent_config.input_files) if agent_config.input_files else None
-            auxiliary_files = json.dumps(agent_config.auxiliary_files) if agent_config.auxiliary_files else None
-            figure_files = json.dumps(agent_config.figure_files) if agent_config.figure_files else None
-            reference_files = json.dumps(agent_config.reference_files) if agent_config.reference_files else None
-            output_files = json.dumps(agent_config.output_files) if agent_config.output_files else None
-            actual_output_files = json.dumps([])
+            inputFiles = json.dumps(agentConfig.inputFiles) if agentConfig.inputFiles else None
+            auxiliaryFiles = json.dumps(agentConfig.auxiliaryFiles) if agentConfig.auxiliaryFiles else None
+            figureFiles = json.dumps(agentConfig.figureFiles) if agentConfig.figureFiles else None
+            referenceFiles = json.dumps(agentConfig.referenceFiles) if agentConfig.referenceFiles else None
+            outputFiles = json.dumps(agentConfig.outputFiles) if agentConfig.outputFiles else None
+            actualOutputFiles = json.dumps([])
 
-            tool_flags = json.dumps(
+            toolFlags = json.dumps(
                 {
-                    "reflect": agent_config.reflect,
-                    "auto_extract_figure": agent_config.tool_config.auto_extract_figure,
-                    "auto_extract_tikz_figure": agent_config.tool_config.auto_extract_tikz_figure,
-                    "auto_extract_tikz_figure_reflect": agent_config.tool_config.auto_extract_tikz_figure_reflect,
-                    "include_tex_count": agent_config.tool_config.include_tex_count,
-                    "use_prefill_from_input": agent_config.tool_config.use_prefill_from_input,
-                    "auto_confirmation": agent_config.tool_config.auto_confirmation,
+                    "reflect": agentConfig.reflect,
+                    "autoExtractFigure": agentConfig.toolConfig.autoExtractFigure,
+                    "autoExtractTikzFigure": agentConfig.toolConfig.autoExtractTikzFigure,
+                    "autoExtractTikzFigureReflect": agentConfig.toolConfig.autoExtractTikzFigureReflect,
+                    "includeTexCount": agentConfig.toolConfig.includeTexCount,
+                    "usePrefillFromInput": agentConfig.toolConfig.usePrefillFromInput,
+                    "autoConfirmation": agentConfig.toolConfig.autoConfirmation,
                 }
             )
 
-            state_global = json.dumps({})
-            state_rounds = json.dumps({})
+            stateGlobal = json.dumps({})
+            stateRounds = json.dumps({})
 
             c.execute(
                 """INSERT INTO coauthor_logs (
                 timestamp, agent, model, temperature,
-                input_file, input_files, auxiliary_file, auxiliary_files,
-                figure_file, figure_files, reference_file, reference_files,
-                edited_file, output_files, output_name_override,
-                actual_output_files, instruction,
-                tool_flags, state_global, state_rounds
+                inputFile, inputFiles, auxiliaryFile, auxiliaryFiles,
+                figureFile, figureFiles, referenceFile, referenceFiles,
+                editedFile, outputFiles, outputNameOverride,
+                actualOutputFiles, instruction,
+                toolFlags, stateGlobal, stateRounds
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     datetime.now(),
-                    agent_config.agent,
-                    agent_config.model,
-                    agent_settings.temperature,
-                    agent_config.input_file,
-                    input_files,
-                    agent_config.auxiliary_file,
-                    auxiliary_files,
-                    agent_config.figure_file,
-                    figure_files,
-                    agent_config.reference_file,
-                    reference_files,
-                    agent_config.edited_file,
-                    output_files,
-                    agent_config.output_name_override,
-                    actual_output_files,
-                    agent_config.instruction,
-                    tool_flags,
-                    state_global,
-                    state_rounds,
+                    agentConfig.agent,
+                    agentConfig.model,
+                    agentSettings.temperature,
+                    agentConfig.inputFile,
+                    inputFiles,
+                    agentConfig.auxiliaryFile,
+                    auxiliaryFiles,
+                    agentConfig.figureFile,
+                    figureFiles,
+                    agentConfig.referenceFile,
+                    referenceFiles,
+                    agentConfig.editedFile,
+                    outputFiles,
+                    agentConfig.outputNameOverride,
+                    actualOutputFiles,
+                    agentConfig.instruction,
+                    toolFlags,
+                    stateGlobal,
+                    stateRounds,
                 ),
             )
 
-            log_id = c.lastrowid
-            if log_id is None:
+            logId = c.lastrowid
+            if logId is None:
                 raise RuntimeError("Failed to create log entry - no ID returned")
 
             conn.commit()
-            return log_id
+            return logId
     except sqlite3.Error as e:
         logger.error(f"Failed to create log entry: {e}")
         raise
 
 
-def update_log_statistics(log_id: int, state_global: AgentStateGlobal, state_round: AgentStateRound, round: int) -> None:
+def update_log_statistics(logId: int, stateGlobal: AgentStateGlobal, stateRound: AgentStateRound, round: int) -> None:
     """Update statistics in the database for a specific log entry."""
-    if log_id is None:
+    if logId is None:
         logger.warning("No log ID provided, skipping statistics update")
         return
 
@@ -142,36 +142,36 @@ def update_log_statistics(log_id: int, state_global: AgentStateGlobal, state_rou
             c = conn.cursor()
 
             # First, get existing round states
-            c.execute("SELECT state_rounds FROM coauthor_logs WHERE id = ?", (log_id,))
+            c.execute("SELECT stateRounds FROM coauthor_logs WHERE id = ?", (logId,))
             row = c.fetchone()
             if not row:
-                logger.error(f"No log entry found for ID {log_id}")
+                logger.error(f"No log entry found for ID {logId}")
                 return
 
-            existing_state_rounds = json.loads(row[0]) if row[0] else {}
+            existing_stateRounds = json.loads(row[0]) if row[0] else {}
 
             # Update the round states with the new state
-            existing_state_rounds[str(round)] = state_round.to_dict()
+            existing_stateRounds[str(round)] = stateRound.to_dict()
 
             # Get the output file from the current round state
-            output_file = state_round.output_file
+            outputFile = stateRound.outputFile
 
-            # Convert state_global to dict before JSON serialization
-            state_global_dict = state_global.to_dict()
-            if state_global_dict.get("model_usage"):
-                state_global_dict["model_usage"] = state_global_dict["model_usage"].to_dict()
+            # Convert stateGlobal to dict before JSON serialization
+            stateGlobal_dict = stateGlobal.to_dict()
+            if stateGlobal_dict.get("APIUsage"):
+                stateGlobal_dict["APIUsage"] = stateGlobal_dict["APIUsage"].to_dict()
 
-            state_global_json = json.dumps(state_global_dict)
-            state_rounds_json = json.dumps(existing_state_rounds)
+            stateGlobalJson = json.dumps(stateGlobal_dict)
+            stateRoundsJson = json.dumps(existing_stateRounds)
 
             # Update the database
             c.execute(
                 """UPDATE coauthor_logs SET
-                state_global = ?,
-                state_rounds = ?,
-                output_file = ?
+                stateGlobal = ?,
+                stateRounds = ?,
+                outputFile = ?
                 WHERE id = ?""",
-                (state_global_json, state_rounds_json, output_file, log_id),
+                (stateGlobalJson, stateRoundsJson, outputFile, logId),
             )
 
             conn.commit()
@@ -180,9 +180,9 @@ def update_log_statistics(log_id: int, state_global: AgentStateGlobal, state_rou
         raise
 
 
-def update_log_output_files(log_id: int, output_file: str, all_output_files: list[str] | None = None) -> None:
+def update_log_outputFiles(logId: int, outputFile: str, all_outputFiles: list[str] | None = None) -> None:
     """Update output files for a specific log entry."""
-    if log_id is None:
+    if logId is None:
         logger.warning("No log ID provided, skipping output files update")
         return
 
@@ -190,28 +190,28 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
 
-            c.execute("SELECT actual_output_files FROM coauthor_logs WHERE id = ?", (log_id,))
+            c.execute("SELECT actualOutputFiles FROM coauthor_logs WHERE id = ?", (logId,))
             row = c.fetchone()
             if not row:
-                logger.error(f"No log entry found for ID {log_id}")
+                logger.error(f"No log entry found for ID {logId}")
                 return
 
             actual_files = json.loads(row[0]) if row[0] else []
 
-            if all_output_files:
-                for file in all_output_files:
+            if all_outputFiles:
+                for file in all_outputFiles:
                     if file not in actual_files:
                         actual_files.append(file)
-            elif output_file and output_file not in actual_files:
-                actual_files.append(output_file)
+            elif outputFile and outputFile not in actual_files:
+                actual_files.append(outputFile)
 
             actual_files_json = json.dumps(actual_files)
             c.execute(
                 """UPDATE coauthor_logs SET
-                output_file = ?,
-                actual_output_files = ?
+                outputFile = ?,
+                actualOutputFiles = ?
                 WHERE id = ?""",
-                (output_file, actual_files_json, log_id),
+                (outputFile, actual_files_json, logId),
             )
 
             conn.commit()
@@ -220,7 +220,7 @@ def update_log_output_files(log_id: int, output_file: str, all_output_files: lis
         raise
 
 
-def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict]:
+def get_log_entry(logId: int) -> dict[str, str | int | float | list[str] | dict]:
     """Retrieve complete log entry information for a specific ID."""
 
     # the idea is that we can retrive the state of panel by using JSON.parse
@@ -228,10 +228,10 @@ def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict
     try:
         with sqlite3.connect(get_db_path()) as conn:
             c = conn.cursor()
-            c.execute("SELECT * FROM coauthor_logs WHERE id = ?", (log_id,))
+            c.execute("SELECT * FROM coauthor_logs WHERE id = ?", (logId,))
             row = c.fetchone()
             if not row:
-                raise ValueError(f"No log entry found for ID {log_id}")
+                raise ValueError(f"No log entry found for ID {logId}")
 
             columns = [
                 "id",
@@ -239,37 +239,37 @@ def get_log_entry(log_id: int) -> dict[str, str | int | float | list[str] | dict
                 "agent",
                 "model",
                 "temperature",
-                "input_file",
-                "input_files",
-                "auxiliary_file",
-                "auxiliary_files",
-                "figure_file",
-                "figure_files",
-                "reference_file",
-                "reference_files",
-                "edited_file",
-                "output_files",
-                "output_name_override",
-                "actual_output_files",
-                "output_file",
+                "inputFile",
+                "inputFiles",
+                "auxiliaryFile",
+                "auxiliaryFiles",
+                "figureFile",
+                "figureFiles",
+                "referenceFile",
+                "referenceFiles",
+                "editedFile",
+                "outputFiles",
+                "outputNameOverride",
+                "actualOutputFiles",
+                "outputFile",
                 "instruction",
-                "tool_flags",
-                "state_global",
-                "state_rounds",
+                "toolFlags",
+                "stateGlobal",
+                "stateRounds",
             ]
 
             entry = {columns[i]: row[i] for i in range(len(columns))}
 
             json_fields = [
-                "input_files",
-                "auxiliary_files",
-                "figure_files",
-                "reference_files",
-                "output_files",
-                "actual_output_files",
-                "tool_flags",
-                "state_global",
-                "state_rounds",
+                "inputFiles",
+                "auxiliaryFiles",
+                "figureFiles",
+                "referenceFiles",
+                "outputFiles",
+                "actualOutputFiles",
+                "toolFlags",
+                "stateGlobal",
+                "stateRounds",
             ]
 
             for field in json_fields:

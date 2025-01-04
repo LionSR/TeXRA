@@ -1,19 +1,22 @@
 import * as vscode from 'vscode';
+
+// Local imports - commands
 import { registerFileSelectionCommands } from './commands/fileSelectionCommands';
-import { registerLatexDiffCommands } from './commands/latexDiffCommmands';
+import { registerLatexDiffCommands } from './commands/latexdiffCommmands';
 import { registerGitCommands } from './commands/gitCommands';
 import { registerPackCommands } from './commands/packCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './ViewProvider';
-import { initializeLogging } from './logger/logUtils';
 import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';
 import { registerTestCommands } from './commands/testCommands';
 
+import * as logger from './logger/logUtils';
+
 const CHANNEL = 'Commands';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 /**
  * Register all extension commands
@@ -23,7 +26,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
   // Register command groups from separate modules
   const registeredCommands = {
     fileSelection: registerFileSelectionCommands(context),
-    latexDiff: registerLatexDiffCommands(context),
+    latexdiff: registerLatexDiffCommands(context),
     git: registerGitCommands(context),
     pack: registerPackCommands(context),
     merge: registerMergeCommands(context),
@@ -47,7 +50,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
 
 // Add exports for the command modules
 export { fileSelectionCommands } from './commands/fileSelectionCommands';
-export { latexDiffCommands } from './commands/latexDiffCommmands';
+export { latexdiffCommands } from './commands/latexdiffCommmands';
 export { gitCommands } from './commands/gitCommands';
 export { packCommands } from './commands/packCommands';
 export { mergeCommands } from './commands/mergeCommands';

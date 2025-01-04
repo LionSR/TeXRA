@@ -4,7 +4,7 @@ import os
 from jinja2 import Template
 from typing import Any
 
-from ..housekeeping.utils import get_agent_first_name_chunk
+from ..housekeeping.utils import getAgent_first_name_chunk
 from ..logger import logger
 
 from .file import read_file
@@ -23,47 +23,47 @@ def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
     return rendered_prompt.strip()
 
 
-def get_first_k_chars_from_document(input_file: str, k: int) -> str | None:
+def get_first_k_chars_from_document(inputFile: str, k: int) -> str | None:
     """Get the first K characters from a document.
 
     Args:
-        input_file: Path to the input file
+        inputFile: Path to the input file
         k: Number of characters to return
 
     Returns:
         First K characters from the document, stripped of whitespace, or None if file cannot be read
     """
-    content = read_file(input_file)
+    content = read_file(inputFile)
     return content[:k].strip() if content else None
 
 
-def write_prompt_to_xml(system_prompt: str, user_prefix: str, user_request: str, input_file: str, agent: str) -> str:
+def write_prompt_to_xml(systemPrompt: str, userPrefix: str, userRequest: str, inputFile: str, agent: str) -> str:
     """Write the model's input prompt to an XML file.
 
     Args:
-        system_prompt: The system prompt
-        user_prefix: The user prefix
-        user_request: The user request
-        input_file: Path to the input file
+        systemPrompt: The system prompt
+        userPrefix: The user prefix
+        userRequest: The user request
+        inputFile: Path to the input file
         agent: Name of the agent
 
     Returns:
         Path to the created XML file
     """
     # Get directory and base name from input file
-    input_dir = os.path.dirname(input_file)
-    input_base = os.path.splitext(os.path.basename(input_file))[0]
-    agent_name = get_agent_first_name_chunk(agent)
+    input_dir = os.path.dirname(inputFile)
+    input_base = os.path.splitext(os.path.basename(inputFile))[0]
+    agentName = getAgent_first_name_chunk(agent)
 
     # Create output file path
-    output_file = os.path.join(input_dir, f"{input_base}_{agent_name}_input.xml")
-    logger.info(f"Writing input prompt to {output_file}")
+    outputFile = os.path.join(input_dir, f"{input_base}_{agentName}_input.xml")
+    logger.info(f"Writing input prompt to {outputFile}")
 
     # Combine prompts
-    full_prompt = f"\n<system>{system_prompt}</system>\n\n{user_prefix}\n{user_request}\n"
+    full_prompt = f"\n<system>{systemPrompt}</system>\n\n{userPrefix}\n{userRequest}\n"
 
     # Write to file
-    with open(output_file, "w") as f:
+    with open(outputFile, "w") as f:
         f.write(full_prompt)
 
-    return output_file
+    return outputFile

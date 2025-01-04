@@ -10,20 +10,20 @@ from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 
 
-class AgentMerge(DirectAgent):
+class MergeAgent(DirectAgent):
     """Agent for merging multiple edited files into a single output."""
 
     def __init__(
         self,
-        model_handler: ModelHandler,
-        agent_config: AgentConfig,
-        agent_settings: AgentSettings,
-        agent_prompts: AgentPrompts,
-        agent_path: str,
+        modelHandler: ModelHandler,
+        agentConfig: AgentConfig,
+        agentSettings: AgentSettings,
+        agentPrompts: AgentPrompts,
+        agentPath: str,
     ) -> None:
         """Initialize merge agent with model handler, configs, settings, prompts and path."""
-        super().__init__(model_handler, agent_config, agent_settings, agent_prompts, agent_path)
-        self.output_file = [self.get_output_file(r) for r in range(2)]
+        super().__init__(modelHandler, agentConfig, agentSettings, agentPrompts, agentPath)
+        self.outputFile = [self.get_outputFile(r) for r in range(2)]
 
     def _parse_filename_parts(self, edited_base: str) -> tuple[str, str, int, str]:
         """Parse filename parts to extract base name, agent, round number and model."""
@@ -32,7 +32,7 @@ class AgentMerge(DirectAgent):
         base = parts[0]
 
         # Extract agent name
-        agent = self._extract_agent_name(parts, underscore_count)
+        agent = self._extract_agentName(parts, underscore_count)
         if agent is None:
             raise ValueError(f"Could not extract agent name from edited base: {edited_base}")
 
@@ -47,17 +47,17 @@ class AgentMerge(DirectAgent):
 
         return base, agent, round_num, model
 
-    def get_output_file(self, curr_round: int) -> str:
+    def get_outputFile(self, currRound: int) -> str:
         """Generate output filename for merged content."""
-        input_file = self.agent_config.input_file
-        edited_file = self.agent_config.edited_file
+        inputFile = self.agentConfig.inputFile
+        editedFile = self.agentConfig.editedFile
 
-        if not edited_file:
-            raise ValueError("edited_file must be specified for merge handler")
+        if not editedFile:
+            raise ValueError("editedFile must be specified for merge handler")
 
-        input_dir = os.path.dirname(input_file)
-        input_base, _ = os.path.splitext(os.path.basename(input_file))
-        edited_base, _ = os.path.splitext(os.path.basename(edited_file))
+        input_dir = os.path.dirname(inputFile)
+        input_base, _ = os.path.splitext(os.path.basename(inputFile))
+        edited_base, _ = os.path.splitext(os.path.basename(editedFile))
 
         # Parse filename components
         base, agent, round_num, model = self._parse_filename_parts(edited_base)
@@ -67,12 +67,12 @@ class AgentMerge(DirectAgent):
             base = input_base
 
         # Construct output filename
-        output_file = f"{base}_{agent}_r{round_num}_full_{model}.tex"
-        output_path = os.path.join(input_dir, output_file)
+        outputFile = f"{base}_{agent}_r{round_num}_full_{model}.tex"
+        output_path = os.path.join(input_dir, outputFile)
         logger.info(f"Merge output file: {output_path}")
         return output_path
 
-    def _extract_agent_name(self, parts: list[str], underscore_count: int) -> str | None:
+    def _extract_agentName(self, parts: list[str], underscore_count: int) -> str | None:
         """Extract agent name from filename parts.
 
         Handles two formats:
@@ -93,15 +93,15 @@ class AgentMerge(DirectAgent):
 
     def handle_output(
         self,
-        state_round: AgentStateRound,
-        state_global: AgentStateGlobal,
-        output_file: str,
-        end_turn: bool,
-        curr_round: int = 0,
+        stateRound: AgentStateRound,
+        stateGlobal: AgentStateGlobal,
+        outputFile: str,
+        endTurn: bool,
+        currRound: int = 0,
     ) -> list[str]:
         """Process and handle output files for the current round."""
-        if end_turn:
-            _files = super().handle_output(state_round, state_global, output_file, end_turn, curr_round)
-            logger.info(f"Output file: {output_file}")
+        if endTurn:
+            _files = super().handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound)
+            logger.info(f"Output file: {outputFile}")
             return _files
         return []

@@ -11,14 +11,14 @@ DEFAULT_CONTEXT_WINDOW = 128000
 class ModelCapabilities:
     """Model capabilities configuration."""
 
-    supports_prompt_caching: bool = False
-    supports_auto_prompt_caching: bool = False
-    supports_reasoning: bool = False
-    supports_vision: bool = True
-    supports_native_pdf: bool = False
-    supports_assistant_prefill: bool = False
-    supports_predictive_output: bool = False
-    likes_to_ask_for_confirmation: bool = False
+    supportsPromptCaching: bool = False
+    supportsAutoPromptCaching: bool = False
+    supportsReasoning: bool = False
+    supportsVision: bool = True
+    supportsNativePdf: bool = False
+    supportsAssistantPrefill: bool = False
+    upportsPredictiveOutput: bool = False
+    likesToAskForConfirmation: bool = False
 
 
 class ModelProvider(Enum):
@@ -35,13 +35,13 @@ class ModelConfig:
     """Configuration for a model."""
 
     name: str  # Short name (e.g., "sonnet++")
-    full_name: str  # Full model name (e.g., "claude-3-5-sonnet-20241022")
+    fullName: str  # Full model name (e.g., "claude-3-5-sonnet-20241022")
     provider: ModelProvider  # The model provider (e.g., ANTHROPIC, OPENAI)
-    max_output_tokens: int
-    input_price: float
-    output_price: float
-    base_url: str | None = None
-    context_window: int = DEFAULT_CONTEXT_WINDOW
+    maxOutputTokens: int
+    inputPrice: float
+    outputPrice: float
+    baseUrl: str | None = None
+    contextWindow: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
-    use_openrouter: bool = False  # Whether to use OpenRouter for this model
-    openrouter_full_name: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
+    useOpenRouter: bool = False  # Whether to use OpenRouter for this model
+    openrouterFullName: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")

@@ -29,9 +29,9 @@ def add_cdata_to_tags_multiple(xml_data: str, tags: list[str]) -> str:
     return xml_data
 
 
-def extract_text_from_tags(input_content: str, document_tag: str) -> str:
+def extract_text_from_tags(input_content: str, documentTag: str) -> str:
     """Extract text between specified XML tags using regex."""
-    match = re.search(rf"<{document_tag}>(.*?)</{document_tag}>", input_content, re.DOTALL)
+    match = re.search(rf"<{documentTag}>(.*?)</{documentTag}>", input_content, re.DOTALL)
     return match.group(1) if match else input_content
 
 

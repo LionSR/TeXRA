@@ -1,18 +1,19 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import { deleteFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
-import {
-  debug,
-  info,
-  warn,
-  error,
-  initializeLogging,
-} from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
@@ -57,9 +58,12 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       for (const backupFile of backupFiles) {
         try {
           await deleteFile(backupFile);
-          debug(CHANNEL, `Removed backup file: ${backupFile}`);
+          logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
         } catch (err) {
-          warn(CHANNEL, `Error removing backup file ${backupFile}: ${err}`);
+          logger.warn(
+            CHANNEL,
+            `Error removing backup file ${backupFile}: ${err}`,
+          );
         }
       }
     }
@@ -68,16 +72,16 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
     try {
       await deleteFile(indentLogPath);
-      debug(CHANNEL, 'Removed indent.log');
+      logger.debug(CHANNEL, 'Removed indent.log');
     } catch (err) {
       // Ignore error if indent.log doesn't exist
-      warn(CHANNEL, `Error removing indent.log: ${err}`);
+      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
     }
 
-    info(CHANNEL, `Indented ${filePath}`);
+    logger.info(CHANNEL, `Indented ${filePath}`);
     return true;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
     );
