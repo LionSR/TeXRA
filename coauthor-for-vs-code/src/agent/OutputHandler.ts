@@ -135,7 +135,7 @@ export class OutputHandler {
       CHANNEL,
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
-    if (this.agentConfig.outputFiles) {
+    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0 && Array.isArray(outputFiles) && outputFiles.length > 0) {
       for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
         const inputFile = this.agentConfig.outputFiles[i];
         const outputFile = outputFiles[i];
