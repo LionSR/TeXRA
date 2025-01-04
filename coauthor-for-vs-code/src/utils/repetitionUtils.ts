@@ -47,7 +47,10 @@ export function checkForMassiveRepetition(
 
     if (massiveRepetitionDetected) {
       logger.error(CHANNEL, `Repetition ratio: ${ratio}`);
-      logger.error(CHANNEL, `Longest matching substring(preview): ${longestMatch.slice(0, 400)}`);
+      logger.error(
+        CHANNEL,
+        `Longest matching substring(preview): ${longestMatch.slice(0, 400)}`,
+      );
       logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
     }
 
