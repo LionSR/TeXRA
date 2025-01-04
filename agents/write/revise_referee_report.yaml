@@ -1,18 +1,18 @@
 name: revise_referee_report
 settings:
-  document_tag: revised_referee_report
-  end_tag: </revised_referee_report>
-  output_ext: tex
+  documentTag: revised_referee_report
+  endTag: </revised_referee_report>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "main"
-    - var_name: "PAPER"
-    - categories: ["input_file", "input_files"]
+    - varName: "PAPER"
+    - categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist and experienced peer reviewer. Your task is to revise and improve a drafted referee report for a research paper submitted to PRX Quantum. The revised report should critically evaluate the paper's novelty, importance, technical aspects, and quality of presentation. Maintain a professional yet critical tone throughout the report.
 
     When revising the referee report:
@@ -30,7 +30,7 @@ prompts:
     - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
     - Only use enumerate and itemize environments for lists.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with revising and improving a drafted referee report for the following research paper submitted to PRX Quantum:
 
     <research_paper>
@@ -45,7 +45,7 @@ prompts:
 
     Please carefully read through the entire research paper and the drafted report above. Ensure you fully understand all the details before revising the report.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -100,7 +100,7 @@ prompts:
     {REVISED_REFEREE_REPORT_CONTENT}
     </revised_referee_report>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the revised referee report we've written. Consider these points and brainstorm potential further improvements in the scratchpad below:
 
     <scratchpad>

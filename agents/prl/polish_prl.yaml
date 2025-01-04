@@ -1,25 +1,25 @@
 name: polish
 
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
-  output_ext: xml
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: xml
   prefills:
     - <scratchpad>
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "preamble"
-      var_name: "PREAMBLE"
-      categories: ["auxiliary_file", "auxiliary_files"]
+      varName: "PREAMBLE"
+      categories: ["auxiliaryFile", "auxiliaryFiles"]
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve both the main text and supplementary materials of a research paper to be submitted to Physical Review Letters. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
 
     When polishing a professional *.tex \LaTeX document, you must:
@@ -32,7 +32,7 @@ prompts:
         \item When making references in the replies to the paper, use |\cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you the main text and supplementary materials of a research paper to polish. Please read both documents carefully.
 
     Here are the \LaTeX documents:
@@ -64,7 +64,7 @@ prompts:
     {{ INSTRUCTION }}
     </instruction>
 
-  user_request: |
+  userRequest: |
     In the scratchpad below, brainstorm concrete ways to improve both the main text and supplementary materials. Consider how changes in one document might affect the other. Be specific about what to change in which section of each document and why.
 
     <scratchpad>
@@ -104,7 +104,7 @@ prompts:
     </document>
     </latex_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to both the main text and supplementary materials, please reflect on your changes and consider any additional improvements that could further enhance the quality of both documents. 
 
     In particular, 

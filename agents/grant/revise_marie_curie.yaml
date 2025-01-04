@@ -1,14 +1,14 @@
 name: revise_marie_curie_fellowship
 settings:
-  document_tag: marie_curie_fellowship_documents
-  end_tag: </marie_curie_fellowship_documents>
-  output_ext: tex
+  documentTag: marie_curie_fellowship_documents
+  endTag: </marie_curie_fellowship_documents>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert grant writer specializing in Marie Skłodowska-Curie Actions (MSCA) Postdoctoral Fellowship proposals for German institutions. Your task is to revise and improve multiple components of a Marie Curie Fellowship proposal, focusing on addressing the given instructions and enhancing the overall quality and competitiveness of the proposal.
 
     \begin{itemize}
@@ -35,7 +35,7 @@ prompts:
         \end{itemize}
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     I am going to give you multiple \LaTeX documents that comprise a Marie Curie Fellowship proposal. Please read all documents carefully.
 
     Here are the \LaTeX documents with additional LaTeX auxiliary files:
@@ -50,7 +50,7 @@ prompts:
 
     Please carefully read through all the components of the Marie Curie Fellowship proposal above and ensure you fully understand all the details.
 
-  user_request: |
+  userRequest: |
     Your task is to enhance these documents. 
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
@@ -103,7 +103,7 @@ prompts:
 
     </marie_curie_fellowship_documents>
 
-  user_reflect: |
+  userReflect: |
     Now that you have made initial improvements to the Marie Curie Fellowship proposal components, please reflect on your changes and consider any additional improvements that could further enhance the quality and competitiveness of the proposal while staying focused on the original instruction.
 
     <scratchpad>

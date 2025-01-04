@@ -1,10 +1,39 @@
 /**
- * Model configuration data structures.
+ * Model configuration data structures
  */
 
-// Default configuration values
+/**
+ * Default configuration values
+ */
 export const DEFAULT_CONTEXT_WINDOW = 128000;
 
+/**
+ * Default model capabilities
+ */
+export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
+  supportsPromptCaching: false,
+  supportsAutoPromptCaching: false,
+  supportsReasoning: false,
+  supportsVision: true,
+  supportsNativePdf: false,
+  supportsAssistantPrefill: false,
+  supportsPredictiveOutput: false,
+  likesToAskForConfirmation: false,
+};
+
+/**
+ * Model provider enum
+ */
+export enum ModelProvider {
+  ANTHROPIC = 'anthropic',
+  OPENAI = 'openai',
+  GOOGLE = 'google',
+  OTHERS = 'others',
+}
+
+/**
+ * Model capabilities interface
+ */
 export interface ModelCapabilities {
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
@@ -16,24 +45,9 @@ export interface ModelCapabilities {
   likesToAskForConfirmation: boolean;
 }
 
-export const defaultModelCapabilities: ModelCapabilities = {
-  supportsPromptCaching: false,
-  supportsAutoPromptCaching: false,
-  supportsReasoning: false,
-  supportsVision: true,
-  supportsNativePdf: false,
-  supportsAssistantPrefill: false,
-  supportsPredictiveOutput: false,
-  likesToAskForConfirmation: false,
-};
-
-export enum ModelProvider {
-  ANTHROPIC = 'anthropic',
-  OPENAI = 'openai',
-  GOOGLE = 'google',
-  OTHERS = 'others',
-}
-
+/**
+ * Model configuration interface
+ */
 export interface ModelConfig {
   name: string; // Short name (e.g., "sonnet++")
   fullName: string; // Full model name (e.g., "claude-3-5-sonnet-20241022")
@@ -44,6 +58,6 @@ export interface ModelConfig {
   baseUrl?: string; // Optional base URL
   contextWindow: number;
   capabilities: ModelCapabilities;
-  useOpenrouter: boolean; // Whether to use OpenRouter for this model
+  useOpenRouter: boolean; // Whether to use OpenRouter for this model
   openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
 }

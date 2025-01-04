@@ -1,16 +1,23 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   showInfoMessage,
   showErrorMessage,
   getConfig,
 } from '../frontend-utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
-import { debug, info, error, initializeLogging } from '../logger/logUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
 const CHANNEL = 'FileSelection';
-initializeLogging(CHANNEL);
+logger.initializeLogging(CHANNEL);
 
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
@@ -86,7 +93,7 @@ async function selectInputFile(
   if (fileUri && fileUri[0]) {
     const relativePath = getRelativePath(fileUri[0].fsPath);
     showInfoMessage(`Selected file: ${relativePath}`);
-    info(CHANNEL, `Selected file: ${relativePath}`);
+    logger.info(CHANNEL, `Selected file: ${relativePath}`);
     return relativePath;
   }
   return null;
@@ -142,10 +149,10 @@ async function selectMultipleInputFiles(
     });
 
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
+    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
     return relativePaths;
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error selecting files: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -188,7 +195,10 @@ async function selectMultipleReferenceFiles(
   if (fileUris && fileUris.length > 0) {
     const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
     showInfoMessage(`Selected reference files: ${relativePaths.join(', ')}`);
-    info(CHANNEL, `Selected reference files: ${relativePaths.join(', ')}`);
+    logger.info(
+      CHANNEL,
+      `Selected reference files: ${relativePaths.join(', ')}`,
+    );
     return relativePaths;
   }
   return null;
@@ -229,7 +239,7 @@ async function selectMultipleAuxiliaryFiles(
   if (fileUris && fileUris.length > 0) {
     const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
+    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
     return relativePaths;
   }
   return null;
@@ -280,7 +290,7 @@ async function selectMultipleFigureFiles(
         : relativePath;
     });
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
-    info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
+    logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
     return relativePaths;
   }
   return null;
@@ -301,7 +311,7 @@ async function selectFigureFile(): Promise<string | null> {
   if (fileUri && fileUri[0]) {
     const relativePath = getRelativePath(fileUri[0].fsPath);
     showInfoMessage(`Selected figure file: ${relativePath}`);
-    info(CHANNEL, `Selected figure file: ${relativePath}`);
+    logger.info(CHANNEL, `Selected figure file: ${relativePath}`);
     return relativePath;
   }
   return null;
@@ -317,7 +327,7 @@ async function selectEditedFile(): Promise<string | null> {
   if (fileUri && fileUri[0]) {
     const relativePath = getRelativePath(fileUri[0].fsPath);
     showInfoMessage(`Selected edited file: ${relativePath}`);
-    info(CHANNEL, `Selected edited file: ${relativePath}`);
+    logger.info(CHANNEL, `Selected edited file: ${relativePath}`);
     return relativePath;
   }
   return null;

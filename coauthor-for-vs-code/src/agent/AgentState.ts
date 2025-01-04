@@ -1,46 +1,61 @@
-import { OpenAIResponseUsage, AnthropicResponseUsage } from './ResponseUsage';
-import { debug } from '../logger/logUtils';
+// Standard library imports
+// (none needed)
+
+// Third-party imports
+// (none needed)
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - agent components
+import {
+  OpenAIAPIResponseUsage,
+  AnthropicAPIResponseUsage,
+} from './ResponseUsage';
+
+const CHANNEL = 'Agent';
+logger.initializeLogging(CHANNEL);
 
 /**
  * State for a single round (first round or reflection round)
  */
-export interface AgentStateRound {
+export interface IAgentStateRound {
   currRound: number;
   continuationCount: number;
   responseTime: number;
   outputFile: string;
-  modelUsage: OpenAIResponseUsage | AnthropicResponseUsage | null;
+  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-export class AgentStateRoundImpl implements AgentStateRound {
+export class AgentStateRound implements IAgentStateRound {
   currRound: number;
   continuationCount: number;
   responseTime: number;
   outputFile: string;
-  modelUsage: OpenAIResponseUsage | AnthropicResponseUsage | null;
+  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 
   private constructor(currRound: number) {
     this.currRound = currRound;
     this.continuationCount = 0;
     this.responseTime = 0;
     this.outputFile = '';
-    this.modelUsage = null;
+    this.APIUsage = null;
   }
 
   /**
    * Initialize a new AgentStateRound object
    */
   static initialize(currRound: number): AgentStateRound {
-    return new AgentStateRoundImpl(currRound);
+    return new AgentStateRound(currRound);
   }
 
   /**
    * Update token counts based on model response usage
    */
   updateTokenCounts(
-    responseUsage: OpenAIResponseUsage | AnthropicResponseUsage,
+    responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,
   ): void {
-    this.modelUsage = responseUsage;
+    this.APIUsage = responseUsage;
   }
 
   /**
@@ -66,7 +81,7 @@ export class AgentStateRoundImpl implements AgentStateRound {
       continuationCount: this.continuationCount,
       responseTime: this.responseTime,
       outputFile: this.outputFile,
-      modelUsage: this.modelUsage,
+      APIUsage: this.APIUsage,
     };
     return stateObj;
   }
@@ -75,22 +90,22 @@ export class AgentStateRoundImpl implements AgentStateRound {
 /**
  * Global state tracking metrics across all rounds
  */
-export interface AgentStateGlobal {
+export interface IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  modelUsage: OpenAIResponseUsage | AnthropicResponseUsage | null;
+  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-export class AgentStateGlobalImpl implements AgentStateGlobal {
+export class AgentStateGlobal implements IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  modelUsage: OpenAIResponseUsage | AnthropicResponseUsage | null;
+  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 
   private constructor() {
     this.firstInputTokens = 0;
@@ -98,38 +113,40 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
     this.totalRounds = 0;
-    this.modelUsage = null;
+    this.APIUsage = null;
   }
 
   /**
    * Initialize a new AgentStateGlobal object
    */
   static initialize(): AgentStateGlobal {
-    return new AgentStateGlobalImpl();
+    return new AgentStateGlobal();
   }
 
   /**
    * Update global metrics based on round state
    */
   updateFromCurrRound(stateRound: AgentStateRound): void {
-    if (stateRound.modelUsage) {
+    if (stateRound.APIUsage) {
       if (this.firstInputTokens === 0) {
-        this.firstInputTokens = stateRound.modelUsage.totalInputTokens;
+        this.firstInputTokens = stateRound.APIUsage.totalInputTokens;
       }
 
       // For Anthropic models, handle cache tokens
-      if ('cacheReadInputTokens' in stateRound.modelUsage) {
-        const cacheRead = stateRound.modelUsage.cacheReadInputTokens ?? 0;
-        this.firstInputTokens += cacheRead;
-        debug(
-          'AgentState',
-          `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}`,
+      if ('cache_read_input_tokens' in stateRound.APIUsage) {
+        const cacheRead = stateRound.APIUsage.cache_read_input_tokens ?? 0;
+        const cacheCreation =
+          stateRound.APIUsage.cache_creation_input_tokens ?? 0;
+        this.firstInputTokens += cacheRead + cacheCreation;
+        logger.debug(
+          CHANNEL,
+          `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}, cache_creation: ${cacheCreation}`,
         );
       }
 
       // Update global totals
-      this.totalInputTokens += stateRound.modelUsage.totalInputTokens;
-      this.totalOutputTokens += stateRound.modelUsage.totalOutputTokens;
+      this.totalInputTokens += stateRound.APIUsage.totalInputTokens;
+      this.totalOutputTokens += stateRound.APIUsage.totalOutputTokens;
     }
 
     this.totalResponseTime += stateRound.responseTime;
@@ -145,7 +162,7 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
       totalInputTokens: this.totalInputTokens,
       totalOutputTokens: this.totalOutputTokens,
       totalRounds: this.totalRounds,
-      modelUsage: this.modelUsage,
+      APIUsage: this.APIUsage,
     };
   }
 
@@ -154,15 +171,15 @@ export class AgentStateGlobalImpl implements AgentStateGlobal {
    */
   static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
     if (!stateObj) {
-      return AgentStateGlobalImpl.initialize();
+      return AgentStateGlobal.initialize();
     }
 
-    const state = new AgentStateGlobalImpl();
+    const state = new AgentStateGlobal();
     state.firstInputTokens = stateObj.firstInputTokens ?? 0;
     state.totalResponseTime = stateObj.totalResponseTime ?? 0;
     state.totalInputTokens = stateObj.totalInputTokens ?? 0;
     state.totalOutputTokens = stateObj.totalOutputTokens ?? 0;
-    state.modelUsage = stateObj.modelUsage ?? null;
+    state.APIUsage = stateObj.APIUsage ?? null;
     return state;
   }
 }

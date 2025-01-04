@@ -1,12 +1,21 @@
-import * as vscode from 'vscode';
+// Standard library imports
 import * as path from 'path';
-import { debug, info, warn, error } from '../logger/logUtils';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports - core
+import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
 import {
   deleteFile,
   readDirectory,
   fileExists,
   findFileInBuild,
 } from '../utils/fileUtils';
+
+// Local imports - housekeeping
 import {
   EXCLUDED_DIRS,
   TEMP_EXTENSIONS,
@@ -22,13 +31,13 @@ export async function runCleanSingle(
   inputFile: string,
   agent: string,
 ): Promise<void> {
-  info(
+  logger.info(
     CHANNEL,
     `Starting cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
 
   if (!inputFile || !model || !agent) {
-    error(
+    logger.error(
       CHANNEL,
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
@@ -40,21 +49,24 @@ export async function runCleanSingle(
 
   const baseName = path.parse(inputFile).name;
   const inputDir = path.dirname(inputFile);
-  debug(CHANNEL, `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`);
+  logger.debug(
+    CHANNEL,
+    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
+  );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
   const filePatterns = getFilePatterns(baseName, model, agentFirstNameChunk);
-  debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
 
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
-  debug(CHANNEL, `Using extensions: ${extensions}`);
+  logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
   let filesFound = false;
   for (const pattern of filePatterns) {
     for (const ext of extensions) {
       const filePath = await findFileInBuild(inputDir, pattern, ext);
       if (filePath) {
-        debug(CHANNEL, `Found file to delete: ${filePath}`);
+        logger.debug(CHANNEL, `Found file to delete: ${filePath}`);
         filesFound = true;
         await deleteFile(filePath);
       }
@@ -62,12 +74,12 @@ export async function runCleanSingle(
   }
 
   if (!filesFound) {
-    warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
+    logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
     vscode.window.showInformationMessage(
       `No files found to clean for ${inputFile}`,
     );
   } else {
-    info(CHANNEL, `Cleanup complete for ${inputFile}`);
+    logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
     vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
   }
 }
@@ -78,11 +90,11 @@ export async function runCleanMultiple(
   agent: string,
   inputFiles: string[],
 ): Promise<void> {
-  debug(
+  logger.debug(
     CHANNEL,
     `Starting multiple cleanup with model=${model}, inputFile=${inputFile}, agent=${agent}`,
   );
-  debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
+  logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
   await runCleanSingle(model, inputFile, agent);
 
@@ -92,11 +104,11 @@ export async function runCleanMultiple(
     }
   }
 
-  info(CHANNEL, 'Cleanup complete for multiple files.');
+  logger.info(CHANNEL, 'Cleanup complete for multiple files.');
 }
 
 export async function runCleanBuild(): Promise<void> {
-  debug(CHANNEL, 'Starting build directory cleanup');
+  logger.debug(CHANNEL, 'Starting build directory cleanup');
 
   async function cleanBuildDir(directory: string) {
     const buildDir = path.join(directory, 'build');
@@ -109,9 +121,9 @@ export async function runCleanBuild(): Promise<void> {
             await deleteFile(filePath);
           }
         }
-        debug(CHANNEL, `Cleaned build directory: ${buildDir}`);
+        logger.debug(CHANNEL, `Cleaned build directory: ${buildDir}`);
       } catch (err) {
-        error(
+        logger.error(
           CHANNEL,
           `Error cleaning build directory ${buildDir}: ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -133,7 +145,7 @@ export async function runCleanBuild(): Promise<void> {
         }
       }
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Error processing directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -145,9 +157,9 @@ export async function runCleanBuild(): Promise<void> {
     await cleanBuildDir('.');
     // Then process subdirectories
     await processDirectory('.');
-    info(CHANNEL, 'Build directories cleaned');
+    logger.info(CHANNEL, 'Build directories cleaned');
   } catch (err) {
-    error(
+    logger.error(
       CHANNEL,
       `Error cleaning build directories: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -156,7 +168,7 @@ export async function runCleanBuild(): Promise<void> {
 }
 
 export async function runCleanOutput(): Promise<void> {
-  debug(CHANNEL, 'Starting output directory cleanup');
+  logger.debug(CHANNEL, 'Starting output directory cleanup');
   const filesToDelete = new Set<string>();
   const validExtensions = new Set(['.tex', '.pdf', '.xml']);
 
@@ -181,7 +193,7 @@ export async function runCleanOutput(): Promise<void> {
         }
       }
     } catch (err) {
-      error(
+      logger.error(
         CHANNEL,
         `Error processing directory ${dirPath}: ${err instanceof Error ? err.message : String(err)}`,
       );
@@ -194,5 +206,5 @@ export async function runCleanOutput(): Promise<void> {
     await deleteFile(file);
   }
 
-  info(CHANNEL, 'All AI Generated Output files cleaned');
+  logger.info(CHANNEL, 'All AI Generated Output files cleaned');
 }

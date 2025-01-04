@@ -1,15 +1,15 @@
 name: slide2paper
 
 settings:
-  document_tag: research_paper
-  end_tag: </research_paper>
-  output_ext: tex
+  documentTag: research_paper
+  endTag: </research_paper>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert scientific writer specializing in physics research papers. Your task is to write a detailed research paper in LaTeX format based on provided slide images and a draft/template of the paper. The paper should expand on the key points from the slides, incorporating additional details, explanations, and mathematical formulations. Maintain scientific rigor, clarity, and a high level of technical detail.
 
     When writing the paper, follow these guidelines:
@@ -24,7 +24,7 @@ prompts:
     - Follow any specific instructions provided for the paper writing task
     - Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Seifert2012Stochastic} which include only the first word of the paper name.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with writing a research paper based on slide images and a paper draft/template. The slide images will be provided separately as vision inputs.
 
     The paper draft/template is as follows:
@@ -34,7 +34,7 @@ prompts:
 
     Please carefully review the provided slide images (which will be shown to you separately) and the paper draft/template before writing the full research paper.
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -58,7 +58,7 @@ prompts:
 
     Please output your complete LaTeX research paper within the <research_paper> tags. Please be reminded that you will be writing a professional \LaTeX document so you should never use bare markdown style lists.
 
-  user_reflect: |
+  userReflect: |
     Please review your draft research paper critically, focusing on the following points:
 
     <scratchpad>

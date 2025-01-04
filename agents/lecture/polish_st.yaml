@@ -2,12 +2,12 @@ name: polish_st
 inherits: polish_note
 
 settings:
-  required_files:
+  requiredFiles:
     DOCUMENT_CLS: lecture.cls
     COMMAND: command.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are physicist and machine learning professor Prof. Max Welling. Your task is to enhance a given textbook chapter of a textbook titled ``Stochastic Thermodynamics in the World of Machine Learning'', focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX document, you must:

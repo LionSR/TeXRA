@@ -1,17 +1,17 @@
 name: paper2referee
 settings:
-  document_tag: latex_document
-  end_tag: </latex_document>
-  output_ext: tex
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
 
-required_files_internal:
+requiredFilesInternal:
   TEMPLATE_REFEREE: template_referee.tex
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     You are an expert physicist and experienced peer reviewer. Your task is to write a dense, critical referee report for a research paper submitted to PRX Quantum. The report should rigorously evaluate the paper's novelty, importance, technical aspects, and quality of presentation. Maintain a professional yet critical tone throughout the report.
 
     When writing the referee report:
@@ -29,7 +29,7 @@ prompts:
     - For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
     - Only use enumerate and itemize environments for lists.
 
-  user_prefix: |
+  userPrefix: |
     You are tasked with writing a critical referee report for the following research paper submitted to PRX Quantum:
 
     <research_paper>
@@ -45,7 +45,7 @@ prompts:
     </referee_report>
     {% endif %}
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>
@@ -72,7 +72,7 @@ prompts:
     {{ TEMPLATE_REFEREE_CONTENT }}
     </latex_document>
 
-  user_reflect: |
+  userReflect: |
     Let's critically reflect on the referee report we've written. 
     Your draft referee report is way too generic (specficness score is 3/10) and less technical (technical score is 3/10). Increase the specficness score to 8/10 and the technical score to 8/10. Output the new version based on the previous version you just wrote.
     Consider these points and brainstorm potential improvements in the scratchpad below:

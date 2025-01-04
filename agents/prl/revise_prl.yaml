@@ -1,25 +1,25 @@
 name: revise_prl
 
 settings:
-  document_tag: latex_documents
-  end_tag: </latex_documents>
-  output_ext: tex
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
   prefills:
     - <scratchpad>
     - <scratchpad>
-  file_patterns_contain:
+  filePatternsContain:
     - pattern: "preamble"
-      var_name: "PREAMBLE"
-      categories: ["auxiliary_file", "auxiliary_files"]
+      varName: "PREAMBLE"
+      categories: ["auxiliaryFile", "auxiliaryFiles"]
     - pattern: "main"
-      var_name: "MAIN"
-      categories: ["input_file", "input_files"]
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
-      var_name: "SUPP"
-      categories: ["input_file", "input_files"]
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
 
 prompts:
-  system_prompt: |
+  systemPrompt: |
     Your task is to revise a research paper submitted to Physical Review Letters and rebut the referees' comments. This includes revising both the main paper and the supplementary material.
 
     When writing a professional *.tex \LaTeX document, you must:
@@ -30,7 +30,7 @@ prompts:
         \item When making references in the replies to the paper, use |\cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
     \end{itemize}
 
-  user_prefix: |
+  userPrefix: |
     You will be revising a paper submitted to Physical Review Letters based on referee reports. Here are the inputs you will need:
 
     <documents>
@@ -75,7 +75,7 @@ prompts:
     The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
     {% endif %}
 
-  user_request: |
+  userRequest: |
     {% if INSTRUCTION %}
     Focus solely on the following specific instruction:
     <instruction>

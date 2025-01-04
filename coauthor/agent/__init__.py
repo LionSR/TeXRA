@@ -15,16 +15,16 @@ from .agent_base import BaseReflectionAgent
 # Specialized agent implementations
 from .agent_class_cot import CoTAgent
 from .agent_class_direct import DirectAgent
-from .agent_class_merge import AgentMerge
+from .agent_class_merge import MergeAgent
 
 # Utility and loading functions
 from .agent_load import load_agent_settings_and_prompts
-from .response_usage import ResponseUsageBase, OpenAIResponseUsage, AnthropicResponseUsage
+from .response_usage import ResponseUsageBase, OpenAIAPIResponseUsage, AnthropicAPIResponseUsage
 from .output_handler import OutputHandler
 from .logdb import (
     create_log_entry,
     update_log_statistics,
-    update_log_output_files,
+    update_log_outputFiles,
     get_log_entry,
 )
 
@@ -52,16 +52,16 @@ __all__ = [
     # Agent implementations
     "CoTAgent",
     "DirectAgent",
-    "AgentMerge",
+    "MergeAgent",
     # Utility and infrastructure
     "load_agent_settings_and_prompts",
     "ResponseUsageBase",
-    "OpenAIResponseUsage",
-    "AnthropicResponseUsage",
+    "OpenAIAPIResponseUsage",
+    "AnthropicAPIResponseUsage",
     "OutputHandler",
     "create_log_entry",
     "update_log_statistics",
-    "update_log_output_files",
+    "update_log_outputFiles",
     "get_log_entry",
     # Model infrastructure
     "ModelConfig",
