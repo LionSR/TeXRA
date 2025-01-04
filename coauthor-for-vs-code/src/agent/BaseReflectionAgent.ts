@@ -948,8 +948,14 @@ export abstract class BaseReflectionAgent {
     outputFile: string,
     currRound: number,
   ): Promise<void> {
-    if (this.agentConfig.outputFiles) {
+    // logger.debug(CHANNEL, `processOutputFiles called with outputFile: ${outputFile}, currRound: ${currRound}`);
+    // logger.debug(CHANNEL, `this.agentConfig.outputFiles type: ${typeof this.agentConfig.outputFiles}`);
+    // logger.debug(CHANNEL, `this.agentConfig.outputFiles value: ${JSON.stringify(this.agentConfig.outputFiles)}`);
+    
+    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0) {
       // Multiple output files case
+      logger.debug(CHANNEL, `Processing multiple outputs for ${outputFile}`);
+      logger.debug(CHANNEL, `Output files: ${this.agentConfig.outputFiles}`);
       const processedFiles =
         await this.outputHandler.processMultipleOutputs(outputFile);
       await this.outputHandler.handleMultipleOutputs(processedFiles);
@@ -960,6 +966,7 @@ export abstract class BaseReflectionAgent {
       );
     } else {
       // Single output file case
+      logger.debug(CHANNEL, `Processing single output for ${outputFile}`);
       const processedFile =
         await this.outputHandler.processSingleOutput(outputFile);
       await this.outputHandler.handleSingleOutput(processedFile);
