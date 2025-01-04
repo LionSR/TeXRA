@@ -80,10 +80,7 @@ export abstract class BaseReflectionAgent {
     this.agentPrompts = agentPrompts;
     this.agentPath = agentPath;
 
-    logger.debug(
-      CHANNEL,
-      `AgentConfig: ${JSON.stringify(this.agentConfig)}\n`,
-    );
+    logger.debug(CHANNEL, `AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
     logger.debug(
       CHANNEL,
       `AgentSettings: ${JSON.stringify(this.agentSettings)}\n`,
@@ -123,10 +120,7 @@ export abstract class BaseReflectionAgent {
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
     ];
-    logger.info(
-      CHANNEL,
-      `Processing file: ${this.agentConfig.inputFile}`,
-    );
+    logger.info(CHANNEL, `Processing file: ${this.agentConfig.inputFile}`);
 
     // Initialize client and check scratchpad usage
     this.client = this.modelHandler.getClient();
@@ -422,10 +416,7 @@ export abstract class BaseReflectionAgent {
       );
       const responseTime = (Date.now() - startTime) / 1000;
       stateRound.updateResponseTime(responseTime);
-      logger.info(
-        CHANNEL,
-        `Response time: ${responseTime.toFixed(2)}s`,
-      );
+      logger.info(CHANNEL, `Response time: ${responseTime.toFixed(2)}s`);
 
       // Extract and validate response
       const [newResponse, responseUsage, stopReason] =
@@ -436,10 +427,7 @@ export abstract class BaseReflectionAgent {
         );
 
       logger.info(CHANNEL, `Stop reason: ${stopReason}`);
-      logger.info(
-        CHANNEL,
-        `Token usage: ${JSON.stringify(responseUsage)}`,
-      );
+      logger.info(CHANNEL, `Token usage: ${JSON.stringify(responseUsage)}`);
 
       // Compute statistics and update states
       const APIUsage = this.modelHandler.computeResponseUsage(
@@ -448,21 +436,12 @@ export abstract class BaseReflectionAgent {
       );
       stateRound.updateTokenCounts(APIUsage);
       stateGlobal.updateFromCurrRound(stateRound);
-      logger.debug(
-        CHANNEL,
-        `State round: ${JSON.stringify(stateRound)}`,
-      );
-      logger.debug(
-        CHANNEL,
-        `State global: ${JSON.stringify(stateGlobal)}`,
-      );
+      logger.debug(CHANNEL, `State round: ${JSON.stringify(stateRound)}`);
+      logger.debug(CHANNEL, `State global: ${JSON.stringify(stateGlobal)}`);
 
       // Early exit for repetition
       if (checkForMassiveRepetition(toolState.lastResponse, newResponse)) {
-        logger.error(
-          CHANNEL,
-          `The new response is: ${newResponse}`,
-        );
+        logger.error(CHANNEL, `The new response is: ${newResponse}`);
         logger.error(
           CHANNEL,
           'Massive repetition detected - skipping this response',
@@ -505,10 +484,7 @@ export abstract class BaseReflectionAgent {
         logger.debug(CHANNEL, `Creating new file: ${outputFile}`);
         await writeFile(outputFile, processedResponse);
       } else {
-        logger.debug(
-          CHANNEL,
-          `Appending to existing file: ${outputFile}`,
-        );
+        logger.debug(CHANNEL, `Appending to existing file: ${outputFile}`);
         await appendFile(outputFile, bestConnector + processedResponse);
       }
 
@@ -946,10 +922,7 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.toolConfig.autoExtractTikzFigureReflect
     ) {
       for (const outputFile of outputFiles) {
-        logger.debug(
-          CHANNEL,
-          `Extracting TikZ figures from ${outputFile}`,
-        );
+        logger.debug(CHANNEL, `Extracting TikZ figures from ${outputFile}`);
         const extractedTikzFigures =
           await extractAndCompileTikzPicturesWithLabels(outputFile);
         if (extractedTikzFigures) {

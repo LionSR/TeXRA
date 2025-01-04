@@ -8,7 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { readFile, writeFile } from '../utils/fileUtils';
+import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import { filterTagsFromText, extractTextFromTags } from '../utils/xmlUtils';
 import {
   applyReplacementRegex,
@@ -172,10 +172,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // Anthropic specific empty response check
       const errorMsg = 'No output generated - API returned empty response';
       logger.error(CHANNEL, errorMsg);
-      logger.debug(
-        CHANNEL,
-        `responseObject: ${responseObject}`,
-      );
+      logger.debug(CHANNEL, `responseObject: ${responseObject}`);
       logger.debug(
         CHANNEL,
         `responseObject.content: ${responseObject.content}`,
@@ -213,16 +210,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
       );
       const extractedResponse = extractTextFromTags(newResponse, 'output');
       if (extractedResponse !== newResponse) {
-        logger.warn(
-          CHANNEL,
-          'Extracted content from <output> tags',
-        );
+        logger.warn(CHANNEL, 'Extracted content from <output> tags');
         newResponse = extractedResponse;
       } else {
-        logger.warn(
-          CHANNEL,
-          'No <output> tags found in response',
-        );
+        logger.warn(CHANNEL, 'No <output> tags found in response');
       }
     }
 
@@ -344,100 +335,90 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    try {
-      // Get prefill from existing and non-trivial file
-      let fileContent = await readFile(outputFile);
+    // Check if file doesn't exist or is too small
+    if (
+      !(await fileExists(outputFile)) ||
+      (await readFile(outputFile)).length <= 15
+    ) {
+      if (
+        agentConfig.toolConfig.usePrefillFromInput &&
+        toolState.firstKCharsFromInput
+      ) {
+        prefill += toolState.firstKCharsFromInput;
+        toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
+      }
 
-      if (!fileContent || fileContent.length <= 15) {
-        if (
-          agentConfig.toolConfig.usePrefillFromInput &&
-          toolState.firstKCharsFromInput
-        ) {
-          prefill += toolState.firstKCharsFromInput;
-          toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
-        }
+      logger.debug(CHANNEL, `Anthropic prefill: ${prefill}`);
 
-        logger.debug(CHANNEL, `Anthropic prefill: ${prefill}`);
+      if (
+        toolState.accumulatedOutput === '<scratchpad>' &&
+        prefill === '<scratchpad>'
+      ) {
+        await writeFile(outputFile, prefill);
+      } else if (agentSettings.outputExt === 'xml') {
+        await writeFile(outputFile, prefill + '\n');
+      }
 
-        if (
-          toolState.accumulatedOutput === '<scratchpad>' &&
-          prefill === '<scratchpad>'
-        ) {
-          await writeFile(outputFile, prefill);
-        } else if (agentSettings.outputExt === 'xml') {
-          await writeFile(outputFile, prefill + '\n');
-        }
+      messages.push({ role: 'assistant', content: prefill });
+      return [false, messages];
+    }
 
-        messages.push({ role: 'assistant', content: prefill });
-        return [false, messages];
+    // Get prefill from existing and non-trivial file
+    let fileContent = await readFile(outputFile);
+
+    if (
+      this.capabilities.likesToAskForConfirmation &&
+      agentConfig.toolConfig.autoConfirmation
+    ) {
+      fileContent = filterTagsFromText(fileContent, 'monologue');
+      fileContent = applyReplacementRegex(
+        fileContent,
+        getReplacementsByCategory('autoConfirmation'),
+        'gms',
+      );
+    }
+    fileContent = fileContent.trim();
+
+    if (hasEndTag(agentSettings, fileContent)) {
+      logger.debug(CHANNEL, 'End tag detected - skipping continuation');
+      if (Array.isArray(messages[messages.length - 1].content)) {
+        messages[messages.length - 1].content[
+          messages[messages.length - 1].content.length - 1
+        ].text = fileContent;
+      } else {
+        messages[messages.length - 1].content = fileContent;
       }
 
       if (
-        this.capabilities.likesToAskForConfirmation &&
-        agentConfig.toolConfig.autoConfirmation
+        messages[messages.length - 1].content[
+          messages[messages.length - 1].content.length - 1
+        ]?.cache_control
       ) {
-        fileContent = filterTagsFromText(fileContent, 'monologue');
-        fileContent = applyReplacementRegex(
-          fileContent,
-          getReplacementsByCategory('autoConfirmation'),
-          'gms',
-        );
+        delete messages[messages.length - 1].content[
+          messages[messages.length - 1].content.length - 1
+        ].cache_control;
       }
-      fileContent = fileContent.trim();
-
-      if (hasEndTag(agentSettings, fileContent)) {
-        logger.debug(
-          CHANNEL,
-          'End tag detected - skipping continuation',
-        );
-        if (Array.isArray(messages[messages.length - 1].content)) {
-          messages[messages.length - 1].content[
-            messages[messages.length - 1].content.length - 1
-          ].text = fileContent;
-        } else {
-          messages[messages.length - 1].content = fileContent;
-        }
-
-        if (
-          messages[messages.length - 1].content[
-            messages[messages.length - 1].content.length - 1
-          ].cache_control
-        ) {
-          delete messages[messages.length - 1].content[
-            messages[messages.length - 1].content.length - 1
-          ].cache_control;
-        }
-        return [true, messages];
-      }
-
-      logger.warn(
-        CHANNEL,
-        'Output file exists but no end tag found - continuing from file',
-      );
-      toolState.updateAccumulatedOutput(fileContent);
-      const content = this.capabilities.supportsPromptCaching
-        ? [
-            {
-              type: 'text',
-              text: fileContent,
-              cache_control: { type: 'ephemeral' },
-            },
-          ]
-        : fileContent;
-      logger.debug(
-        CHANNEL,
-        `Using existing content as prefill: ${outputFile}`,
-      );
-
-      messages.push({ role: 'assistant', content });
-      return [false, messages];
-    } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Error reading/writing file: ${error}`,
-      );
-      return [false, messages];
+      return [true, messages];
     }
+
+    logger.warn(
+      CHANNEL,
+      'Output file exists but no end tag found - continuing from file',
+    );
+    toolState.updateAccumulatedOutput(fileContent);
+    const content = this.capabilities.supportsPromptCaching
+      ? [
+          {
+            type: 'text',
+            text: fileContent,
+            cache_control: { type: 'ephemeral' },
+          },
+        ]
+      : fileContent;
+    logger.debug(CHANNEL, `Using existing content as prefill: ${outputFile}`);
+
+    messages.push({ role: 'assistant', content });
+    return [false, messages];
   }
 
   /** Compute the price for token usage. */
@@ -487,10 +468,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    logger.debug(
-      CHANNEL,
-      'Updating message content for Anthropic models',
-    );
+    logger.debug(CHANNEL, 'Updating message content for Anthropic models');
     if (messages[messages.length - 1].role === 'assistant') {
       const lastMessage = messages[messages.length - 1];
 
