@@ -440,7 +440,8 @@ export abstract class BaseReflectionAgent {
       logger.debug(CHANNEL, `State global: ${JSON.stringify(stateGlobal)}`);
 
       // Early exit for repetition
-      if (checkForMassiveRepetition(toolState.lastResponse, newResponse)) {
+      const repetitionResult = checkForMassiveRepetition(toolState.lastResponse, newResponse);
+      if (repetitionResult.massiveRepetitionDetected) {
         logger.error(CHANNEL, `The new response is: ${newResponse}`);
         logger.error(
           CHANNEL,
