@@ -20,6 +20,9 @@ import { ToolState } from './ToolState';
 
 const K_SLICE = 200;
 
+const CHANNEL = 'Agent';
+logger.initializeLogging(CHANNEL);
+
 /**
  * OpenAI-specific handlers.
  */
@@ -27,7 +30,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Get OpenAI client. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
-    logger.info('ModelHandlerOpenAI', 'Using OpenAI API key.');
+    logger.info(CHANNEL, 'Using OpenAI API key.');
     return new OpenAI({ apiKey });
   }
 
@@ -139,8 +142,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): [string, any, string] {
     if (!responseObject.choices?.length) {
       const errorMsg = 'Invalid response from API: missing choices';
-      logger.error('ModelHandlerOpenAI', errorMsg);
-      logger.debug('ModelHandlerOpenAI', responseObject);
+      logger.error(CHANNEL, errorMsg);
+      logger.debug(CHANNEL, responseObject);
       throw new Error(errorMsg);
     }
 
@@ -168,7 +171,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Skip if model supports assistant prefill
     if (this.capabilities.supportsAssistantPrefill) {
       logger.debug(
-        'ModelHandlerOpenAI',
+        CHANNEL,
         'Skipping continuation - assistant prefill is supported',
       );
       return;
@@ -185,11 +188,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Add continuation message
     logger.info(
-      'ModelHandlerOpenAI',
+      CHANNEL,
       'Adding continuation message to conversation',
     );
     logger.debug(
-      'ModelHandlerOpenAI',
+      CHANNEL,
       `Continuation message: ${userMessageContinuation}`,
     );
     messages.push({
@@ -231,7 +234,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       if (hasEndTag(agentSettings, fileContent)) {
         logger.debug(
-          'ModelHandlerOpenAI',
+          CHANNEL,
           'End tag detected - skipping continuation',
         );
         if (Array.isArray(messages[messages.length - 1].content)) {
@@ -245,7 +248,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
 
       logger.warn(
-        'ModelHandlerOpenAI',
+        CHANNEL,
         'Output file exists but no end tag found - continuing from file',
       );
       toolState.updateAccumulatedOutput(fileContent);
@@ -261,7 +264,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       return [false, messages];
     } catch (error) {
-      logger.error('ModelHandlerOpenAI', `Error reading file: ${error}`);
+      logger.error(CHANNEL, `Error reading file: ${error}`);
       return [false, messages];
     }
   }
@@ -335,13 +338,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
     autoConfirmation = false,
   ): void {
     logger.debug(
-      'ModelHandlerOpenAI',
+      CHANNEL,
       'Updating message content for OpenAI API compatible models',
     );
 
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
     if (messages[messages.length - 1].role === 'user') {
-      logger.debug('ModelHandlerOpenAI', 'Last message is a user message');
+      logger.debug(CHANNEL, 'Last message is a user message');
       if (
         messages[messages.length - 1].content.includes(
           'Your response got cut off',
@@ -356,7 +359,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
             });
           } else {
             logger.error(
-              'ModelHandlerOpenAI',
+              CHANNEL,
               'Second last message content is not a list',
             );
             messages[messages.length - 2].content = toolState.accumulatedOutput;
@@ -366,7 +369,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         }
       } else {
         logger.debug(
-          'ModelHandlerOpenAI',
+          CHANNEL,
           'Last message is a request message rather than a ask to continue after cut off',
         );
         // otherwise last message is a request message rather than a ask to continue after cut off
@@ -385,7 +388,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     agentSettings: AgentSettings,
   ): boolean {
     logger.info(
-      'ModelHandlerOpenAI',
+      CHANNEL,
       'Determining if should continue for OpenAI model via OpenAI API',
     );
     return stopReason === 'length' && !hasEndTag(agentSettings, newResponse);

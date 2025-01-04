@@ -81,19 +81,19 @@ export abstract class BaseReflectionAgent {
     this.agentPath = agentPath;
 
     logger.debug(
-      'BaseReflectionAgent',
+      CHANNEL,
       `AgentConfig: ${JSON.stringify(this.agentConfig)}\n`,
     );
     logger.debug(
-      'BaseReflectionAgent',
+      CHANNEL,
       `AgentSettings: ${JSON.stringify(this.agentSettings)}\n`,
     );
 
     logger.debug(
-      'BaseReflectionAgent',
+      CHANNEL,
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
     );
-    logger.debug('BaseReflectionAgent', `ModelHandler: ${this.modelHandler}\n`);
+    logger.debug(CHANNEL, `ModelHandler: ${this.modelHandler}\n`);
 
     // Initialize basic attributes
     this.outputFile = ['', ''];
@@ -124,7 +124,7 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.inputFile,
     ];
     logger.info(
-      'BaseReflectionAgent',
+      CHANNEL,
       `Processing file: ${this.agentConfig.inputFile}`,
     );
 
@@ -251,12 +251,12 @@ export abstract class BaseReflectionAgent {
             userVars[`${varName}_FILE`] = filePath;
             userVars[`${varName}_CONTENT`] = fileContent;
             logger.info(
-              'BaseReflectionAgent',
+              CHANNEL,
               `Found from [Required Files] the [VAR '${varName}']: ${filePath}`,
             );
           } catch (err) {
             logger.warn(
-              'BaseReflectionAgent',
+              CHANNEL,
               `[Required file] ${filePath} not found from [VAR '${varName}']`,
             );
           }
@@ -275,12 +275,12 @@ export abstract class BaseReflectionAgent {
           userVars[`${varName}_FILE`] = fullPath;
           userVars[`${varName}_CONTENT`] = fileContent;
           logger.info(
-            'BaseReflectionAgent',
+            CHANNEL,
             `Found from [Required Files Internal] the [VAR '${varName}']: ${fullPath}`,
           );
         } catch (err) {
           logger.warn(
-            'BaseReflectionAgent',
+            CHANNEL,
             `[Required file internal] ${fullPath} not found from [VAR '${varName}']`,
           );
         }
@@ -316,12 +316,12 @@ export abstract class BaseReflectionAgent {
                 userVars[`${varName}_FILE`] = categoryValue;
                 userVars[`${varName}_CONTENT`] = fileContent;
                 logger.info(
-                  'BaseReflectionAgent',
+                  CHANNEL,
                   `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${categoryValue}`,
                 );
               } catch (err) {
                 logger.warn(
-                  'BaseReflectionAgent',
+                  CHANNEL,
                   `File ${categoryValue} not found from [Pattern '${pattern}']`,
                 );
               }
@@ -336,13 +336,13 @@ export abstract class BaseReflectionAgent {
                     userVars[`${varName}_FILE`] = file;
                     userVars[`${varName}_CONTENT`] = fileContent;
                     logger.info(
-                      'BaseReflectionAgent',
+                      CHANNEL,
                       `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${file}`,
                     );
                     break; // Stop after first match
                   } catch (err) {
                     logger.warn(
-                      'BaseReflectionAgent',
+                      CHANNEL,
                       `File ${file} not found from [Pattern '${pattern}']`,
                     );
                   }
@@ -423,7 +423,7 @@ export abstract class BaseReflectionAgent {
       const responseTime = (Date.now() - startTime) / 1000;
       stateRound.updateResponseTime(responseTime);
       logger.info(
-        'BaseReflectionAgent',
+        CHANNEL,
         `Response time: ${responseTime.toFixed(2)}s`,
       );
 
@@ -435,9 +435,9 @@ export abstract class BaseReflectionAgent {
           this.agentConfig.toolConfig.autoConfirmation,
         );
 
-      logger.info('BaseReflectionAgent', `Stop reason: ${stopReason}`);
+      logger.info(CHANNEL, `Stop reason: ${stopReason}`);
       logger.info(
-        'BaseReflectionAgent',
+        CHANNEL,
         `Token usage: ${JSON.stringify(responseUsage)}`,
       );
 
@@ -449,22 +449,22 @@ export abstract class BaseReflectionAgent {
       stateRound.updateTokenCounts(APIUsage);
       stateGlobal.updateFromCurrRound(stateRound);
       logger.debug(
-        'BaseReflectionAgent',
+        CHANNEL,
         `State round: ${JSON.stringify(stateRound)}`,
       );
       logger.debug(
-        'BaseReflectionAgent',
+        CHANNEL,
         `State global: ${JSON.stringify(stateGlobal)}`,
       );
 
       // Early exit for repetition
       if (checkForMassiveRepetition(toolState.lastResponse, newResponse)) {
         logger.error(
-          'BaseReflectionAgent',
+          CHANNEL,
           `The new response is: ${newResponse}`,
         );
         logger.error(
-          'BaseReflectionAgent',
+          CHANNEL,
           'Massive repetition detected - skipping this response',
         );
         break;
@@ -502,24 +502,24 @@ export abstract class BaseReflectionAgent {
 
       // Write or append to output file
       if (!exists) {
-        logger.debug('BaseReflectionAgent', `Creating new file: ${outputFile}`);
+        logger.debug(CHANNEL, `Creating new file: ${outputFile}`);
         await writeFile(outputFile, processedResponse);
       } else {
         logger.debug(
-          'BaseReflectionAgent',
+          CHANNEL,
           `Appending to existing file: ${outputFile}`,
         );
         await appendFile(outputFile, bestConnector + processedResponse);
       }
 
       // Log response boundaries
-      logger.info('BaseReflectionAgent', 'Response preview:');
+      logger.info(CHANNEL, 'Response preview:');
       logger.debug(
-        'BaseReflectionAgent',
+        CHANNEL,
         `First ${K_SLICE} chars: ${processedResponse.slice(0, K_SLICE)}`,
       );
       logger.debug(
-        'BaseReflectionAgent',
+        CHANNEL,
         `Last ${K_SLICE} chars: ${processedResponse.slice(-K_SLICE)}`,
       );
 
@@ -548,7 +548,7 @@ export abstract class BaseReflectionAgent {
       // Handle continuation
       stateRound.incrementContinuation();
       logger.info(
-        'BaseReflectionAgent',
+        CHANNEL,
         `Starting continuation #${stateRound.continuationCount}`,
       );
 
@@ -561,7 +561,7 @@ export abstract class BaseReflectionAgent {
         )
       ) {
         logger.info(
-          'BaseReflectionAgent',
+          CHANNEL,
           'Should continue - adding continuation message to conversation',
         );
         this.modelHandler.addContinueMessage(
@@ -602,10 +602,10 @@ export abstract class BaseReflectionAgent {
     this.handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound);
     const inputInfo = `input file ${this.agentConfig.inputFile} and/or input files ${this.agentConfig.inputFiles}`;
     logger.info(
-      'BaseReflectionAgent',
+      CHANNEL,
       `\n\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
     );
-    logger.info('BaseReflectionAgent', `Completed round ${currRound}`);
+    logger.info(CHANNEL, `Completed round ${currRound}`);
   }
 
   /**
@@ -691,7 +691,7 @@ export abstract class BaseReflectionAgent {
 
     // Initialize state and messages
     const currRound = 0;
-    logger.info('BaseReflectionAgent', `\n\nProcessing round ${currRound}`);
+    logger.info(CHANNEL, `\n\nProcessing round ${currRound}`);
     const stateGlobal = AgentStateGlobal.initialize();
 
     const messages: any[] = [];
@@ -834,7 +834,7 @@ export abstract class BaseReflectionAgent {
     }
 
     // Initialize reflection round
-    logger.info('BaseReflectionAgent', `\n\nProcessing round ${currRound}`);
+    logger.info(CHANNEL, `\n\nProcessing round ${currRound}`);
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
@@ -947,7 +947,7 @@ export abstract class BaseReflectionAgent {
     ) {
       for (const outputFile of outputFiles) {
         logger.debug(
-          'BaseReflectionAgent',
+          CHANNEL,
           `Extracting TikZ figures from ${outputFile}`,
         );
         const extractedTikzFigures =
