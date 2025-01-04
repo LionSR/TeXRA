@@ -108,6 +108,8 @@ export class OutputHandler {
     if (splitAndSaveThinking) {
       const logFileThinking = `${baseName}_thinking.xml`;
       logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
+
+      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
       const scratchpad = root.find(thinkingTag);
       if (scratchpad) {
         const scratchpadContent = scratchpad.content.trim();
@@ -188,7 +190,7 @@ export class OutputHandler {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    const rootContent = `<root>${outputContent}</root>`;
+    // const rootContent = `<root>${outputContent}</root>`;
 
     try {
       const parser = new XMLParser({
@@ -197,7 +199,13 @@ export class OutputHandler {
         parseTagValue: false,
         textNodeName: 'content',
       });
-      const root = parser.parse(rootContent);
+      // const root = parser.parse(rootContent);
+      const root = parser.parse(outputContent)[0];
+
+      logger.debug(
+        CHANNEL,
+        `Root: ${JSON.stringify(root)}`,
+      );
 
       await this.handleScratchpad(
         root,
@@ -238,19 +246,22 @@ export class OutputHandler {
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
 
-    const rootContent = `<root>${outputContent}</root>`;
+    // const rootContent = `<root>${outputContent}</root>`;
 
     try {
       const parser = new XMLParser({
-        ignoreAttributes: true,
+        ignoreAttributes: false,
         preserveOrder: true,
         parseTagValue: false,
         textNodeName: 'content',
       });
-      const root = parser.parse(rootContent);
-      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-      logger.debug(CHANNEL, `root.root: ${JSON.stringify(root.root)}`);
+      // const root = parser.parse(rootContent);
+      const root = parser.parse(outputContent)[0];
 
+      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
+
+
+      // Handle scratchpad
       await this.handleScratchpad(
         root,
         name,
@@ -258,9 +269,10 @@ export class OutputHandler {
         splitAndSaveThinking,
       );
 
-      const latexDocuments = root.root[documentTag];
-      if (latexDocuments) {
-        return this.processLatexDocuments(latexDocuments, outputFile);
+      // Find all document elements
+      const documents = root.find((item: any) => item[documentTag]);
+      if (documents) {
+        return this.processLatexDocuments(documents[documentTag], outputFile);
       }
 
       logger.error(CHANNEL, `No ${documentTag} found in output file.`);
@@ -274,8 +286,8 @@ export class OutputHandler {
     }
   }
 
-  public async processLatexDocuments(
-    latexDocuments: any,
+  async processLatexDocuments(
+    latexDocuments: any[],
     outputFile: string,
   ): Promise<string[]> {
     const outputFiles: string[] = [];
@@ -287,28 +299,27 @@ export class OutputHandler {
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
-      const source = doc.name;
-      logger.debug(CHANNEL, `XML Source: ${source}`);
-      const content = doc.content;
+      if (doc.document) {
+        const source = doc.document['@_name'] || '';
+        logger.debug(CHANNEL, `XML Source: ${source}`);
+        const content = doc.document.content;
 
-      if (source && content) {
-        const { name: baseName, ext } = path.parse(source);
-        const extension = ext.replace('.', '');
-        const texFile = getOutputFileName(
-          baseName,
-          agent,
-          model,
-          extension,
-          currRound,
-        );
-        await writeFile(texFile, content.trim());
-        outputFiles.push(texFile);
-        logger.debug(CHANNEL, `TeX file written: ${texFile}`);
-      } else {
-        logger.error(
-          CHANNEL,
-          `Invalid document structure in ${latexDocuments.tag}`,
-        );
+        if (source && content) {
+          const { name: baseName, ext } = path.parse(source);
+          const extension = ext.replace('.', '');
+          const texFile = getOutputFileName(
+            baseName,
+            agent,
+            model,
+            extension,
+            currRound,
+          );
+          await writeFile(texFile, content.trim());
+          outputFiles.push(texFile);
+          logger.debug(CHANNEL, `TeX file written: ${texFile}`);
+        } else {
+          logger.error(CHANNEL, `Invalid document structure in document tag`);
+        }
       }
     }
 
@@ -382,7 +393,10 @@ export class OutputHandler {
     outputFiles: string[],
   ): Promise<void> {
     if (!baseFiles?.length || !outputFiles?.length) {
-      logger.debug(CHANNEL, 'No files to process for input command replacement');
+      logger.debug(
+        CHANNEL,
+        'No files to process for input command replacement',
+      );
       return;
     }
 
