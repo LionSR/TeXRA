@@ -440,7 +440,10 @@ export abstract class BaseReflectionAgent {
       logger.debug(CHANNEL, `State global: ${JSON.stringify(stateGlobal)}`);
 
       // Early exit for repetition
-      const repetitionResult = checkForMassiveRepetition(toolState.lastResponse, newResponse);
+      const repetitionResult = checkForMassiveRepetition(
+        toolState.lastResponse,
+        newResponse,
+      );
       if (repetitionResult.massiveRepetitionDetected) {
         logger.error(CHANNEL, `The new response is: ${newResponse}`);
         logger.error(
@@ -947,7 +950,8 @@ export abstract class BaseReflectionAgent {
   ): Promise<void> {
     if (this.agentConfig.outputFiles) {
       // Multiple output files case
-      const processedFiles = await this.outputHandler.processMultipleOutputs(outputFile);
+      const processedFiles =
+        await this.outputHandler.processMultipleOutputs(outputFile);
       await this.outputHandler.handleMultipleOutputs(processedFiles);
       this.outputHandler.outputFiles[currRound] = processedFiles;
       await this.outputHandler.replaceInputCommands(
@@ -956,7 +960,8 @@ export abstract class BaseReflectionAgent {
       );
     } else {
       // Single output file case
-      const processedFile = await this.outputHandler.processSingleOutput(outputFile);
+      const processedFile =
+        await this.outputHandler.processSingleOutput(outputFile);
       await this.outputHandler.handleSingleOutput(processedFile);
       this.outputHandler.outputFiles[currRound] = [processedFile];
     }
