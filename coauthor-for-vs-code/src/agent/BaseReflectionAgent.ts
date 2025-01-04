@@ -358,13 +358,12 @@ export abstract class BaseReflectionAgent {
     const userVars: Record<string, any> = {};
 
     // Handle output files order - use defaultOutputFiles if no outputFiles specified
-    if (this.agentConfig.outputFiles) {
+    if (Array.isArray(this.agentConfig.outputFiles) && this.agentConfig.outputFiles.length > 0) {
       userVars.OUTPUT_FILES_ORDER = this.agentConfig.outputFiles.join(', ');
-    } else if (this.agentSettings.defaultOutputFiles) {
+    } else if (Array.isArray(this.agentSettings.defaultOutputFiles) && this.agentSettings.defaultOutputFiles.length > 0) {
       // If no outputFiles specified but defaultOutputFiles exists in settings
       this.agentConfig.outputFiles = this.agentSettings.defaultOutputFiles;
-      userVars.OUTPUT_FILES_ORDER =
-        this.agentSettings.defaultOutputFiles.join(', ');
+      userVars.OUTPUT_FILES_ORDER = this.agentSettings.defaultOutputFiles.join(', ');
     }
 
     return userVars;
