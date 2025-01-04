@@ -91,9 +91,9 @@ export class OutputHandler {
   }
 
   public extractDocumentContent(root: any, documentTag: string): string | null {
-    const latexDocument = root[documentTag];
+    const latexDocument = root.find(documentTag);
     if (latexDocument) {
-      return latexDocument.trim();
+      return latexDocument.content.trim();
     }
     logger.error(CHANNEL, `No ${documentTag} found in output file`);
     return null;
@@ -108,9 +108,9 @@ export class OutputHandler {
     if (splitAndSaveThinking) {
       const logFileThinking = `${baseName}_thinking.xml`;
       logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
-      const scratchpad = root[thinkingTag];
+      const scratchpad = root.find(thinkingTag);
       if (scratchpad) {
-        const scratchpadContent = scratchpad.trim();
+        const scratchpadContent = scratchpad.content.trim();
         await writeFile(
           logFileThinking,
           `<scratchpad>\n${scratchpadContent}\n</scratchpad>\n`,
@@ -192,8 +192,10 @@ export class OutputHandler {
 
     try {
       const parser = new XMLParser({
-        ignoreAttributes: false,
+        ignoreAttributes: true,
         preserveOrder: true,
+        parseTagValue: false,
+        textNodeName: 'content',
       });
       const root = parser.parse(rootContent);
 
@@ -240,10 +242,14 @@ export class OutputHandler {
 
     try {
       const parser = new XMLParser({
-        ignoreAttributes: false,
+        ignoreAttributes: true,
         preserveOrder: true,
+        parseTagValue: false,
+        textNodeName: 'content',
       });
       const root = parser.parse(rootContent);
+      logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
+      logger.debug(CHANNEL, `root.root: ${JSON.stringify(root.root)}`);
 
       await this.handleScratchpad(
         root,
@@ -252,7 +258,7 @@ export class OutputHandler {
         splitAndSaveThinking,
       );
 
-      const latexDocuments = root[documentTag];
+      const latexDocuments = root.root[documentTag];
       if (latexDocuments) {
         return this.processLatexDocuments(latexDocuments, outputFile);
       }
@@ -375,6 +381,11 @@ export class OutputHandler {
     baseFiles: string[],
     outputFiles: string[],
   ): Promise<void> {
+    if (!baseFiles?.length || !outputFiles?.length) {
+      logger.debug(CHANNEL, 'No files to process for input command replacement');
+      return;
+    }
+
     const baseToOutput = new Map(
       baseFiles.map((bf, i) => [
         path.basename(bf),
@@ -383,6 +394,7 @@ export class OutputHandler {
     );
 
     for (const outputFile of outputFiles) {
+      if (!outputFile) continue;
       const content = await readFile(outputFile);
       const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
         baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
