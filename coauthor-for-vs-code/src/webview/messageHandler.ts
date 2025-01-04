@@ -150,7 +150,7 @@ export class WebviewMessageHandler {
       const agentConfig: AgentConfig = {
         agent: message.agent,
         model: message.model,
-        reflect: message.reflect,
+        reflect: message.reflect === 'True',
         instruction: message.instructions,
         inputFile: message.inputFile,
         inputFiles: getFilesIfNotEmpty(message.inputFiles),
