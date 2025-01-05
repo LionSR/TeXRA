@@ -245,7 +245,7 @@ export class OutputHandler {
   }
 
   async processLatexDocuments(
-    latexDocuments: any[],
+    latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
   ): Promise<string[]> {
     const outputFiles: string[] = [];
@@ -257,14 +257,14 @@ export class OutputHandler {
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
-      if (doc['@_name']) {
-        const source = doc['@_name'];
+      if (doc.name) {
+        const source = doc.name;
         logger.debug(CHANNEL, `XML Source: ${source}`);
         const content = doc.content;
 
         if (source && content) {
           const { name: baseName, ext } = path.parse(source);
-          const extension = ext.replace('.', '');
+          const extension = ext.replace('.', '') || 'tex';
           const texFile = getOutputFileName(
             baseName,
             agent,
