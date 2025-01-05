@@ -72,7 +72,7 @@
   - New argument for using prefill from input file
 - **Changed:**
   - Refactored codebase to improve readability, organization, and efficiency
-  - Optimized model pricing calculation in compute_price function
+  - Optimized model pricing calculation in computePrice function
   - Updated MODEL_MAPPING in openai_utils.py
   - Improved handling of user variables in prompt_utils.py
   - Created common utility functions for housekeeping agents

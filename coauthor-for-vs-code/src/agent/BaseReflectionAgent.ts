@@ -986,6 +986,6 @@ export abstract class BaseReflectionAgent {
       this.outputHandler.outputFiles[currRound] = [processedFile];
     }
 
-    await this.outputHandler.handleLatexDiff(currRound);
+    await this.outputHandler.handleLatexdiff(currRound);
   }
 }

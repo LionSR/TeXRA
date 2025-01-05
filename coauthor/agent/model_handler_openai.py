@@ -6,9 +6,10 @@ from typing import Any
 
 from ..logger import logger
 
-from ..agent.agent_state import AgentStateRound
-from ..agent import AgentSetting, AgentConfig
 from ..utils.file import readFile
+
+from .agent_state import AgentStateRound
+from .agent_dataclass import AgentSetting, AgentConfig
 
 from .model_handler import ModelHandler
 from .response_usage import OpenAIAPIResponseUsage
@@ -210,7 +211,7 @@ class OpenAIHandler(ModelHandler):
         # also here continue message is added here, not like later it was handled separately. We should make them consistent...
         return False, messages
 
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute price for OpenAI token usage."""
         # Handle Google models that return None for usage
         if responseUsage is None:
@@ -247,13 +248,13 @@ class OpenAIHandler(ModelHandler):
                         )(),
                     },
                 )(),
-                self.compute_price(responseUsage),
+                self.computePrice(responseUsage),
                 responseTime,
             )
 
-        return OpenAIAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
+        return OpenAIAPIResponseUsage.from_response(responseUsage, self.computePrice(responseUsage), responseTime)
 
-    def update_message_content(
+    def updateMessageContent(
         self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState, autoConfirmation: bool = False
     ) -> None:
         """Update message content for OpenAI models."""
