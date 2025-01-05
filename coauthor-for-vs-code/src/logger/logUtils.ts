@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import * as winston from 'winston';
 
 // Local imports - logView
-import { LogViewProvider } from '../logView/LogViewProvider';
+import { LogViewProvider } from './LogViewProvider';
 
 const { combine, timestamp, printf, json } = winston.format;
 
