@@ -3,7 +3,7 @@ import difflib
 from ..logger import logger
 
 
-def check_for_massive_repetition(lastResponse: str, newResponse: str) -> bool:
+def checkForMassiveRepetition(lastResponse: str, newResponse: str) -> bool:
     """Check if there is significant text repetition between responses."""
     sequence_matcher = difflib.SequenceMatcher(None, lastResponse, newResponse)
     repetition_ratio = sequence_matcher.ratio()

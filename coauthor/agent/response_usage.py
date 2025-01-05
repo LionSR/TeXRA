@@ -61,7 +61,7 @@ class OpenAIAPIResponseUsage(ResponseUsageBase):
             percentageCached=percentageCached,
             cost=cost,
             responseTime=responseTime,
-            # relevant fields from openai api response
+            # relevant fields from openai api response in snake_case
             prompt_tokens=responseUsage.prompt_tokens,
             completion_tokens=responseUsage.completion_tokens,
             cached_tokens=cached_tokens,
@@ -97,7 +97,7 @@ class AnthropicAPIResponseUsage(ResponseUsageBase):
             percentageCached=percentageCached,
             cost=cost,
             responseTime=responseTime,
-            # relevant fields from anthropic api response
+            # relevant fields from anthropic api response in snake_case
             input_tokens=responseUsage.input_tokens,
             output_tokens=responseUsage.output_tokens,
             cache_read_input_tokens=cache_read_input_tokens,

@@ -1,7 +1,7 @@
 /**
  * Default settings for agent configuration
  */
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
+export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   agentType: 'CoT',
   documentTag: 'document',
   temperature: 0.0,
@@ -17,7 +17,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
 /**
  * Default prompts for agent configuration
  */
-export const DEFAULT_AGENT_PROMPTS: AgentPrompts = {
+export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
   systemPrompt: '',
   userPrefix: '',
   userRequest: '',
@@ -27,7 +27,7 @@ export const DEFAULT_AGENT_PROMPTS: AgentPrompts = {
 /**
  * Configuration for agent behavior and generation settings
  */
-export interface AgentSettings {
+export interface AgentSetting {
   /** Core settings */
   agentType: 'CoT' | 'direct';
   documentTag: string;
@@ -49,7 +49,7 @@ export interface AgentSettings {
  * Validates agent settings
  * @throws Error if settings are invalid
  */
-export function validateAgentSettings(settings: AgentSettings): void {
+export function validateAgentSetting(settings: AgentSetting): void {
   if (settings.agentType !== 'CoT' && settings.agentType !== 'direct') {
     throw new Error(
       `Invalid agentType: ${settings.agentType}. Must be 'CoT' or 'direct'`,
@@ -74,7 +74,7 @@ export function validateAgentSettings(settings: AgentSettings): void {
  * Checks if file content contains the end tag or document tag
  */
 export function hasEndTag(
-  settings: AgentSettings,
+  settings: AgentSetting,
   fileContent: string,
 ): boolean {
   return [
@@ -87,7 +87,7 @@ export function hasEndTag(
 /**
  * Configuration for agent prompts
  */
-export interface AgentPrompts {
+export interface AgentPrompt {
   systemPrompt: string;
   userPrefix: string;
   userRequest: string;

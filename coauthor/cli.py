@@ -3,10 +3,10 @@ import os
 import click
 from dotenv import load_dotenv
 from coauthor.latex import (
-    extract_figure_paths_from_latex,
+    extract_figurePaths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_texcount
+from coauthor.latex import runLatexdiff, runLatexdiffvc, runLatexdiffvc_multiple, getTexcount
 from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
@@ -163,7 +163,7 @@ def pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride):
 @click.option("--editedFile", required=True, help="Path to the edited file")
 def latexdiff(inputFile, editedFile):
     """Run latexdiff on the given input and edited files."""
-    diff_file = run_latexdiff(inputFile, editedFile)
+    diff_file = runLatexdiff(inputFile, editedFile)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
@@ -173,7 +173,7 @@ def latexdiff(inputFile, editedFile):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 def latexdiff_vc(inputFile, commitHash):
     """Run latexdiff-vc on the given input file and commit hash."""
-    diff_file = run_latexdiff_vc(inputFile, commitHash)
+    diff_file = runLatexdiffvc(inputFile, commitHash)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
@@ -183,7 +183,7 @@ def latexdiff_vc(inputFile, commitHash):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 def latexdiff_vc_multiple(inputFiles, commitHash):
     """Run latexdiff-vc on multiple input files and commit hash."""
-    run_latexdiff_vc_multiple(inputFiles, commitHash)
+    runLatexdiffvc_multiple(inputFiles, commitHash)
 
 
 @cli.command()
@@ -203,24 +203,24 @@ def pack_latexdiff_vc_multiple(inputFiles, commitHash, clean):
 
 
 @cli.command()
-@click.argument("latex_file")
-def texcount(latex_file):
-    texCountStats = get_texcount(latex_file)
-    if texCountStats is not None:
-        logger.info(f"Statistics for {latex_file}:\n {texCountStats}")
+@click.argument("latexFile")
+def texcount(latexFile):
+    texcountStats = getTexcount(latexFile)
+    if texcountStats is not None:
+        logger.info(f"Statistics for {latexFile}:\n {texcountStats}")
 
 
 @cli.command()
-@click.argument("latex_file")
-def extract_figure_path(latex_file):
-    figure_paths = extract_figure_paths_from_latex(latex_file)
-    logger.info(f"Extracted figure file paths: {figure_paths}")
+@click.argument("latexFile")
+def extract_figure_path(latexFile):
+    figurePaths = extract_figurePaths_from_latex(latexFile)
+    logger.info(f"Extracted figure file paths: {figurePaths}")
 
 
 @cli.command()
-@click.argument("latex_file")
-def extract_tikzpictures(latex_file):
-    compiled_files = extract_and_compile_tikzpictures_with_labels(latex_file)
+@click.argument("latexFile")
+def extract_tikzpictures(latexFile):
+    compiled_files = extract_and_compile_tikzpictures_with_labels(latexFile)
     logger.info(f"Compiled TikZ pictures: {compiled_files}")
 
 

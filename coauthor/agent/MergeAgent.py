@@ -4,8 +4,8 @@ import re
 from ..logger import logger
 
 from .agent_config import AgentConfig
-from .agent_dataclass import AgentSettings, AgentPrompts
-from .agent_class_direct import DirectAgent
+from .agent_dataclass import AgentSetting, AgentPrompt
+from .DirectAgent import DirectAgent
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .model_handler import ModelHandler
 
@@ -17,37 +17,37 @@ class MergeAgent(DirectAgent):
         self,
         modelHandler: ModelHandler,
         agentConfig: AgentConfig,
-        agentSettings: AgentSettings,
-        agentPrompts: AgentPrompts,
+        agentSetting: AgentSetting,
+        agentPrompt: AgentPrompt,
         agentPath: str,
     ) -> None:
         """Initialize merge agent with model handler, configs, settings, prompts and path."""
-        super().__init__(modelHandler, agentConfig, agentSettings, agentPrompts, agentPath)
-        self.outputFile = [self.get_outputFile(r) for r in range(2)]
+        super().__init__(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath)
+        self.outputFile = [self.getOutputFile(r) for r in range(2)]
 
-    def _parse_filename_parts(self, edited_base: str) -> tuple[str, str, int, str]:
+    def _parseFilenameParts(self, editedBase: str) -> tuple[str, str, int, str]:
         """Parse filename parts to extract base name, agent, round number and model."""
-        parts = edited_base.split("_")
-        underscore_count = edited_base.count("_")
+        parts = editedBase.split("_")
+        underscoreCount = editedBase.count("_")
         base = parts[0]
 
         # Extract agent name
-        agent = self._extract_agentName(parts, underscore_count)
+        agent = self._extractAgentName(parts, underscoreCount)
         if agent is None:
-            raise ValueError(f"Could not extract agent name from edited base: {edited_base}")
+            raise ValueError(f"Could not extract agent name from edited base: {editedBase}")
 
         # Extract round number
-        round_match = re.search(r"_r(\d+)_", edited_base)
-        if not round_match:
-            raise ValueError(f"Could not extract round number from edited base: {edited_base}")
-        round_num = int(round_match.group(1))
+        roundMatch = re.search(r"_r(\d+)_", editedBase)
+        if not roundMatch:
+            raise ValueError(f"Could not extract round number from edited base: {editedBase}")
+        roundNum = int(roundMatch.group(1))
 
         # Get model name (last part)
         model = parts[-1]
 
-        return base, agent, round_num, model
+        return base, agent, roundNum, model
 
-    def get_outputFile(self, currRound: int) -> str:
+    def getOutputFile(self, currRound: int) -> str:
         """Generate output filename for merged content."""
         inputFile = self.agentConfig.inputFile
         editedFile = self.agentConfig.editedFile
@@ -55,31 +55,31 @@ class MergeAgent(DirectAgent):
         if not editedFile:
             raise ValueError("editedFile must be specified for merge handler")
 
-        input_dir = os.path.dirname(inputFile)
-        input_base, _ = os.path.splitext(os.path.basename(inputFile))
-        edited_base, _ = os.path.splitext(os.path.basename(editedFile))
+        inputDir = os.path.dirname(inputFile)
+        inputBase, _ = os.path.splitext(os.path.basename(inputFile))
+        editedBase, _ = os.path.splitext(os.path.basename(editedFile))
 
         # Parse filename components
-        base, agent, round_num, model = self._parse_filename_parts(edited_base)
+        base, agent, roundNum, model = self._parseFilenameParts(editedBase)
 
         # Use original input base if it differs from edited base
-        if input_base != base:
-            base = input_base
+        if inputBase != base:
+            base = inputBase
 
         # Construct output filename
-        outputFile = f"{base}_{agent}_r{round_num}_full_{model}.tex"
-        output_path = os.path.join(input_dir, outputFile)
+        outputFile = f"{base}_{agent}_r{roundNum}_full_{model}.tex"
+        output_path = os.path.join(inputDir, outputFile)
         logger.info(f"Merge output file: {output_path}")
         return output_path
 
-    def _extract_agentName(self, parts: list[str], underscore_count: int) -> str | None:
+    def _extractAgentName(self, parts: list[str], underscoreCount: int) -> str | None:
         """Extract agent name from filename parts.
 
         Handles two formats:
         - Standard: base_agent_r1_model
         - Complex: MutualInfo_restructured_polish_r1_sonnet++
         """
-        if underscore_count == 3:
+        if underscoreCount == 3:
             # Standard format
             return parts[1]
 
@@ -91,7 +91,7 @@ class MergeAgent(DirectAgent):
             agent_parts.append(part)
         return None
 
-    def handle_output(
+    def handleOutput(
         self,
         stateRound: AgentStateRound,
         stateGlobal: AgentStateGlobal,
@@ -101,7 +101,7 @@ class MergeAgent(DirectAgent):
     ) -> list[str]:
         """Process and handle output files for the current round."""
         if endTurn:
-            _files = super().handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound)
+            _files = super().handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound)
             logger.info(f"Output file: {outputFile}")
             return _files
         return []

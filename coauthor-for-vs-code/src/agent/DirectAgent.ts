@@ -1,4 +1,4 @@
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
@@ -20,7 +20,7 @@ export class DirectAgent extends BaseReflectionAgent {
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
-      this.agentSettings.outputExt,
+      this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
     );

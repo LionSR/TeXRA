@@ -4,57 +4,57 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getWorkspacePath } from '../utils/fileUtils';
 
 // Local imports - latex utils
-import { runLatexDiff, runLatexDiffVC } from '../latex/latexdiff';
+import { runLatexdiff, runLatexdiffvc } from '../latex/latexdiff';
 
 // Local imports - housekeeping
 import {
-  runPackLatexDiffVC,
-  runPackLatexDiffVCMultiple,
-  runCleanLatexDiffVC,
-  runCleanLatexDiffVCMultiple,
+  runPackLatexdiffvc,
+  runPackLatexdiffvcMultiple,
+  runCleanLatexdiffvc,
+  runCleanLatexdiffvcMultiple,
 } from '../housekeeping';
 
-const CHANNEL = 'LatexDiff';
+const CHANNEL = 'Latexdiff';
 
-export function registerLatexDiffCommands(context: vscode.ExtensionContext) {
+export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.latexdiff', handleLatexDiff),
-    vscode.commands.registerCommand('coauthor.latexdiffVC', handleLatexDiffVC),
+    vscode.commands.registerCommand('coauthor.latexdiff', handleLatexdiff),
+    vscode.commands.registerCommand('coauthor.latexdiffvc', handleLatexdiffvc),
     vscode.commands.registerCommand(
-      'coauthor.packLatexDiffVC',
-      handlePackLatexDiffVC,
+      'coauthor.packLatexdiffvc',
+      handlePackLatexdiffvc,
     ),
     vscode.commands.registerCommand(
-      'coauthor.packLatexDiffVCMultiple',
-      handlePackLatexDiffVCMultiple,
+      'coauthor.packLatexdiffvcMultiple',
+      handlePackLatexdiffvcMultiple,
     ),
     vscode.commands.registerCommand(
-      'coauthor.cleanLatexDiffVC',
-      handleCleanLatexDiffVC,
+      'coauthor.cleanLatexdiffvc',
+      handleCleanLatexdiffvc,
     ),
     vscode.commands.registerCommand(
-      'coauthor.cleanLatexDiffVCMultiple',
-      handleCleanLatexDiffVCMultiple,
+      'coauthor.cleanLatexdiffvcMultiple',
+      handleCleanLatexdiffvcMultiple,
     ),
   );
 }
 
-async function handleLatexDiff(
+async function handleLatexdiff(
   inputFile: string,
   baseFile: string,
   editedFile: string,
 ) {
   const fileToUse = baseFile || inputFile;
   try {
-    // Get the diff filename from runLatexDiff
-    const diffFileName = await runLatexDiff(fileToUse, editedFile);
+    // Get the diff filename from runLatexdiff
+    const diffFileName = await runLatexdiff(fileToUse, editedFile);
     if (!diffFileName) {
       throw new Error('Failed to generate diff file');
     }
@@ -106,15 +106,15 @@ async function handleLatexDiff(
   }
 }
 
-async function handleLatexDiffVC(
+async function handleLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
 ) {
   const fileToUse = baseFile || inputFile;
   try {
-    // Get the diff filename from runLatexDiffVC
-    const diffFileName = await runLatexDiffVC(fileToUse, commitHash);
+    // Get the diff filename from runLatexdiffvc
+    const diffFileName = await runLatexdiffvc(fileToUse, commitHash);
     if (!diffFileName) {
       throw new Error('Failed to generate diff file');
     }
@@ -162,7 +162,7 @@ async function handleLatexDiffVC(
   }
 }
 
-async function handlePackLatexDiffVC(
+async function handlePackLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
@@ -173,10 +173,10 @@ async function handlePackLatexDiffVC(
     `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
   );
   const fileToUse = baseFile || inputFile;
-  await runPackLatexDiffVC(fileToUse, commitHash, clean);
+  await runPackLatexdiffvc(fileToUse, commitHash, clean);
 }
 
-async function handlePackLatexDiffVCMultiple(
+async function handlePackLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
   clean: boolean,
@@ -186,10 +186,10 @@ async function handlePackLatexDiffVCMultiple(
     `Command called with: commitHash=${commitHash}, clean=${clean}`,
   );
   logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-  await runPackLatexDiffVCMultiple(inputFiles, commitHash, clean);
+  await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean);
 }
 
-async function handleCleanLatexDiffVC(
+async function handleCleanLatexdiffvc(
   inputFile: string,
   baseFile: string,
   commitHash: string,
@@ -199,23 +199,23 @@ async function handleCleanLatexDiffVC(
     `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
   );
   const fileToUse = baseFile || inputFile;
-  await runCleanLatexDiffVC(fileToUse, commitHash);
+  await runCleanLatexdiffvc(fileToUse, commitHash);
 }
 
-async function handleCleanLatexDiffVCMultiple(
+async function handleCleanLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
 ) {
   logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
   logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
-  await runCleanLatexDiffVCMultiple(inputFiles, commitHash);
+  await runCleanLatexdiffvcMultiple(inputFiles, commitHash);
 }
 
 export const latexdiffCommands = {
-  handleLatexDiff,
-  handleLatexDiffVC,
-  handlePackLatexDiffVC,
-  handlePackLatexDiffVCMultiple,
-  handleCleanLatexDiffVC,
-  handleCleanLatexDiffVCMultiple,
+  handleLatexdiff,
+  handleLatexdiffvc,
+  handlePackLatexdiffvc,
+  handlePackLatexdiffvcMultiple,
+  handleCleanLatexdiffvc,
+  handleCleanLatexdiffvcMultiple,
 };

@@ -27,7 +27,7 @@ CONFIRMATION_PROMPT_PATTERNS = [
 ]
 
 
-def wrap_confirmation_prompts(text: str) -> str:
+def wrapConfirmationPrompts(text: str) -> str:
     """Process text to wrap confirmation prompts in monologue tags."""
     lines = text.split("\n")
     processed_lines = []

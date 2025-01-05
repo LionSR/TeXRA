@@ -335,13 +335,13 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('latexdiffVCButton', 'click', function () {
+  addEventListenerSafely('latexdiffvcButton', 'click', function () {
     const inputFile = safeGetElementValue('inputFile');
     const baseFile = safeGetElementValue('baseFile');
     const commitHash = safeGetElementValue('commit');
 
     vscode.postMessage({
-      command: 'latexdiffVC',
+      command: 'latexdiffvc',
       inputFile: inputFile,
       baseFile: baseFile,
       commitHash: commitHash,
@@ -354,13 +354,13 @@ export function setupUIHandlers() {
   });
 
   ['pack', 'clean'].forEach((action) => {
-    addEventListenerSafely(`${action}LatexDiffVCButton`, 'click', function () {
+    addEventListenerSafely(`${action}LatexdiffvcButton`, 'click', function () {
       const inputFile = safeGetElementValue('inputFile');
       const baseFile = safeGetElementValue('baseFile');
       const commitHash = safeGetElementValue('commit');
 
       vscode.postMessage({
-        command: `${action}LatexDiffVC`,
+        command: `${action}Latexdiffvc`,
         inputFile: inputFile,
         baseFile: baseFile,
         commitHash: commitHash,

@@ -168,7 +168,7 @@ AUTO_CONFIRM_REPLACEMENTS = ReplacementCategory(
 )
 
 
-def get_all_replacements() -> dict[str, str]:
+def getAllReplacements() -> dict[str, str]:
     """Get all replacement patterns combined into a single dictionary."""
     all_replacements: dict[str, str] = {}
     categories = [
@@ -190,7 +190,7 @@ def get_all_replacements() -> dict[str, str]:
     return all_replacements
 
 
-def get_replacements_by_category(category_name: str) -> dict[str, str]:
+def getReplacementsByCategory(category_name: str) -> dict[str, str]:
     """Get replacement patterns for a specific category."""
     categories = {
         # LaTeX Content Formatting
@@ -209,14 +209,14 @@ def get_replacements_by_category(category_name: str) -> dict[str, str]:
     return category.patterns if category else {}
 
 
-def apply_replacements(text: str, replacements: dict[str, str]) -> str:
+def applyReplacements(text: str, replacements: dict[str, str]) -> str:
     """Apply a dictionary of replacements to the given text."""
     for old, new in replacements.items():
         text = text.replace(old, new)
     return text
 
 
-def apply_replacement_regex(text: str, replacements: dict[str, str], flags: int = 0) -> str:
+def applyReplacementRegex(text: str, replacements: dict[str, str], flags: int = 0) -> str:
     """Apply a dictionary of regex replacements to the given text."""
     for pattern, repl in replacements.items():
         text = re.sub(pattern, repl, text, flags=flags)

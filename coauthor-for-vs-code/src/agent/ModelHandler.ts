@@ -4,12 +4,12 @@
 // Third-party imports
 // (none needed)
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings } from './AgentDataclass';
+import { AgentSetting } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ModelConfig, ModelProvider, ModelCapabilities } from './ModelConfig';
 import { ToolState } from './ToolState';
@@ -111,7 +111,7 @@ export abstract class ModelHandler {
    * @param newResponse The new response text
    * @param stateRound The current round state
    * @param stateGlobal The global conversation state
-   * @param agentSettings The agent settings
+   * @param agentSetting The agent settings
    * @returns Tuple of [endTurn: boolean, shouldStop: boolean]
    */
   public checkStopConditions(
@@ -119,7 +119,7 @@ export abstract class ModelHandler {
     newResponse: string,
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
   ): [boolean, boolean] {
     const maxOutputTokens =
       stateGlobal.firstInputTokens > 0
@@ -128,7 +128,7 @@ export abstract class ModelHandler {
 
     const endTurn = ['end_turn', 'stop_sequence', 'stop'].includes(stopReason);
     const encounterDocumentTag = newResponse.includes(
-      `</${agentSettings.documentTag}>`,
+      `</${agentSetting.documentTag}>`,
     );
     const continuationLimit = stateRound.continuationCount > this.continueLimit;
     const inputTokenLimit = stateGlobal.totalInputTokens > this.inputTokenLimit;
@@ -186,7 +186,7 @@ export abstract class ModelHandler {
   ): Promise<any[]>;
 
   /** Create a reflection message. */
-  abstract createReflectionMessage(
+  abstract createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
@@ -207,14 +207,14 @@ export abstract class ModelHandler {
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
 
   /** Initialize output and handle prefill. */
   abstract initializeOutputAndPrefill(
     agentConfig: AgentConfig,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     messages: any[],
     toolState: ToolState,
     outputFile: string,
@@ -240,6 +240,6 @@ export abstract class ModelHandler {
   abstract shouldContinue(
     stopReason: string,
     newResponse: string,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
   ): boolean;
 }

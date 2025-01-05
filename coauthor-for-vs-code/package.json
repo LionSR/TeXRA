@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.14.10",
+  "version": "0.15.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -462,8 +462,16 @@
         "title": "CoAuthor: Test Agent Loading"
       },
       {
-        "command": "coauthor.testLoadSpecificAgent",
-        "title": "CoAuthor: Test Load Specific Agent"
+        "command": "coauthor.loadSpecificAgent",
+        "title": "CoAuthor: Load Specific Agent"
+      },
+      {
+        "command": "coauthor.parseXml",
+        "title": "CoAuthor: Parse XML Structure"
+      },
+      {
+        "command": "coauthor.parseYaml",
+        "title": "CoAuthor: Parse YAML Structure"
       }
     ],
     "viewsContainers": {

@@ -3,7 +3,7 @@
  */
 export interface IToolState {
   /** Statistics about TeX document structure */
-  texCountStats: string | null;
+  texcountStats: string | null;
 
   /** First K lines of TeX document */
   firstKCharsFromInput: string | null;
@@ -26,14 +26,14 @@ export interface IToolState {
  * Implementation of tool-specific runtime data that doesn't need to be logged. [Per round]
  */
 export class ToolState implements IToolState {
-  texCountStats: string | null;
+  texcountStats: string | null;
   firstKCharsFromInput: string | null;
   lastResponse: string;
   accumulatedOutput: string;
   figureFiles: string[];
 
   private constructor() {
-    this.texCountStats = null;
+    this.texcountStats = null;
     this.firstKCharsFromInput = null;
     this.lastResponse = '';
     this.accumulatedOutput = '';

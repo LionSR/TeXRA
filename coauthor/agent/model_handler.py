@@ -6,9 +6,11 @@ from typing import Any
 
 from ..logger import logger
 
-from ..agent import AgentSettings, AgentConfig
-from ..agent.agent_state import AgentStateRound, AgentStateGlobal
-from ..utils.img import get_base64_encoded_image, count_pdf_pages, process_pdf_input
+from ..utils.img import getBase64EncodedImage, countPdfPages, processPdfInput
+
+from .agent_dataclass import AgentSetting
+from .agent_config import AgentConfig
+from .agent_state import AgentStateRound, AgentStateGlobal
 
 from .model_config import ModelConfig, ModelProvider
 from .tool_state import ToolState
@@ -45,7 +47,7 @@ class ModelHandler(ABC):
             return key
         raise ValueError(f"Missing {env_key} in environment")
 
-    def get_baseUrl(self) -> str | None:
+    def get_base_url(self) -> str | None:
         """Get base URL based on provider and OpenRouter configuration."""
         if self.config.useOpenRouter:
             return "https://openrouter.ai/api/v1"
@@ -88,14 +90,14 @@ class ModelHandler(ABC):
         Returns:
             Tuple of (base64 encoded image data, media type)
         """
-        img_data = get_base64_encoded_image(figureFile)
+        img_data = getBase64EncodedImage(figureFile)
         ext = file_extension.lower()
 
         media_types = {
             ".jpg": "image/jpeg",
             ".jpeg": "image/jpeg",
             ".png": "image/png",
-            ".pdf": "application/pdf" if (self.capabilities.supportsNativePdf and count_pdf_pages(figureFile) > 1) else "image/png",
+            ".pdf": "application/pdf" if (self.capabilities.supportsNativePdf and countPdfPages(figureFile) > 1) else "image/png",
         }
 
         if ext not in media_types:
@@ -103,7 +105,7 @@ class ModelHandler(ABC):
 
         media_type = media_types[ext]
         if ext == ".pdf" and media_type == "image/png":
-            img_data = process_pdf_input(figureFile)
+            img_data = processPdfInput(figureFile)
 
         return img_data, media_type
 
@@ -151,7 +153,7 @@ class ModelHandler(ABC):
         newResponse: str,
         stateRound: AgentStateRound,
         stateGlobal: AgentStateGlobal,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
     ) -> tuple[bool, bool]:
         """Check if the conversation should stop and print debug info if stopping.
 
@@ -160,7 +162,7 @@ class ModelHandler(ABC):
             newResponse: The new response text
             stateRound: The current round state
             stateGlobal: The global conversation state
-            agentSettings: The agent settings
+            agentSetting: The agent settings
 
         Returns:
             Tuple of (endTurn: bool, should_stop: bool)
@@ -168,7 +170,7 @@ class ModelHandler(ABC):
         maxOutputTokens = self.maxOutputTokensFactor * stateGlobal.firstInputTokens if stateGlobal.firstInputTokens > 0 else float("inf")
 
         endTurn = stopReason in ["end_turn", "stop_sequence", "stop"]  # end_turn/stop_sequence is correct as this is what api returns
-        encounterDocumentTag = f"</{agentSettings.documentTag}>" in newResponse
+        encounterDocumentTag = f"</{agentSetting.documentTag}>" in newResponse
         continuation_limit = stateRound.continuationCount > self.continueLimit
         inputTokenLimit = stateGlobal.totalInputTokens > self.inputTokenLimit
         maxOutputTokensExceeded = stateGlobal.totalOutputTokens > maxOutputTokens
@@ -193,12 +195,12 @@ class ModelHandler(ABC):
         return endTurn, should_stop
 
     @abstractmethod
-    def get_client(self) -> Any:
+    def getClient(self) -> Any:
         """Get the appropriate client for this model."""
         pass
 
     @abstractmethod
-    def create_response(
+    def createResponse(
         self,
         client: Any,
         messages: list[dict],
@@ -221,7 +223,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def create_reflection_message(
+    def create_reflection_messages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -251,7 +253,7 @@ class ModelHandler(ABC):
         messages: list[dict],
         stateRound: AgentStateRound,
         toolState: ToolState,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         agentConfig: AgentConfig,
     ) -> None:
         """Handle continuation for truncated responses."""
@@ -261,7 +263,7 @@ class ModelHandler(ABC):
     def initialize_output_and_prefill(
         self,
         agentConfig: AgentConfig,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         messages: list[dict],
         toolState: ToolState,
         outputFile: str,
@@ -271,17 +273,17 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute the price for token usage."""
         pass
 
     @abstractmethod
-    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> Any:
+    def computeResponseUsage(self, responseUsage: Any, responseTime: float) -> Any:
         """Compute model-specific response usage."""
         pass
 
     @abstractmethod
-    def update_message_content(
+    def updateMessageContent(
         self,
         messages: list[dict],
         bestConnector: str,
@@ -293,6 +295,6 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def should_continue(self, stopReason: str, newResponse: str, agentSettings: AgentSettings) -> bool:
+    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if the model should continue generating based on stop reason and response."""
         pass
