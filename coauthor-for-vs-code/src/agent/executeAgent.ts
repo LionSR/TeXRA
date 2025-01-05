@@ -8,7 +8,9 @@ import { glob } from 'glob';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - utilities
+import { getAgentsDirectory } from '../utils/pathUtils';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';
@@ -38,11 +40,7 @@ export async function getAgentPath(
   context: vscode.ExtensionContext,
 ): Promise<string> {
   try {
-    const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
-    const basePath =
-      rootPath && path.isAbsolute(rootPath)
-        ? rootPath
-        : path.join(context.globalStorageUri.fsPath, rootPath);
+    const basePath = await getAgentsDirectory(context);
 
     // Use glob to find the yaml file recursively
     const matches = await glob(`**/${agentName}.yaml`, {
@@ -75,13 +73,9 @@ async function getAgentClass(
   agent: string,
   context: vscode.ExtensionContext,
 ): Promise<AgentConstructor> {
-  const [settings] = await loadAgentSettingAndPrompts(
-    agentPath,
-    agent,
-    context,
-  );
+  const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
 
-  const agentTypeMapping = {
+  const agentTypeMapping: Record<string, AgentConstructor> = {
     direct: DirectAgent,
     CoT: CoTAgent,
   };
@@ -134,7 +128,6 @@ export async function executeAgent(
     const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
       agentPath,
       agentName,
-      context,
     );
 
     // Get appropriate agent class and create instance
