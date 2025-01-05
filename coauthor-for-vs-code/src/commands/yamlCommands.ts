@@ -1,6 +1,13 @@
-import * as vscode from 'vscode';
-import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+import * as yaml from 'yaml';
+
+// Local imports - utilities
+
+import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
@@ -10,6 +17,7 @@ logger.initializeLogging(CHANNEL);
 export const yamlCommands = {
   testAgentLoading: 'coauthor.testAgentLoading',
   loadSpecificAgent: 'coauthor.loadSpecificAgent',
+  parseYaml: 'coauthor.parseYaml',
 };
 
 export async function handleTestAgentLoading(
@@ -195,6 +203,60 @@ export async function handleLoadSpecificAgent(
   }
 }
 
+export async function handleParseYaml(): Promise<void> {
+  try {
+    // Get active editor
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      logger.warn(CHANNEL, 'No active editor found');
+      vscode.window.showWarningMessage('Please open a YAML file first');
+      return;
+    }
+
+    // Check if it's a YAML file
+    if (
+      !editor.document.fileName.toLowerCase().endsWith('.yaml') &&
+      !editor.document.fileName.toLowerCase().endsWith('.yml')
+    ) {
+      logger.warn(
+        CHANNEL,
+        `File ${editor.document.fileName} is not a YAML file`,
+      );
+      vscode.window.showWarningMessage(
+        'This command only works with YAML files',
+      );
+      return;
+    }
+
+    const content = editor.document.getText();
+    logger.debug(
+      CHANNEL,
+      `Parsing YAML content from: ${editor.document.fileName}`,
+    );
+
+    try {
+      const parsedYaml = yaml.parse(content);
+      logger.info(CHANNEL, 'Successfully parsed YAML structure');
+      logger.debug(
+        CHANNEL,
+        `Parsed structure: ${JSON.stringify(parsedYaml, null, 2)}`,
+      );
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Failed to parse YAML: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      vscode.window.showErrorMessage('Failed to parse YAML content');
+    }
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error in parseYaml command: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    vscode.window.showErrorMessage('Error parsing YAML');
+  }
+}
+
 export function registerYamlCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(yamlCommands.testAgentLoading, () =>
@@ -203,6 +265,7 @@ export function registerYamlCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(yamlCommands.loadSpecificAgent, () =>
       handleLoadSpecificAgent(context),
     ),
+    vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
   );
   return yamlCommands;
 }

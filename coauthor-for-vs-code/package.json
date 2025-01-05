@@ -468,6 +468,10 @@
       {
         "command": "coauthor.parseXml",
         "title": "CoAuthor: Parse XML Structure"
+      },
+      {
+        "command": "coauthor.parseYaml",
+        "title": "CoAuthor: Parse YAML Structure"
       }
     ],
     "viewsContainers": {
