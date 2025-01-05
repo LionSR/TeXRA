@@ -17,6 +17,7 @@ import {
   filterTagsFromText,
   addCdataToTags,
   addCdataToTagsMultiple,
+  extractContentFromTag,
 } from '../utils/xmlUtils';
 import {
   runLatexDiff,
@@ -88,28 +89,6 @@ export class OutputHandler {
       getReplacementsByCategory('scratchpad_xml'),
     );
     return outputContent;
-  }
-
-  public extractDocumentContent(
-    root: any[],
-    documentTag: string,
-  ): string | null {
-    logger.debug(
-      CHANNEL,
-      `Extracting document content from root: ${JSON.stringify(root)}`,
-    );
-    // Find the object containing the documentTag
-    const docObj = root.find(
-      (item: { [key: string]: any }) => item[documentTag],
-    );
-    if (docObj && docObj[documentTag]) {
-      const content = docObj[documentTag][0]?.content;
-      if (content) {
-        return content.trim();
-      }
-    }
-    logger.error(CHANNEL, `No ${documentTag} found in output file`);
-    return null;
   }
 
   public async handleScratchpad(
@@ -224,8 +203,6 @@ export class OutputHandler {
       // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent);
 
-      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-
       await this.handleScratchpad(
         root,
         name,
@@ -233,7 +210,7 @@ export class OutputHandler {
         splitAndSaveThinking,
       );
 
-      const latexDocument = this.extractDocumentContent(root, documentTag);
+      const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
       }
