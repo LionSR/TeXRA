@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -19,6 +19,7 @@ import {
   addCdataToTagsMultiple,
   extractContentFromTag,
   extractTextFromTag,
+  extractContentFromTagMultiple,
 } from '../utils/xmlUtils';
 import {
   runLatexdiff,
@@ -228,15 +229,11 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      // Find the object containing the documentTag
-      const docObj = root.find(
-        (item: { [key: string]: any }) => item[documentTag],
-      );
-      if (docObj && docObj[documentTag] && Array.isArray(docObj[documentTag])) {
-        return this.processLatexDocuments(docObj[documentTag], outputFile);
+      const documents = extractContentFromTagMultiple(root, documentTag);
+      if (documents) {
+        return this.processLatexDocuments(documents, outputFile);
       }
 
-      logger.error(CHANNEL, `No ${documentTag} found in output file.`);
       return [];
     } catch (err) {
       logger.error(
