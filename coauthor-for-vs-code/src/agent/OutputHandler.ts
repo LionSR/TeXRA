@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
