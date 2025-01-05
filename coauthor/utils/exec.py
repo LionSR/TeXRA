@@ -1,6 +1,7 @@
 import subprocess
 
 from ..logger import logger
+
 from .file import writeFile
 
 
@@ -17,7 +18,7 @@ def executeCommand(
     """Execute external command with output handling, returns (success, stdout, stderr) or writes to file."""
 
     try:
-        result = subprocess.run(command, text=True, captureOutput=captureOutput, encoding=encoding)
+        result = subprocess.run(command, text=True, capture_output=captureOutput, encoding=encoding)
         if outputFile:
             if result.returncode != 0:
                 logger.error(f"\nCommand failed with return code {result.returncode}")

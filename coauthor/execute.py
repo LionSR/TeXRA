@@ -15,10 +15,10 @@ from .agent.agent_load import load_agent_settings_and_prompts
 from .agent.model_registry import MODEL_CONFIGS
 from .agent.model_factory import ModelFactory
 
-from .agent.agent_base import BaseReflectionAgent
-from .agent.agent_class_cot import CoTAgent
-from .agent.agent_class_direct import DirectAgent
-from .agent.agent_class_merge import MergeAgent
+from .agent.BaseReflectionAgent import BaseReflectionAgent
+from .agent.CoTAgent import CoTAgent
+from .agent.DirectAgent import DirectAgent
+from .agent.MergeAgent import MergeAgent
 
 load_dotenv()
 
