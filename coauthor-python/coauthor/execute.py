@@ -26,7 +26,7 @@ load_dotenv()
 def getAgent_dir_from_env() -> str:
     """Get the agent directory path from environment or default location."""
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/agents")
+    agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/../agents")
     return agents_dir
 
 

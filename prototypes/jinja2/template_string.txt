@@ -1,4 +1,0 @@
-Title: {title}
-Author: {author}
-Year: {year}
-Content: {content}
