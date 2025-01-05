@@ -177,14 +177,13 @@ export class OutputHandler {
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    const rootContent = `<root>${outputContent}</root>`;
-
     try {
       const parser = new XMLParser({
-        ignoreAttributes: true,
-        preserveOrder: true,
-        parseTagValue: false,
+        ignoreAttributes: false,
+        // preserveOrder: true,
+        parseTagValue: true,
         textNodeName: 'content',
+        attributeNamePrefix: '',
       });
       const root = parser.parse(outputContent);
 
@@ -222,9 +221,10 @@ export class OutputHandler {
     try {
       const parser = new XMLParser({
         ignoreAttributes: false,
-        preserveOrder: true,
-        parseTagValue: false,
+        // preserveOrder: false,
+        parseTagValue: true,
         textNodeName: 'content',
+        attributeNamePrefix: '',
       });
       const root = parser.parse(outputContent);
 
