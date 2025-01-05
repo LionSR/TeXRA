@@ -76,12 +76,12 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
 
     # Check if both input and output files contain \begin{document} and \end{document}
     input_content = read_file(inputFile)
-    output_content = read_file(outputFile)
+    outputContent = read_file(outputFile)
     if (
         "\\begin{document}" not in input_content
         or "\\end{document}" not in input_content
-        or "\\begin{document}" not in output_content
-        or "\\end{document}" not in output_content
+        or "\\begin{document}" not in outputContent
+        or "\\end{document}" not in outputContent
     ):
         logger.warning("One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.")
         logger.warning(f"Input file: {inputFile}, Output file: {outputFile}")

@@ -122,3 +122,36 @@ export function filterTagsFromText(
     throw err;
   }
 }
+
+/**
+ * Extract content from XML document element
+ */
+export function extractContentFromTag(
+  root: any[],
+  documentTag: string,
+): string | null {
+  try {
+    logger.debug(
+      CHANNEL,
+      `Extracting document content from root: ${JSON.stringify(root)}`,
+    );
+    // Find the object containing the documentTag
+    const docObj = root.find(
+      (item: { [key: string]: any }) => item[documentTag],
+    );
+    if (docObj && docObj[documentTag]) {
+      const content = docObj[documentTag][0]?.content;
+      if (content) {
+        return content.trim();
+      }
+    }
+    logger.error(CHANNEL, `No ${documentTag} found in output file`);
+    return null;
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
