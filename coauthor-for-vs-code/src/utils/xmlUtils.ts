@@ -144,21 +144,24 @@ export function extractContentFromTagMultiple(
     }
 
     if (documentTag in root) {
-      const documents = root[documentTag]?.document;
-      if (Array.isArray(documents)) {
-        return documents.map((doc) => ({
-          content: doc.content?.trim() || '',
-          name: doc['name'],
-        }));
-      }
-      // Handle single document case
-      if (documents && typeof documents === 'object') {
-        return [
-          {
-            content: documents.content?.trim() || '',
-            name: documents['name'],
-          },
-        ];
+      const container = root[documentTag];
+      if (container && typeof container === 'object') {
+        const documents = container.document;
+        if (Array.isArray(documents)) {
+          return documents.map((doc) => ({
+            content: doc.content?.trim() || '',
+            name: doc.name,
+          }));
+        }
+        // Handle single document case
+        if (documents && typeof documents === 'object') {
+          return [
+            {
+              content: documents.content?.trim() || '',
+              name: documents.name,
+            },
+          ];
+        }
       }
     }
 
