@@ -9,7 +9,7 @@ import { promisify } from 'util';
 import { PDFDocument } from 'pdf-lib';
 import { fromPath } from 'pdf2pic';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -142,7 +142,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
  * @param maxSize Maximum size of the output image (default: [1024, 1024])
  * @returns Promise<string> Base64 encoded PNG image
  */
-export async function singlePagePdfToPng(
+export async function singlePagePdf2Png(
   pdfPath: string,
   pageNum: number = 1,
   quality: number = 300,
@@ -154,7 +154,7 @@ export async function singlePagePdfToPng(
   try {
     logger.debug(
       CHANNEL,
-      `Starting singlePagePdfToPng for ${pdfPath}, page ${pageNum}`,
+      `Starting singlePagePdf2Png for ${pdfPath}, page ${pageNum}`,
     );
 
     // Check for GraphicsMagick/ImageMagick installation
@@ -246,7 +246,7 @@ export async function singlePagePdfToPng(
  * @param maxPages Maximum number of pages to convert (default: 100)
  * @returns Promise<string[]> Array of base64 encoded PNG images
  */
-export async function multiPagePdfToPng(
+export async function multiPagePdf2Png(
   pdfPath: string,
   quality: number = 300,
   maxSize: [number, number] = [1024, 1024],
@@ -258,7 +258,7 @@ export async function multiPagePdfToPng(
 
     const base64Images: string[] = [];
     for (let pageNum = 0; pageNum < pagesToConvert; pageNum++) {
-      const base64Image = await singlePagePdfToPng(
+      const base64Image = await singlePagePdf2Png(
         pdfPath,
         pageNum,
         quality,
@@ -312,9 +312,9 @@ export async function processPdfInput(
     const finalMaxSize: [number, number] = maxSize || [1024, 1024];
 
     if (pageCount === 1) {
-      return await singlePagePdfToPng(pdfPath, 0, finalQuality, finalMaxSize);
+      return await singlePagePdf2Png(pdfPath, 0, finalQuality, finalMaxSize);
     } else {
-      return await multiPagePdfToPng(
+      return await multiPagePdf2Png(
         pdfPath,
         finalQuality,
         finalMaxSize,

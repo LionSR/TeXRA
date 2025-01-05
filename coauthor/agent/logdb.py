@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime
 
 from .agent_config import AgentConfig
-from .agent_dataclass import AgentSettings
+from .agent_dataclass import AgentSetting
 from .agent_state import AgentStateGlobal, AgentStateRound
 
 
@@ -58,7 +58,7 @@ def init_db() -> None:
         raise
 
 
-def create_log_entry(agentConfig: AgentConfig, agentSettings: AgentSettings) -> int:
+def create_log_entry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> int:
     """Create a new log entry and return its ID."""
     init_db()
     try:
@@ -100,7 +100,7 @@ def create_log_entry(agentConfig: AgentConfig, agentSettings: AgentSettings) -> 
                     datetime.now(),
                     agentConfig.agent,
                     agentConfig.model,
-                    agentSettings.temperature,
+                    agentSetting.temperature,
                     agentConfig.inputFile,
                     inputFiles,
                     agentConfig.auxiliaryFile,

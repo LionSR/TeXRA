@@ -26,15 +26,15 @@ class ModelFactory:
             return OpenRouterHandler(config)
 
         # Map providers to their handler classes
-        handler_map = {
+        handlerMap = {
             ModelProvider.ANTHROPIC: AnthropicHandler,
             ModelProvider.OPENAI: OpenAIHandler,
             ModelProvider.GOOGLE: GoogleviaOpenAIHandler,
             ModelProvider.OTHERS: OpenRouterHandler,
         }
 
-        handler_class = handler_map.get(config.provider)
-        if not handler_class:
+        handlerClass = handlerMap.get(config.provider)
+        if not handlerClass:
             raise ValueError(f"Unsupported model provider: {config.provider}")
 
-        return handler_class(config)
+        return handlerClass(config)

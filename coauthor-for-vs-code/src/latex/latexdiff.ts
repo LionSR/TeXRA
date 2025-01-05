@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -108,7 +108,7 @@ async function processTikzPictureEndings(filePath: string): Promise<void> {
   }
 }
 
-export async function runLatexDiff(
+export async function runLatexdiff(
   inputFile: string,
   editedFile: string,
   suffix: string = '_diff',
@@ -236,7 +236,7 @@ export async function runLatexDiff(
   }
 }
 
-export async function runLatexDiffVC(
+export async function runLatexdiffvc(
   inputFile: string,
   commitHash: string,
 ): Promise<string> {
@@ -293,7 +293,7 @@ export async function runLatexDiffVC(
   }
 }
 
-export async function runLatexDiffVCMultiple(
+export async function runLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
 ): Promise<void> {
@@ -307,7 +307,7 @@ export async function runLatexDiffVCMultiple(
 
   for (const inputFile of inputFiles) {
     try {
-      await runLatexDiffVC(inputFile, commitHash);
+      await runLatexdiffvc(inputFile, commitHash);
     } catch (err) {
       logger.error(
         CHANNEL,
@@ -319,14 +319,14 @@ export async function runLatexDiffVCMultiple(
   logger.info(CHANNEL, 'All LaTeX diff operations completed');
 }
 
-export async function runLatexDiffForRound(
+export async function runLatexdiffForRound(
   baseFile: string,
   outputFile: string,
   round: number,
 ): Promise<string | undefined> {
   try {
     if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
-      return await runLatexDiff(baseFile, outputFile, '_diff');
+      return await runLatexdiff(baseFile, outputFile, '_diff');
     } else {
       logger.warn(
         CHANNEL,
@@ -337,13 +337,13 @@ export async function runLatexDiffForRound(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in runLatexDiffForRound: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexdiffForRound: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
   }
 }
 
-export async function runLatexDiffBetweenRounds(
+export async function runLatexdiffBetweenRounds(
   outputFile1: string,
   outputFile2: string,
 ): Promise<string | undefined> {
@@ -361,7 +361,7 @@ export async function runLatexDiffBetweenRounds(
       const secondRound = secondRoundMatch[1];
       const diffSuffix = `_diffr${secondRound}r${firstRound}`;
 
-      return await runLatexDiff(outputFile1, outputFile2, diffSuffix);
+      return await runLatexdiff(outputFile1, outputFile2, diffSuffix);
     } else {
       logger.warn(
         CHANNEL,
@@ -372,13 +372,13 @@ export async function runLatexDiffBetweenRounds(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in runLatexDiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexdiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
   }
 }
 
-export async function runLatexDiffMultiple(
+export async function runLatexdiffMultiple(
   inputFiles: string[],
   editedFiles: string[],
 ): Promise<void> {
@@ -396,7 +396,7 @@ export async function runLatexDiffMultiple(
 
     for (let i = 0; i < inputFiles.length; i++) {
       try {
-        await runLatexDiff(inputFiles[i], editedFiles[i]);
+        await runLatexdiff(inputFiles[i], editedFiles[i]);
       } catch (err) {
         logger.error(
           CHANNEL,
@@ -409,7 +409,7 @@ export async function runLatexDiffMultiple(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in runLatexDiffMultiple: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in runLatexdiffMultiple: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

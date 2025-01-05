@@ -1,4 +1,4 @@
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
@@ -18,7 +18,7 @@ export class CoTAgent extends DirectAgent {
       this.agentConfig.outputNameOverride || this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
-      : this.agentSettings.outputExt;
+      : this.agentSetting.outputExt;
     return getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
@@ -42,7 +42,7 @@ export class CoTAgent extends DirectAgent {
     if (endTurn) {
       await this.outputHandler.ensureCorrectXmlStructure(
         outputFile,
-        this.agentSettings.documentTag,
+        this.agentSetting.documentTag,
       );
       await this.processOutputFiles(outputFile, currRound);
     }

@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -17,16 +17,18 @@ import {
   filterTagsFromText,
   addCdataToTags,
   addCdataToTagsMultiple,
+  extractContentFromTag,
+  extractTextFromTag,
 } from '../utils/xmlUtils';
 import {
-  runLatexDiff,
-  runLatexDiffForRound,
-  runLatexDiffBetweenRounds,
+  runLatexdiff,
+  runLatexdiffForRound,
+  runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings } from './AgentDataclass';
+import { AgentSetting } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
@@ -56,7 +58,7 @@ export function getOutputFileName(
 }
 
 export class OutputHandler {
-  public agentSettings: AgentSettings;
+  public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
   public modelHandler: any;
   public logId: number;
@@ -64,12 +66,12 @@ export class OutputHandler {
   public baseFiles: string[];
 
   constructor(
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     modelHandler: any,
     logId: number,
   ) {
-    this.agentSettings = agentSettings;
+    this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
     this.modelHandler = modelHandler;
     this.logId = logId;
@@ -77,65 +79,17 @@ export class OutputHandler {
     this.baseFiles = [];
   }
 
-  public async processXmlContent(outputContent: string): Promise<string> {
-    outputContent = filterTagsFromText(outputContent, 'monologue');
-    outputContent = applyReplacements(
-      outputContent,
+  public async processXmlContent(content: string): Promise<string> {
+    content = filterTagsFromText(content, 'monologue');
+    content = applyReplacements(
+      content,
       getReplacementsByCategory('latex_xml'),
     );
-    outputContent = applyReplacements(
-      outputContent,
+    content = applyReplacements(
+      content,
       getReplacementsByCategory('scratchpad_xml'),
     );
-    return outputContent;
-  }
-
-  public extractDocumentContent(
-    root: any[],
-    documentTag: string,
-  ): string | null {
-    logger.debug(
-      CHANNEL,
-      `Extracting document content from root: ${JSON.stringify(root)}`,
-    );
-    // Find the object containing the documentTag
-    const docObj = root.find(
-      (item: { [key: string]: any }) => item[documentTag],
-    );
-    if (docObj && docObj[documentTag]) {
-      const content = docObj[documentTag][0]?.content;
-      if (content) {
-        return content.trim();
-      }
-    }
-    logger.error(CHANNEL, `No ${documentTag} found in output file`);
-    return null;
-  }
-
-  public async handleScratchpad(
-    root: any[],
-    baseName: string,
-    thinkingTag: string,
-    splitAndSaveThinking: boolean,
-  ): Promise<void> {
-    if (splitAndSaveThinking) {
-      const logFileThinking = `${baseName}_thinking.xml`;
-      logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
-
-      // Find the object containing the thinkingTag
-      const scratchpadObj = root.find(
-        (item: { [key: string]: any }) => item[thinkingTag],
-      );
-      if (scratchpadObj && scratchpadObj[thinkingTag]) {
-        const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
-        if (scratchpadContent) {
-          await writeFile(
-            logFileThinking,
-            `<scratchpad>\n${scratchpadContent.trim()}\n</scratchpad>\n`,
-          );
-        }
-      }
-    }
+    return content;
   }
 
   public async handleSingleOutput(outputFile: string): Promise<void> {
@@ -143,7 +97,7 @@ export class OutputHandler {
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
-      await runLatexDiff(this.agentConfig.inputFile, outputFile);
+      await runLatexdiff(this.agentConfig.inputFile, outputFile);
     }
   }
 
@@ -164,7 +118,7 @@ export class OutputHandler {
         // TODO: Implement log update
         // await updateLogOutputFiles(this.logId, outputFile);
         if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          await runLatexDiff(inputFile, outputFile);
+          await runLatexdiff(inputFile, outputFile);
         }
       }
     }
@@ -173,7 +127,7 @@ export class OutputHandler {
   public async processSingleOutput(outputFile: string): Promise<string> {
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
-      this.agentSettings.documentTag,
+      this.agentSetting.documentTag,
     );
     const content = await readFile(processedOutputFile);
     const filteredContent = filterTagsFromText(content, 'monologue');
@@ -182,9 +136,9 @@ export class OutputHandler {
   }
 
   public async processMultipleOutputs(outputFile: string): Promise<string[]> {
-    const processedOutputFiles = await this.splitMultipleScratchpadOutputXml(
+    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
-      this.agentSettings.documentTag,
+      this.agentSetting.documentTag,
     );
     for (const processedOutputFile of processedOutputFiles) {
       const content = await readFile(processedOutputFile);
@@ -194,11 +148,20 @@ export class OutputHandler {
     return processedOutputFiles;
   }
 
+  private async extractAndLogScratchpad(
+    outputContent: string,
+    thinkingTag: string = 'scratchpad',
+  ): Promise<void> {
+    const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
+    if (scratchpadContent) {
+      logger.info(CHANNEL, `Scratchpad content:\n${scratchpadContent.trim()}`);
+    }
+  }
+
   async splitScratchpadOutputXml(
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-    splitAndSaveThinking: boolean = false,
   ): Promise<string> {
     logger.debug(CHANNEL, `Splitting scratchpad output XML: ${outputFile}`);
 
@@ -209,31 +172,22 @@ export class OutputHandler {
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
+    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
-    const rootContent = `<root>${outputContent}</root>`;
-
     try {
       const parser = new XMLParser({
-        ignoreAttributes: true,
-        preserveOrder: true,
-        parseTagValue: false,
+        ignoreAttributes: false,
+        // preserveOrder: true,
+        parseTagValue: true,
         textNodeName: 'content',
+        attributeNamePrefix: '',
       });
-      // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent);
 
-      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-
-      await this.handleScratchpad(
-        root,
-        name,
-        thinkingTag,
-        splitAndSaveThinking,
-      );
-
-      const latexDocument = this.extractDocumentContent(root, documentTag);
+      const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
       }
@@ -247,20 +201,19 @@ export class OutputHandler {
     return texFile;
   }
 
-  async splitMultipleScratchpadOutputXml(
+  async splitScratchpadMultipleOutputXml(
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-    splitAndSaveThinking: boolean = false,
   ): Promise<string[]> {
     logger.debug(
       CHANNEL,
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
-    const { dir, name } = path.parse(outputFile);
-
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
+
+    await this.extractAndLogScratchpad(outputContent, thinkingTag);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -268,20 +221,12 @@ export class OutputHandler {
     try {
       const parser = new XMLParser({
         ignoreAttributes: false,
-        preserveOrder: true,
-        parseTagValue: false,
+        // preserveOrder: false,
+        parseTagValue: true,
         textNodeName: 'content',
+        attributeNamePrefix: '',
       });
       const root = parser.parse(outputContent);
-
-      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-
-      await this.handleScratchpad(
-        root,
-        name,
-        thinkingTag,
-        splitAndSaveThinking,
-      );
 
       // Find the object containing the documentTag
       const docObj = root.find(
@@ -376,7 +321,7 @@ export class OutputHandler {
     await writeFile(filePath, content);
   }
 
-  public async handleLatexDiff(currRound: number): Promise<void> {
+  public async handleLatexdiff(currRound: number): Promise<void> {
     logger.info(
       CHANNEL,
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
@@ -391,7 +336,7 @@ export class OutputHandler {
     for (let i = 0; i < this.baseFiles.length; i++) {
       const baseFile = this.baseFiles[i];
       const outputFile = this.outputFiles[currRound][i];
-      await runLatexDiffForRound(baseFile, outputFile, currRound);
+      await runLatexdiffForRound(baseFile, outputFile, currRound);
     }
 
     // Generate diffs between consecutive rounds
@@ -399,7 +344,7 @@ export class OutputHandler {
       for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
         const outputFile1 = this.outputFiles[r - 1][i];
         const outputFile2 = this.outputFiles[r][i];
-        await runLatexDiffBetweenRounds(outputFile1, outputFile2);
+        await runLatexdiffBetweenRounds(outputFile1, outputFile2);
       }
     }
   }

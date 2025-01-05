@@ -3,7 +3,7 @@
 ## [0.12.0]
 
 - **Added:**
-  - Utility functions: delete_file, move_file, and find_file
+  - Utility functions: deleteFile, moveFile, and findFile
 - **Changed:**
   - Refactored housekeeping utilities for improved efficiency and maintainability
   - Updated existing functions to use new utility functions
@@ -72,7 +72,7 @@
   - New argument for using prefill from input file
 - **Changed:**
   - Refactored codebase to improve readability, organization, and efficiency
-  - Optimized model pricing calculation in compute_price function
+  - Optimized model pricing calculation in computePrice function
   - Updated MODEL_MAPPING in openai_utils.py
   - Improved handling of user variables in prompt_utils.py
   - Created common utility functions for housekeeping agents
@@ -86,7 +86,7 @@
 - **Added:**
   - Scratchpad functionality implementation with use_scratchpad and use_scratchpad_reflect flags
 - **Changed:**
-  - Renamed user_prefix_vars to user_vars throughout the codebase for clarity
+  - Renamed user_prefix_vars to userVars throughout the codebase for clarity
   - Refactored prompt handling and user variable updates
   - Moved figure-related functions to figure_tools.py
   - Consolidated file content formatting
@@ -112,7 +112,7 @@
 
 - **Added:**
   - Support for multiple document output in XML handling
-  - New `split_multiple_scratchpad_output_xml` function in output_utils.py
+  - New `splitScratchpadMultipleOutputXml` function in output_utils.py
   - 'name' attribute for documents in XML structure
 - **Changed:**
   - Refactored XML handling across multiple files
@@ -125,7 +125,7 @@
 ## [0.11.1]
 
 - Refactored XML handling and improved error logging
-  - Replaced `split_scratchpad_output` with `split_scratchpad_output_xml`
+  - Replaced `split_scratchpad_output` with `splitScratchpadOutputXml`
   - Renamed `handle_single_output` to `update_user_prefix_vars_single_output`
   - Renamed `handle_multiple_output` to `update_user_prefix_vars_multiple_output`
   - Added CDATA handling for XML tags
@@ -227,7 +227,7 @@
 
 - Added new slide2paper agent for converting slides to research papers
 - Implemented multi-page PDF processing functionality
-- Enhanced process_pdf_input function to handle both single and multi-page PDFs
+- Enhanced processPdfInput function to handle both single and multi-page PDFs
 - Improved file handling with output name override in various functions
 - Updated CLI to support new slide2paper agent
 - Refactored code for better modularity and error handling
@@ -246,8 +246,8 @@
 
 ## [0.10.1]
 
-- Added `ensure_correct_xml_structure` function to fix XML structure issues
-- Implemented `split_scratchpad_output_xml` for improved XML parsing of scratchpad output
+- Added `ensureCorrectXmlStructure` function to fix XML structure issues
+- Implemented `splitScratchpadOutputXml` for improved XML parsing of scratchpad output
 - Updated `edit_lecture.py`, `edit_tex.py`, and `write_tex.py` to use new XML handling functions
 - Refactored file processing in agent files to support initial .text output for scratchpad content
 - Added support for .text extension in `clean_single` and `pack_single` functions
@@ -289,11 +289,11 @@
 
 - Added intelligent merge functionality for LaTeX documents
 - Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command
-- Added new function get_outputFile_name_merge in output_utils.py
+- Added new function getOutputFileName_merge in output_utils.py
 - Improved pattern handling in clean_single and pack_single functions in cli.py
 - Added process_tikzpicture_endings function in tex_tools.py for better TikZ handling
 - Updated process_first_round and process_reflection_round functions in process.py to handle scratchpad output
-- Updated merge.py to use get_outputFile_name_merge function
+- Updated merge.py to use getOutputFileName_merge function
 
 ## [0.9.5]
 
@@ -436,7 +436,7 @@
 
 ## [0.7.11]
 
-- Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
+- Enhanced `extract_figurePaths` function to also look under `\graphicspath` for figures.
 - Added regular expression to match `\graphicspath` and extract paths.
 - Updated logic to normalize and check the list of figures within the specified graphicspaths.
 - Added logging to `create_image_message` in `message_utils.py` for used images.
