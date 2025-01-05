@@ -10,7 +10,7 @@ import * as logger from './logger/logUtils';
 
 // Local imports - components
 import { FolderExplorer } from './FolderExplorer';
-import { LogViewProvider } from './logView/LogViewProvider';
+import { LogViewProvider } from './logger/LogViewProvider';
 import { registerCommands } from './commands';
 
 async function copyDefaultAgents(context: vscode.ExtensionContext) {
