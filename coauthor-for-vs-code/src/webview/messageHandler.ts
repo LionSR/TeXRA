@@ -94,16 +94,16 @@ export class WebviewMessageHandler {
         return this.handleMultipleOperation(message);
       // Latex Diff cases
       case 'latexdiff':
-        return this.handleLatexDiff(message);
-      case 'latexdiffVC':
-        return this.handleLatexDiffVC(message);
+        return this.handleLatexdiff(message);
+      case 'latexdiffvc':
+        return this.handleLatexdiffvc(message);
       case 'requestRecentCommits':
         return this.handleRequestRecentCommits(webviewView);
       case 'refreshCommits':
         return this.handleRefreshCommits(webviewView);
-      case 'packLatexDiffVC':
-      case 'cleanLatexDiffVC':
-        return this.handleLatexDiffVCOperation(message);
+      case 'packLatexdiffvc':
+      case 'cleanLatexdiffvc':
+        return this.handleLatexdiffvcOperation(message);
       // VS Code Logic cases
       case 'getCurrentFile':
         return this.handleGetCurrentFile(message, webviewView);
@@ -371,7 +371,7 @@ export class WebviewMessageHandler {
     );
   }
 
-  private handleLatexDiff(message: any) {
+  private handleLatexdiff(message: any) {
     vscode.commands.executeCommand(
       'coauthor.latexdiff',
       message.inputFile,
@@ -380,16 +380,16 @@ export class WebviewMessageHandler {
     );
   }
 
-  private handleLatexDiffVC(message: any) {
+  private handleLatexdiffvc(message: any) {
     vscode.commands.executeCommand(
-      'coauthor.latexdiffVC',
+      'coauthor.latexdiffvc',
       message.inputFile,
       message.baseFile,
       message.commitHash,
     );
   }
 
-  private handleLatexDiffVCOperation(message: any) {
+  private handleLatexdiffvcOperation(message: any) {
     vscode.commands.executeCommand(
       `coauthor.${message.command}`,
       message.inputFile,

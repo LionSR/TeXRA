@@ -22,7 +22,7 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
             base_url=base_url,
         )
 
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute price for Google token usage."""
         # Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
         prompt_tokens = getattr(responseUsage, "promptTokens", 0)
@@ -47,7 +47,7 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
             },
         )()
 
-        return OpenAIAPIResponseUsage.from_response(usage_obj, self.compute_price(responseUsage), responseTime)
+        return OpenAIAPIResponseUsage.from_response(usage_obj, self.computePrice(responseUsage), responseTime)
 
     def should_continue(self, stopReason: str, newResponse: str, agentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""

@@ -64,7 +64,7 @@ def process_tikzpicture_endings_diff(filePath: str) -> None:
     # logger.info(f"Tikzpicture endings fixed in {filePath}")
 
 
-def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
+def runLatexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
     """Run latexdiff between two LaTeX files with optional indentation and return diff file path."""
     if not inputFile:
         logger.warning("Input file is None or empty")
@@ -138,7 +138,7 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
     return diffFileName
 
 
-def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
+def runLatexdiffvc(inputFile: str, commitHash: str) -> str | None:
     """Run latexdiff-vc on LaTeX file using specified git commit hash and return diff file path."""
     if not inputFile:
         logger.warning("Input file is None or empty")
@@ -175,36 +175,36 @@ def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
     return diffFileName
 
 
-def run_latexdiff_multiple(inputFiles: list[str], editedFiles: list[str]) -> None:
+def runLatexdiff_multiple(inputFiles: list[str], editedFiles: list[str]) -> None:
     """Run latexdiff on multiple pairs of LaTeX files in parallel."""
     if len(inputFiles) != len(editedFiles):
         logger.error("The number of input files must match the number of edited files. Stopping latexdiff.")
         return None
 
     for inputFile, editedFile in zip(inputFiles, editedFiles):
-        _ = run_latexdiff(inputFile, editedFile)
+        _ = runLatexdiff(inputFile, editedFile)
 
 
-def run_latexdiff_vc_multiple(inputFiles: list[str], commitHash: str) -> None:
+def runLatexdiffvc_multiple(inputFiles: list[str], commitHash: str) -> None:
     """Run latexdiff-vc on multiple LaTeX files using specified git commit hash."""
     for inputFile in inputFiles:
-        _ = run_latexdiff_vc(inputFile, commitHash)
+        _ = runLatexdiffvc(inputFile, commitHash)
 
 
-def run_latexdiff_for_round(baseFile: str, outputFile: str, round: int) -> str | None:
+def runLatexdiffForRound(baseFile: str, outputFile: str, round: int) -> str | None:
     """Run latexdiff between base and output LaTeX files for a specific round."""
     if baseFile and outputFile and os.path.exists(baseFile) and os.path.exists(outputFile):
-        _ = run_latexdiff(baseFile, outputFile, suffix="_diff")
+        _ = runLatexdiff(baseFile, outputFile, suffix="_diff")
     else:
         logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {baseFile} or {outputFile}")
 
 
-def run_latexdiff_between_rounds(outputFile1: str, outputFile2: str) -> str | None:
+def runLatexdiffBetweenRounds(outputFile1: str, outputFile2: str) -> str | None:
     """Run latexdiff between two rounds of LaTeX edits and process the resulting diff."""
     if outputFile1 and outputFile2 and os.path.exists(outputFile1) and os.path.exists(outputFile2):
         first_round = re.search(r"_r(\d+)_", outputFile1).group(1)
         second_round = re.search(r"_r(\d+)_", outputFile2).group(1)
         diff_suffix = f"_diffr{second_round}r{first_round}"
-        _ = run_latexdiff(outputFile1, outputFile2, suffix=diff_suffix)
+        _ = runLatexdiff(outputFile1, outputFile2, suffix=diff_suffix)
     else:
         logger.warning(f"Could not generate latexdiff between rounds. Files not found: {outputFile1} or {outputFile2}")

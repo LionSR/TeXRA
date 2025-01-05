@@ -293,7 +293,7 @@
 ## [0.5.2]
 
 - Added "Clean" button for latexdiff-vc functionality
-- Updated packLatexDiffVC command to support cleaning option
+- Updated packLatexdiffvc command to support cleaning option
 - Improved UI for latexdiff-vc section
 
 ## [0.5.1]
