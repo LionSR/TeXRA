@@ -16,7 +16,8 @@ from ..utils.xml import (
     extractContentFromTag,
 )
 
-from .agent_dataclass import AgentConfig, AgentSetting
+from .agent_dataclass import AgentSetting
+from .agent_config import AgentConfig
 
 from .logdb import update_log_outputFiles
 
@@ -56,15 +57,12 @@ class OutputHandler:
         outputContent = applyReplacements(outputContent, getReplacementsByCategory("scratchpad_xml"))
         return outputContent
 
-    def _handle_scratchpad(self, root: ET.Element, baseName: str, thinkingTag: str, split_and_save_thinking: bool) -> None:
-        """Save thinking content to separate file if enabled."""
-        if split_and_save_thinking:
-            logFileThinking = f"{baseName}_thinking.xml"
-            logger.debug(f"Thinking file: {logFileThinking}")
-            scratchpad = root.find(thinkingTag)
-            if scratchpad is not None:
-                scratchpadContent = ET.tostring(scratchpad, encoding="unicode", method="text")
-                writeFile(logFileThinking, f"<scratchpad>\n{scratchpadContent.strip()}\n</scratchpad>\n")
+    def _handle_scratchpad(self, root: ET.Element, baseName: str, thinkingTag: str) -> None:
+        """Log thinking content from scratchpad."""
+        scratchpad = root.find(thinkingTag)
+        if scratchpad is not None:
+            scratchpadContent = ET.tostring(scratchpad, encoding="unicode", method="text")
+            logger.info(f"Scratchpad content:\n{scratchpadContent.strip()}")
 
     def _handleSingleOutput(self, outputFile: str) -> None:
         """Generate LaTeX diff for single output file."""
@@ -100,9 +98,7 @@ class OutputHandler:
             writeFile(processedOutputFile, filteredContent)
         return processedOutputFiles
 
-    def split_scratchpad_output_xml(
-        self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad", split_and_save_thinking: bool = False
-    ) -> str:
+    def split_scratchpad_output_xml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> str:
         """Split scratchpad output XML into separate files."""
         logger.debug(f"Splitting scratchpad output XML: {outputFile}")
 
@@ -120,7 +116,7 @@ class OutputHandler:
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, baseName, thinkingTag, split_and_save_thinking)
+            self._handle_scratchpad(root, baseName, thinkingTag)
 
             latex_document = extractContentFromTag(root, documentTag)
             if latex_document:
@@ -132,9 +128,7 @@ class OutputHandler:
 
         return latexFile
 
-    def split_multiple_scratchpad_output_xml(
-        self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad", split_and_save_thinking: bool = False
-    ) -> list[str]:
+    def split_multiple_scratchpad_output_xml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> list[str]:
         """Split multiple scratchpad output XML into separate files."""
         logger.debug(f"Splitting multiple scratchpad output XML: {outputFile}")
         baseName, extension = os.path.splitext(outputFile)
@@ -149,7 +143,7 @@ class OutputHandler:
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, baseName, thinkingTag, split_and_save_thinking)
+            self._handle_scratchpad(root, baseName, thinkingTag)
 
             latex_documents = root.find(documentTag)
             if latex_documents:
