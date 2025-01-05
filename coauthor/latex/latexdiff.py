@@ -49,19 +49,19 @@ def process_diff_file(diff_file_name: str) -> None:
     write_file(diff_file_name, "\n".join(processed_lines))
 
 
-def process_tikzpicture_endings_diff(file_path: str) -> None:
+def process_tikzpicture_endings_diff(filePath: str) -> None:
     """Fix tikzpicture environment endings and indentation in LaTeX diff file."""
-    if not os.path.exists(file_path):
-        logger.warning(f"File {file_path} does not exist. Skipping.")
+    if not os.path.exists(filePath):
+        logger.warning(f"File {filePath} does not exist. Skipping.")
         return None
 
-    content = read_file(file_path)
+    content = read_file(filePath)
 
     # Apply tikz-specific replacements
     content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
 
-    write_file(file_path, content)
-    # logger.info(f"Tikzpicture endings fixed in {file_path}")
+    write_file(filePath, content)
+    # logger.info(f"Tikzpicture endings fixed in {filePath}")
 
 
 def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_indent: bool = False) -> str | None:
@@ -191,12 +191,12 @@ def run_latexdiff_vc_multiple(inputFiles: list[str], commitHash: str) -> None:
         _ = run_latexdiff_vc(inputFile, commitHash)
 
 
-def run_latexdiff_for_round(base_file: str, outputFile: str, round: int) -> str | None:
+def run_latexdiff_for_round(baseFile: str, outputFile: str, round: int) -> str | None:
     """Run latexdiff between base and output LaTeX files for a specific round."""
-    if base_file and outputFile and os.path.exists(base_file) and os.path.exists(outputFile):
-        _ = run_latexdiff(base_file, outputFile, suffix="_diff")
+    if baseFile and outputFile and os.path.exists(baseFile) and os.path.exists(outputFile):
+        _ = run_latexdiff(baseFile, outputFile, suffix="_diff")
     else:
-        logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {base_file} or {outputFile}")
+        logger.warning(f"Could not generate latexdiff for round {round}. Files not found: {baseFile} or {outputFile}")
 
 
 def run_latexdiff_between_rounds(outputFile1: str, outputFile2: str) -> str | None:
