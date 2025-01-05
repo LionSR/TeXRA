@@ -204,32 +204,58 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     <html>
       <head>
         <style>
+          :root {
+            /* Colors */
+            --background-color: var(--vscode-editor-background);
+            --text-color: var(--vscode-editor-foreground);
+            --button-background: var(--vscode-button-background);
+            --button-foreground: var(--vscode-button-foreground);
+            --button-hover-background: var(--vscode-button-hoverBackground);
+            --input-background: var(--vscode-input-background);
+            --input-foreground: var(--vscode-input-foreground);
+            --input-border: var(--vscode-input-border);
+            --panel-border: var(--vscode-panel-border);
+            --list-hover-background: var(--vscode-list-hoverBackground);
+            --list-active-selection-background: var(--vscode-list-activeSelectionBackground);
+            --list-active-selection-foreground: var(--vscode-list-activeSelectionForeground);
+            --description-foreground: var(--vscode-descriptionForeground);
+            
+            /* Typography */
+            --font-family: var(--vscode-font-family);
+            --font-size: var(--vscode-font-size);
+            --font-weight: var(--vscode-font-weight);
+          }
+
           body {
             padding: 0;
             margin: 0;
             display: flex;
             height: 100vh;
-            font-family: monospace;
-            font-size: 12px;
-            background: var(--vscode-editor-background);
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            background: var(--background-color);
+            color: var(--text-color);
           }
+
           .main-container {
             display: flex;
             flex: 1;
             height: 100%;
           }
+
           .content-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             min-width: 0;
           }
+
           .tabs {
             display: flex;
             flex-direction: column;
             width: 120px;
             font-size: 11px;
-            border-left: 1px solid var(--vscode-panel-border);
+            border-left: 1px solid var(--panel-border);
             height: 100%;
           }
 
@@ -240,8 +266,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           
           .clear-all-container {
             flex-shrink: 0;
-            background: var(--vscode-editor-background);
-            border-top: 1px solid var(--vscode-panel-border);
+            background: var(--background-color);
+            border-top: 1px solid var(--panel-border);
             padding: 4px;
           }
 
@@ -253,8 +279,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             cursor: pointer;
             border: none;
             background: none;
-            color: var(--vscode-foreground);
-            font-family: monospace;
+            color: var(--text-color);
+            font-family: var(--font-family);
             font-size: 11px;
           }
 
@@ -263,7 +289,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           }
 
           .clear-button:hover, .delete-button:hover {
-            background: var(--vscode-list-hoverBackground);
+            background: var(--list-hover-background);
           }
 
           .delete-button:hover {
@@ -274,25 +300,29 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             font-family: codicon;
             font-size: 14px;
           }
+
           .tab {
             padding: 4px 8px;
             cursor: pointer;
             border: none;
             background: none;
-            color: var(--vscode-foreground);
+            color: var(--text-color);
             text-align: left;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-family: monospace;
+            font-family: var(--font-family);
           }
+
           .tab:hover {
-            background: var(--vscode-list-hoverBackground);
+            background: var(--list-hover-background);
           }
+
           .tab.active {
-            background: var(--vscode-list-activeSelectionBackground);
-            color: var(--vscode-list-activeSelectionForeground);
+            background: var(--list-active-selection-background);
+            color: var(--list-active-selection-foreground);
           }
+
           .log-container {
             flex: 1;
             overflow-y: auto;
@@ -300,35 +330,41 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             white-space: pre;
             min-width: 0;
           }
+
           .log-header {
             padding: 2px 4px;
             font-size: 11px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            color: var(--vscode-descriptionForeground);
+            color: var(--description-foreground);
           }
+
           .workspace-name {
-            color: var(--vscode-descriptionForeground);
+            color: var(--description-foreground);
             font-size: 10px;
             padding: 2px 4px;
-            border-bottom: 1px solid var(--vscode-panel-border);
+            border-bottom: 1px solid var(--panel-border);
           }
+
           .header-actions {
             display: flex;
             gap: 4px;
           }
+
           .button {
             background: none;
             border: none;
-            color: var(--vscode-button-foreground);
+            color: var(--button-foreground);
             cursor: pointer;
             font-size: 11px;
             padding: 0 4px;
           }
+
           .button:hover {
-            color: var(--vscode-button-hoverBackground);
+            color: var(--button-hover-background);
           }
+
           .debug { color: #0087ff; }
           .info { color: #00af00; }
           .warn { color: #ffaf00; }
