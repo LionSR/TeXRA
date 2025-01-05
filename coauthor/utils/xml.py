@@ -10,7 +10,7 @@ def addCdataToTags(xml_data: str, tags: list[str]) -> str:
     return xml_data
 
 
-def addCdataToTags_multiple(xml_data: str, tags: list[str]) -> str:
+def addCdataToTagsMultiple(xml_data: str, tags: list[str]) -> str:
     """Wrap content of specified tags with CDATA sections, handling attributes."""
     for tag in tags:
         pattern = f"(<{tag}(?:\\s+[^>]*)?>)(.*?)(</{tag}>)"
@@ -18,10 +18,10 @@ def addCdataToTags_multiple(xml_data: str, tags: list[str]) -> str:
     return xml_data
 
 
-def extractTextFromTag(input_content: str, documentTag: str) -> str:
+def extractTextFromTag(content: str, documentTag: str) -> str:
     """Extract text between specified XML tags using regex."""
-    match = re.search(rf"<{documentTag}>(.*?)</{documentTag}>", input_content, re.DOTALL)
-    return match.group(1) if match else input_content
+    match = re.search(rf"<{documentTag}>(.*?)</{documentTag}>", content, re.DOTALL)
+    return match.group(1) if match else content
 
 
 def filterTagsFromText(content: str, tags: list[str] | str) -> str:

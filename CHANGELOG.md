@@ -289,11 +289,11 @@
 
 - Added intelligent merge functionality for LaTeX documents
 - Enhanced error handling in CoAuthorViewProvider for 'requestEditedFile' command
-- Added new function get_outputFile_name_merge in output_utils.py
+- Added new function getOutputFileName_merge in output_utils.py
 - Improved pattern handling in clean_single and pack_single functions in cli.py
 - Added process_tikzpicture_endings function in tex_tools.py for better TikZ handling
 - Updated process_first_round and process_reflection_round functions in process.py to handle scratchpad output
-- Updated merge.py to use get_outputFile_name_merge function
+- Updated merge.py to use getOutputFileName_merge function
 
 ## [0.9.5]
 
