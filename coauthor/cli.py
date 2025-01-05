@@ -6,7 +6,7 @@ from coauthor.latex import (
     extract_figurePaths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, getTexcount
+from coauthor.latex import runLatexdiff, runLatexdiffvc, runLatexdiffvc_multiple, getTexcount
 from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
@@ -163,7 +163,7 @@ def pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride):
 @click.option("--editedFile", required=True, help="Path to the edited file")
 def latexdiff(inputFile, editedFile):
     """Run latexdiff on the given input and edited files."""
-    diff_file = run_latexdiff(inputFile, editedFile)
+    diff_file = runLatexdiff(inputFile, editedFile)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
@@ -173,7 +173,7 @@ def latexdiff(inputFile, editedFile):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 def latexdiff_vc(inputFile, commitHash):
     """Run latexdiff-vc on the given input file and commit hash."""
-    diff_file = run_latexdiff_vc(inputFile, commitHash)
+    diff_file = runLatexdiffvc(inputFile, commitHash)
     if diff_file is None:
         logger.error("Failed to generate diff file")
 
@@ -183,7 +183,7 @@ def latexdiff_vc(inputFile, commitHash):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 def latexdiff_vc_multiple(inputFiles, commitHash):
     """Run latexdiff-vc on multiple input files and commit hash."""
-    run_latexdiff_vc_multiple(inputFiles, commitHash)
+    runLatexdiffvc_multiple(inputFiles, commitHash)
 
 
 @cli.command()

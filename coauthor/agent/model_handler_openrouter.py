@@ -55,7 +55,7 @@ class AnthropicviaOpenrouterHandler(OpenRouterHandler):
             base_url=self.get_base_url(),
         )
 
-    def update_message_content(self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState) -> None:
+    def updateMessageContent(self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState) -> None:
         last_message = messages[-1]
         if self.capabilities.supportsAssistantPrefill:
             # although OpenAI models do not support assistant prefill, some models (such as Anthropic) via OpenRouter might do
