@@ -8,7 +8,8 @@ from ..logger import logger
 
 from ..utils.img import getBase64EncodedImage, countPdfPages, processPdfInput
 
-from .agent_dataclass import AgentSetting, AgentConfig
+from .agent_dataclass import AgentSetting
+from .agent_config import AgentConfig
 from .agent_state import AgentStateRound, AgentStateGlobal
 
 from .model_config import ModelConfig, ModelProvider

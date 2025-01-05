@@ -95,24 +95,18 @@ export class OutputHandler {
     root: any[],
     baseName: string,
     thinkingTag: string,
-    splitAndSaveThinking: boolean,
   ): Promise<void> {
-    if (splitAndSaveThinking) {
-      const logFileThinking = `${baseName}_thinking.xml`;
-      logger.debug(CHANNEL, `Thinking file: ${logFileThinking}`);
-
-      // Find the object containing the thinkingTag
-      const scratchpadObj = root.find(
-        (item: { [key: string]: any }) => item[thinkingTag],
-      );
-      if (scratchpadObj && scratchpadObj[thinkingTag]) {
-        const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
-        if (scratchpadContent) {
-          await writeFile(
-            logFileThinking,
-            `<scratchpad>\n${scratchpadContent.trim()}\n</scratchpad>\n`,
-          );
-        }
+    // Find the object containing the thinkingTag
+    const scratchpadObj = root.find(
+      (item: { [key: string]: any }) => item[thinkingTag],
+    );
+    if (scratchpadObj && scratchpadObj[thinkingTag]) {
+      const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
+      if (scratchpadContent) {
+        logger.info(
+          CHANNEL,
+          `Scratchpad content:\n${scratchpadContent.trim()}`,
+        );
       }
     }
   }
@@ -177,7 +171,6 @@ export class OutputHandler {
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-    splitAndSaveThinking: boolean = false,
   ): Promise<string> {
     logger.debug(CHANNEL, `Splitting scratchpad output XML: ${outputFile}`);
 
@@ -203,12 +196,7 @@ export class OutputHandler {
       // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent);
 
-      await this.handleScratchpad(
-        root,
-        name,
-        thinkingTag,
-        splitAndSaveThinking,
-      );
+      await this.handleScratchpad(root, name, thinkingTag);
 
       const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
@@ -228,7 +216,6 @@ export class OutputHandler {
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-    splitAndSaveThinking: boolean = false,
   ): Promise<string[]> {
     logger.debug(
       CHANNEL,
@@ -253,12 +240,7 @@ export class OutputHandler {
 
       // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
 
-      await this.handleScratchpad(
-        root,
-        name,
-        thinkingTag,
-        splitAndSaveThinking,
-      );
+      await this.handleScratchpad(root, name, thinkingTag);
 
       // Find the object containing the documentTag
       const docObj = root.find(
