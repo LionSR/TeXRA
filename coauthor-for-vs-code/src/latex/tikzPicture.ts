@@ -11,7 +11,6 @@ import * as logger from '../logger/logUtils';
 import {
   readFile,
   fileExists,
-  getWorkspacePath,
   writeFile,
   createDirectory,
 } from '../utils/fileUtils';

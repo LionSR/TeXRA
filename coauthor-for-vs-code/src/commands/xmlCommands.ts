@@ -1,5 +1,8 @@
+// Third-party imports
 import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
+
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'XML';
