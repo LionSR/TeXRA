@@ -9,7 +9,8 @@ from ..logger import logger
 from ..utils.file import readFile
 
 from .agent_state import AgentStateRound
-from .agent_dataclass import AgentSetting, AgentConfig
+from .agent_dataclass import AgentSetting
+from .agent_config import AgentConfig
 
 from .model_handler import ModelHandler
 from .response_usage import OpenAIAPIResponseUsage
