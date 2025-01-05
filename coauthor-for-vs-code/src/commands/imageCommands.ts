@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -10,7 +10,7 @@ import {
   countPdfPages,
   getBase64EncodedImage,
   processPdfInput,
-  singlePagePdfToPng,
+  singlePagePdf2Png,
 } from '../utils/imgUtils';
 
 const CHANNEL = 'ImageCommands';
@@ -221,7 +221,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     }
 
     // Convert single page
-    const base64String = await singlePagePdfToPng(
+    const base64String = await singlePagePdf2Png(
       selectedFile,
       parseInt(pageNum),
       300,

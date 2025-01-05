@@ -12,17 +12,17 @@ from ..logger import logger
 class OpenRouterHandler(OpenAIHandler):
     """Handler for models accessed through OpenRouter."""
 
-    def get_client(self) -> OpenAI:
+    def getClient(self) -> OpenAI:
         """Get OpenAI client with OpenRouter configuration."""
         api_key = self.get_api_key()
-        baseUrl = self.get_baseUrl()
-        logger.info(f"Using OpenRouter API key. Base URL: {baseUrl}")
+        base_url = self.get_base_url()
+        logger.info(f"Using OpenRouter API key. Base URL: {base_url}")
         return OpenAI(
             api_key=api_key,
-            baseUrl=baseUrl,
+            base_url=base_url,
         )
 
-    def create_response(
+    def createResponse(
         self,
         client: OpenAI,
         messages: list[dict],
@@ -48,14 +48,14 @@ class OpenRouterHandler(OpenAIHandler):
 class AnthropicviaOpenrouterHandler(OpenRouterHandler):
     """Handler for Anthropic models using OpenAI-compatible API via OpenRouter."""
 
-    def get_client(self) -> OpenAI:
+    def getClient(self) -> OpenAI:
         """Get OpenAI client with Anthropic's base URL."""
         return OpenAI(
             api_key=self.get_api_key(),
-            baseUrl=self.get_baseUrl(),
+            base_url=self.get_base_url(),
         )
 
-    def update_message_content(self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState) -> None:
+    def updateMessageContent(self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState) -> None:
         last_message = messages[-1]
         if self.capabilities.supportsAssistantPrefill:
             # although OpenAI models do not support assistant prefill, some models (such as Anthropic) via OpenRouter might do

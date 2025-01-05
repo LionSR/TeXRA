@@ -1,7 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
@@ -9,7 +9,7 @@ import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings, AgentPrompts } from './AgentDataclass';
+import { AgentSetting, AgentPrompt } from './AgentDataclass';
 
 const CHANNEL = 'MergeAgent';
 logger.initializeLogging(CHANNEL);
@@ -21,11 +21,11 @@ export class MergeAgent extends DirectAgent {
   constructor(
     modelHandler: ModelHandler,
     agentConfig: AgentConfig,
-    agentSettings: AgentSettings,
-    agentPrompts: AgentPrompts,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
     agentPath: string,
   ) {
-    super(modelHandler, agentConfig, agentSettings, agentPrompts, agentPath);
+    super(modelHandler, agentConfig, agentSetting, agentPrompt, agentPath);
     this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
   }
 

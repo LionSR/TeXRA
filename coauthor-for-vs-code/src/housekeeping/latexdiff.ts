@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -22,7 +22,7 @@ import { TEMP_EXTENSIONS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initializeLogging(CHANNEL);
 
-export async function runPackLatexDiffVC(
+export async function runPackLatexdiffvc(
   inputFile: string,
   commitHash: string,
   clean: boolean = false,
@@ -117,7 +117,7 @@ export async function runPackLatexDiffVC(
   }
 }
 
-export async function runPackLatexDiffVCMultiple(
+export async function runPackLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
   clean: boolean = false,
@@ -138,13 +138,13 @@ export async function runPackLatexDiffVCMultiple(
 
   for (const inputFile of inputFiles) {
     logger.debug(CHANNEL, `Processing file: ${inputFile}`);
-    await runPackLatexDiffVC(inputFile, commitHash, clean);
+    await runPackLatexdiffvc(inputFile, commitHash, clean);
   }
 
   logger.info(CHANNEL, 'Multiple LaTeX diff files processed');
 }
 
-export async function runCleanLatexDiffVC(
+export async function runCleanLatexdiffvc(
   inputFile: string,
   commitHash: string,
 ): Promise<void> {
@@ -200,7 +200,7 @@ export async function runCleanLatexDiffVC(
   }
 }
 
-export async function runCleanLatexDiffVCMultiple(
+export async function runCleanLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
 ): Promise<void> {
@@ -220,7 +220,7 @@ export async function runCleanLatexDiffVCMultiple(
 
   for (const inputFile of inputFiles) {
     logger.debug(CHANNEL, `Processing file: ${inputFile}`);
-    await runCleanLatexDiffVC(inputFile, commitHash);
+    await runCleanLatexdiffvc(inputFile, commitHash);
   }
 
   logger.info(CHANNEL, 'Multiple LaTeX diff files cleaned');

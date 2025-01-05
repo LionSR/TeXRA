@@ -1,4 +1,4 @@
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -81,8 +81,8 @@ export async function getTexCount(
 export async function getTexCountStats(
   filePaths: string | string[],
 ): Promise<string | null> {
-  const texCountStats = await getTexCount(filePaths);
-  return texCountStats
-    ? `Tex Count Statistics:<texcount>\n${texCountStats}\n</texcount>\n\n`
+  const texcountStats = await getTexCount(filePaths);
+  return texcountStats
+    ? `Tex Count Statistics:<texcount>\n${texcountStats}\n</texcount>\n\n`
     : null;
 }
