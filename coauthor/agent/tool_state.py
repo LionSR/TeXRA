@@ -24,6 +24,6 @@ class ToolState:
         """Update the accumulated output."""
         self.accumulatedOutput = output
 
-    def add_figureFiles(self, files: list[str]) -> None:
+    def addFigureFiles(self, files: list[str]) -> None:
         """Add figure files to the list."""
         self.figureFiles.extend(files)

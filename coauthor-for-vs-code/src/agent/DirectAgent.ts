@@ -20,7 +20,7 @@ export class DirectAgent extends BaseReflectionAgent {
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
-      this.agentSettings.outputExt,
+      this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
     );

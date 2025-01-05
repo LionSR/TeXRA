@@ -2,7 +2,7 @@ import os
 import re
 
 from ..logger import logger
-from ..utils.file import read_file
+from ..utils.file import readFile
 
 
 def _parse_graphicspath(content: str) -> list[str]:
@@ -31,12 +31,12 @@ def _parse_graphicspath(content: str) -> list[str]:
     return paths
 
 
-def extract_figure_paths_from_latex(latexFile: str) -> list[str] | None:
+def extract_figurePaths_from_latex(latexFile: str) -> list[str] | None:
     r"""Extract absolute paths of figures referenced by \includegraphics commands in LaTeX file."""
     if not latexFile or not os.path.exists(latexFile):
         return None
 
-    content = read_file(latexFile)
+    content = readFile(latexFile)
     if not content:
         return None
 
@@ -53,27 +53,27 @@ def extract_figure_paths_from_latex(latexFile: str) -> list[str] | None:
     # Regular expressions to match figure inclusion commands
     figure_patterns = [r"\\includegraphics(?:\[.*?\])?\{(.*?)\}", r"\\begin\{overpic\}(?:\[.*?\])?\{(.*?)\}"]
 
-    figure_paths = []
+    figurePaths = []
     for pattern in figure_patterns:
         matches = re.findall(pattern, content)
         for path in matches:
             # Try each graphics path
             for graphics_path in graphicspaths:
-                full_path_base = os.path.join(graphics_path, path)
+                fullPath_base = os.path.join(graphics_path, path)
 
                 # Handle paths with and without extensions
                 if not os.path.splitext(path)[1]:
                     for ext in [".pdf", ".png", ".jpg", ".jpeg"]:
-                        full_path = full_path_base + ext
-                        if os.path.exists(full_path):
-                            figure_paths.append(full_path)
+                        fullPath = fullPath_base + ext
+                        if os.path.exists(fullPath):
+                            figurePaths.append(fullPath)
                             break
                 else:
-                    if os.path.exists(full_path_base):
-                        figure_paths.append(full_path_base)
+                    if os.path.exists(fullPath_base):
+                        figurePaths.append(fullPath_base)
                         break
 
-    if figure_paths:
-        logger.info(f"Found {len(figure_paths)} figures in {latexFile}")
-        return figure_paths
+    if figurePaths:
+        logger.info(f"Found {len(figurePaths)} figures in {latexFile}")
+        return figurePaths
     return None

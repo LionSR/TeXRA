@@ -13,21 +13,20 @@ from ..logger import logger
 # Local imports - latex utils
 from ..latex import (
     extract_and_compile_tikzpictures_with_labels,
-    extract_figure_paths_from_latex,
-    best_connection_method,
-    get_texcountStats,
+    extract_figurePaths_from_latex,
+    bestConnectionMethod,
+    getTexcountStats,
 )
 
 # Local imports - utilities
-from ..utils.file import read_file, write_file, append_file
-from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
-from ..utils.replacement import get_all_replacements, applyReplacements, get_replacements_by_category, apply_replacement_regex
-from ..utils.repetition import check_for_massive_repetition
-from ..utils.xml import get_xml_format_from_files
+from ..utils.file import readFile, writeFile, appendFile
+from ..utils.prompt import renderPrompt, getListOfFiles, getFirstKCharsFromDocument, write_prompt_to_xml, getXmlFormatFromFiles
+from ..utils.replacement import getAllReplacements, applyReplacements, getReplacementsByCategory, applyReplacementRegex
+from ..utils.repetition import checkForMassiveRepetition
 
 # Local imports - agent components
 from .agent_config import AgentConfig
-from .agent_dataclass import AgentSettings, AgentPrompts
+from .agent_dataclass import AgentSetting, AgentPrompt
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 from .logdb import create_log_entry, update_log_statistics, update_log_outputFiles
@@ -41,17 +40,17 @@ class BaseReflectionAgent(ABC):
     """Abstract base class for reflect chain agents."""
 
     def __init__(
-        self, modelHandler: ModelHandler, agentConfig: AgentConfig, agentSettings: AgentSettings, agentPrompts: AgentPrompts, agentPath: str
+        self, modelHandler: ModelHandler, agentConfig: AgentConfig, agentSetting: AgentSetting, agentPrompt: AgentPrompt, agentPath: str
     ) -> None:
         self.modelHandler = modelHandler
         self.agentConfig = agentConfig
-        self.agentSettings = agentSettings
-        self.agentPrompts = agentPrompts
+        self.agentSetting = agentSetting
+        self.agentPrompt = agentPrompt
         self.agentPath = agentPath
 
         logger.debug(f"AgentConfig: {self.agentConfig}\n")
-        logger.debug(f"AgentSettings: {self.agentSettings}\n")
-        # logger.debug(f"AgentPrompts: {self.agentPrompts}\n")
+        logger.debug(f"AgentSetting: {self.agentSetting}\n")
+        # logger.debug(f"AgentPrompt: {self.agentPrompt}\n")
 
         logger.debug(f"ModelConfig: {self.modelHandler.config}\n")
         logger.debug(f"ModelHandler: {self.modelHandler}\n")
@@ -62,20 +61,20 @@ class BaseReflectionAgent(ABC):
         self.baseFiles = []
 
         self.setup()
-        self.user_vars = self.get_user_vars()
-        self.output_handler = OutputHandler(self.agentSettings, self.agentConfig, self.modelHandler, self.logId)
+        self.userVars = self.get_userVars()
+        self.outputHandler = OutputHandler(self.agentSetting, self.agentConfig, self.modelHandler, self.logId)
 
-    def get_user_vars(self) -> dict[str, Any]:
+    def get_userVars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
         # Build user variables incrementally with clear categories
-        user_vars = {}
-        user_vars.update(self._get_basic_vars())
-        user_vars.update(self._get_file_vars())
-        user_vars.update(self._get_required_file_vars())
-        user_vars.update(self._get_pattern_based_file_vars())
-        user_vars.update(self._get_outputFiles_order())
-        user_vars.update(self._get_toolFlags())
-        return user_vars
+        userVars = {}
+        userVars.update(self._get_basic_vars())
+        userVars.update(self._get_file_vars())
+        userVars.update(self._get_required_file_vars())
+        userVars.update(self._get_pattern_based_file_vars())
+        userVars.update(self._get_outputFiles_order())
+        userVars.update(self._get_toolFlags())
+        return userVars
 
     def _get_basic_vars(self) -> dict[str, Any]:
         """Get basic model and instruction variables."""
@@ -90,74 +89,74 @@ class BaseReflectionAgent(ABC):
 
     def _get_file_vars(self) -> dict[str, Any]:
         """Get input, reference, and auxiliary file variables."""
-        user_vars = {}
+        userVars = {}
 
         all_inputFiles = [self.agentConfig.inputFile] + (self.agentConfig.inputFiles or [])
         all_referenceFiles = [self.agentConfig.referenceFile] + (self.agentConfig.referenceFiles or [])
         all_auxiliaryFiles = [self.agentConfig.auxiliaryFile] + (self.agentConfig.auxiliaryFiles or [])
 
         # Handle single files
-        single_file_mappings = {
+        singleFileMappings = {
             "INPUT": self.agentConfig.inputFile,
             "REFERENCE": self.agentConfig.referenceFile,
             "AUXILIARY": self.agentConfig.auxiliaryFile,
             "EDITED": self.agentConfig.editedFile,
         }
 
-        for prefix, filePath in single_file_mappings.items():
-            user_vars[f"{prefix}_FILE"] = filePath
-            user_vars[f"{prefix}_CONTENT"] = read_file(filePath) if filePath else None
+        for prefix, filePath in singleFileMappings.items():
+            userVars[f"{prefix}_FILE"] = filePath
+            userVars[f"{prefix}_CONTENT"] = readFile(filePath) if filePath else None
 
         # Handle file collections
-        collection_mappings = {
+        collectionMappings = {
             "INPUT": (self.agentConfig.inputFiles, all_inputFiles),
             "REFERENCE": (self.agentConfig.referenceFiles, all_referenceFiles),
             "AUXILIARY": (self.agentConfig.auxiliaryFiles, all_auxiliaryFiles),
         }
 
-        for prefix, (additional_files, all_files) in collection_mappings.items():
-            user_vars[f"ADDITIONAL_{prefix}S"] = get_xml_format_from_files(additional_files) if additional_files else None
-            user_vars[f"ALL_{prefix}S"] = get_xml_format_from_files(all_files) if all_files else None
-            user_vars[f"LIST_OF_ALL_{prefix}S"] = get_list_of_files(all_files)
+        for prefix, (additionalFiles, allFiles) in collectionMappings.items():
+            userVars[f"ADDITIONAL_{prefix}S"] = getXmlFormatFromFiles(additionalFiles) if additionalFiles else None
+            userVars[f"ALL_{prefix}S"] = getXmlFormatFromFiles(allFiles) if allFiles else None
+            userVars[f"LIST_OF_ALL_{prefix}S"] = getListOfFiles(allFiles)
 
-        return user_vars
+        return userVars
 
     def _get_required_file_vars(self) -> dict[str, Any]:
         """Get variables from required files specified in agent settings."""
-        user_vars = {}
+        userVars = {}
 
         # Add variables for required files
-        if self.agentSettings.requiredFiles:
-            for varName, filePath in self.agentSettings.requiredFiles.items():
+        if self.agentSetting.requiredFiles:
+            for varName, filePath in self.agentSetting.requiredFiles.items():
                 if filePath is not None and os.path.exists(filePath):
-                    fileContent = read_file(filePath)
-                    user_vars[f"{varName}_FILE"] = filePath
-                    user_vars[f"{varName}_CONTENT"] = fileContent
+                    fileContent = readFile(filePath)
+                    userVars[f"{varName}_FILE"] = filePath
+                    userVars[f"{varName}_CONTENT"] = fileContent
                     logger.info(f"Found from [requiredFiles] the [VAR '{varName}']: {filePath}")
                 else:
                     logger.warning(f"[Required file] {filePath} not found from [VAR '{varName}']")
 
         # Add variables for internal required files (from prompt directory)
-        if self.agentSettings.requiredFilesInternal:
-            for varName, filePath in self.agentSettings.requiredFilesInternal.items():
-                full_path = os.path.join(self.agentPath, filePath)
-                if os.path.exists(full_path) and full_path:
-                    fileContent = read_file(full_path)
-                    user_vars[f"{varName}_FILE"] = full_path
-                    user_vars[f"{varName}_CONTENT"] = fileContent
-                    logger.info(f"Found from [requiredFilesInternal] the [VAR '{varName}']: {full_path}")
+        if self.agentSetting.requiredFilesInternal:
+            for varName, filePath in self.agentSetting.requiredFilesInternal.items():
+                fullPath = os.path.join(self.agentPath, filePath)
+                if os.path.exists(fullPath) and fullPath:
+                    fileContent = readFile(fullPath)
+                    userVars[f"{varName}_FILE"] = fullPath
+                    userVars[f"{varName}_CONTENT"] = fileContent
+                    logger.info(f"Found from [requiredFilesInternal] the [VAR '{varName}']: {fullPath}")
                 else:
-                    logger.warning(f"[Required file internal] {full_path} not found from [VAR '{varName}']")
+                    logger.warning(f"[Required file internal] {fullPath} not found from [VAR '{varName}']")
 
-        return user_vars
+        return userVars
 
     def _get_pattern_based_file_vars(self) -> dict[str, Any]:
         """Get variables from pattern-based file mappings specified in agent settings."""
-        user_vars = {}
+        userVars = {}
 
         # Handle pattern-based file mappings if defined in settings
-        if self.agentSettings.filePatternsContain:
-            for pattern_config in self.agentSettings.filePatternsContain:
+        if self.agentSetting.filePatternsContain:
+            for pattern_config in self.agentSetting.filePatternsContain:
                 pattern = pattern_config["pattern"].lower()
                 varName = pattern_config["varName"]
                 categories = pattern_config["categories"]
@@ -170,10 +169,10 @@ class BaseReflectionAgent(ABC):
                     if category.endswith("_file"):  # Single file categories
                         if category_value and pattern in category_value.lower():
                             if os.path.exists(category_value):
-                                fileContent = read_file(category_value)
+                                fileContent = readFile(category_value)
                                 if fileContent:
-                                    user_vars[varName + "_FILE"] = category_value
-                                    user_vars[varName + "_CONTENT"] = fileContent
+                                    userVars[varName + "_FILE"] = category_value
+                                    userVars[varName + "_CONTENT"] = fileContent
                                     logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{varName}']: {category_value}")
                                 else:
                                     logger.warning(f"File {category_value} not found from [Pattern '{pattern}']")
@@ -185,10 +184,10 @@ class BaseReflectionAgent(ABC):
                             for file in category_value:
                                 if pattern in file.lower():
                                     if os.path.exists(file):
-                                        fileContent = read_file(file)
+                                        fileContent = readFile(file)
                                         if fileContent:
-                                            user_vars[varName + "_FILE"] = file
-                                            user_vars[varName + "_CONTENT"] = fileContent
+                                            userVars[varName + "_FILE"] = file
+                                            userVars[varName + "_CONTENT"] = fileContent
                                             logger.info(f"Found from [Pattern '{pattern}'] the [VAR '{varName}']: {file}")
                                         else:
                                             logger.warning(f"File {file} not found from [Pattern '{pattern}']")
@@ -196,21 +195,21 @@ class BaseReflectionAgent(ABC):
                                         logger.warning(f"File {file} not found from [Pattern '{pattern}']")
                                     break  # Stop after first match
 
-        return user_vars
+        return userVars
 
     def _get_outputFiles_order(self) -> dict[str, Any]:
         """Get variables for output files order."""
-        user_vars = {}
+        userVars = {}
 
         # Handle output files order - use defaultOutputFiles if no outputFiles specified
         if self.agentConfig.outputFiles:
-            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.agentConfig.outputFiles)
-        elif hasattr(self.agentSettings, "defaultOutputFiles"):
+            userVars["OUTPUT_FILES_ORDER"] = ", ".join(self.agentConfig.outputFiles)
+        elif hasattr(self.agentSetting, "defaultOutputFiles"):
             # If no outputFiles specified but defaultOutputFiles exists in settings
-            self.agentConfig.outputFiles = self.agentSettings.defaultOutputFiles
-            user_vars["OUTPUT_FILES_ORDER"] = ", ".join(self.agentSettings.defaultOutputFiles)
+            self.agentConfig.outputFiles = self.agentSetting.defaultOutputFiles
+            userVars["OUTPUT_FILES_ORDER"] = ", ".join(self.agentSetting.defaultOutputFiles)
 
-        return user_vars
+        return userVars
 
     def _get_toolFlags(self) -> dict[str, Any]:
         """Get variables related to tool usage flags."""
@@ -232,16 +231,16 @@ class BaseReflectionAgent(ABC):
         logger.info(f"Processing file: {self.agentConfig.inputFile}")
 
         # Initialize client and check scratchpad usage
-        self.client = self.modelHandler.get_client()
+        self.client = self.modelHandler.getClient()
 
-        self.use_scratchpad = "<scratchpad>" in self.agentSettings.prefills if self.agentSettings.prefills else False
+        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
         self.outputFile[0] = self.get_outputFile(currRound=0)
         self.outputFile[1] = self.get_outputFile(currRound=1)
 
         # Initialize logging and database entry
-        self.logId = create_log_entry(self.agentConfig, self.agentSettings)
+        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
 
-    def handle_output(
+    def handleOutput(
         self,
         stateRound: AgentStateRound,
         stateGlobal: AgentStateGlobal,
@@ -254,8 +253,8 @@ class BaseReflectionAgent(ABC):
         if self.logId is not None:
             update_log_statistics(self.logId, stateGlobal, stateRound, currRound)
 
-        update_log_outputFiles(self.logId, outputFile, self.output_handler.outputFiles[currRound])
-        return self.output_handler.outputFiles[currRound]
+        update_log_outputFiles(self.logId, outputFile, self.outputHandler.outputFiles[currRound])
+        return self.outputHandler.outputFiles[currRound]
 
     @abstractmethod
     def get_outputFile(self, currRound: int) -> str:
@@ -273,67 +272,66 @@ class BaseReflectionAgent(ABC):
         endTurn = False
 
         while not endTurn:
-            file_exists = os.path.exists(outputFile)
-            start_time = time.time()
-            responseObject = self.modelHandler.create_response(
+            fileExists = os.path.exists(outputFile)
+            startTime = time.time()
+            responseObject = self.modelHandler.createResponse(
                 self.client,
                 messages,
-                self.agentSettings.temperature or 0.0,
-                render_prompt(self.agentPrompts.systemPrompt, self.user_vars),
-                self.agentSettings.endTag,
+                self.agentSetting.temperature or 0.0,
+                renderPrompt(self.agentPrompt.systemPrompt, self.userVars),
+                self.agentSetting.endTag,
             )
-            responseTime = time.time() - start_time
-            stateRound.update_responseTime(responseTime)
+            responseTime = time.time() - startTime
+            stateRound.updateResponseTime(responseTime)
             logger.info(f"Response time: {responseTime:.2f}s")
 
             # Extract and validate response
             newResponse, responseUsage, stopReason = self.modelHandler.extract_response(
-                responseObject, self.agentSettings.endTag, self.agentConfig.toolConfig.autoConfirmation
+                responseObject, self.agentSetting.endTag, self.agentConfig.toolConfig.autoConfirmation
             )
 
             logger.info(f"Stop reason: {stopReason}")
-
             logger.info(f"Token usage: {responseUsage}")
 
             # Compute statistics and update states
-            APIUsage = self.modelHandler.compute_response_usage(responseUsage, responseTime)
-            stateRound.update_token_counts(APIUsage)
-            stateGlobal.update_from_currRound(stateRound)
+            APIUsage = self.modelHandler.computeResponseUsage(responseUsage, responseTime)
+            stateRound.updateTokenCounts(APIUsage)
+            stateGlobal.updateFromCurrRound(stateRound)
             logger.debug(f"State round: {stateRound}")
             logger.debug(f"State global: {stateGlobal}")
 
             # Early exit for repetition
             # maybe this should be checked with the accumulated output instead of the last response...
             # if the model starts all over again from the beginning, this leads to a bug
-            if check_for_massive_repetition(toolState.lastResponse, newResponse):
+            if checkForMassiveRepetition(toolState.lastResponse, newResponse):
                 logger.error(f"The new response is: {newResponse}")
                 logger.error("Massive repetition detected - skipping this response")
                 break
 
             # Chain response processing operations
             newResponse = (
-                apply_replacement_regex(newResponse, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
+                applyReplacementRegex(newResponse, getReplacementsByCategory("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
                 if self.modelHandler.capabilities.likesToAskForConfirmation and self.agentConfig.toolConfig.autoConfirmation
                 else newResponse
             )
-            newResponse = applyReplacements(newResponse, get_all_replacements()).strip()
+            newResponse = applyReplacements(newResponse, getAllReplacements()).strip()
 
             toolState.update_lastResponse(newResponse)
 
             # Process response connection with proper slicing
-            bestConnector, _ = best_connection_method(toolState.lastResponse[-K_SLICE:], newResponse[:K_SLICE])
+            bestConnector, _ = bestConnectionMethod(toolState.lastResponse[-K_SLICE:], newResponse[:K_SLICE])
 
             # Update state and file atomically
             toolState.update_accumulatedOutput(toolState.accumulatedOutput + bestConnector + newResponse)
 
             # Write or append to output file
-            if not file_exists:
+            if not fileExists:
                 logger.debug(f"Creating new file: {outputFile}")
-                write_file(outputFile, newResponse)
-                file_exists = True
+                writeFile(outputFile, newResponse)
+                fileExists = True
             else:
                 logger.debug(f"Appending to existing file: {outputFile}")
-                append_file(outputFile, bestConnector + newResponse)
+                appendFile(outputFile, bestConnector + newResponse)
 
             # Log response boundaries
             logger.info("Response preview:")
@@ -350,7 +348,7 @@ class BaseReflectionAgent(ABC):
             )
 
             # Check stop conditions
-            endTurn, should_stop = self.modelHandler.check_stop_conditions(stopReason, newResponse, stateRound, stateGlobal, self.agentSettings)
+            endTurn, should_stop = self.modelHandler.check_stop_conditions(stopReason, newResponse, stateRound, stateGlobal, self.agentSetting)
             if should_stop:
                 break
 
@@ -359,23 +357,23 @@ class BaseReflectionAgent(ABC):
             logger.info(f"Starting continuation #{stateRound.continuationCount}")
 
             # Check if model should continue generating
-            if self.modelHandler.should_continue(stopReason, newResponse, self.agentSettings):
+            if self.modelHandler.should_continue(stopReason, newResponse, self.agentSetting):
                 logger.info("Should continue - adding continuation message to conversation")
-                self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSettings, self.agentConfig)
+                self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSetting, self.agentConfig)
                 continue
 
         return stateRound, stateGlobal, toolState, endTurn
 
     def _get_prefill_for_round(self, currRound: int) -> str:
         """Get prefill content for the current round."""
-        prefill = self.agentSettings.prefills[currRound] if currRound < len(self.agentSettings.prefills) else self.agentSettings.prefills[0]
+        prefill = self.agentSetting.prefills[currRound] if currRound < len(self.agentSetting.prefills) else self.agentSetting.prefills[0]
         return prefill if prefill else ""
 
     def _handle_round_completion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
         """Handle output and logging for round completion."""
-        self.handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound=currRound)
-        input_info = f"input file {self.agentConfig.inputFile} " f"and/or input files {self.agentConfig.inputFiles}"
-        logger.info(f"\n\nProcessed {input_info}. The round {currRound} output was saved as {outputFile}")
+        self.handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound=currRound)
+        inputInfo = f"input file {self.agentConfig.inputFile} " f"and/or input files {self.agentConfig.inputFiles}"
+        logger.info(f"\n\nProcessed {inputInfo}. The round {currRound} output was saved as {outputFile}")
         logger.info(f"Completed round {currRound}")
 
     def process(self):
@@ -386,29 +384,29 @@ class BaseReflectionAgent(ABC):
 
         # Handle tex count if enabled
         if self.agentConfig.toolConfig.includeTexCount:
-            toolState.texcountStats = get_texcountStats(inputFiles)
+            toolState.texcountStats = getTexcountStats(inputFiles)
 
         # Handle prefill from input if enabled
         if self.agentConfig.toolConfig.usePrefillFromInput:
-            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, K_SLICE)
+            toolState.firstKCharsFromInput = getFirstKCharsFromDocument(self.agentConfig.inputFile, K_SLICE)
 
         # Handle figure extraction for vision-capable models
         if self.modelHandler.capabilities.supportsVision:
             if self.agentConfig.figureFile and self.agentConfig.figureFile not in toolState.figureFiles:
-                toolState.add_figureFiles([self.agentConfig.figureFile])
+                toolState.addFigureFiles([self.agentConfig.figureFile])
             if self.agentConfig.figureFiles:
-                toolState.add_figureFiles(self.agentConfig.figureFiles)
+                toolState.addFigureFiles(self.agentConfig.figureFiles)
 
             if self.agentConfig.toolConfig.autoExtractFigure:
                 # this now only works for single input file. In the future, we should support multiple input files.
-                if extracted_figures := extract_figure_paths_from_latex(self.agentConfig.inputFile):
-                    toolState.add_figureFiles(extracted_figures)
+                if extracted_figures := extract_figurePaths_from_latex(self.agentConfig.inputFile):
+                    toolState.addFigureFiles(extracted_figures)
 
             if self.agentConfig.toolConfig.autoExtractTikzFigure:
                 for inputFile in inputFiles:
-                    extracted_tikz_figures = extract_and_compile_tikzpictures_with_labels(inputFile)
-                    if extracted_tikz_figures:
-                        toolState.add_figureFiles(extracted_tikz_figures)
+                    extractedTikzFigures = extract_and_compile_tikzpictures_with_labels(inputFile)
+                    if extractedTikzFigures:
+                        toolState.addFigureFiles(extractedTikzFigures)
 
         # Initialize state and messages
         currRound = 0
@@ -418,9 +416,9 @@ class BaseReflectionAgent(ABC):
         messages = []
 
         # Set up initial prompts
-        systemPrompt = render_prompt(self.agentPrompts.systemPrompt, self.user_vars)
-        userRequest = render_prompt(self.agentPrompts.userRequest, self.user_vars)
-        userPrefix = render_prompt(self.agentPrompts.userPrefix, self.user_vars)
+        systemPrompt = renderPrompt(self.agentPrompt.systemPrompt, self.userVars)
+        userRequest = renderPrompt(self.agentPrompt.userRequest, self.userVars)
+        userPrefix = renderPrompt(self.agentPrompt.userPrefix, self.userVars)
 
         if toolState.texcountStats:
             userPrefix = f"{toolState.texcountStats}{userPrefix}"
@@ -444,7 +442,7 @@ class BaseReflectionAgent(ABC):
         # Initialize output and handle prefill
         endTurn, messages = self.modelHandler.initialize_output_and_prefill(
             self.agentConfig,
-            self.agentSettings,
+            self.agentSetting,
             messages,
             toolState,
             self.outputFile[0],
@@ -466,37 +464,37 @@ class BaseReflectionAgent(ABC):
 
         return stateRound, stateGlobal, messages, endTurn, toolState
 
-    def _handle_outputFile_processing(self, outputFiles: list[str], currRound: int, toolState: ToolState):
+    def __handleToolStateForOutput(self, outputFiles: list[str], currRound: int, toolState: ToolState):
         """Helper method to handle tex count and TikZ figure extraction for output files."""
         if self.agentConfig.toolConfig.includeTexCount:
-            toolState.texcountStats = get_texcountStats(outputFiles)
+            toolState.texcountStats = getTexcountStats(outputFiles)
 
         if self.modelHandler.capabilities.supportsVision and self.agentConfig.toolConfig.autoExtractTikzFigureReflect:
             for outputFile in outputFiles:
                 logger.debug(f"Extracting TikZ figures from {outputFile}")
-                if extracted_tikz_figures := extract_and_compile_tikzpictures_with_labels(outputFile):
-                    toolState.add_figureFiles(extracted_tikz_figures)
+                if extractedTikzFigures := extract_and_compile_tikzpictures_with_labels(outputFile):
+                    toolState.addFigureFiles(extractedTikzFigures)
 
     def reflect(self, stateGlobal: AgentStateGlobal, messages: list[dict], toolState: ToolState, currRound: int = 1):
         """Process reflection round."""
         # Handle output file processing
         if self.agentConfig.outputFiles:
-            self._handle_outputFile_processing(self.agentConfig.outputFiles, currRound, toolState)
+            self.__handleToolStateForOutput(self.agentConfig.outputFiles, currRound, toolState)
         else:
             # Handle single output file
-            generated_outputFile = self.output_handler.outputFiles[0][0]
-            self._handle_outputFile_processing([generated_outputFile], currRound, toolState)
+            generatedOutputFile = self.outputHandler.outputFiles[0][0]
+            self.__handleToolStateForOutput([generatedOutputFile], currRound, toolState)
 
         if self.agentConfig.toolConfig.usePrefillFromInput:
-            toolState.firstKCharsFromInput = get_first_k_chars_from_document(self.agentConfig.inputFile, K_SLICE)
+            toolState.firstKCharsFromInput = getFirstKCharsFromDocument(self.agentConfig.inputFile, K_SLICE)
 
         # Initialize reflection round
         logger.info(f"\n\nProcessing round {currRound}")
         stateRound = AgentStateRound.initialize(currRound)
 
         # Prepare reflection message
-        userRequest_reflect = render_prompt(self.agentPrompts.userReflect, self.user_vars)
-        userMessage = f"{userRequest_reflect}\n" if userRequest_reflect else ""
+        userRequestReflection = renderPrompt(self.agentPrompt.userReflect, self.userVars)
+        userMessage = f"{userRequestReflection}\n" if userRequestReflection else ""
         if toolState.texcountStats:
             userMessage = f"{toolState.texcountStats}{userMessage}"
 
@@ -504,7 +502,7 @@ class BaseReflectionAgent(ABC):
         if not userMessage.strip():
             return stateRound, stateGlobal, messages, True
 
-        messages = self.modelHandler.create_reflection_message(messages, userMessage, toolState.figureFiles)
+        messages = self.modelHandler.create_reflection_messages(messages, userMessage, toolState.figureFiles)
 
         # Handle prefill for reflection round
         prefill = self._get_prefill_for_round(currRound)
@@ -512,7 +510,7 @@ class BaseReflectionAgent(ABC):
 
         endTurn, messages = self.modelHandler.initialize_output_and_prefill(
             self.agentConfig,
-            self.agentSettings,
+            self.agentSetting,
             messages,
             toolState,
             self.outputFile[1],
@@ -539,8 +537,10 @@ class BaseReflectionAgent(ABC):
 
         if self.agentConfig.reflect and endTurn:
             # Create a new ToolState for reflection round
-            reflection_toolState = ToolState.initialize()
-            reflection_stateRound, stateGlobal, reflection_messages, endTurn_reflection = self.reflect(stateGlobal, messages, reflection_toolState)
+            toolStateReflection = ToolState.initialize()
+            stateRoundReflection, stateGlobalReflection, messagesReflection, endTurnReflection = self.reflect(
+                stateGlobal, messages, toolStateReflection
+            )
 
     def _process_outputFiles(self, outputFile: str, currRound: int):
         """Process output files for the current round.
@@ -552,13 +552,13 @@ class BaseReflectionAgent(ABC):
         - Handling LaTeX diff if needed
         """
         if self.agentConfig.outputFiles:
-            processedFiles = self.output_handler._process_multiple_outputs(outputFile)
-            self.output_handler._handle_multiple_outputs(processedFiles)
-            self.output_handler.outputFiles[currRound] = processedFiles
-            self.output_handler._replace_input_commands(self.baseFiles, processedFiles)
+            processedFiles = self.outputHandler._processMultipleOutputs(outputFile)
+            self.outputHandler._handleMultipleOutputs(processedFiles)
+            self.outputHandler.outputFiles[currRound] = processedFiles
+            self.outputHandler._replaceInputCommands(self.baseFiles, processedFiles)
         else:
-            processed_file = self.output_handler._process_single_output(outputFile)
-            self.output_handler._handle_single_output(processed_file)
-            self.output_handler.outputFiles[currRound] = [processed_file]
+            processedFile = self.outputHandler._processSingleOutput(outputFile)
+            self.outputHandler._handleSingleOutput(processedFile)
+            self.outputHandler.outputFiles[currRound] = [processedFile]
 
-        self.output_handler._handle_latexdiff(currRound)
+        self.outputHandler._handleLatexdiff(currRound)

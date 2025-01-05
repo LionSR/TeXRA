@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from ..utils.file import delete_file, move_file, find_file
+from ..utils.file import deleteFile, moveFile, findFile
 from ..logger import logger
 
 from .constants import TEMP_EXTENSIONS
@@ -10,8 +10,8 @@ from .constants import TEMP_EXTENSIONS
 def run_pack_latexdiff_vc(inputFile: str, commitHash: str, clean: bool = False) -> None:
     """Pack or clean latexdiff-vc output files into timestamped directory or remove them."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
-    input_dir = os.path.dirname(inputFile)
-    output_folder = None if clean else os.path.join(input_dir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{baseName}_{commitHash}")
+    inputDir = os.path.dirname(inputFile)
+    output_folder = None if clean else os.path.join(inputDir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{baseName}_{commitHash}")
 
     file_patterns = [f"{baseName}-diff{commitHash}"]
     files_to_process = []
@@ -19,7 +19,7 @@ def run_pack_latexdiff_vc(inputFile: str, commitHash: str, clean: bool = False) 
 
     for pattern in file_patterns:
         for ext in [".tex", ".pdf"]:
-            filePath = find_file(input_dir, pattern, ext)
+            filePath = findFile(inputDir, pattern, ext)
             if filePath:
                 files_to_process.append(filePath)
                 for temp_ext in TEMP_EXTENSIONS:
@@ -30,15 +30,15 @@ def run_pack_latexdiff_vc(inputFile: str, commitHash: str, clean: bool = False) 
     if files_to_process:
         if clean:
             for filePath in files_to_process + files_to_delete:
-                delete_file(filePath)
+                deleteFile(filePath)
             logger.info("Cleanup finished")
         else:  # move files to output folder
             os.makedirs(output_folder, exist_ok=True)
             for filePath in files_to_process:
-                move_file(filePath, output_folder)
+                moveFile(filePath, output_folder)
 
             for filePath in files_to_delete:
-                delete_file(filePath)
+                deleteFile(filePath)
 
             logger.info(f"Files packed to: {output_folder}")
     else:
