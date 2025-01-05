@@ -129,9 +129,9 @@ export function addOptionToSelect(select, value, text) {
 
 export function handleRecentCommits(message) {
   const commitButtons = [
-    'packLatexDiffVCButton',
-    'cleanLatexDiffVCButton',
-    'latexdiffVCButton',
+    'packLatexdiffvcButton',
+    'cleanLatexdiffvcButton',
+    'latexdiffvcButton',
   ];
   const commitDiv = document.getElementById('commit');
   commitDiv.innerHTML = '';

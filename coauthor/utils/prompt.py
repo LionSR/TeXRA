@@ -47,7 +47,7 @@ def getFirstKCharsFromDocument(inputFile: str, k: int) -> str | None:
     return content[:k].strip() if content else None
 
 
-def write_prompt_to_xml(systemPrompt: str, userPrefix: str, userRequest: str, inputFile: str, agent: str) -> str:
+def writePromptToXml(systemPrompt: str, userPrefix: str, userRequest: str, inputFile: str, agent: str) -> str:
     """Write the model's input prompt to an XML file.
 
     Args:
