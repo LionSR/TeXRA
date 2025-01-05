@@ -8,17 +8,17 @@ from dotenv import load_dotenv
 
 from .logger import logger
 
-from .agent.agent_dataclass import AgentSettings, AgentPrompts
+from .agent.agent_dataclass import AgentSetting, AgentPrompt
 from .agent.agent_config import AgentConfig
 from .agent.agent_load import load_agent_settings_and_prompts
 
 from .agent.model_registry import MODEL_CONFIGS
 from .agent.model_factory import ModelFactory
 
-from .agent.agent_base import BaseReflectionAgent
-from .agent.agent_class_cot import CoTAgent
-from .agent.agent_class_direct import DirectAgent
-from .agent.agent_class_merge import MergeAgent
+from .agent.BaseReflectionAgent import BaseReflectionAgent
+from .agent.CoTAgent import CoTAgent
+from .agent.DirectAgent import DirectAgent
+from .agent.MergeAgent import MergeAgent
 
 load_dotenv()
 
@@ -50,8 +50,8 @@ def createAgentConfig(**kwargs: Any) -> AgentConfig:
 
 def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
     """Return DirectAgent or CoTAgent agent class based on yaml settings."""
-    settings_dict, _ = load_agent_settings_and_prompts(agentPath, agent)
-    return DirectAgent if settings_dict.get("agentType") == "direct" else CoTAgent
+    settingDict, _ = load_agent_settings_and_prompts(agentPath, agent)
+    return DirectAgent if settingDict.get("agentType") == "direct" else CoTAgent
 
 
 def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
@@ -87,16 +87,16 @@ def run_agent(agent: str, **kwargs: Any) -> None:
 
     modelHandler = ModelFactory.create_handler(modelConfig)
 
-    agentSettings_dict, agentPrompts_dict = load_agent_settings_and_prompts(agentPath, agentName)
-    agentSettings = AgentSettings.from_dict(agentSettings_dict)
-    agentPrompts = AgentPrompts.from_dict(agentPrompts_dict)
+    agentSettingDict, agentPromptDict = load_agent_settings_and_prompts(agentPath, agentName)
+    agentSetting = AgentSetting.from_dict(agentSettingDict)
+    agentPrompt = AgentPrompt.from_dict(agentPromptDict)
 
     agent_class = getAgentClass(agentPath, agentName)
     agent_instance = agent_class(
         modelHandler=modelHandler,
         agentConfig=agentConfig,
-        agentSettings=agentSettings,
-        agentPrompts=agentPrompts,
+        agentSetting=agentSetting,
+        agentPrompt=agentPrompt,
         agentPath=agentPath,
     )
     agent_instance.run()
@@ -113,15 +113,15 @@ def run_merge_agent(model: str, inputFile: str, editedFile: str) -> None:
     modelHandler = ModelFactory.create_handler(modelConfig)
 
     agentPath = getAgentPath("merge")
-    agentSettings_dict, agentPrompts_dict = load_agent_settings_and_prompts(agentPath, "merge")
-    agentSettings = AgentSettings.from_dict(agentSettings_dict)
-    agentPrompts = AgentPrompts.from_dict(agentPrompts_dict)
+    agentSettingDict, agentPromptDict = load_agent_settings_and_prompts(agentPath, "merge")
+    agentSetting = AgentSetting.from_dict(agentSettingDict)
+    agentPrompt = AgentPrompt.from_dict(agentPromptDict)
 
     agent = MergeAgent(
         modelHandler=modelHandler,
         agentConfig=agentConfig,
-        agentSettings=agentSettings,
-        agentPrompts=agentPrompts,
+        agentSetting=agentSetting,
+        agentPrompt=agentPrompt,
         agentPath=agentPath,
     )
     agent.run()

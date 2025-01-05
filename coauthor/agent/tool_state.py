@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 class ToolState:
     """State for tool-specific runtime data that doesn't need to be logged. [Per round]"""
 
-    texCountStats: str | None = None  # Statistics about TeX document structure
+    texcountStats: str | None = None  # Statistics about TeX document structure
     firstKCharsFromInput: str | None = None  # First K lines of TeX document
     lastResponse: str = ""  # Most recent model response
     accumulatedOutput: str = ""  # Combined output from all responses
@@ -24,6 +24,6 @@ class ToolState:
         """Update the accumulated output."""
         self.accumulatedOutput = output
 
-    def add_figureFiles(self, files: list[str]) -> None:
+    def addFigureFiles(self, files: list[str]) -> None:
         """Add figure files to the list."""
         self.figureFiles.extend(files)

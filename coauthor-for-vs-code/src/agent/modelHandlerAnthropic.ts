@@ -4,12 +4,12 @@
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
-import { filterTagsFromText, extractTextFromTags } from '../utils/xmlUtils';
+import { filterTagsFromText, extractTextFromTag } from '../utils/xmlUtils';
 import {
   applyReplacementRegex,
   getReplacementsByCategory,
@@ -21,7 +21,7 @@ import {
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings, hasEndTag } from './AgentDataclass';
+import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { ModelHandler } from './ModelHandler';
 import {
   AnthropicAPIResponseUsage,
@@ -91,7 +91,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Create a reflection message for Anthropic models. */
-  createReflectionMessage(
+  createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
@@ -208,7 +208,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         CHANNEL,
         'Output tag detected - extracting latex code from <output> tags',
       );
-      const extractedResponse = extractTextFromTags(newResponse, 'output');
+      const extractedResponse = extractTextFromTag(newResponse, 'output');
       if (extractedResponse !== newResponse) {
         logger.warn(CHANNEL, 'Extracted content from <output> tags');
         newResponse = extractedResponse;
@@ -241,7 +241,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     messages: any[],
     stateRound: any,
     toolState: ToolState,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
     // Skip if model doesn't need confirmation
@@ -276,7 +276,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
           'Respond the latex code of the next section in the <output> ... </output> tags.';
 
     // Handle document tag if present
-    const documentTagStart = `<${agentSettings.documentTag}>`;
+    const documentTagStart = `<${agentSetting.documentTag}>`;
     const firstLines = toolState.lastResponse.split('\n').slice(0, 10);
     for (const line of firstLines) {
       if (line.trim().startsWith(documentTagStart)) {
@@ -329,7 +329,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Initialize output and handle prefill for Anthropic models. */
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     messages: any[],
     toolState: ToolState,
     outputFile: string,
@@ -355,7 +355,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         prefill === '<scratchpad>'
       ) {
         await writeFile(outputFile, prefill);
-      } else if (agentSettings.outputExt === 'xml') {
+      } else if (agentSetting.outputExt === 'xml') {
         await writeFile(outputFile, prefill + '\n');
       }
 
@@ -379,7 +379,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
     fileContent = fileContent.trim();
 
-    if (hasEndTag(agentSettings, fileContent)) {
+    if (hasEndTag(agentSetting, fileContent)) {
       logger.debug(CHANNEL, 'End tag detected - skipping continuation');
       if (Array.isArray(messages[messages.length - 1].content)) {
         messages[messages.length - 1].content[
@@ -512,7 +512,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   shouldContinue(
     stopReason: string,
     newResponse: string,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
   ): boolean {
     logger.info(
       CHANNEL,
@@ -521,7 +521,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return (
       stopReason !== 'max_tokens' &&
       stopReason !== 'stop_sequence' &&
-      !hasEndTag(agentSettings, newResponse)
+      !hasEndTag(agentSetting, newResponse)
     );
   }
 }

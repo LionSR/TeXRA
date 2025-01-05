@@ -2,7 +2,7 @@
 import * as cp from 'child_process';
 import { promisify } from 'util';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -16,7 +16,7 @@ logger.initializeLogging(CHANNEL);
 const MAX_OUTPUT_LENGTH = 150;
 
 /**
- * Truncate text to max_chars by keeping the end portion.
+ * Truncate text to maxChars by keeping the end portion.
  */
 function truncateOutput(
   text: string | null,

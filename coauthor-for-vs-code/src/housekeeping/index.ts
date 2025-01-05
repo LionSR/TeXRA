@@ -6,9 +6,9 @@ export {
 } from './clean';
 export { runPackSingle, runPackMultiple } from './pack';
 export {
-  runPackLatexDiffVC,
-  runPackLatexDiffVCMultiple,
-  runCleanLatexDiffVC,
-  runCleanLatexDiffVCMultiple,
+  runPackLatexdiffvc,
+  runPackLatexdiffvcMultiple,
+  runCleanLatexdiffvc,
+  runCleanLatexdiffvcMultiple,
 } from './latexdiff';
 export { runIndentTex } from './indent';
