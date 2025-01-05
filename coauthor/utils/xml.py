@@ -1,4 +1,5 @@
 import re
+import xml.etree.ElementTree as ET
 
 from ..utils.file import read_file
 
@@ -44,3 +45,11 @@ def filter_tags_from_text(content: str, tags: list[str] | str) -> str:
         content = re.sub(rf"<{tag}>.*?</{tag}>\s*", "", content, flags=re.DOTALL)
 
     return content
+
+
+def extract_content_from_tag(root: ET.Element, documentTag: str) -> str | None:
+    """Extract content from XML document element."""
+    content = root.find(documentTag)
+    if content is not None:
+        return ET.tostring(content, encoding="unicode", method="text").strip()
+    return None
