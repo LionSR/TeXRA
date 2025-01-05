@@ -4,7 +4,7 @@ Provides utilities for LaTeX document processing, including diff generation,
 figure extraction, TikZ compilation, and text analysis.
 """
 
-from .extract_figure import extract_figure_paths_from_latex
+from .extract_figure import extract_figurePaths_from_latex
 from .latexdiff import (
     process_tikzpicture_endings_diff,
     run_latexdiff,
@@ -15,8 +15,8 @@ from .latexdiff import (
     run_latexdiff_vc_multiple,
 )
 from .latexindent import run_latexindent
-from .text_connection import best_connection_method
-from .texcount import get_texcount, get_texcountStats
+from .text_connection import bestConnectionMethod
+from .texcount import getTexcount, getTexcountStats
 from .tikzpicture import compile_latex_to_pdf, extract_and_compile_tikzpictures_with_labels
 
 __all__ = [
@@ -32,10 +32,10 @@ __all__ = [
     "run_latexindent",
     "compile_latex_to_pdf",
     # Figure and TikZ handling
-    "extract_figure_paths_from_latex",
+    "extract_figurePaths_from_latex",
     "extract_and_compile_tikzpictures_with_labels",
     # Text analysis and processing
-    "get_texcount",
-    "get_texcountStats",
-    "best_connection_method",
+    "getTexcount",
+    "getTexcountStats",
+    "bestConnectionMethod",
 ]

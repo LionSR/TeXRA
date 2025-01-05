@@ -3,10 +3,10 @@ import os
 import click
 from dotenv import load_dotenv
 from coauthor.latex import (
-    extract_figure_paths_from_latex,
+    extract_figurePaths_from_latex,
     extract_and_compile_tikzpictures_with_labels,
 )
-from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, get_texcount
+from coauthor.latex import run_latexdiff, run_latexdiff_vc, run_latexdiff_vc_multiple, getTexcount
 from coauthor.housekeeping import (
     run_clean_single,
     run_pack_single,
@@ -205,7 +205,7 @@ def pack_latexdiff_vc_multiple(inputFiles, commitHash, clean):
 @cli.command()
 @click.argument("latexFile")
 def texcount(latexFile):
-    texcountStats = get_texcount(latexFile)
+    texcountStats = getTexcount(latexFile)
     if texcountStats is not None:
         logger.info(f"Statistics for {latexFile}:\n {texcountStats}")
 
@@ -213,8 +213,8 @@ def texcount(latexFile):
 @cli.command()
 @click.argument("latexFile")
 def extract_figure_path(latexFile):
-    figure_paths = extract_figure_paths_from_latex(latexFile)
-    logger.info(f"Extracted figure file paths: {figure_paths}")
+    figurePaths = extract_figurePaths_from_latex(latexFile)
+    logger.info(f"Extracted figure file paths: {figurePaths}")
 
 
 @cli.command()

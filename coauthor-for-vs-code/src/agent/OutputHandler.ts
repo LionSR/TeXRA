@@ -27,7 +27,7 @@ import {
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings } from './AgentDataclass';
+import { AgentSetting } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
@@ -57,7 +57,7 @@ export function getOutputFileName(
 }
 
 export class OutputHandler {
-  public agentSettings: AgentSettings;
+  public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
   public modelHandler: any;
   public logId: number;
@@ -65,12 +65,12 @@ export class OutputHandler {
   public baseFiles: string[];
 
   constructor(
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     modelHandler: any,
     logId: number,
   ) {
-    this.agentSettings = agentSettings;
+    this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
     this.modelHandler = modelHandler;
     this.logId = logId;
@@ -152,7 +152,7 @@ export class OutputHandler {
   public async processSingleOutput(outputFile: string): Promise<string> {
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
-      this.agentSettings.documentTag,
+      this.agentSetting.documentTag,
     );
     const content = await readFile(processedOutputFile);
     const filteredContent = filterTagsFromText(content, 'monologue');
@@ -163,7 +163,7 @@ export class OutputHandler {
   public async processMultipleOutputs(outputFile: string): Promise<string[]> {
     const processedOutputFiles = await this.splitMultipleScratchpadOutputXml(
       outputFile,
-      this.agentSettings.documentTag,
+      this.agentSetting.documentTag,
     );
     for (const processedOutputFile of processedOutputFiles) {
       const content = await readFile(processedOutputFile);

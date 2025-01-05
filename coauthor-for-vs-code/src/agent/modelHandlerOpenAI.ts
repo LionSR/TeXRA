@@ -12,7 +12,7 @@ import { readFile, fileExists } from '../utils/fileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings, hasEndTag } from './AgentDataclass';
+import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
@@ -104,7 +104,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Create a reflection message for OpenAI models. */
-  createReflectionMessage(
+  createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
@@ -165,7 +165,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
     // Skip if model supports assistant prefill
@@ -182,7 +182,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const userMessageContinuation =
       `Your response got cut off, because you only have limited response space. ` +
       `Continue writing exactly from where you left off until the very end, ` +
-      `marked by ${agentSettings.endTag}. ` +
+      `marked by ${agentSetting.endTag}. ` +
       'Avoid repeat yourself and avoid starting over. ' +
       `Start your response at the next token after: "${prefillTokens}"`;
 
@@ -198,7 +198,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Initialize output and handle prefill for OpenAI-compatible models. */
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
     messages: any[],
     toolState: ToolState,
     outputFile: string,
@@ -214,7 +214,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         ) {
           prefill += toolState.firstKCharsFromInput;
           toolState.updateAccumulatedOutput('');
-          prefill = `<${agentSettings.documentTag}>${toolState.firstKCharsFromInput}`;
+          prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
         }
 
         messages[messages.length - 1].content.push({
@@ -226,7 +226,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       messages.push({ role: 'assistant', content: fileContent });
 
-      if (hasEndTag(agentSettings, fileContent)) {
+      if (hasEndTag(agentSetting, fileContent)) {
         logger.debug(CHANNEL, 'End tag detected - skipping continuation');
         if (Array.isArray(messages[messages.length - 1].content)) {
           messages[messages.length - 1].content[
@@ -249,7 +249,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         messages,
         state,
         toolState,
-        agentSettings,
+        agentSetting,
         agentConfig,
       );
 
@@ -373,12 +373,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
   shouldContinue(
     stopReason: string,
     newResponse: string,
-    agentSettings: AgentSettings,
+    agentSetting: AgentSetting,
   ): boolean {
     logger.info(
       CHANNEL,
       'Determining if should continue for OpenAI model via OpenAI API',
     );
-    return stopReason === 'length' && !hasEndTag(agentSettings, newResponse);
+    return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
   }
 }

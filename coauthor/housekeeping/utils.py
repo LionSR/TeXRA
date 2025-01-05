@@ -34,12 +34,12 @@ def get_file_patterns(base: str, model: str, agent: str, totalRounds: int = 4) -
     return patterns
 
 
-def get_folder_datetime(input_dir: str, file_patterns: list[str], extensions: list[str]) -> str:
+def get_folder_datetime(inputDir: str, file_patterns: list[str], extensions: list[str]) -> str:
     """Get formatted datetime string based on most recent file modification time."""
     most_recent_time = None
     for pattern in file_patterns:
         for ext in extensions:
-            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+            for search_dir in [os.path.join(inputDir, "build"), inputDir]:
                 filePath = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(filePath):
                     mod_time = os.path.getmtime(filePath)

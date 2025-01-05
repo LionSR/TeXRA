@@ -3,8 +3,8 @@ import os
 
 from ..logger import logger
 
-from ..utils.file import read_file, write_file
-from ..utils.prompt import render_prompt
+from ..utils.file import readFile, writeFile
+from ..utils.prompt import renderPrompt
 
 from .tex_tools import compile_latex_to_pdf
 
@@ -27,7 +27,7 @@ TIKZ_TEMPLATE = r"""
 
 def extract_tikzpictures_with_labels(latexFile: str) -> list[tuple[str, list[str]]]:
     """Extract TikZ pictures and their associated labels from LaTeX file, returns list of (label, pictures) tuples."""
-    content = read_file(latexFile)
+    content = readFile(latexFile)
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments
     figure_pattern = re.compile(r"(\\begin{figure}.*?\\label\{.*?\}.*?\\end{figure})", re.DOTALL)
@@ -47,10 +47,10 @@ def extract_tikzpictures_with_labels(latexFile: str) -> list[tuple[str, list[str
 
 def extract_and_compile_tikzpictures_with_labels(latexFile: str) -> list[str]:
     """Extract and compile TikZ pictures from LaTeX file into standalone PDFs, returns PDF paths."""
-    input_dir = os.path.dirname(latexFile)
-    input_name = os.path.splitext(os.path.basename(latexFile))[0]
-    build_dir = os.path.join(input_dir, "build", input_name)
-    os.makedirs(build_dir, exist_ok=True)
+    inputDir = os.path.dirname(latexFile)
+    inputName = os.path.splitext(os.path.basename(latexFile))[0]
+    buildDir = os.path.join(inputDir, "build", inputName)
+    os.makedirs(buildDir, exist_ok=True)
 
     # Extract TikZ pictures
     logger.debug("Extracting TikZ pictures with labels...")
@@ -64,7 +64,7 @@ def extract_and_compile_tikzpictures_with_labels(latexFile: str) -> list[str]:
 
         for tikzpicture, suffix in zip(tikzpictures, suffixes):
             # Create and compile standalone LaTeX file
-            tex_file = create_standalone_latex_with_labels(tikzpicture, label, build_dir, suffix)
+            tex_file = create_standalone_latex_with_labels(tikzpicture, label, buildDir, suffix)
             compile_latex_to_pdf(tex_file)
             pdf_file = f"{os.path.splitext(tex_file)[0]}.pdf"
             compiled_files.append(pdf_file)
@@ -77,10 +77,10 @@ def extract_and_compile_tikzpictures_with_labels(latexFile: str) -> list[str]:
     return compiled_files
 
 
-def create_standalone_latex_with_labels(tikzpicture: str, label: str, build_dir: str, suffix: str | None = None) -> str:
+def create_standalone_latex_with_labels(tikzpicture: str, label: str, buildDir: str, suffix: str | None = None) -> str:
     """Create a standalone LaTeX file containing a TikZ picture with labels."""
-    standalone_content = render_prompt(TIKZ_TEMPLATE, {"tikzpicture": tikzpicture})
-    filename = os.path.join(build_dir, f"{label}_{suffix}.tex" if suffix else f"{label}.tex")
-    write_file(filename, standalone_content)
+    standalone_content = renderPrompt(TIKZ_TEMPLATE, {"tikzpicture": tikzpicture})
+    filename = os.path.join(buildDir, f"{label}_{suffix}.tex" if suffix else f"{label}.tex")
+    writeFile(filename, standalone_content)
 
     return filename

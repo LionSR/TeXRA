@@ -72,12 +72,12 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   shouldContinue(
     stopReason: string,
     newResponse: string,
-    agentSettings: any,
+    agentSetting: any,
   ): boolean {
     logger.info(
       'ModelHandlerGoogle',
       'Determining if should continue for Google model via OpenAI API',
     );
-    return !hasEndTag(agentSettings, newResponse);
+    return !hasEndTag(agentSetting, newResponse);
   }
 }

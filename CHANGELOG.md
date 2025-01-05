@@ -3,7 +3,7 @@
 ## [0.12.0]
 
 - **Added:**
-  - Utility functions: delete_file, move_file, and find_file
+  - Utility functions: deleteFile, moveFile, and findFile
 - **Changed:**
   - Refactored housekeeping utilities for improved efficiency and maintainability
   - Updated existing functions to use new utility functions
@@ -86,7 +86,7 @@
 - **Added:**
   - Scratchpad functionality implementation with use_scratchpad and use_scratchpad_reflect flags
 - **Changed:**
-  - Renamed user_prefix_vars to user_vars throughout the codebase for clarity
+  - Renamed user_prefix_vars to userVars throughout the codebase for clarity
   - Refactored prompt handling and user variable updates
   - Moved figure-related functions to figure_tools.py
   - Consolidated file content formatting
@@ -227,7 +227,7 @@
 
 - Added new slide2paper agent for converting slides to research papers
 - Implemented multi-page PDF processing functionality
-- Enhanced process_pdf_input function to handle both single and multi-page PDFs
+- Enhanced processPdfInput function to handle both single and multi-page PDFs
 - Improved file handling with output name override in various functions
 - Updated CLI to support new slide2paper agent
 - Refactored code for better modularity and error handling
@@ -436,7 +436,7 @@
 
 ## [0.7.11]
 
-- Enhanced `extract_figure_paths` function to also look under `\graphicspath` for figures.
+- Enhanced `extract_figurePaths` function to also look under `\graphicspath` for figures.
 - Added regular expression to match `\graphicspath` and extract paths.
 - Updated logic to normalize and check the list of figures within the specified graphicspaths.
 - Added logging to `create_image_message` in `message_utils.py` for used images.

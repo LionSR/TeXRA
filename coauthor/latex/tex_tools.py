@@ -1,7 +1,7 @@
 import os
 
 from ..logger import logger
-from ..utils.exec import execute_command
+from ..utils.exec import executeCommand
 
 
 def compile_latex_to_pdf(latexFile: str) -> bool:
@@ -10,7 +10,7 @@ def compile_latex_to_pdf(latexFile: str) -> bool:
     command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, latexFile]
 
     try:
-        success, stdout, stderr = execute_command(command, capture_output=True)
+        success, stdout, stderr = executeCommand(command, captureOutput=True)
         if success:
             logger.info(f"Compiled {latexFile} successfully.")
             return True
