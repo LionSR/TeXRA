@@ -15,7 +15,7 @@ import { extractFigurePathsFromLatex } from '../latex/extractFigure';
 import {
   extractTikzPicturesWithLabels,
   extractAndCompileTikzPicturesWithLabels,
-} from '../latex/tikzpicture';
+} from '../latex/tikzPicture';
 
 const CHANNEL = 'FigureCommands';
 logger.initializeLogging(CHANNEL);

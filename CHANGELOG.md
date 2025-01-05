@@ -112,7 +112,7 @@
 
 - **Added:**
   - Support for multiple document output in XML handling
-  - New `split_multiple_scratchpad_output_xml` function in output_utils.py
+  - New `splitScratchpadMultipleOutputXml` function in output_utils.py
   - 'name' attribute for documents in XML structure
 - **Changed:**
   - Refactored XML handling across multiple files
@@ -125,7 +125,7 @@
 ## [0.11.1]
 
 - Refactored XML handling and improved error logging
-  - Replaced `split_scratchpad_output` with `split_scratchpad_output_xml`
+  - Replaced `split_scratchpad_output` with `splitScratchpadOutputXml`
   - Renamed `handle_single_output` to `update_user_prefix_vars_single_output`
   - Renamed `handle_multiple_output` to `update_user_prefix_vars_multiple_output`
   - Added CDATA handling for XML tags
@@ -246,8 +246,8 @@
 
 ## [0.10.1]
 
-- Added `ensure_correct_xml_structure` function to fix XML structure issues
-- Implemented `split_scratchpad_output_xml` for improved XML parsing of scratchpad output
+- Added `ensureCorrectXmlStructure` function to fix XML structure issues
+- Implemented `splitScratchpadOutputXml` for improved XML parsing of scratchpad output
 - Updated `edit_lecture.py`, `edit_tex.py`, and `write_tex.py` to use new XML handling functions
 - Refactored file processing in agent files to support initial .text output for scratchpad content
 - Added support for .text extension in `clean_single` and `pack_single` functions

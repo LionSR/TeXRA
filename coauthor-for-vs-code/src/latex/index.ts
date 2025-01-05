@@ -3,7 +3,7 @@ export {
   extractTikzPicturesWithLabels,
   createStandaloneLatexWithLabels,
   extractAndCompileTikzPicturesWithLabels,
-} from './tikzpicture';
+} from './tikzPicture';
 
 // Export figure extraction functionality
 export { extractFigurePathsFromLatex } from './extractFigure';

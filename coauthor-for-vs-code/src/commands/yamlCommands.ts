@@ -1,11 +1,16 @@
 import * as vscode from 'vscode';
-import { loadYaml, loadAgentSettingAndPrompts } from '../../agent/agentLoad';
+import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as path from 'path';
-import * as logger from '../../logger/logUtils';
-import { getConfig } from '../../frontend-utils/commonUtils';
+import * as logger from '../logger/logUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'AgentLoadingTests';
+const CHANNEL = 'YAML';
 logger.initializeLogging(CHANNEL);
+
+export const yamlCommands = {
+  testAgentLoading: 'coauthor.testAgentLoading',
+  loadSpecificAgent: 'coauthor.loadSpecificAgent',
+};
 
 export async function handleTestAgentLoading(
   context: vscode.ExtensionContext,
@@ -128,7 +133,7 @@ export async function handleTestAgentLoading(
   }
 }
 
-export async function handleTestLoadSpecificAgent(
+export async function handleLoadSpecificAgent(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
@@ -188,4 +193,16 @@ export async function handleTestLoadSpecificAgent(
     }
     vscode.window.showErrorMessage(`Failed to load agent: ${errorMessage}`);
   }
+}
+
+export function registerYamlCommands(context: vscode.ExtensionContext) {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(yamlCommands.testAgentLoading, () =>
+      handleTestAgentLoading(context),
+    ),
+    vscode.commands.registerCommand(yamlCommands.loadSpecificAgent, () =>
+      handleLoadSpecificAgent(context),
+    ),
+  );
+  return yamlCommands;
 }
