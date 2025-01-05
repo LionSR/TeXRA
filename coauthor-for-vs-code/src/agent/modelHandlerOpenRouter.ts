@@ -4,7 +4,7 @@
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
