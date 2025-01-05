@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 class ToolState:
     """State for tool-specific runtime data that doesn't need to be logged. [Per round]"""
 
-    texCountStats: str | None = None  # Statistics about TeX document structure
+    texcountStats: str | None = None  # Statistics about TeX document structure
     firstKCharsFromInput: str | None = None  # First K lines of TeX document
     lastResponse: str = ""  # Most recent model response
     accumulatedOutput: str = ""  # Combined output from all responses

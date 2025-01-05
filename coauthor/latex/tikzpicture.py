@@ -25,9 +25,9 @@ TIKZ_TEMPLATE = r"""
 """
 
 
-def extract_tikzpictures_with_labels(latex_file: str) -> list[tuple[str, list[str]]]:
+def extract_tikzpictures_with_labels(latexFile: str) -> list[tuple[str, list[str]]]:
     """Extract TikZ pictures and their associated labels from LaTeX file, returns list of (label, pictures) tuples."""
-    content = read_file(latex_file)
+    content = read_file(latexFile)
 
     # Regular expression to match entire figure environments with labels and tikzpicture environments
     figure_pattern = re.compile(r"(\\begin{figure}.*?\\label\{.*?\}.*?\\end{figure})", re.DOTALL)
@@ -45,16 +45,16 @@ def extract_tikzpictures_with_labels(latex_file: str) -> list[tuple[str, list[st
     return labeled_tikzpictures
 
 
-def extract_and_compile_tikzpictures_with_labels(latex_file: str) -> list[str]:
+def extract_and_compile_tikzpictures_with_labels(latexFile: str) -> list[str]:
     """Extract and compile TikZ pictures from LaTeX file into standalone PDFs, returns PDF paths."""
-    input_dir = os.path.dirname(latex_file)
-    input_name = os.path.splitext(os.path.basename(latex_file))[0]
+    input_dir = os.path.dirname(latexFile)
+    input_name = os.path.splitext(os.path.basename(latexFile))[0]
     build_dir = os.path.join(input_dir, "build", input_name)
     os.makedirs(build_dir, exist_ok=True)
 
     # Extract TikZ pictures
     logger.debug("Extracting TikZ pictures with labels...")
-    labeled_tikzpictures = extract_tikzpictures_with_labels(latex_file)
+    labeled_tikzpictures = extract_tikzpictures_with_labels(latexFile)
     logger.debug(f"Found {len(labeled_tikzpictures)} labeled TikZ pictures.")
 
     compiled_files = []

@@ -203,24 +203,24 @@ def pack_latexdiff_vc_multiple(inputFiles, commitHash, clean):
 
 
 @cli.command()
-@click.argument("latex_file")
-def texcount(latex_file):
-    texCountStats = get_texcount(latex_file)
-    if texCountStats is not None:
-        logger.info(f"Statistics for {latex_file}:\n {texCountStats}")
+@click.argument("latexFile")
+def texcount(latexFile):
+    texcountStats = get_texcount(latexFile)
+    if texcountStats is not None:
+        logger.info(f"Statistics for {latexFile}:\n {texcountStats}")
 
 
 @cli.command()
-@click.argument("latex_file")
-def extract_figure_path(latex_file):
-    figure_paths = extract_figure_paths_from_latex(latex_file)
+@click.argument("latexFile")
+def extract_figure_path(latexFile):
+    figure_paths = extract_figure_paths_from_latex(latexFile)
     logger.info(f"Extracted figure file paths: {figure_paths}")
 
 
 @cli.command()
-@click.argument("latex_file")
-def extract_tikzpictures(latex_file):
-    compiled_files = extract_and_compile_tikzpictures_with_labels(latex_file)
+@click.argument("latexFile")
+def extract_tikzpictures(latexFile):
+    compiled_files = extract_and_compile_tikzpictures_with_labels(latexFile)
     logger.info(f"Compiled TikZ pictures: {compiled_files}")
 
 

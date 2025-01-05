@@ -9,36 +9,36 @@ from .constants import TEMP_EXTENSIONS
 
 def run_pack_latexdiff_vc(inputFile: str, commitHash: str, clean: bool = False) -> None:
     """Pack or clean latexdiff-vc output files into timestamped directory or remove them."""
-    base_name = os.path.splitext(os.path.basename(inputFile))[0]
+    baseName = os.path.splitext(os.path.basename(inputFile))[0]
     input_dir = os.path.dirname(inputFile)
-    output_folder = None if clean else os.path.join(input_dir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{base_name}_{commitHash}")
+    output_folder = None if clean else os.path.join(input_dir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{baseName}_{commitHash}")
 
-    file_patterns = [f"{base_name}-diff{commitHash}"]
+    file_patterns = [f"{baseName}-diff{commitHash}"]
     files_to_process = []
     files_to_delete = []
 
     for pattern in file_patterns:
         for ext in [".tex", ".pdf"]:
-            file_path = find_file(input_dir, pattern, ext)
-            if file_path:
-                files_to_process.append(file_path)
+            filePath = find_file(input_dir, pattern, ext)
+            if filePath:
+                files_to_process.append(filePath)
                 for temp_ext in TEMP_EXTENSIONS:
-                    temp_file = os.path.splitext(file_path)[0] + temp_ext
+                    temp_file = os.path.splitext(filePath)[0] + temp_ext
                     if os.path.exists(temp_file):
                         files_to_delete.append(temp_file)
 
     if files_to_process:
         if clean:
-            for file_path in files_to_process + files_to_delete:
-                delete_file(file_path)
+            for filePath in files_to_process + files_to_delete:
+                delete_file(filePath)
             logger.info("Cleanup finished")
         else:  # move files to output folder
             os.makedirs(output_folder, exist_ok=True)
-            for file_path in files_to_process:
-                move_file(file_path, output_folder)
+            for filePath in files_to_process:
+                move_file(filePath, output_folder)
 
-            for file_path in files_to_delete:
-                delete_file(file_path)
+            for filePath in files_to_delete:
+                delete_file(filePath)
 
             logger.info(f"Files packed to: {output_folder}")
     else:
