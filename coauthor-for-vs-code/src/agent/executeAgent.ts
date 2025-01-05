@@ -38,7 +38,7 @@ export async function getAgentPath(
   context: vscode.ExtensionContext,
 ): Promise<string> {
   try {
-    const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+    const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
     const basePath =
       rootPath && path.isAbsolute(rootPath)
         ? rootPath
