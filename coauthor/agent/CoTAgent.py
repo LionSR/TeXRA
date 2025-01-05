@@ -22,7 +22,7 @@ class CoTAgent(BaseReflectionAgent):
     ) -> list[str]:
         """Handle the output for the given round."""
         if endTurn:
-            self.outputHandler.ensure_correct_xml_structure(outputFile, self.agentSetting.documentTag)
+            self.outputHandler.ensureCorrectXmlStructure(outputFile, self.agentSetting.documentTag)
             self._processOutputFiles(outputFile, currRound)
 
         # Call base implementation for database updates

@@ -462,8 +462,12 @@
         "title": "CoAuthor: Test Agent Loading"
       },
       {
-        "command": "coauthor.testLoadSpecificAgent",
-        "title": "CoAuthor: Test Load Specific Agent"
+        "command": "coauthor.loadSpecificAgent",
+        "title": "CoAuthor: Load Specific Agent"
+      },
+      {
+        "command": "coauthor.parseXml",
+        "title": "CoAuthor: Parse XML Structure"
       }
     ],
     "viewsContainers": {
