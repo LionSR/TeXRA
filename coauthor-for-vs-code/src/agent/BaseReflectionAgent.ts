@@ -4,7 +4,7 @@
 // Third-party imports
 // (none needed)
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - latex utils

@@ -147,6 +147,9 @@ export async function handleTestLoadSpecificAgent(
 
     // Get the configured root path
     const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+
+    // the following works for now but it is actually not intended to be used this way
+    // agentPath should be a relative path to the rootPath
     const agentPath = path.join(context.globalStorageUri.fsPath, rootPath);
 
     // Load and display the agent configuration

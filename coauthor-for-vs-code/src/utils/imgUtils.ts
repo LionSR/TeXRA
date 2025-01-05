@@ -9,7 +9,7 @@ import { promisify } from 'util';
 import { PDFDocument } from 'pdf-lib';
 import { fromPath } from 'pdf2pic';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
