@@ -48,12 +48,6 @@ def createAgentConfig(**kwargs: Any) -> AgentConfig:
     return AgentConfig.from_kwargs(**kwargs)
 
 
-def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
-    """Return DirectAgent or CoTAgent agent class based on yaml settings."""
-    settingDict, _ = load_agent_settings_and_prompts(agentPath, agent)
-    return DirectAgent if settingDict.get("agentType") == "direct" else CoTAgent
-
-
 def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
     """Return agent name with '_multiple' suffix if output files exist."""
     return f"{base_agent}_multiple" if outputFiles else base_agent
@@ -68,6 +62,12 @@ def getAgentPath(agentName: str) -> str:
     error_msg = f"Could not find yaml file for agent: {agentName}"
     logger.error(f"{error_msg} from {agents_dir}")
     raise ValueError(error_msg)
+
+
+def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
+    """Return DirectAgent or CoTAgent agent class based on yaml settings."""
+    settingDict, _ = load_agent_settings_and_prompts(agentPath, agent)
+    return DirectAgent if settingDict.get("agentType") == "direct" else CoTAgent
 
 
 def run_agent(agent: str, **kwargs: Any) -> None:
