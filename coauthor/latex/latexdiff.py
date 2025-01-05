@@ -75,11 +75,11 @@ def runLatexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_ind
             logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    input_content = readFile(inputFile)
+    inputContent = readFile(inputFile)
     outputContent = readFile(outputFile)
     if (
-        "\\begin{document}" not in input_content
-        or "\\end{document}" not in input_content
+        "\\begin{document}" not in inputContent
+        or "\\end{document}" not in inputContent
         or "\\begin{document}" not in outputContent
         or "\\end{document}" not in outputContent
     ):
@@ -145,8 +145,8 @@ def runLatexdiffvc(inputFile: str, commitHash: str) -> str | None:
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
-    input_content = readFile(inputFile)
-    if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
+    inputContent = readFile(inputFile)
+    if "\\begin{document}" not in inputContent or "\\end{document}" not in inputContent:
         logger.warning("Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.")
         return None
 

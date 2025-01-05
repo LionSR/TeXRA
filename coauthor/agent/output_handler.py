@@ -14,6 +14,7 @@ from ..utils.xml import (
     addCdataToTagsMultiple,
     filterTagsFromText,
     extractContentFromTag,
+    extractTextFromTag,
 )
 
 from .agent_dataclass import AgentSetting
@@ -50,26 +51,19 @@ class OutputHandler:
         self.outputFiles = {0: [], 1: []}  # Maps round number to output files
         self.baseFiles = []  # Original input files
 
-    def _process_xml_content(self, outputContent: str) -> str:
+    def _processXmlContent(self, content: str) -> str:
         """Process XML content by applying filters and replacements."""
-        outputContent = filterTagsFromText(outputContent, "monologue")
-        outputContent = applyReplacements(outputContent, getReplacementsByCategory("latex_xml"))
-        outputContent = applyReplacements(outputContent, getReplacementsByCategory("scratchpad_xml"))
-        return outputContent
-
-    def _handle_scratchpad(self, root: ET.Element, baseName: str, thinkingTag: str) -> None:
-        """Log thinking content from scratchpad."""
-        scratchpad = root.find(thinkingTag)
-        if scratchpad is not None:
-            scratchpadContent = ET.tostring(scratchpad, encoding="unicode", method="text")
-            logger.info(f"Scratchpad content:\n{scratchpadContent.strip()}")
+        content = filterTagsFromText(content, "monologue")
+        content = applyReplacements(content, getReplacementsByCategory("latex_xml"))
+        content = applyReplacements(content, getReplacementsByCategory("scratchpad_xml"))
+        return content
 
     def _handleSingleOutput(self, outputFile: str) -> None:
         """Generate LaTeX diff for single output file."""
         if ".tex" in self.agentConfig.inputFile and ".tex" in outputFile:
             _ = runLatexdiff(self.agentConfig.inputFile, outputFile)
 
-    def _handle_multiple_outputs(self, outputFiles: list[str]) -> None:
+    def _handleMultipleOutputs(self, outputFiles: list[str]) -> None:
         """Generate LaTeX diffs for multiple output files."""
         logger.debug(f"Handling multiple outputs: tasked outputFiles: {self.agentConfig.outputFiles}; actual outputFiles: {outputFiles}")
 
@@ -81,7 +75,7 @@ class OutputHandler:
 
     def _processSingleOutput(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
-        processedOutputFile = self.split_scratchpad_output_xml(outputFile, self.agentSetting.documentTag)
+        processedOutputFile = self.splitScratchpadOutputXml(outputFile, self.agentSetting.documentTag)
         content = readFile(processedOutputFile)
 
         filteredContent = filterTagsFromText(content, "monologue")
@@ -89,16 +83,22 @@ class OutputHandler:
 
         return processedOutputFile
 
-    def _process_multiple_outputs(self, outputFile: str) -> list[str]:
+    def _processMultipleOutputs(self, outputFile: str) -> list[str]:
         """Process file containing multiple outputs and return processed file paths."""
-        processedOutputFiles = self.split_multiple_scratchpad_output_xml(outputFile, self.agentSetting.documentTag)
+        processedOutputFiles = self.splitScratchpadMultipleOutputXml(outputFile, self.agentSetting.documentTag)
         for processedOutputFile in processedOutputFiles:
             content = readFile(processedOutputFile)
             filteredContent = filterTagsFromText(content, "monologue")
             writeFile(processedOutputFile, filteredContent)
         return processedOutputFiles
 
-    def split_scratchpad_output_xml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> str:
+    def _extractAndLogScratchpad(self, outputContent: str, thinkingTag: str = "scratchpad") -> None:
+        """Extract and log scratchpad content using regex."""
+        scratchpadContent = extractTextFromTag(outputContent, thinkingTag)
+        if scratchpadContent:
+            logger.info(f"Scratchpad content:\n{scratchpadContent.strip()}")
+
+    def splitScratchpadOutputXml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> str:
         """Split scratchpad output XML into separate files."""
         logger.debug(f"Splitting scratchpad output XML: {outputFile}")
 
@@ -107,7 +107,9 @@ class OutputHandler:
         logger.debug(f"LaTeX file: {latexFile}")
 
         outputContent = readFile(outputFile)
-        outputContent = self._process_xml_content(outputContent)
+        outputContent = self._processXmlContent(outputContent)
+
+        self._extractAndLogScratchpad(outputContent, thinkingTag)
 
         tagsToWrap = [documentTag, thinkingTag]
         outputContent = addCdataToTags(outputContent, tagsToWrap)
@@ -116,8 +118,6 @@ class OutputHandler:
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, baseName, thinkingTag)
-
             latex_document = extractContentFromTag(root, documentTag)
             if latex_document:
                 writeFile(latexFile, latex_document)
@@ -128,13 +128,15 @@ class OutputHandler:
 
         return latexFile
 
-    def split_multiple_scratchpad_output_xml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> list[str]:
+    def splitScratchpadMultipleOutputXml(self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad") -> list[str]:
         """Split multiple scratchpad output XML into separate files."""
         logger.debug(f"Splitting multiple scratchpad output XML: {outputFile}")
         baseName, extension = os.path.splitext(outputFile)
 
         outputContent = readFile(outputFile)
-        outputContent = self._process_xml_content(outputContent)
+        outputContent = self._processXmlContent(outputContent)
+
+        self._extractAndLogScratchpad(outputContent, thinkingTag)
 
         tagsToWrap = [thinkingTag, "document"]
         outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap)
@@ -143,11 +145,9 @@ class OutputHandler:
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, baseName, thinkingTag)
-
             latex_documents = root.find(documentTag)
             if latex_documents:
-                return self._process_latex_documents(latex_documents, outputFile)
+                return self._processLatexDocuments(latex_documents, outputFile)
 
             logger.error(f"No {documentTag} found in output file.")
             return []
@@ -155,7 +155,7 @@ class OutputHandler:
             logger.error(f"Failed to parse XML content: {str(e)}")
             return []
 
-    def _process_latex_documents(self, latex_documents: ET.Element, outputFile: str) -> list[str]:
+    def _processLatexDocuments(self, latex_documents: ET.Element, outputFile: str) -> list[str]:
         """Process LaTeX documents and return processed file paths."""
         outputFiles = []
         output_parts = os.path.basename(outputFile).split("_")
@@ -182,7 +182,7 @@ class OutputHandler:
 
         return outputFiles
 
-    def ensure_correct_xml_structure(self, filePath: str, documentTag: str) -> None:
+    def ensureCorrectXmlStructure(self, filePath: str, documentTag: str) -> None:
         """Ensure correct XML structure in file."""
         logger.debug(f"Ensuring correct XML structure: {filePath}")
         content = readFile(filePath)
@@ -195,7 +195,7 @@ class OutputHandler:
                     if f"<{documentTag}>" in content:
                         content += f"\n<{documentTag}>"
 
-            content = self._process_xml_content(content)
+            content = self._processXmlContent(content)
 
         writeFile(filePath, content)
 

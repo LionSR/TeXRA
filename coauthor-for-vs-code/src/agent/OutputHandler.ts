@@ -18,6 +18,7 @@ import {
   addCdataToTags,
   addCdataToTagsMultiple,
   extractContentFromTag,
+  extractTextFromTag,
 } from '../utils/xmlUtils';
 import {
   runLatexdiff,
@@ -78,37 +79,17 @@ export class OutputHandler {
     this.baseFiles = [];
   }
 
-  public async processXmlContent(outputContent: string): Promise<string> {
-    outputContent = filterTagsFromText(outputContent, 'monologue');
-    outputContent = applyReplacements(
-      outputContent,
+  public async processXmlContent(content: string): Promise<string> {
+    content = filterTagsFromText(content, 'monologue');
+    content = applyReplacements(
+      content,
       getReplacementsByCategory('latex_xml'),
     );
-    outputContent = applyReplacements(
-      outputContent,
+    content = applyReplacements(
+      content,
       getReplacementsByCategory('scratchpad_xml'),
     );
-    return outputContent;
-  }
-
-  public async handleScratchpad(
-    root: any[],
-    baseName: string,
-    thinkingTag: string,
-  ): Promise<void> {
-    // Find the object containing the thinkingTag
-    const scratchpadObj = root.find(
-      (item: { [key: string]: any }) => item[thinkingTag],
-    );
-    if (scratchpadObj && scratchpadObj[thinkingTag]) {
-      const scratchpadContent = scratchpadObj[thinkingTag][0]?.content;
-      if (scratchpadContent) {
-        logger.info(
-          CHANNEL,
-          `Scratchpad content:\n${scratchpadContent.trim()}`,
-        );
-      }
-    }
+    return content;
   }
 
   public async handleSingleOutput(outputFile: string): Promise<void> {
@@ -155,7 +136,7 @@ export class OutputHandler {
   }
 
   public async processMultipleOutputs(outputFile: string): Promise<string[]> {
-    const processedOutputFiles = await this.splitMultipleScratchpadOutputXml(
+    const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
@@ -165,6 +146,16 @@ export class OutputHandler {
       await writeFile(processedOutputFile, filteredContent);
     }
     return processedOutputFiles;
+  }
+
+  private async extractAndLogScratchpad(
+    outputContent: string,
+    thinkingTag: string = 'scratchpad',
+  ): Promise<void> {
+    const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
+    if (scratchpadContent) {
+      logger.info(CHANNEL, `Scratchpad content:\n${scratchpadContent.trim()}`);
+    }
   }
 
   async splitScratchpadOutputXml(
@@ -181,6 +172,8 @@ export class OutputHandler {
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
+    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
@@ -193,10 +186,7 @@ export class OutputHandler {
         parseTagValue: false,
         textNodeName: 'content',
       });
-      // const root = parser.parse(rootContent);
       const root = parser.parse(outputContent);
-
-      await this.handleScratchpad(root, name, thinkingTag);
 
       const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
@@ -212,7 +202,7 @@ export class OutputHandler {
     return texFile;
   }
 
-  async splitMultipleScratchpadOutputXml(
+  async splitScratchpadMultipleOutputXml(
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
@@ -221,10 +211,10 @@ export class OutputHandler {
       CHANNEL,
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
-    const { dir, name } = path.parse(outputFile);
-
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
+
+    await this.extractAndLogScratchpad(outputContent, thinkingTag);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -237,10 +227,6 @@ export class OutputHandler {
         textNodeName: 'content',
       });
       const root = parser.parse(outputContent);
-
-      // logger.debug(CHANNEL, `Root: ${JSON.stringify(root)}`);
-
-      await this.handleScratchpad(root, name, thinkingTag);
 
       // Find the object containing the documentTag
       const docObj = root.find(
