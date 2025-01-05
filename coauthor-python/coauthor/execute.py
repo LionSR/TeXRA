@@ -30,6 +30,22 @@ def getAgent_dir_from_env() -> str:
     return agents_dir
 
 
+def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
+    """Return agent name with '_multiple' suffix if output files exist."""
+    return f"{base_agent}_multiple" if outputFiles else base_agent
+
+
+def getAgentPath(agentName: str) -> str:
+    """Find and return the path to agent's yaml configuration file."""
+    agents_dir = Path(getAgent_dir_from_env())
+    if yaml_path := next((p for p in agents_dir.rglob(f"{agentName}.yaml")), None):
+        return str(yaml_path.parent)
+
+    error_msg = f"Could not find yaml file for agent: {agentName}"
+    logger.error(f"{error_msg} from {agents_dir}")
+    raise ValueError(error_msg)
+
+
 def createAgentConfig(**kwargs: Any) -> AgentConfig:
     """Create and return AgentConfig object from CLI kwargs, converting string lists as needed."""
     required_fields = ["model", "agent"]
@@ -46,22 +62,6 @@ def createAgentConfig(**kwargs: Any) -> AgentConfig:
             kwargs[field] = []
 
     return AgentConfig.from_kwargs(**kwargs)
-
-
-def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
-    """Return agent name with '_multiple' suffix if output files exist."""
-    return f"{base_agent}_multiple" if outputFiles else base_agent
-
-
-def getAgentPath(agentName: str) -> str:
-    """Find and return the path to agent's yaml configuration file."""
-    agents_dir = Path(getAgent_dir_from_env())
-    if yaml_path := next((p for p in agents_dir.rglob(f"{agentName}.yaml")), None):
-        return str(yaml_path.parent)
-
-    error_msg = f"Could not find yaml file for agent: {agentName}"
-    logger.error(f"{error_msg} from {agents_dir}")
-    raise ValueError(error_msg)
 
 
 def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
