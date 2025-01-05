@@ -10,12 +10,12 @@ from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 
 # Base agent implementations
-from .agent_base import BaseReflectionAgent
+from .BaseReflectionAgent import BaseReflectionAgent
 
 # Specialized agent implementations
-from .agent_class_cot import CoTAgent
-from .agent_class_direct import DirectAgent
-from .agent_class_merge import MergeAgent
+from .CoTAgent import CoTAgent
+from .DirectAgent import DirectAgent
+from .MergeAgent import MergeAgent
 
 # Utility and loading functions
 from .agent_load import load_agent_settings_and_prompts
