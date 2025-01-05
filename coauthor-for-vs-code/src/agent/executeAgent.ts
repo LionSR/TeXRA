@@ -5,14 +5,14 @@ import * as vscode from 'vscode';
 // Third-party imports
 // (none needed)
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';
-import { AgentSettings, AgentPrompts } from './AgentDataclass';
-import { loadAgentSettingsAndPrompts } from './agentLoad';
+import { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { loadAgentSettingAndPrompts } from './agentLoad';
 import { ModelConfig } from './ModelConfig';
 import { MODEL_CONFIGS } from './ModelRegistry';
 import { ModelFactory } from './ModelFactory';
@@ -25,8 +25,8 @@ logger.initializeLogging(CHANNEL);
 type AgentConstructor = new (
   modelHandler: any,
   agentConfig: AgentConfig,
-  agentSettings: AgentSettings,
-  agentPrompts: AgentPrompts,
+  agentSetting: AgentSetting,
+  agentPrompt: AgentPrompt,
   agentPath: string,
 ) => DirectAgent | CoTAgent;
 
@@ -73,7 +73,7 @@ async function getAgentClass(
   agent: string,
   context: vscode.ExtensionContext,
 ): Promise<AgentConstructor> {
-  const [settings] = await loadAgentSettingsAndPrompts(
+  const [settings] = await loadAgentSettingAndPrompts(
     agentPath,
     agent,
     context,
@@ -124,7 +124,7 @@ export async function executeAgent(
     const agentPath = await getAgentPath(fullConfig.agent, context);
 
     // Load settings and prompts
-    const [agentSettings, agentPrompts] = await loadAgentSettingsAndPrompts(
+    const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
       agentPath,
       agentName,
       context,
@@ -135,8 +135,8 @@ export async function executeAgent(
     const agent = new AgentClass(
       modelHandler,
       fullConfig,
-      agentSettings,
-      agentPrompts,
+      agentSetting,
+      agentPrompt,
       agentPath,
     );
 

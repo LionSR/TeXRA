@@ -6,9 +6,11 @@ from typing import Any
 
 from ..logger import logger
 
-from ..agent.agent_state import AgentStateRound
-from ..agent import AgentSettings, AgentConfig
-from ..utils.file import read_file
+from ..utils.file import readFile
+
+from .agent_state import AgentStateRound
+from .agent_dataclass import AgentSetting
+from .agent_config import AgentConfig
 
 from .model_handler import ModelHandler
 from .response_usage import OpenAIAPIResponseUsage
@@ -21,13 +23,13 @@ K_SLICE = 200
 class OpenAIHandler(ModelHandler):
     """OpenAI-specific handlers."""
 
-    def get_client(self) -> OpenAI:
+    def getClient(self) -> OpenAI:
         """Get OpenAI client."""
         api_key = self.get_api_key()
         logger.info("Using OpenAI API key.")
         return OpenAI(api_key=api_key)
 
-    def create_response(
+    def createResponse(
         self,
         client: OpenAI,
         messages: list[dict],
@@ -84,7 +86,7 @@ class OpenAIHandler(ModelHandler):
 
         return messages
 
-    def create_reflection_message(
+    def create_reflection_messages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -146,7 +148,7 @@ class OpenAIHandler(ModelHandler):
         messages: list[dict],
         stateRound: AgentStateRound,
         toolState: ToolState,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         agentConfig: AgentConfig,
     ) -> None:
         """Handle continuation for OpenAI models."""
@@ -160,7 +162,7 @@ class OpenAIHandler(ModelHandler):
         userMessageContinuation = (
             f"Your response got cut off, because you only have limited response space. "
             f"Continue writing exactly from where you left off until the very end, "
-            f"marked by {agentSettings.endTag}. "
+            f"marked by {agentSetting.endTag}. "
             "Avoid repeat yourself and avoid starting over. "
             f'Start your response at the next token after: "{prefill_tokens}"'
         )
@@ -173,7 +175,7 @@ class OpenAIHandler(ModelHandler):
     def initialize_output_and_prefill(
         self,
         agentConfig: AgentConfig,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         messages: list[dict],
         toolState: ToolState,
         outputFile: str,
@@ -184,15 +186,15 @@ class OpenAIHandler(ModelHandler):
             if agentConfig.toolConfig.usePrefillFromInput and toolState.firstKCharsFromInput:
                 prefill += toolState.firstKCharsFromInput
                 toolState.update_accumulatedOutput("")
-                prefill = f"<{agentSettings.documentTag}>{toolState.firstKCharsFromInput}"
+                prefill = f"<{agentSetting.documentTag}>{toolState.firstKCharsFromInput}"
 
             messages[-1]["content"].append({"type": "text", "text": f"Start your response with\n{prefill}"})
             return False, messages
 
-        fileContent = read_file(outputFile)
+        fileContent = readFile(outputFile)
         messages.append({"role": "assistant", "content": fileContent})
 
-        if agentSettings.has_endTag(fileContent):
+        if agentSetting.has_endTag(fileContent):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
                 messages[-1]["content"][-1]["text"] = fileContent
@@ -204,13 +206,13 @@ class OpenAIHandler(ModelHandler):
         toolState.update_accumulatedOutput(fileContent)
         state = AgentStateRound.initialize(0)
         toolState.lastResponse = toolState.accumulatedOutput
-        self.add_continue_message(messages, state, toolState, agentSettings, agentConfig)
+        self.add_continue_message(messages, state, toolState, agentSetting, agentConfig)
 
         # here state is somehow not possible to be passed outside?
         # also here continue message is added here, not like later it was handled separately. We should make them consistent...
         return False, messages
 
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute price for OpenAI token usage."""
         # Handle Google models that return None for usage
         if responseUsage is None:
@@ -230,7 +232,7 @@ class OpenAIHandler(ModelHandler):
 
         return basePrice
 
-    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
+    def computeResponseUsage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
         """Compute OpenAI-specific statistics."""
         # For Google models, create a minimal usage object with zeros
         if responseUsage is None:
@@ -247,13 +249,13 @@ class OpenAIHandler(ModelHandler):
                         )(),
                     },
                 )(),
-                self.compute_price(responseUsage),
+                self.computePrice(responseUsage),
                 responseTime,
             )
 
-        return OpenAIAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
+        return OpenAIAPIResponseUsage.from_response(responseUsage, self.computePrice(responseUsage), responseTime)
 
-    def update_message_content(
+    def updateMessageContent(
         self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState, autoConfirmation: bool = False
     ) -> None:
         """Update message content for OpenAI models."""
@@ -277,7 +279,7 @@ class OpenAIHandler(ModelHandler):
                 # otherwise last message is a request message rather than a ask to continue after cut off
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": toolState.accumulatedOutput}]})
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSettings: AgentSettings) -> bool:
+    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""
         logger.info("Determining if should continue for OpenAI model via OpenAI API")
-        return stopReason == "length" and not agentSettings.has_endTag(newResponse)
+        return stopReason == "length" and not agentSetting.has_endTag(newResponse)

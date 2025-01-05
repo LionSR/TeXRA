@@ -4,7 +4,7 @@ import * as path from 'path';
 // Third-party imports
 import * as nunjucks from 'nunjucks';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
@@ -13,6 +13,49 @@ import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'Utils';
 logger.initializeLogging(CHANNEL);
+
+/**
+ * Get XML formatted string from a single file
+ * @param file Path to the file
+ * @returns XML formatted string containing file content
+ */
+export async function getXmlFormatFromFile(file: string): Promise<string> {
+  try {
+    const content = await readFile(file);
+    return `<document name="${file}">\n${content}\n</document>`;
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error formatting file as XML: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * Get XML formatted string from multiple files
+ * @param files List of file paths
+ * @returns XML formatted string containing all file contents, or null if no files
+ */
+export async function getXmlFormatFromFiles(
+  files: string[],
+): Promise<string | null> {
+  try {
+    if (!files || files.length === 0) {
+      return null;
+    }
+
+    const xmlPromises = files.map((file) => getXmlFormatFromFile(file));
+    const xmlContents = await Promise.all(xmlPromises);
+    return xmlContents.join('\n');
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error formatting files as XML: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
 
 /**
  * Convert a list of files to a comma-separated string

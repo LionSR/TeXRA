@@ -1,4 +1,4 @@
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Housekeeping';

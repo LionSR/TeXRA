@@ -4,7 +4,7 @@
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
@@ -72,12 +72,12 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   shouldContinue(
     stopReason: string,
     newResponse: string,
-    agentSettings: any,
+    agentSetting: any,
   ): boolean {
     logger.info(
       'ModelHandlerGoogle',
       'Determining if should continue for Google model via OpenAI API',
     );
-    return !hasEndTag(agentSettings, newResponse);
+    return !hasEndTag(agentSetting, newResponse);
   }
 }

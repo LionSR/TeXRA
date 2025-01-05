@@ -5,7 +5,7 @@
 import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Repetition';

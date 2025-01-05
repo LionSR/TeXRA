@@ -5,17 +5,17 @@ This module provides the core agent functionality for academic writing assistanc
 
 # Core dataclasses and configurations
 from .agent_config import AgentConfig
-from .agent_dataclass import AgentSettings, AgentPrompts
+from .agent_dataclass import AgentSetting, AgentPrompt
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 
 # Base agent implementations
-from .agent_base import BaseReflectionAgent
+from .BaseReflectionAgent import BaseReflectionAgent
 
 # Specialized agent implementations
-from .agent_class_cot import CoTAgent
-from .agent_class_direct import DirectAgent
-from .agent_class_merge import MergeAgent
+from .CoTAgent import CoTAgent
+from .DirectAgent import DirectAgent
+from .MergeAgent import MergeAgent
 
 # Utility and loading functions
 from .agent_load import load_agent_settings_and_prompts
@@ -42,8 +42,8 @@ from .model_factory import ModelFactory
 __all__ = [
     # Core dataclasses and configurations
     "AgentConfig",
-    "AgentSettings",
-    "AgentPrompts",
+    "AgentSetting",
+    "AgentPrompt",
     "AgentStateRound",
     "AgentStateGlobal",
     "ToolState",

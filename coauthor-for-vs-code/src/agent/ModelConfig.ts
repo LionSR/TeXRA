@@ -55,7 +55,6 @@ export interface ModelConfig {
   maxOutputTokens: number;
   inputPrice: number;
   outputPrice: number;
-  baseUrl?: string; // Optional base URL
   contextWindow: number;
   capabilities: ModelCapabilities;
   useOpenRouter: boolean; // Whether to use OpenRouter for this model
