@@ -12,7 +12,7 @@ from ..utils.file import readFile, writeFile
 from ..utils.replacement import applyReplacements, getReplacementsByCategory
 from ..utils.xml import (
     addCdataToTags,
-    addCdataToTags_multiple,
+    addCdataToTagsMultiple,
     filterTagsFromText,
     extractContentFromTag,
 )
@@ -20,7 +20,7 @@ from ..utils.xml import (
 from .logdb import update_log_outputFiles
 
 
-def get_outputFile_name(inputFile: str, agent: str, model: str, outputExt: str, currRound: int, editedFile: str | None = None) -> str:
+def getOutputFileName(inputFile: str, agent: str, model: str, outputExt: str, currRound: int, editedFile: str | None = None) -> str:
     """Generate output filename based on input parameters."""
     file_name, _ = os.path.splitext(inputFile)
     agent_first_name_chunk = agent.split("_")[0]
@@ -80,7 +80,7 @@ class OutputHandler:
                 if ".tex" in inputFile and ".tex" in outputFile:
                     _ = run_latexdiff(inputFile, outputFile)
 
-    def _process_single_output(self, outputFile: str) -> str:
+    def _processSingleOutput(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
         processedOutputFile = self.split_scratchpad_output_xml(outputFile, self.agentSetting.documentTag)
         content = readFile(processedOutputFile)
@@ -142,7 +142,7 @@ class OutputHandler:
         outputContent = self._process_xml_content(outputContent)
 
         tagsToWrap = [thinkingTag, "document"]
-        outputContent = addCdataToTags_multiple(outputContent, tagsToWrap)
+        outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap)
 
         rootContent = f"<root>{outputContent}</root>"
 
@@ -167,8 +167,8 @@ class OutputHandler:
         agent = output_parts[-3]
         model = output_parts[-1].split(".")[0]
 
-        round_match = re.search(r"_r(\d+)_", outputFile)
-        currRound = int(round_match.group(1)) if round_match else 0
+        roundMatch = re.search(r"_r(\d+)_", outputFile)
+        currRound = int(roundMatch.group(1)) if roundMatch else 0
 
         for doc in latex_documents.findall("document"):
             source = doc.get("name")
@@ -178,7 +178,7 @@ class OutputHandler:
             if source is not None and content is not None:
                 baseName, extension = os.path.splitext(source)
                 extension = extension.strip(".")
-                tex_file = get_outputFile_name(baseName, agent, model, extension, currRound=currRound)
+                tex_file = getOutputFileName(baseName, agent, model, extension, currRound=currRound)
                 writeFile(tex_file, content.strip())
                 outputFiles.append(tex_file)
                 logger.debug(f"TeX file written: {tex_file}")

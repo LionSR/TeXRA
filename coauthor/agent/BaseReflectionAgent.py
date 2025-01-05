@@ -72,7 +72,7 @@ class BaseReflectionAgent(ABC):
         userVars.update(self._get_file_vars())
         userVars.update(self._get_required_file_vars())
         userVars.update(self._get_pattern_based_file_vars())
-        userVars.update(self._get_outputFiles_order())
+        userVars.update(self._getOutputFiles_order())
         userVars.update(self._get_toolFlags())
         return userVars
 
@@ -197,7 +197,7 @@ class BaseReflectionAgent(ABC):
 
         return userVars
 
-    def _get_outputFiles_order(self) -> dict[str, Any]:
+    def _getOutputFiles_order(self) -> dict[str, Any]:
         """Get variables for output files order."""
         userVars = {}
 
@@ -234,8 +234,8 @@ class BaseReflectionAgent(ABC):
         self.client = self.modelHandler.getClient()
 
         self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
-        self.outputFile[0] = self.get_outputFile(currRound=0)
-        self.outputFile[1] = self.get_outputFile(currRound=1)
+        self.outputFile[0] = self.getOutputFile(currRound=0)
+        self.outputFile[1] = self.getOutputFile(currRound=1)
 
         # Initialize logging and database entry
         self.logId = create_log_entry(self.agentConfig, self.agentSetting)
@@ -257,7 +257,7 @@ class BaseReflectionAgent(ABC):
         return self.outputHandler.outputFiles[currRound]
 
     @abstractmethod
-    def get_outputFile(self, currRound: int) -> str:
+    def getOutputFile(self, currRound: int) -> str:
         pass
 
     def _process_response_cycle(
@@ -542,7 +542,7 @@ class BaseReflectionAgent(ABC):
                 stateGlobal, messages, toolStateReflection
             )
 
-    def _process_outputFiles(self, outputFile: str, currRound: int):
+    def _processOutputFiles(self, outputFile: str, currRound: int):
         """Process output files for the current round.
 
         Handles both single and multiple output file cases, including:

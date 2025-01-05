@@ -1,15 +1,15 @@
-from .agent_base import BaseReflectionAgent
+from .BaseReflectionAgent import BaseReflectionAgent
 from .agent_state import AgentStateRound, AgentStateGlobal
-from .output_handler import get_outputFile_name
+from .output_handler import getOutputFileName
 
 
 class CoTAgent(BaseReflectionAgent):
-    def get_outputFile(self, currRound: int) -> str:
+    def getOutputFile(self, currRound: int) -> str:
         """Get the output file name for the given round."""
-        base_outputFile = self.agentConfig.outputNameOverride or self.agentConfig.inputFile
+        baseOutputFile = self.agentConfig.outputNameOverride or self.agentConfig.inputFile
         file_extension = "xml" if self.use_scratchpad else self.agentSetting.outputExt
-        return get_outputFile_name(
-            base_outputFile, self.agentConfig.agent, self.modelHandler.config.name, file_extension, currRound, self.agentConfig.editedFile
+        return getOutputFileName(
+            baseOutputFile, self.agentConfig.agent, self.modelHandler.config.name, file_extension, currRound, self.agentConfig.editedFile
         )
 
     def handleOutput(
@@ -23,7 +23,7 @@ class CoTAgent(BaseReflectionAgent):
         """Handle the output for the given round."""
         if endTurn:
             self.outputHandler.ensure_correct_xml_structure(outputFile, self.agentSetting.documentTag)
-            self._process_outputFiles(outputFile, currRound)
+            self._processOutputFiles(outputFile, currRound)
 
         # Call base implementation for database updates
         return super().handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound)
