@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - utilities
-
 import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/executeAgent';
+import { getAgentsDirectory } from '../utils/pathUtils';
 
 const CHANNEL = 'YAML';
 logger.initializeLogging(CHANNEL);
@@ -88,7 +88,6 @@ export async function handleTestAgentLoading(
     const [baseSettings, basePrompts] = await loadAgentSettingAndPrompts(
       testDir,
       'base',
-      context,
     );
     logger.info(CHANNEL, 'Base agent settings loaded:');
     logger.info(CHANNEL, JSON.stringify(baseSettings, null, 2));
@@ -106,7 +105,6 @@ export async function handleTestAgentLoading(
     const [childSettings, childPrompts] = await loadAgentSettingAndPrompts(
       testDir,
       'child',
-      context,
     );
     logger.info(
       CHANNEL,
@@ -166,7 +164,6 @@ export async function handleLoadSpecificAgent(
     const [settings, prompts] = await loadAgentSettingAndPrompts(
       agentPath,
       agentName,
-      context,
     );
 
     // Display the results
@@ -177,7 +174,7 @@ export async function handleLoadSpecificAgent(
 
     // If the agent inherits from another, show the inheritance chain
     const agentFile = path.join(agentPath, `${agentName}.yaml`);
-    const config = (await loadYaml(agentFile, context)) as any;
+    const config = (await loadYaml(agentFile)) as { inherits?: string };
     if (config?.inherits) {
       logger.info(
         CHANNEL,
