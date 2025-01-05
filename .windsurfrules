@@ -1,3 +1,0 @@
-You are developing coauthor for assisting academic writing using LLMs, which consists a python backend and a vscode extension using typescript.
-The code you output should be correct, functional, yet maintainable as well.
-In the future the python backend will be merged into the typescript vs code extension. So please keep the code modular and well-organized, and make design choices that will make this easier.
