@@ -16,8 +16,8 @@ def run_indent_tex() -> None:
         dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
         for file in files:
             if file.endswith(".tex"):
-                tex_file = os.path.join(root, file)
-                command = ["latexindent", tex_file, "-w", "-s"]
+                latexFile = os.path.join(root, file)
+                command = ["latexindent", latexFile, "-w", "-s"]
                 if latexindent_config:
                     command.append(f"-l={latexindent_config}")
                 subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

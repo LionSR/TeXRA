@@ -10,21 +10,21 @@ from .utils import getAgent_first_name_chunk, get_file_patterns
 
 def run_clean_single(model: str, inputFile: str, agent: str) -> None:
     """Clean temporary and packed files for a single LaTeX file based on model and agent."""
-    base_name = os.path.splitext(os.path.basename(inputFile))[0]
+    baseName = os.path.splitext(os.path.basename(inputFile))[0]
     input_dir = os.path.dirname(inputFile)
 
     agent_first_name_chunk = getAgent_first_name_chunk(agent)
-    file_patterns = get_file_patterns(base_name, model, agent_first_name_chunk)
-    file_patterns.extend([f"{base_name}_{agent_first_name_chunk}_r0_{model}_thinking", f"{base_name}_{agent_first_name_chunk}_r1_{model}_thinking"])
+    file_patterns = get_file_patterns(baseName, model, agent_first_name_chunk)
+    file_patterns.extend([f"{baseName}_{agent_first_name_chunk}_r0_{model}_thinking", f"{baseName}_{agent_first_name_chunk}_r1_{model}_thinking"])
 
     extensions = TEMP_EXTENSIONS + PACK_EXTENSIONS
 
     for pattern in file_patterns:
         for ext in extensions:
             for search_dir in [os.path.join(input_dir, "build"), input_dir]:
-                file_path = os.path.join(search_dir, f"{pattern}{ext}")
-                if os.path.exists(file_path):
-                    delete_file(file_path)
+                filePath = os.path.join(search_dir, f"{pattern}{ext}")
+                if os.path.exists(filePath):
+                    delete_file(filePath)
 
     logger.info(f"Cleanup finished: {inputFile}.")
 
@@ -44,8 +44,8 @@ def run_clean_build() -> None:
         build_dir = os.path.join(directory, "build")
         if os.path.isdir(build_dir):
             for item in os.listdir(build_dir):
-                file_path = os.path.join(build_dir, item)
-                delete_file(file_path)
+                filePath = os.path.join(build_dir, item)
+                delete_file(filePath)
 
     clean_build_dir(".")
 

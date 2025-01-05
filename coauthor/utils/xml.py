@@ -36,7 +36,7 @@ def extract_text_from_tags(input_content: str, documentTag: str) -> str:
     return match.group(1) if match else input_content
 
 
-def filter_tags_from_text(content: str, tags: list[str] | str) -> str:
+def filterTagsFromText(content: str, tags: list[str] | str) -> str:
     """Remove specified XML tags and their content from input string."""
     if isinstance(tags, str):
         tags = [tags]
