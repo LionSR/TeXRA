@@ -6,13 +6,13 @@ from anthropic import Anthropic
 from typing import Any
 
 from ..logger import logger
-from ..utils.file import read_file, write_file
-from ..utils.xml import filterTagsFromText, extract_text_from_tags
-from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
-from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
+from ..utils.file import readFile, writeFile
+from ..utils.xml import filterTagsFromText, extractTextFromTag
+from ..utils.replacement import applyReplacementRegex, getReplacementsByCategory
+from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrapConfirmationPrompts
 
 from ..agent.agent_state import AgentStateRound
-from ..agent import AgentSettings, AgentConfig
+from ..agent import AgentSetting, AgentConfig
 
 from .model_handler import ModelHandler
 from .model_config import ModelConfig
@@ -27,13 +27,13 @@ class AnthropicHandler(ModelHandler):
     def __init__(self, config: ModelConfig):
         super().__init__(config)
 
-    def get_client(self) -> Anthropic:
+    def getClient(self) -> Anthropic:
         """Get Anthropic client."""
         api_key = self.get_api_key()
         logger.info("Using Anthropic API key.")
         return Anthropic(api_key=api_key)
 
-    def create_response(
+    def createResponse(
         self,
         client: Anthropic,
         messages: list[dict],
@@ -75,10 +75,10 @@ class AnthropicHandler(ModelHandler):
         }
         content.append(request)
 
-        # Note: Anthropic handles system prompts differently via create_response()
+        # Note: Anthropic handles system prompts differently via createResponse()
         return [{"role": "user", "content": content}]
 
-    def create_reflection_message(
+    def create_reflection_messages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -150,7 +150,7 @@ class AnthropicHandler(ModelHandler):
 
         # Handle auto confirmation
         if self.capabilities.likesToAskForConfirmation and autoConfirmation:
-            newResponse = wrap_confirmation_prompts(newResponse)
+            newResponse = wrapConfirmationPrompts(newResponse)
 
         # Check for confirmation patterns
         if any(pattern.lower() in newResponse.lower() for pattern in CONFIRMATION_PROMPT_PATTERNS):
@@ -159,11 +159,11 @@ class AnthropicHandler(ModelHandler):
         # Handle output tags if present
         if "<output>" in newResponse and self.capabilities.likesToAskForConfirmation and autoConfirmation:
             logger.warning("Output tag detected - extracting latex code from <output> tags")
-            newResponse = extract_text_from_tags(newResponse, "output")
+            newResponse = extractTextFromTag(newResponse, "output")
             logger.warning("No <output> tags found in response" if newResponse == newResponse else "Extracted content from <output> tags")
 
         # Apply formatting
-        newResponse = apply_replacement_regex(newResponse, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
+        newResponse = applyReplacementRegex(newResponse, getReplacementsByCategory("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
 
         if autoConfirmation:
             newResponse = filterTagsFromText(newResponse, "monologue")
@@ -179,7 +179,7 @@ class AnthropicHandler(ModelHandler):
         messages: list[dict],
         stateRound: AgentStateRound,
         toolState: ToolState,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         agentConfig: AgentConfig,
     ) -> None:
         """Handle continuation for Anthropic models."""
@@ -215,7 +215,7 @@ class AnthropicHandler(ModelHandler):
             )
 
         # Handle document tag if present
-        documentTagStart = f"<{agentSettings.documentTag}>"
+        documentTagStart = f"<{agentSetting.documentTag}>"
         first_lines = toolState.lastResponse.split("\n")[:10]
         for line in first_lines:
             if line.strip().startswith(documentTagStart):
@@ -246,7 +246,7 @@ class AnthropicHandler(ModelHandler):
     def initialize_output_and_prefill(
         self,
         agentConfig: AgentConfig,
-        agentSettings: AgentSettings,
+        agentSetting: AgentSetting,
         messages: list[dict],
         toolState: ToolState,
         outputFile: str,
@@ -261,22 +261,22 @@ class AnthropicHandler(ModelHandler):
             logger.debug(f"Anthropic prefill: {prefill}")
 
             if toolState.accumulatedOutput == "<scratchpad>" and prefill == "<scratchpad>":
-                write_file(outputFile, prefill)
-            elif agentSettings.outputExt == "xml":
-                write_file(outputFile, prefill + "\n")
+                writeFile(outputFile, prefill)
+            elif agentSetting.outputExt == "xml":
+                writeFile(outputFile, prefill + "\n")
 
             messages.append({"role": "assistant", "content": prefill})
             return False, messages
 
         # Get prefill from existing and non-trivial file
-        fileContent = read_file(outputFile)
+        fileContent = readFile(outputFile)
 
         if self.capabilities.likesToAskForConfirmation and agentConfig.toolConfig.autoConfirmation:
             fileContent = filterTagsFromText(fileContent, "monologue")
-            fileContent = apply_replacement_regex(fileContent, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
+            fileContent = applyReplacementRegex(fileContent, getReplacementsByCategory("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
         fileContent = fileContent.strip()
 
-        if agentSettings.has_endTag(fileContent):
+        if agentSetting.has_endTag(fileContent):
             logger.debug("End tag detected - skipping continuation")
             if isinstance(messages[-1]["content"], list):
                 messages[-1]["content"][-1]["text"] = fileContent
@@ -310,7 +310,7 @@ class AnthropicHandler(ModelHandler):
 
         return basePrice
 
-    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> AnthropicAPIResponseUsage:
+    def computeResponseUsage(self, responseUsage: Any, responseTime: float) -> AnthropicAPIResponseUsage:
         """Compute model-specific response usage from response usage object."""
         return AnthropicAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
 
@@ -339,7 +339,7 @@ class AnthropicHandler(ModelHandler):
                     # Initialize content list with single message
                     last_message["content"] = [{"type": "text", "text": toolState.accumulatedOutput, "cache_control": {"type": "ephemeral"}}]
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSettings: AgentSettings) -> bool:
+    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if Anthropic model should continue generating."""
         logger.info("Determining if should continue for Anthropic model via Anthropic API")
-        return stopReason not in ("max_tokens", "stop_sequence") and not agentSettings.has_endTag(newResponse)
+        return stopReason not in ("max_tokens", "stop_sequence") and not agentSetting.has_endTag(newResponse)

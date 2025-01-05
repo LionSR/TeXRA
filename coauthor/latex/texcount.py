@@ -2,10 +2,10 @@ import os
 
 from ..logger import logger
 
-from ..utils.exec import execute_command
+from ..utils.exec import executeCommand
 
 
-def get_texcount(filePaths: list[str] | str, merge: bool = False) -> str | None:
+def getTexcount(filePaths: list[str] | str, merge: bool = False) -> str | None:
     """Run texcount on LaTeX files and return combined statistics output, optionally merging included files."""
     if not isinstance(filePaths, list):
         filePaths = [filePaths]
@@ -25,7 +25,7 @@ def get_texcount(filePaths: list[str] | str, merge: bool = False) -> str | None:
             command.append("-merge")
         command.append(filePath)
 
-        success, stdout, stderr = execute_command(command, capture_output=True)
+        success, stdout, stderr = executeCommand(command, captureOutput=True)
         if success:
             all_outputs.append(f"Tex Count Results for {filePath}:\n{stdout}")
         else:
@@ -40,10 +40,10 @@ def get_texcount(filePaths: list[str] | str, merge: bool = False) -> str | None:
     return None
 
 
-def get_texcountStats(inputFiles: str | list[str]) -> str | None:
+def getTexcountStats(inputFiles: str | list[str]) -> str | None:
     """Run texcount on LaTeX files and return formatted statistics with XML-style tags."""
     if isinstance(inputFiles, str):
         inputFiles = [inputFiles]
 
-    texcountStats = get_texcount(inputFiles)
+    texcountStats = getTexcount(inputFiles)
     return f"Tex Count Statistics:<texcount>\n{texcountStats}\n</texcount>\n\n" if texcountStats else None

@@ -3,7 +3,7 @@ import glob
 import subprocess
 
 from ..logger import logger
-from ..utils.file import delete_file
+from ..utils.file import deleteFile
 
 from .constants import EXCLUDED_DIRS
 
@@ -24,6 +24,6 @@ def run_indent_tex() -> None:
 
     for pattern in ["**/*.bak0", "**/indent.log"]:
         for file in glob.glob(pattern, recursive=True):
-            delete_file(file)
+            deleteFile(file)
 
     logger.info("All .tex files indented and temp files deleted")

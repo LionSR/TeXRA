@@ -3,7 +3,7 @@ from typing import Any
 
 
 @dataclass
-class AgentSettings:
+class AgentSetting:
     """Configuration for agent behavior and generation settings."""
 
     agentType: str  # Core settings
@@ -29,22 +29,22 @@ class AgentSettings:
             raise ValueError("documentTag cannot be empty")
 
     @classmethod
-    def from_dict(cls, settings_dict: dict[str, Any]) -> "AgentSettings":
-        """Create an AgentSettings from a dictionary."""
+    def from_dict(cls, settingDict: dict[str, Any]) -> "AgentSetting":
+        """Create an AgentSetting from a dictionary."""
         settings = cls(
             # Core settings
-            agentType=settings_dict.get("agentType", "CoT"),
-            documentTag=settings_dict.get("documentTag", "document"),
-            temperature=settings_dict.get("temperature", 0.0),
+            agentType=settingDict.get("agentType", "CoT"),
+            documentTag=settingDict.get("documentTag", "document"),
+            temperature=settingDict.get("temperature", 0.0),
             # Generation settings
-            prefills=settings_dict.get("prefills", []),
-            outputExt=settings_dict.get("outputExt", "txt"),
-            endTag=settings_dict.get("endTag", "\\end{document}"),
+            prefills=settingDict.get("prefills", []),
+            outputExt=settingDict.get("outputExt", "txt"),
+            endTag=settingDict.get("endTag", "\\end{document}"),
             # File configurations
-            requiredFiles=settings_dict.get("requiredFiles", {}),
-            requiredFilesInternal=settings_dict.get("requiredFilesInternal", {}),
-            defaultOutputFiles=settings_dict.get("defaultOutputFiles", []),
-            filePatternsContain=settings_dict.get("filePatternsContain", []),
+            requiredFiles=settingDict.get("requiredFiles", {}),
+            requiredFilesInternal=settingDict.get("requiredFilesInternal", {}),
+            defaultOutputFiles=settingDict.get("defaultOutputFiles", []),
+            filePatternsContain=settingDict.get("filePatternsContain", []),
         )
         return settings
 
@@ -54,7 +54,7 @@ class AgentSettings:
 
 
 @dataclass
-class AgentPrompts:
+class AgentPrompt:
     """Configuration for agent prompts."""
 
     systemPrompt: str
@@ -63,13 +63,13 @@ class AgentPrompts:
     userReflect: str
 
     @classmethod
-    def from_dict(cls, prompt_dict: dict[str, str]) -> "AgentPrompts":
-        """Create a AgentPrompts from a dictionary of prompts."""
+    def from_dict(cls, promptDict: dict[str, str]) -> "AgentPrompt":
+        """Create a AgentPrompt from a dictionary of prompts."""
         return cls(
-            systemPrompt=prompt_dict.get("systemPrompt", ""),
-            userPrefix=prompt_dict.get("userPrefix", ""),
-            userRequest=prompt_dict.get("userRequest", ""),
-            userReflect=prompt_dict.get("userReflect", ""),
+            systemPrompt=promptDict.get("systemPrompt", ""),
+            userPrefix=promptDict.get("userPrefix", ""),
+            userRequest=promptDict.get("userRequest", ""),
+            userReflect=promptDict.get("userReflect", ""),
         )
 
     def __getitem__(self, key: str) -> Any:

@@ -7,15 +7,25 @@ from typing import Any
 from ..housekeeping.utils import getAgent_first_name_chunk
 from ..logger import logger
 
-from .file import read_file
+from .file import readFile
 
 
-def get_list_of_files(files: list[str] | None) -> str:
+def getXmlFormatFromFile(file: str) -> str:
+    """Format file content as XML document with filename as attribute."""
+    return f'<document name="{file}">\n' f"{readFile(file)}\n" f"</document>"
+
+
+def getXmlFormatFromFiles(files: list[str]) -> str:
+    """Convert multiple files to XML format, joining with newlines."""
+    return "\n".join(getXmlFormatFromFile(file) for file in files) if files else ""
+
+
+def getListOfFiles(files: list[str] | None) -> str:
     """Convert a list of files to a comma-separated string."""
     return ", ".join(str(f) for f in (files or []) if f is not None)
 
 
-def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
+def renderPrompt(prompt: str, variables: dict[str, Any]) -> str:
     """Render a prompt string using Jinja2 templating."""
     template = Template(prompt)
     rendered_prompt = template.render(**variables)
@@ -23,7 +33,7 @@ def render_prompt(prompt: str, variables: dict[str, Any]) -> str:
     return rendered_prompt.strip()
 
 
-def get_first_k_chars_from_document(inputFile: str, k: int) -> str | None:
+def getFirstKCharsFromDocument(inputFile: str, k: int) -> str | None:
     """Get the first K characters from a document.
 
     Args:
@@ -33,7 +43,7 @@ def get_first_k_chars_from_document(inputFile: str, k: int) -> str | None:
     Returns:
         First K characters from the document, stripped of whitespace, or None if file cannot be read
     """
-    content = read_file(inputFile)
+    content = readFile(inputFile)
     return content[:k].strip() if content else None
 
 
@@ -51,12 +61,12 @@ def write_prompt_to_xml(systemPrompt: str, userPrefix: str, userRequest: str, in
         Path to the created XML file
     """
     # Get directory and base name from input file
-    input_dir = os.path.dirname(inputFile)
-    input_base = os.path.splitext(os.path.basename(inputFile))[0]
+    inputDir = os.path.dirname(inputFile)
+    inputBase = os.path.splitext(os.path.basename(inputFile))[0]
     agentName = getAgent_first_name_chunk(agent)
 
     # Create output file path
-    outputFile = os.path.join(input_dir, f"{input_base}_{agentName}_input.xml")
+    outputFile = os.path.join(inputDir, f"{inputBase}_{agentName}_input.xml")
     logger.info(f"Writing input prompt to {outputFile}")
 
     # Combine prompts

@@ -20,14 +20,14 @@ class AgentStateRound:
         """Initialize a new AgentStateRound object."""
         return cls(currRound=currRound)
 
-    def update_token_counts(
+    def updateTokenCounts(
         self,
         responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,  # Usage statistics from model response
     ) -> None:
         """Update token counts based on model response usage."""
         self.APIUsage = responseUsage
 
-    def update_responseTime(self, responseTime: float) -> None:
+    def updateResponseTime(self, responseTime: float) -> None:
         """Update response time for this round."""
         self.responseTime += responseTime
 
@@ -60,7 +60,7 @@ class AgentStateGlobal:
         """Initialize a new AgentStateGlobal object."""
         return cls()
 
-    def update_from_currRound(self, stateRound: AgentStateRound) -> None:
+    def updateFromCurrRound(self, stateRound: AgentStateRound) -> None:
         """Update global metrics based on round state."""
         if stateRound.APIUsage:
             if self.firstInputTokens == 0:

@@ -13,9 +13,9 @@ import { getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent components
 import {
-  AgentSettings,
-  AgentPrompts,
-  validateAgentSettings,
+  AgentSetting,
+  AgentPrompt,
+  validateAgentSetting,
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
@@ -133,50 +133,50 @@ export function mergeDicts(
  * @param agentPath Path to the agent directory
  * @param agentName Name of the agent
  * @param context Extension context (required for relative paths)
- * @returns Promise<[AgentSettings, AgentPrompts]> Tuple of settings and prompts
+ * @returns Promise<[AgentSetting, AgentPrompt]> Tuple of settings and prompts
  */
-export async function loadAgentSettingsAndPrompts(
+export async function loadAgentSettingAndPrompts(
   agentPath: string,
   agentName: string,
   context?: vscode.ExtensionContext,
-): Promise<[AgentSettings, AgentPrompts]> {
+): Promise<[AgentSetting, AgentPrompt]> {
   try {
     const agentFile = path.join(agentPath, `${agentName}.yaml`);
     const config = (await loadYaml(agentFile, context)) as any;
     const parent = config?.inherits;
 
-    let settings: AgentSettings;
-    let prompts: AgentPrompts;
+    let settings: AgentSetting;
+    let prompts: AgentPrompt;
 
     if (parent) {
       // Load parent settings and prompts recursively
-      const [parentSettings, parentPrompts] = await loadAgentSettingsAndPrompts(
+      const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
         agentPath,
         parent,
         context,
       );
 
       // Get current settings and prompts, defaulting to empty objects
-      const agentSettings = (config?.settings || {}) as Partial<AgentSettings>;
-      const agentPrompts = (config?.prompts || {}) as Partial<AgentPrompts>;
+      const agentSetting = (config?.settings || {}) as Partial<AgentSetting>;
+      const agentPrompt = (config?.prompts || {}) as Partial<AgentPrompt>;
 
       // Merge with parent settings and prompts
-      settings = mergeDicts(parentSettings, agentSettings) as AgentSettings;
-      prompts = mergeDicts(parentPrompts, agentPrompts) as AgentPrompts;
+      settings = mergeDicts(parentSettings, agentSetting) as AgentSetting;
+      prompts = mergeDicts(parentPrompts, agentPrompt) as AgentPrompt;
     } else {
       // No inheritance, use settings and prompts directly with defaults
       settings = mergeDicts(
         DEFAULT_AGENT_SETTINGS,
-        (config?.settings || {}) as Partial<AgentSettings>,
-      ) as AgentSettings;
+        (config?.settings || {}) as Partial<AgentSetting>,
+      ) as AgentSetting;
       prompts = mergeDicts(
         DEFAULT_AGENT_PROMPTS,
-        (config?.prompts || {}) as Partial<AgentPrompts>,
-      ) as AgentPrompts;
+        (config?.prompts || {}) as Partial<AgentPrompt>,
+      ) as AgentPrompt;
     }
 
     // Validate settings
-    validateAgentSettings(settings);
+    validateAgentSetting(settings);
 
     return [settings, prompts];
   } catch (err) {

@@ -15,7 +15,7 @@ logger.initializeLogging(CHANNEL);
  * @param latexFile Path to the LaTeX file
  * @returns Promise<boolean> True if compilation succeeded
  */
-export async function compileLatexToPdf(latexFile: string): Promise<boolean> {
+export async function compileLatex2Pdf(latexFile: string): Promise<boolean> {
   try {
     const outputDirectory = path.dirname(latexFile);
     const command = [

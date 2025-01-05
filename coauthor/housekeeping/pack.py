@@ -2,7 +2,7 @@ import os
 import shutil
 
 from ..logger import logger
-from ..utils.file import delete_file, move_file, find_file
+from ..utils.file import deleteFile, moveFile, findFile
 
 from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
 from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_datetime
@@ -11,7 +11,7 @@ from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_date
 def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str | None = None) -> None:
     """Pack LaTeX files and related outputs into timestamped history directory, cleaning temp files."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
-    input_dir = os.path.dirname(inputFile)
+    inputDir = os.path.dirname(inputFile)
 
     agent_first_name_chunk = getAgent_first_name_chunk(agent)
 
@@ -22,7 +22,7 @@ def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str |
     copied_files = []
     for pattern in file_patterns:
         for ext in PACK_EXTENSIONS:
-            filePath = find_file(input_dir, pattern, ext)
+            filePath = findFile(inputDir, pattern, ext)
             if filePath:
                 if filePath == inputFile or pattern == baseName:
                     copied_files.append(filePath)
@@ -32,12 +32,12 @@ def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str |
     # this includes the original input file, f"{base}_{agent}_r{round}_{model}",
     # so even if no output file from llm is genereated, the output folder will still be created
     if moved_files or copied_files:
-        now = get_folder_datetime(input_dir, file_patterns, PACK_EXTENSIONS)
+        now = get_folder_datetime(inputDir, file_patterns, PACK_EXTENSIONS)
         if output_folder is None:
-            output_folder = os.path.join(input_dir, HISTORY_DIR, f"{now}_{baseName}_{agent}_{model}")
+            output_folder = os.path.join(inputDir, HISTORY_DIR, f"{now}_{baseName}_{agent}_{model}")
         os.makedirs(output_folder, exist_ok=True)
         for filePath in moved_files:
-            move_file(filePath, output_folder)
+            moveFile(filePath, output_folder)
         for filePath in copied_files:
             shutil.copy(filePath, output_folder)
             logger.info(f"Copied file: {filePath}")
@@ -46,9 +46,9 @@ def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str |
 
     for pattern in file_patterns:
         for ext in TEMP_EXTENSIONS:
-            filePath = find_file(input_dir, pattern, ext)
+            filePath = findFile(inputDir, pattern, ext)
             if filePath and filePath != inputFile:
-                delete_file(filePath)
+                deleteFile(filePath)
 
     logger.info(f"Packing finished: {inputFile}.")
     return output_folder
@@ -88,7 +88,7 @@ def run_pack_multiple(model: str, inputFile: str, inputFiles: list[str], agent: 
     for pattern in additional_patterns:
         filePath = os.path.join(output_dir, pattern)
         if os.path.exists(filePath):
-            move_file(filePath, common_output_folder)
+            moveFile(filePath, common_output_folder)
 
     logger.info(f"All files packed to: {common_output_folder}")
     return common_output_folder
