@@ -912,10 +912,12 @@ export abstract class BaseReflectionAgent {
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 
+    logger.debug(CHANNEL, `Round 0 completed`);
+
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
-      const reflectionToolState = ToolState.initialize();
-      await this.reflect(stateGlobal, messages, reflectionToolState);
+      const toolStateReflection = ToolState.initialize();
+      await this.reflect(stateGlobal, messages, toolStateReflection);
     }
   }
 

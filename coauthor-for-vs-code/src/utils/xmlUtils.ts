@@ -90,7 +90,7 @@ export function extractContentFromTag(
   try {
     logger.error(
       CHANNEL,
-      `Extracting document content from root: ${JSON.stringify(root)}`,
+      `Extracting single document content from root: ${JSON.stringify(root)}`,
     );
 
     if (!root || typeof root !== 'object') {
@@ -100,18 +100,10 @@ export function extractContentFromTag(
 
     if (documentTag in root) {
       const content = root[documentTag];
-      // For single document case, content should be a string
       if (typeof content === 'string') {
         return content.trim();
       }
-      // If it's an array, that means it's a multiple document case
-      if (Array.isArray(content)) {
-        logger.error(
-          CHANNEL,
-          `Found array of documents, should use extractContentFromTagMultiple instead`,
-        );
-        return null;
-      }
+      logger.error(CHANNEL, `Content is not a string in single document case`);
     }
 
     logger.error(CHANNEL, `No ${documentTag} found in output file`);
@@ -145,7 +137,11 @@ export function extractContentFromTagMultiple(
 
     if (documentTag in root) {
       const container = root[documentTag];
-      if (container && typeof container === 'object') {
+      if (
+        container &&
+        typeof container === 'object' &&
+        'document' in container
+      ) {
         const documents = container.document;
         if (Array.isArray(documents)) {
           return documents.map((doc) => ({
@@ -153,15 +149,10 @@ export function extractContentFromTagMultiple(
             name: doc.name,
           }));
         }
-        // Handle single document case
-        if (documents && typeof documents === 'object') {
-          return [
-            {
-              content: documents.content?.trim() || '',
-              name: documents.name,
-            },
-          ];
-        }
+        logger.error(
+          CHANNEL,
+          `Document property is not an array in multiple document case`,
+        );
       }
     }
 
