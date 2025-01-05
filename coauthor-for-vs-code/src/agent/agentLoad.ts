@@ -36,7 +36,7 @@ export async function loadYaml(
 ): Promise<object> {
   try {
     let absolutePath: string;
-    const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+    const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
 
     if (path.isAbsolute(filePath)) {
       // If filePath is absolute, use it directly

@@ -27,7 +27,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   public async setupFileSystemWatcher() {
     try {
       // Get the current path being watched using getConfig
-      const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+      const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
       let watchPath: string;
 
       if (rootPath && path.isAbsolute(rootPath)) {
@@ -78,7 +78,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       return this.getFilesInDirectory(dirPath);
     } else {
       // For root level, first check configuration using getConfig
-      const rootPath = getConfig<string>('explorer.rootPath', 'agents');
+      const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
 
       let absolutePath: string;
       if (rootPath && path.isAbsolute(rootPath)) {
