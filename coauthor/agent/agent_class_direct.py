@@ -11,12 +11,12 @@ class DirectAgent(BaseReflectionAgent):
             base_outputFile,
             self.agentConfig.agent,
             self.modelHandler.config.name,
-            self.agentSettings.outputExt,
+            self.agentSetting.outputExt,
             currRound,
             self.agentConfig.editedFile,
         )
 
-    def handle_output(
+    def handleOutput(
         self,
         stateRound: AgentStateRound,  # Current round state object
         stateGlobal: AgentStateGlobal,  # Global state object
@@ -29,4 +29,4 @@ class DirectAgent(BaseReflectionAgent):
             self._process_outputFiles(outputFile, currRound)
 
         # Call base implementation for database updates
-        return super().handle_output(stateRound, stateGlobal, outputFile, endTurn, currRound)
+        return super().handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound)

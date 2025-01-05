@@ -40,7 +40,6 @@ class ModelConfig:
     maxOutputTokens: int
     inputPrice: float
     outputPrice: float
-    baseUrl: str | None = None
     contextWindow: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     useOpenRouter: bool = False  # Whether to use OpenRouter for this model

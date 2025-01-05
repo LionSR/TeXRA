@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { loadYaml, loadAgentSettingsAndPrompts } from '../../agent/agentLoad';
+import { loadYaml, loadAgentSettingAndPrompts } from '../../agent/agentLoad';
 import * as path from 'path';
 import * as logger from '../../logger/logUtils';
 import { getConfig } from '../../frontend-utils/commonUtils';
@@ -72,7 +72,7 @@ export async function handleTestAgentLoading(
       `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`,
     );
 
-    const [baseSettings, basePrompts] = await loadAgentSettingsAndPrompts(
+    const [baseSettings, basePrompts] = await loadAgentSettingAndPrompts(
       testDir,
       'base',
       context,
@@ -90,7 +90,7 @@ export async function handleTestAgentLoading(
       `Child YAML loaded: ${JSON.stringify(childYamlContent, null, 2)}`,
     );
 
-    const [childSettings, childPrompts] = await loadAgentSettingsAndPrompts(
+    const [childSettings, childPrompts] = await loadAgentSettingAndPrompts(
       testDir,
       'child',
       context,
@@ -155,7 +155,7 @@ export async function handleTestLoadSpecificAgent(
     // Load and display the agent configuration
     logger.info(CHANNEL, `Loading from path: ${agentPath}`);
 
-    const [settings, prompts] = await loadAgentSettingsAndPrompts(
+    const [settings, prompts] = await loadAgentSettingAndPrompts(
       agentPath,
       agentName,
       context,

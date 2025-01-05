@@ -33,10 +33,10 @@ def load_agent_settings_and_prompts(agentPath: str, agentName: str) -> tuple[dic
 
     if parent:
         parentSettings, parentPrompts = load_agent_settings_and_prompts(agentPath, parent)
-        agentSettings = config.get("settings", {}) or {}
-        agentPrompts = config.get("prompts", {}) or {}
-        settings = merge_dicts(parentSettings, agentSettings)
-        prompts = merge_dicts(parentPrompts, agentPrompts)
+        agentSetting = config.get("settings", {}) or {}
+        agentPrompt = config.get("prompts", {}) or {}
+        settings = merge_dicts(parentSettings, agentSetting)
+        prompts = merge_dicts(parentPrompts, agentPrompt)
     else:
         settings = config.get("settings", {}) or {}
         prompts = config.get("prompts", {}) or {}

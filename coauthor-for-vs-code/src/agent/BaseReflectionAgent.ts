@@ -28,6 +28,7 @@ import {
   getListOfFiles,
   getFirstKCharsFromDocument,
   writePromptToXml,
+  getXmlFormatFromFiles,
 } from '../utils/promptUtils';
 import {
   getReplacementsByCategory,
@@ -35,11 +36,10 @@ import {
   applyReplacements,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { getXmlFormatFromFiles } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSettings, AgentPrompts } from './AgentDataclass';
+import { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
@@ -56,8 +56,8 @@ logger.initializeLogging(CHANNEL);
 export abstract class BaseReflectionAgent {
   protected modelHandler: ModelHandler;
   protected agentConfig: AgentConfig;
-  protected agentSettings: AgentSettings;
-  protected agentPrompts: AgentPrompts;
+  protected agentSetting: AgentSetting;
+  protected agentPrompt: AgentPrompt;
   protected agentPath: string;
   protected outputFile: [string, string];
   protected outputFiles: { [key: number]: string[] };
@@ -70,20 +70,20 @@ export abstract class BaseReflectionAgent {
   constructor(
     modelHandler: ModelHandler,
     agentConfig: AgentConfig,
-    agentSettings: AgentSettings,
-    agentPrompts: AgentPrompts,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
     agentPath: string,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
-    this.agentSettings = agentSettings;
-    this.agentPrompts = agentPrompts;
+    this.agentSetting = agentSetting;
+    this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
 
     logger.debug(CHANNEL, `AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
     logger.debug(
       CHANNEL,
-      `AgentSettings: ${JSON.stringify(this.agentSettings)}\n`,
+      `AgentSetting: ${JSON.stringify(this.agentSetting)}\n`,
     );
 
     logger.debug(
@@ -100,7 +100,7 @@ export abstract class BaseReflectionAgent {
     this.setup();
     const userVars = this.getUserVars();
     this.outputHandler = new OutputHandler(
-      this.agentSettings,
+      this.agentSetting,
       this.agentConfig,
       this.modelHandler,
       this.logId,
@@ -126,7 +126,7 @@ export abstract class BaseReflectionAgent {
     this.client = this.modelHandler.getClient();
 
     this.useScratchpad =
-      this.agentSettings.prefills?.includes('<scratchpad>') || false;
+      this.agentSetting.prefills?.includes('<scratchpad>') || false;
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
@@ -240,9 +240,9 @@ export abstract class BaseReflectionAgent {
     const userVars: Record<string, any> = {};
 
     // Add variables for required files
-    if (this.agentSettings.requiredFiles) {
+    if (this.agentSetting.requiredFiles) {
       for (const [varName, filePath] of Object.entries(
-        this.agentSettings.requiredFiles,
+        this.agentSetting.requiredFiles,
       )) {
         if (filePath) {
           try {
@@ -264,9 +264,9 @@ export abstract class BaseReflectionAgent {
     }
 
     // Add variables for internal required files (from prompt directory)
-    if (this.agentSettings.requiredFilesInternal) {
+    if (this.agentSetting.requiredFilesInternal) {
       for (const [varName, filePath] of Object.entries(
-        this.agentSettings.requiredFilesInternal,
+        this.agentSetting.requiredFilesInternal,
       )) {
         const fullPath = `${this.agentPath}/${filePath}`;
         try {
@@ -296,8 +296,8 @@ export abstract class BaseReflectionAgent {
     const userVars: Record<string, any> = {};
 
     // Handle pattern-based file mappings if defined in settings
-    if (this.agentSettings.filePatternsContain) {
-      for (const patternConfig of this.agentSettings.filePatternsContain) {
+    if (this.agentSetting.filePatternsContain) {
+      for (const patternConfig of this.agentSetting.filePatternsContain) {
         const pattern = patternConfig.pattern.toLowerCase();
         const varName = patternConfig.varName;
         const categories = patternConfig.categories;
@@ -369,13 +369,13 @@ export abstract class BaseReflectionAgent {
     ) {
       userVars.OUTPUT_FILES_ORDER = this.agentConfig.outputFiles.join(', ');
     } else if (
-      Array.isArray(this.agentSettings.defaultOutputFiles) &&
-      this.agentSettings.defaultOutputFiles.length > 0
+      Array.isArray(this.agentSetting.defaultOutputFiles) &&
+      this.agentSetting.defaultOutputFiles.length > 0
     ) {
       // If no outputFiles specified but defaultOutputFiles exists in settings
-      this.agentConfig.outputFiles = this.agentSettings.defaultOutputFiles;
+      this.agentConfig.outputFiles = this.agentSetting.defaultOutputFiles;
       userVars.OUTPUT_FILES_ORDER =
-        this.agentSettings.defaultOutputFiles.join(', ');
+        this.agentSetting.defaultOutputFiles.join(', ');
     }
 
     return userVars;
@@ -415,15 +415,15 @@ export abstract class BaseReflectionAgent {
       const exists = await fileExists(outputFile);
       const startTime = Date.now();
       const systemPrompt = await renderPrompt(
-        this.agentPrompts.systemPrompt,
+        this.agentPrompt.systemPrompt,
         this.getUserVars(),
       );
       const responseObject = await this.modelHandler.createResponse(
         this.client,
         messages,
-        this.agentSettings.temperature || 0.0,
+        this.agentSetting.temperature || 0.0,
         systemPrompt,
-        this.agentSettings.endTag,
+        this.agentSetting.endTag,
       );
       const responseTime = (Date.now() - startTime) / 1000;
       stateRound.updateResponseTime(responseTime);
@@ -433,7 +433,7 @@ export abstract class BaseReflectionAgent {
       const [newResponse, responseUsage, stopReason] =
         this.modelHandler.extractResponse(
           responseObject,
-          this.agentSettings.endTag,
+          this.agentSetting.endTag,
           this.agentConfig.toolConfig.autoConfirmation,
         );
 
@@ -529,7 +529,7 @@ export abstract class BaseReflectionAgent {
         processedResponse,
         stateRound,
         stateGlobal,
-        this.agentSettings,
+        this.agentSetting,
       );
       endTurn = shouldEndTurn;
       if (shouldStop) {
@@ -548,7 +548,7 @@ export abstract class BaseReflectionAgent {
         this.modelHandler.shouldContinue(
           stopReason,
           processedResponse,
-          this.agentSettings,
+          this.agentSetting,
         )
       ) {
         logger.info(
@@ -559,7 +559,7 @@ export abstract class BaseReflectionAgent {
           messages,
           stateRound,
           toolState,
-          this.agentSettings,
+          this.agentSetting,
           this.agentConfig,
         );
         continue;
@@ -574,9 +574,9 @@ export abstract class BaseReflectionAgent {
    */
   private getPrefillForRound(currRound: number): string {
     const prefill =
-      currRound < (this.agentSettings.prefills?.length || 0)
-        ? this.agentSettings.prefills![currRound]
-        : this.agentSettings.prefills?.[0] || '';
+      currRound < (this.agentSetting.prefills?.length || 0)
+        ? this.agentSetting.prefills![currRound]
+        : this.agentSetting.prefills?.[0] || '';
     return prefill;
   }
 
@@ -690,9 +690,9 @@ export abstract class BaseReflectionAgent {
     // Set up initial prompts
     const userVars = await this.getUserVars();
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      renderPrompt(this.agentPrompts.systemPrompt, userVars),
-      renderPrompt(this.agentPrompts.userRequest, userVars),
-      renderPrompt(this.agentPrompts.userPrefix, userVars),
+      renderPrompt(this.agentPrompt.systemPrompt, userVars),
+      renderPrompt(this.agentPrompt.userRequest, userVars),
+      renderPrompt(this.agentPrompt.userPrefix, userVars),
     ]);
 
     // logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
@@ -732,7 +732,7 @@ export abstract class BaseReflectionAgent {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
-        this.agentSettings,
+        this.agentSetting,
         messages,
         toolState,
         this.outputFile[0],
@@ -798,7 +798,7 @@ export abstract class BaseReflectionAgent {
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
     // Handle output file processing
     if (this.agentConfig.outputFiles) {
-      await this.handleOutputFileProcessing(
+      await this._handleToolStateForOutput(
         this.agentConfig.outputFiles,
         currRound,
         toolState,
@@ -807,7 +807,7 @@ export abstract class BaseReflectionAgent {
       // Handle single output file
       const outputFiles = this.outputHandler.outputFiles[0];
       if (outputFiles && outputFiles.length > 0) {
-        await this.handleOutputFileProcessing(
+        await this._handleToolStateForOutput(
           [outputFiles[0]],
           currRound,
           toolState,
@@ -829,7 +829,7 @@ export abstract class BaseReflectionAgent {
     // Prepare reflection message
     const userVars = await this.getUserVars();
     const userRequestReflect = await renderPrompt(
-      this.agentPrompts.userReflect,
+      this.agentPrompt.userReflect,
       userVars,
     );
     let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
@@ -842,7 +842,7 @@ export abstract class BaseReflectionAgent {
       return [stateRound, stateGlobal, messages, true];
     }
 
-    const reflectionMessages = await this.modelHandler.createReflectionMessage(
+    const reflectionMessages = await this.modelHandler.createReflectionMessages(
       messages,
       userMessage,
       toolState.figureFiles,
@@ -855,7 +855,7 @@ export abstract class BaseReflectionAgent {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
-        this.agentSettings,
+        this.agentSetting,
         reflectionMessages,
         toolState,
         this.outputFile[1],
@@ -922,7 +922,7 @@ export abstract class BaseReflectionAgent {
   /**
    * Handle output file processing.
    */
-  private async handleOutputFileProcessing(
+  private async _handleToolStateForOutput(
     outputFiles: string[],
     currRound: number,
     toolState: ToolState,

@@ -5,7 +5,7 @@ This module provides the core agent functionality for academic writing assistanc
 
 # Core dataclasses and configurations
 from .agent_config import AgentConfig
-from .agent_dataclass import AgentSettings, AgentPrompts
+from .agent_dataclass import AgentSetting, AgentPrompt
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
 
@@ -42,8 +42,8 @@ from .model_factory import ModelFactory
 __all__ = [
     # Core dataclasses and configurations
     "AgentConfig",
-    "AgentSettings",
-    "AgentPrompts",
+    "AgentSetting",
+    "AgentPrompt",
     "AgentStateRound",
     "AgentStateGlobal",
     "ToolState",
