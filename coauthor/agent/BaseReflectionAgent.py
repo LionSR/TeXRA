@@ -20,7 +20,7 @@ from ..latex import (
 
 # Local imports - utilities
 from ..utils.file import readFile, writeFile, appendFile
-from ..utils.prompt import renderPrompt, getListOfFiles, getFirstKCharsFromDocument, write_prompt_to_xml, getXmlFormatFromFiles
+from ..utils.prompt import renderPrompt, getListOfFiles, getFirstKCharsFromDocument, writePromptToXml, getXmlFormatFromFiles
 from ..utils.replacement import getAllReplacements, applyReplacements, getReplacementsByCategory, applyReplacementRegex
 from ..utils.repetition import checkForMassiveRepetition
 
@@ -339,7 +339,7 @@ class BaseReflectionAgent(ABC):
             logger.debug(f"Last {K_SLICE} chars: {newResponse[-K_SLICE:]}")
 
             # Update message content
-            self.modelHandler.update_message_content(
+            self.modelHandler.updateMessageContent(
                 messages,
                 bestConnector,
                 newResponse,
@@ -425,7 +425,7 @@ class BaseReflectionAgent(ABC):
 
         # Write prompt to file if requested
         if self.agentConfig.toolConfig.printInputPrompt:
-            write_prompt_to_xml(systemPrompt, userPrefix, userRequest, self.agentConfig.inputFile, self.agentConfig.agent)
+            writePromptToXml(systemPrompt, userPrefix, userRequest, self.agentConfig.inputFile, self.agentConfig.agent)
 
         # Initialize messages with prompts
         messages = self.modelHandler.initialize_messages(

@@ -6,9 +6,10 @@ from typing import Any
 
 from ..logger import logger
 
-from ..agent import AgentSetting, AgentConfig
-from ..agent.agent_state import AgentStateRound, AgentStateGlobal
 from ..utils.img import getBase64EncodedImage, countPdfPages, processPdfInput
+
+from .agent_dataclass import AgentSetting, AgentConfig
+from .agent_state import AgentStateRound, AgentStateGlobal
 
 from .model_config import ModelConfig, ModelProvider
 from .tool_state import ToolState
@@ -271,7 +272,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute the price for token usage."""
         pass
 
@@ -281,7 +282,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def update_message_content(
+    def updateMessageContent(
         self,
         messages: list[dict],
         bestConnector: str,

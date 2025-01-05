@@ -6,6 +6,7 @@ from anthropic import Anthropic
 from typing import Any
 
 from ..logger import logger
+
 from ..utils.file import readFile, writeFile
 from ..utils.xml import filterTagsFromText, extractTextFromTag
 from ..utils.replacement import applyReplacementRegex, getReplacementsByCategory
@@ -16,8 +17,8 @@ from ..agent import AgentSetting, AgentConfig
 
 from .model_handler import ModelHandler
 from .model_config import ModelConfig
-from .response_usage import AnthropicAPIResponseUsage
 
+from .response_usage import AnthropicAPIResponseUsage
 from .tool_state import ToolState
 
 
@@ -216,8 +217,8 @@ class AnthropicHandler(ModelHandler):
 
         # Handle document tag if present
         documentTagStart = f"<{agentSetting.documentTag}>"
-        first_lines = toolState.lastResponse.split("\n")[:10]
-        for line in first_lines:
+        firstLines = toolState.lastResponse.split("\n")[:10]
+        for line in firstLines:
             if line.strip().startswith(documentTagStart):
                 logger.warning(f"Removing document tag prefix {documentTagStart} from response")
                 toolState.lastResponse = toolState.lastResponse.replace(line, "", 1).strip()
@@ -298,7 +299,7 @@ class AnthropicHandler(ModelHandler):
         messages.append({"role": "assistant", "content": content})
         return False, messages
 
-    def compute_price(self, responseUsage: Any) -> float:
+    def computePrice(self, responseUsage: Any) -> float:
         """Compute the price for token usage."""
         basePrice = (responseUsage.input_tokens * self.config.inputPrice + responseUsage.output_tokens * self.config.outputPrice) / 1e6
 
@@ -312,9 +313,9 @@ class AnthropicHandler(ModelHandler):
 
     def computeResponseUsage(self, responseUsage: Any, responseTime: float) -> AnthropicAPIResponseUsage:
         """Compute model-specific response usage from response usage object."""
-        return AnthropicAPIResponseUsage.from_response(responseUsage, self.compute_price(responseUsage), responseTime)
+        return AnthropicAPIResponseUsage.from_response(responseUsage, self.computePrice(responseUsage), responseTime)
 
-    def update_message_content(
+    def updateMessageContent(
         self, messages: list[dict], bestConnector: str, newResponse: str, toolState: ToolState, autoConfirmation: bool = False
     ) -> None:
         """Update message content for Anthropic models."""

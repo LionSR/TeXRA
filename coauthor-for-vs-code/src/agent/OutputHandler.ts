@@ -20,9 +20,9 @@ import {
   extractContentFromTag,
 } from '../utils/xmlUtils';
 import {
-  runLatexDiff,
-  runLatexDiffForRound,
-  runLatexDiffBetweenRounds,
+  runLatexdiff,
+  runLatexdiffForRound,
+  runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
 
 // Local imports - agent components
@@ -122,7 +122,7 @@ export class OutputHandler {
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
-      await runLatexDiff(this.agentConfig.inputFile, outputFile);
+      await runLatexdiff(this.agentConfig.inputFile, outputFile);
     }
   }
 
@@ -143,7 +143,7 @@ export class OutputHandler {
         // TODO: Implement log update
         // await updateLogOutputFiles(this.logId, outputFile);
         if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          await runLatexDiff(inputFile, outputFile);
+          await runLatexdiff(inputFile, outputFile);
         }
       }
     }
@@ -353,7 +353,7 @@ export class OutputHandler {
     await writeFile(filePath, content);
   }
 
-  public async handleLatexDiff(currRound: number): Promise<void> {
+  public async handleLatexdiff(currRound: number): Promise<void> {
     logger.info(
       CHANNEL,
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
@@ -368,7 +368,7 @@ export class OutputHandler {
     for (let i = 0; i < this.baseFiles.length; i++) {
       const baseFile = this.baseFiles[i];
       const outputFile = this.outputFiles[currRound][i];
-      await runLatexDiffForRound(baseFile, outputFile, currRound);
+      await runLatexdiffForRound(baseFile, outputFile, currRound);
     }
 
     // Generate diffs between consecutive rounds
@@ -376,7 +376,7 @@ export class OutputHandler {
       for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
         const outputFile1 = this.outputFiles[r - 1][i];
         const outputFile2 = this.outputFiles[r][i];
-        await runLatexDiffBetweenRounds(outputFile1, outputFile2);
+        await runLatexdiffBetweenRounds(outputFile1, outputFile2);
       }
     }
   }

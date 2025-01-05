@@ -5,8 +5,7 @@ from typing import Any
 
 from ..logger import logger
 
-from ..agent import AgentConfig, AgentSetting
-from ..latex import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds
+from ..latex import runLatexdiff, runLatexdiffForRound, runLatexdiffBetweenRounds
 
 from ..utils.file import readFile, writeFile
 from ..utils.replacement import applyReplacements, getReplacementsByCategory
@@ -16,6 +15,8 @@ from ..utils.xml import (
     filterTagsFromText,
     extractContentFromTag,
 )
+
+from .agent_dataclass import AgentConfig, AgentSetting
 
 from .logdb import update_log_outputFiles
 
@@ -68,7 +69,7 @@ class OutputHandler:
     def _handleSingleOutput(self, outputFile: str) -> None:
         """Generate LaTeX diff for single output file."""
         if ".tex" in self.agentConfig.inputFile and ".tex" in outputFile:
-            _ = run_latexdiff(self.agentConfig.inputFile, outputFile)
+            _ = runLatexdiff(self.agentConfig.inputFile, outputFile)
 
     def _handle_multiple_outputs(self, outputFiles: list[str]) -> None:
         """Generate LaTeX diffs for multiple output files."""
@@ -78,7 +79,7 @@ class OutputHandler:
             for inputFile, outputFile in zip(self.agentConfig.outputFiles, outputFiles):
                 update_log_outputFiles(self.logId, outputFile)
                 if ".tex" in inputFile and ".tex" in outputFile:
-                    _ = run_latexdiff(inputFile, outputFile)
+                    _ = runLatexdiff(inputFile, outputFile)
 
     def _processSingleOutput(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
@@ -212,12 +213,12 @@ class OutputHandler:
 
         # Generate diffs between base files and current round
         for baseFile, outputFile in zip(self.baseFiles, self.outputFiles[currRound]):
-            run_latexdiff_for_round(baseFile, outputFile, currRound)
+            runLatexdiffForRound(baseFile, outputFile, currRound)
 
         # Generate diffs between consecutive rounds
         for r in range(1, currRound + 1):
             for outputFile1, outputFile2 in zip(self.outputFiles[r - 1], self.outputFiles[r]):
-                run_latexdiff_between_rounds(outputFile1, outputFile2)
+                runLatexdiffBetweenRounds(outputFile1, outputFile2)
 
     def _replaceInputCommands(self, baseFiles: list[str], outputFiles: list[str]) -> None:
         """Replace LaTeX input commands with updated file names."""
