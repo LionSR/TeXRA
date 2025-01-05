@@ -7,7 +7,7 @@ from typing import Any
 
 from ..logger import logger
 from ..utils.file import read_file, write_file
-from ..utils.xml import filter_tags_from_text, extract_text_from_tags
+from ..utils.xml import filterTagsFromText, extract_text_from_tags
 from ..utils.replacement import apply_replacement_regex, get_replacements_by_category
 from ..utils.confirmation import CONFIRMATION_PROMPT_PATTERNS, wrap_confirmation_prompts
 
@@ -166,7 +166,7 @@ class AnthropicHandler(ModelHandler):
         newResponse = apply_replacement_regex(newResponse, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
 
         if autoConfirmation:
-            newResponse = filter_tags_from_text(newResponse, "monologue")
+            newResponse = filterTagsFromText(newResponse, "monologue")
 
         # Add end tag if needed
         if stopReason == "stop_sequence" and endTag not in newResponse:
@@ -224,7 +224,7 @@ class AnthropicHandler(ModelHandler):
                 break
 
         # Filter monologue tags
-        toolState.lastResponse = filter_tags_from_text(toolState.lastResponse, "monologue")
+        toolState.lastResponse = filterTagsFromText(toolState.lastResponse, "monologue")
 
         # Update messages
         logger.info("Adding User message")
@@ -272,7 +272,7 @@ class AnthropicHandler(ModelHandler):
         fileContent = read_file(outputFile)
 
         if self.capabilities.likesToAskForConfirmation and agentConfig.toolConfig.autoConfirmation:
-            fileContent = filter_tags_from_text(fileContent, "monologue")
+            fileContent = filterTagsFromText(fileContent, "monologue")
             fileContent = apply_replacement_regex(fileContent, get_replacements_by_category("autoConfirmation"), flags=re.DOTALL | re.MULTILINE)
         fileContent = fileContent.strip()
 

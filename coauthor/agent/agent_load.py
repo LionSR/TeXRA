@@ -2,11 +2,11 @@ import os
 import yaml
 
 
-def load_yaml(file_path: str) -> dict:
+def load_yaml(filePath: str) -> dict:
     """Load a YAML file and return its contents as a dictionary."""
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"YAML file not found: {file_path}")
-    with open(file_path) as f:
+    if not os.path.exists(filePath):
+        raise FileNotFoundError(f"YAML file not found: {filePath}")
+    with open(filePath) as f:
         content = yaml.safe_load(f)
         return content if content else {}
 

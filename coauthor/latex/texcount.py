@@ -5,31 +5,31 @@ from ..logger import logger
 from ..utils.exec import execute_command
 
 
-def get_texcount(file_paths: list[str] | str, merge: bool = False) -> str | None:
+def get_texcount(filePaths: list[str] | str, merge: bool = False) -> str | None:
     """Run texcount on LaTeX files and return combined statistics output, optionally merging included files."""
-    if not isinstance(file_paths, list):
-        file_paths = [file_paths]
+    if not isinstance(filePaths, list):
+        filePaths = [filePaths]
 
     all_outputs = []
-    for file_path in file_paths:
-        if not os.path.exists(file_path):
-            logger.warning(f"Warning: File {file_path} does not exist.")
+    for filePath in filePaths:
+        if not os.path.exists(filePath):
+            logger.warning(f"Warning: File {filePath} does not exist.")
             continue
 
-        if ".tex" not in file_path:
-            logger.warning(f"Error: File {file_path} is not a LaTeX file. Skipping.")
+        if ".tex" not in filePath:
+            logger.warning(f"Error: File {filePath} is not a LaTeX file. Skipping.")
             continue
 
         command = ["texcount"]
         if merge:
             command.append("-merge")
-        command.append(file_path)
+        command.append(filePath)
 
         success, stdout, stderr = execute_command(command, capture_output=True)
         if success:
-            all_outputs.append(f"Tex Count Results for {file_path}:\n{stdout}")
+            all_outputs.append(f"Tex Count Results for {filePath}:\n{stdout}")
         else:
-            logger.error(f"Error getting tex count for {file_path}")
+            logger.error(f"Error getting tex count for {filePath}")
             logger.error(f"Stdout: {stdout}")
             logger.error(f"Stderr: {stderr}")
 
@@ -40,9 +40,10 @@ def get_texcount(file_paths: list[str] | str, merge: bool = False) -> str | None
     return None
 
 
-def get_texCountStats(inputFiles: str | list[str]) -> str | None:
+def get_texcountStats(inputFiles: str | list[str]) -> str | None:
     """Run texcount on LaTeX files and return formatted statistics with XML-style tags."""
     if isinstance(inputFiles, str):
         inputFiles = [inputFiles]
-    texCountStats = get_texcount(inputFiles)
-    return f"Tex Count Statistics:<texcount>\n{texCountStats}\n</texcount>\n\n" if texCountStats else None
+
+    texcountStats = get_texcount(inputFiles)
+    return f"Tex Count Statistics:<texcount>\n{texcountStats}\n</texcount>\n\n" if texcountStats else None

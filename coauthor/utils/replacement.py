@@ -209,7 +209,7 @@ def get_replacements_by_category(category_name: str) -> dict[str, str]:
     return category.patterns if category else {}
 
 
-def apply_replacements(text: str, replacements: dict[str, str]) -> str:
+def applyReplacements(text: str, replacements: dict[str, str]) -> str:
     """Apply a dictionary of replacements to the given text."""
     for old, new in replacements.items():
         text = text.replace(old, new)

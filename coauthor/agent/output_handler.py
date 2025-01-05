@@ -7,12 +7,13 @@ from ..logger import logger
 
 from ..agent import AgentConfig, AgentSettings
 from ..latex import run_latexdiff, run_latexdiff_for_round, run_latexdiff_between_rounds
+
 from ..utils.file import read_file, write_file
-from ..utils.replacement import apply_replacements, get_replacements_by_category
+from ..utils.replacement import applyReplacements, get_replacements_by_category
 from ..utils.xml import (
     add_cdata_to_tags,
     add_cdata_to_tags_multiple,
-    filter_tags_from_text,
+    filterTagsFromText,
     extract_content_from_tag,
 )
 
@@ -45,19 +46,19 @@ class OutputHandler:
         self.modelHandler = modelHandler
         self.logId = logId
         self.outputFiles = {0: [], 1: []}  # Maps round number to output files
-        self.base_files = []  # Original input files
+        self.baseFiles = []  # Original input files
 
     def _process_xml_content(self, outputContent: str) -> str:
         """Process XML content by applying filters and replacements."""
-        outputContent = filter_tags_from_text(outputContent, "monologue")
-        outputContent = apply_replacements(outputContent, get_replacements_by_category("latex_xml"))
-        outputContent = apply_replacements(outputContent, get_replacements_by_category("scratchpad_xml"))
+        outputContent = filterTagsFromText(outputContent, "monologue")
+        outputContent = applyReplacements(outputContent, get_replacements_by_category("latex_xml"))
+        outputContent = applyReplacements(outputContent, get_replacements_by_category("scratchpad_xml"))
         return outputContent
 
-    def _handle_scratchpad(self, root: ET.Element, base_name: str, thinkingTag: str, split_and_save_thinking: bool) -> None:
+    def _handle_scratchpad(self, root: ET.Element, baseName: str, thinkingTag: str, split_and_save_thinking: bool) -> None:
         """Save thinking content to separate file if enabled."""
         if split_and_save_thinking:
-            logFileThinking = f"{base_name}_thinking.xml"
+            logFileThinking = f"{baseName}_thinking.xml"
             logger.debug(f"Thinking file: {logFileThinking}")
             scratchpad = root.find(thinkingTag)
             if scratchpad is not None:
@@ -72,6 +73,7 @@ class OutputHandler:
     def _handle_multiple_outputs(self, outputFiles: list[str]) -> None:
         """Generate LaTeX diffs for multiple output files."""
         logger.debug(f"Handling multiple outputs: tasked outputFiles: {self.agentConfig.outputFiles}; actual outputFiles: {outputFiles}")
+
         if self.agentConfig.outputFiles:
             for inputFile, outputFile in zip(self.agentConfig.outputFiles, outputFiles):
                 update_log_outputFiles(self.logId, outputFile)
@@ -80,20 +82,22 @@ class OutputHandler:
 
     def _process_single_output(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
-        processed_outputFile = self.split_scratchpad_output_xml(outputFile, self.agentSettings.documentTag)
-        content = read_file(processed_outputFile)
-        filtered_content = filter_tags_from_text(content, "monologue")
-        write_file(processed_outputFile, filtered_content)
-        return processed_outputFile
+        processedOutputFile = self.split_scratchpad_output_xml(outputFile, self.agentSettings.documentTag)
+        content = read_file(processedOutputFile)
+
+        filteredContent = filterTagsFromText(content, "monologue")
+        write_file(processedOutputFile, filteredContent)
+
+        return processedOutputFile
 
     def _process_multiple_outputs(self, outputFile: str) -> list[str]:
         """Process file containing multiple outputs and return processed file paths."""
-        processed_outputFiles = self.split_multiple_scratchpad_output_xml(outputFile, self.agentSettings.documentTag)
-        for processed_outputFile in processed_outputFiles:
-            content = read_file(processed_outputFile)
-            filtered_content = filter_tags_from_text(content, "monologue")
-            write_file(processed_outputFile, filtered_content)
-        return processed_outputFiles
+        processedOutputFiles = self.split_multiple_scratchpad_output_xml(outputFile, self.agentSettings.documentTag)
+        for processedOutputFile in processedOutputFiles:
+            content = read_file(processedOutputFile)
+            filteredContent = filterTagsFromText(content, "monologue")
+            write_file(processedOutputFile, filteredContent)
+        return processedOutputFiles
 
     def split_scratchpad_output_xml(
         self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad", split_and_save_thinking: bool = False
@@ -101,50 +105,50 @@ class OutputHandler:
         """Split scratchpad output XML into separate files."""
         logger.debug(f"Splitting scratchpad output XML: {outputFile}")
 
-        base_name, extension = os.path.splitext(outputFile)
-        tex_file = f"{base_name}.tex"
-        logger.debug(f"TeX file: {tex_file}")
+        baseName, extension = os.path.splitext(outputFile)
+        latexFile = f"{baseName}.tex"
+        logger.debug(f"LaTeX file: {latexFile}")
 
         outputContent = read_file(outputFile)
         outputContent = self._process_xml_content(outputContent)
 
-        tags_to_wrap = [documentTag, thinkingTag]
-        outputContent = add_cdata_to_tags(outputContent, tags_to_wrap)
+        tagsToWrap = [documentTag, thinkingTag]
+        outputContent = add_cdata_to_tags(outputContent, tagsToWrap)
 
         rootContent = f"<root>{outputContent}</root>"
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, base_name, thinkingTag, split_and_save_thinking)
+            self._handle_scratchpad(root, baseName, thinkingTag, split_and_save_thinking)
 
             latex_document = extract_content_from_tag(root, documentTag)
             if latex_document:
-                write_file(tex_file, latex_document)
+                write_file(latexFile, latex_document)
             else:
                 logger.error(f"No {documentTag} found in output file")
         except ET.ParseError as e:
             logger.error(f"Failed to parse XML content: {str(e)}")
 
-        return tex_file
+        return latexFile
 
     def split_multiple_scratchpad_output_xml(
         self, outputFile: str, documentTag: str, thinkingTag: str = "scratchpad", split_and_save_thinking: bool = False
     ) -> list[str]:
         """Split multiple scratchpad output XML into separate files."""
         logger.debug(f"Splitting multiple scratchpad output XML: {outputFile}")
-        base_name, extension = os.path.splitext(outputFile)
+        baseName, extension = os.path.splitext(outputFile)
 
         outputContent = read_file(outputFile)
         outputContent = self._process_xml_content(outputContent)
 
-        tags_to_wrap = [thinkingTag, "document"]
-        outputContent = add_cdata_to_tags_multiple(outputContent, tags_to_wrap)
+        tagsToWrap = [thinkingTag, "document"]
+        outputContent = add_cdata_to_tags_multiple(outputContent, tagsToWrap)
 
         rootContent = f"<root>{outputContent}</root>"
 
         try:
             root = ET.fromstring(rootContent)
-            self._handle_scratchpad(root, base_name, thinkingTag, split_and_save_thinking)
+            self._handle_scratchpad(root, baseName, thinkingTag, split_and_save_thinking)
 
             latex_documents = root.find(documentTag)
             if latex_documents:
@@ -172,9 +176,9 @@ class OutputHandler:
             content = doc.text
 
             if source is not None and content is not None:
-                base_name, extension = os.path.splitext(source)
+                baseName, extension = os.path.splitext(source)
                 extension = extension.strip(".")
-                tex_file = get_outputFile_name(base_name, agent, model, extension, currRound=currRound)
+                tex_file = get_outputFile_name(baseName, agent, model, extension, currRound=currRound)
                 write_file(tex_file, content.strip())
                 outputFiles.append(tex_file)
                 logger.debug(f"TeX file written: {tex_file}")
@@ -183,10 +187,10 @@ class OutputHandler:
 
         return outputFiles
 
-    def ensure_correct_xml_structure(self, file_path: str, documentTag: str) -> None:
+    def ensure_correct_xml_structure(self, filePath: str, documentTag: str) -> None:
         """Ensure correct XML structure in file."""
-        logger.debug(f"Ensuring correct XML structure: {file_path}")
-        content = read_file(file_path)
+        logger.debug(f"Ensuring correct XML structure: {filePath}")
+        content = read_file(filePath)
         if content.startswith("<scratchpad>") or content.startswith("<rebuttal_package>"):
             if not content.endswith(f"</{documentTag}>"):
                 if "</{documentTag}>" not in content and f"<{documentTag}>" in content:
@@ -198,35 +202,35 @@ class OutputHandler:
 
             content = self._process_xml_content(content)
 
-        write_file(file_path, content)
+        write_file(filePath, content)
 
     def _handle_latexdiff(self, currRound: int) -> None:
         """Handle LaTeX diff generation between files and rounds."""
         logger.info(f"Running latexdiff for {self.agentConfig.agent} round {currRound}")
-        logger.debug(f"Base files: {self.base_files}")
+        logger.debug(f"Base files: {self.baseFiles}")
         logger.debug(f"Round {currRound} output files: {self.outputFiles[currRound]}")
 
         # Generate diffs between base files and current round
-        for base_file, outputFile in zip(self.base_files, self.outputFiles[currRound]):
-            run_latexdiff_for_round(base_file, outputFile, currRound)
+        for baseFile, outputFile in zip(self.baseFiles, self.outputFiles[currRound]):
+            run_latexdiff_for_round(baseFile, outputFile, currRound)
 
         # Generate diffs between consecutive rounds
         for r in range(1, currRound + 1):
             for outputFile1, outputFile2 in zip(self.outputFiles[r - 1], self.outputFiles[r]):
                 run_latexdiff_between_rounds(outputFile1, outputFile2)
 
-    def _replace_input_commands(self, base_files: list[str], outputFiles: list[str]) -> None:
+    def _replace_input_commands(self, baseFiles: list[str], outputFiles: list[str]) -> None:
         """Replace LaTeX input commands with updated file names."""
-        base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(base_files, outputFiles)}
+        base_to_output = {os.path.basename(bf): os.path.basename(of) for bf, of in zip(baseFiles, outputFiles)}
 
         for outputFile in outputFiles:
             content = read_file(outputFile)
-            new_content = re.sub(
+            Newcontent = re.sub(
                 r"\\input{([^}]+)}",
                 lambda match: (f"\\input{{{base_to_output[match.group(1)]}}}" if match.group(1) in base_to_output else match.group(0)),
                 content,
             )
 
-            if new_content != content:
-                write_file(outputFile, new_content)
+            if Newcontent != content:
+                write_file(outputFile, Newcontent)
                 logger.debug(f"Updated input commands in {outputFile}")

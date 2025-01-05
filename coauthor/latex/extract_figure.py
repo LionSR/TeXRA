@@ -31,16 +31,16 @@ def _parse_graphicspath(content: str) -> list[str]:
     return paths
 
 
-def extract_figure_paths_from_latex(latex_file: str) -> list[str] | None:
+def extract_figure_paths_from_latex(latexFile: str) -> list[str] | None:
     r"""Extract absolute paths of figures referenced by \includegraphics commands in LaTeX file."""
-    if not latex_file or not os.path.exists(latex_file):
+    if not latexFile or not os.path.exists(latexFile):
         return None
 
-    content = read_file(latex_file)
+    content = read_file(latexFile)
     if not content:
         return None
 
-    base_dir = os.path.dirname(latex_file)
+    base_dir = os.path.dirname(latexFile)
     graphicspaths = [base_dir]  # Start with the directory of the LaTeX file
 
     # Parse graphicspaths
@@ -74,6 +74,6 @@ def extract_figure_paths_from_latex(latex_file: str) -> list[str] | None:
                         break
 
     if figure_paths:
-        logger.info(f"Found {len(figure_paths)} figures in {latex_file}")
+        logger.info(f"Found {len(figure_paths)} figures in {latexFile}")
         return figure_paths
     return None

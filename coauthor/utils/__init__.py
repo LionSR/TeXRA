@@ -42,7 +42,7 @@ from .replacement import (
     ReplacementCategory,
     get_all_replacements,
     get_replacements_by_category,
-    apply_replacements,
+    applyReplacements,
     apply_replacement_regex,
 )
 
@@ -73,7 +73,7 @@ __all__ = [
     "ReplacementCategory",
     "get_all_replacements",
     "get_replacements_by_category",
-    "apply_replacements",
+    "applyReplacements",
     "apply_replacement_regex",
     "check_for_massive_repetition",
     # Prompts and confirmation
