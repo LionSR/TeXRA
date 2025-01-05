@@ -6,7 +6,7 @@ repos:
         entry: black
         language: system
         types: [python]
-        args: ["."]
+        args: ["coauthor-python"]
 
   - repo: local
     hooks:
