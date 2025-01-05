@@ -58,8 +58,8 @@ class VSCodeTransport extends Writable {
     // Always write to output channel
     this.channel.appendLine(formattedMessage);
 
-    // Only write to LogView if it's an Agent-related log
-    if (this.logViewProvider && this.streamName.includes('Agent')) {
+    // Write to LogView
+    if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
         formattedMessage,
