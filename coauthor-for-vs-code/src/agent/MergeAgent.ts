@@ -1,7 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components

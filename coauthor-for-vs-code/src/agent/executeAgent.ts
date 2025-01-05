@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 // Third-party imports
 // (none needed)
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 

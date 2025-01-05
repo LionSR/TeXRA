@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities

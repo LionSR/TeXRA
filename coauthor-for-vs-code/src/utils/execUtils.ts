@@ -2,7 +2,7 @@
 import * as cp from 'child_process';
 import { promisify } from 'util';
 
-// Local imports - core
+// Local imports - log
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
