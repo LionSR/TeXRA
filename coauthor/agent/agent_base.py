@@ -15,13 +15,13 @@ from ..latex import (
     extract_and_compile_tikzpictures_with_labels,
     extract_figure_paths_from_latex,
     best_connection_method,
-    get_texCountStats,
+    get_texcountStats,
 )
 
 # Local imports - utilities
 from ..utils.file import read_file, write_file, append_file
 from ..utils.prompt import render_prompt, get_list_of_files, get_first_k_chars_from_document, write_prompt_to_xml
-from ..utils.replacement import get_all_replacements, apply_replacements, get_replacements_by_category, apply_replacement_regex
+from ..utils.replacement import get_all_replacements, applyReplacements, get_replacements_by_category, apply_replacement_regex
 from ..utils.repetition import check_for_massive_repetition
 from ..utils.xml import get_xml_format_from_files
 
@@ -59,7 +59,7 @@ class BaseReflectionAgent(ABC):
         # Initialize basic attributes
         self.outputFile = ["", ""]
         self.outputFiles = {0: [], 1: []}
-        self.base_files = []
+        self.baseFiles = []
 
         self.setup()
         self.user_vars = self.get_user_vars()
@@ -104,9 +104,9 @@ class BaseReflectionAgent(ABC):
             "EDITED": self.agentConfig.editedFile,
         }
 
-        for prefix, file_path in single_file_mappings.items():
-            user_vars[f"{prefix}_FILE"] = file_path
-            user_vars[f"{prefix}_CONTENT"] = read_file(file_path) if file_path else None
+        for prefix, filePath in single_file_mappings.items():
+            user_vars[f"{prefix}_FILE"] = filePath
+            user_vars[f"{prefix}_CONTENT"] = read_file(filePath) if filePath else None
 
         # Handle file collections
         collection_mappings = {
@@ -128,19 +128,19 @@ class BaseReflectionAgent(ABC):
 
         # Add variables for required files
         if self.agentSettings.requiredFiles:
-            for varName, file_path in self.agentSettings.requiredFiles.items():
-                if file_path is not None and os.path.exists(file_path):
-                    fileContent = read_file(file_path)
-                    user_vars[f"{varName}_FILE"] = file_path
+            for varName, filePath in self.agentSettings.requiredFiles.items():
+                if filePath is not None and os.path.exists(filePath):
+                    fileContent = read_file(filePath)
+                    user_vars[f"{varName}_FILE"] = filePath
                     user_vars[f"{varName}_CONTENT"] = fileContent
-                    logger.info(f"Found from [requiredFiles] the [VAR '{varName}']: {file_path}")
+                    logger.info(f"Found from [requiredFiles] the [VAR '{varName}']: {filePath}")
                 else:
-                    logger.warning(f"[Required file] {file_path} not found from [VAR '{varName}']")
+                    logger.warning(f"[Required file] {filePath} not found from [VAR '{varName}']")
 
         # Add variables for internal required files (from prompt directory)
         if self.agentSettings.requiredFilesInternal:
-            for varName, file_path in self.agentSettings.requiredFilesInternal.items():
-                full_path = os.path.join(self.agentPath, file_path)
+            for varName, filePath in self.agentSettings.requiredFilesInternal.items():
+                full_path = os.path.join(self.agentPath, filePath)
                 if os.path.exists(full_path) and full_path:
                     fileContent = read_file(full_path)
                     user_vars[f"{varName}_FILE"] = full_path
@@ -228,7 +228,7 @@ class BaseReflectionAgent(ABC):
     def setup(self):
         """Set up the agent for processing."""
         # Initialize base files and logging
-        self.base_files = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
+        self.baseFiles = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
         logger.info(f"Processing file: {self.agentConfig.inputFile}")
 
         # Initialize client and check scratchpad usage
@@ -316,7 +316,7 @@ class BaseReflectionAgent(ABC):
                 if self.modelHandler.capabilities.likesToAskForConfirmation and self.agentConfig.toolConfig.autoConfirmation
                 else newResponse
             )
-            newResponse = apply_replacements(newResponse, get_all_replacements()).strip()
+            newResponse = applyReplacements(newResponse, get_all_replacements()).strip()
 
             toolState.update_lastResponse(newResponse)
 
@@ -386,7 +386,7 @@ class BaseReflectionAgent(ABC):
 
         # Handle tex count if enabled
         if self.agentConfig.toolConfig.includeTexCount:
-            toolState.texCountStats = get_texCountStats(inputFiles)
+            toolState.texcountStats = get_texcountStats(inputFiles)
 
         # Handle prefill from input if enabled
         if self.agentConfig.toolConfig.usePrefillFromInput:
@@ -422,8 +422,8 @@ class BaseReflectionAgent(ABC):
         userRequest = render_prompt(self.agentPrompts.userRequest, self.user_vars)
         userPrefix = render_prompt(self.agentPrompts.userPrefix, self.user_vars)
 
-        if toolState.texCountStats:
-            userPrefix = f"{toolState.texCountStats}{userPrefix}"
+        if toolState.texcountStats:
+            userPrefix = f"{toolState.texcountStats}{userPrefix}"
 
         # Write prompt to file if requested
         if self.agentConfig.toolConfig.printInputPrompt:
@@ -469,7 +469,7 @@ class BaseReflectionAgent(ABC):
     def _handle_outputFile_processing(self, outputFiles: list[str], currRound: int, toolState: ToolState):
         """Helper method to handle tex count and TikZ figure extraction for output files."""
         if self.agentConfig.toolConfig.includeTexCount:
-            toolState.texCountStats = get_texCountStats(outputFiles)
+            toolState.texcountStats = get_texcountStats(outputFiles)
 
         if self.modelHandler.capabilities.supportsVision and self.agentConfig.toolConfig.autoExtractTikzFigureReflect:
             for outputFile in outputFiles:
@@ -497,8 +497,8 @@ class BaseReflectionAgent(ABC):
         # Prepare reflection message
         userRequest_reflect = render_prompt(self.agentPrompts.userReflect, self.user_vars)
         userMessage = f"{userRequest_reflect}\n" if userRequest_reflect else ""
-        if toolState.texCountStats:
-            userMessage = f"{toolState.texCountStats}{userMessage}"
+        if toolState.texcountStats:
+            userMessage = f"{toolState.texcountStats}{userMessage}"
 
         # Only proceed if there's actual content
         if not userMessage.strip():
@@ -552,10 +552,10 @@ class BaseReflectionAgent(ABC):
         - Handling LaTeX diff if needed
         """
         if self.agentConfig.outputFiles:
-            processed_files = self.output_handler._process_multiple_outputs(outputFile)
-            self.output_handler._handle_multiple_outputs(processed_files)
-            self.output_handler.outputFiles[currRound] = processed_files
-            self.output_handler._replace_input_commands(self.base_files, processed_files)
+            processedFiles = self.output_handler._process_multiple_outputs(outputFile)
+            self.output_handler._handle_multiple_outputs(processedFiles)
+            self.output_handler.outputFiles[currRound] = processedFiles
+            self.output_handler._replace_input_commands(self.baseFiles, processedFiles)
         else:
             processed_file = self.output_handler._process_single_output(outputFile)
             self.output_handler._handle_single_output(processed_file)

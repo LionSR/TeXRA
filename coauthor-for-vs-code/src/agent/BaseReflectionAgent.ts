@@ -637,7 +637,7 @@ export abstract class BaseReflectionAgent {
     // Handle tex count if enabled
     if (this.agentConfig.toolConfig.includeTexCount) {
       // TODO: Implement texcount functionality
-      // toolState.texCountStats = await getTexCountStats(inputFiles);
+      // toolState.texcountStats = await getTexCountStats(inputFiles);
     }
 
     // Handle prefill from input if enabled
@@ -700,8 +700,8 @@ export abstract class BaseReflectionAgent {
     // logger.debug(CHANNEL, `System prompt: ${systemPrompt}`);
 
     let prefixWithStats = userPrefix;
-    if (toolState.texCountStats) {
-      prefixWithStats = `${toolState.texCountStats}${userPrefix}`;
+    if (toolState.texcountStats) {
+      prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
     }
 
     // Write prompt to file if requested
@@ -833,8 +833,8 @@ export abstract class BaseReflectionAgent {
       userVars,
     );
     let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
-    if (toolState.texCountStats) {
-      userMessage = `${toolState.texCountStats}${userMessage}`;
+    if (toolState.texcountStats) {
+      userMessage = `${toolState.texcountStats}${userMessage}`;
     }
 
     // Only proceed if there's actual content
@@ -928,7 +928,7 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
   ): Promise<void> {
     if (this.agentConfig.toolConfig.includeTexCount) {
-      toolState.texCountStats = await getTexCountStats(outputFiles);
+      toolState.texcountStats = await getTexCountStats(outputFiles);
     }
 
     if (
