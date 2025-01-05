@@ -18,7 +18,7 @@ import {
 import { renderPrompt } from '../utils/promptUtils';
 
 // Local imports - latex utils
-import { compileLatexToPdf } from './texTools';
+import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeX';
 logger.initializeLogging(CHANNEL);
@@ -166,7 +166,7 @@ export async function extractAndCompileTikzPicturesWithLabels(
           buildDir,
           suffix,
         );
-        await compileLatexToPdf(texFile);
+        await compileLatex2Pdf(texFile);
 
         const pdfFile = texFile.replace(/\.tex$/, '.pdf');
         if (await fileExists(pdfFile)) {

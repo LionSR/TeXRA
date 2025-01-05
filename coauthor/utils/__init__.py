@@ -5,82 +5,82 @@ XML handling, text replacements, and other common tasks.
 """
 
 from .file import (
-    read_file,
-    write_file,
-    append_file,
-    delete_file,
-    move_file,
-    find_file,
+    readFile,
+    writeFile,
+    appendFile,
+    deleteFile,
+    moveFile,
+    findFile,
 )
 
 from .img import (
-    get_base64_encoded_image,
-    single_page_pdf_to_png,
-    multi_page_pdf_to_png,
-    process_pdf_input,
-    count_pdf_pages,
+    getBase64EncodedImage,
+    singlePagePdf2Png,
+    multiPagePdf2Png,
+    processPdfInput,
+    countPdfPages,
 )
 
 from .xml import (
-    get_xml_format_from_file,
-    get_xml_format_from_files,
-    extract_text_from_tags,
-    add_cdata_to_tags,
-    add_cdata_to_tags_multiple,
+    extractTextFromTag,
+    addCdataToTags,
+    addCdataToTagsMultiple,
 )
 
 from .prompt import (
-    get_list_of_files,
-    render_prompt,
+    getListOfFiles,
+    renderPrompt,
+    getXmlFormatFromFile,
+    getXmlFormatFromFiles,
 )
 
-from .exec import execute_command, truncate_output
+from .exec import executeCommand, truncateOutput
 
-from .confirmation import wrap_confirmation_prompts, CONFIRMATION_PROMPT_PATTERNS
+from .confirmation import wrapConfirmationPrompts, CONFIRMATION_PROMPT_PATTERNS
 
 from .replacement import (
     ReplacementCategory,
-    get_all_replacements,
-    get_replacements_by_category,
+    getAllReplacements,
+    getReplacementsByCategory,
     applyReplacements,
-    apply_replacement_regex,
+    applyReplacementRegex,
 )
 
-from .repetition import check_for_massive_repetition
+from .repetition import checkForMassiveRepetition
 
 __all__ = [
     # File operations
-    "read_file",
-    "write_file",
-    "append_file",
-    "delete_file",
-    "move_file",
-    "find_file",
-    "get_list_of_files",
+    "readFile",
+    "writeFile",
+    "appendFile",
+    "deleteFile",
+    "moveFile",
+    "findFile",
+    "getListOfFiles",
     # Image and PDF processing
-    "get_base64_encoded_image",
-    "single_page_pdf_to_png",
-    "multi_page_pdf_to_png",
-    "process_pdf_input",
-    "count_pdf_pages",
+    "getBase64EncodedImage",
+    "singlePagePdf2Png",
+    "multiPagePdf2Png",
+    "processPdfInput",
+    "countPdfPages",
     # XML handling
-    "get_xml_format_from_file",
-    "get_xml_format_from_files",
-    "extract_text_from_tags",
-    "add_cdata_to_tags",
-    "add_cdata_to_tags_multiple",
+    "getXmlFormatFromFile",
+    "getXmlFormatFromFiles",
+    "extractTextFromTag",
+    "addCdataToTags",
+    "addCdataToTagsMultiple",
     # Text processing and replacements
     "ReplacementCategory",
-    "get_all_replacements",
-    "get_replacements_by_category",
+    "getAllReplacements",
+    "getReplacementsByCategory",
     "applyReplacements",
-    "apply_replacement_regex",
-    "check_for_massive_repetition",
+    "applyReplacementRegex",
+    "checkForMassiveRepetition",
     # Prompts and confirmation
-    "render_prompt",
-    "wrap_confirmation_prompts",
+    "renderPrompt",
+    "wrapConfirmationPrompts",
     "CONFIRMATION_PROMPT_PATTERNS",
     # Execution
-    "execute_command",
-    "truncate_output",
+    "executeCommand",
+    "truncateOutput",
 ]

@@ -12,14 +12,14 @@ from .response_usage import OpenAIAPIResponseUsage
 class GoogleviaOpenAIHandler(OpenAIHandler):
     """Handler for Google models using OpenAI-compatible API."""
 
-    def get_client(self) -> OpenAI:
+    def getClient(self) -> OpenAI:
         """Get OpenAI client with Google's base URL."""
         api_key = self.get_api_key()
-        baseUrl = self.get_baseUrl()
-        logger.info(f"Using Google API key. Base URL: {baseUrl}")
+        base_url = self.get_base_url()
+        logger.info(f"Using Google API key. Base URL: {base_url}")
         return OpenAI(
             api_key=api_key,
-            baseUrl=baseUrl,
+            base_url=base_url,
         )
 
     def compute_price(self, responseUsage: Any) -> float:
@@ -30,7 +30,7 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
 
         return (prompt_tokens * self.config.inputPrice + completion_tokens * self.config.outputPrice) / 1e6
 
-    def compute_response_usage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
+    def computeResponseUsage(self, responseUsage: Any, responseTime: float) -> OpenAIAPIResponseUsage:
         """Compute statistics for Google models."""
         # Create a minimal usage object with Google's token counts
         usage_obj = type(
@@ -49,7 +49,7 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
 
         return OpenAIAPIResponseUsage.from_response(usage_obj, self.compute_price(responseUsage), responseTime)
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSettings) -> bool:
+    def should_continue(self, stopReason: str, newResponse: str, agentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""
         logger.info("Determining if should continue for Google model via OpenAI API")
-        return not agentSettings.has_endTag(newResponse)
+        return not agentSetting.has_endTag(newResponse)

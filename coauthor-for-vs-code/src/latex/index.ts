@@ -16,7 +16,7 @@ export {
 } from './textConnection';
 
 // Export LaTeX compilation tools
-export { compileLatexToPdf } from './texTools';
+export { compileLatex2Pdf } from './texTools';
 
 // Export texcount functionality
 export { getTexCountStats } from './texcount';

@@ -2,7 +2,7 @@ import os
 import glob
 
 from ..logger import logger
-from ..utils import delete_file
+from ..utils import deleteFile
 
 from .constants import EXCLUDED_DIRS, TEMP_EXTENSIONS, PACK_EXTENSIONS, MODELS
 from .utils import getAgent_first_name_chunk, get_file_patterns
@@ -11,7 +11,7 @@ from .utils import getAgent_first_name_chunk, get_file_patterns
 def run_clean_single(model: str, inputFile: str, agent: str) -> None:
     """Clean temporary and packed files for a single LaTeX file based on model and agent."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
-    input_dir = os.path.dirname(inputFile)
+    inputDir = os.path.dirname(inputFile)
 
     agent_first_name_chunk = getAgent_first_name_chunk(agent)
     file_patterns = get_file_patterns(baseName, model, agent_first_name_chunk)
@@ -21,10 +21,10 @@ def run_clean_single(model: str, inputFile: str, agent: str) -> None:
 
     for pattern in file_patterns:
         for ext in extensions:
-            for search_dir in [os.path.join(input_dir, "build"), input_dir]:
+            for search_dir in [os.path.join(inputDir, "build"), inputDir]:
                 filePath = os.path.join(search_dir, f"{pattern}{ext}")
                 if os.path.exists(filePath):
-                    delete_file(filePath)
+                    deleteFile(filePath)
 
     logger.info(f"Cleanup finished: {inputFile}.")
 
@@ -40,20 +40,20 @@ def run_clean_multiple(model: str, inputFile: str, inputFiles: list[str], agent:
 def run_clean_build() -> None:
     """Recursively clean all build directories while respecting excluded directories."""
 
-    def clean_build_dir(directory):
-        build_dir = os.path.join(directory, "build")
-        if os.path.isdir(build_dir):
-            for item in os.listdir(build_dir):
-                filePath = os.path.join(build_dir, item)
-                delete_file(filePath)
+    def clean_buildDir(directory):
+        buildDir = os.path.join(directory, "build")
+        if os.path.isdir(buildDir):
+            for item in os.listdir(buildDir):
+                filePath = os.path.join(buildDir, item)
+                deleteFile(filePath)
 
-    clean_build_dir(".")
+    clean_buildDir(".")
 
     for root, dirs, _ in os.walk(".", topdown=True):
         dirs[:] = [d for d in dirs if d.lower() not in EXCLUDED_DIRS]
         for dir in dirs:
             subdir = os.path.join(root, dir)
-            clean_build_dir(subdir)
+            clean_buildDir(subdir)
 
     logger.info("All specified files deleted")
 
@@ -77,7 +77,7 @@ def run_clean_output() -> None:
     for file in set(files_to_delete):
         try:
             if os.path.exists(file):
-                delete_file(file)
+                deleteFile(file)
             else:
                 logger.warning(f"Not found: {file}")
         except OSError as e:

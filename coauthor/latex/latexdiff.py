@@ -2,20 +2,20 @@ import os
 import re
 
 from ..logger import logger
-from ..utils.file import write_file, read_file
-from ..utils.replacement import get_replacements_by_category, apply_replacement_regex
-from ..utils.exec import execute_command
+from ..utils.file import writeFile, readFile
+from ..utils.replacement import getReplacementsByCategory, applyReplacementRegex
+from ..utils.exec import executeCommand
 
 from .latexindent import run_latexindent
 
 
-def process_diff_file(diff_file_name: str) -> None:
+def process_diff_file(diffFileName: str) -> None:
     """Process LaTeX diff file to fix formatting issues and apply replacements."""
-    if not os.path.exists(diff_file_name):
-        logger.warning(f"File {diff_file_name} does not exist. Skipping.")
+    if not os.path.exists(diffFileName):
+        logger.warning(f"File {diffFileName} does not exist. Skipping.")
         return None
 
-    content = read_file(diff_file_name)
+    content = readFile(diffFileName)
     lines = content.splitlines()
 
     add_block = False
@@ -46,7 +46,7 @@ def process_diff_file(diff_file_name: str) -> None:
         if not add_block:
             processed_lines.append(line)
 
-    write_file(diff_file_name, "\n".join(processed_lines))
+    writeFile(diffFileName, "\n".join(processed_lines))
 
 
 def process_tikzpicture_endings_diff(filePath: str) -> None:
@@ -55,12 +55,12 @@ def process_tikzpicture_endings_diff(filePath: str) -> None:
         logger.warning(f"File {filePath} does not exist. Skipping.")
         return None
 
-    content = read_file(filePath)
+    content = readFile(filePath)
 
     # Apply tikz-specific replacements
-    content = apply_replacement_regex(content, get_replacements_by_category("tikz"), flags=re.DOTALL)
+    content = applyReplacementRegex(content, getReplacementsByCategory("tikz"), flags=re.DOTALL)
 
-    write_file(filePath, content)
+    writeFile(filePath, content)
     # logger.info(f"Tikzpicture endings fixed in {filePath}")
 
 
@@ -75,8 +75,8 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
             logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
-    input_content = read_file(inputFile)
-    outputContent = read_file(outputFile)
+    input_content = readFile(inputFile)
+    outputContent = readFile(outputFile)
     if (
         "\\begin{document}" not in input_content
         or "\\end{document}" not in input_content
@@ -102,7 +102,7 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
             # Get the base name up to the round number (inclusive)
             base_match = re.match(r"^(.*?_r\d+)", os.path.splitext(outputFile)[0])
             if base_match:
-                diff_file_name = f"{base_match.group(1)}_{second_model}_diffr{second_round}r{first_round}.tex"
+                diffFileName = f"{base_match.group(1)}_{second_model}_diffr{second_round}r{first_round}.tex"
             else:
                 logger.warning("Failed to extract base name with round number")
                 return None
@@ -110,13 +110,13 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
             # Models don't match, use standard pattern
             base_match = re.match(r"^(.*?)_r\d+", os.path.splitext(outputFile)[0])
             if base_match:
-                diff_file_name = f"{base_match.group(1)}_diffr{second_round}r{first_round}.tex"
+                diffFileName = f"{base_match.group(1)}_diffr{second_round}r{first_round}.tex"
             else:
                 logger.warning("Failed to extract base name")
                 return None
     else:
         # Use default naming convention
-        diff_file_name = outputFile.replace(".tex", f"{suffix}.tex")
+        diffFileName = outputFile.replace(".tex", f"{suffix}.tex")
 
     latexdiff_command = [
         "latexdiff",
@@ -128,14 +128,14 @@ def run_latexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_in
         outputFile,
     ]
 
-    success, _, _ = execute_command(latexdiff_command, diff_file_name)
+    success, _, _ = executeCommand(latexdiff_command, diffFileName)
     if not success:
         return None
 
-    process_diff_file(diff_file_name)
-    process_tikzpicture_endings_diff(diff_file_name)
+    process_diff_file(diffFileName)
+    process_tikzpicture_endings_diff(diffFileName)
 
-    return diff_file_name
+    return diffFileName
 
 
 def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
@@ -145,12 +145,12 @@ def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
         return None
 
     # Check if the input file contains \begin{document} and \end{document}
-    input_content = read_file(inputFile)
+    input_content = readFile(inputFile)
     if "\\begin{document}" not in input_content or "\\end{document}" not in input_content:
         logger.warning("Input file does not contain \\begin{document} and \\end{document}. Skipping latexdiff-vc.")
         return None
 
-    diff_file_name = inputFile.replace(".tex", f"-diff{commitHash}.tex")
+    diffFileName = inputFile.replace(".tex", f"-diff{commitHash}.tex")
 
     latexdiff_vc_command = [
         "latexdiff-vc",
@@ -165,14 +165,14 @@ def run_latexdiff_vc(inputFile: str, commitHash: str) -> str | None:
         inputFile,
     ]
 
-    success, _, _ = execute_command(latexdiff_vc_command)
+    success, _, _ = executeCommand(latexdiff_vc_command)
     if not success:
         return None
 
-    process_diff_file(diff_file_name)
-    process_tikzpicture_endings_diff(diff_file_name)
+    process_diff_file(diffFileName)
+    process_tikzpicture_endings_diff(diffFileName)
 
-    return diff_file_name
+    return diffFileName
 
 
 def run_latexdiff_multiple(inputFiles: list[str], editedFiles: list[str]) -> None:
