@@ -241,6 +241,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             display: flex;
             flex: 1;
             height: 100%;
+            overflow: hidden;
           }
 
           .content-area {
@@ -248,20 +249,24 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             display: flex;
             flex-direction: column;
             min-width: 0;
+            overflow: hidden;
           }
 
           .tabs {
             display: flex;
             flex-direction: column;
             width: 120px;
+            min-width: 120px;
             font-size: 11px;
             border-left: 1px solid var(--panel-border);
             height: 100%;
+            overflow: hidden;
           }
 
           .tabs-content {
             flex: 1;
             overflow-y: auto;
+            min-height: 0;
           }
           
           .clear-all-container {
@@ -329,6 +334,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             padding: 2px 4px;
             white-space: pre;
             min-width: 0;
+            min-height: 0;
           }
 
           .log-header {
