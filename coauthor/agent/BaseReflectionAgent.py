@@ -552,11 +552,16 @@ class BaseReflectionAgent(ABC):
         - Handling LaTeX diff if needed
         """
         if self.agentConfig.outputFiles:
+            # Multiple output files case
+            logger.debug(f"Processing multiple outputs for {outputFile}")
+            logger.debug(f"Output files: {self.agentConfig.outputFiles}")
             processedFiles = self.outputHandler._processMultipleOutputs(outputFile)
             self.outputHandler._handleMultipleOutputs(processedFiles)
             self.outputHandler.outputFiles[currRound] = processedFiles
             self.outputHandler._replaceInputCommands(self.baseFiles, processedFiles)
         else:
+            # Single output file case
+            logger.debug(f"Processing single output for {outputFile}")
             processedFile = self.outputHandler._processSingleOutput(outputFile)
             self.outputHandler._handleSingleOutput(processedFile)
             self.outputHandler.outputFiles[currRound] = [processedFile]
