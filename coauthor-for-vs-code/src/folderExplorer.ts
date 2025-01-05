@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
 import { getConfig } from './frontend-utils/commonUtils';
+import { getAgentsDirectory } from './utils/pathUtils';
 
 const CHANNEL = 'FolderExplorer';
 logger.initializeLogging(CHANNEL);
@@ -26,18 +27,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   public async setupFileSystemWatcher() {
     try {
-      // Get the current path being watched using getConfig
-      const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
-      let watchPath: string;
-
-      if (rootPath && path.isAbsolute(rootPath)) {
-        watchPath = rootPath;
-      } else if (this.context) {
-        const globalStoragePath = this.context.globalStorageUri.fsPath;
-        watchPath = path.join(globalStoragePath, rootPath);
-      } else {
+      if (!this.context) {
         return;
       }
+
+      const watchPath = await getAgentsDirectory(this.context);
 
       // Dispose of existing watcher if any
       this.fileSystemWatcher?.dispose();
@@ -77,44 +71,20 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       const dirPath = element.resourceUri.fsPath;
       return this.getFilesInDirectory(dirPath);
     } else {
-      // For root level, first check configuration using getConfig
-      const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
-
-      let absolutePath: string;
-      if (rootPath && path.isAbsolute(rootPath)) {
-        // If rootPath is configured and absolute, use it directly
-        absolutePath = rootPath;
-      } else {
-        // For any non-absolute path, use global storage as base
-        if (!this.context) {
-          logger.error(CHANNEL, 'Extension context not available');
-          return Promise.resolve([]);
-        }
-
-        try {
-          const globalStoragePath = this.context.globalStorageUri.fsPath;
-          const fullPath = path.join(globalStoragePath, rootPath);
-
-          // Ensure the directory exists
-          await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
-          logger.info(CHANNEL, `Using global storage path: ${fullPath}`);
-
-          absolutePath = fullPath;
-        } catch (err) {
-          logger.error(CHANNEL, `Error with global storage path: ${err}`);
-          return Promise.resolve([]);
-        }
+      // For root level, use getAgentsDirectory
+      if (!this.context) {
+        logger.error(CHANNEL, 'Extension context not available');
+        return Promise.resolve([]);
       }
 
       try {
-        // Verify the path exists before trying to read it
-        await vscode.workspace.fs.stat(vscode.Uri.file(absolutePath));
+        const absolutePath = await getAgentsDirectory(this.context);
         logger.debug(CHANNEL, `Reading from: ${absolutePath}`);
         return this.getFilesInDirectory(absolutePath);
       } catch (err) {
         logger.error(
           CHANNEL,
-          `Path does not exist or is not accessible: ${absolutePath}`,
+          `Error getting agents directory: ${err instanceof Error ? err.message : String(err)}`,
         );
         return Promise.resolve([]);
       }
