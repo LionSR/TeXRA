@@ -55,8 +55,11 @@ class VSCodeTransport extends Writable {
     const emoji = emojis[level as keyof typeof emojis];
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
 
+    // Always write to output channel
     this.channel.appendLine(formattedMessage);
-    if (this.logViewProvider) {
+
+    // Only write to LogView if it's an Agent-related log
+    if (this.logViewProvider && this.streamName.includes('Agent')) {
       this.logViewProvider.addLogMessage(
         this.streamName,
         formattedMessage,
@@ -66,8 +69,6 @@ class VSCodeTransport extends Writable {
     return true;
   }
 }
-
-const baseFormat = combine(timestamp({ format: 'HH:mm:ss' }), customFormat);
 
 // Map to store loggers for different categories
 const channelLoggers = new Map<string, winston.Logger>();
