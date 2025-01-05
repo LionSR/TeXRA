@@ -12,6 +12,8 @@ import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';
 import { registerTestCommands } from './commands/testCommands';
+import { registerXmlCommands } from './commands/xmlCommands';
+import { registerYamlCommands } from './commands/yamlCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -35,6 +37,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
     image: registerImageCommands(context),
     figure: registerFigureCommands(context),
     test: registerTestCommands(context),
+    xml: registerXmlCommands(context),
+    yaml: registerYamlCommands(context),
   };
 
   // Register webview provider
@@ -59,3 +63,5 @@ export { latexCommands } from './commands/latexCommands';
 export { imageCommands } from './commands/imageCommands';
 export { figureCommands } from './commands/figCommands';
 export { testCommands } from './commands/testCommands';
+export { xmlCommands } from './commands/xmlCommands';
+export { yamlCommands } from './commands/yamlCommands';
