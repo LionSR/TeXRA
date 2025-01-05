@@ -39,15 +39,17 @@ export async function handleParseXml(): Promise<void> {
 
     // Parse XML using the same configuration as OutputHandler
     const parser = new XMLParser({
-      ignoreAttributes: true,
-      preserveOrder: true,
-      parseTagValue: false,
+      ignoreAttributes: false,
+      // preserveOrder: true,
+      parseTagValue: true,
       textNodeName: 'content',
+      attributeNamePrefix: '',
     });
 
     try {
       const parsedXml = parser.parse(content);
-      logger.info(CHANNEL, 'Successfully parsed XML structure');
+
+      logger.debug(CHANNEL, 'Parsed XML(JSON)');
       logger.debug(
         CHANNEL,
         `Parsed structure: ${JSON.stringify(parsedXml, null, 2)}`,
