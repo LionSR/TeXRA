@@ -35,6 +35,11 @@ class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private logViewProvider?: LogViewProvider;
   private streamName: string;
+  private messageBuffer: {
+    level: string;
+    message: string;
+    timestamp: string;
+  }[] = [];
 
   constructor(
     channel: vscode.OutputChannel,
@@ -56,30 +61,47 @@ class VSCodeTransport extends Transport {
     // Always write to output channel
     this.channel.appendLine(formattedMessage);
 
-    // Write to LogView
+    // Write to LogView if available
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
         formattedMessage,
         level as 'error' | 'warn' | 'info' | 'debug',
       );
+    } else {
+      // Buffer the message if LogViewProvider is not available
+      this.messageBuffer.push({ level, message: formattedMessage, timestamp });
     }
 
     callback();
+  }
+
+  // Method to replay buffered messages when LogViewProvider becomes available
+  replayBufferedMessages(logViewProvider: LogViewProvider) {
+    this.logViewProvider = logViewProvider;
+    for (const msg of this.messageBuffer) {
+      this.logViewProvider.addLogMessage(
+        this.streamName,
+        msg.message,
+        msg.level as 'error' | 'warn' | 'info' | 'debug',
+      );
+    }
+    this.messageBuffer = []; // Clear buffer after replay
   }
 }
 
 // Map to store loggers for different categories
 const channelLoggers = new Map<string, winston.Logger>();
+const channelTransports = new Map<string, VSCodeTransport>();
 
 let globalLogViewProvider: LogViewProvider | undefined;
 
 export function setLogViewProvider(provider: LogViewProvider) {
   globalLogViewProvider = provider;
-  // Recreate all existing loggers with the new provider
-  for (const [channel, logger] of channelLoggers.entries()) {
-    const newLogger = createLoggerForChannel(channel, false);
-    channelLoggers.set(channel, newLogger);
+
+  // Replay buffered messages for all existing transports
+  for (const transport of channelTransports.values()) {
+    transport.replayBufferedMessages(provider);
   }
 }
 
@@ -106,6 +128,14 @@ function createLoggerForChannel(
   const channelName = 'CoAuthor: ' + channel;
   const outputChannel = vscode.window.createOutputChannel(channelName);
 
+  // Create transport
+  const transport = new VSCodeTransport(
+    outputChannel,
+    channel,
+    globalLogViewProvider,
+  );
+  channelTransports.set(channel, transport);
+
   const logger = winston.createLogger({
     levels: logLevels,
     level: 'debug',
@@ -114,9 +144,7 @@ function createLoggerForChannel(
         format: 'YYYY-MM-DD HH:mm:ss',
       }),
     ),
-    transports: [
-      new VSCodeTransport(outputChannel, channel, globalLogViewProvider),
-    ],
+    transports: [transport],
   });
 
   channelLoggers.set(channel, logger);
