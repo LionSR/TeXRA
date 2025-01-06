@@ -13,7 +13,6 @@ import {
   extractFigurePathsFromLatex,
   bestConnectionMethod,
   getTexCountStats,
-  ConnectionResult,
 } from '../latex';
 
 // Local imports - utilities
@@ -56,30 +55,21 @@ logger.initialize(CHANNEL);
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent {
-  /** Handler for model-specific API interactions. */
   protected modelHandler: ModelHandler;
-  /** Configuration for agent execution behavior. */
   protected agentConfig: AgentConfig;
-  /** Settings controlling agent behavior and output generation. */
   protected agentSetting: AgentSetting;
-  /** Templates for system and user prompts. */
   protected agentPrompt: AgentPrompt;
-  /** Base path for agent file operations. */
   protected agentPath: string;
-  /** Primary and reflection output file paths. */
   protected outputFile: [string, string];
-  /** Mapping of round numbers to output file paths. */
   protected outputFiles: { [key: number]: string[] };
-  /** Collection of input files to process. */
   protected baseFiles: string[];
-  /** Model-specific API client instance. */
   protected client: any;
-  /** Flag indicating if agent uses scratchpad for intermediate work. */
   protected useScratchpad: boolean = false;
-  /** Unique identifier for logging and database tracking. */
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
+  /** Cached user variables to avoid recomputation */
+  protected userVars: Record<string, any>;
 
   constructor(
     modelHandler: ModelHandler,
@@ -99,7 +89,6 @@ export abstract class BaseReflectionAgent {
       CHANNEL,
       `AgentSetting: ${JSON.stringify(this.agentSetting)}\n`,
     );
-
     logger.debug(
       CHANNEL,
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
@@ -109,46 +98,46 @@ export abstract class BaseReflectionAgent {
     // Initialize basic attributes
     this.outputFile = ['', ''];
     this.outputFiles = { 0: [], 1: [] };
-    this.baseFiles = [];
-
-    this.setup();
-    const userVars = this.getUserVars();
-    this.outputHandler = new OutputHandler(
-      this.agentSetting,
-      this.agentConfig,
-      this.modelHandler,
-      this.logId,
-    );
-  }
-
-  /**
-   * Generates output file path for specified conversation round.
-   */
-  protected abstract getOutputFile(currRound: number): string;
-
-  /**
-   * Initializes agent state and resources for processing.
-   * Sets up file paths, client connection, and logging.
-   */
-  protected setup(): void {
-    // Initialize base files and logging
     this.baseFiles = this.agentConfig.outputFiles || [
       this.agentConfig.inputFile,
     ];
-    logger.info(CHANNEL, `Processing file: ${this.agentConfig.inputFile}`);
+    this.userVars = {};
 
     // Initialize client and check scratchpad usage
     this.client = this.modelHandler.getClient();
-
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
+
+    // Set output files
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
     // Initialize logging and database entry
     // TODO: Implement logging to SQLite database
     this.logId = 0;
+
+    this.outputHandler = new OutputHandler(
+      this.agentSetting,
+      this.agentConfig,
+      this.modelHandler,
+      this.logId,
+    );
+
+    logger.info(CHANNEL, `Processing file: ${this.agentConfig.inputFile}`);
   }
+
+  /**
+   * Initializes user variables that require async operations.
+   * Must be called after constructor before using the agent.
+   */
+  public async init(): Promise<void> {
+    this.userVars = await this.getUserVars();
+  }
+
+  /**
+   * Generates output file path for specified conversation round.
+   */
+  protected abstract getOutputFile(currRound: number): string;
 
   /**
    * Collects variables for prompt rendering from various sources.
@@ -444,7 +433,7 @@ export abstract class BaseReflectionAgent {
       const startTime = Date.now();
       const systemPrompt = await renderPrompt(
         this.agentPrompt.systemPrompt,
-        this.getUserVars(),
+        this.userVars,
       );
       const responseObject = await this.modelHandler.createResponse(
         this.client,
@@ -718,11 +707,10 @@ export abstract class BaseReflectionAgent {
     const messages: any[] = [];
 
     // Set up initial prompts
-    const userVars = await this.getUserVars();
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      renderPrompt(this.agentPrompt.systemPrompt, userVars),
-      renderPrompt(this.agentPrompt.userRequest, userVars),
-      renderPrompt(this.agentPrompt.userPrefix, userVars),
+      renderPrompt(this.agentPrompt.systemPrompt, this.userVars),
+      renderPrompt(this.agentPrompt.userRequest, this.userVars),
+      renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
 
     // logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
@@ -858,10 +846,9 @@ export abstract class BaseReflectionAgent {
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
-    const userVars = await this.getUserVars();
     const userRequestReflect = await renderPrompt(
       this.agentPrompt.userReflect,
-      userVars,
+      this.userVars,
     );
     let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
     if (toolState.texcountStats) {
