@@ -12,6 +12,9 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
+
 /**
  * Handler for Google models using OpenAI-compatible API.
  */
