@@ -70,13 +70,7 @@ export async function getAgentPath(
 /**
  * Get agent class based on settings.
  */
-async function getAgentClass(
-  agentPath: string,
-  agent: string,
-  context: vscode.ExtensionContext,
-): Promise<AgentConstructor> {
-  const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
-
+function getAgentClass(settings: AgentSetting): AgentConstructor {
   const agentTypeMapping: Record<string, AgentConstructor> = {
     direct: DirectAgent,
     CoT: CoTAgent,
@@ -133,7 +127,7 @@ export async function executeAgent(
     );
 
     // Get appropriate agent class and create instance
-    const AgentClass = await getAgentClass(agentPath, agentName, context);
+    const AgentClass = getAgentClass(agentSetting);
     const agent = new AgentClass(
       modelHandler,
       fullConfig,
@@ -141,6 +135,9 @@ export async function executeAgent(
       agentPrompt,
       agentPath,
     );
+
+    // Initialize agent
+    await agent.init();
 
     // Run the agent
     await agent.run();
