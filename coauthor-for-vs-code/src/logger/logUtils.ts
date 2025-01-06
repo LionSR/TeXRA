@@ -1,12 +1,10 @@
-// Standard library imports
-import { Writable } from 'stream';
-
 // Third-party imports
 import * as vscode from 'vscode';
 import * as winston from 'winston';
+import Transport from 'winston-transport';
 
 // Local imports - logView
-import { LogViewProvider } from '../logView/LogViewProvider';
+import { LogViewProvider } from './LogViewProvider';
 
 const { combine, timestamp, printf, json } = winston.format;
 
@@ -33,7 +31,7 @@ const customFormat = printf(({ level, message, timestamp }) => {
 });
 
 // Create VSCode output channel transport
-class VSCodeTransport extends Writable {
+class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private logViewProvider?: LogViewProvider;
   private streamName: string;
@@ -42,20 +40,23 @@ class VSCodeTransport extends Writable {
     channel: vscode.OutputChannel,
     streamName: string,
     logViewProvider?: LogViewProvider,
+    opts?: Transport.TransportStreamOptions,
   ) {
-    super();
+    super(opts);
     this.channel = channel;
     this.streamName = streamName;
     this.logViewProvider = logViewProvider;
   }
 
-  write(chunk: any): boolean {
-    const info = JSON.parse(chunk);
+  log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
 
+    // Always write to output channel
     this.channel.appendLine(formattedMessage);
+
+    // Write to LogView
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
@@ -63,17 +64,13 @@ class VSCodeTransport extends Writable {
         level as 'error' | 'warn' | 'info' | 'debug',
       );
     }
-    return true;
+
+    callback();
   }
 }
 
-const baseFormat = combine(timestamp({ format: 'HH:mm:ss' }), customFormat);
-
 // Map to store loggers for different categories
 const channelLoggers = new Map<string, winston.Logger>();
-
-// Map to store output channels
-const outputChannels = new Map<string, vscode.OutputChannel>();
 
 let globalLogViewProvider: LogViewProvider | undefined;
 
@@ -90,8 +87,8 @@ export function initializeLogging(
   defaultChannel: string,
   useColors: boolean = false,
 ): void {
-  // Create default output channel if it doesn't exist
-  if (!outputChannels.has(defaultChannel)) {
+  // Create default logger if it doesn't exist
+  if (!channelLoggers.has(defaultChannel)) {
     createLoggerForChannel(defaultChannel, useColors);
   }
 }
@@ -105,10 +102,9 @@ function createLoggerForChannel(
     return channelLoggers.get(channel)!;
   }
 
-  const outputChannel = vscode.window.createOutputChannel(
-    'CoAuthor: ' + channel,
-  );
-  outputChannels.set('CoAuthor: ' + channel, outputChannel);
+  // Create output channel with the CoAuthor prefix
+  const channelName = 'CoAuthor: ' + channel;
+  const outputChannel = vscode.window.createOutputChannel(channelName);
 
   const logger = winston.createLogger({
     levels: logLevels,
@@ -117,16 +113,9 @@ function createLoggerForChannel(
       timestamp({
         format: 'YYYY-MM-DD HH:mm:ss',
       }),
-      json(),
     ),
     transports: [
-      new winston.transports.Stream({
-        stream: new VSCodeTransport(
-          outputChannel,
-          channel,
-          globalLogViewProvider,
-        ),
-      }),
+      new VSCodeTransport(outputChannel, channel, globalLogViewProvider),
     ],
   });
 
