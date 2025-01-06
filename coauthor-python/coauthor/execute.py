@@ -90,7 +90,7 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agentSetting = AgentSetting.from_dict(agentSettingDict)
     agentPrompt = AgentPrompt.from_dict(agentPromptDict)
 
-    agent_class = getAgentClass(agentPath, agentName)
+    agent_class = getAgentClass(agentSettingDict)
     agent_instance = agent_class(
         modelHandler=modelHandler,
         agentConfig=agentConfig,
