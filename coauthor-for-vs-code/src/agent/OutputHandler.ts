@@ -204,15 +204,17 @@ export class OutputHandler {
       const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
+        return texFile;
+      } else {
+        throw new Error(`No ${documentTag} found in output file`);
       }
     } catch (err) {
       logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
+      throw err;
     }
-
-    return texFile;
   }
 
   /**
@@ -249,15 +251,15 @@ export class OutputHandler {
       const documents = extractContentFromTagMultiple(root, documentTag);
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
+      } else {
+        throw new Error(`No ${documentTag} found in output file`);
       }
-
-      return [];
     } catch (err) {
       logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return [];
+      throw err;
     }
   }
 
