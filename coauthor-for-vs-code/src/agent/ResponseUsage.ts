@@ -1,10 +1,6 @@
-/**
- * Data structures for response usage statistics.
- */
+/** Types and utilities for tracking and analyzing model API response usage metrics. */
 
-/**
- * Base interface for response usage statistics.
- */
+/** Base interface for common response usage metrics across all model providers. */
 export interface ResponseUsageBase {
   totalInputTokens: number;
   totalOutputTokens: number;
@@ -13,9 +9,7 @@ export interface ResponseUsageBase {
   responseTime: number;
 }
 
-/**
- * OpenAI response usage statistics.
- */
+/** OpenAI-specific response usage metrics with detailed token breakdowns. */
 export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   prompt_tokens: number;
   completion_tokens: number;
@@ -25,9 +19,7 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   rejected_prediction_tokens: number | null;
 }
 
-/**
- * Anthropic response usage statistics.
- */
+/** Anthropic-specific response usage metrics with cache statistics. */
 export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   input_tokens: number;
   output_tokens: number;
@@ -35,12 +27,14 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   cache_creation_input_tokens: number | null;
 }
 
-/**
- * Factory functions for creating response usage objects
- */
+/** Factory class for creating provider-specific response usage objects. */
 export class ResponseUsageFactory {
   /**
-   * Create OpenAI response usage object from API response
+   * Creates an OpenAI usage object from API response data.
+   * @param responseUsage Raw usage data from OpenAI API
+   * @param cost Calculated cost in USD
+   * @param responseTime Response time in milliseconds
+   * @returns Structured OpenAI usage metrics
    */
   static fromOpenAIResponse(
     responseUsage: any,
@@ -83,7 +77,11 @@ export class ResponseUsageFactory {
   }
 
   /**
-   * Create Anthropic response usage object from API response
+   * Creates an Anthropic usage object from API response data.
+   * @param responseUsage Raw usage data from Anthropic API
+   * @param cost Calculated cost in USD
+   * @param responseTime Response time in milliseconds
+   * @returns Structured Anthropic usage metrics
    */
   static fromAnthropicResponse(
     responseUsage: any,

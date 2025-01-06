@@ -16,7 +16,7 @@ import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
  * Handler for Google models using OpenAI-compatible API.
  */
 export class ModelHandlerGoogle extends ModelHandlerOpenAI {
-  /** Get OpenAI client with Google's base URL. */
+  /** Returns OpenAI client configured with Google's base URL. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
@@ -30,7 +30,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     });
   }
 
-  /** Compute price for Google token usage. */
+  /** Computes cost based on Google's token usage format. */
   computePrice(responseUsage: any): number {
     // Google models return completionTokens, promptTokens instead of completion_tokens, prompt_tokens
     const promptTokens = responseUsage?.promptTokens ?? 0;
@@ -43,7 +43,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     );
   }
 
-  /** Compute statistics for Google models. */
+  /** Creates usage statistics from Google's response format. */
   computeResponseUsage(
     responseUsage: any,
     responseTime: number,
@@ -68,7 +68,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     );
   }
 
-  /** Determine if Google model should continue generating. */
+  /** Determines if generation should continue based on response content. */
   shouldContinue(
     stopReason: string,
     newResponse: string,
