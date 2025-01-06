@@ -17,6 +17,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
+  private _viewDisposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -38,6 +39,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   public dispose() {
     this._disposables.forEach((d) => d.dispose());
+    this._cleanupView();
+  }
+
+  private _cleanupView() {
+    // Dispose of all view-specific disposables
+    this._viewDisposables.forEach((d) => d.dispose());
+    this._viewDisposables = [];
+    this._view = undefined;
   }
 
   private _getWorkspaceKey(): string {
@@ -64,6 +73,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
+    // Clean up old view if it exists
+    this._cleanupView();
+
     this._view = webviewView;
 
     webviewView.webview.options = {
@@ -78,7 +90,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     webviewView.title = this._viewTitle;
 
     // Add visibility change handler
-    this._disposables.push(
+    this._viewDisposables.push(
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this._updateWebview();
@@ -87,7 +99,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     );
 
     // Handle theme changes
-    this._disposables.push(
+    this._viewDisposables.push(
       vscode.window.onDidChangeActiveColorTheme(() => {
         if (webviewView.visible) {
           this._updateWebview();
@@ -97,37 +109,40 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
     this._updateWebview();
 
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      switch (message.command) {
-        case 'switchStream':
-          this._updateLogContent(message.stream);
-          break;
-        case 'clearStream':
-          if (this._logStreams.has(message.stream)) {
-            this._logStreams.get(message.stream)!.length = 0;
-            this._saveState();
+    // Handle webview messages
+    this._viewDisposables.push(
+      webviewView.webview.onDidReceiveMessage(async (message) => {
+        switch (message.command) {
+          case 'switchStream':
             this._updateLogContent(message.stream);
-          }
-          break;
-        case 'clearAll':
-          this._logStreams.clear();
-          this._saveState();
-          this._updateWebview();
-          break;
-        case 'deleteStream':
-          if (this._logStreams.has(message.stream)) {
-            this._logStreams.delete(message.stream);
+            break;
+          case 'clearStream':
+            if (this._logStreams.has(message.stream)) {
+              this._logStreams.get(message.stream)!.length = 0;
+              this._saveState();
+              this._updateLogContent(message.stream);
+            }
+            break;
+          case 'clearAll':
+            this._logStreams.clear();
             this._saveState();
             this._updateWebview();
-          }
-          break;
-      }
-    });
+            break;
+          case 'deleteStream':
+            if (this._logStreams.has(message.stream)) {
+              this._logStreams.delete(message.stream);
+              this._saveState();
+              this._updateWebview();
+            }
+            break;
+        }
+      }),
+    );
 
     // Register disposable for cleanup
-    this._disposables.push(
+    this._viewDisposables.push(
       webviewView.onDidDispose(() => {
-        this._view = undefined;
+        this._cleanupView();
       }),
     );
   }
