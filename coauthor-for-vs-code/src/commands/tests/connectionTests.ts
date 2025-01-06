@@ -11,7 +11,7 @@ import {
 import * as logger from '../../logger/logUtils';
 
 const CHANNEL = 'ConnectionTests';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export async function handleTestConnection(): Promise<void> {
   try {

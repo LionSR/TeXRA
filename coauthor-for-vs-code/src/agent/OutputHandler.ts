@@ -32,7 +32,7 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(

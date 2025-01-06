@@ -15,7 +15,7 @@ import { executeCommand } from '../utils/execUtils';
 import { runLatexIndent } from './latexindent';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 async function processDiffFile(diffFileName: string): Promise<void> {
   try {
