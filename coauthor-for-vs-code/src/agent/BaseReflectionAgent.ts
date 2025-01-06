@@ -93,7 +93,7 @@ export abstract class BaseReflectionAgent {
       CHANNEL,
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
     );
-    logger.debug(CHANNEL, `ModelHandler: ${this.modelHandler}\n`);
+    // logger.debug(CHANNEL, `ModelHandler: ${this.modelHandler}\n`);
 
     // Initialize basic attributes
     this.outputFile = ['', ''];
@@ -121,6 +121,7 @@ export abstract class BaseReflectionAgent {
       this.agentConfig,
       this.modelHandler,
       this.logId,
+      this.baseFiles,
     );
 
     logger.info(CHANNEL, `Processing file: ${this.agentConfig.inputFile}`);
@@ -931,12 +932,13 @@ export abstract class BaseReflectionAgent {
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 
-    logger.debug(CHANNEL, `Round 0 completed`);
+    logger.info(CHANNEL, `Round 0 completed`);
 
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
+      logger.info(CHANNEL, 'Round 1 completed');
     }
   }
 
