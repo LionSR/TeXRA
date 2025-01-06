@@ -991,19 +991,23 @@ export abstract class BaseReflectionAgent {
       logger.debug(CHANNEL, `Output files: ${this.agentConfig.outputFiles}`);
       const processedFiles =
         await this.outputHandler.processMultipleOutputs(outputFile);
-      await this.outputHandler.handleMultipleOutputs(processedFiles);
-      this.outputHandler.outputFiles[currRound] = processedFiles;
-      await this.outputHandler.replaceInputCommands(
-        this.baseFiles,
-        processedFiles,
-      );
+      if (processedFiles.length > 0) {
+        await this.outputHandler.handleMultipleOutputs(processedFiles);
+        this.outputHandler.outputFiles[currRound] = processedFiles;
+        await this.outputHandler.replaceInputCommands(
+          this.baseFiles,
+          processedFiles,
+        );
+      }
     } else {
       // Single output file case
       logger.debug(CHANNEL, `Processing single output for ${outputFile}`);
       const processedFile =
         await this.outputHandler.processSingleOutput(outputFile);
-      await this.outputHandler.handleSingleOutput(processedFile);
-      this.outputHandler.outputFiles[currRound] = [processedFile];
+      if (processedFile) {
+        await this.outputHandler.handleSingleOutput(processedFile);
+        this.outputHandler.outputFiles[currRound] = [processedFile];
+      }
     }
 
     await this.outputHandler.handleLatexdiff(currRound);
