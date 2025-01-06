@@ -24,13 +24,15 @@ import { CoTAgent } from './CoTAgent';
 const CHANNEL = 'ExecuteAgent';
 logger.initialize(CHANNEL);
 
-type AgentConstructor = new (
-  modelHandler: any,
-  agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
-  agentPrompt: AgentPrompt,
-  agentPath: string,
-) => DirectAgent | CoTAgent;
+type AgentConstructor = {
+  new (
+    modelHandler: any,
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
+    agentPath: string,
+  ): DirectAgent | CoTAgent;
+};
 
 /**
  * Find and return the path to agent's yaml configuration file.
