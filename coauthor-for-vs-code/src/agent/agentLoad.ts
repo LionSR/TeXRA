@@ -18,7 +18,7 @@ import {
 } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {

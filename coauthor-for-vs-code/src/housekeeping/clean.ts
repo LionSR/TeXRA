@@ -25,7 +25,7 @@ import {
 import { getAgentFirstNameChunk, getFilePatterns } from './utils';
 
 const CHANNEL = 'Housekeeping';
-
+logger.initialize(CHANNEL);
 export async function runCleanSingle(
   model: string,
   inputFile: string,

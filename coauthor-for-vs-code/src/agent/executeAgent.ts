@@ -22,7 +22,7 @@ import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 
 const CHANNEL = 'ExecuteAgent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 type AgentConstructor = new (
   modelHandler: any,

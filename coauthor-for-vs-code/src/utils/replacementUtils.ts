@@ -6,7 +6,7 @@
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 interface ReplacementCategory {
   name: string;
