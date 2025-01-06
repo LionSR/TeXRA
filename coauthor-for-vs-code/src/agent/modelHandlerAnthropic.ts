@@ -335,7 +335,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    // Check if file doesn't exist or is too small
     if (
       !(await fileExists(outputFile)) ||
       (await readFile(outputFile)).length <= 15
