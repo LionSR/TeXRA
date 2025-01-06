@@ -11,7 +11,7 @@ import { getWorkspacePath } from './fileUtils';
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
 

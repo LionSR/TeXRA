@@ -9,7 +9,7 @@ import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
 
 const CHANNEL = 'ViewProvider';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;

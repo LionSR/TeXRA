@@ -18,7 +18,7 @@ import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
 const execAsync = promisify(exec);
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'coauthor-pdf-conversion');

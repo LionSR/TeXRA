@@ -6,7 +6,7 @@ import { getConfig } from './frontend-utils/commonUtils';
 import { getAgentsDirectory } from './utils/pathUtils';
 
 const CHANNEL = 'FolderExplorer';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
