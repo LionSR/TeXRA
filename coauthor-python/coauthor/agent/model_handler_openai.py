@@ -41,7 +41,7 @@ class OpenAIHandler(ModelHandler):
         kwargs = {
             "model": self.config.fullName,
             "messages": messages,
-            "max_completion_tokens": self.config.maxOutputTokens,
+            "max_completion_tokens" if "o1" in self.config.name.lower() else "max_tokens": self.config.maxOutputTokens,
             "temperature": 1.0 if "o1" in self.config.name.lower() else temperature,
         }
 
