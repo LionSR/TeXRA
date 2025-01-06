@@ -11,8 +11,8 @@ import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 import { AgentConfig } from '../agent/AgentConfig';
 import { executeAgent } from '../agent/executeAgent';
 
-const CHANNEL = 'ExecuteCommand';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {

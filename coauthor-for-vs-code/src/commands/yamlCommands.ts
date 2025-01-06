@@ -9,10 +9,9 @@ import * as yaml from 'yaml';
 import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/executeAgent';
-import { getAgentsDirectory } from '../utils/pathUtils';
 
-const CHANNEL = 'YAML';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export const yamlCommands = {
   testAgentLoading: 'coauthor.testAgentLoading',

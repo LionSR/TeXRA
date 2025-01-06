@@ -8,7 +8,7 @@ import * as logger from '../logger/logUtils';
 import { readFile, fileExists } from '../utils/fileUtils';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Parse graphicspath commands supporting both single and multiple path formats

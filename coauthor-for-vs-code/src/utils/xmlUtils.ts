@@ -5,7 +5,7 @@ import * as logger from '../logger/logUtils';
 import { readFile } from './fileUtils';
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Wrap content of specified tags with CDATA sections

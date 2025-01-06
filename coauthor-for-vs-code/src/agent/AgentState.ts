@@ -14,7 +14,7 @@ import {
 } from './ResponseUsage';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /** Interface for tracking state within a single conversation round. */
 export interface IAgentStateRound {

@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export function getRelativePath(filePath: string): string {
   const workspacePath = getWorkspacePath();

@@ -16,8 +16,8 @@ import {
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
-const CHANNEL = 'FileSelection';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
