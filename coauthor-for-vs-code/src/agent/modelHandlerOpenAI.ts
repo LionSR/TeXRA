@@ -27,14 +27,14 @@ logger.initializeLogging(CHANNEL);
  * OpenAI-specific handlers.
  */
 export class ModelHandlerOpenAI extends ModelHandler {
-  /** Get OpenAI client. */
+  /** Returns OpenAI client with configured API key. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     logger.info(CHANNEL, 'Using OpenAI API key.');
     return new OpenAI({ apiKey });
   }
 
-  /** Create a response using OpenAI's API. */
+  /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     client: OpenAI,
     messages: any[],
@@ -62,7 +62,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return client.chat.completions.create(kwargs);
   }
 
-  /** Initialize messages for OpenAI models. */
+  /** Initializes message array with system prompt and user content. */
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -103,7 +103,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return messages;
   }
 
-  /** Create a reflection message for OpenAI models. */
+  /** Adds user message with reflection content to existing messages. */
   createReflectionMessages(
     messages: any[],
     userMessage: string,
@@ -119,7 +119,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return messages;
   }
 
-  /** Create image content for OpenAI models. */
+  /** Formats image content for OpenAI's vision API. */
   createImageContent(imageContents: any[]): any[] {
     return imageContents.flatMap((image) => [
       { type: 'text', text: `Image: ${image.file_name}` },
@@ -134,7 +134,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ]);
   }
 
-  /** Extract response text and usage statistics from OpenAI response. */
+  /** Extracts response text and usage statistics from API response. */
   extractResponse(
     responseObject: any,
     endTag: string,
@@ -160,7 +160,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Handle continuation for OpenAI models. */
+  /** Adds continuation message when response is truncated. */
   addContinueMessage(
     messages: any[],
     stateRound: AgentStateRound,
@@ -195,7 +195,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     });
   }
 
-  /** Initialize output and handle prefill for OpenAI-compatible models. */
+  /** Initializes output file and handles prefill content. */
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
@@ -260,7 +260,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
   }
 
-  /** Compute price for OpenAI token usage. */
+  /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: any): number {
     // Handle Google models that return None for usage
     if (!responseUsage) {
@@ -289,7 +289,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return basePrice;
   }
 
-  /** Compute OpenAI-specific statistics. */
+  /** Creates usage statistics from OpenAI's response format. */
   computeResponseUsage(
     responseUsage: any,
     responseTime: number,
@@ -320,7 +320,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
   }
 
-  /** Update message content for OpenAI models. */
+  /** Updates message content with new response or continuation. */
   updateMessageContent(
     messages: any[],
     bestConnector: string,
@@ -369,7 +369,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
   }
 
-  /** Determine if OpenAI model should continue generating. */
+  /** Determines if generation should continue based on response content. */
   shouldContinue(
     stopReason: string,
     newResponse: string,

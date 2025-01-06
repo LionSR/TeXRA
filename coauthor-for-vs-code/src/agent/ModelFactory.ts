@@ -9,12 +9,13 @@ import {
 } from './modelHandlerOpenRouter';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
-/**
- * Factory for creating model handlers with appropriate handlers.
- */
+/** Factory class for instantiating appropriate model handlers based on configuration. */
 export class ModelFactory {
   /**
-   * Create model handler based on provider and OpenRouter configuration.
+   * Creates a model handler instance based on provider and routing configuration.
+   * @param config Model configuration including provider and OpenRouter settings
+   * @returns Appropriate ModelHandler instance for the configuration
+   * @throws Error if provider is unsupported
    */
   static createHandler(config: ModelConfig): ModelHandler {
     // Handle OpenRouter configuration

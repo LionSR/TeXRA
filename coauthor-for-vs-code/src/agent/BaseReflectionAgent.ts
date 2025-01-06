@@ -51,20 +51,34 @@ const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
 
 /**
- * Abstract base class for reflection chain agents.
+ * Abstract base class for agents that support multi-turn reflection and refinement.
+ * Provides core functionality for processing inputs, managing state, and handling outputs
+ * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent {
+  /** Handler for model-specific API interactions. */
   protected modelHandler: ModelHandler;
+  /** Configuration for agent execution behavior. */
   protected agentConfig: AgentConfig;
+  /** Settings controlling agent behavior and output generation. */
   protected agentSetting: AgentSetting;
+  /** Templates for system and user prompts. */
   protected agentPrompt: AgentPrompt;
+  /** Base path for agent file operations. */
   protected agentPath: string;
+  /** Primary and reflection output file paths. */
   protected outputFile: [string, string];
+  /** Mapping of round numbers to output file paths. */
   protected outputFiles: { [key: number]: string[] };
+  /** Collection of input files to process. */
   protected baseFiles: string[];
+  /** Model-specific API client instance. */
   protected client: any;
+  /** Flag indicating if agent uses scratchpad for intermediate work. */
   protected useScratchpad: boolean = false;
+  /** Unique identifier for logging and database tracking. */
   protected logId: number = 0;
+  /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
 
   constructor(
@@ -108,12 +122,13 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get output file path for the current round.
+   * Generates output file path for specified conversation round.
    */
   protected abstract getOutputFile(currRound: number): string;
 
   /**
-   * Set up the agent for processing.
+   * Initializes agent state and resources for processing.
+   * Sets up file paths, client connection, and logging.
    */
   protected setup(): void {
     // Initialize base files and logging
@@ -136,7 +151,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get basic user variables common across agents.
+   * Collects variables for prompt rendering from various sources.
+   * @returns Combined dictionary of variables for prompt templates
    */
   protected async getUserVars(): Promise<Record<string, any>> {
     // Build user variables incrementally with clear categories
@@ -151,7 +167,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get basic model and instruction variables.
+   * Collects basic model and instruction variables.
+   * @returns Core variables about model capabilities and instructions
    */
   private getBasicVars(): Record<string, any> {
     return {
@@ -166,7 +183,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get input, reference, and auxiliary file variables.
+   * Processes input, reference, and auxiliary files into variables.
+   * @returns File content and metadata variables for prompts
    */
   private async getFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
@@ -234,7 +252,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get variables from required files specified in agent settings.
+   * Processes required files specified in agent settings.
+   * @returns Variables containing required file contents
    */
   private async getRequiredFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
@@ -290,7 +309,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get variables from pattern-based file mappings specified in agent settings.
+   * Processes files matching patterns in agent settings.
+   * @returns Variables from pattern-matched files
    */
   private async getPatternBasedFileVars(): Promise<Record<string, any>> {
     const userVars: Record<string, any> = {};
@@ -357,7 +377,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get variables for output files order.
+   * Determines order of output file processing.
+   * @returns Variables controlling output file ordering
    */
   private getOutputFilesOrder(): Record<string, any> {
     const userVars: Record<string, any> = {};
@@ -382,7 +403,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get variables related to tool usage flags.
+   * Collects tool-specific configuration flags.
+   * @returns Variables for tool behavior control
    */
   private getToolFlags(): Record<string, any> {
     return {
@@ -400,7 +422,13 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Process a single response cycle.
+   * Manages single response cycle with model interaction.
+   * @param messages Current conversation messages
+   * @param stateRound Current round state
+   * @param stateGlobal Global conversation state
+   * @param toolState Tool-specific state
+   * @param outputFile Current output file path
+   * @returns Updated states and completion flag
    */
   private async processResponseCycle(
     messages: any[],
@@ -570,7 +598,7 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Get prefill content for the current round.
+   * Gets prefill content for specified round.
    */
   private getPrefillForRound(currRound: number): string {
     const prefill =
@@ -581,7 +609,7 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Handle output and logging for round completion.
+   * Processes completion of conversation round.
    */
   private handleRoundCompletion(
     stateRound: AgentStateRound,
@@ -600,7 +628,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Handle output for the given round.
+   * Processes output files for current round.
+   * @returns Array of processed output file paths
    */
   protected async handleOutput(
     stateRound: AgentStateRound,
@@ -622,7 +651,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Process the input files and generate output.
+   * Processes initial conversation round.
+   * @returns Tuple of [round state, global state, messages, completion flag, tool state]
    */
   protected async process(): Promise<
     [AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]
@@ -788,7 +818,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Process reflection round.
+   * Processes reflection/refinement round.
+   * @returns Tuple of [round state, global state, messages, completion flag]
    */
   protected async reflect(
     stateGlobal: AgentStateGlobal,
@@ -906,7 +937,8 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Run the agent processing pipeline.
+   * Executes complete agent conversation cycle.
+   * Manages initial processing and optional reflection rounds.
    */
   public async run(): Promise<void> {
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
@@ -922,7 +954,7 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Handle output file processing.
+   * Updates tool state based on output files.
    */
   private async _handleToolStateForOutput(
     outputFiles: string[],
@@ -949,12 +981,9 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Process output files for the current round.
-   * Handles both single and multiple output file cases, including:
-   * - Processing outputs
-   * - Handling file operations
-   * - Managing output file tracking
-   * - Handling LaTeX diff if needed
+   * Processes output files with figure extraction and validation.
+   * @param outputFile Current output file path
+   * @param currRound Current round number
    */
   protected async processOutputFiles(
     outputFile: string,
