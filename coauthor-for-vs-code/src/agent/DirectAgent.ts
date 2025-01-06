@@ -7,11 +7,14 @@ import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
 
 /**
- * Direct agent implementation of BaseReflectionAgent.
+ * Direct agent implementation that processes requests in a single pass.
+ * Extends BaseReflectionAgent with simplified output handling and no intermediate steps.
  */
 export class DirectAgent extends BaseReflectionAgent {
   /**
-   * Get the output file name for the given round.
+   * Generates output file name based on configuration and current round.
+   * @param currRound Current round number in the conversation
+   * @returns Formatted output file path incorporating model and round information
    */
   protected getOutputFile(currRound: number): string {
     const baseOutputFile =
@@ -27,7 +30,8 @@ export class DirectAgent extends BaseReflectionAgent {
   }
 
   /**
-   * Handle the output for the given round.
+   * Processes output for the current round with minimal processing.
+   * @returns Array of processed output file paths
    */
   protected async handleOutput(
     stateRound: AgentStateRound,

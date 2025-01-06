@@ -33,17 +33,17 @@ const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
 
 /**
- * Anthropic-specific handlers.
+ * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
 export class ModelHandlerAnthropic extends ModelHandler {
-  /** Get Anthropic client. */
+  /** Initializes an Anthropic API client using the configured API key. */
   getClient(): Anthropic {
     const apiKey = this.getApiKey();
     logger.info(CHANNEL, 'Using Anthropic API key.');
     return new Anthropic({ apiKey });
   }
 
-  /** Create a response using Anthropic's API. */
+  /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
     client: Anthropic,
     messages: any[],
@@ -61,7 +61,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     });
   }
 
-  /** Initialize messages for Anthropic models. */
+  /** Initializes the message array for Anthropic chat models with user prefix, request, and optional images. */
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -90,7 +90,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return [{ role: 'user', content }];
   }
 
-  /** Create a reflection message for Anthropic models. */
+  /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
   createReflectionMessages(
     messages: any[],
     userMessage: string,
@@ -132,7 +132,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return messages;
   }
 
-  /** Create image content for Anthropic models. */
+  /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createImageContent(imageContents: any[]): any[] {
     return imageContents.flatMap((image) => {
       const isPdf =
@@ -155,7 +155,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     });
   }
 
-  /** Extract response text and usage statistics from Anthropic response. */
+  /** Processes Anthropic API response, handling errors, confirmations, and formatting while returning [response, usage, stopReason]. */
   extractResponse(
     responseObject: any,
     endTag: string,
@@ -236,7 +236,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Handle continuation for Anthropic models. */
+  /** Adds continuation message for handling multi-turn conversations, managing token limits and output formatting. */
   addContinueMessage(
     messages: any[],
     stateRound: any,
@@ -326,7 +326,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
   }
 
-  /** Initialize output and handle prefill for Anthropic models. */
+  /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
@@ -421,7 +421,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return [false, messages];
   }
 
-  /** Compute the price for token usage. */
+  /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
   computePrice(responseUsage: any): number {
     let basePrice =
       (responseUsage.input_tokens * this.config.inputPrice +
@@ -448,7 +448,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return basePrice;
   }
 
-  /** Compute model-specific response usage from response usage object. */
+  /** Computes detailed response usage metrics including tokens, price, and response time. */
   computeResponseUsage(
     responseUsage: any,
     responseTime: number,
@@ -460,7 +460,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
   }
 
-  /** Update message content for Anthropic models. */
+  /** Updates message content with new responses while managing cache control and content formatting. */
   updateMessageContent(
     messages: any[],
     bestConnector: string,
@@ -508,7 +508,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
   }
 
-  /** Determine if Anthropic model should continue generating. */
+  /** Determines if generation should continue based on stop reason and end tag presence. */
   shouldContinue(
     stopReason: string,
     newResponse: string,

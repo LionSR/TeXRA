@@ -7,11 +7,14 @@ import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
 
 /**
- * Chain of Thought agent implementation.
+ * Chain of Thought (CoT) agent implementation that extends DirectAgent.
+ * Adds XML structure validation and specialized output handling for multi-step reasoning.
  */
 export class CoTAgent extends DirectAgent {
   /**
-   * Get the output file name for the given round.
+   * Generates output file name based on configuration and current round.
+   * @param currRound Current round number in the conversation
+   * @returns Formatted output file path incorporating model and round information
    */
   protected getOutputFile(currRound: number): string {
     const baseOutputFile =
@@ -30,7 +33,8 @@ export class CoTAgent extends DirectAgent {
   }
 
   /**
-   * Handle the output for the given round.
+   * Processes output for the current round with XML validation.
+   * @returns Array of processed output file paths
    */
   protected async handleOutput(
     stateRound: AgentStateRound,

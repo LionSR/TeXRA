@@ -1,5 +1,5 @@
 /**
- * Model configuration data structures
+ * Configuration types and constants for language model interactions and capabilities.
  */
 
 /**
@@ -7,9 +7,7 @@
  */
 export const DEFAULT_CONTEXT_WINDOW = 128000;
 
-/**
- * Default model capabilities
- */
+/** Base model capabilities configuration with all features disabled by default. */
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsPromptCaching: false,
   supportsAutoPromptCaching: false,
@@ -21,9 +19,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   likesToAskForConfirmation: false,
 };
 
-/**
- * Model provider enum
- */
+/** Supported language model providers with their API identifiers. */
 export enum ModelProvider {
   ANTHROPIC = 'anthropic',
   OPENAI = 'openai',
@@ -31,9 +27,7 @@ export enum ModelProvider {
   OTHERS = 'others',
 }
 
-/**
- * Model capabilities interface
- */
+/** Feature flags defining model's supported capabilities and behaviors. */
 export interface ModelCapabilities {
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
@@ -45,9 +39,7 @@ export interface ModelCapabilities {
   likesToAskForConfirmation: boolean;
 }
 
-/**
- * Model configuration interface
- */
+/** Complete configuration for a language model instance. */
 export interface ModelConfig {
   name: string; // Short name (e.g., "sonnet++")
   fullName: string; // Full model name (e.g., "claude-3-5-sonnet-20241022")

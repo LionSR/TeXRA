@@ -16,9 +16,7 @@ import {
 const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
 
-/**
- * State for a single round (first round or reflection round)
- */
+/** Interface for tracking state within a single conversation round. */
 export interface IAgentStateRound {
   currRound: number;
   continuationCount: number;
@@ -27,6 +25,7 @@ export interface IAgentStateRound {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
+/** Manages state and metrics for a single conversation round. */
 export class AgentStateRound implements IAgentStateRound {
   currRound: number;
   continuationCount: number;
@@ -42,39 +41,29 @@ export class AgentStateRound implements IAgentStateRound {
     this.APIUsage = null;
   }
 
-  /**
-   * Initialize a new AgentStateRound object
-   */
+  /** Creates a new AgentStateRound instance with initial values. */
   static initialize(currRound: number): AgentStateRound {
     return new AgentStateRound(currRound);
   }
 
-  /**
-   * Update token counts based on model response usage
-   */
+  /** Updates token usage metrics from model API response. */
   updateTokenCounts(
     responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,
   ): void {
     this.APIUsage = responseUsage;
   }
 
-  /**
-   * Update response time for this round
-   */
+  /** Adds response time in milliseconds to the round total. */
   updateResponseTime(responseTime: number): void {
     this.responseTime += responseTime;
   }
 
-  /**
-   * Increment continuation count for this round
-   */
+  /** Increments the continuation counter for tracking multi-turn responses. */
   incrementContinuation(): void {
     this.continuationCount += 1;
   }
 
-  /**
-   * Convert round state to object format
-   */
+  /** Converts state to a serializable object for persistence. */
   toObject(): Record<string, any> {
     const stateObj = {
       currRound: this.currRound,
@@ -87,9 +76,7 @@ export class AgentStateRound implements IAgentStateRound {
   }
 }
 
-/**
- * Global state tracking metrics across all rounds
- */
+/** Interface for tracking aggregate metrics across all conversation rounds. */
 export interface IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
@@ -99,6 +86,7 @@ export interface IAgentStateGlobal {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
+/** Manages global state and aggregates metrics across conversation rounds. */
 export class AgentStateGlobal implements IAgentStateGlobal {
   firstInputTokens: number;
   totalResponseTime: number;
@@ -116,16 +104,12 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.APIUsage = null;
   }
 
-  /**
-   * Initialize a new AgentStateGlobal object
-   */
+  /** Creates a new AgentStateGlobal instance with zeroed metrics. */
   static initialize(): AgentStateGlobal {
     return new AgentStateGlobal();
   }
 
-  /**
-   * Update global metrics based on round state
-   */
+  /** Updates global metrics by incorporating round state data. */
   updateFromCurrRound(stateRound: AgentStateRound): void {
     if (stateRound.APIUsage) {
       if (this.firstInputTokens === 0) {
@@ -152,9 +136,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalResponseTime += stateRound.responseTime;
   }
 
-  /**
-   * Convert global state to object format
-   */
+  /** Converts global state to a serializable object for persistence. */
   toObject(): Record<string, any> {
     return {
       firstInputTokens: this.firstInputTokens,
@@ -166,9 +148,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     };
   }
 
-  /**
-   * Create AgentStateGlobal object from plain object
-   */
+  /** Creates an AgentStateGlobal instance from a persisted state object. */
   static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
     if (!stateObj) {
       return AgentStateGlobal.initialize();
