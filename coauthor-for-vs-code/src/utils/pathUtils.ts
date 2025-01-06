@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'PathUtils';
+const CHANNEL = 'Utils';
 logger.initialize(CHANNEL);
 
 /**

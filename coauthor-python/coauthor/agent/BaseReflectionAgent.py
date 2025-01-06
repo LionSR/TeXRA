@@ -533,6 +533,7 @@ class BaseReflectionAgent(ABC):
     def run(self):
         """Run the agent processing pipeline."""
         stateRound, stateGlobal, messages, endTurn, toolState = self.process()
+        logger.info("Round 0 completed")
 
         if self.agentConfig.reflect and endTurn:
             # Create a new ToolState for reflection round
@@ -540,6 +541,8 @@ class BaseReflectionAgent(ABC):
             stateRoundReflection, stateGlobalReflection, messagesReflection, endTurnReflection = self.reflect(
                 stateGlobal, messages, toolStateReflection
             )
+
+            logger.info("Round 1 completed")
 
     def _processOutputFiles(self, outputFile: str, currRound: int):
         """Process output files for the current round.
