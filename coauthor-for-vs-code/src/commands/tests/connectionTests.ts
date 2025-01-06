@@ -1,8 +1,13 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Local imports - utilities
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
 } from '../../latex/textConnection';
+
+// Local imports - log
 import * as logger from '../../logger/logUtils';
 
 const CHANNEL = 'ConnectionTests';

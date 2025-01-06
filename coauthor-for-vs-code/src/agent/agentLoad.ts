@@ -20,11 +20,7 @@ import {
 const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
 
-/**
- * Load a YAML file and return its contents as a dictionary
- * @param absolutePath Absolute path to the YAML file
- * @returns Promise<object> Parsed YAML content
- */
+/** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
   try {
     if (!path.isAbsolute(absolutePath)) {
@@ -48,12 +44,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   }
 }
 
-/**
- * Merge two dictionaries recursively
- * @param base Base dictionary
- * @param override Dictionary with overriding values
- * @returns Merged dictionary
- */
+/** Recursively merges two dictionaries with override values. */
 export function mergeDicts(
   base: { [key: string]: any },
   override: { [key: string]: any },
@@ -83,10 +74,8 @@ export function mergeDicts(
 }
 
 /**
- * Load agent settings and prompts from YAML file with inheritance support
- * @param agentPath Path to the agent directory
- * @param agentName Name of the agent
- * @returns Promise<[AgentSetting, AgentPrompt]> Tuple of settings and prompts
+ * Loads agent settings and prompts with inheritance support.
+ * Merges with parent configurations if specified in the inherits field.
  */
 export async function loadAgentSettingAndPrompts(
   agentPath: string,

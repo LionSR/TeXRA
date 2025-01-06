@@ -23,9 +23,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   toolConfig: {} as ToolConfig,
 };
 
-/**
- * Configuration for task execution and tool usage
- */
+/** Configuration interface for controlling agent execution and file handling. */
 export interface AgentConfig {
   // Core configuration
   model: string;
@@ -51,7 +49,9 @@ export interface AgentConfig {
 }
 
 /**
- * Create AgentConfig from partial configuration
+ * Creates a complete AgentConfig by merging partial config with defaults.
+ * @param config Partial configuration to merge with defaults
+ * @returns Complete AgentConfig with all fields populated
  */
 export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
   // Merge provided config with defaults
@@ -59,7 +59,8 @@ export function createAgentConfig(config: Partial<AgentConfig>): AgentConfig {
 }
 
 /**
- * Validate the configuration
+ * Validates agent configuration for consistency and correctness.
+ * @throws Error if output file count exceeds input file count
  */
 export function validateAgentConfig(config: AgentConfig): void {
   // For multiple output agents

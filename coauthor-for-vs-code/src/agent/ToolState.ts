@@ -1,6 +1,4 @@
-/**
- * Interface defining the shape of tool-specific runtime data that doesn't need to be logged
- */
+/** Interface for managing tool-specific runtime state within a conversation round. */
 export interface IToolState {
   /** Statistics about TeX document structure */
   texcountStats: string | null;
@@ -22,9 +20,7 @@ export interface IToolState {
   addFigureFiles(files: string[]): void;
 }
 
-/**
- * Implementation of tool-specific runtime data that doesn't need to be logged. [Per round]
- */
+/** Manages tool-specific runtime state and operations within a conversation round. */
 export class ToolState implements IToolState {
   texcountStats: string | null;
   firstKCharsFromInput: string | null;
@@ -40,29 +36,30 @@ export class ToolState implements IToolState {
     this.figureFiles = [];
   }
 
-  /**
-   * Initialize a new ToolState object
-   */
+  /** Creates a new ToolState instance with initialized values. */
   static initialize(): ToolState {
     return new ToolState();
   }
 
   /**
-   * Update the last response
+   * Updates the most recent model response.
+   * @param response New response text from the model
    */
   updateLastResponse(response: string): void {
     this.lastResponse = response;
   }
 
   /**
-   * Update the accumulated output
+   * Updates the accumulated output with new content.
+   * @param output New content to store as accumulated output
    */
   updateAccumulatedOutput(output: string): void {
     this.accumulatedOutput = output;
   }
 
   /**
-   * Add figure files to the list
+   * Adds new figure file paths to the collection.
+   * @param files Array of paths to new figure files
    */
   addFigureFiles(files: string[]): void {
     this.figureFiles.push(...files);
