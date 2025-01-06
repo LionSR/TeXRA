@@ -68,6 +68,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
+      enableCommandUris: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this._extensionUri, 'src', 'logView'),
       ],
@@ -79,6 +80,15 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     // Add visibility change handler
     this._disposables.push(
       webviewView.onDidChangeVisibility(() => {
+        if (webviewView.visible) {
+          this._updateWebview();
+        }
+      }),
+    );
+
+    // Handle theme changes
+    this._disposables.push(
+      vscode.window.onDidChangeActiveColorTheme(() => {
         if (webviewView.visible) {
           this._updateWebview();
         }
@@ -200,47 +210,62 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       ? workspaceFolder.name
       : 'No Workspace';
 
+    const nonce = this._getNonce();
+
     return `<!DOCTYPE html>
     <html>
       <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this._view?.webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <style>
           body {
             padding: 0;
             margin: 0;
             display: flex;
             height: 100vh;
-            font-family: monospace;
-            font-size: 12px;
-            background: var(--vscode-editor-background);
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
           }
+
           .main-container {
             display: flex;
             flex: 1;
             height: 100%;
+            overflow: hidden;
           }
+
           .content-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             min-width: 0;
+            overflow: hidden;
           }
+
           .tabs {
             display: flex;
             flex-direction: column;
             width: 120px;
+            min-width: 120px;
             font-size: 11px;
             border-left: 1px solid var(--vscode-panel-border);
             height: 100%;
+            overflow: hidden;
+            background-color: var(--vscode-sideBar-background);
           }
 
           .tabs-content {
             flex: 1;
             overflow-y: auto;
+            min-height: 0;
           }
           
           .clear-all-container {
             flex-shrink: 0;
-            background: var(--vscode-editor-background);
+            background-color: var(--vscode-sideBar-background);
             border-top: 1px solid var(--vscode-panel-border);
             padding: 4px;
           }
@@ -254,26 +279,27 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             border: none;
             background: none;
             color: var(--vscode-foreground);
-            font-family: monospace;
+            font-family: var(--vscode-font-family);
             font-size: 11px;
           }
 
           .delete-button {
-            color: #ff6b6b;
+            color: var(--vscode-errorForeground, #ff6b6b);
           }
 
           .clear-button:hover, .delete-button:hover {
-            background: var(--vscode-list-hoverBackground);
+            background-color: var(--vscode-list-hoverBackground);
           }
 
           .delete-button:hover {
-            background: rgba(255, 0, 0, 0.1);
+            background-color: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
           }
 
           .x-icon {
             font-family: codicon;
             font-size: 14px;
           }
+
           .tab {
             padding: 4px 8px;
             cursor: pointer;
@@ -284,22 +310,29 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-family: monospace;
+            font-family: var(--vscode-font-family);
+            width: 100%;
           }
+
           .tab:hover {
-            background: var(--vscode-list-hoverBackground);
+            background-color: var(--vscode-list-hoverBackground);
           }
+
           .tab.active {
-            background: var(--vscode-list-activeSelectionBackground);
+            background-color: var(--vscode-list-activeSelectionBackground);
             color: var(--vscode-list-activeSelectionForeground);
           }
+
           .log-container {
             flex: 1;
             overflow-y: auto;
             padding: 2px 4px;
             white-space: pre;
             min-width: 0;
+            min-height: 0;
+            background-color: var(--vscode-editor-background);
           }
+
           .log-header {
             padding: 2px 4px;
             font-size: 11px;
@@ -307,32 +340,19 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             justify-content: space-between;
             align-items: center;
             color: var(--vscode-descriptionForeground);
-          }
-          .workspace-name {
-            color: var(--vscode-descriptionForeground);
-            font-size: 10px;
-            padding: 2px 4px;
+            background-color: var(--vscode-editor-background);
             border-bottom: 1px solid var(--vscode-panel-border);
           }
+
           .header-actions {
             display: flex;
             gap: 4px;
           }
-          .button {
-            background: none;
-            border: none;
-            color: var(--vscode-button-foreground);
-            cursor: pointer;
-            font-size: 11px;
-            padding: 0 4px;
-          }
-          .button:hover {
-            color: var(--vscode-button-hoverBackground);
-          }
-          .debug { color: #0087ff; }
-          .info { color: #00af00; }
-          .warn { color: #ffaf00; }
-          .error { color: #ff0000; }
+
+          .debug { color: var(--vscode-debugIcon-startForeground, #0087ff); }
+          .info { color: var(--vscode-notificationsInfoIcon-foreground, #00af00); }
+          .warn { color: var(--vscode-editorWarning-foreground, #ffaf00); }
+          .error { color: var(--vscode-editorError-foreground, #ff0000); }
         </style>
       </head>
       <body>
@@ -341,10 +361,10 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             <div class="log-header">
               <span>${currentStream}</span>
               <div class="header-actions">
-                <button class="clear-button" onclick="clearStream()">
+                <button class="clear-button" id="clearStreamBtn">
                   <span class="x-icon">✕</span> Clear
                 </button>
-                <button class="delete-button" onclick="deleteStream()">
+                <button class="delete-button" id="deleteStreamBtn">
                   <span class="x-icon">✕</span> Delete
                 </button>
               </div>
@@ -358,18 +378,18 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
                   (stream) =>
                     `<button class="tab ${
                       stream === currentStream ? 'active' : ''
-                    }" onclick="switchStream('${stream}')">${stream}</button>`,
+                    }" data-stream="${stream}">${stream}</button>`,
                 )
                 .join('')}
             </div>
             <div class="clear-all-container">
-              <button class="clear-button danger" onclick="clearAll()">
+              <button class="clear-button danger" id="clearAllBtn">
                 <span class="x-icon">✕</span> Clear All
               </button>
             </div>
           </div>
         </div>
-        <script>
+        <script nonce="${nonce}">
           const vscode = acquireVsCodeApi();
           let currentStream = '${currentStream}';
 
@@ -377,26 +397,36 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             return \`<span class="\${logMessage.level}">\${logMessage.message}</span>\`;
           }
 
-          function switchStream(stream) {
-            currentStream = stream;
-            document.querySelector('.log-header span').textContent = stream;
+          // Add event listeners after DOM is loaded
+          document.addEventListener('DOMContentLoaded', () => {
+            // Stream switching
             document.querySelectorAll('.tab').forEach(tab => {
-              tab.classList.toggle('active', tab.textContent === stream);
+              tab.addEventListener('click', () => {
+                const stream = tab.dataset.stream;
+                currentStream = stream;
+                document.querySelector('.log-header span').textContent = stream;
+                document.querySelectorAll('.tab').forEach(t => {
+                  t.classList.toggle('active', t.dataset.stream === stream);
+                });
+                vscode.postMessage({ command: 'switchStream', stream });
+              });
             });
-            vscode.postMessage({ command: 'switchStream', stream });
-          }
 
-          function clearStream() {
-            vscode.postMessage({ command: 'clearStream', stream: currentStream });
-          }
+            // Clear current stream
+            document.getElementById('clearStreamBtn').addEventListener('click', () => {
+              vscode.postMessage({ command: 'clearStream', stream: currentStream });
+            });
 
-          function clearAll() {
-            vscode.postMessage({ command: 'clearAll' });
-          }
+            // Clear all streams
+            document.getElementById('clearAllBtn').addEventListener('click', () => {
+              vscode.postMessage({ command: 'clearAll' });
+            });
 
-          function deleteStream() {
-            vscode.postMessage({ command: 'deleteStream', stream: currentStream });
-          }
+            // Delete current stream
+            document.getElementById('deleteStreamBtn').addEventListener('click', () => {
+              vscode.postMessage({ command: 'deleteStream', stream: currentStream });
+            });
+          });
 
           window.addEventListener('message', event => {
             const message = event.data;
@@ -425,5 +455,15 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
         </script>
       </body>
     </html>`;
+  }
+
+  private _getNonce() {
+    let text = '';
+    const possible =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+      text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
   }
 }

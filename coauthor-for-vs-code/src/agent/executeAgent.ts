@@ -1,19 +1,21 @@
 // Standard library imports
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { glob } from 'glob';
 
 // Third-party imports
 // (none needed)
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+
+// Local imports - utilities
+import { getAgentsDirectory } from '../utils/pathUtils';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { loadAgentSettingAndPrompts } from './agentLoad';
-import { ModelConfig } from './ModelConfig';
 import { MODEL_CONFIGS } from './ModelRegistry';
 import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
@@ -33,31 +35,29 @@ type AgentConstructor = new (
 /**
  * Find and return the path to agent's yaml configuration file.
  */
-async function getAgentPath(
+export async function getAgentPath(
   agentName: string,
   context: vscode.ExtensionContext,
 ): Promise<string> {
   try {
-    const rootPath = getConfig<string>('explorer.rootPath', 'agents');
-    const agentsDir = path.join(context.globalStorageUri.fsPath, rootPath);
+    const basePath = await getAgentsDirectory(context);
 
-    // First try direct path
-    const directPath = path.join(agentsDir, `${agentName}.yaml`);
-    try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(directPath));
-      return agentsDir;
-    } catch {
-      // If direct path doesn't exist, try nested path
-      const nestedPath = path.join(agentsDir, agentName, `${agentName}.yaml`);
-      try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(nestedPath));
-        return path.join(agentsDir, agentName);
-      } catch {
-        const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-        logger.error(CHANNEL, `${errorMsg} from ${agentsDir}`);
-        throw new Error(errorMsg);
-      }
+    // Use glob to find the yaml file recursively
+    const matches = await glob(`**/${agentName}.yaml`, {
+      cwd: basePath,
+      dot: false,
+      nodir: true,
+      absolute: false,
+    });
+
+    if (matches.length === 0) {
+      const errorMsg = `Could not find yaml file for agent: ${agentName}`;
+      logger.error(CHANNEL, `${errorMsg} from ${basePath}`);
+      throw new Error(errorMsg);
     }
+
+    // Return the directory containing the yaml file
+    return path.join(basePath, path.dirname(matches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     logger.error(CHANNEL, errorMsg);
@@ -73,12 +73,13 @@ async function getAgentClass(
   agent: string,
   context: vscode.ExtensionContext,
 ): Promise<AgentConstructor> {
-  const [settings] = await loadAgentSettingAndPrompts(
-    agentPath,
-    agent,
-    context,
-  );
-  return settings.agentType === 'direct' ? DirectAgent : CoTAgent;
+  const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
+
+  const agentTypeMapping: Record<string, AgentConstructor> = {
+    direct: DirectAgent,
+    CoT: CoTAgent,
+  };
+  return agentTypeMapping[settings.agentType] || DirectAgent;
 }
 
 /**
@@ -127,7 +128,6 @@ export async function executeAgent(
     const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
       agentPath,
       agentName,
-      context,
     );
 
     // Get appropriate agent class and create instance

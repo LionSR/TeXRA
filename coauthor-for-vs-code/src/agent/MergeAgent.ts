@@ -15,7 +15,8 @@ const CHANNEL = 'MergeAgent';
 logger.initializeLogging(CHANNEL);
 
 /**
- * Agent for merging multiple edited files into a single output.
+ * Specialized agent for merging multiple edited files into a consolidated output.
+ * Handles complex filename parsing and maintains file relationships during merging.
  */
 export class MergeAgent extends DirectAgent {
   constructor(
@@ -30,7 +31,10 @@ export class MergeAgent extends DirectAgent {
   }
 
   /**
-   * Parse filename parts to extract base name, agent, round number and model.
+   * Extracts components from edited filename for merge operations.
+   * @param editedBase Base name of edited file without extension
+   * @returns Tuple of [base name, agent name, round number, model name]
+   * @throws Error if filename components cannot be extracted
    */
   private parseFilenameParts(
     editedBase: string,
@@ -63,7 +67,10 @@ export class MergeAgent extends DirectAgent {
   }
 
   /**
-   * Generate output filename for merged content.
+   * Generates output filename for merged content based on input and edited files.
+   * @param currRound Current round number (unused in merge operations)
+   * @returns Path to output file for merged content
+   * @throws Error if editedFile is not specified
    */
   protected getOutputFile(currRound: number): string {
     const inputFile = this.agentConfig.inputFile;
@@ -91,10 +98,10 @@ export class MergeAgent extends DirectAgent {
   }
 
   /**
-   * Extract agent name from filename parts.
-   * Handles two formats:
-   * - Standard: base_agent_r1_model
-   * - Complex: MutualInfo_restructured_polish_r1_sonnet++
+   * Extracts agent name from filename parts handling multiple formats.
+   * @param parts Array of filename parts split by underscore
+   * @param underscoreCount Total number of underscores in filename
+   * @returns Agent name or null if not found
    */
   private extractAgentName(
     parts: string[],
@@ -118,7 +125,13 @@ export class MergeAgent extends DirectAgent {
   }
 
   /**
-   * Process and handle output files for the current round.
+   * Processes output files for merge operation.
+   * @param stateRound Current round state
+   * @param stateGlobal Global conversation state
+   * @param outputFile Path to the output file
+   * @param endTurn Whether this is the end of the current turn
+   * @param currRound Current round number (defaults to 0)
+   * @returns Array of processed output file paths
    */
   protected async handleOutput(
     stateRound: AgentStateRound,
