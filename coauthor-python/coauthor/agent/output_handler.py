@@ -42,14 +42,14 @@ def getOutputFileName(inputFile: str, agent: str, model: str, outputExt: str, cu
 class OutputHandler:
     """Handler for processing and managing output files."""
 
-    def __init__(self, agentSetting: AgentSetting, agentConfig: AgentConfig, modelHandler: Any, logId: int):
+    def __init__(self, agentSetting: AgentSetting, agentConfig: AgentConfig, modelHandler: Any, logId: int, baseFiles: list[str] | None = None):
         """Initialize output handler with settings and configuration."""
         self.agentSetting = agentSetting
         self.agentConfig = agentConfig
         self.modelHandler = modelHandler
         self.logId = logId
         self.outputFiles = {0: [], 1: []}  # Maps round number to output files
-        self.baseFiles = []  # Original input files
+        self.baseFiles = baseFiles if baseFiles is not None else []  # Original input files
 
     def _processXmlContent(self, content: str) -> str:
         """Process XML content by applying filters and replacements."""
@@ -147,7 +147,7 @@ class OutputHandler:
             root = ET.fromstring(rootContent)
             latex_documents = root.find(documentTag)
             if latex_documents:
-                return self._processLatexDocuments(latex_documents, outputFile)
+                return self._processMultipleLatexDocuments(latex_documents, outputFile)
 
             logger.error(f"No {documentTag} found in output file.")
             return []
@@ -155,7 +155,7 @@ class OutputHandler:
             logger.error(f"Failed to parse XML content: {str(e)}")
             return []
 
-    def _processLatexDocuments(self, latex_documents: ET.Element, outputFile: str) -> list[str]:
+    def _processMultipleLatexDocuments(self, latex_documents: ET.Element, outputFile: str) -> list[str]:
         """Process LaTeX documents and return processed file paths."""
         outputFiles = []
         output_parts = os.path.basename(outputFile).split("_")

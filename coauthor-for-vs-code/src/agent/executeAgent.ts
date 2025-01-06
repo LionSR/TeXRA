@@ -21,7 +21,7 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 
-const CHANNEL = 'ExecuteAgent';
+const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);
 
 type AgentConstructor = {
