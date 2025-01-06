@@ -75,7 +75,13 @@ class BaseReflectionAgent(ABC):
         self.userVars = self.get_userVars()
 
         # Initialize output handler
-        self.outputHandler = OutputHandler(self.agentSetting, self.agentConfig, self.modelHandler, self.logId)
+        self.outputHandler = OutputHandler(
+            self.agentSetting,
+            self.agentConfig,
+            self.modelHandler,
+            self.logId,
+            self.baseFiles,
+        )
 
         logger.info(f"Processing file: {self.agentConfig.inputFile}")
 
