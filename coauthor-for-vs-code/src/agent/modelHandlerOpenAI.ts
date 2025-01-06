@@ -45,7 +45,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const kwargs: any = {
       model: this.config.fullName,
       messages,
-      max_tokens: this.config.maxOutputTokens,
+      [this.config.name.toLowerCase().includes('o1')
+        ? 'max_completion_tokens'
+        : 'max_tokens']: this.config.maxOutputTokens,
       temperature: this.config.name.toLowerCase().includes('o1')
         ? 1.0
         : temperature,
