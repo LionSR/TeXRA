@@ -58,11 +58,26 @@ class BaseReflectionAgent(ABC):
         # Initialize basic attributes
         self.outputFile = ["", ""]
         self.outputFiles = {0: [], 1: []}
-        self.baseFiles = []
+        self.baseFiles = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
 
-        self.setup()
+        # Initialize client and check scratchpad usage
+        self.client = self.modelHandler.getClient()
+        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
+
+        # Set output files
+        self.outputFile[0] = self.getOutputFile(currRound=0)
+        self.outputFile[1] = self.getOutputFile(currRound=1)
+
+        # Initialize logging and database entry
+        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
+
+        # Initialize user variables
         self.userVars = self.get_userVars()
+
+        # Initialize output handler
         self.outputHandler = OutputHandler(self.agentSetting, self.agentConfig, self.modelHandler, self.logId)
+
+        logger.info(f"Processing file: {self.agentConfig.inputFile}")
 
     def get_userVars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
@@ -223,22 +238,6 @@ class BaseReflectionAgent(ABC):
             "PRINT_INPUT_PROMPT": self.agentConfig.toolConfig.printInputPrompt,
             "USE_OPENROUTER": self.agentConfig.toolConfig.useOpenRouter,
         }
-
-    def setup(self):
-        """Set up the agent for processing."""
-        # Initialize base files and logging
-        self.baseFiles = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
-        logger.info(f"Processing file: {self.agentConfig.inputFile}")
-
-        # Initialize client and check scratchpad usage
-        self.client = self.modelHandler.getClient()
-
-        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
-        self.outputFile[0] = self.getOutputFile(currRound=0)
-        self.outputFile[1] = self.getOutputFile(currRound=1)
-
-        # Initialize logging and database entry
-        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
 
     def handleOutput(
         self,
