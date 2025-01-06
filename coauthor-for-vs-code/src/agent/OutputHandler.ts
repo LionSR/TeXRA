@@ -73,13 +73,14 @@ export class OutputHandler {
     agentConfig: AgentConfig,
     modelHandler: any,
     logId: number,
+    baseFiles: string[] = [],
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
     this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
-    this.baseFiles = [];
+    this.baseFiles = baseFiles;
   }
 
   /** Processes XML content by filtering tags and applying replacements. */
@@ -247,7 +248,7 @@ export class OutputHandler {
 
       const documents = extractContentFromTagMultiple(root, documentTag);
       if (documents) {
-        return this.processLatexDocuments(documents, outputFile);
+        return this.processMultipleLatexDocuments(documents, outputFile);
       }
 
       return [];
@@ -261,7 +262,7 @@ export class OutputHandler {
   }
 
   /** Processes LaTeX documents into separate output files. */
-  async processLatexDocuments(
+  async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
   ): Promise<string[]> {
@@ -280,10 +281,10 @@ export class OutputHandler {
         const content = doc.content;
 
         if (source && content) {
-          const { name: baseName, ext } = path.parse(source);
+          const { ext } = path.parse(source);
           const extension = ext.replace('.', '') || 'tex';
           const texFile = getOutputFileName(
-            baseName,
+            source,
             agent,
             model,
             extension,
