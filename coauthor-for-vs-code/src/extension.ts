@@ -10,7 +10,7 @@ import * as logger from './logger/logUtils';
 
 // Local imports - components
 import { FolderExplorer } from './FolderExplorer';
-import { LogViewProvider } from './logView/LogViewProvider';
+import { LogViewProvider } from './logger/LogViewProvider';
 import { registerCommands } from './commands';
 
 async function copyDefaultAgents(context: vscode.ExtensionContext) {
@@ -77,7 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     // Add watcher for configuration changes
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('coauthor.explorer.rootPath')) {
+      if (e.affectsConfiguration('coauthor.explorer.agentsDirectory')) {
         folderExplorer.setupFileSystemWatcher();
         folderExplorer.refresh();
       }

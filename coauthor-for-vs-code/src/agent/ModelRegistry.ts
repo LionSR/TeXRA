@@ -1,5 +1,10 @@
 /**
- * Registry of available model configurations.
+ * Registry of available language model configurations with pricing and capabilities.
+ * Models are grouped by provider (Anthropic, OpenAI, Google) and include:
+ * - Model identifiers and versions
+ * - Context window and token limits
+ * - Pricing for input/output tokens
+ * - Provider-specific capabilities
  */
 
 // Local imports - agent components
@@ -11,7 +16,8 @@ import {
 } from './ModelConfig';
 
 /**
- * Available model configurations
+ * Available model configurations indexed by short name.
+ * Each configuration includes complete model settings and capabilities.
  */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Anthropic Claude Models =====

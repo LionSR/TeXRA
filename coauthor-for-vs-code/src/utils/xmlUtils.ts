@@ -81,33 +81,90 @@ export function filterTagsFromText(
 }
 
 /**
- * Extract content from XML document element
+ * Extract content from XML document element for single document case
  */
 export function extractContentFromTag(
-  root: any[],
+  root: Record<string, any>,
   documentTag: string,
 ): string | null {
   try {
-    logger.debug(
+    logger.error(
       CHANNEL,
-      `Extracting document content from root: ${JSON.stringify(root)}`,
+      `Extracting single document content from root: ${JSON.stringify(root)}`,
     );
-    // Find the object containing the documentTag
-    const docObj = root.find(
-      (item: { [key: string]: any }) => item[documentTag],
-    );
-    if (docObj && docObj[documentTag]) {
-      const content = docObj[documentTag][0]?.content;
-      if (content) {
+
+    if (!root || typeof root !== 'object') {
+      logger.error(CHANNEL, `Invalid root object`);
+      return null;
+    }
+
+    if (documentTag in root) {
+      const content = root[documentTag];
+      if (typeof content === 'string') {
         return content.trim();
       }
+      logger.error(CHANNEL, `Content is not a string in single document case`);
     }
+
     logger.error(CHANNEL, `No ${documentTag} found in output file`);
     return null;
   } catch (err) {
     logger.error(
       CHANNEL,
       `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    throw err;
+  }
+}
+
+/**
+ * Extract content from XML document element for multiple document case
+ */
+export function extractContentFromTagMultiple(
+  root: Record<string, any>,
+  documentTag: string,
+): Array<{ content: string; name: string }> | null {
+  try {
+    logger.error(
+      CHANNEL,
+      `Extracting multiple document content from root: ${JSON.stringify(root)}`,
+    );
+
+    if (!root || typeof root !== 'object') {
+      logger.error(CHANNEL, `Invalid root object`);
+      return null;
+    }
+
+    if (documentTag in root) {
+      const container = root[documentTag];
+      if (
+        container &&
+        typeof container === 'object' &&
+        'document' in container
+      ) {
+        const documents = container.document;
+        if (Array.isArray(documents)) {
+          return documents.map((doc) => ({
+            content: doc.content?.trim() || '',
+            name: doc.name,
+          }));
+        }
+        logger.error(
+          CHANNEL,
+          `Document property is not an array in multiple document case`,
+        );
+      }
+    }
+
+    logger.error(
+      CHANNEL,
+      `No ${documentTag} or document elements found in output file`,
+    );
+    return null;
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

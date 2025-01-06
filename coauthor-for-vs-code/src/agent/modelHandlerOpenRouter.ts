@@ -15,7 +15,7 @@ import { ToolState } from './ToolState';
  * Handler for models accessed through OpenRouter.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
-  /** Get OpenAI client with OpenRouter configuration. */
+  /** Returns OpenAI client configured with OpenRouter settings. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
@@ -29,7 +29,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     });
   }
 
-  /** Create a response using OpenRouter's API. */
+  /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
     client: OpenAI,
     messages: any[],
@@ -57,7 +57,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
  * Handler for Anthropic models using OpenAI-compatible API via OpenRouter.
  */
 export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
-  /** Get OpenAI client with Anthropic's base URL. */
+  /** Returns OpenAI client configured with Anthropic's base URL. */
   getClient(): OpenAI {
     return new OpenAI({
       apiKey: this.getApiKey(),
@@ -65,7 +65,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     });
   }
 
-  /** Update message content for Anthropic models via OpenRouter. */
+  /** Updates message content with support for Anthropic's assistant prefill. */
   updateMessageContent(
     messages: any[],
     bestConnector: string,

@@ -1,6 +1,4 @@
-/**
- * Configuration for tool usage and automation features
- */
+/** Configuration interface for controlling tool behavior and automation features. */
 export interface ToolConfig {
   usePrefillFromInput: boolean;
   autoExtractFigure: boolean;

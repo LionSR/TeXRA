@@ -23,7 +23,7 @@ const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
 /**
- * Base class for model-specific handlers.
+ * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
 export abstract class ModelHandler {
   public config: ModelConfig;
@@ -43,7 +43,8 @@ export abstract class ModelHandler {
   }
 
   /**
-   * Get API key based on provider and OpenRouter configuration.
+   * Retrieves API key from environment variables based on provider and OpenRouter configuration.
+   * @throws Error if required API key is missing from environment
    */
   public getApiKey(): string {
     if (this.config.useOpenRouter) {
@@ -63,7 +64,8 @@ export abstract class ModelHandler {
   }
 
   /**
-   * Get base URL based on provider and OpenRouter configuration.
+   * Retrieves base URL for API requests based on provider and OpenRouter configuration.
+   * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
     if (this.config.useOpenRouter) {
@@ -81,7 +83,7 @@ export abstract class ModelHandler {
     return BASE_URLS[this.config.provider];
   }
 
-  /** Check if this is using an OpenAI-compatible API. */
+  /** Checks if the model uses an OpenAI-compatible API format. */
   get isOpenaiCompatible(): boolean {
     return [
       ModelProvider.OPENAI,
@@ -90,29 +92,24 @@ export abstract class ModelHandler {
     ].includes(this.config.provider);
   }
 
-  /** Check if this is an Anthropic model. */
+  /** Checks if the model is from Anthropic provider. */
   get isAnthropic(): boolean {
     return this.config.provider === ModelProvider.ANTHROPIC;
   }
 
-  /** Check if this is an OpenAI model. */
+  /** Checks if the model is from OpenAI provider. */
   get isOpenai(): boolean {
     return this.config.provider === ModelProvider.OPENAI;
   }
 
-  /** Check if this is a Google model. */
+  /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
   /**
-   * Check if the conversation should stop and print debug info if stopping.
-   * @param stopReason The reason for stopping from the model response
-   * @param newResponse The new response text
-   * @param stateRound The current round state
-   * @param stateGlobal The global conversation state
-   * @param agentSetting The agent settings
-   * @returns Tuple of [endTurn: boolean, shouldStop: boolean]
+   * Evaluates conversation stop conditions based on model response and state.
+   * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
    */
   public checkStopConditions(
     stopReason: string,
@@ -165,10 +162,13 @@ export abstract class ModelHandler {
     return [endTurn, shouldStop];
   }
 
-  /** Get the appropriate client for this model. */
+  /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(): any;
 
-  /** Create a response using the model's API. */
+  /**
+   * Generates a model response using the provider's API.
+   * @returns Promise resolving to provider-specific response object
+   */
   abstract createResponse(
     client: any,
     messages: any[],
@@ -177,7 +177,10 @@ export abstract class ModelHandler {
     endTag?: string,
   ): Promise<any>;
 
-  /** Initialize messages for the conversation. */
+  /**
+   * Creates initial message array for conversation with optional images and system prompt.
+   * @returns Promise resolving to provider-specific message array
+   */
   abstract initializeMessages(
     userPrefix: string,
     userRequest: string,
@@ -185,24 +188,36 @@ export abstract class ModelHandler {
     systemPrompt?: string,
   ): Promise<any[]>;
 
-  /** Create a reflection message. */
+  /**
+   * Creates reflection messages for multi-turn conversations with optional images.
+   * @returns Provider-specific message array with reflection content
+   */
   abstract createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
   ): any[];
 
-  /** Create image content for the model. */
+  /**
+   * Formats image content into provider-specific message format.
+   * @returns Array of formatted image/document content objects
+   */
   abstract createImageContent(imageContents: any[]): any[];
 
-  /** Extract response text and usage statistics. */
+  /**
+   * Processes model response, handling errors and formatting.
+   * @returns Tuple of [formatted response text, usage statistics, stop reason]
+   */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
     autoConfirmation?: boolean,
   ): [string, any, string];
 
-  /** Handle continuation for truncated responses. */
+  /**
+   * Manages continuation for truncated responses in multi-turn conversations.
+   * Updates messages array and tool state for next turn.
+   */
   abstract addContinueMessage(
     messages: any[],
     stateRound: AgentStateRound,
@@ -211,7 +226,10 @@ export abstract class ModelHandler {
     agentConfig: AgentConfig,
   ): void;
 
-  /** Initialize output and handle prefill. */
+  /**
+   * Sets up output file and handles content prefilling.
+   * @returns Promise resolving to [isComplete: generation complete, messages: updated message array]
+   */
   abstract initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
@@ -221,13 +239,22 @@ export abstract class ModelHandler {
     prefill: string,
   ): Promise<[boolean, any[]]>;
 
-  /** Compute the price for token usage. */
+  /**
+   * Calculates API usage cost based on token counts and provider pricing.
+   * @returns Total cost in provider's currency units
+   */
   abstract computePrice(responseUsage: any): number;
 
-  /** Compute model-specific response usage. */
+  /**
+   * Computes detailed usage metrics from model response.
+   * @returns Provider-specific response usage object
+   */
   abstract computeResponseUsage(responseUsage: any, responseTime: number): any;
 
-  /** Update message content. */
+  /**
+   * Updates conversation message content with new responses.
+   * Handles cache control and content formatting.
+   */
   abstract updateMessageContent(
     messages: any[],
     bestConnector: string,
@@ -236,7 +263,10 @@ export abstract class ModelHandler {
     autoConfirmation?: boolean,
   ): void;
 
-  /** Determine if the model should continue generating based on stop reason and response. */
+  /**
+   * Determines if model should continue generating based on response state.
+   * @returns Boolean indicating if generation should continue
+   */
   abstract shouldContinue(
     stopReason: string,
     newResponse: string,

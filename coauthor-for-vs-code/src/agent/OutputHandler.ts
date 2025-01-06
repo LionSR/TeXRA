@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import { XMLParser, XMLBuilder } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -19,6 +19,7 @@ import {
   addCdataToTagsMultiple,
   extractContentFromTag,
   extractTextFromTag,
+  extractContentFromTagMultiple,
 } from '../utils/xmlUtils';
 import {
   runLatexdiff,
@@ -33,6 +34,7 @@ import { AgentSetting } from './AgentDataclass';
 const CHANNEL = 'Agent';
 logger.initializeLogging(CHANNEL);
 
+/** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
   inputFile: string,
   agent: string,
@@ -57,6 +59,7 @@ export function getOutputFileName(
   return outputFile;
 }
 
+/** Handles output file processing and validation for agent responses. */
 export class OutputHandler {
   public agentSetting: AgentSetting;
   public agentConfig: AgentConfig;
@@ -79,6 +82,7 @@ export class OutputHandler {
     this.baseFiles = [];
   }
 
+  /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
     content = filterTagsFromText(content, 'monologue');
     content = applyReplacements(
@@ -92,6 +96,7 @@ export class OutputHandler {
     return content;
   }
 
+  /** Runs latexdiff on single output file. */
   public async handleSingleOutput(outputFile: string): Promise<void> {
     if (
       this.agentConfig.inputFile.includes('.tex') &&
@@ -101,6 +106,7 @@ export class OutputHandler {
     }
   }
 
+  /** Runs latexdiff on multiple output files. */
   public async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
     logger.debug(
       CHANNEL,
@@ -124,6 +130,7 @@ export class OutputHandler {
     }
   }
 
+  /** Processes single output file with XML splitting and filtering. */
   public async processSingleOutput(outputFile: string): Promise<string> {
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
@@ -135,6 +142,7 @@ export class OutputHandler {
     return processedOutputFile;
   }
 
+  /** Processes multiple output files with XML splitting and filtering. */
   public async processMultipleOutputs(outputFile: string): Promise<string[]> {
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
@@ -148,6 +156,7 @@ export class OutputHandler {
     return processedOutputFiles;
   }
 
+  /** Extracts and logs scratchpad content from output. */
   private async extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
@@ -158,6 +167,10 @@ export class OutputHandler {
     }
   }
 
+  /**
+   * Splits XML output into separate files for document and scratchpad content.
+   * Handles CDATA wrapping and XML parsing.
+   */
   async splitScratchpadOutputXml(
     outputFile: string,
     documentTag: string,
@@ -201,6 +214,10 @@ export class OutputHandler {
     return texFile;
   }
 
+  /**
+   * Splits XML output containing multiple documents into separate files.
+   * Handles CDATA wrapping and XML parsing for each document.
+   */
   async splitScratchpadMultipleOutputXml(
     outputFile: string,
     documentTag: string,
@@ -228,15 +245,11 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      // Find the object containing the documentTag
-      const docObj = root.find(
-        (item: { [key: string]: any }) => item[documentTag],
-      );
-      if (docObj && docObj[documentTag] && Array.isArray(docObj[documentTag])) {
-        return this.processLatexDocuments(docObj[documentTag], outputFile);
+      const documents = extractContentFromTagMultiple(root, documentTag);
+      if (documents) {
+        return this.processLatexDocuments(documents, outputFile);
       }
 
-      logger.error(CHANNEL, `No ${documentTag} found in output file.`);
       return [];
     } catch (err) {
       logger.error(
@@ -247,8 +260,9 @@ export class OutputHandler {
     }
   }
 
+  /** Processes LaTeX documents into separate output files. */
   async processLatexDocuments(
-    latexDocuments: any[],
+    latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
   ): Promise<string[]> {
     const outputFiles: string[] = [];
@@ -260,14 +274,14 @@ export class OutputHandler {
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
-      if (doc['@_name']) {
-        const source = doc['@_name'];
+      if (doc.name) {
+        const source = doc.name;
         logger.debug(CHANNEL, `XML Source: ${source}`);
         const content = doc.content;
 
         if (source && content) {
           const { name: baseName, ext } = path.parse(source);
-          const extension = ext.replace('.', '');
+          const extension = ext.replace('.', '') || 'tex';
           const texFile = getOutputFileName(
             baseName,
             agent,
@@ -287,6 +301,7 @@ export class OutputHandler {
     return outputFiles;
   }
 
+  /** Validates and fixes XML structure in output file. */
   async ensureCorrectXmlStructure(
     filePath: string,
     documentTag: string,
@@ -321,6 +336,10 @@ export class OutputHandler {
     await writeFile(filePath, content);
   }
 
+  /**
+   * Runs latexdiff comparisons for current round.
+   * Generates diffs between base files and current round, and between consecutive rounds.
+   */
   public async handleLatexdiff(currRound: number): Promise<void> {
     logger.info(
       CHANNEL,
@@ -349,6 +368,7 @@ export class OutputHandler {
     }
   }
 
+  /** Updates \input commands in output files to reference new file paths. */
   public async replaceInputCommands(
     baseFiles: string[],
     outputFiles: string[],
