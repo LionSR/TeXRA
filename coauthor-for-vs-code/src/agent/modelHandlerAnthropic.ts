@@ -30,7 +30,7 @@ import {
 import { ToolState } from './ToolState';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.

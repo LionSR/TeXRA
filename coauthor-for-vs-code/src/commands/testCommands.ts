@@ -7,8 +7,8 @@ import * as logger from '../logger/logUtils';
 // Local imports
 import { handleTestConnection } from './tests/connectionTests';
 
-const CHANNEL = 'TestCommands';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerTestCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

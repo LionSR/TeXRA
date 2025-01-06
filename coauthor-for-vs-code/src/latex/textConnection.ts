@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export interface ConnectionResult {
   connector: string;

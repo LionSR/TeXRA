@@ -14,8 +14,8 @@ import { getTexCount } from '../latex/texcount';
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
 
-const CHANNEL = 'LaTeXCommands';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerLatexCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

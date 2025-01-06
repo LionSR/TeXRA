@@ -83,7 +83,7 @@ export function setLogViewProvider(provider: LogViewProvider) {
   }
 }
 
-export function initializeLogging(
+export function initialize(
   defaultChannel: string,
   useColors: boolean = false,
 ): void {

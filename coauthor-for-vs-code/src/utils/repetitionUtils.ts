@@ -9,7 +9,7 @@ import * as difflib from 'difflib';
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Repetition';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export interface RepetitionResult {
   massiveRepetitionDetected: boolean;

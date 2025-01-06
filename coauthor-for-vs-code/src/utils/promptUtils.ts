@@ -12,7 +12,7 @@ import { readFile, writeFile } from './fileUtils';
 import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Get XML formatted string from a single file

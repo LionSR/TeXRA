@@ -21,7 +21,7 @@ import { ToolState } from './ToolState';
 const K_SLICE = 200;
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * OpenAI-specific handlers.

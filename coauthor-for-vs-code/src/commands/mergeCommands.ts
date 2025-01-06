@@ -1,13 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
-import { debug } from '../logger/logUtils';
+// Local imports - log
+import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'MergeCommands';
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

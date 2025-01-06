@@ -22,7 +22,8 @@ import { PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR } from './constants';
 import { getAgentFirstNameChunk, getFilePatterns } from './utils';
 
 const CHANNEL = 'Housekeeping';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
+
 export async function runPackSingle(
   model: string,
   inputFile: string,

@@ -48,7 +48,7 @@ import { OutputHandler } from './OutputHandler';
 const K_SLICE = 200;
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
