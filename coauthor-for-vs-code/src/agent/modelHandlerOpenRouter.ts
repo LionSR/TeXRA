@@ -11,6 +11,9 @@ import * as logger from '../logger/logUtils';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
 
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
+
 /**
  * Handler for models accessed through OpenRouter.
  */
