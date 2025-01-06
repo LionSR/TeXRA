@@ -1,6 +1,4 @@
-/**
- * Default settings for agent configuration
- */
+/** Base configuration for agent behavior with default values. */
 export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   agentType: 'CoT',
   documentTag: 'document',
@@ -14,9 +12,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   filePatternsContain: [],
 };
 
-/**
- * Default prompts for agent configuration
- */
+/** Default prompt templates for agent interactions. */
 export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
   systemPrompt: '',
   userPrefix: '',
@@ -24,9 +20,7 @@ export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
   userReflect: '',
 };
 
-/**
- * Configuration for agent behavior and generation settings
- */
+/** Configuration interface defining agent behavior and generation parameters. */
 export interface AgentSetting {
   /** Core settings */
   agentType: 'CoT' | 'direct';
@@ -46,8 +40,8 @@ export interface AgentSetting {
 }
 
 /**
- * Validates agent settings
- * @throws Error if settings are invalid
+ * Validates agent settings for correctness and completeness.
+ * @throws Error if agentType is invalid, temperature is out of range, or documentTag is empty
  */
 export function validateAgentSetting(settings: AgentSetting): void {
   if (settings.agentType !== 'CoT' && settings.agentType !== 'direct') {
@@ -71,7 +65,8 @@ export function validateAgentSetting(settings: AgentSetting): void {
 }
 
 /**
- * Checks if file content contains the end tag or document tag
+ * Checks if content contains a valid end marker.
+ * @returns True if content contains endTag, document closing tag, or LaTeX document end
  */
 export function hasEndTag(
   settings: AgentSetting,

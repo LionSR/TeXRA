@@ -26,8 +26,24 @@ load_dotenv()
 def getAgent_dir_from_env() -> str:
     """Get the agent directory path from environment or default location."""
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/agents")
+    agents_dir = os.getenv("AGENTS_DIR", f"{script_dir}/../agents")
     return agents_dir
+
+
+def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
+    """Return agent name with '_multiple' suffix if output files exist."""
+    return f"{base_agent}_multiple" if outputFiles else base_agent
+
+
+def getAgentPath(agentName: str) -> str:
+    """Find and return the path to agent's yaml configuration file."""
+    agents_dir = Path(getAgent_dir_from_env())
+    if yaml_path := next((p for p in agents_dir.rglob(f"{agentName}.yaml")), None):
+        return str(yaml_path.parent)
+
+    error_msg = f"Could not find yaml file for agent: {agentName}"
+    logger.error(f"{error_msg} from {agents_dir}")
+    raise ValueError(error_msg)
 
 
 def createAgentConfig(**kwargs: Any) -> AgentConfig:
@@ -52,22 +68,6 @@ def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
     """Return DirectAgent or CoTAgent agent class based on yaml settings."""
     settingDict, _ = load_agent_settings_and_prompts(agentPath, agent)
     return DirectAgent if settingDict.get("agentType") == "direct" else CoTAgent
-
-
-def getAgentName(base_agent: str, outputFiles: list[str] | None = None) -> str:
-    """Return agent name with '_multiple' suffix if output files exist."""
-    return f"{base_agent}_multiple" if outputFiles else base_agent
-
-
-def getAgentPath(agentName: str) -> str:
-    """Find and return the path to agent's yaml configuration file."""
-    agents_dir = Path(getAgent_dir_from_env())
-    if yaml_path := next((p for p in agents_dir.rglob(f"{agentName}.yaml")), None):
-        return str(yaml_path.parent)
-
-    error_msg = f"Could not find yaml file for agent: {agentName}"
-    logger.error(f"{error_msg} from {agents_dir}")
-    raise ValueError(error_msg)
 
 
 def run_agent(agent: str, **kwargs: Any) -> None:
