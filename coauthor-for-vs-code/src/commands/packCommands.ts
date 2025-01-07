@@ -15,7 +15,8 @@ import {
   runIndentTex,
 } from '../housekeeping';
 
-const CHANNEL = 'PackCommands';
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -63,7 +64,7 @@ async function handlePackMultiple(
   inputFile: string,
   agent: string,
   model: string,
-  outputFiles: string[],
+  outputFiles: string[] = [],
   outputNameOverride?: string,
 ) {
   logger.debug(
@@ -96,7 +97,7 @@ async function handleCleanSingle(
   inputFile: string,
   agent: string,
   model: string,
-  outputNameOverride: string,
+  outputNameOverride: string = '',
 ) {
   logger.debug(
     CHANNEL,
@@ -113,18 +114,14 @@ async function handleCleanSingle(
     );
     return;
   }
-  if (outputNameOverride) {
-    await runCleanSingle(model, outputNameOverride, agent);
-  } else {
-    await runCleanSingle(model, inputFile, agent);
-  }
+  await runCleanSingle(model, outputNameOverride || inputFile, agent);
 }
 
 async function handleCleanMultiple(
   inputFile: string,
   agent: string,
   model: string,
-  outputFiles: string[],
+  outputFiles: string[] = [],
   outputNameOverride?: string,
 ) {
   logger.debug(

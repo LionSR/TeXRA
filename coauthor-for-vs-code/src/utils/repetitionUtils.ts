@@ -8,8 +8,8 @@ import * as difflib from 'difflib';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'Repetition';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Utils';
+logger.initialize(CHANNEL);
 
 export interface RepetitionResult {
   massiveRepetitionDetected: boolean;

@@ -366,8 +366,8 @@ export class WebviewMessageHandler {
       message.inputFile,
       message.agent,
       message.model,
-      message.outputNameOverride,
       message.outputFiles,
+      message.outputNameOverride,
     );
   }
 

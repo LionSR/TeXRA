@@ -6,7 +6,7 @@ import Transport from 'winston-transport';
 // Local imports - logView
 import { LogViewProvider } from './LogViewProvider';
 
-const { combine, timestamp, printf, json } = winston.format;
+const { combine, timestamp } = winston.format;
 
 // Define log levels
 const logLevels = {
@@ -23,18 +23,16 @@ const emojis = {
   info: '🟢',
 };
 
-// Create custom format
-const customFormat = printf(({ level, message, timestamp }) => {
-  const emoji = emojis[level as keyof typeof emojis];
-  const upperLevel = level.toUpperCase().padEnd(8);
-  return `${emoji} [${timestamp}] ${upperLevel} ${message}`;
-});
-
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
   private logViewProvider?: LogViewProvider;
   private streamName: string;
+  private messageBuffer: {
+    level: string;
+    message: string;
+    timestamp: string;
+  }[] = [];
 
   constructor(
     channel: vscode.OutputChannel,
@@ -51,52 +49,76 @@ class VSCodeTransport extends Transport {
   log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
+    // Plain format for output channel
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
 
-    // Always write to output channel
+    // Colored format for LogView using CSS classes
+    const coloredFormattedMessage =
+      `<div class="log-line">` +
+      `<span class="timestamp">${emoji} [${timestamp}]</span> ` +
+      `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
+      `<span class="message-${level}">${message}</span>` +
+      `</div>`;
+
+    // Always write to output channel (plain text)
     this.channel.appendLine(formattedMessage);
 
-    // Write to LogView
+    // Write to LogView if available (with colors)
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
-        formattedMessage,
+        coloredFormattedMessage,
         level as 'error' | 'warn' | 'info' | 'debug',
       );
+    } else {
+      // Buffer the message if LogViewProvider is not available
+      this.messageBuffer.push({
+        level,
+        message: coloredFormattedMessage,
+        timestamp,
+      });
     }
 
     callback();
+  }
+
+  // Method to replay buffered messages when LogViewProvider becomes available
+  replayBufferedMessages(logViewProvider: LogViewProvider) {
+    this.logViewProvider = logViewProvider;
+    for (const msg of this.messageBuffer) {
+      this.logViewProvider.addLogMessage(
+        this.streamName,
+        msg.message,
+        msg.level as 'error' | 'warn' | 'info' | 'debug',
+      );
+    }
+    this.messageBuffer = []; // Clear buffer after replay
   }
 }
 
 // Map to store loggers for different categories
 const channelLoggers = new Map<string, winston.Logger>();
+const channelTransports = new Map<string, VSCodeTransport>();
 
 let globalLogViewProvider: LogViewProvider | undefined;
 
 export function setLogViewProvider(provider: LogViewProvider) {
   globalLogViewProvider = provider;
-  // Recreate all existing loggers with the new provider
-  for (const [channel, logger] of channelLoggers.entries()) {
-    const newLogger = createLoggerForChannel(channel, false);
-    channelLoggers.set(channel, newLogger);
+
+  // Replay buffered messages for all existing transports
+  for (const transport of channelTransports.values()) {
+    transport.replayBufferedMessages(provider);
   }
 }
 
-export function initializeLogging(
-  defaultChannel: string,
-  useColors: boolean = false,
-): void {
+export function initialize(defaultChannel: string): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel, useColors);
+    createLoggerForChannel(defaultChannel);
   }
 }
 
-function createLoggerForChannel(
-  channel: string,
-  useColors: boolean = false,
-): winston.Logger {
+function createLoggerForChannel(channel: string): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
     return channelLoggers.get(channel)!;
@@ -106,6 +128,14 @@ function createLoggerForChannel(
   const channelName = 'CoAuthor: ' + channel;
   const outputChannel = vscode.window.createOutputChannel(channelName);
 
+  // Create transport
+  const transport = new VSCodeTransport(
+    outputChannel,
+    channel,
+    globalLogViewProvider,
+  );
+  channelTransports.set(channel, transport);
+
   const logger = winston.createLogger({
     levels: logLevels,
     level: 'debug',
@@ -114,9 +144,7 @@ function createLoggerForChannel(
         format: 'YYYY-MM-DD HH:mm:ss',
       }),
     ),
-    transports: [
-      new VSCodeTransport(outputChannel, channel, globalLogViewProvider),
-    ],
+    transports: [transport],
   });
 
   channelLoggers.set(channel, logger);
