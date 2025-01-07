@@ -634,9 +634,6 @@ export abstract class BaseReflectionAgent {
     // }
     // updateLogOutputFiles(this.logId, outputFile, this.outputHandler.outputFiles[currRound]);
 
-    // Process output files
-    await this.processOutputFiles(outputFile, currRound);
-
     return this.outputHandler.outputFiles[currRound] || [];
   }
 
@@ -656,8 +653,7 @@ export abstract class BaseReflectionAgent {
 
     // Handle tex count if enabled
     if (this.agentConfig.toolConfig.includeTexCount) {
-      // TODO: Implement texcount functionality
-      // toolState.texcountStats = await getTexCountStats(inputFiles);
+      toolState.texcountStats = await getTexCountStats(inputFiles);
     }
 
     // Handle prefill from input if enabled
