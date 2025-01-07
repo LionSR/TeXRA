@@ -34,7 +34,7 @@ export class LogViewContentProvider {
       const scriptUri = webview.asWebviewUri(scriptPath);
 
       // Replace placeholders in HTML with actual content
-      logger.debug(CHANNEL, 'Generated HTML content for log view');
+      logger.debug(CHANNEL, 'Generated HTML content for LogView');
       return htmlContent
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())

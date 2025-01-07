@@ -66,6 +66,9 @@ window.addEventListener('message', (event) => {
         logContent.scrollTop = logContent.scrollHeight;
       }
       break;
+    case 'clearLogs':
+      logContent.innerHTML = '';
+      break;
     case 'appendLog':
       if (message.stream === currentStream) {
         const formattedLog = formatLogEntry(message.logMessage);
