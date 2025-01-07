@@ -23,10 +23,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    logger.info(
-      'ModelHandlerGoogle',
-      `Using Google API key. Base URL: ${baseUrl}`,
-    );
+    logger.info(CHANNEL, `Using Google API key. Base URL: ${baseUrl}`);
     return new OpenAI({
       apiKey,
       baseURL: baseUrl,
@@ -78,7 +75,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     agentSetting: any,
   ): boolean {
     logger.info(
-      'ModelHandlerGoogle',
+      CHANNEL,
       'Determining if should continue for Google model via OpenAI API',
     );
     return !hasEndTag(agentSetting, newResponse);
