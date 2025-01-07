@@ -1,11 +1,26 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-// Local imports - utilities
-import { readFile } from './fileUtils';
-
 const CHANNEL = 'Utils';
 logger.initialize(CHANNEL);
+
+/**
+ * Get a string representation of an object's structure without its values
+ */
+function getObjectStructure(obj: any): string {
+  if (Array.isArray(obj)) {
+    return `Array(${obj.length})`;
+  }
+  if (obj && typeof obj === 'object') {
+    const keys = Object.keys(obj);
+    const structure = keys.map((key) => {
+      const value = obj[key];
+      return `${key}: ${getObjectStructure(value)}`;
+    });
+    return `{${structure.join(', ')}}`;
+  }
+  return typeof obj;
+}
 
 /**
  * Wrap content of specified tags with CDATA sections
@@ -88,13 +103,11 @@ export function extractContentFromTag(
   documentTag: string,
 ): string | null {
   try {
-    logger.error(
-      CHANNEL,
-      `Extracting single document content from root: ${JSON.stringify(root)}`,
-    );
-
     if (!root || typeof root !== 'object') {
-      logger.error(CHANNEL, `Invalid root object`);
+      logger.error(
+        CHANNEL,
+        `Invalid root object. Structure: ${getObjectStructure(root)}`,
+      );
       return null;
     }
 
@@ -103,15 +116,21 @@ export function extractContentFromTag(
       if (typeof content === 'string') {
         return content.trim();
       }
-      logger.error(CHANNEL, `Content is not a string in single document case`);
+      logger.error(
+        CHANNEL,
+        `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
+      );
     }
 
-    logger.error(CHANNEL, `No ${documentTag} found in output file`);
+    logger.error(
+      CHANNEL,
+      `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
+    );
     return null;
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}`,
+      `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
     );
     throw err;
   }
@@ -125,13 +144,11 @@ export function extractContentFromTagMultiple(
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
-    logger.error(
-      CHANNEL,
-      `Extracting multiple document content from root: ${JSON.stringify(root)}`,
-    );
-
     if (!root || typeof root !== 'object') {
-      logger.error(CHANNEL, `Invalid root object`);
+      logger.error(
+        CHANNEL,
+        `Invalid root object. Structure: ${getObjectStructure(root)}`,
+      );
       return null;
     }
 
@@ -151,20 +168,20 @@ export function extractContentFromTagMultiple(
         }
         logger.error(
           CHANNEL,
-          `Document property is not an array in multiple document case`,
+          `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
         );
       }
     }
 
     logger.error(
       CHANNEL,
-      `No ${documentTag} or document elements found in output file`,
+      `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
     );
     return null;
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}`,
+      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
     );
     throw err;
   }
