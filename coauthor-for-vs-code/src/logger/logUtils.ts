@@ -6,7 +6,7 @@ import Transport from 'winston-transport';
 // Local imports - logView
 import { LogViewProvider } from './LogViewProvider';
 
-const { combine, timestamp, printf, json } = winston.format;
+const { combine, timestamp } = winston.format;
 
 // Define log levels
 const logLevels = {
