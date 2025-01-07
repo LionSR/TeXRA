@@ -49,21 +49,34 @@ class VSCodeTransport extends Transport {
   log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
+    // Plain format for output channel
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
 
-    // Always write to output channel
+    // Colored format for LogView using CSS classes
+    const coloredFormattedMessage =
+      `<div class="log-line">` +
+      `<span class="timestamp">${emoji} [${timestamp}]</span> ` +
+      `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
+      `<span class="message-${level}">${message}</span>` +
+      `</div>`;
+
+    // Always write to output channel (plain text)
     this.channel.appendLine(formattedMessage);
 
-    // Write to LogView if available
+    // Write to LogView if available (with colors)
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
-        formattedMessage,
+        coloredFormattedMessage,
         level as 'error' | 'warn' | 'info' | 'debug',
       );
     } else {
       // Buffer the message if LogViewProvider is not available
-      this.messageBuffer.push({ level, message: formattedMessage, timestamp });
+      this.messageBuffer.push({
+        level,
+        message: coloredFormattedMessage,
+        timestamp,
+      });
     }
 
     callback();

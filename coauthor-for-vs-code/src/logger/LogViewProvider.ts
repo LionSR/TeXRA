@@ -239,8 +239,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             margin: 0;
             display: flex;
             height: 100vh;
-            font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
             background-color: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
           }
@@ -353,9 +353,47 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             white-space: pre-wrap;
             word-wrap: break-word;
             word-break: break-all;
-            line-height: 1.2;
+            line-height: 1.4;
             margin: 0;
-            padding: 0;
+            padding: 1px 0;
+            display: block;
+          }
+
+          /* Timestamp color */
+          .timestamp {
+            color: var(--vscode-descriptionForeground);
+          }
+
+          /* Level colors */
+          .level-debug {
+            color: var(--vscode-debugIcon-startForeground, #0087ff);
+            font-weight: bold;
+          }
+          .level-info {
+            color: var(--vscode-notificationsInfoIcon-foreground, #00af00);
+            font-weight: bold;
+          }
+          .level-warn {
+            color: var(--vscode-editorWarning-foreground, #ffaf00);
+            font-weight: bold;
+          }
+          .level-error {
+            color: var(--vscode-editorError-foreground, #ff0000);
+            font-weight: bold;
+          }
+
+          /* Message colors */
+          .message-debug {
+            color: var(--vscode-debugIcon-startForeground, #00ffff);
+          }
+          .message-info {
+            color: var(--vscode-foreground, #ffffff);
+          }
+          .message-warn {
+            color: var(--vscode-editorWarning-foreground, #ffaf00);
+          }
+          .message-error {
+            color: var(--vscode-editorError-foreground, #ff0000);
           }
 
           .log-header {
@@ -374,10 +412,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             gap: 4px;
           }
 
-          .debug { color: var(--vscode-debugIcon-startForeground, #0087ff); }
-          .info { color: var(--vscode-notificationsInfoIcon-foreground, #00af00); }
-          .warn { color: var(--vscode-editorWarning-foreground, #ffaf00); }
-          .error { color: var(--vscode-editorError-foreground, #ff0000); }
+          .debug, .info, .warn, .error {
+            color: inherit;
+          }
         </style>
       </head>
       <body>
@@ -419,7 +456,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           let currentStream = '${currentStream}';
 
           function formatLogEntry(logMessage) {
-            return \`<div class="log-line \${logMessage.level}">\${logMessage.message}</div>\`;
+            return logMessage.message;
           }
 
           // Add event listeners after DOM is loaded
@@ -460,7 +497,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             switch (message.command) {
               case 'updateLogs':
                 if (message.stream === currentStream) {
-                  logContent.innerHTML = message.messages.map(formatLogEntry).join('\\n');
+                  logContent.innerHTML = message.messages.map(formatLogEntry).join('');
                   logContent.scrollTop = logContent.scrollHeight;
                 }
                 break;
@@ -468,7 +505,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
                 if (message.stream === currentStream) {
                   const formattedLog = formatLogEntry(message.logMessage);
                   if (logContent.innerHTML) {
-                    logContent.innerHTML += '\\n' + formattedLog;
+                    logContent.innerHTML += formattedLog;
                   } else {
                     logContent.innerHTML = formattedLog;
                   }
