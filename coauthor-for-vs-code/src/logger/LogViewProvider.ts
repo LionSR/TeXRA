@@ -342,10 +342,20 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
             flex: 1;
             overflow-y: auto;
             padding: 2px 4px;
-            white-space: pre;
             min-width: 0;
             min-height: 0;
             background-color: var(--vscode-editor-background);
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
+          }
+
+          .log-line {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            word-break: break-all;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
           }
 
           .log-header {
@@ -409,7 +419,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           let currentStream = '${currentStream}';
 
           function formatLogEntry(logMessage) {
-            return \`<span class="\${logMessage.level}">\${logMessage.message}</span>\`;
+            return \`<div class="log-line \${logMessage.level}">\${logMessage.message}</div>\`;
           }
 
           // Add event listeners after DOM is loaded
