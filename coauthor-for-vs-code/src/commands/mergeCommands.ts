@@ -15,8 +15,10 @@ logger.initialize(CHANNEL);
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.merge', (inputFile: string, baseFile: string, editedFile: string) => 
-      handleMerge(context, inputFile, baseFile, editedFile)
+    vscode.commands.registerCommand(
+      'coauthor.merge',
+      (inputFile: string, baseFile: string, editedFile: string) =>
+        handleMerge(context, inputFile, baseFile, editedFile),
     ),
   );
 }
@@ -28,7 +30,8 @@ async function handleMerge(
   editedFile: string,
 ) {
   if (!editedFile || (!baseFile && !inputFile)) {
-    const errorMsg = 'Both input file and edited file must be specified for merge operation';
+    const errorMsg =
+      'Both input file and edited file must be specified for merge operation';
     vscode.window.showErrorMessage(errorMsg);
     return;
   }
@@ -44,7 +47,7 @@ async function handleMerge(
       CHANNEL,
       `Direct execution failed, falling back to terminal: ${error}`,
     );
-    
+
     const terminalName = `Merge@${model}`;
     const terminalNew = vscode.window.createTerminal(terminalName);
     terminalNew.show();

@@ -935,14 +935,20 @@ export abstract class BaseReflectionAgent {
       await this.process();
 
     logger.info(CHANNEL, `Round 0 completed\n`);
-    logger.info(CHANNEL, `------------------------------------------------------------`);
+    logger.info(
+      CHANNEL,
+      `------------------------------------------------------------`,
+    );
 
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
       logger.info(CHANNEL, 'Round 1 completed\n');
-      logger.info(CHANNEL, `------------------------------------------------------------`);
+      logger.info(
+        CHANNEL,
+        `------------------------------------------------------------`,
+      );
     }
   }
 
