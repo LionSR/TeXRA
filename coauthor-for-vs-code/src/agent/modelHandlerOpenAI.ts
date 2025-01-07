@@ -21,7 +21,7 @@ import { ToolState } from './ToolState';
 const K_SLICE = 200;
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * OpenAI-specific handlers.
@@ -45,7 +45,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const kwargs: any = {
       model: this.config.fullName,
       messages,
-      max_tokens: this.config.maxOutputTokens,
+      [this.config.name.toLowerCase().includes('o1')
+        ? 'max_completion_tokens'
+        : 'max_tokens']: this.config.maxOutputTokens,
       temperature: this.config.name.toLowerCase().includes('o1')
         ? 1.0
         : temperature,
@@ -204,60 +206,57 @@ export class ModelHandlerOpenAI extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    try {
-      const fileContent = await readFile(outputFile);
-
-      if (!fileContent || fileContent.length <= 15) {
-        if (
-          agentConfig.toolConfig.usePrefillFromInput &&
-          toolState.firstKCharsFromInput
-        ) {
-          prefill += toolState.firstKCharsFromInput;
-          toolState.updateAccumulatedOutput('');
-          prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
-        }
-
-        messages[messages.length - 1].content.push({
-          type: 'text',
-          text: `Start your response with\n${prefill}`,
-        });
-        return [false, messages];
+    if (
+      !(await fileExists(outputFile)) ||
+      (await readFile(outputFile)).length <= 15
+    ) {
+      if (
+        agentConfig.toolConfig.usePrefillFromInput &&
+        toolState.firstKCharsFromInput
+      ) {
+        prefill += toolState.firstKCharsFromInput;
+        toolState.updateAccumulatedOutput('');
+        prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
       }
 
-      messages.push({ role: 'assistant', content: fileContent });
-
-      if (hasEndTag(agentSetting, fileContent)) {
-        logger.debug(CHANNEL, 'End tag detected - skipping continuation');
-        if (Array.isArray(messages[messages.length - 1].content)) {
-          messages[messages.length - 1].content[
-            messages[messages.length - 1].content.length - 1
-          ].text = fileContent;
-        } else {
-          messages[messages.length - 1].content = fileContent;
-        }
-        return [true, messages];
-      }
-
-      logger.warn(
-        CHANNEL,
-        'Output file exists but no end tag found - continuing from file',
-      );
-      toolState.updateAccumulatedOutput(fileContent);
-      const state = AgentStateRound.initialize(0);
-      toolState.lastResponse = toolState.accumulatedOutput;
-      this.addContinueMessage(
-        messages,
-        state,
-        toolState,
-        agentSetting,
-        agentConfig,
-      );
-
-      return [false, messages];
-    } catch (error) {
-      logger.error(CHANNEL, `Error reading file: ${error}`);
+      messages[messages.length - 1].content.push({
+        type: 'text',
+        text: `Start your response with\n${prefill}`,
+      });
       return [false, messages];
     }
+
+    const fileContent = await readFile(outputFile);
+    messages.push({ role: 'assistant', content: fileContent });
+
+    if (hasEndTag(agentSetting, fileContent)) {
+      logger.debug(CHANNEL, 'End tag detected - skipping continuation');
+      if (Array.isArray(messages[messages.length - 1].content)) {
+        messages[messages.length - 1].content[
+          messages[messages.length - 1].content.length - 1
+        ].text = fileContent;
+      } else {
+        messages[messages.length - 1].content = fileContent;
+      }
+      return [true, messages];
+    }
+
+    logger.warn(
+      CHANNEL,
+      'Output file exists but no end tag found - continuing from file',
+    );
+    toolState.updateAccumulatedOutput(fileContent);
+    const state = AgentStateRound.initialize(0);
+    toolState.lastResponse = toolState.accumulatedOutput;
+    this.addContinueMessage(
+      messages,
+      state,
+      toolState,
+      agentSetting,
+      agentConfig,
+    );
+
+    return [false, messages];
   }
 
   /** Computes cost based on token usage and model pricing. */

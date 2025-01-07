@@ -21,7 +21,7 @@ import { executeCommand } from '../utils/execUtils';
 import { EXCLUDED_DIRS } from './constants';
 
 const CHANNEL = 'Housekeeping';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export async function runIndentTex(): Promise<void> {
   logger.debug(CHANNEL, 'Starting LaTeX indentation process');

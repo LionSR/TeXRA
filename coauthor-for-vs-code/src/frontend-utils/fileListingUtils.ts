@@ -12,7 +12,7 @@ import { getConfig } from './commonUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 
 const CHANNEL = 'FrontendUtils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 const IGNORED_FILE_EXTENSIONS = getConfig<string[]>(
   'files.ignored.fileExtensions',

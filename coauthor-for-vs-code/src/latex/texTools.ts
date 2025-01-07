@@ -8,7 +8,7 @@ import * as logger from '../logger/logUtils';
 import { executeCommand } from '../utils/execUtils';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Compile a LaTeX file to PDF

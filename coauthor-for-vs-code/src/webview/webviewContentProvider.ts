@@ -11,7 +11,7 @@ import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
 const CHANNEL = 'WebviewContent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 export class WebviewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 

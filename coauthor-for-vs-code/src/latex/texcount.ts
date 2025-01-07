@@ -6,7 +6,7 @@ import { fileExists } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Get full statistics for LaTeX documents using the texcount Perl script

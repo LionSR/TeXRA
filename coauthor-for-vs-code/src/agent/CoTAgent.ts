@@ -2,15 +2,18 @@
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
-import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
+import { BaseReflectionAgent } from './BaseReflectionAgent';
+
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
 
 /**
- * Chain of Thought (CoT) agent implementation that extends DirectAgent.
+ * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
  */
-export class CoTAgent extends DirectAgent {
+export class CoTAgent extends BaseReflectionAgent {
   /**
    * Generates output file name based on configuration and current round.
    * @param currRound Current round number in the conversation
@@ -34,6 +37,7 @@ export class CoTAgent extends DirectAgent {
 
   /**
    * Processes output for the current round with XML validation.
+   * Ensures proper sequencing of XML processing, file processing, and logging.
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
@@ -43,19 +47,42 @@ export class CoTAgent extends DirectAgent {
     endTurn: boolean,
     currRound: number = 0,
   ): Promise<string[]> {
-    if (endTurn) {
-      await this.outputHandler.ensureCorrectXmlStructure(
+    try {
+      // Initialize output files array if needed
+      this.outputHandler.outputFiles[currRound] =
+        this.outputHandler.outputFiles[currRound] || [];
+
+      if (endTurn) {
+        logger.debug(CHANNEL, `Processing output for round ${currRound}`);
+
+        // Process XML structure first
+        await this.outputHandler.ensureCorrectXmlStructure(
+          outputFile,
+          this.agentSetting.documentTag,
+        );
+        logger.debug(CHANNEL, `XML structure processed for round ${currRound}`);
+
+        // Then process output files
+        await this.processOutputFiles(outputFile, currRound);
+        logger.debug(CHANNEL, `Output files processed for round ${currRound}`);
+      }
+
+      // Finally handle logging in base class
+      const result = await super.handleOutput(
+        stateRound,
+        stateGlobal,
         outputFile,
-        this.agentSetting.documentTag,
+        endTurn,
+        currRound,
       );
-      await this.processOutputFiles(outputFile, currRound);
+
+      return result;
+    } catch (error) {
+      logger.error(
+        CHANNEL,
+        `Error in handleOutput for round ${currRound}: ${error}`,
+      );
+      throw error; // Re-throw to maintain error propagation
     }
-    return super.handleOutput(
-      stateRound,
-      stateGlobal,
-      outputFile,
-      endTurn,
-      currRound,
-    );
   }
 }

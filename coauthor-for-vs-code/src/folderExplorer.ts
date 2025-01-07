@@ -1,12 +1,15 @@
-// folderExplorer.ts
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
-import { getConfig } from './frontend-utils/commonUtils';
+
+// Local imports
 import { getAgentsDirectory } from './utils/pathUtils';
 
 const CHANNEL = 'FolderExplorer';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
