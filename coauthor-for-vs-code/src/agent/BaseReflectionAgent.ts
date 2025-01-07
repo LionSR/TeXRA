@@ -601,14 +601,20 @@ export abstract class BaseReflectionAgent {
   /**
    * Processes completion of conversation round.
    */
-  private handleRoundCompletion(
+  private async handleRoundCompletion(
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     outputFile: string,
     endTurn: boolean,
     currRound: number,
-  ): void {
-    this.handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound);
+  ): Promise<void> {
+    await this.handleOutput(
+      stateRound,
+      stateGlobal,
+      outputFile,
+      endTurn,
+      currRound,
+    );
     const inputInfo = `input file ${this.agentConfig.inputFile} and/or input files ${this.agentConfig.inputFiles}`;
     logger.info(
       CHANNEL,
@@ -773,7 +779,7 @@ export abstract class BaseReflectionAgent {
       finalEndTurn = newEndTurn;
 
       // Handle output and logging
-      this.handleRoundCompletion(
+      await this.handleRoundCompletion(
         updatedStateRound,
         updatedStateGlobal,
         this.outputFile[0],
@@ -791,7 +797,7 @@ export abstract class BaseReflectionAgent {
     }
 
     // Handle output and logging for early termination
-    this.handleRoundCompletion(
+    await this.handleRoundCompletion(
       stateRound,
       stateGlobal,
       this.outputFile[0],
@@ -892,7 +898,7 @@ export abstract class BaseReflectionAgent {
       );
 
       // Handle output and logging
-      this.handleRoundCompletion(
+      await this.handleRoundCompletion(
         updatedStateRound,
         updatedStateGlobal,
         this.outputFile[1],
@@ -909,7 +915,7 @@ export abstract class BaseReflectionAgent {
     }
 
     // Handle output and logging for early termination
-    this.handleRoundCompletion(
+    await this.handleRoundCompletion(
       stateRound,
       stateGlobal,
       this.outputFile[1],
