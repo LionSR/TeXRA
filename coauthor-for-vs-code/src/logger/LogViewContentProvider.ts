@@ -1,6 +1,5 @@
 // Standard library imports
 import * as fs from 'fs';
-import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
@@ -8,7 +7,8 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from './logUtils';
 
-const CHANNEL = 'LogViewContent';
+const CHANNEL = 'Webview';
+logger.initialize(CHANNEL);
 
 export class LogViewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
