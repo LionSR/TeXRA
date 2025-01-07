@@ -1,8 +1,11 @@
-// folderExplorer.ts
+// Standard library imports
 import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
-import { getConfig } from './frontend-utils/commonUtils';
+
+// Local imports
 import { getAgentsDirectory } from './utils/pathUtils';
 
 const CHANNEL = 'FolderExplorer';
