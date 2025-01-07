@@ -305,6 +305,7 @@ export class OutputHandler {
   }
 
   /** Validates and fixes XML structure in output file. */
+  // TODO: use XML.Validator in the future [this function is a bit outdated]
   async ensureCorrectXmlStructure(
     filePath: string,
     documentTag: string,
@@ -332,10 +333,7 @@ export class OutputHandler {
           }
         }
       }
-
-      content = await this.processXmlContent(content);
     }
-
     await writeFile(filePath, content);
   }
 
