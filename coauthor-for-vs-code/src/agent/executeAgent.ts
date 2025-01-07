@@ -129,8 +129,6 @@ export async function executeAgent(
       agentPath,
       agentName,
     );
-    logger.debug(CHANNEL, `AgentSetting: ${JSON.stringify(agentSetting)}\n`);
-    logger.debug(CHANNEL, `AgentPrompt: ${JSON.stringify(agentPrompt)}\n`);
 
     // Get appropriate agent class and create instance
     const AgentClass = getAgentClass(agentSetting);
