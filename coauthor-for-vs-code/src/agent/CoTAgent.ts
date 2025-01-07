@@ -2,15 +2,15 @@
 import * as logger from '../logger/logUtils';
 
 // Local imports - agent components
-import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
+import { BaseReflectionAgent } from './BaseReflectionAgent';
 
 /**
  * Chain of Thought (CoT) agent implementation that extends DirectAgent.
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
  */
-export class CoTAgent extends DirectAgent {
+export class CoTAgent extends BaseReflectionAgent {
   /**
    * Generates output file name based on configuration and current round.
    * @param currRound Current round number in the conversation
