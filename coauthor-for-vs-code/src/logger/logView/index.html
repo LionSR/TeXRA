@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';"
+    />
+    <link rel="stylesheet" href="${styleUri}" />
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+  </head>
+
+  <body>
+    <div class="main-container">
+      <div class="content-area">
+        <div class="log-header">
+          <span id="currentStreamName"></span>
+          <div class="header-actions">
+            <button class="clear-button" id="clearStreamBtn">
+              <span class="x-icon">✕</span> Clear
+            </button>
+            <button class="delete-button" id="deleteStreamBtn">
+              <span class="x-icon">✕</span> Delete
+            </button>
+          </div>
+        </div>
+        <div id="logContent" class="log-container"></div>
+      </div>
+      <div class="tabs">
+        <div id="streamTabs" class="tabs-content">
+          <!-- Stream tabs will be dynamically inserted here -->
+        </div>
+        <div class="clear-all-container">
+          <button class="clear-button danger" id="clearAllBtn">
+            <span class="x-icon">✕</span> Clear All
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
