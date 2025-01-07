@@ -18,7 +18,7 @@ import { registerYamlCommands } from './commands/yamlCommands';
 import * as logger from './logger/logUtils';
 
 const CHANNEL = 'Commands';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Register all extension commands

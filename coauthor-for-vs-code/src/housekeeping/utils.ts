@@ -2,7 +2,7 @@
 import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Housekeeping';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export function getAgentFirstNameChunk(agent: string): string {
   logger.debug(CHANNEL, `Getting agent first name chunk for: ${agent}`);

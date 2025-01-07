@@ -13,7 +13,7 @@ import { deleteFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {

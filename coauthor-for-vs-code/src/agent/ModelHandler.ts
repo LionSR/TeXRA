@@ -22,6 +22,9 @@ const CONFIRMATION_CONTINUE_LIMIT = 20;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
+
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
@@ -134,11 +137,11 @@ export abstract class ModelHandler {
 
     if (maxOutputTokensExceeded) {
       logger.warn(
-        'ModelHandler',
+        CHANNEL,
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
       logger.warn(
-        'ModelHandler',
+        CHANNEL,
         `Total output tokens: ${stateGlobal.totalOutputTokens}, First input tokens: ${stateGlobal.firstInputTokens}`,
       );
     }
@@ -149,7 +152,7 @@ export abstract class ModelHandler {
     // Print debug info if stopping
     if (shouldStop) {
       logger.debug(
-        'ModelHandler',
+        CHANNEL,
         `StopFlags:
                 endTurn: ${endTurn}
                 encounterDocumentTag: ${encounterDocumentTag}
