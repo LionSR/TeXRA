@@ -8,7 +8,7 @@ import * as logger from './logger/logUtils';
 // Local imports
 import { getAgentsDirectory } from './utils/pathUtils';
 
-const CHANNEL = 'FolderExplorer';
+const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
