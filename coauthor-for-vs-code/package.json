@@ -472,6 +472,10 @@
       {
         "command": "coauthor.parseYaml",
         "title": "CoAuthor: Parse YAML Structure"
+      },
+      {
+        "command": "coauthor.testYamlBrackets",
+        "title": "CoAuthor: Test YAML Bracket Handling"
       }
     ],
     "viewsContainers": {
