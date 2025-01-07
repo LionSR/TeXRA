@@ -58,11 +58,32 @@ class BaseReflectionAgent(ABC):
         # Initialize basic attributes
         self.outputFile = ["", ""]
         self.outputFiles = {0: [], 1: []}
-        self.baseFiles = []
+        self.baseFiles = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
 
-        self.setup()
+        # Initialize client and check scratchpad usage
+        self.client = self.modelHandler.getClient()
+        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
+
+        # Set output files
+        self.outputFile[0] = self.getOutputFile(currRound=0)
+        self.outputFile[1] = self.getOutputFile(currRound=1)
+
+        # Initialize logging and database entry
+        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
+
+        # Initialize user variables
         self.userVars = self.get_userVars()
-        self.outputHandler = OutputHandler(self.agentSetting, self.agentConfig, self.modelHandler, self.logId)
+
+        # Initialize output handler
+        self.outputHandler = OutputHandler(
+            self.agentSetting,
+            self.agentConfig,
+            self.modelHandler,
+            self.logId,
+            self.baseFiles,
+        )
+
+        logger.info(f"Processing file: {self.agentConfig.inputFile}")
 
     def get_userVars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
@@ -224,22 +245,6 @@ class BaseReflectionAgent(ABC):
             "USE_OPENROUTER": self.agentConfig.toolConfig.useOpenRouter,
         }
 
-    def setup(self):
-        """Set up the agent for processing."""
-        # Initialize base files and logging
-        self.baseFiles = self.agentConfig.outputFiles or [self.agentConfig.inputFile]
-        logger.info(f"Processing file: {self.agentConfig.inputFile}")
-
-        # Initialize client and check scratchpad usage
-        self.client = self.modelHandler.getClient()
-
-        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
-        self.outputFile[0] = self.getOutputFile(currRound=0)
-        self.outputFile[1] = self.getOutputFile(currRound=1)
-
-        # Initialize logging and database entry
-        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
-
     def handleOutput(
         self,
         stateRound: AgentStateRound,
@@ -260,7 +265,7 @@ class BaseReflectionAgent(ABC):
     def getOutputFile(self, currRound: int) -> str:
         pass
 
-    def _process_response_cycle(
+    def _processResponseCycle(
         self,
         messages: list[dict],
         stateRound: AgentStateRound,
@@ -364,12 +369,12 @@ class BaseReflectionAgent(ABC):
 
         return stateRound, stateGlobal, toolState, endTurn
 
-    def _get_prefill_for_round(self, currRound: int) -> str:
+    def _getPrefillForRound(self, currRound: int) -> str:
         """Get prefill content for the current round."""
         prefill = self.agentSetting.prefills[currRound] if currRound < len(self.agentSetting.prefills) else self.agentSetting.prefills[0]
         return prefill if prefill else ""
 
-    def _handle_round_completion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
+    def _handleRoundCompletion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
         """Handle output and logging for round completion."""
         self.handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound=currRound)
         inputInfo = f"input file {self.agentConfig.inputFile} " f"and/or input files {self.agentConfig.inputFiles}"
@@ -436,7 +441,7 @@ class BaseReflectionAgent(ABC):
         )
 
         # Handle prefill
-        prefill = self._get_prefill_for_round(currRound)
+        prefill = self._getPrefillForRound(currRound)
         toolState.update_accumulatedOutput(prefill)
 
         # Initialize output and handle prefill
@@ -451,7 +456,7 @@ class BaseReflectionAgent(ABC):
 
         stateRound = AgentStateRound.initialize(currRound)
         if not endTurn:
-            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
+            stateRound, stateGlobal, toolState, endTurn = self._processResponseCycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -460,7 +465,7 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[0], endTurn, currRound)
+        self._handleRoundCompletion(stateRound, stateGlobal, self.outputFile[0], endTurn, currRound)
 
         return stateRound, stateGlobal, messages, endTurn, toolState
 
@@ -505,7 +510,7 @@ class BaseReflectionAgent(ABC):
         messages = self.modelHandler.create_reflection_messages(messages, userMessage, toolState.figureFiles)
 
         # Handle prefill for reflection round
-        prefill = self._get_prefill_for_round(currRound)
+        prefill = self._getPrefillForRound(currRound)
         toolState.update_accumulatedOutput(prefill)
 
         endTurn, messages = self.modelHandler.initialize_output_and_prefill(
@@ -518,7 +523,7 @@ class BaseReflectionAgent(ABC):
         )
 
         if not endTurn:
-            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
+            stateRound, stateGlobal, toolState, endTurn = self._processResponseCycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -527,13 +532,14 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[1], endTurn, currRound)
+        self._handleRoundCompletion(stateRound, stateGlobal, self.outputFile[1], endTurn, currRound)
 
         return stateRound, stateGlobal, messages, endTurn
 
     def run(self):
         """Run the agent processing pipeline."""
         stateRound, stateGlobal, messages, endTurn, toolState = self.process()
+        logger.info("Round 0 completed\n")
 
         if self.agentConfig.reflect and endTurn:
             # Create a new ToolState for reflection round
@@ -541,6 +547,8 @@ class BaseReflectionAgent(ABC):
             stateRoundReflection, stateGlobalReflection, messagesReflection, endTurnReflection = self.reflect(
                 stateGlobal, messages, toolStateReflection
             )
+
+            logger.info("Round 1 completed\n")
 
     def _processOutputFiles(self, outputFile: str, currRound: int):
         """Process output files for the current round.

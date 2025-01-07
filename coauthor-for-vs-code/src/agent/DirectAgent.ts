@@ -6,6 +6,9 @@ import { BaseReflectionAgent } from './BaseReflectionAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
 
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
+
 /**
  * Direct agent implementation that processes requests in a single pass.
  * Extends BaseReflectionAgent with simplified output handling and no intermediate steps.
@@ -40,10 +43,16 @@ export class DirectAgent extends BaseReflectionAgent {
     endTurn: boolean,
     currRound: number = 0,
   ): Promise<string[]> {
+    // Initialize output files array if needed
+    this.outputHandler.outputFiles[currRound] =
+      this.outputHandler.outputFiles[currRound] || [];
+
     if (endTurn) {
       await this.processOutputFiles(outputFile, currRound);
     }
-    return super.handleOutput(
+
+    // Let base class handle logging
+    return await super.handleOutput(
       stateRound,
       stateGlobal,
       outputFile,

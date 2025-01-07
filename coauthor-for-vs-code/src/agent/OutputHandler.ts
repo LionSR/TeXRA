@@ -32,7 +32,7 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -73,13 +73,14 @@ export class OutputHandler {
     agentConfig: AgentConfig,
     modelHandler: any,
     logId: number,
+    baseFiles: string[] = [],
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
     this.modelHandler = modelHandler;
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
-    this.baseFiles = [];
+    this.baseFiles = baseFiles;
   }
 
   /** Processes XML content by filtering tags and applying replacements. */
@@ -203,15 +204,17 @@ export class OutputHandler {
       const latexDocument = extractContentFromTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
+        return texFile;
+      } else {
+        throw new Error(`No ${documentTag} found in output file`);
       }
     } catch (err) {
       logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
+      throw err;
     }
-
-    return texFile;
   }
 
   /**
@@ -247,21 +250,21 @@ export class OutputHandler {
 
       const documents = extractContentFromTagMultiple(root, documentTag);
       if (documents) {
-        return this.processLatexDocuments(documents, outputFile);
+        return this.processMultipleLatexDocuments(documents, outputFile);
+      } else {
+        throw new Error(`No ${documentTag} found in output file`);
       }
-
-      return [];
     } catch (err) {
       logger.error(
         CHANNEL,
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return [];
+      throw err;
     }
   }
 
   /** Processes LaTeX documents into separate output files. */
-  async processLatexDocuments(
+  async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
   ): Promise<string[]> {
@@ -280,10 +283,10 @@ export class OutputHandler {
         const content = doc.content;
 
         if (source && content) {
-          const { name: baseName, ext } = path.parse(source);
+          const { ext } = path.parse(source);
           const extension = ext.replace('.', '') || 'tex';
           const texFile = getOutputFileName(
-            baseName,
+            source,
             agent,
             model,
             extension,
@@ -302,6 +305,7 @@ export class OutputHandler {
   }
 
   /** Validates and fixes XML structure in output file. */
+  // TODO: use XML.Validator in the future [this function is a bit outdated]
   async ensureCorrectXmlStructure(
     filePath: string,
     documentTag: string,
@@ -329,10 +333,7 @@ export class OutputHandler {
           }
         }
       }
-
-      content = await this.processXmlContent(content);
     }
-
     await writeFile(filePath, content);
   }
 

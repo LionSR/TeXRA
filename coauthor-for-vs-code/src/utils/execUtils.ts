@@ -11,7 +11,7 @@ import { getWorkspacePath } from './fileUtils';
 const execAsync = promisify(cp.exec);
 
 const CHANNEL = 'Utils';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 const MAX_OUTPUT_LENGTH = 150;
 
@@ -76,12 +76,12 @@ export async function executeCommand(
       );
     }
 
-    if (stdout && stdout.trim()) {
-      logger.debug(
-        options.channel || CHANNEL,
-        `Command stdout: ${processOutput(stdout)}`,
-      );
-    }
+    // if (stdout && stdout.trim()) {
+    //   logger.debug(
+    //     options.channel || CHANNEL,
+    //     `Command stdout: ${processOutput(stdout)}`,
+    //   );
+    // }
 
     return {
       success: true,

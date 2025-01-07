@@ -11,6 +11,9 @@ import * as logger from '../logger/logUtils';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
 
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
+
 /**
  * Handler for models accessed through OpenRouter.
  */
@@ -19,10 +22,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    logger.info(
-      'ModelHandlerOpenRouter',
-      `Using OpenRouter API key. Base URL: ${baseUrl}`,
-    );
+    logger.info(CHANNEL, `Using OpenRouter API key. Base URL: ${baseUrl}`);
     return new OpenAI({
       apiKey,
       baseURL: baseUrl,

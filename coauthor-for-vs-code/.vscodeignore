@@ -14,9 +14,16 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 .DS_Store
 
+!resources/**
 !src/webview/*.js
 !src/webview/*.ts
 !src/webview/*.html
 !src/webview/*.css
 !src/webview/modules/*.js
-!resources/**
+
+!src/logger/logView/*.js
+!src/logger/logView/*.html
+!src/logger/logView/*.css
+!src/logger/LogViewProvider.ts
+!src/logger/LogViewContentProvider.ts
+!src/logger/LogViewMessageHandler.ts
