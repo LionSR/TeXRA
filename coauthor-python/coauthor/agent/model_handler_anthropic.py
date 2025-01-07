@@ -53,7 +53,7 @@ class AnthropicHandler(ModelHandler):
         )
         # rememeber to use snake_case for the keys since these are from the apis
 
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -113,7 +113,7 @@ class AnthropicHandler(ModelHandler):
         messages.append({"role": "user", "content": content})
         return messages
 
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for Anthropic models."""
 
         def create_content_pair(image: dict) -> list[dict]:
@@ -123,7 +123,7 @@ class AnthropicHandler(ModelHandler):
                 {"type": "document" if is_pdf else "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
             ]
 
-        return [item for image in image_contents for item in create_content_pair(image)]
+        return [item for image in imageContents for item in create_content_pair(image)]
 
     def extract_response(
         self,
