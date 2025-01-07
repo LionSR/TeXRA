@@ -76,12 +76,12 @@ export async function executeCommand(
       );
     }
 
-    if (stdout && stdout.trim()) {
-      logger.debug(
-        options.channel || CHANNEL,
-        `Command stdout: ${processOutput(stdout)}`,
-      );
-    }
+    // if (stdout && stdout.trim()) {
+    //   logger.debug(
+    //     options.channel || CHANNEL,
+    //     `Command stdout: ${processOutput(stdout)}`,
+    //   );
+    // }
 
     return {
       success: true,
