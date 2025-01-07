@@ -137,11 +137,11 @@ export abstract class ModelHandler {
 
     if (maxOutputTokensExceeded) {
       logger.warn(
-        'ModelHandler',
+        CHANNEL,
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
       logger.warn(
-        'ModelHandler',
+        CHANNEL,
         `Total output tokens: ${stateGlobal.totalOutputTokens}, First input tokens: ${stateGlobal.firstInputTokens}`,
       );
     }
@@ -152,7 +152,7 @@ export abstract class ModelHandler {
     // Print debug info if stopping
     if (shouldStop) {
       logger.debug(
-        'ModelHandler',
+        CHANNEL,
         `StopFlags:
                 endTurn: ${endTurn}
                 encounterDocumentTag: ${encounterDocumentTag}
