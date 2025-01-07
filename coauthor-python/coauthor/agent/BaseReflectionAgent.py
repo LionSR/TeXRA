@@ -265,7 +265,7 @@ class BaseReflectionAgent(ABC):
     def getOutputFile(self, currRound: int) -> str:
         pass
 
-    def _process_response_cycle(
+    def _processResponseCycle(
         self,
         messages: list[dict],
         stateRound: AgentStateRound,
@@ -369,12 +369,12 @@ class BaseReflectionAgent(ABC):
 
         return stateRound, stateGlobal, toolState, endTurn
 
-    def _get_prefill_for_round(self, currRound: int) -> str:
+    def _getPrefillForRound(self, currRound: int) -> str:
         """Get prefill content for the current round."""
         prefill = self.agentSetting.prefills[currRound] if currRound < len(self.agentSetting.prefills) else self.agentSetting.prefills[0]
         return prefill if prefill else ""
 
-    def _handle_round_completion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
+    def _handleRoundCompletion(self, stateRound: AgentStateRound, stateGlobal: AgentStateGlobal, outputFile: str, endTurn: bool, currRound: int):
         """Handle output and logging for round completion."""
         self.handleOutput(stateRound, stateGlobal, outputFile, endTurn, currRound=currRound)
         inputInfo = f"input file {self.agentConfig.inputFile} " f"and/or input files {self.agentConfig.inputFiles}"
@@ -441,7 +441,7 @@ class BaseReflectionAgent(ABC):
         )
 
         # Handle prefill
-        prefill = self._get_prefill_for_round(currRound)
+        prefill = self._getPrefillForRound(currRound)
         toolState.update_accumulatedOutput(prefill)
 
         # Initialize output and handle prefill
@@ -456,7 +456,7 @@ class BaseReflectionAgent(ABC):
 
         stateRound = AgentStateRound.initialize(currRound)
         if not endTurn:
-            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
+            stateRound, stateGlobal, toolState, endTurn = self._processResponseCycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -465,7 +465,7 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[0], endTurn, currRound)
+        self._handleRoundCompletion(stateRound, stateGlobal, self.outputFile[0], endTurn, currRound)
 
         return stateRound, stateGlobal, messages, endTurn, toolState
 
@@ -510,7 +510,7 @@ class BaseReflectionAgent(ABC):
         messages = self.modelHandler.create_reflection_messages(messages, userMessage, toolState.figureFiles)
 
         # Handle prefill for reflection round
-        prefill = self._get_prefill_for_round(currRound)
+        prefill = self._getPrefillForRound(currRound)
         toolState.update_accumulatedOutput(prefill)
 
         endTurn, messages = self.modelHandler.initialize_output_and_prefill(
@@ -523,7 +523,7 @@ class BaseReflectionAgent(ABC):
         )
 
         if not endTurn:
-            stateRound, stateGlobal, toolState, endTurn = self._process_response_cycle(
+            stateRound, stateGlobal, toolState, endTurn = self._processResponseCycle(
                 messages,
                 stateRound,
                 stateGlobal,
@@ -532,7 +532,7 @@ class BaseReflectionAgent(ABC):
             )
 
         # Handle output and logging
-        self._handle_round_completion(stateRound, stateGlobal, self.outputFile[1], endTurn, currRound)
+        self._handleRoundCompletion(stateRound, stateGlobal, self.outputFile[1], endTurn, currRound)
 
         return stateRound, stateGlobal, messages, endTurn
 
