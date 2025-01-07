@@ -82,7 +82,11 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
  * Get agent name with optional multiple suffix.
  */
 function getAgentName(baseAgent: string, outputFiles: string[] | null): string {
-  return outputFiles ? `${baseAgent}_multiple` : baseAgent;
+  if (outputFiles && outputFiles.length > 1) {
+    logger.info(CHANNEL, `Switching to multiple output mode`);
+    return `${baseAgent}_multiple`;
+  }
+  return baseAgent;
 }
 
 /**
@@ -125,6 +129,8 @@ export async function executeAgent(
       agentPath,
       agentName,
     );
+    logger.debug(CHANNEL, `AgentSetting: ${JSON.stringify(agentSetting)}\n`);
+    logger.debug(CHANNEL, `AgentPrompt: ${JSON.stringify(agentPrompt)}\n`);
 
     // Get appropriate agent class and create instance
     const AgentClass = getAgentClass(agentSetting);
