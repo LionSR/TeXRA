@@ -115,7 +115,7 @@ class ModelHandler(ABC):
         This is a shared implementation that can be used by all providers.
         Individual providers can override if needed.
         """
-        image_contents = []
+        imageContents = []
         added_figures = []
 
         for figureFile in figureFiles:
@@ -132,11 +132,11 @@ class ModelHandler(ABC):
                 if isinstance(img_data, list):
                     logger.debug(f"Adding {len(img_data)} pages to the image contents")
                     for i, data in enumerate(img_data):
-                        image_contents.append({"file_name": f"{os.path.basename(figureFile)}_page_{i+1}", "data": data, "media_type": media_type})
+                        imageContents.append({"file_name": f"{os.path.basename(figureFile)}_page_{i+1}", "data": data, "media_type": media_type})
                     added_figures.extend([f"{figureFile}_page_{i+1}" for i in range(len(img_data))])
                 else:
                     logger.debug(f"Adding single page to the image contents: {figureFile}")
-                    image_contents.append({"file_name": os.path.basename(figureFile), "data": img_data, "media_type": media_type})
+                    imageContents.append({"file_name": os.path.basename(figureFile), "data": img_data, "media_type": media_type})
                     added_figures.append(figureFile)
             except Exception as e:
                 logger.error(f"Failed to process image {figureFile}: {e}")
@@ -145,7 +145,7 @@ class ModelHandler(ABC):
         logger.info(f"Using images: {figureFiles}")
         logger.info(f"Successfully added: {added_figures}")
 
-        return self.create_image_content(image_contents)
+        return self.createImageContent(imageContents)
 
     def check_stop_conditions(
         self,
@@ -212,7 +212,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -233,7 +233,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for the model."""
         pass
 

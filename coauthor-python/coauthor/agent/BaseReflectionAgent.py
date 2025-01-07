@@ -433,7 +433,7 @@ class BaseReflectionAgent(ABC):
             writePromptToXml(systemPrompt, userPrefix, userRequest, self.agentConfig.inputFile, self.agentConfig.agent)
 
         # Initialize messages with prompts
-        messages = self.modelHandler.initialize_messages(
+        messages = self.modelHandler.initializeMessages(
             userPrefix,
             userRequest,
             figureFiles=toolState.figureFiles,

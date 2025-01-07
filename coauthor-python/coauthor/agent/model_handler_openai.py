@@ -53,7 +53,7 @@ class OpenAIHandler(ModelHandler):
 
         return client.chat.completions.create(**kwargs)
 
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -101,7 +101,7 @@ class OpenAIHandler(ModelHandler):
         messages.append({"role": "user", "content": content})
         return messages
 
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for OpenAI models."""
 
         def create_content_pair(image: dict) -> list[dict]:
@@ -113,11 +113,12 @@ class OpenAIHandler(ModelHandler):
                         "url": f"data:{image['media_type']};base64,{image['data']}",
                         "media_type": image["media_type"],
                         "data": image["data"],
+                        "detail": "high",
                     },
                 },
             ]
 
-        return [item for image in image_contents for item in create_content_pair(image)]
+        return [item for image in imageContents for item in create_content_pair(image)]
 
     def extract_response(
         self,
