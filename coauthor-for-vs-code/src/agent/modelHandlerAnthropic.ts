@@ -30,7 +30,7 @@ import {
 import { ToolState } from './ToolState';
 
 const CHANNEL = 'Agent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -335,7 +335,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    // Check if file doesn't exist or is too small
     if (
       !(await fileExists(outputFile)) ||
       (await readFile(outputFile)).length <= 15

@@ -1,15 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - core
-import * as logger from './logger/logUtils';
-
 // Local imports - webview
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
-
-const CHANNEL = 'ViewProvider';
-logger.initializeLogging(CHANNEL);
 
 export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;

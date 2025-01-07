@@ -13,8 +13,8 @@ import {
   singlePagePdf2Png,
 } from '../utils/imgUtils';
 
-const CHANNEL = 'ImageCommands';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Commands';
+logger.initialize(CHANNEL);
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

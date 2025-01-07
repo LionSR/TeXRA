@@ -64,10 +64,9 @@ def createAgentConfig(**kwargs: Any) -> AgentConfig:
     return AgentConfig.from_kwargs(**kwargs)
 
 
-def getAgentClass(agentPath: str, agent: str) -> type[BaseReflectionAgent]:
-    """Return DirectAgent or CoTAgent agent class based on yaml settings."""
-    settingDict, _ = load_agent_settings_and_prompts(agentPath, agent)
-    return DirectAgent if settingDict.get("agentType") == "direct" else CoTAgent
+def getAgentClass(settings: dict) -> type[BaseReflectionAgent]:
+    """Return DirectAgent or CoTAgent agent class based on settings."""
+    return DirectAgent if settings.get("agentType") == "direct" else CoTAgent
 
 
 def run_agent(agent: str, **kwargs: Any) -> None:
@@ -91,7 +90,7 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agentSetting = AgentSetting.from_dict(agentSettingDict)
     agentPrompt = AgentPrompt.from_dict(agentPromptDict)
 
-    agent_class = getAgentClass(agentPath, agentName)
+    agent_class = getAgentClass(agentSettingDict)
     agent_instance = agent_class(
         modelHandler=modelHandler,
         agentConfig=agentConfig,

@@ -20,7 +20,7 @@ import {
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 export async function runPackLatexdiffvc(
   inputFile: string,

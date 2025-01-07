@@ -12,7 +12,7 @@ import { AgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt } from './AgentDataclass';
 
 const CHANNEL = 'MergeAgent';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
@@ -141,6 +141,7 @@ export class MergeAgent extends DirectAgent {
     currRound: number = 0,
   ): Promise<string[]> {
     if (endTurn) {
+      logger.debug(CHANNEL, `Processing merge output for round ${currRound}`);
       const files = await super.handleOutput(
         stateRound,
         stateGlobal,
@@ -148,7 +149,7 @@ export class MergeAgent extends DirectAgent {
         endTurn,
         currRound,
       );
-      logger.info(CHANNEL, `Output file: ${outputFile}`);
+      logger.info(CHANNEL, `Merge output file: ${outputFile}`);
       return files;
     }
     return [];

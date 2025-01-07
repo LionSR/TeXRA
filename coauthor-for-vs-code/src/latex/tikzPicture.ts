@@ -20,7 +20,7 @@ import { renderPrompt } from '../utils/promptUtils';
 import { compileLatex2Pdf } from './texTools';
 
 const CHANNEL = 'LaTeX';
-logger.initializeLogging(CHANNEL);
+logger.initialize(CHANNEL);
 
 // Configure nunjucks
 nunjucks.configure({ autoescape: false });

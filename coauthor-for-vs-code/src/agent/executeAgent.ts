@@ -21,16 +21,18 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 
-const CHANNEL = 'ExecuteAgent';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Agent';
+logger.initialize(CHANNEL);
 
-type AgentConstructor = new (
-  modelHandler: any,
-  agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
-  agentPrompt: AgentPrompt,
-  agentPath: string,
-) => DirectAgent | CoTAgent;
+type AgentConstructor = {
+  new (
+    modelHandler: any,
+    agentConfig: AgentConfig,
+    agentSetting: AgentSetting,
+    agentPrompt: AgentPrompt,
+    agentPath: string,
+  ): DirectAgent | CoTAgent;
+};
 
 /**
  * Find and return the path to agent's yaml configuration file.
@@ -68,13 +70,7 @@ export async function getAgentPath(
 /**
  * Get agent class based on settings.
  */
-async function getAgentClass(
-  agentPath: string,
-  agent: string,
-  context: vscode.ExtensionContext,
-): Promise<AgentConstructor> {
-  const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
-
+function getAgentClass(settings: AgentSetting): AgentConstructor {
   const agentTypeMapping: Record<string, AgentConstructor> = {
     direct: DirectAgent,
     CoT: CoTAgent,
@@ -131,7 +127,7 @@ export async function executeAgent(
     );
 
     // Get appropriate agent class and create instance
-    const AgentClass = await getAgentClass(agentPath, agentName, context);
+    const AgentClass = getAgentClass(agentSetting);
     const agent = new AgentClass(
       modelHandler,
       fullConfig,
@@ -139,6 +135,9 @@ export async function executeAgent(
       agentPrompt,
       agentPath,
     );
+
+    // Initialize agent
+    await agent.init();
 
     // Run the agent
     await agent.run();

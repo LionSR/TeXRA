@@ -6,8 +6,8 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'PathUtils';
-logger.initializeLogging(CHANNEL);
+const CHANNEL = 'Utils';
+logger.initialize(CHANNEL);
 
 /**
  * Get the absolute path to the agents directory, handling both absolute and relative paths.
