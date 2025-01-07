@@ -7,7 +7,7 @@ import { ToolConfig } from './ToolConfig';
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   model: 'sonnet+',
   reflect: false,
-  agent: '',
+  agent: 'correct',
   instruction: '',
   inputFile: '',
   inputFiles: [],

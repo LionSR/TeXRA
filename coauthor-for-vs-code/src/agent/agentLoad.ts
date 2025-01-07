@@ -17,7 +17,7 @@ import {
   DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
 
-const CHANNEL = 'Agent';
+const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 
 /** Loads and parses a YAML file from an absolute path. */
@@ -30,6 +30,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     // Read and parse YAML
     const fileUri = vscode.Uri.file(absolutePath);
     const fileContent = await vscode.workspace.fs.readFile(fileUri);
+    // const fileContent = vscode.workspace.fs.readFileSync(fileUri);
     const yamlContent = Buffer.from(fileContent).toString('utf-8');
     const parsedYaml = yaml.parse(yamlContent);
 
