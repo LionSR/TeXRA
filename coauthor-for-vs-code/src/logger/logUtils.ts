@@ -23,13 +23,6 @@ const emojis = {
   info: '🟢',
 };
 
-// Create custom format
-const customFormat = printf(({ level, message, timestamp }) => {
-  const emoji = emojis[level as keyof typeof emojis];
-  const upperLevel = level.toUpperCase().padEnd(8);
-  return `${emoji} [${timestamp}] ${upperLevel} ${message}`;
-});
-
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
@@ -105,20 +98,14 @@ export function setLogViewProvider(provider: LogViewProvider) {
   }
 }
 
-export function initialize(
-  defaultChannel: string,
-  useColors: boolean = false,
-): void {
+export function initialize(defaultChannel: string): void {
   // Create default logger if it doesn't exist
   if (!channelLoggers.has(defaultChannel)) {
-    createLoggerForChannel(defaultChannel, useColors);
+    createLoggerForChannel(defaultChannel);
   }
 }
 
-function createLoggerForChannel(
-  channel: string,
-  useColors: boolean = false,
-): winston.Logger {
+function createLoggerForChannel(channel: string): winston.Logger {
   // Check if channel already exists
   if (channelLoggers.has(channel)) {
     return channelLoggers.get(channel)!;
