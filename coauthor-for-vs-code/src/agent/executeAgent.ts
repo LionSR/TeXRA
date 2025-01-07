@@ -20,6 +20,7 @@ import { MODEL_CONFIGS } from './ModelRegistry';
 import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
+import { MergeAgent } from './MergeAgent';
 
 const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);
@@ -147,6 +148,60 @@ export async function executeAgent(
     await agent.run();
   } catch (err) {
     const errorMsg = `Error executing agent: ${err instanceof Error ? err.message : String(err)}`;
+    logger.error(CHANNEL, errorMsg);
+    throw new Error(errorMsg);
+  }
+}
+
+/**
+ * Run merge agent to handle file merging operations.
+ */
+export async function executeMergeAgent(
+  model: string,
+  inputFile: string,
+  editedFile: string,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    // Create agent config for merge operation
+    const agentConfig = createAgentConfig({
+      agent: 'merge',
+      model,
+      inputFile,
+      editedFile,
+    });
+
+    // Get model configuration
+    if (!(model in MODEL_CONFIGS)) {
+      throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
+    }
+
+    const modelConfig = MODEL_CONFIGS[model];
+    const modelHandler = ModelFactory.createHandler(modelConfig);
+
+    // Get agent path and load settings/prompts
+    const agentPath = await getAgentPath('merge', context);
+    const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+      agentPath,
+      'merge',
+    );
+
+    // Create and run merge agent
+    const agent = new MergeAgent(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+    );
+
+    // Initialize agent
+    await agent.init();
+
+    // Run the agent
+    await agent.run();
+  } catch (err) {
+    const errorMsg = `Error executing merge agent: ${err instanceof Error ? err.message : String(err)}`;
     logger.error(CHANNEL, errorMsg);
     throw new Error(errorMsg);
   }
