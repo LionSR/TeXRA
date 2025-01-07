@@ -7,33 +7,49 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
+// Local imports - agent
+import { executeMergeAgent } from '../agent/executeAgent';
+
 const CHANNEL = 'Commands';
 logger.initialize(CHANNEL);
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.merge', handleMerge),
+    vscode.commands.registerCommand('coauthor.merge', (inputFile: string, baseFile: string, editedFile: string) => 
+      handleMerge(context, inputFile, baseFile, editedFile)
+    ),
   );
 }
 
 async function handleMerge(
+  context: vscode.ExtensionContext,
   inputFile: string,
   baseFile: string,
   editedFile: string,
 ) {
-  const model = getConfig('merge.defaultModel', 'sonnet+');
-  const terminalName = `Merge@${model}`;
-  const terminal_new = vscode.window.createTerminal(terminalName);
-  terminal_new.show();
+  if (!editedFile || (!baseFile && !inputFile)) {
+    const errorMsg = 'Both input file and edited file must be specified for merge operation';
+    vscode.window.showErrorMessage(errorMsg);
+    return;
+  }
 
-  if (editedFile && (baseFile || inputFile)) {
-    const fileToUse = baseFile || inputFile;
-    terminal_new.sendText(
-      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
+  const model = getConfig('merge.defaultModel', 'sonnet+');
+  const fileToUse = baseFile || inputFile;
+
+  try {
+    await executeMergeAgent(model, fileToUse, editedFile, context);
+  } catch (error) {
+    // If direct execution fails, fall back to terminal execution
+    logger.warn(
+      CHANNEL,
+      `Direct execution failed, falling back to terminal: ${error}`,
     );
-  } else {
-    vscode.window.showErrorMessage(
-      'Both input file and edited file must be specified for merge operation',
+    
+    const terminalName = `Merge@${model}`;
+    const terminalNew = vscode.window.createTerminal(terminalName);
+    terminalNew.show();
+    terminalNew.sendText(
+      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
     );
   }
 }
