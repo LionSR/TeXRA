@@ -17,7 +17,7 @@ import {
   DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
 
-const CHANNEL = 'AgentLoad';
+const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);
 
 /** Loads and parses a YAML file from an absolute path. */
