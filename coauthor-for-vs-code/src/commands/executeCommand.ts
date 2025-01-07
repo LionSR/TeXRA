@@ -47,16 +47,16 @@ export const executeCommand = {
  */
 async function executeViaTerminal(config: AgentConfig): Promise<void> {
   const terminalName = `${config.agent}@${config.model}`;
-  const terminal_new = vscode.window.createTerminal(terminalName);
-  terminal_new.show();
+  const terminalNew = vscode.window.createTerminal(terminalName);
+  terminalNew.show();
 
   // Check if virtual environment string is configured
   const virtualEnvString = getConfig<string>('python.virtualEnvString', '');
 
   if (virtualEnvString) {
-    if (terminal_new.shellIntegration) {
+    if (terminalNew.shellIntegration) {
       const execution =
-        terminal_new.shellIntegration.executeCommand(virtualEnvString);
+        terminalNew.shellIntegration.executeCommand(virtualEnvString);
       await new Promise<void>((resolve) => {
         const disposable = vscode.window.onDidEndTerminalShellExecution(
           (event) => {
@@ -68,7 +68,7 @@ async function executeViaTerminal(config: AgentConfig): Promise<void> {
         );
       });
     } else {
-      terminal_new.sendText(virtualEnvString);
+      terminalNew.sendText(virtualEnvString);
     }
   }
 
@@ -121,5 +121,5 @@ async function executeViaTerminal(config: AgentConfig): Promise<void> {
     command += ` --instruction="${escapedInstructions}"`;
   }
 
-  terminal_new.sendText(command);
+  terminalNew.sendText(command);
 }
