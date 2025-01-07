@@ -23,6 +23,16 @@ const emojis = {
   info: '🟢',
 };
 
+// Helper function to escape HTML tags
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
@@ -49,21 +59,24 @@ class VSCodeTransport extends Transport {
   log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
-    // Plain format for output channel
+    // Plain format for output channel - no escaping needed
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
+
+    // Escape HTML tags in message for LogView
+    const escapedMessage = escapeHtml(message);
 
     // Colored format for LogView using CSS classes
     const coloredFormattedMessage =
       `<div class="log-line">` +
       `<span class="timestamp">${emoji} [${timestamp}]</span> ` +
       `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
-      `<span class="message-${level}">${message}</span>` +
+      `<span class="message-${level}">${escapedMessage}</span>` +
       `</div>`;
 
     // Always write to output channel (plain text)
     this.channel.appendLine(formattedMessage);
 
-    // Write to LogView if available (with colors)
+    // Write to LogView if available (with colors and escaped HTML)
     if (this.logViewProvider) {
       this.logViewProvider.addLogMessage(
         this.streamName,
