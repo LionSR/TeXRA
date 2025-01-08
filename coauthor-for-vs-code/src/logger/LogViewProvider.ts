@@ -17,6 +17,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'fileSelectionCommands',
   'packCommands',
   'MessageHandler',
+  'AgentLoad',
 ]);
 
 // Channels that should not be persisted in workspace storage
