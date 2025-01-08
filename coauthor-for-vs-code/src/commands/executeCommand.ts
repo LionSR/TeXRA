@@ -1,18 +1,12 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { ensureArray, getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../agent/AgentConfig';
 import { executeAgent } from '../agent/executeAgent';
-
-const CHANNEL = 'Commands';
-logger.initialize(CHANNEL);
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
@@ -33,8 +27,7 @@ export const executeCommand = {
       await executeAgent(config, context);
     } catch (error) {
       // If direct execution fails, fall back to terminal execution
-      logger.warn(
-        CHANNEL,
+      vscode.window.showWarningMessage(
         `Direct execution failed, falling back to terminal: ${error}`,
       );
       await executeViaTerminal(config);

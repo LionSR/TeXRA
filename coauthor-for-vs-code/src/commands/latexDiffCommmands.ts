@@ -21,7 +21,7 @@ import {
   runCleanLatexdiffvcMultiple,
 } from '../housekeeping';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {

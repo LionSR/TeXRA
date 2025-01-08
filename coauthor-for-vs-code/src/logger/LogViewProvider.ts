@@ -10,6 +10,21 @@ interface ColoredLogMessage {
   level: 'error' | 'warn' | 'info' | 'debug';
 }
 
+// Channels that should only be written to VSCode output channel
+const OUTPUT_CHANNEL_ONLY = new Set([
+  'Webview',
+  'TestCommands',
+  'fileSelectionCommands',
+  'packCommands',
+  'MessageHandler',
+]);
+
+// Channels that should not be persisted in workspace storage
+const NON_PERSISTENT_CHANNELS = new Set([
+  ...OUTPUT_CHANNEL_ONLY,
+  'LaTeXCommands',
+]);
+
 export class LogViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
@@ -64,14 +79,23 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       [key: string]: ColoredLogMessage[];
     }>(this._getWorkspaceKey());
     if (savedState) {
-      this._logStreams = new Map(Object.entries(savedState));
+      // Only load channels that are not in the blacklist
+      this._logStreams = new Map(
+        Object.entries(savedState).filter(
+          ([channel]) => !NON_PERSISTENT_CHANNELS.has(channel),
+        ),
+      );
     } else {
       this._logStreams.clear();
     }
   }
 
   private _saveState() {
-    const stateObj = Object.fromEntries(this._logStreams.entries());
+    // Only save channels that are not in the blacklist
+    const persistentStreams = Array.from(this._logStreams.entries()).filter(
+      ([channel]) => !NON_PERSISTENT_CHANNELS.has(channel),
+    );
+    const stateObj = Object.fromEntries(persistentStreams);
     this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
   }
 
@@ -152,6 +176,11 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     message: string,
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
   ) {
+    // Skip if this stream should only be written to output channel
+    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+      return;
+    }
+
     if (!this._logStreams.has(stream)) {
       this._logStreams.set(stream, []);
       this._updateWebview();
