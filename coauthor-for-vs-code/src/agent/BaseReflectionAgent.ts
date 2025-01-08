@@ -934,7 +934,7 @@ export abstract class BaseReflectionAgent {
 
     this.logger.info(`Round 0 completed\n`);
     this.logger.info(
-      `------------------------------------------------------------`,
+      `\n------------------------------------------------------------`,
     );
 
     if (this.agentConfig.reflect && endTurn) {
@@ -943,7 +943,7 @@ export abstract class BaseReflectionAgent {
       await this.reflect(stateGlobal, messages, toolStateReflection);
       this.logger.info(`Round 1 completed\n`);
       this.logger.info(
-        `------------------------------------------------------------`,
+        `\n------------------------------------------------------------`,
       );
     }
   }
