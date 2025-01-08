@@ -125,7 +125,7 @@ class AnthropicHandler(ModelHandler):
 
         return [item for image in imageContents for item in create_content_pair(image)]
 
-    def extract_response(
+    def extractResponse(
         self,
         responseObject: Any,
         endTag: str,
@@ -231,7 +231,7 @@ class AnthropicHandler(ModelHandler):
         logger.info("Adding User message")
         logger.debug(userMessageContinuation)
 
-        # better to merge with extract_response?
+        # better to merge with extractResponse?
         # Solution 1: keep updating the last assistant message
         if messages[-1]["role"] == "user":
             if messages[-2]["role"] == "assistant":
@@ -340,7 +340,7 @@ class AnthropicHandler(ModelHandler):
                     # Initialize content list with single message
                     last_message["content"] = [{"type": "text", "text": toolState.accumulatedOutput, "cache_control": {"type": "ephemeral"}}]
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
+    def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if Anthropic model should continue generating."""
         logger.info("Determining if should continue for Anthropic model via Anthropic API")
         return stopReason not in ("max_tokens", "stop_sequence") and not agentSetting.has_endTag(newResponse)
