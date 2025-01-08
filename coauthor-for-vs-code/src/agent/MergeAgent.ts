@@ -1,18 +1,12 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt } from './AgentDataclass';
-
-const CHANNEL = 'MergeAgent';
-logger.initialize(CHANNEL);
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
@@ -93,7 +87,7 @@ export class MergeAgent extends DirectAgent {
     // Construct output filename
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
-    logger.info(CHANNEL, `Merge output file: ${outputPath}`);
+    this.logger.info(`Merge output file: ${outputPath}`);
     return outputPath;
   }
 
@@ -141,7 +135,7 @@ export class MergeAgent extends DirectAgent {
     currRound: number = 0,
   ): Promise<string[]> {
     if (endTurn) {
-      logger.debug(CHANNEL, `Processing merge output for round ${currRound}`);
+      this.logger.debug(`Processing merge output for round ${currRound}`);
       const files = await super.handleOutput(
         stateRound,
         stateGlobal,
@@ -149,7 +143,7 @@ export class MergeAgent extends DirectAgent {
         endTurn,
         currRound,
       );
-      logger.info(CHANNEL, `Merge output file: ${outputFile}`);
+      this.logger.info(`Merge output file: ${outputFile}`);
       return files;
     }
     return [];
