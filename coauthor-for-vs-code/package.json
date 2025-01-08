@@ -304,6 +304,17 @@
         }
       },
       {
+        "title": "CoAuthor: Execution",
+        "properties": {
+          "coauthor.execution.allowTerminalFallback": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to allow falling back to terminal execution when direct execution fails",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "CoAuthor: Git",
         "properties": {
           "coauthor.git.numberOfCommitsToShow": {
