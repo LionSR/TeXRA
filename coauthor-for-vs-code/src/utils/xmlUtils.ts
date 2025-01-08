@@ -70,7 +70,7 @@ export function extractTextFromTag(
 ): string {
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
   const match = inputContent.match(regex);
-  return match ? match[1] : inputContent;
+  return match ? match[1] : '';
 }
 
 /**

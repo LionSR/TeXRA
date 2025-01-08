@@ -1,13 +1,7 @@
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
 import { BaseReflectionAgent } from './BaseReflectionAgent';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
 
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
@@ -53,18 +47,18 @@ export class CoTAgent extends BaseReflectionAgent {
         this.outputHandler.outputFiles[currRound] || [];
 
       if (endTurn) {
-        logger.debug(CHANNEL, `Processing output for round ${currRound}`);
+        this.logger.debug(`Processing output for round ${currRound}`);
 
         // Process XML structure first
         await this.outputHandler.ensureCorrectXmlStructure(
           outputFile,
           this.agentSetting.documentTag,
         );
-        logger.debug(CHANNEL, `XML structure processed for round ${currRound}`);
+        this.logger.debug(`XML structure processed for round ${currRound}`);
 
         // Then process output files
         await this.processOutputFiles(outputFile, currRound);
-        logger.debug(CHANNEL, `Output files processed for round ${currRound}`);
+        this.logger.debug(`Output files processed for round ${currRound}`);
       }
 
       // Finally handle logging in base class
@@ -78,8 +72,7 @@ export class CoTAgent extends BaseReflectionAgent {
 
       return result;
     } catch (error) {
-      logger.error(
-        CHANNEL,
+      this.logger.error(
         `Error in handleOutput for round ${currRound}: ${error}`,
       );
       throw error; // Re-throw to maintain error propagation
