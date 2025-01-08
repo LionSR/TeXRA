@@ -36,7 +36,14 @@ async function handleMerge(
   try {
     await executeMergeAgent(model, fileToUse, editedFile, context);
   } catch (error) {
-    // If direct execution fails, fall back to terminal execution
+    const allowTerminalFallback = getConfig<boolean>(
+      'execution.allowTerminalFallback',
+      false,
+    );
+    if (!allowTerminalFallback) {
+      throw error;
+    }
+    // If direct execution fails and terminal fallback is allowed, fall back to terminal execution
     vscode.window.showWarningMessage(
       `Direct execution failed, falling back to terminal: ${error}`,
     );
