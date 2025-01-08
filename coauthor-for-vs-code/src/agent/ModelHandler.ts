@@ -1,11 +1,21 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 // (none needed)
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+
+// Local imports - utilities
+import { fileExists } from '../utils/fileUtils';
+import {
+  getBase64EncodedImage,
+  countPdfPages,
+  singlePagePdf2Png,
+  multiPagePdf2Png,
+  processPdfInput,
+} from '../utils/imgUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -108,6 +118,120 @@ export abstract class ModelHandler {
   /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
     return this.config.provider === ModelProvider.GOOGLE;
+  }
+
+  /**
+   * Process image for models.
+   * @param figureFile Path to the image file
+   * @param fileExtension File extension (e.g. '.jpg', '.pdf')
+   * @returns Tuple of [base64 encoded image data, media type]
+   */
+  protected async processImage(
+    figureFile: string,
+    fileExtension: string,
+  ): Promise<[string | string[], string]> {
+    let imgData: string | string[];
+    const ext = fileExtension.toLowerCase();
+
+    const mediaTypes: { [key: string]: string } = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.pdf':
+        this.capabilities.supportsNativePdf &&
+        (await countPdfPages(figureFile)) > 1
+          ? 'application/pdf'
+          : 'image/png',
+    };
+
+    if (!(ext in mediaTypes)) {
+      throw new Error(`Unsupported file extension: ${fileExtension}`);
+    }
+
+    const mediaType = mediaTypes[ext];
+    if (ext === '.pdf' && mediaType === 'image/png') {
+      const pdfResult = await processPdfInput(figureFile);
+      if (pdfResult === null) {
+        throw new Error(`Failed to process PDF file: ${figureFile}`);
+      }
+      imgData = pdfResult;
+    } else {
+      imgData = await getBase64EncodedImage(figureFile);
+    }
+
+    return [imgData, mediaType];
+  }
+
+  /**
+   * Create image messages for the conversation.
+   * This is a shared implementation that can be used by all providers.
+   * Individual providers can override if needed.
+   */
+  public async createImageMessage(figureFiles: string[]): Promise<any[]> {
+    const imageContents: any[] = [];
+    const addedFigures: string[] = [];
+
+    for (const figureFile of figureFiles) {
+      try {
+        if (!(await fileExists(figureFile))) {
+          logger.error(CHANNEL, `File not found: ${figureFile}`);
+          continue;
+        }
+
+        const fileExtension = path.extname(figureFile).toLowerCase();
+
+        try {
+          const [imgData, mediaType] = await this.processImage(
+            figureFile,
+            fileExtension,
+          );
+          logger.debug(
+            CHANNEL,
+            `Processed image: ${figureFile}, type: ${mediaType}`,
+          );
+
+          if (Array.isArray(imgData)) {
+            logger.debug(
+              CHANNEL,
+              `Adding ${imgData.length} pages to the image contents`,
+            );
+            for (let i = 0; i < imgData.length; i++) {
+              imageContents.push({
+                file_name: `${path.basename(figureFile)}_page_${i + 1}`,
+                data: imgData[i],
+                media_type: mediaType,
+              });
+              addedFigures.push(`${figureFile}_page_${i + 1}`);
+            }
+          } else {
+            logger.debug(
+              CHANNEL,
+              `Adding single page to the image contents: ${figureFile}`,
+            );
+            imageContents.push({
+              file_name: path.basename(figureFile),
+              data: imgData,
+              media_type: mediaType,
+            });
+            addedFigures.push(figureFile);
+          }
+        } catch (err) {
+          logger.error(
+            CHANNEL,
+            `Failed to process image ${figureFile}: ${err}`,
+          );
+          continue;
+        }
+      } catch (err) {
+        logger.error(CHANNEL, `Failed to process image ${figureFile}: ${err}`);
+        continue;
+      }
+    }
+
+    logger.info(CHANNEL, `Using images: ${figureFiles}`);
+    logger.info(CHANNEL, `Successfully added: ${addedFigures}`);
+
+    return this.createImageContent(imageContents);
   }
 
   /**

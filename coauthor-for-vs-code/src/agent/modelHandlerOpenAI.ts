@@ -93,11 +93,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add images if provided
       if (figureFiles) {
-        content.push(...this.createImageContent(figureFiles));
+        content.push(...(await this.createImageMessage(figureFiles)));
       }
 
       // Add user request
-      content.push({ type: 'text', text: userRequest });
+      const request = { type: 'text', text: userRequest };
+      content.push(request);
 
       messages.push({ role: 'user', content });
     }
