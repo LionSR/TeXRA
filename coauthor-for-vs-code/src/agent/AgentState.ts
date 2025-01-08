@@ -122,10 +122,6 @@ export class AgentStateGlobal implements IAgentStateGlobal {
         const cacheCreation =
           stateRound.APIUsage.cache_creation_input_tokens ?? 0;
         this.firstInputTokens += cacheRead + cacheCreation;
-        logger.debug(
-          CHANNEL,
-          `First input tokens: ${this.firstInputTokens}, cache_read: ${cacheRead}, cache_creation: ${cacheCreation}`,
-        );
       }
 
       // Update global totals
