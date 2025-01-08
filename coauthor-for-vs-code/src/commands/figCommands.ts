@@ -17,7 +17,7 @@ import {
   extractAndCompileTikzPicturesWithLabels,
 } from '../latex/tikzpicture';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export function registerFigureCommands(context: vscode.ExtensionContext) {
@@ -35,7 +35,6 @@ export function registerFigureCommands(context: vscode.ExtensionContext) {
       handleCompileTikzFigures,
     ),
   );
-  logger.debug(CHANNEL, 'Figure commands registered');
 }
 
 async function handleExtractFigurePaths(): Promise<void> {

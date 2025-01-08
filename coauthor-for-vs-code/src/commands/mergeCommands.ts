@@ -1,17 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent
 import { executeMergeAgent } from '../agent/executeAgent';
-
-const CHANNEL = 'Commands';
-logger.initialize(CHANNEL);
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -43,8 +37,7 @@ async function handleMerge(
     await executeMergeAgent(model, fileToUse, editedFile, context);
   } catch (error) {
     // If direct execution fails, fall back to terminal execution
-    logger.warn(
-      CHANNEL,
+    vscode.window.showWarningMessage(
       `Direct execution failed, falling back to terminal: ${error}`,
     );
 

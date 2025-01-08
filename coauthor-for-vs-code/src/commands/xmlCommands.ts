@@ -5,7 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export const xmlCommands = {

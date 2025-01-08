@@ -13,7 +13,7 @@ import {
   singlePagePdf2Png,
 } from '../utils/imgUtils';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
@@ -35,7 +35,6 @@ export function registerImageCommands(context: vscode.ExtensionContext) {
       handleTestPdfToImage,
     ),
   );
-  logger.debug(CHANNEL, 'Image commands registered');
 }
 
 async function handleCountPdfPages(): Promise<void> {
