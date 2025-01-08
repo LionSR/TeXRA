@@ -47,21 +47,13 @@ export function addCdataToTagsMultiple(
   xmlData: string,
   tags: string[],
 ): string {
-  try {
-    return tags.reduce((result, tag) => {
-      const pattern = new RegExp(
-        `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
-        'gs',
-      );
-      return result.replace(pattern, '$1<![CDATA[$2]]>$3');
-    }, xmlData);
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error adding CDATA to tags with attributes: ${err instanceof Error ? err.message : String(err)}`,
+  return tags.reduce((result, tag) => {
+    const pattern = new RegExp(
+      `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
+      'gs',
     );
-    throw err;
-  }
+    return result.replace(pattern, '$1<![CDATA[$2]]>$3');
+  }, xmlData);
 }
 
 export function extractTextFromTag(
@@ -80,19 +72,11 @@ export function filterTagsFromText(
   content: string,
   tags: string | string[],
 ): string {
-  try {
-    const tagArray = typeof tags === 'string' ? [tags] : tags;
-    return tagArray.reduce((result, tag) => {
-      const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
-      return result.replace(pattern, '');
-    }, content);
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error filtering tags from text: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
+  const tagArray = typeof tags === 'string' ? [tags] : tags;
+  return tagArray.reduce((result, tag) => {
+    const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
+    return result.replace(pattern, '');
+  }, content);
 }
 
 /**
@@ -102,38 +86,30 @@ export function extractContentFromTag(
   root: Record<string, any>,
   documentTag: string,
 ): string | null {
-  try {
-    if (!root || typeof root !== 'object') {
-      logger.error(
-        CHANNEL,
-        `Invalid root object. Structure: ${getObjectStructure(root)}`,
-      );
-      return null;
-    }
-
-    if (documentTag in root) {
-      const content = root[documentTag];
-      if (typeof content === 'string') {
-        return content.trim();
-      }
-      logger.error(
-        CHANNEL,
-        `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
-      );
-    }
-
+  if (!root || typeof root !== 'object') {
     logger.error(
       CHANNEL,
-      `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
+      `Invalid root object. Structure: ${getObjectStructure(root)}`,
     );
     return null;
-  } catch (err) {
+  }
+
+  if (documentTag in root) {
+    const content = root[documentTag];
+    if (typeof content === 'string') {
+      return content.trim();
+    }
     logger.error(
       CHANNEL,
-      `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
+      `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
     );
-    throw err;
   }
+
+  logger.error(
+    CHANNEL,
+    `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
+  );
+  return null;
 }
 
 /**

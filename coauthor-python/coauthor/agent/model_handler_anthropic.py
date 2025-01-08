@@ -31,7 +31,7 @@ class AnthropicHandler(ModelHandler):
     def getClient(self) -> Anthropic:
         """Get Anthropic client."""
         api_key = self.get_api_key()
-        logger.info("Using Anthropic API key.")
+        logger.info("Using Anthropic API.")
         return Anthropic(api_key=api_key)
 
     def createResponse(
