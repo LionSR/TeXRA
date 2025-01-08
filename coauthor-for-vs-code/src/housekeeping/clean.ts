@@ -61,24 +61,26 @@ export async function runCleanSingle(
   const extensions = [...TEMP_EXTENSIONS, ...PACK_EXTENSIONS];
   logger.debug(CHANNEL, `Using extensions: ${extensions}`);
 
-  let filesFound = false;
+  const filesToDelete: string[] = [];
   for (const pattern of filePatterns) {
     for (const ext of extensions) {
       const filePath = await findFileInBuild(inputDir, pattern, ext);
       if (filePath) {
-        logger.debug(CHANNEL, `Found file to delete: ${filePath}`);
-        filesFound = true;
-        await deleteFile(filePath);
+        filesToDelete.push(filePath);
       }
     }
   }
 
-  if (!filesFound) {
+  if (filesToDelete.length === 0) {
     logger.warn(CHANNEL, `No matching files found to clean for ${inputFile}`);
     vscode.window.showInformationMessage(
       `No files found to clean for ${inputFile}`,
     );
   } else {
+    logger.debug(CHANNEL, `Files to delete:\n${filesToDelete.join('\n')}`);
+    for (const filePath of filesToDelete) {
+      await deleteFile(filePath);
+    }
     logger.info(CHANNEL, `Cleanup complete for ${inputFile}`);
     vscode.window.showInformationMessage(`Cleanup complete for ${inputFile}`);
   }
