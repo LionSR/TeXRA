@@ -80,7 +80,7 @@ class ModelHandler(ABC):
         """Check if this is a Google model."""
         return self.config.provider == ModelProvider.GOOGLE
 
-    def process_image(self, figureFile: str, file_extension: str) -> tuple[str, str]:
+    def processImage(self, figureFile: str, file_extension: str) -> tuple[str, str]:
         """Process image for models.
 
         Args:
@@ -126,7 +126,7 @@ class ModelHandler(ABC):
             file_extension = os.path.splitext(figureFile)[1].lower()
 
             try:
-                img_data, media_type = self.process_image(figureFile, file_extension)
+                img_data, media_type = self.processImage(figureFile, file_extension)
                 logger.debug(f"Processed image: {figureFile}, type: {media_type}")
 
                 if isinstance(img_data, list):
@@ -238,7 +238,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def extract_response(
+    def extractResponse(
         self,
         responseObject: Any,
         endTag: str,
@@ -295,6 +295,6 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
+    def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if the model should continue generating based on stop reason and response."""
         pass
