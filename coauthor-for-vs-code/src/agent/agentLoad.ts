@@ -17,7 +17,7 @@ import {
   DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
 
-const CHANNEL = 'Agent';
+const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 
 /** Loads and parses a YAML file from an absolute path. */
@@ -34,7 +34,7 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     const yamlContent = Buffer.from(fileContent).toString('utf-8');
     const parsedYaml = yaml.parse(yamlContent);
 
-    logger.debug(CHANNEL, `Successfully loaded YAML from: ${absolutePath}`);
+    logger.info(CHANNEL, `Successfully loaded YAML from: ${absolutePath}`);
     return parsedYaml;
   } catch (err) {
     logger.error(
