@@ -6,9 +6,6 @@ import { glob } from 'glob';
 // Third-party imports
 // (none needed)
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { getAgentsDirectory } from '../utils/pathUtils';
 
@@ -21,9 +18,6 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
-
-const CHANNEL = 'ExecuteAgent';
-logger.initialize(CHANNEL);
 
 type AgentConstructor = {
   new (
@@ -55,7 +49,7 @@ export async function getAgentPath(
 
     if (matches.length === 0) {
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      logger.error(CHANNEL, `${errorMsg} from ${basePath}`);
+      vscode.window.showErrorMessage(`${errorMsg} from ${basePath}`);
       throw new Error(errorMsg);
     }
 
@@ -63,7 +57,7 @@ export async function getAgentPath(
     return path.join(basePath, path.dirname(matches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
+    vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
   }
 }
@@ -84,7 +78,7 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
  */
 function getAgentName(baseAgent: string, outputFiles: string[] | null): string {
   if (outputFiles && outputFiles.length > 1) {
-    logger.info(CHANNEL, `Switching to multiple output mode`);
+    // logger.info(CHANNEL, `Switching to multiple output mode`);
     return `${baseAgent}_multiple`;
   }
   return baseAgent;
@@ -148,7 +142,7 @@ export async function executeAgent(
     await agent.run();
   } catch (err) {
     const errorMsg = `Error executing agent ${agentConfig.agent}: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
+    vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
   }
 }
@@ -202,7 +196,7 @@ export async function executeMergeAgent(
     await agent.run();
   } catch (err) {
     const errorMsg = `Error executing merge agent: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
+    vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
   }
 }
