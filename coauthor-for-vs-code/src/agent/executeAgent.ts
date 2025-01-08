@@ -22,7 +22,7 @@ import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
 
-const CHANNEL = 'Agent';
+const CHANNEL = 'ExecuteAgent';
 logger.initialize(CHANNEL);
 
 type AgentConstructor = {
