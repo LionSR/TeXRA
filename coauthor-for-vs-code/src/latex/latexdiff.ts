@@ -130,14 +130,13 @@ export async function runLatexdiff(
     }
 
     if (runIndent) {
-      // Import and run latexindent if needed
-      if (
-        !(await runLatexIndent(inputFile)) ||
-        !(await runLatexIndent(editedFile))
-      ) {
+      const indentResults = [];
+      if (!(await runLatexIndent(inputFile))) indentResults.push(inputFile);
+      if (!(await runLatexIndent(editedFile))) indentResults.push(editedFile);
+      if (indentResults.length > 0) {
         logger.warn(
           CHANNEL,
-          'Failed to indent one or both files. Proceeding with latexdiff anyway.',
+          `Failed to indent files:\n${indentResults.join('\n')}\nProceeding with latexdiff anyway.`,
         );
       }
     }
@@ -146,19 +145,23 @@ export async function runLatexdiff(
     const inputContent = await readFile(inputFile);
     const editedContent = await readFile(editedFile);
 
-    if (
-      !inputContent.includes('\\begin{document}') ||
-      !inputContent.includes('\\end{document}') ||
-      !editedContent.includes('\\begin{document}') ||
-      !editedContent.includes('\\end{document}')
-    ) {
+    const documentChecks = [
+      { file: inputFile, content: inputContent },
+      { file: editedFile, content: editedContent },
+    ];
+    const invalidFiles = [];
+    for (const { file, content } of documentChecks) {
+      if (
+        !content.includes('\\begin{document}') ||
+        !content.includes('\\end{document}')
+      ) {
+        invalidFiles.push(file);
+      }
+    }
+    if (invalidFiles.length > 0) {
       logger.warn(
         CHANNEL,
-        'One or both files do not contain \\begin{document} and \\end{document}. Skipping latexdiff.',
-      );
-      logger.warn(
-        CHANNEL,
-        `Input file: ${inputFile}, Output file: ${editedFile}`,
+        `Files missing document environment:\n${invalidFiles.join('\n')}\nSkipping latexdiff.`,
       );
       return undefined;
     }
@@ -394,18 +397,35 @@ export async function runLatexdiffMultiple(
       return;
     }
 
+    const results: { success: string[]; failed: string[] } = {
+      success: [],
+      failed: [],
+    };
+
     for (let i = 0; i < inputFiles.length; i++) {
       try {
         await runLatexdiff(inputFiles[i], editedFiles[i]);
+        results.success.push(inputFiles[i]);
       } catch (err) {
+        results.failed.push(inputFiles[i]);
         logger.error(
           CHANNEL,
-          `Error processing file pair ${i + 1}: ${err instanceof Error ? err.message : String(err)}`,
+          `Error processing ${inputFiles[i]}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
 
-    logger.info(CHANNEL, 'All LaTeX diff operations completed');
+    const summary = [
+      'LaTeX diff operations completed:',
+      results.success.length > 0
+        ? `\nSuccessful:\n${results.success.join('\n')}`
+        : '',
+      results.failed.length > 0
+        ? `\nFailed:\n${results.failed.join('\n')}`
+        : '',
+    ].join('');
+
+    logger.info(CHANNEL, summary);
   } catch (err) {
     logger.error(
       CHANNEL,
