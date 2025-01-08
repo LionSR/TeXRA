@@ -5,7 +5,7 @@ import * as path from 'path';
 // (none needed)
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
 import { fileExists } from '../utils/fileUtils';
@@ -32,9 +32,6 @@ const CONFIRMATION_CONTINUE_LIMIT = 20;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
-
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
@@ -44,6 +41,7 @@ export abstract class ModelHandler {
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
+  protected logger: AgentLogger;
 
   constructor(config: ModelConfig) {
     this.config = config;
@@ -53,6 +51,15 @@ export abstract class ModelHandler {
       : DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
+    // Initialize with default channel, will be overwritten by agent
+    this.logger = new AgentLogger('Agent');
+  }
+
+  /**
+   * Updates the logger instance.
+   */
+  public setLogger(logger: AgentLogger): void {
+    this.logger = logger;
   }
 
   /**
@@ -174,7 +181,7 @@ export abstract class ModelHandler {
     for (const figureFile of figureFiles) {
       try {
         if (!(await fileExists(figureFile))) {
-          logger.error(CHANNEL, `File not found: ${figureFile}`);
+          this.logger.error(`File not found: ${figureFile}`);
           continue;
         }
 
@@ -185,14 +192,12 @@ export abstract class ModelHandler {
             figureFile,
             fileExtension,
           );
-          logger.debug(
-            CHANNEL,
+          this.logger.debug(
             `Processed image: ${figureFile}, type: ${mediaType}`,
           );
 
           if (Array.isArray(imgData)) {
-            logger.debug(
-              CHANNEL,
+            this.logger.debug(
               `Adding ${imgData.length} pages to the image contents`,
             );
             for (let i = 0; i < imgData.length; i++) {
@@ -204,8 +209,7 @@ export abstract class ModelHandler {
               addedFigures.push(`${figureFile}_page_${i + 1}`);
             }
           } else {
-            logger.debug(
-              CHANNEL,
+            this.logger.debug(
               `Adding single page to the image contents: ${figureFile}`,
             );
             imageContents.push({
@@ -216,20 +220,17 @@ export abstract class ModelHandler {
             addedFigures.push(figureFile);
           }
         } catch (err) {
-          logger.error(
-            CHANNEL,
-            `Failed to process image ${figureFile}: ${err}`,
-          );
+          this.logger.error(`Failed to process image ${figureFile}: ${err}`);
           continue;
         }
       } catch (err) {
-        logger.error(CHANNEL, `Failed to process image ${figureFile}: ${err}`);
+        this.logger.error(`Failed to process image ${figureFile}: ${err}`);
         continue;
       }
     }
 
-    logger.info(CHANNEL, `Using images: ${figureFiles}`);
-    logger.info(CHANNEL, `Successfully added: ${addedFigures}`);
+    this.logger.info(`Using images: ${figureFiles}`);
+    this.logger.info(`Successfully added: ${addedFigures}`);
 
     return this.createImageContent(imageContents);
   }
@@ -260,12 +261,10 @@ export abstract class ModelHandler {
       stateGlobal.totalOutputTokens > maxOutputTokens;
 
     if (maxOutputTokensExceeded) {
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Total output tokens: ${stateGlobal.totalOutputTokens}, First input tokens: ${stateGlobal.firstInputTokens}`,
       );
     }
@@ -275,8 +274,7 @@ export abstract class ModelHandler {
 
     // Print debug info if stopping
     if (shouldStop) {
-      logger.debug(
-        CHANNEL,
+      this.logger.debug(
         `StopFlags:
                 endTurn: ${endTurn}
                 encounterDocumentTag: ${encounterDocumentTag}
