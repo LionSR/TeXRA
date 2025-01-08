@@ -46,21 +46,17 @@ async function cleanupTempFiles(
   basePath: string,
   tempFilePattern: string,
 ): Promise<void> {
-  try {
-    const files = fs.readdirSync(basePath);
-    const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
+  const files = fs.readdirSync(basePath);
+  const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
 
-    for (const file of tempFiles) {
-      const fullPath = path.join(basePath, file);
-      try {
-        fs.unlinkSync(fullPath);
-        logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
-      } catch (err) {
-        logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
-      }
+  for (const file of tempFiles) {
+    const fullPath = path.join(basePath, file);
+    try {
+      fs.unlinkSync(fullPath);
+      logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
+    } catch (err) {
+      logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
     }
-  } catch (err) {
-    logger.warn(CHANNEL, `Error cleaning up temporary files: ${err}`);
   }
 }
 
