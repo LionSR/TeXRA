@@ -15,7 +15,7 @@ import {
   runIndentTex,
 } from '../housekeeping';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
@@ -73,13 +73,13 @@ async function handlePackMultiple(
   );
   logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
 
-  if (!inputFile || !agent || !model) {
+  if ((!inputFile && !outputFiles.length) || !agent || !model) {
     logger.error(
       CHANNEL,
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
     vscode.window.showErrorMessage(
-      'Missing required parameters for pack multiple',
+      'Missing required parameters for packMultiple:',
     );
     return;
   }

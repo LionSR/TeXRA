@@ -7,7 +7,7 @@ import * as logger from '../logger/logUtils';
 // Local imports
 import { handleTestConnection } from './tests/connectionTests';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export function registerTestCommands(context: vscode.ExtensionContext) {
@@ -17,7 +17,6 @@ export function registerTestCommands(context: vscode.ExtensionContext) {
       handleTestConnection,
     ),
   );
-  logger.debug(CHANNEL, 'Test commands registered');
 }
 
 export const testCommands = {
