@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';"
+      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://unpkg.com;"
     />
     <link rel="stylesheet" href="${styleUri}" />
+    <script nonce="${nonce}" src="https://unpkg.com/split.js"></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
   <body>
     <div class="main-container">
-      <div class="content-area">
+      <div class="content-area split">
         <div class="log-header">
           <span id="currentStreamName"></span>
           <div class="header-actions">
@@ -27,7 +28,7 @@
         </div>
         <div id="logContent" class="log-container"></div>
       </div>
-      <div class="tabs">
+      <div class="tabs split">
         <div id="streamTabs" class="tabs-content">
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
