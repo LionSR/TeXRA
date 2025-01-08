@@ -73,7 +73,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Add images if provided
     if (figureFiles) {
-      content.push(...this.createImageContent(figureFiles));
+      content.push(...(await this.createImageMessage(figureFiles)));
     }
 
     // Add user request with optional caching
