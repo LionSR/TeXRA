@@ -24,7 +24,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Returns OpenAI client with configured API key. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
-    this.logger.info('Using OpenAI API key.');
+    this.logger.info('Using OpenAI API.');
     return new OpenAI({ apiKey });
   }
 
