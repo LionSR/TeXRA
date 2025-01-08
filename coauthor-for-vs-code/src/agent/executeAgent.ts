@@ -147,7 +147,7 @@ export async function executeAgent(
     // Run the agent
     await agent.run();
   } catch (err) {
-    const errorMsg = `Error executing agent: ${err instanceof Error ? err.message : String(err)}`;
+    const errorMsg = `Error executing agent ${agentConfig.agent}: ${err instanceof Error ? err.message : String(err)}`;
     logger.error(CHANNEL, errorMsg);
     throw new Error(errorMsg);
   }
