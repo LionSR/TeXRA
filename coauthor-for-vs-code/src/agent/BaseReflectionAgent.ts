@@ -128,14 +128,16 @@ export abstract class BaseReflectionAgent {
     this.logger.info(`Processing file: ${this.agentConfig.inputFile}`);
   }
 
+  /**
+   * Gets unique task ID from output name override or input filename.
+   * @returns Task ID string used for logging and output naming
+   */
   private getTaskId(): string {
     return (
       this.agentConfig.outputNameOverride ||
       (this.agentConfig.inputFile &&
-        path.basename(
-          this.agentConfig.inputFile,
-          path.extname(this.agentConfig.inputFile),
-        ))
+        path.basename(this.agentConfig.inputFile)) +
+        `@${this.agentConfig.model}`
     );
   }
 

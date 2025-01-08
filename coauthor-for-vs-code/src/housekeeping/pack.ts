@@ -68,7 +68,6 @@ export async function runPackSingle(
     for (const ext of PACK_EXTENSIONS) {
       const filePath = await findFileInBuild(inputDir, pattern, ext);
       if (filePath) {
-        logger.debug(CHANNEL, `Found file: ${filePath}`);
         if (filePath === inputFile || pattern === baseName) {
           copiedFiles.push(filePath);
         } else {
@@ -78,10 +77,18 @@ export async function runPackSingle(
     }
   }
 
-  logger.debug(CHANNEL, `Files to move: ${movedFiles}`);
-  logger.debug(CHANNEL, `Files to copy: ${copiedFiles}`);
-
   if (movedFiles.length > 0 || copiedFiles.length > 0) {
+    logger.debug(
+      CHANNEL,
+      'Found files to process:' +
+        (movedFiles.length > 0
+          ? `\nFiles to move:\n${movedFiles.join('\n')}`
+          : '') +
+        (copiedFiles.length > 0
+          ? `\nFiles to copy:\n${copiedFiles.join('\n')}`
+          : ''),
+    );
+
     const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
     outputFolder =
       outputFolder ||
@@ -89,20 +96,23 @@ export async function runPackSingle(
     logger.debug(CHANNEL, `Output folder: ${outputFolder}`);
 
     try {
-      // Use the new helper function
       await createDirectory(outputFolder);
       logger.debug(CHANNEL, `Created output directory: ${outputFolder}`);
 
       // Move and copy files
+      const operations: string[] = [];
       for (const file of movedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
-        logger.debug(CHANNEL, `Moving file from ${file} to ${destination}`);
+        operations.push(`Moving: ${file} -> ${destination}`);
         await moveFile(file, destination);
       }
       for (const file of copiedFiles) {
         const destination = path.join(outputFolder, path.basename(file));
-        logger.debug(CHANNEL, `Copying file from ${file} to ${destination}`);
+        operations.push(`Copying: ${file} -> ${destination}`);
         await copyFile(file, destination);
+      }
+      if (operations.length > 0) {
+        logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
       }
 
       logger.info(CHANNEL, `Files packed into ${outputFolder}`);
