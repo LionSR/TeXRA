@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' https://unpkg.com;"
+      content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';"
     />
     <link rel="stylesheet" href="${styleUri}" />
-    <script nonce="${nonce}" src="https://unpkg.com/split.js"></script>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "split.js": "${splitJsUri}"
+        }
+      }
+    </script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
