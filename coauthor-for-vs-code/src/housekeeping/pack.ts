@@ -189,7 +189,7 @@ export async function runPackMultiple(
     // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
-        logger.debug(CHANNEL, `Packing input file: ${file}`);
+        // logger.debug(CHANNEL, `Packing input file: ${file}`);
         await runPackSingle(model, file, agent, commonOutputFolder);
       }
     }
