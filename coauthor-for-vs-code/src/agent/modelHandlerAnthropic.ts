@@ -4,9 +4,6 @@
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import { filterTagsFromText, extractTextFromTag } from '../utils/xmlUtils';
@@ -29,9 +26,6 @@ import {
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
 
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
-
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
@@ -39,7 +33,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Initializes an Anthropic API client using the configured API key. */
   getClient(): Anthropic {
     const apiKey = this.getApiKey();
-    logger.info(CHANNEL, 'Using Anthropic API key.');
+    this.logger.info('Using Anthropic API.');
     return new Anthropic({ apiKey });
   }
 
@@ -73,7 +67,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Add images if provided
     if (figureFiles) {
-      content.push(...this.createImageContent(figureFiles));
+      content.push(...(await this.createImageMessage(figureFiles)));
     }
 
     // Add user request with optional caching
@@ -163,7 +157,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): [string, any, string] {
     if (responseObject.error) {
       const errorMsg = `API error: ${responseObject.error}`;
-      logger.error(CHANNEL, errorMsg);
+      this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -171,12 +165,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (responseObject.usage.output_tokens === 3) {
       // Anthropic specific empty response check
       const errorMsg = 'No output generated - API returned empty response';
-      logger.error(CHANNEL, errorMsg);
-      logger.debug(CHANNEL, `responseObject: ${responseObject}`);
-      logger.debug(
-        CHANNEL,
-        `responseObject.content: ${responseObject.content}`,
-      );
+      this.logger.error(errorMsg);
+      this.logger.debug(`responseObject: ${responseObject}`);
+      this.logger.debug(`responseObject.content: ${responseObject.content}`);
       throw new Error(errorMsg);
     }
 
@@ -204,16 +195,15 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.capabilities.likesToAskForConfirmation &&
       autoConfirmation
     ) {
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         'Output tag detected - extracting latex code from <output> tags',
       );
       const extractedResponse = extractTextFromTag(newResponse, 'output');
       if (extractedResponse !== newResponse) {
-        logger.warn(CHANNEL, 'Extracted content from <output> tags');
+        this.logger.warn('Extracted content from <output> tags');
         newResponse = extractedResponse;
       } else {
-        logger.warn(CHANNEL, 'No <output> tags found in response');
+        this.logger.warn('No <output> tags found in response');
       }
     }
 
@@ -280,8 +270,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     const firstLines = toolState.lastResponse.split('\n').slice(0, 10);
     for (const line of firstLines) {
       if (line.trim().startsWith(documentTagStart)) {
-        logger.warn(
-          CHANNEL,
+        this.logger.warn(
           `Removing document tag prefix ${documentTagStart} from response`,
         );
         toolState.lastResponse = toolState.lastResponse
@@ -298,13 +287,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
 
     // Update messages
-    logger.info(CHANNEL, 'Adding User message');
-    logger.debug(CHANNEL, userMessageContinuation);
+    this.logger.info('Adding User message');
+    this.logger.debug(userMessageContinuation);
 
     if (messages[messages.length - 1].role === 'user') {
       if (messages[messages.length - 2]?.role === 'assistant') {
-        logger.warn(
-          CHANNEL,
+        this.logger.warn(
           'Appending new response to the previous assistant message',
         );
         if (Array.isArray(messages[messages.length - 2].content)) {
@@ -347,7 +335,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
       }
 
-      logger.debug(CHANNEL, `Anthropic prefill: ${prefill}`);
+      this.logger.info(`Anthropic prefill: ${prefill}`);
 
       if (
         toolState.accumulatedOutput === '<scratchpad>' &&
@@ -379,7 +367,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     fileContent = fileContent.trim();
 
     if (hasEndTag(agentSetting, fileContent)) {
-      logger.debug(CHANNEL, 'End tag detected - skipping continuation');
+      this.logger.debug('End tag detected - skipping continuation');
       if (Array.isArray(messages[messages.length - 1].content)) {
         messages[messages.length - 1].content[
           messages[messages.length - 1].content.length - 1
@@ -400,8 +388,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       return [true, messages];
     }
 
-    logger.warn(
-      CHANNEL,
+    this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
     toolState.updateAccumulatedOutput(fileContent);
@@ -414,7 +401,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
           },
         ]
       : fileContent;
-    logger.debug(CHANNEL, `Using existing content as prefill: ${outputFile}`);
+    this.logger.debug(`Using existing content as prefill: ${outputFile}`);
 
     messages.push({ role: 'assistant', content });
     return [false, messages];
@@ -467,7 +454,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    logger.debug(CHANNEL, 'Updating message content for Anthropic models');
+    // this.logger.debug('Updating message content for Anthropic models');
     if (messages[messages.length - 1].role === 'assistant') {
       const lastMessage = messages[messages.length - 1];
 
@@ -513,8 +500,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    logger.info(
-      CHANNEL,
+    this.logger.info(
       'Determining if should continue for Anthropic model via Anthropic API',
     );
     return (

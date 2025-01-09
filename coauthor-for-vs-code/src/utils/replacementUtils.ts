@@ -263,24 +263,16 @@ export function applyReplacementRegex(
   replacements: { [key: string]: string },
   flags: string = '',
 ): string {
-  try {
-    for (const [pattern, repl] of Object.entries(replacements)) {
-      try {
-        text = text.replace(new RegExp(pattern, flags), repl);
-      } catch (regexErr) {
-        // Log specific regex errors but continue with other replacements
-        logger.error(
-          CHANNEL,
-          `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
-        );
-      }
+  for (const [pattern, repl] of Object.entries(replacements)) {
+    try {
+      text = text.replace(new RegExp(pattern, flags), repl);
+    } catch (regexErr) {
+      // Log specific regex errors but continue with other replacements
+      logger.error(
+        CHANNEL,
+        `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
+      );
     }
-    return text;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error applying regex replacements: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
   }
+  return text;
 }

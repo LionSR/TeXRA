@@ -5,9 +5,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - agent components
 import {
   AgentSetting,
@@ -16,9 +13,6 @@ import {
   DEFAULT_AGENT_SETTINGS,
   DEFAULT_AGENT_PROMPTS,
 } from './AgentDataclass';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
@@ -30,14 +24,16 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     // Read and parse YAML
     const fileUri = vscode.Uri.file(absolutePath);
     const fileContent = await vscode.workspace.fs.readFile(fileUri);
+    // const fileContent = vscode.workspace.fs.readFileSync(fileUri);
     const yamlContent = Buffer.from(fileContent).toString('utf-8');
     const parsedYaml = yaml.parse(yamlContent);
 
-    logger.debug(CHANNEL, `Successfully loaded YAML from: ${absolutePath}`);
+    vscode.window.showInformationMessage(
+      `Successfully loaded YAML from: ${absolutePath}`,
+    );
     return parsedYaml;
   } catch (err) {
-    logger.error(
-      CHANNEL,
+    vscode.window.showErrorMessage(
       `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -65,8 +61,7 @@ export function mergeDicts(
     }
     return result;
   } catch (err) {
-    logger.error(
-      CHANNEL,
+    vscode.window.showErrorMessage(
       `Error merging dictionaries: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -120,8 +115,7 @@ export async function loadAgentSettingAndPrompts(
 
     return [settings, prompts];
   } catch (err) {
-    logger.error(
-      CHANNEL,
+    vscode.window.showErrorMessage(
       `Error loading agent settings and prompts: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;

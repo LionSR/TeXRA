@@ -16,7 +16,7 @@ import {
 import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
 export function registerFileSelectionCommands(

@@ -5,14 +5,10 @@ import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
-import {
-  applyReplacements,
-  getReplacementsByCategory,
-} from '../utils/replacementUtils';
 import {
   filterTagsFromText,
   addCdataToTags,
@@ -22,6 +18,10 @@ import {
   extractContentFromTagMultiple,
 } from '../utils/xmlUtils';
 import {
+  applyReplacements,
+  getReplacementsByCategory,
+} from '../utils/replacementUtils';
+import {
   runLatexdiff,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
@@ -30,9 +30,6 @@ import {
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -55,7 +52,6 @@ export function getOutputFileName(
 
   const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
   const outputFile = path.join(dir, outputBaseName);
-  logger.debug(CHANNEL, `Output file: ${outputFile}`);
   return outputFile;
 }
 
@@ -67,6 +63,8 @@ export class OutputHandler {
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public baseFiles: string[];
+  protected logger: AgentLogger;
+  protected channel: string;
 
   constructor(
     agentSetting: AgentSetting,
@@ -74,6 +72,7 @@ export class OutputHandler {
     modelHandler: any,
     logId: number,
     baseFiles: string[] = [],
+    logger?: AgentLogger,
   ) {
     this.agentSetting = agentSetting;
     this.agentConfig = agentConfig;
@@ -81,11 +80,15 @@ export class OutputHandler {
     this.logId = logId;
     this.outputFiles = { 0: [], 1: [] };
     this.baseFiles = baseFiles;
+    this.logger = logger || new AgentLogger('OutputHandler');
+    this.channel = this.logger.channelId;
   }
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    content = filterTagsFromText(content, 'monologue');
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      content = filterTagsFromText(content, 'monologue');
+    }
     content = applyReplacements(
       content,
       getReplacementsByCategory('latex_xml'),
@@ -103,14 +106,22 @@ export class OutputHandler {
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
-      await runLatexdiff(this.agentConfig.inputFile, outputFile);
+      this.logger.info(
+        `Running latexdiff for ${this.agentConfig.inputFile} and ${outputFile}`,
+      );
+      await runLatexdiff(
+        this.agentConfig.inputFile,
+        outputFile,
+        '_diff',
+        false,
+        this.channel,
+      );
     }
   }
 
   /** Runs latexdiff on multiple output files. */
   public async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
-    logger.debug(
-      CHANNEL,
+    this.logger.debug(
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
     if (
@@ -119,52 +130,67 @@ export class OutputHandler {
       Array.isArray(outputFiles) &&
       outputFiles.length > 0
     ) {
+      this.logger.info(
+        `Running latexdiff for ${this.agentConfig.outputFiles} and ${outputFiles}`,
+      );
       for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
         const inputFile = this.agentConfig.outputFiles[i];
         const outputFile = outputFiles[i];
         // TODO: Implement log update
         // await updateLogOutputFiles(this.logId, outputFile);
         if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          await runLatexdiff(inputFile, outputFile);
+          await runLatexdiff(
+            inputFile,
+            outputFile,
+            '_diff',
+            false,
+            this.channel,
+          );
         }
       }
     }
   }
 
   /** Processes single output file with XML splitting and filtering. */
-  public async processSingleOutput(outputFile: string): Promise<string> {
+  public async processSingleXmlOutput(outputFile: string): Promise<string> {
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
-    const content = await readFile(processedOutputFile);
-    const filteredContent = filterTagsFromText(content, 'monologue');
-    await writeFile(processedOutputFile, filteredContent);
+    let content = await readFile(processedOutputFile);
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      content = filterTagsFromText(content, 'monologue');
+    }
+    await writeFile(processedOutputFile, content);
     return processedOutputFile;
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
-  public async processMultipleOutputs(outputFile: string): Promise<string[]> {
+  public async processMultipleXmlOutputs(
+    outputFile: string,
+  ): Promise<string[]> {
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
-    for (const processedOutputFile of processedOutputFiles) {
-      const content = await readFile(processedOutputFile);
-      const filteredContent = filterTagsFromText(content, 'monologue');
-      await writeFile(processedOutputFile, filteredContent);
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      for (const processedOutputFile of processedOutputFiles) {
+        let content = await readFile(processedOutputFile);
+        content = filterTagsFromText(content, 'monologue');
+        await writeFile(processedOutputFile, content);
+      }
     }
     return processedOutputFiles;
   }
 
   /** Extracts and logs scratchpad content from output. */
-  private async extractAndLogScratchpad(
+  private extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<void> {
+  ): void {
     const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
     if (scratchpadContent) {
-      logger.info(CHANNEL, `Scratchpad content:\n${scratchpadContent.trim()}`);
+      this.logger.info(`Scratchpad content:\n${scratchpadContent.trim()}`);
     }
   }
 
@@ -177,16 +203,18 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    logger.debug(CHANNEL, `Splitting scratchpad output XML: ${outputFile}`);
+    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
 
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
-    logger.debug(CHANNEL, `TeX file: ${texFile}`);
+    // this.logger.debug(`TeX file: ${texFile}`);
 
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
-    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+    if (this.agentSetting.agentType === 'CoT') {
+      this.extractAndLogScratchpad(outputContent, thinkingTag);
+    }
 
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
@@ -209,8 +237,7 @@ export class OutputHandler {
         throw new Error(`No ${documentTag} found in output file`);
       }
     } catch (err) {
-      logger.error(
-        CHANNEL,
+      this.logger.error(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
@@ -226,14 +253,15 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string[]> {
-    logger.debug(
-      CHANNEL,
+    this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
-    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+    if (this.agentSetting.agentType === 'CoT') {
+      this.extractAndLogScratchpad(outputContent, thinkingTag);
+    }
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -255,8 +283,7 @@ export class OutputHandler {
         throw new Error(`No ${documentTag} found in output file`);
       }
     } catch (err) {
-      logger.error(
-        CHANNEL,
+      this.logger.error(
         `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
@@ -279,7 +306,7 @@ export class OutputHandler {
     for (const doc of latexDocuments) {
       if (doc.name) {
         const source = doc.name;
-        logger.debug(CHANNEL, `XML Source: ${source}`);
+        this.logger.debug(`XML Source: ${source}`);
         const content = doc.content;
 
         if (source && content) {
@@ -294,9 +321,9 @@ export class OutputHandler {
           );
           await writeFile(texFile, content.trim());
           outputFiles.push(texFile);
-          logger.debug(CHANNEL, `TeX file written: ${texFile}`);
+          this.logger.debug(`TeX file written: ${texFile}`);
         } else {
-          logger.error(CHANNEL, `Invalid document structure in document tag`);
+          this.logger.error(`Invalid document structure in document tag`);
         }
       }
     }
@@ -310,7 +337,7 @@ export class OutputHandler {
     filePath: string,
     documentTag: string,
   ): Promise<void> {
-    logger.debug(CHANNEL, `Ensuring correct XML structure: ${filePath}`);
+    this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
     let content = await readFile(filePath);
 
     if (
@@ -342,13 +369,11 @@ export class OutputHandler {
    * Generates diffs between base files and current round, and between consecutive rounds.
    */
   public async handleLatexdiff(currRound: number): Promise<void> {
-    logger.info(
-      CHANNEL,
+    this.logger.info(
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
     );
-    logger.debug(CHANNEL, `Base files: ${this.baseFiles}`);
-    logger.debug(
-      CHANNEL,
+    this.logger.debug(`Base files: ${this.baseFiles}`);
+    this.logger.debug(
       `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
     );
 
@@ -356,7 +381,7 @@ export class OutputHandler {
     for (let i = 0; i < this.baseFiles.length; i++) {
       const baseFile = this.baseFiles[i];
       const outputFile = this.outputFiles[currRound][i];
-      await runLatexdiffForRound(baseFile, outputFile, currRound);
+      await runLatexdiffForRound(baseFile, outputFile, currRound, this.channel);
     }
 
     // Generate diffs between consecutive rounds
@@ -364,7 +389,7 @@ export class OutputHandler {
       for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
         const outputFile1 = this.outputFiles[r - 1][i];
         const outputFile2 = this.outputFiles[r][i];
-        await runLatexdiffBetweenRounds(outputFile1, outputFile2);
+        await runLatexdiffBetweenRounds(outputFile1, outputFile2, this.channel);
       }
     }
   }
@@ -375,10 +400,7 @@ export class OutputHandler {
     outputFiles: string[],
   ): Promise<void> {
     if (!baseFiles?.length || !outputFiles?.length) {
-      logger.debug(
-        CHANNEL,
-        'No files to process for input command replacement',
-      );
+      this.logger.debug('No files to process for input command replacement');
       return;
     }
 
@@ -398,7 +420,7 @@ export class OutputHandler {
 
       if (newContent !== content) {
         await writeFile(outputFile, newContent);
-        logger.debug(CHANNEL, `Updated input commands in ${outputFile}`);
+        this.logger.debug(`Updated input commands in ${outputFile}`);
       }
     }
   }
