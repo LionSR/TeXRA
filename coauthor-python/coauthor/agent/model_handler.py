@@ -223,7 +223,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def create_reflection_messages(
+    def createReflectionMessages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -248,7 +248,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def add_continue_message(
+    def addContinueMessage(
         self,
         messages: list[dict],
         stateRound: AgentStateRound,
@@ -260,7 +260,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def initialize_output_and_prefill(
+    def initializeOutputAndPrefill(
         self,
         agentConfig: AgentConfig,
         agentSetting: AgentSetting,
