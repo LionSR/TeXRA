@@ -207,14 +207,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
     }
 
-    // Apply formatting
-    newResponse = applyReplacementRegex(
-      newResponse,
-      getReplacementsByCategory('autoConfirmation'),
-      'gms',
-    );
-
     if (autoConfirmation) {
+      // Apply formatting
+      newResponse = applyReplacementRegex(
+        newResponse,
+        getReplacementsByCategory('autoConfirmation'),
+        'gms',
+      );
       newResponse = filterTagsFromText(newResponse, 'monologue');
     }
 
