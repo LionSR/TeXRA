@@ -4,6 +4,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { fileExists } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
+import { checkToolInstalled } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -21,6 +22,11 @@ export async function getTexCount(
   channel: string = CHANNEL,
 ): Promise<string | null> {
   try {
+    // Check if texcount is installed
+    if (!(await checkToolInstalled('texcount'))) {
+      return null;
+    }
+
     // Convert single path to array
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
     const allOutputs: string[] = [];
