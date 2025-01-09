@@ -1,79 +1,49 @@
-# CoAuthor: Your Favourite and Intelligent Coauthor for academic research
+# CoAuthor: Your Favourite and Intelligent Coauthor for Academic Research
 
-CoAuthor is a tool designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It consists of two main components working in tandem to provide a seamless AI-assisted writing experience: the front end VS code extension and the python back end.
+CoAuthor is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
 
 See [PHILOSOPHY.md](PHILOSOPHY.md).
 
-## UI Improvements
+## UI Features
 
 - Enhanced file selection interface with improved multiple file selection and management
 - Streamlined agent execution process with clearer options and feedback
 - Improved error handling and user notifications for a smoother experience
-- The CoAuthor extension now automatically adapts to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience across different environments.
+- Automatic adaptation to VS Code's light and dark themes, ensuring a consistent and comfortable viewing experience
+- Integrated LaTeX support with intelligent document processing
+- Built-in version control features including LaTeX diff functionality
+- Advanced PDF and image handling capabilities:
+  - PDF page counting and conversion to images
+  - Image encoding and processing
+  - Support for various image formats (PNG, JPG, SVG, etc.)
+- LaTeX-specific tools:
+  - Automatic document indentation
+  - Word and element counting (text, headers, captions, math)
+  - Smart merging of included files
+- YAML and XML configuration support
+- Git integration for version control
 
-For detailed information on these new features and improvements, please refer to the [CoAuthor Frontend README](coauthor-for-vs-code/README.md).
+## Architecture
 
-## Components
+CoAuthor is built as a TypeScript-based VS Code extension that provides:
 
-### 1. CoAuthor Backend
-
-A robust Python package that serves as the engine for AI-assisted text processing and generation. It interfaces with LLMs like OpenAI's GPT and Anthropic's Claude to perform a variety of academic writing agents.
-
-Key features:
-
-- Multiple agent support: correct, polish, draw, adapt, and more
-- LaTeX document processing
+- Multiple AI agent support: correct, polish, draw, adapt, and more
+- LaTeX document processing and enhancement
 - Automatic figure and TikZ extraction
 - Version control integration (latexdiff functionality)
 - Customizable prompts and settings
+- Direct integration with OpenAI and Anthropic APIs
 
-For detailed backend information, see the [CoAuthor Backend README](coauthor/README.md).
+## Installation Guide
 
-### 2. CoAuthor Frontend (VS Code Extension)
-
-A user-friendly Visual Studio Code extension that provides an intuitive interface for interacting with the CoAuthor backend.
-
-Key features:
-
-- Easy file selection for input, auxiliary, and figure files
-- agent and model selection
-- Execution of CoAuthor commands directly from VS Code
-- LaTeX diff visualization
-- Housekeeping operations (clean output, clean build, indent TeX)
-
-For detailed frontend information, see the [CoAuthor Frontend README](coauthor-for-vs-code/README.md).
-
-## Quick Installation Guide
-
-### Backend Installation
-
-1. Ensure you have Python 3.9+ installed.
-2. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-repo/coauthor.git
-   cd coauthor
-   ```
-
-3. Install the package:
-
-   ```bash
-   pip install -e .
-   ```
-
-4. Set up your API keys:
-   - Copy `.env.sample` to `.env`
-   - Edit `.env` and add your OpenAI and Anthropic API keys
-
-### Frontend Installation [Quick]
-
-1. Open VS Code.
-2. Download the newest release (`.vsix` file, e.g., `coauthor-0.5.6.vsix`) from the release page of the Github repo.
-3. Find the newest `.vsix` file in the vs code file explorer.
-4. Right-click on the `.vsix` file.
-5. From the context menu, select "Install Extension VSIX".
-
-For manual installation or development setup, refer to the [CoAuthor Frontend README](coauthor-for-vs-code/README.md).
+1. Open VS Code
+2. Download the newest release (`.vsix` file, e.g., `coauthor-0.5.6.vsix`) from the release page of the Github repo
+3. Find the newest `.vsix` file in the VS Code file explorer
+4. Right-click on the `.vsix` file
+5. From the context menu, select "Install Extension VSIX"
+6. Configure your API keys in VS Code settings:
+   - OpenAI API key
+   - Anthropic API key
 
 ## Basic Usage
 
@@ -88,41 +58,47 @@ For manual installation or development setup, refer to the [CoAuthor Frontend RE
 
 Although many models are supported, we recommend using Anthropic sonnet+/opus or O1-series model for the best experience.
 
-## Available Agentic agents
+## Available AI Agents
 
-CoAuthor supports a variety of agentic agents, including but not limited to:
+CoAuthor supports a variety of intelligent agents, including but not limited to:
 
 - `correct_tex`: Fix typos and minor errors in LaTeX documents
 - `polish_tex`: Improve the writing style and clarity of LaTeX documents
 - `draw_tex`: Create or enhance TikZ figures in LaTeX documents
-- `write-tex`: Generate new LaTeX content based on instructions
+- `write_tex`: Generate new LaTeX content based on instructions
 - `meeting2text`: Convert meeting transcripts into structured text
 - `paper2note`: Transform research papers into lecture notes
 - `txt2tex`: Convert plain text to LaTeX format
-- `merge-tex`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
+- `merge_tex`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
 - `slide2paper`: Convert presentation slides into a research paper format
 - `paper2slide`: Convert research paper into a latex beamer presentation slides
 
-For a full list of agentic agents and their descriptions, refer to the backend and frontend READMEs.
-
 ## Customization
 
-CoAuthor offers various customization options:
+CoAuthor offers various customization options through VS Code settings:
 
-- Modify available agentic agents in VS Code settings
+- Configure available AI agents and their parameters
 - Adjust included directories and file types
-- Fine-tune prompts for specific agents in the xml prompt files (see backend documentation)
-- Configure model parameters like temperature and max tokens
+- Fine-tune prompts for specific agents
+- Customize model parameters like temperature and max tokens
+- Set up output directories and file handling preferences
 
 ## Advanced Features
 
 - Multi-file processing for complex projects
 - Automatic TikZ figure extraction and compilation
 - LaTeX diff functionality for version comparison
-- Integration with git for accessing recent commits
-- **Intelligent Merge**: Automatically merges LaTeX documents, ensuring consistency and handling conflicts intelligently
-
-For detailed information on these features, consult the respective backend and frontend READMEs.
+- Git integration for accessing recent commits
+- Intelligent document merging with conflict resolution
+- Custom prompt templates for specialized tasks
+- PDF processing capabilities:
+  - Convert PDFs to high-quality images
+- LaTeX document analysis:
+  - Word count statistics
+- File organization tools:
+  - Automatic build directory management
+  - Smart file backup and versioning
+  - Cross-platform path handling
 
 ## Recommended Settings
 
@@ -133,7 +109,7 @@ To reduce clutter, configure LaTeX-workshop's output directory:
 
 This directs all LaTeX output files to a `build` subdirectory. Works with relative/absolute paths from the root file. No trailing slash needed.
 
-**Note:** Default for `latexmk` users. The extension auto-detects output directory from LaTeX tool arguments. Recomend add `-pdf` and `-f` to the latexmk command. Use
+**Note:** Default for `latexmk` users. The extension auto-detects output directory from LaTeX tool arguments. Recommend adding `-pdf` and `-f` to the latexmk command:
 
 ```json
 "latex-workshop.latex.magic.args": [
@@ -162,8 +138,6 @@ ln -s /path/to/Dropbox/coauthor-papers/ProjectName/History /path/to/local/Projec
 ```
 
 Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.
-
-This method ensures consistent access to your CoAuthor outputs and version history across all your work environments while maintaining your preferred local directory structure.
 
 ## License
 
