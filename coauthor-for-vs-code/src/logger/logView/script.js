@@ -1,6 +1,8 @@
 const vscode = acquireVsCodeApi();
 let currentStream = '';
 
+import Split from 'split.js';
+
 function formatLogEntry(logMessage) {
   // The message is already formatted HTML from the server
   return logMessage.message;
@@ -23,7 +25,7 @@ function updateStreamTabs(streams, activeStream) {
 
 function setupEventListeners() {
   // Initialize Split.js
-  Split(['.content-area', '.tabs'], {
+  const split = Split(['.content-area', '.tabs'], {
     sizes: [80, 20],
     minSize: [400, 80],
     gutterSize: 1,

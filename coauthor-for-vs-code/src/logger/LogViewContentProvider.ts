@@ -27,17 +27,26 @@ export class LogViewContentProvider {
       const htmlPath = getWebviewPath('index.html');
       const cssPath = getWebviewPath('styles.css');
       const scriptPath = getWebviewPath('script.js');
+      const splitJsPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        'split.js',
+        'dist',
+        'split.es.js',
+      );
 
       let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
       const nonce = this.getNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const scriptUri = webview.asWebviewUri(scriptPath);
+      const splitJsUri = webview.asWebviewUri(splitJsPath);
 
       // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for LogView');
       return htmlContent
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
+        .replace('${splitJsUri}', splitJsUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace(/\${cspSource}/g, webview.cspSource);
     } catch (err) {
