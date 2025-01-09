@@ -338,7 +338,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.info(`Anthropic prefill: ${prefill}`);
 
       if (
-        toolState.accumulatedOutput === '<scratchpad>' &&
+        toolState.accumulatedOutput.includes('<scratchpad>') &&
         prefill === '<scratchpad>'
       ) {
         await writeFile(outputFile, prefill);
