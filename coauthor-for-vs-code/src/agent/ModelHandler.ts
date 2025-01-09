@@ -17,6 +17,8 @@ import {
   processPdfInput,
 } from '../utils/imgUtils';
 
+import { getConfig } from '../frontend-utils/commonUtils';
+
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
@@ -68,19 +70,33 @@ export abstract class ModelHandler {
    */
   public getApiKey(): string {
     if (this.config.useOpenRouter) {
-      const key = process.env.OPENROUTER_API_KEY;
-      if (!key) {
-        throw new Error('Missing OPENROUTER_API_KEY in environment');
+      // Try VS Code settings first
+      const key = getConfig('apiKeys.openrouter') as string;
+      if (key) {
+        return key;
       }
-      return key;
+      // Fall back to environment variable
+      const envKey = process.env.OPENROUTER_API_KEY;
+      if (!envKey) {
+        throw new Error('Missing OPENROUTER_API_KEY in both VS Code settings and environment');
+      }
+      return envKey;
     }
 
-    const envKey = `${this.config.provider.toUpperCase()}_API_KEY`;
-    const key = process.env[envKey];
-    if (!key) {
-      throw new Error(`Missing ${envKey} in environment`);
+    const provider = this.config.provider.toLowerCase();
+    // Try VS Code settings first
+    const key = getConfig(`apiKeys.${provider}`) as string;
+    if (key) {
+      return key;
     }
-    return key;
+    
+    // Fall back to environment variable
+    const envKey = `${this.config.provider.toUpperCase()}_API_KEY`;
+    const envValue = process.env[envKey];
+    if (!envValue) {
+      throw new Error(`Missing API key for ${this.config.provider} in both VS Code settings and environment (${envKey})`);
+    }
+    return envValue;
   }
 
   /**

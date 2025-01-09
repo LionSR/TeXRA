@@ -28,9 +28,9 @@
               "type": "string"
             },
             "default": [
-              "correct_tex",
-              "polish_tex",
-              "draw_tex",
+              "correct",
+              "polish",
+              "draw",
               "write_tex",
               "ocr_tex",
               "meeting2text",
