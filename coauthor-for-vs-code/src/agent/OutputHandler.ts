@@ -84,7 +84,9 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    content = filterTagsFromText(content, 'monologue');
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      content = filterTagsFromText(content, 'monologue');
+    }
     content = applyReplacements(
       content,
       getReplacementsByCategory('latex_xml'),
@@ -130,36 +132,40 @@ export class OutputHandler {
   }
 
   /** Processes single output file with XML splitting and filtering. */
-  public async processSingleOutput(outputFile: string): Promise<string> {
+  public async processSingleXmlOutput(outputFile: string): Promise<string> {
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
-    const content = await readFile(processedOutputFile);
-    const filteredContent = filterTagsFromText(content, 'monologue');
-    await writeFile(processedOutputFile, filteredContent);
+    let content = await readFile(processedOutputFile);
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      content = filterTagsFromText(content, 'monologue');
+    }
+    await writeFile(processedOutputFile, content);
     return processedOutputFile;
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
-  public async processMultipleOutputs(outputFile: string): Promise<string[]> {
+  public async processMultipleXmlOutputs(outputFile: string): Promise<string[]> {
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,
     );
-    for (const processedOutputFile of processedOutputFiles) {
-      const content = await readFile(processedOutputFile);
-      const filteredContent = filterTagsFromText(content, 'monologue');
-      await writeFile(processedOutputFile, filteredContent);
+    if (this.agentConfig.toolConfig.autoConfirmation) {
+      for (const processedOutputFile of processedOutputFiles) {
+        let content = await readFile(processedOutputFile);
+        content = filterTagsFromText(content, 'monologue');
+        await writeFile(processedOutputFile, content);
+      }
     }
     return processedOutputFiles;
   }
 
   /** Extracts and logs scratchpad content from output. */
-  private async extractAndLogScratchpad(
+  private extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<void> {
+  ): void {
     const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
     if (scratchpadContent) {
       this.logger.info(`Scratchpad content:\n${scratchpadContent.trim()}`);
@@ -179,12 +185,14 @@ export class OutputHandler {
 
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
-    this.logger.debug(`TeX file: ${texFile}`);
+    // this.logger.debug(`TeX file: ${texFile}`);
 
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
-    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+    if (this.agentSetting.agentType === 'CoT') {
+      this.extractAndLogScratchpad(outputContent, thinkingTag);
+    }
 
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
@@ -229,7 +237,9 @@ export class OutputHandler {
     let outputContent = await readFile(outputFile);
     outputContent = await this.processXmlContent(outputContent);
 
-    await this.extractAndLogScratchpad(outputContent, thinkingTag);
+    if (this.agentSetting.agentType === 'CoT') {
+      this.extractAndLogScratchpad(outputContent, thinkingTag);
+    }
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
