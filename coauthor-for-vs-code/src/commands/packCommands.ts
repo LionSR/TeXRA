@@ -53,7 +53,7 @@ async function handlePackSingle(
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
     vscode.window.showErrorMessage(
-      'Missing required parameters for pack single',
+      'Missing required parameters for packSingle',
     );
     return;
   }
@@ -110,7 +110,7 @@ async function handleCleanSingle(
       `Missing required parameters: inputFile=${inputFile}, agent=${agent}, model=${model}`,
     );
     vscode.window.showErrorMessage(
-      'Missing required parameters for clean single',
+      'Missing required parameters for cleanSingle',
     );
     return;
   }

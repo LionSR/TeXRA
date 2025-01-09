@@ -42,7 +42,7 @@ export async function runCleanSingle(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
     vscode.window.showErrorMessage(
-      'Missing required parameters for clean single',
+      'Missing required parameters for cleanSingle',
     );
     return;
   }
