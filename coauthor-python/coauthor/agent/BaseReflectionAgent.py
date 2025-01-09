@@ -295,8 +295,8 @@ class BaseReflectionAgent(ABC):
                 responseObject, self.agentSetting.endTag, self.agentConfig.toolConfig.autoConfirmation
             )
 
-            logger.info(f"Stop reason: {stopReason}")
-            logger.info(f"Token usage: {responseUsage}")
+            logger.debug(f"Stop reason: {stopReason}")
+            logger.debug(f"Token usage: {responseUsage}")
 
             # Compute statistics and update states
             APIUsage = self.modelHandler.computeResponseUsage(responseUsage, responseTime)
@@ -363,7 +363,7 @@ class BaseReflectionAgent(ABC):
 
             # Check if model should continue generating
             if self.modelHandler.shouldContinue(stopReason, newResponse, self.agentSetting):
-                logger.info("Should continue - adding continuation message to conversation")
+                logger.debug("Should continue - adding continuation message to conversation")
                 self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSetting, self.agentConfig)
                 continue
 

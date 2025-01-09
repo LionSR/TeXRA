@@ -83,7 +83,7 @@ export abstract class BaseReflectionAgent {
     this.agentPath = agentPath;
 
     // Initialize logger with unique channel ID
-    const channelId = `${this.agentConfig.agent}-${this.getTaskId()}`;
+    const channelId = this.getTaskId();
     this.logger = new AgentLogger(channelId);
 
     // Update model handler's logger
@@ -134,10 +134,12 @@ export abstract class BaseReflectionAgent {
    */
   private getTaskId(): string {
     return (
-      this.agentConfig.outputNameOverride ||
-      (this.agentConfig.inputFile &&
-        path.basename(this.agentConfig.inputFile)) +
-        `@${this.agentConfig.model}`
+      this.agentConfig.agent +
+      '-' +
+      `@${this.agentConfig.model}` +
+      (this.agentConfig.outputNameOverride ||
+        (this.agentConfig.inputFile &&
+          path.basename(this.agentConfig.inputFile)))
     );
   }
 
@@ -461,8 +463,8 @@ export abstract class BaseReflectionAgent {
           this.agentConfig.toolConfig.autoConfirmation,
         );
 
-      this.logger.info(`Stop reason: ${stopReason}`);
-      this.logger.info(`Token usage: ${JSON.stringify(responseUsage)}`);
+      this.logger.debug(`Stop reason: ${stopReason}`);
+      this.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
       // Compute statistics and update states
       const APIUsage = this.modelHandler.computeResponseUsage(
@@ -571,7 +573,7 @@ export abstract class BaseReflectionAgent {
           this.agentSetting,
         )
       ) {
-        this.logger.info(
+        this.logger.debug(
           `Should continue - adding continuation message to conversation`,
         );
         this.modelHandler.addContinueMessage(
@@ -940,6 +942,9 @@ export abstract class BaseReflectionAgent {
    * Manages initial processing and optional reflection rounds.
    */
   public async run(): Promise<void> {
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 

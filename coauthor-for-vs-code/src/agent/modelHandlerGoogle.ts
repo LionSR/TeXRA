@@ -68,9 +68,9 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     newResponse: string,
     agentSetting: any,
   ): boolean {
-    this.logger.info(
-      'Determining if should continue for Google model via OpenAI API',
-    );
+    // this.logger.info(
+    //   'Determining if should continue for Google model via OpenAI API',
+    // );
     return !hasEndTag(agentSetting, newResponse);
   }
 }

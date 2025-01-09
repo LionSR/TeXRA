@@ -42,14 +42,17 @@ export class ModelHandlerOpenAI extends ModelHandler {
       [this.config.name.toLowerCase().includes('o1')
         ? 'max_completion_tokens'
         : 'max_tokens']: this.config.maxOutputTokens,
-      temperature,
-      stream: true,
     };
+    if (!this.config.name.toLowerCase().includes('o1')) {
+      if (endTag) {
+        kwargs.stop = [endTag];
+      }
+      kwargs.temperature = temperature;
+    }
 
-    if (this.config.useOpenRouter) {
-      kwargs.http = {
-        baseURL: this.getBaseUrl(),
-      };
+    // Handle O1 models
+    if (this.config.name.toLowerCase() === 'o1') {
+      kwargs.reasoning_effort = 'high';
     }
 
     try {
@@ -186,8 +189,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
       `Start your response at the next token after: "${prefillTokens}"`;
 
     // Add continuation message
-    this.logger.info('Adding continuation message to conversation');
-    this.logger.debug(`Continuation message: ${userMessageContinuation}`);
+    this.logger.info(
+      'Adding continuation message to conversation. Continuation message:\n${userMessageContinuation}',
+    );
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
@@ -216,10 +220,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
         prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
       }
 
+      const PseudoPrefillMsgContentString = `Start your response with\n${prefill}`;
       messages[messages.length - 1].content.push({
         type: 'text',
-        text: `Start your response with\n${prefill}`,
+        text: PseudoPrefillMsgContentString,
       });
+      this.logger.info(
+        `Added pseudo prefill message to messages: ${PseudoPrefillMsgContentString}`,
+      );
       return [false, messages];
     }
 
@@ -350,10 +358,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
           messages.pop();
         }
       } else {
-        this.logger.debug(
-          'Last message is a request message rather than a ask to continue after cut off',
-        );
-        // otherwise last message is a request message rather than a ask to continue after cut off
+        // this.logger.debug(
+        //   'Last message is a request message rather than a ask to continue after cut off',
+        // );
         messages.push({
           role: 'assistant',
           content: [{ type: 'text', text: toolState.accumulatedOutput }],
@@ -368,9 +375,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    this.logger.info(
-      'Determining if should continue for OpenAI model via OpenAI API',
-    );
+    // this.logger.info(
+    //   'Determining if should continue for OpenAI model via OpenAI API',
+    // );
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
   }
 }
