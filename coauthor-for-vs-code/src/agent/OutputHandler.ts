@@ -31,6 +31,7 @@ import {
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
+import { AgentStateGlobal } from './AgentState';
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -445,5 +446,98 @@ export class OutputHandler {
         this.logger.debug(`Updated input commands in ${outputFile}`);
       }
     }
+  }
+
+  /** Prints statistics about token usage and costs */
+  public printStatistics(stateGlobal: AgentStateGlobal): void {
+    this.logger.info('=== Task Statistics ===');
+    this.logger.info(`Total input tokens  : ${stateGlobal.totalInputTokens}`);
+    this.logger.info(`Total output tokens : ${stateGlobal.totalOutputTokens}`);
+
+    // Calculate caching statistics if model supports either type of caching
+    if (
+      this.modelHandler.capabilities.supportsPromptCaching ||
+      this.modelHandler.capabilities.supportsAutoPromptCaching
+    ) {
+      this.logger.info(
+        `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
+      );
+
+      // Only show cache creation for Anthropic models (which use explicit caching)
+      if (this.modelHandler.capabilities.supportsPromptCaching) {
+        this.logger.info(
+          `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
+        );
+      }
+
+      // Calculate percentage cached
+      let totalCacheableTokens: number;
+      if (this.modelHandler.capabilities.supportsPromptCaching) {
+        // For Anthropic: include both read and creation tokens
+        totalCacheableTokens =
+          stateGlobal.totalCacheCreationInputTokens +
+          stateGlobal.totalCacheReadInputTokens;
+      } else {
+        // For OpenAI auto-caching: only use input tokens as base
+        totalCacheableTokens = stateGlobal.totalInputTokens;
+      }
+
+      const percentageCached =
+        totalCacheableTokens > 0
+          ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) * 100
+          : 0;
+      this.logger.info(`Percentage cached: ${percentageCached.toFixed(2)}%`);
+    }
+
+    // Print reasoning tokens if model supports it
+    if (this.modelHandler.capabilities.supportsReasoning) {
+      this.logger.info(
+        `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
+      );
+    }
+
+    // Calculate cost using model handler's price computation
+    let responseUsage;
+    if (this.modelHandler.isOpenai) {
+      if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
+        responseUsage = {
+          prompt_tokens: stateGlobal.totalInputTokens,
+          completion_tokens: stateGlobal.totalOutputTokens,
+          prompt_tokens_details: {
+            cached_tokens: stateGlobal.totalCacheReadInputTokens,
+          },
+          completion_tokens_details: {
+            reasoning_tokens: stateGlobal.totalReasoningTokens,
+          },
+        };
+      } else {
+        responseUsage = {
+          prompt_tokens: stateGlobal.totalInputTokens,
+          completion_tokens: stateGlobal.totalOutputTokens,
+          reasoning_tokens: stateGlobal.totalReasoningTokens,
+          cached_tokens: stateGlobal.totalCacheReadInputTokens,
+        };
+      }
+    } else if (this.modelHandler.isAnthropic) {
+      responseUsage = {
+        input_tokens: stateGlobal.totalInputTokens,
+        output_tokens: stateGlobal.totalOutputTokens,
+        cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
+        cache_creation_input_tokens: stateGlobal.totalCacheCreationInputTokens,
+      };
+    } else if (this.modelHandler.isGoogle) {
+      responseUsage = {
+        promptTokens: stateGlobal.totalInputTokens,
+        completionTokens: stateGlobal.totalOutputTokens,
+      };
+    }
+
+    const cost = this.modelHandler.computePrice(responseUsage);
+
+    this.logger.info(
+      `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
+    );
+    this.logger.warn(`Total cost          : ${cost.toFixed(3)} USD`);
+    this.logger.info('=======================');
   }
 }

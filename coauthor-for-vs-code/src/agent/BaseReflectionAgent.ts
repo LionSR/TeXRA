@@ -158,6 +158,7 @@ export abstract class BaseReflectionAgent {
    */
   protected async getUserVars(): Promise<Record<string, any>> {
     // Build user variables incrementally with clear categories
+    this.logger.info(`Obtaining dynamic variables...`);
     const userVars: Record<string, any> = {};
     Object.assign(userVars, this.getBasicVars());
     Object.assign(userVars, await this.getFileVars());
@@ -607,6 +608,8 @@ export abstract class BaseReflectionAgent {
     endTurn: boolean,
     currRound: number,
   ): Promise<void> {
+    this.logger.debug(`State global: ${JSON.stringify(stateGlobal)}`);
+
     await this.handleOutput(
       stateRound,
       stateGlobal,
@@ -614,9 +617,9 @@ export abstract class BaseReflectionAgent {
       endTurn,
       currRound,
     );
-    const inputInfo = `input file ${this.agentConfig.inputFile} and/or input files ${this.agentConfig.inputFiles}`;
+    const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
     this.logger.info(
-      `\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+      `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
     );
     this.logger.info(`Completed round ${currRound}`);
   }
@@ -637,6 +640,9 @@ export abstract class BaseReflectionAgent {
     //   updateLogStatistics(this.logId, stateGlobal, stateRound, currRound);
     // }
     // updateLogOutputFiles(this.logId, outputFile, this.outputHandler.outputFiles[currRound]);
+
+    // Print statistics at the end of each round
+    this.outputHandler.printStatistics(stateGlobal);
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
