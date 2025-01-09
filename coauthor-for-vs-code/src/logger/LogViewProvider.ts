@@ -19,13 +19,11 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'MessageHandler',
   'AgentLoad',
   'Housekeeping',
+  'LaTeXCommands',
 ]);
 
 // Channels that should not be persisted in workspace storage
-const NON_PERSISTENT_CHANNELS = new Set([
-  ...OUTPUT_CHANNEL_ONLY,
-  'LaTeXCommands',
-]);
+const NON_PERSISTENT_CHANNELS = new Set([...OUTPUT_CHANNEL_ONLY, 'ImgUtils']);
 
 export class LogViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;

@@ -55,7 +55,13 @@ async function handleLatexdiff(
   const fileToUse = baseFile || inputFile;
   try {
     // Get the diff filename from runLatexdiff
-    const diffFileName = await runLatexdiff(fileToUse, editedFile);
+    const diffFileName = await runLatexdiff(
+      fileToUse,
+      editedFile,
+      '_diff',
+      false,
+      CHANNEL,
+    );
     if (!diffFileName) {
       throw new Error('Failed to generate diff file');
     }
@@ -115,7 +121,7 @@ async function handleLatexdiffvc(
   const fileToUse = baseFile || inputFile;
   try {
     // Get the diff filename from runLatexdiffvc
-    const diffFileName = await runLatexdiffvc(fileToUse, commitHash);
+    const diffFileName = await runLatexdiffvc(fileToUse, commitHash, CHANNEL);
     if (!diffFileName) {
       throw new Error('Failed to generate diff file');
     }

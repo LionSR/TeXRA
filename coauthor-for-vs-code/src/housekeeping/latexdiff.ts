@@ -76,7 +76,7 @@ export async function runPackLatexdiffvc(
         await deleteFile(file);
       }
       logger.info(CHANNEL, 'Cleanup complete.');
-      vscode.window.showInformationMessage('LaTeX diff files cleaned');
+      vscode.window.showInformationMessage('LaTeXdiff files cleaned');
     } else {
       // Move files to output folder
       const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
@@ -193,7 +193,7 @@ export async function runCleanLatexdiffvc(
       await deleteFile(file);
     }
     logger.info(CHANNEL, 'Cleanup complete.');
-    vscode.window.showInformationMessage('LaTeX diff files cleaned');
+    vscode.window.showInformationMessage('LaTeXdiff files cleaned');
   } else {
     logger.warn(CHANNEL, 'No files found to clean.');
     vscode.window.showInformationMessage('No LaTeX diff files found to clean');
