@@ -25,6 +25,7 @@ import {
   runLatexdiff,
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
+  ensureLatexdiffInstalled,
 } from '../latex/latexdiff';
 
 // Local imports - agent components
@@ -106,6 +107,14 @@ export class OutputHandler {
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
+      // Check if latexdiff is installed before proceeding
+      if (!(await ensureLatexdiffInstalled())) {
+        this.logger.warn(
+          'Skipping latexdiff operation - latexdiff not installed',
+        );
+        return;
+      }
+
       this.logger.info(
         `Running latexdiff for ${this.agentConfig.inputFile} and ${outputFile}`,
       );
@@ -130,6 +139,14 @@ export class OutputHandler {
       Array.isArray(outputFiles) &&
       outputFiles.length > 0
     ) {
+      // Check if latexdiff is installed before proceeding
+      if (!(await ensureLatexdiffInstalled())) {
+        this.logger.warn(
+          'Skipping latexdiff operations - latexdiff not installed',
+        );
+        return;
+      }
+
       this.logger.info(
         `Running latexdiff for ${this.agentConfig.outputFiles} and ${outputFiles}`,
       );
@@ -369,6 +386,14 @@ export class OutputHandler {
    * Generates diffs between base files and current round, and between consecutive rounds.
    */
   public async handleLatexdiff(currRound: number): Promise<void> {
+    // Check if latexdiff is installed before proceeding
+    if (!(await ensureLatexdiffInstalled())) {
+      this.logger.warn(
+        'Skipping latexdiff operations - latexdiff not installed',
+      );
+      return;
+    }
+
     this.logger.info(
       `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
     );
