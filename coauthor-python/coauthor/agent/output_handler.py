@@ -20,7 +20,7 @@ from ..utils.xml import (
 from .agent_dataclass import AgentSetting
 from .agent_config import AgentConfig
 
-from .logdb import update_log_outputFiles
+from .logdb import updateLogAndOutputFiles
 
 
 def getOutputFileName(inputFile: str, agent: str, model: str, outputExt: str, currRound: int, editedFile: str | None = None) -> str:
@@ -70,7 +70,7 @@ class OutputHandler:
 
         if self.agentConfig.outputFiles:
             for inputFile, outputFile in zip(self.agentConfig.outputFiles, outputFiles):
-                update_log_outputFiles(self.logId, outputFile)
+                updateLogAndOutputFiles(self.logId, outputFile)
                 if ".tex" in inputFile and ".tex" in outputFile:
                     _ = runLatexdiff(inputFile, outputFile)
 
