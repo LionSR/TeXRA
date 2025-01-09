@@ -13,25 +13,10 @@ import { executeCommand } from '../utils/execUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from './latexindent';
-import { checkLatexdiffInstalled, checkLatexdiffVcInstalled } from './texTools';
+import { checkToolInstalled } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
-
-// Error messages for latexdiff installation
-export const INSTALLATION_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexdiff\n' +
-  '- Ubuntu: sudo apt-get install latexdiff\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-export const LATEXDIFF_ERROR =
-  'latexdiff is not installed. Please install it to use this feature.\n' +
-  INSTALLATION_INSTRUCTIONS;
-
-export const LATEXDIFF_VC_ERROR =
-  'latexdiff-vc is not installed. Please install it to use this feature.\n' +
-  INSTALLATION_INSTRUCTIONS;
 
 /**
  * Checks if latexdiff is installed and shows error if not
@@ -39,11 +24,7 @@ export const LATEXDIFF_VC_ERROR =
 export async function ensureLatexdiffInstalled(
   showError: boolean = true,
 ): Promise<boolean> {
-  const isInstalled = await checkLatexdiffInstalled();
-  if (!isInstalled && showError) {
-    vscode.window.showErrorMessage(LATEXDIFF_ERROR);
-  }
-  return isInstalled;
+  return checkToolInstalled('latexdiff', showError);
 }
 
 /**
@@ -52,11 +33,7 @@ export async function ensureLatexdiffInstalled(
 export async function ensureLatexdiffVcInstalled(
   showError: boolean = true,
 ): Promise<boolean> {
-  const isInstalled = await checkLatexdiffVcInstalled();
-  if (!isInstalled && showError) {
-    vscode.window.showErrorMessage(LATEXDIFF_VC_ERROR);
-  }
-  return isInstalled;
+  return checkToolInstalled('latexdiff-vc', showError);
 }
 
 async function processDiffFile(
