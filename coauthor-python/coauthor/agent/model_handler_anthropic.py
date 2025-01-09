@@ -342,5 +342,5 @@ class AnthropicHandler(ModelHandler):
 
     def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if Anthropic model should continue generating."""
-        logger.info("Determining if should continue for Anthropic model via Anthropic API")
+        # logger.info("Determining if should continue for Anthropic model via Anthropic API")
         return stopReason not in ("max_tokens", "stop_sequence") and not agentSetting.has_endTag(newResponse)
