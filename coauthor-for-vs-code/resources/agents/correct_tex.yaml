@@ -6,7 +6,7 @@ settings:
   endTag: </latex_document>
   outputExt: tex
   prefills:
-    - "Here is the revised \\LaTeX document. <latex_document>"
+    - "Here is the revised \LaTeX document. <latex_document>"
 
 prompts:
   systemPrompt: |

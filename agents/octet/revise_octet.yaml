@@ -6,7 +6,7 @@ settings:
   endTag: </latex_code>
   outputExt: tex
   prefills:
-    - "Here is the entire revised code of the \\LaTeX document. <latex_code>"
+    - "Here is the entire revised code of the \LaTeX document. <latex_code>"
 
 prompts:
   systemPrompt: |
