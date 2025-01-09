@@ -114,7 +114,7 @@ body {
   padding: 2px 4px;
   min-width: 0;
   min-height: 0;
-  background-color: var(--vscode-editor-background);
+  background-color: var(--vscode-sideBar-background);
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
 }
@@ -136,40 +136,40 @@ body {
 
 /* Level colors */
 .level-debug {
-  color: var(--vscode-debugIcon-startForeground, #0087ff);
+  color: var(--vscode-debugTokenExpression-name, #4b9ef9);
   font-weight: bold;
 }
 
 .level-info {
-  color: var(--vscode-notificationsInfoIcon-foreground, #00af00);
+  color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
   font-weight: bold;
 }
 
 .level-warn {
-  color: var(--vscode-editorWarning-foreground, #ffaf00);
+  color: var(--vscode-editorWarning-foreground, #cca700);
   font-weight: bold;
 }
 
 .level-error {
-  color: var(--vscode-editorError-foreground, #ff0000);
+  color: var(--vscode-editorError-foreground, #f14c4c);
   font-weight: bold;
 }
 
 /* Message colors */
 .message-debug {
-  color: var(--vscode-debugIcon-startForeground, #00ffff);
+  color: var(--vscode-textPreformat-foreground, #a9b7c6);
 }
 
 .message-info {
-  color: var(--vscode-foreground, #ffffff);
+  color: var(--vscode-foreground);
 }
 
 .message-warn {
-  color: var(--vscode-editorWarning-foreground, #ffaf00);
+  color: var(--vscode-inputValidation-warningForeground, #ddb100);
 }
 
 .message-error {
-  color: var(--vscode-editorError-foreground, #ff0000);
+  color: var(--vscode-editorError-foreground, #f14c4c);
 }
 
 .log-header {
@@ -179,7 +179,7 @@ body {
   justify-content: space-between;
   align-items: center;
   color: var(--vscode-descriptionForeground);
-  background-color: var(--vscode-editor-background);
+  background-color: var(--vscode-sideBar-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
