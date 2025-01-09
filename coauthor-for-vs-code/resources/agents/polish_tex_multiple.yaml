@@ -1,0 +1,129 @@
+name: polish_tex_multiple
+inherits: polish_tex
+settings:
+  agentType: CoT
+  documentTag: latex_documents
+  endTag: </latex_documents>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve a LaTeX research paper consisting of multiple documents focusing solely on addressing the given instructions.
+
+    When writing a professional *.tex \LaTeX document, you must:
+    \begin{itemize}
+        \item Follow the best practices that will result in zero warnings when checked by chktex.
+        \item Use appropriate notation and terminology consistently throughout all papers.
+        \item Keep the comments that start with `%' in the documents. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
+        \item Use either `` or '' as an alternative to `"'.
+        \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown.
+        \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in each input file.
+        \item Ensure that you maintain the structure and formatting of each individual paper while making improvements.
+    \end{itemize}
+
+  userPrefix: |
+    I am going to give you multiple \LaTeX documents to revise. Please read all documents carefully.
+
+    Here are the \LaTeX documents with additional LaTeX auxiliary files (where the math commands are defined):
+
+    <documents>
+    {{ AUXILIARY_FILES }}
+    {{ ADDITIONAL_INPUTS }}
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+    </documents>
+
+    Please carefully read through all the research papers above and ensure you fully understand all the details.
+
+  userRequest: |
+    Your task is to enhance these papers focusing solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    For example, in the instruction, if I ask you to revise section A in all papers, you do not need to revise section B in any paper.
+
+    {% if OUTPUT_FILES_ORDER %}
+    The output files should be in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}.
+    {% endif %}
+
+    In the scratchpad below, brainstorm concrete ways to significantly improve the quality of all papers that are directly relevant to the instruction above. Do not consider any other aspects of the papers. Be as concrete as to change what in which section of which paper in what ways. Use the scratchpad as an opportunity to formulate as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change, and the concrete steps to be taken to implement the changes starting from the beginning of each document.
+
+    <scratchpad>
+    \begin{enumerate}
+        \item [Specific improvement 1 addressing the instruction]
+        \begin{itemize}
+            \item Affected documents: [List of documents]
+            \item Rationale: [explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+        
+        \item [Specific improvement 2 addressing the instruction]
+        \begin{itemize}
+            \item Affected documents: [List of documents]
+            \item Rationale: [explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+        
+        \item [Specific improvement 3 addressing the instruction]
+        \begin{itemize}
+            \item Affected document: [Name of the document]
+            \item Rationale: [explanation]
+            \item Implementation: [Concrete steps]
+        \end{itemize}
+    \end{enumerate}
+    </scratchpad>
+
+    Then, following your plan in the scratchpad, please output updated versions of all \LaTeX documents with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+
+    <latex_documents>
+    <document name="{OUTPUT_FILES_ORDER[0]}">
+    % 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
+    </document>
+    <document name="{OUTPUT_FILES_ORDER[1]}">
+    % 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
+    </document>
+    ... (repeat for all output files)
+    </latex_documents>
+
+  userReflect: |
+    Now that you have made initial improvements to the papers, please reflect on your changes and consider any additional improvements that could further enhance the quality of the papers while staying focused on the original instruction.
+
+    <scratchpad>
+    \begin{itemize}
+        \item Reflection on previous changes:
+        \begin{enumerate}
+            \item [Summary of major changes made to each document]
+            \item [Evaluation of the effectiveness of these changes]
+            \item [Identification of any areas that may need further improvement]
+        \end{enumerate}
+        \item Additional improvements:
+        \begin{enumerate}
+            \item [Additional improvement 1]
+            \begin{itemize}
+                \item Affected documents: [List of documents]
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+            \item [Additional improvement 2]
+            \begin{itemize}
+                \item Affected documents: [List of documents]
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+            \item [Additional improvement 3]
+            \begin{itemize}
+                \item Affected documents: [List of documents]
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \end{enumerate}
+    \end{itemize}
+    </scratchpad>
+
+    Then, output further enhanced and complete versions of all \LaTeX documents in the <latex_documents> tag, incorporating the reflections and additional improvements discussed above. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction or the additional plan in the scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
+
+    Ensure that the output documents are in the following order: OUTPUT_FILES_ORDER={{ OUTPUT_FILES_ORDER }}
