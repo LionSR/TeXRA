@@ -704,7 +704,10 @@ export abstract class BaseReflectionAgent {
 
     // Initialize state and messages
     const currRound = 0;
-    this.logger.info(`\n\nProcessing round ${currRound}`);
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
+    this.logger.info(`\nProcessing round ${currRound}`);
     const stateGlobal = AgentStateGlobal.initialize();
 
     const messages: any[] = [];
@@ -845,7 +848,10 @@ export abstract class BaseReflectionAgent {
     }
 
     // Initialize reflection round
-    this.logger.info(`\n\nProcessing round ${currRound}`);
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
+    this.logger.info(`\nProcessing round ${currRound}`);
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
@@ -997,24 +1003,36 @@ export abstract class BaseReflectionAgent {
       // Multiple output files case
       this.logger.debug(`Processing multiple outputs for ${outputFile}`);
       this.logger.debug(`Output files: ${this.agentConfig.outputFiles}`);
-      const processedFiles =
-        await this.outputHandler.processMultipleOutputs(outputFile);
-      if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(processedFiles);
-        this.outputHandler.outputFiles[currRound] = processedFiles;
-        await this.outputHandler.replaceInputCommands(
-          this.baseFiles,
-          processedFiles,
+
+      if (this.agentSetting.agentType === 'CoT') {
+        const processedFiles =
+          await this.outputHandler.processMultipleXmlOutputs(outputFile);
+        if (processedFiles.length > 0) {
+          await this.outputHandler.handleMultipleOutputs(processedFiles);
+          this.outputHandler.outputFiles[currRound] = processedFiles;
+          await this.outputHandler.replaceInputCommands(
+            this.baseFiles,
+            processedFiles,
+          );
+        }
+      } else {
+        this.logger.error(
+          'Direct agent with multiple output files is not yet supported',
         );
       }
     } else {
       // Single output file case
       this.logger.debug(`Processing single output for ${outputFile}`);
-      const processedFile =
-        await this.outputHandler.processSingleOutput(outputFile);
-      if (processedFile) {
-        await this.outputHandler.handleSingleOutput(processedFile);
-        this.outputHandler.outputFiles[currRound] = [processedFile];
+      if (this.agentSetting.agentType === 'CoT') {
+        const processedFile =
+          await this.outputHandler.processSingleXmlOutput(outputFile);
+        if (processedFile) {
+          await this.outputHandler.handleSingleOutput(processedFile);
+          this.outputHandler.outputFiles[currRound] = [processedFile];
+        }
+      } else {
+        await this.outputHandler.handleSingleOutput(outputFile);
+        this.outputHandler.outputFiles[currRound] = [outputFile];
       }
     }
 
