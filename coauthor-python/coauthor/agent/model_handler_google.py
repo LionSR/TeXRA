@@ -51,5 +51,5 @@ class GoogleviaOpenAIHandler(OpenAIHandler):
 
     def shouldContinue(self, stopReason: str, newResponse: str, agentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""
-        logger.info("Determining if should continue for Google model via OpenAI API")
+        # logger.info("Determining if should continue for Google model via OpenAI API")
         return not agentSetting.has_endTag(newResponse)
