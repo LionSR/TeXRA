@@ -62,7 +62,7 @@ class BaseReflectionAgent(ABC):
 
         # Initialize client and check scratchpad usage
         self.client = self.modelHandler.getClient()
-        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
+        self.useScratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
 
         # Set output files
         self.outputFile[0] = self.getOutputFile(currRound=0)

@@ -80,18 +80,18 @@ class ModelHandler(ABC):
         """Check if this is a Google model."""
         return self.config.provider == ModelProvider.GOOGLE
 
-    def processImage(self, figureFile: str, file_extension: str) -> tuple[str, str]:
+    def processImage(self, figureFile: str, fileExtension: str) -> tuple[str, str]:
         """Process image for models.
 
         Args:
             figureFile: Path to the image file
-            file_extension: File extension (e.g. '.jpg', '.pdf')
+            fileExtension: File extension (e.g. '.jpg', '.pdf')
 
         Returns:
             Tuple of (base64 encoded image data, media type)
         """
         img_data = getBase64EncodedImage(figureFile)
-        ext = file_extension.lower()
+        ext = fileExtension.lower()
 
         media_types = {
             ".jpg": "image/jpeg",
@@ -101,7 +101,7 @@ class ModelHandler(ABC):
         }
 
         if ext not in media_types:
-            raise ValueError(f"Unsupported file extension: {file_extension}")
+            raise ValueError(f"Unsupported file extension: {fileExtension}")
 
         media_type = media_types[ext]
         if ext == ".pdf" and media_type == "image/png":
@@ -123,10 +123,10 @@ class ModelHandler(ABC):
                 logger.error(f"File not found or empty: {figureFile}")
                 continue
 
-            file_extension = os.path.splitext(figureFile)[1].lower()
+            fileExtension = os.path.splitext(figureFile)[1].lower()
 
             try:
-                img_data, media_type = self.processImage(figureFile, file_extension)
+                img_data, media_type = self.processImage(figureFile, fileExtension)
                 logger.debug(f"Processed image: {figureFile}, type: {media_type}")
 
                 if isinstance(img_data, list):
