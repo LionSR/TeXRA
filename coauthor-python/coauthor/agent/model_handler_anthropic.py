@@ -259,7 +259,7 @@ class AnthropicHandler(ModelHandler):
                 prefill += toolState.firstKCharsFromInput
                 toolState.update_accumulatedOutput(toolState.firstKCharsFromInput)
 
-            logger.debug(f"Anthropic prefill: {prefill}")
+            logger.debug(f"Anthropic prefill:\n{prefill}")
 
             if toolState.accumulatedOutput == "<scratchpad>" and prefill == "<scratchpad>":
                 writeFile(outputFile, prefill)

@@ -94,6 +94,9 @@ export class AgentStateGlobal implements IAgentStateGlobal {
   totalOutputTokens: number;
   totalRounds: number;
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
+  public totalCacheReadInputTokens: number = 0;
+  public totalCacheCreationInputTokens: number = 0;
+  public totalReasoningTokens: number = 0;
 
   private constructor() {
     this.firstInputTokens = 0;
@@ -116,12 +119,42 @@ export class AgentStateGlobal implements IAgentStateGlobal {
         this.firstInputTokens = stateRound.APIUsage.totalInputTokens;
       }
 
-      // For Anthropic models, handle cache tokens
+      // For Anthropic models, handle cache tokens directly from response
       if ('cache_read_input_tokens' in stateRound.APIUsage) {
         const cacheRead = stateRound.APIUsage.cache_read_input_tokens ?? 0;
         const cacheCreation =
           stateRound.APIUsage.cache_creation_input_tokens ?? 0;
+        this.totalCacheReadInputTokens += cacheRead;
+        this.totalCacheCreationInputTokens += cacheCreation;
         this.firstInputTokens += cacheRead + cacheCreation;
+      }
+      // For OpenAI models with auto prompt caching, handle cache tokens from prompt_tokens_details
+      else if (
+        'prompt_tokens_details' in stateRound.APIUsage &&
+        stateRound.APIUsage.prompt_tokens_details
+      ) {
+        const promptDetails = stateRound.APIUsage.prompt_tokens_details as {
+          cached_tokens?: number;
+        };
+        if ('cached_tokens' in promptDetails) {
+          this.totalCacheReadInputTokens += promptDetails.cached_tokens ?? 0;
+        }
+      }
+
+      // For OpenAI models, handle reasoning tokens from completion_tokens_details
+      if (
+        'completion_tokens_details' in stateRound.APIUsage &&
+        stateRound.APIUsage.completion_tokens_details
+      ) {
+        const completionDetails = stateRound.APIUsage
+          .completion_tokens_details as { reasoning_tokens?: number };
+        if ('reasoning_tokens' in completionDetails) {
+          this.totalReasoningTokens += completionDetails.reasoning_tokens ?? 0;
+        }
+      }
+      // For older OpenAI models, handle reasoning tokens directly
+      else if ('reasoning_tokens' in stateRound.APIUsage) {
+        this.totalReasoningTokens += stateRound.APIUsage.reasoning_tokens ?? 0;
       }
 
       // Update global totals
@@ -141,6 +174,9 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       totalOutputTokens: this.totalOutputTokens,
       totalRounds: this.totalRounds,
       APIUsage: this.APIUsage,
+      totalCacheReadInputTokens: this.totalCacheReadInputTokens,
+      totalCacheCreationInputTokens: this.totalCacheCreationInputTokens,
+      totalReasoningTokens: this.totalReasoningTokens,
     };
   }
 
@@ -155,7 +191,12 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     state.totalResponseTime = stateObj.totalResponseTime ?? 0;
     state.totalInputTokens = stateObj.totalInputTokens ?? 0;
     state.totalOutputTokens = stateObj.totalOutputTokens ?? 0;
+    state.totalRounds = stateObj.totalRounds ?? 0;
     state.APIUsage = stateObj.APIUsage ?? null;
+    state.totalCacheReadInputTokens = stateObj.totalCacheReadInputTokens ?? 0;
+    state.totalCacheCreationInputTokens =
+      stateObj.totalCacheCreationInputTokens ?? 0;
+    state.totalReasoningTokens = stateObj.totalReasoningTokens ?? 0;
     return state;
   }
 }
