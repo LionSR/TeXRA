@@ -7,9 +7,9 @@ class CoTAgent(BaseReflectionAgent):
     def getOutputFile(self, currRound: int) -> str:
         """Get the output file name for the given round."""
         baseOutputFile = self.agentConfig.outputNameOverride or self.agentConfig.inputFile
-        file_extension = "xml" if self.use_scratchpad else self.agentSetting.outputExt
+        fileExtension = "xml" if self.useScratchpad else self.agentSetting.outputExt
         return getOutputFileName(
-            baseOutputFile, self.agentConfig.agent, self.modelHandler.config.name, file_extension, currRound, self.agentConfig.editedFile
+            baseOutputFile, self.agentConfig.agent, self.modelHandler.config.name, fileExtension, currRound, self.agentConfig.editedFile
         )
 
     def handleOutput(
