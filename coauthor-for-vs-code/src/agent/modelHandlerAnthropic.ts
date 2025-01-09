@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import { filterTagsFromText, extractTextFromTag } from '../utils/xmlUtils';
 import {
+  applyReplacements,
   applyReplacementRegex,
   getReplacementsByCategory,
 } from '../utils/replacementUtils';
@@ -334,7 +335,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
       }
 
-      this.logger.info(`Anthropic prefill: ${prefill}`);
+      this.logger.info(`Anthropic prefill:\n${prefill}`);
 
       if (
         toolState.accumulatedOutput.includes('<scratchpad>') &&
@@ -351,6 +352,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
+    fileContent = applyReplacements(
+      fileContent,
+      getReplacementsByCategory('all'),
+    ).trim();
 
     if (
       this.capabilities.likesToAskForConfirmation &&

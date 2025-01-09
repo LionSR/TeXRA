@@ -89,6 +89,7 @@ class BaseReflectionAgent(ABC):
     def get_userVars(self) -> dict[str, Any]:
         """Get basic user variables common across agents."""
         # Build user variables incrementally with clear categories
+        logger.info("Obtaining dynamic variables...")
         userVars = {}
         userVars.update(self._get_basic_vars())
         userVars.update(self._get_file_vars())

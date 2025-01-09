@@ -144,6 +144,7 @@ const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
     // Code block to latex_document conversions - handle markdown code blocks
     '<scratchpad>\n```latex\n<latex_document>':
       '<scratchpad>\n</scratchpad>\n<latex_document>',
+    '</scratchpad>\n```latex': '</scratchpad>\n<latex_document>',
     '</scratchpad>\n\n```latex': '</scratchpad>\n\n<latex_document>',
     '</scratchpad>\n    \n```latex': '</scratchpad>\n\n<latex_document>',
     '```\n</latex_document>': '</latex_document>',

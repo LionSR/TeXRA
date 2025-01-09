@@ -6,6 +6,10 @@ import OpenAI from 'openai';
 
 // Local imports - utilities
 import { readFile, fileExists, writeFile } from '../utils/fileUtils';
+import {
+  applyReplacements,
+  getReplacementsByCategory,
+} from '../utils/replacementUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -231,7 +235,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
       return [false, messages];
     }
 
-    const fileContent = await readFile(outputFile);
+    let fileContent = await readFile(outputFile);
+    fileContent = applyReplacements(
+      fileContent,
+      getReplacementsByCategory('all'),
+    ).trim();
+
     messages.push({ role: 'assistant', content: fileContent });
 
     if (hasEndTag(agentSetting, fileContent)) {
