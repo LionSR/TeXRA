@@ -10,13 +10,14 @@ import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/executeAgent';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export const yamlCommands = {
   testAgentLoading: 'coauthor.testAgentLoading',
   loadSpecificAgent: 'coauthor.loadSpecificAgent',
   parseYaml: 'coauthor.parseYaml',
+  testYamlBrackets: 'coauthor.testYamlBrackets',
 };
 
 export async function handleTestAgentLoading(
@@ -226,7 +227,7 @@ export async function handleParseYaml(): Promise<void> {
     );
 
     try {
-      const parsedYaml = yaml.parse(content);
+      const parsedYaml = yaml.parse(content, {});
       logger.info(CHANNEL, 'Successfully parsed YAML structure');
       logger.debug(
         CHANNEL,
@@ -248,6 +249,78 @@ export async function handleParseYaml(): Promise<void> {
   }
 }
 
+export async function handleTestYamlBrackets(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    logger.info(CHANNEL, 'Testing YAML parsing with angle brackets:');
+
+    // Create a temporary test YAML file
+    const testDir = path.join(context.globalStorageUri.fsPath, 'test_yaml');
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(testDir));
+
+    // Test YAML content with various angle bracket formats
+    const testYaml = {
+      test1: '<value>',
+      test2: '</value>',
+      test3: 'value',
+      settings: {
+        documentTag: 'latex_document',
+        endTag: '</latex_document>',
+      },
+    };
+
+    // Write test YAML
+    const testYamlPath = path.join(testDir, 'test_brackets.yaml');
+    const yamlString = yaml.stringify(testYaml);
+    await vscode.workspace.fs.writeFile(
+      vscode.Uri.file(testYamlPath),
+      Buffer.from(yamlString, 'utf-8'),
+    );
+
+    // Read and parse the YAML using VSCode's fs API
+    const fileContent = await vscode.workspace.fs.readFile(
+      vscode.Uri.file(testYamlPath),
+    );
+    const content = Buffer.from(fileContent).toString('utf-8');
+    logger.info(CHANNEL, '\nRaw YAML content:');
+    logger.info(CHANNEL, content);
+
+    // Parse the content
+    const parsed = yaml.parse(content);
+    logger.info(CHANNEL, '\nParsed YAML structure:');
+    logger.info(CHANNEL, JSON.stringify(parsed, null, 2));
+
+    // Verify specific fields
+    logger.info(CHANNEL, '\nVerifying specific fields:');
+    logger.info(CHANNEL, `test1: "${parsed.test1}"`);
+    logger.info(CHANNEL, `test2: "${parsed.test2}"`);
+    logger.info(CHANNEL, `test3: "${parsed.test3}"`);
+    logger.info(
+      CHANNEL,
+      `settings.documentTag: "${parsed.settings.documentTag}"`,
+    );
+    logger.info(CHANNEL, `settings.endTag: "${parsed.settings.endTag}"`);
+
+    // Cleanup
+    await vscode.workspace.fs.delete(vscode.Uri.file(testYamlPath));
+    await vscode.workspace.fs.delete(vscode.Uri.file(testDir), {
+      recursive: true,
+    });
+
+    vscode.window.showInformationMessage(
+      'YAML bracket test completed. Check Debug Console for results.',
+    );
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logger.error(CHANNEL, `YAML bracket test failed: ${errorMessage}`);
+    if (err instanceof Error && err.stack) {
+      logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
+    }
+    vscode.window.showErrorMessage(`YAML bracket test failed: ${errorMessage}`);
+  }
+}
+
 export function registerYamlCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(yamlCommands.testAgentLoading, () =>
@@ -257,6 +330,9 @@ export function registerYamlCommands(context: vscode.ExtensionContext) {
       handleLoadSpecificAgent(context),
     ),
     vscode.commands.registerCommand(yamlCommands.parseYaml, handleParseYaml),
+    vscode.commands.registerCommand(yamlCommands.testYamlBrackets, () =>
+      handleTestYamlBrackets(context),
+    ),
   );
   return yamlCommands;
 }

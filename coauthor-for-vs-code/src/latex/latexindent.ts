@@ -12,7 +12,7 @@ import * as logger from '../logger/logUtils';
 import { deleteFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
 
-const CHANNEL = 'LaTeX';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {

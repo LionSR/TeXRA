@@ -26,7 +26,7 @@ class OpenAIHandler(ModelHandler):
     def getClient(self) -> OpenAI:
         """Get OpenAI client."""
         api_key = self.get_api_key()
-        logger.info("Using OpenAI API key.")
+        logger.info("Using OpenAI API.")
         return OpenAI(api_key=api_key)
 
     def createResponse(
@@ -53,7 +53,7 @@ class OpenAIHandler(ModelHandler):
 
         return client.chat.completions.create(**kwargs)
 
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -101,7 +101,7 @@ class OpenAIHandler(ModelHandler):
         messages.append({"role": "user", "content": content})
         return messages
 
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for OpenAI models."""
 
         def create_content_pair(image: dict) -> list[dict]:
@@ -113,13 +113,14 @@ class OpenAIHandler(ModelHandler):
                         "url": f"data:{image['media_type']};base64,{image['data']}",
                         "media_type": image["media_type"],
                         "data": image["data"],
+                        "detail": "high",
                     },
                 },
             ]
 
-        return [item for image in image_contents for item in create_content_pair(image)]
+        return [item for image in imageContents for item in create_content_pair(image)]
 
-    def extract_response(
+    def extractResponse(
         self,
         responseObject: Any,
         endTag: str,
@@ -279,7 +280,7 @@ class OpenAIHandler(ModelHandler):
                 # otherwise last message is a request message rather than a ask to continue after cut off
                 messages.append({"role": "assistant", "content": [{"type": "text", "text": toolState.accumulatedOutput}]})
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
+    def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""
         logger.info("Determining if should continue for OpenAI model via OpenAI API")
         return stopReason == "length" and not agentSetting.has_endTag(newResponse)

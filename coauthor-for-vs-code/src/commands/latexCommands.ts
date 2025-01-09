@@ -14,7 +14,7 @@ import { getTexCount } from '../latex/texcount';
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export function registerLatexCommands(context: vscode.ExtensionContext) {
@@ -25,7 +25,6 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand('coauthor.getTexCount', handleGetTexCount),
   );
-  logger.debug(CHANNEL, 'LaTeX commands registered');
 }
 
 async function handleIndentCurrentTex(): Promise<void> {
@@ -114,7 +113,7 @@ async function handleGetTexCount(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Running texcount...' });
 
-        const result = await getTexCount(filePath, mergeOption.value);
+        const result = await getTexCount(filePath, mergeOption.value, CHANNEL);
 
         if (result) {
           // Extract key statistics using regex

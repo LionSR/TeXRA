@@ -4,16 +4,10 @@
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { hasEndTag } from './AgentDataclass';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
 
 /**
  * Handler for Google models using OpenAI-compatible API.
@@ -23,7 +17,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    logger.info(CHANNEL, `Using Google API key. Base URL: ${baseUrl}`);
+    this.logger.info(`Using Google API key. Base URL: ${baseUrl}`);
     return new OpenAI({
       apiKey,
       baseURL: baseUrl,
@@ -74,8 +68,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
     newResponse: string,
     agentSetting: any,
   ): boolean {
-    logger.info(
-      CHANNEL,
+    this.logger.info(
       'Determining if should continue for Google model via OpenAI API',
     );
     return !hasEndTag(agentSetting, newResponse);

@@ -17,7 +17,7 @@ import { registerYamlCommands } from './commands/yamlCommands';
 
 import * as logger from './logger/logUtils';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'Registration';
 logger.initialize(CHANNEL);
 
 /**

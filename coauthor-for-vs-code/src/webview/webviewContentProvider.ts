@@ -10,8 +10,9 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'WebviewContent';
+const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
+
 export class WebviewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 

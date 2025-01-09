@@ -1,11 +1,26 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-// Local imports - utilities
-import { readFile } from './fileUtils';
-
 const CHANNEL = 'Utils';
 logger.initialize(CHANNEL);
+
+/**
+ * Get a string representation of an object's structure without its values
+ */
+function getObjectStructure(obj: any): string {
+  if (Array.isArray(obj)) {
+    return `Array(${obj.length})`;
+  }
+  if (obj && typeof obj === 'object') {
+    const keys = Object.keys(obj);
+    const structure = keys.map((key) => {
+      const value = obj[key];
+      return `${key}: ${getObjectStructure(value)}`;
+    });
+    return `{${structure.join(', ')}}`;
+  }
+  return typeof obj;
+}
 
 /**
  * Wrap content of specified tags with CDATA sections
@@ -32,21 +47,13 @@ export function addCdataToTagsMultiple(
   xmlData: string,
   tags: string[],
 ): string {
-  try {
-    return tags.reduce((result, tag) => {
-      const pattern = new RegExp(
-        `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
-        'gs',
-      );
-      return result.replace(pattern, '$1<![CDATA[$2]]>$3');
-    }, xmlData);
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error adding CDATA to tags with attributes: ${err instanceof Error ? err.message : String(err)}`,
+  return tags.reduce((result, tag) => {
+    const pattern = new RegExp(
+      `(<${tag}(?:\\s+[^>]*)?>)(.*?)(</${tag}>)`,
+      'gs',
     );
-    throw err;
-  }
+    return result.replace(pattern, '$1<![CDATA[$2]]>$3');
+  }, xmlData);
 }
 
 export function extractTextFromTag(
@@ -55,7 +62,7 @@ export function extractTextFromTag(
 ): string {
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
   const match = inputContent.match(regex);
-  return match ? match[1] : inputContent;
+  return match ? match[1] : '';
 }
 
 /**
@@ -65,19 +72,11 @@ export function filterTagsFromText(
   content: string,
   tags: string | string[],
 ): string {
-  try {
-    const tagArray = typeof tags === 'string' ? [tags] : tags;
-    return tagArray.reduce((result, tag) => {
-      const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
-      return result.replace(pattern, '');
-    }, content);
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error filtering tags from text: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
+  const tagArray = typeof tags === 'string' ? [tags] : tags;
+  return tagArray.reduce((result, tag) => {
+    const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
+    return result.replace(pattern, '');
+  }, content);
 }
 
 /**
@@ -87,34 +86,30 @@ export function extractContentFromTag(
   root: Record<string, any>,
   documentTag: string,
 ): string | null {
-  try {
+  if (!root || typeof root !== 'object') {
     logger.error(
       CHANNEL,
-      `Extracting single document content from root: ${JSON.stringify(root)}`,
+      `Invalid root object. Structure: ${getObjectStructure(root)}`,
     );
-
-    if (!root || typeof root !== 'object') {
-      logger.error(CHANNEL, `Invalid root object`);
-      return null;
-    }
-
-    if (documentTag in root) {
-      const content = root[documentTag];
-      if (typeof content === 'string') {
-        return content.trim();
-      }
-      logger.error(CHANNEL, `Content is not a string in single document case`);
-    }
-
-    logger.error(CHANNEL, `No ${documentTag} found in output file`);
     return null;
-  } catch (err) {
+  }
+
+  if (documentTag in root) {
+    const content = root[documentTag];
+    if (typeof content === 'string') {
+      return content.trim();
+    }
     logger.error(
       CHANNEL,
-      `Error extracting content from tag: ${err instanceof Error ? err.message : String(err)}`,
+      `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
     );
-    throw err;
   }
+
+  logger.error(
+    CHANNEL,
+    `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
+  );
+  return null;
 }
 
 /**
@@ -125,13 +120,11 @@ export function extractContentFromTagMultiple(
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
-    logger.error(
-      CHANNEL,
-      `Extracting multiple document content from root: ${JSON.stringify(root)}`,
-    );
-
     if (!root || typeof root !== 'object') {
-      logger.error(CHANNEL, `Invalid root object`);
+      logger.error(
+        CHANNEL,
+        `Invalid root object. Structure: ${getObjectStructure(root)}`,
+      );
       return null;
     }
 
@@ -151,20 +144,20 @@ export function extractContentFromTagMultiple(
         }
         logger.error(
           CHANNEL,
-          `Document property is not an array in multiple document case`,
+          `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
         );
       }
     }
 
     logger.error(
       CHANNEL,
-      `No ${documentTag} or document elements found in output file`,
+      `No ${documentTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
     );
     return null;
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}`,
+      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
     );
     throw err;
   }

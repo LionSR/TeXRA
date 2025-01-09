@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 
 /**
@@ -15,29 +15,23 @@ logger.initialize(CHANNEL);
 export async function getAgentsDirectory(
   context: vscode.ExtensionContext,
 ): Promise<string> {
-  try {
-    const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
+  const rootPath = getConfig<string>('explorer.agentsDirectory', 'agents');
 
-    if (rootPath && path.isAbsolute(rootPath)) {
-      return rootPath;
-    }
-
-    if (!context) {
-      throw new Error('Extension context required for relative paths');
-    }
-
-    const basePath = path.join(context.globalStorageUri.fsPath, rootPath);
-
-    // Ensure the directory exists
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(basePath));
-    logger.debug(CHANNEL, `Using agents directory: ${basePath}`);
-
-    return basePath;
-  } catch (err) {
-    const errorMsg = `Error getting agents directory: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
-    throw new Error(errorMsg);
+  if (rootPath && path.isAbsolute(rootPath)) {
+    return rootPath;
   }
+
+  if (!context) {
+    throw new Error('Extension context required for relative paths');
+  }
+
+  const basePath = path.join(context.globalStorageUri.fsPath, rootPath);
+
+  // Ensure the directory exists
+  await vscode.workspace.fs.createDirectory(vscode.Uri.file(basePath));
+  logger.debug(CHANNEL, `Using agents directory: ${basePath}`);
+
+  return basePath;
 }
 
 /**
