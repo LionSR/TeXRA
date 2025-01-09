@@ -58,7 +58,7 @@ def init_db() -> None:
         raise
 
 
-def create_log_entry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> int:
+def createLogEntry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> int:
     """Create a new log entry and return its ID."""
     init_db()
     try:
@@ -131,7 +131,7 @@ def create_log_entry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> in
         raise
 
 
-def update_log_statistics(logId: int, stateGlobal: AgentStateGlobal, stateRound: AgentStateRound, round: int) -> None:
+def updateLogStatistics(logId: int, stateGlobal: AgentStateGlobal, stateRound: AgentStateRound, round: int) -> None:
     """Update statistics in the database for a specific log entry."""
     if logId is None:
         logger.warning("No log ID provided, skipping statistics update")
@@ -180,7 +180,7 @@ def update_log_statistics(logId: int, stateGlobal: AgentStateGlobal, stateRound:
         raise
 
 
-def update_log_outputFiles(logId: int, outputFile: str, all_outputFiles: list[str] | None = None) -> None:
+def updateLogAndOutputFiles(logId: int, outputFile: str, all_outputFiles: list[str] | None = None) -> None:
     """Update output files for a specific log entry."""
     if logId is None:
         logger.warning("No log ID provided, skipping output files update")
@@ -220,7 +220,7 @@ def update_log_outputFiles(logId: int, outputFile: str, all_outputFiles: list[st
         raise
 
 
-def get_log_entry(logId: int) -> dict[str, str | int | float | list[str] | dict]:
+def getLogEntry(logId: int) -> dict[str, str | int | float | list[str] | dict]:
     """Retrieve complete log entry information for a specific ID."""
 
     # the idea is that we can retrive the state of panel by using JSON.parse

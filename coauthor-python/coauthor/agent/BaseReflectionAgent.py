@@ -29,7 +29,8 @@ from .agent_config import AgentConfig
 from .agent_dataclass import AgentSetting, AgentPrompt
 from .agent_state import AgentStateRound, AgentStateGlobal
 from .tool_state import ToolState
-from .logdb import create_log_entry, update_log_statistics, update_log_outputFiles
+from .logdb import createLogEntry, updateLogStatistics, updateLogAndOutputFiles
+
 from .model_handler import ModelHandler
 from .output_handler import OutputHandler
 
@@ -69,7 +70,7 @@ class BaseReflectionAgent(ABC):
         self.outputFile[1] = self.getOutputFile(currRound=1)
 
         # Initialize logging and database entry
-        self.logId = create_log_entry(self.agentConfig, self.agentSetting)
+        self.logId = createLogEntry(self.agentConfig, self.agentSetting)
 
         # Initialize user variables
         self.userVars = self.get_userVars()
@@ -256,9 +257,9 @@ class BaseReflectionAgent(ABC):
         """Handle the output for the given round."""
         # Update database with statistics
         if self.logId is not None:
-            update_log_statistics(self.logId, stateGlobal, stateRound, currRound)
+            updateLogStatistics(self.logId, stateGlobal, stateRound, currRound)
 
-        update_log_outputFiles(self.logId, outputFile, self.outputHandler.outputFiles[currRound])
+        updateLogAndOutputFiles(self.logId, outputFile, self.outputHandler.outputFiles[currRound])
         return self.outputHandler.outputFiles[currRound]
 
     @abstractmethod
