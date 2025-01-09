@@ -944,18 +944,18 @@ export abstract class BaseReflectionAgent {
       await this.process();
 
     // this.logger.info(`Round 0 completed\n`);
-    this.logger.info(
-      `\n------------------------------------------------------------`,
-    );
+    // this.logger.info(
+    //   `\n------------------------------------------------------------`,
+    // );
 
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
       // this.logger.info(`Round 1 completed\n`);
-      this.logger.info(
-        `\n------------------------------------------------------------`,
-      );
+      // this.logger.info(
+      //   `\n------------------------------------------------------------`,
+      // );
     }
   }
 
