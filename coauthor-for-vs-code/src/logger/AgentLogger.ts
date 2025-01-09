@@ -8,8 +8,9 @@ import * as logger from './logUtils';
  * Encapsulates logging functionality for agents with a dedicated channel.
  */
 export class AgentLogger {
-  constructor(private channelId: string) {
+  constructor(public channelId: string) {
     logger.initialize(this.channelId);
+    this.channelId = channelId;
   }
 
   debug(message: string): void {

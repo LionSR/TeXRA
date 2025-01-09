@@ -179,49 +179,42 @@ export abstract class ModelHandler {
     const addedFigures: string[] = [];
 
     for (const figureFile of figureFiles) {
+      if (!(await fileExists(figureFile))) {
+        this.logger.error(`File not found: ${figureFile}`);
+        continue;
+      }
+
+      const fileExtension = path.extname(figureFile).toLowerCase();
+
       try {
-        if (!(await fileExists(figureFile))) {
-          this.logger.error(`File not found: ${figureFile}`);
-          continue;
-        }
+        const [imgData, mediaType] = await this.processImage(
+          figureFile,
+          fileExtension,
+        );
+        this.logger.debug(`Processed image: ${figureFile}, type: ${mediaType}`);
 
-        const fileExtension = path.extname(figureFile).toLowerCase();
-
-        try {
-          const [imgData, mediaType] = await this.processImage(
-            figureFile,
-            fileExtension,
-          );
+        if (Array.isArray(imgData)) {
           this.logger.debug(
-            `Processed image: ${figureFile}, type: ${mediaType}`,
+            `Adding ${imgData.length} pages to the image contents`,
           );
-
-          if (Array.isArray(imgData)) {
-            this.logger.debug(
-              `Adding ${imgData.length} pages to the image contents`,
-            );
-            for (let i = 0; i < imgData.length; i++) {
-              imageContents.push({
-                file_name: `${path.basename(figureFile)}_page_${i + 1}`,
-                data: imgData[i],
-                media_type: mediaType,
-              });
-              addedFigures.push(`${figureFile}_page_${i + 1}`);
-            }
-          } else {
-            this.logger.debug(
-              `Adding single page to the image contents: ${figureFile}`,
-            );
+          for (let i = 0; i < imgData.length; i++) {
             imageContents.push({
-              file_name: path.basename(figureFile),
-              data: imgData,
+              file_name: `${path.basename(figureFile)}_page_${i + 1}`,
+              data: imgData[i],
               media_type: mediaType,
             });
-            addedFigures.push(figureFile);
+            addedFigures.push(`${figureFile}_page_${i + 1}`);
           }
-        } catch (err) {
-          this.logger.error(`Failed to process image ${figureFile}: ${err}`);
-          continue;
+        } else {
+          this.logger.debug(
+            `Adding single page to the image contents: ${figureFile}`,
+          );
+          imageContents.push({
+            file_name: path.basename(figureFile),
+            data: imgData,
+            media_type: mediaType,
+          });
+          addedFigures.push(figureFile);
         }
       } catch (err) {
         this.logger.error(`Failed to process image ${figureFile}: ${err}`);
@@ -229,8 +222,10 @@ export abstract class ModelHandler {
       }
     }
 
-    this.logger.info(`Using images: ${figureFiles}`);
-    this.logger.info(`Successfully added: ${addedFigures}`);
+    if (figureFiles.length > 0) {
+      this.logger.info(`Trying to load images: ${figureFiles}`);
+      this.logger.info(`Successfully added: ${addedFigures}`);
+    }
 
     return this.createImageContent(imageContents);
   }

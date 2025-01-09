@@ -64,6 +64,7 @@ export class OutputHandler {
   public outputFiles: { [key: number]: string[] };
   public baseFiles: string[];
   protected logger: AgentLogger;
+  protected channel: string;
 
   constructor(
     agentSetting: AgentSetting,
@@ -80,6 +81,7 @@ export class OutputHandler {
     this.outputFiles = { 0: [], 1: [] };
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
+    this.channel = this.logger.channelId;
   }
 
   /** Processes XML content by filtering tags and applying replacements. */
@@ -104,7 +106,16 @@ export class OutputHandler {
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
-      await runLatexdiff(this.agentConfig.inputFile, outputFile);
+      this.logger.info(
+        `Running latexdiff for ${this.agentConfig.inputFile} and ${outputFile}`,
+      );
+      await runLatexdiff(
+        this.agentConfig.inputFile,
+        outputFile,
+        '_diff',
+        false,
+        this.channel,
+      );
     }
   }
 
@@ -119,13 +130,22 @@ export class OutputHandler {
       Array.isArray(outputFiles) &&
       outputFiles.length > 0
     ) {
+      this.logger.info(
+        `Running latexdiff for ${this.agentConfig.outputFiles} and ${outputFiles}`,
+      );
       for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
         const inputFile = this.agentConfig.outputFiles[i];
         const outputFile = outputFiles[i];
         // TODO: Implement log update
         // await updateLogOutputFiles(this.logId, outputFile);
         if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          await runLatexdiff(inputFile, outputFile);
+          await runLatexdiff(
+            inputFile,
+            outputFile,
+            '_diff',
+            false,
+            this.channel,
+          );
         }
       }
     }
@@ -146,7 +166,9 @@ export class OutputHandler {
   }
 
   /** Processes multiple output files with XML splitting and filtering. */
-  public async processMultipleXmlOutputs(outputFile: string): Promise<string[]> {
+  public async processMultipleXmlOutputs(
+    outputFile: string,
+  ): Promise<string[]> {
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,
@@ -359,7 +381,7 @@ export class OutputHandler {
     for (let i = 0; i < this.baseFiles.length; i++) {
       const baseFile = this.baseFiles[i];
       const outputFile = this.outputFiles[currRound][i];
-      await runLatexdiffForRound(baseFile, outputFile, currRound);
+      await runLatexdiffForRound(baseFile, outputFile, currRound, this.channel);
     }
 
     // Generate diffs between consecutive rounds
@@ -367,7 +389,7 @@ export class OutputHandler {
       for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
         const outputFile1 = this.outputFiles[r - 1][i];
         const outputFile2 = this.outputFiles[r][i];
-        await runLatexdiffBetweenRounds(outputFile1, outputFile2);
+        await runLatexdiffBetweenRounds(outputFile1, outputFile2, this.channel);
       }
     }
   }
