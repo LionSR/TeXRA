@@ -500,9 +500,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    this.logger.info(
-      'Determining if should continue for Anthropic model via Anthropic API',
-    );
+    // this.logger.debug(
+    //   'Determining if should continue for Anthropic model via Anthropic API',
+    // );
     return (
       stopReason !== 'max_tokens' &&
       stopReason !== 'stop_sequence' &&

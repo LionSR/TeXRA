@@ -170,7 +170,7 @@ class OpenAIHandler(ModelHandler):
 
         # Add continuation message
         logger.info("Adding continuation message to conversation")
-        logger.debug(f"Continuation message: {userMessageContinuation}")
+        logger.info(f"Continuation message: {userMessageContinuation}")
         messages.append({"role": "user", "content": [{"type": "text", "text": userMessageContinuation}]})
 
     def initialize_output_and_prefill(
@@ -282,5 +282,5 @@ class OpenAIHandler(ModelHandler):
 
     def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if OpenAI model should continue generating."""
-        logger.info("Determining if should continue for OpenAI model via OpenAI API")
+        # logger.info("Determining if should continue for OpenAI model via OpenAI API")
         return stopReason == "length" and not agentSetting.has_endTag(newResponse)

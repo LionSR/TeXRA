@@ -77,7 +77,7 @@ class OutputHandler:
     def _processSingleXmlOutput(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
         processedOutputFile = self.splitScratchpadOutputXml(outputFile, self.agentSetting.documentTag)
-        
+
         content = readFile(processedOutputFile)
         if self.agentConfig.toolConfig.autoConfirmation:
             filteredContent = filterTagsFromText(content, "monologue")
