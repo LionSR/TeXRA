@@ -13,16 +13,16 @@ HISTORY_DIR = "History"
 logger = logging.getLogger(__name__)
 
 
-def get_db_path() -> str:
+def getDbPath() -> str:
     """Get path to SQLite database in current working directory."""
     if not os.path.exists(HISTORY_DIR):
         os.makedirs(HISTORY_DIR, exist_ok=True)
     return os.path.join(os.getcwd(), f"{HISTORY_DIR}/logs.db")
 
 
-def init_db() -> None:
+def initDb() -> None:
     """Initialize SQLite database with a single comprehensive table."""
-    db_path = get_db_path()
+    db_path = getDbPath()
     try:
         with sqlite3.connect(db_path) as conn:
             c = conn.cursor()
@@ -60,9 +60,9 @@ def init_db() -> None:
 
 def createLogEntry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> int:
     """Create a new log entry and return its ID."""
-    init_db()
+    initDb()
     try:
-        with sqlite3.connect(get_db_path()) as conn:
+        with sqlite3.connect(getDbPath()) as conn:
             c = conn.cursor()
 
             inputFiles = json.dumps(agentConfig.inputFiles) if agentConfig.inputFiles else None
@@ -138,7 +138,7 @@ def updateLogStatistics(logId: int, stateGlobal: AgentStateGlobal, stateRound: A
         return
 
     try:
-        with sqlite3.connect(get_db_path()) as conn:
+        with sqlite3.connect(getDbPath()) as conn:
             c = conn.cursor()
 
             # First, get existing round states
@@ -187,7 +187,7 @@ def updateLogAndOutputFiles(logId: int, outputFile: str, all_outputFiles: list[s
         return
 
     try:
-        with sqlite3.connect(get_db_path()) as conn:
+        with sqlite3.connect(getDbPath()) as conn:
             c = conn.cursor()
 
             c.execute("SELECT actualOutputFiles FROM coauthor_logs WHERE id = ?", (logId,))
@@ -226,7 +226,7 @@ def getLogEntry(logId: int) -> dict[str, str | int | float | list[str] | dict]:
     # the idea is that we can retrive the state of panel by using JSON.parse
 
     try:
-        with sqlite3.connect(get_db_path()) as conn:
+        with sqlite3.connect(getDbPath()) as conn:
             c = conn.cursor()
             c.execute("SELECT * FROM coauthor_logs WHERE id = ?", (logId,))
             row = c.fetchone()
