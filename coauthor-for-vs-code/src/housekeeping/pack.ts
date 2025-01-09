@@ -41,7 +41,7 @@ export async function runPackSingle(
       `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
     );
     vscode.window.showErrorMessage(
-      'Missing required parameters for pack single',
+      'Missing required parameters for packSingle',
     );
     return '';
   }
