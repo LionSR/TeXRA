@@ -11,11 +11,12 @@ import * as logger from '../logger/logUtils';
 import { getWorkspacePath } from '../utils/fileUtils';
 
 // Local imports - latex utils
-import { runLatexdiff, runLatexdiffvc } from '../latex/latexdiff';
 import {
-  checkLatexdiffInstalled,
-  checkLatexdiffVcInstalled,
-} from '../latex/texTools';
+  runLatexdiff,
+  runLatexdiffvc,
+  ensureLatexdiffInstalled,
+  ensureLatexdiffVcInstalled,
+} from '../latex/latexdiff';
 
 // Local imports - housekeeping
 import {
@@ -27,20 +28,6 @@ import {
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
-
-const INSTALLATION_INSTRUCTIONS =
-  'Installation instructions:\n' +
-  '- Mac: brew install latexdiff\n' +
-  '- Ubuntu: sudo apt-get install latexdiff\n' +
-  '- Windows: Install through MiKTeX or TeX Live package manager';
-
-const LATEXDIFF_ERROR =
-  'latexdiff is not installed. Please install it to use this feature.\n' +
-  INSTALLATION_INSTRUCTIONS;
-
-const LATEXDIFF_VC_ERROR =
-  'latexdiff-vc is not installed. Please install it to use this feature.\n' +
-  INSTALLATION_INSTRUCTIONS;
 
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -73,8 +60,8 @@ async function handleLatexdiff(
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff is installed
-    if (!(await checkLatexdiffInstalled())) {
-      throw new Error(LATEXDIFF_ERROR);
+    if (!(await ensureLatexdiffInstalled())) {
+      return;
     }
 
     // Get the diff filename from runLatexdiff
@@ -144,8 +131,8 @@ async function handleLatexdiffvc(
   const fileToUse = baseFile || inputFile;
   try {
     // Check if latexdiff-vc is installed
-    if (!(await checkLatexdiffVcInstalled())) {
-      throw new Error(LATEXDIFF_VC_ERROR);
+    if (!(await ensureLatexdiffVcInstalled())) {
+      return;
     }
 
     // Get the diff filename from runLatexdiffvc
@@ -205,8 +192,8 @@ async function handlePackLatexdiffvc(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await checkLatexdiffVcInstalled())) {
-      throw new Error(LATEXDIFF_VC_ERROR);
+    if (!(await ensureLatexdiffVcInstalled())) {
+      return;
     }
 
     logger.debug(
@@ -229,8 +216,8 @@ async function handlePackLatexdiffvcMultiple(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await checkLatexdiffVcInstalled())) {
-      throw new Error(LATEXDIFF_VC_ERROR);
+    if (!(await ensureLatexdiffVcInstalled())) {
+      return;
     }
 
     logger.debug(
@@ -253,8 +240,8 @@ async function handleCleanLatexdiffvc(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await checkLatexdiffVcInstalled())) {
-      throw new Error(LATEXDIFF_VC_ERROR);
+    if (!(await ensureLatexdiffVcInstalled())) {
+      return;
     }
 
     logger.debug(
@@ -276,8 +263,8 @@ async function handleCleanLatexdiffvcMultiple(
 ) {
   try {
     // Check if latexdiff-vc is installed
-    if (!(await checkLatexdiffVcInstalled())) {
-      throw new Error(LATEXDIFF_VC_ERROR);
+    if (!(await ensureLatexdiffVcInstalled())) {
+      return;
     }
 
     logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
