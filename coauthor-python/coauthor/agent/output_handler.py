@@ -53,7 +53,8 @@ class OutputHandler:
 
     def _processXmlContent(self, content: str) -> str:
         """Process XML content by applying filters and replacements."""
-        content = filterTagsFromText(content, "monologue")
+        if self.agentConfig.toolConfig.autoConfirmation:
+            content = filterTagsFromText(content, "monologue")
         content = applyReplacements(content, getReplacementsByCategory("latex_xml"))
         content = applyReplacements(content, getReplacementsByCategory("scratchpad_xml"))
         return content
@@ -73,23 +74,27 @@ class OutputHandler:
                 if ".tex" in inputFile and ".tex" in outputFile:
                     _ = runLatexdiff(inputFile, outputFile)
 
-    def _processSingleOutput(self, outputFile: str) -> str:
+    def _processSingleXmlOutput(self, outputFile: str) -> str:
         """Process single output file and return processed file path."""
         processedOutputFile = self.splitScratchpadOutputXml(outputFile, self.agentSetting.documentTag)
+        
         content = readFile(processedOutputFile)
-
-        filteredContent = filterTagsFromText(content, "monologue")
-        writeFile(processedOutputFile, filteredContent)
+        if self.agentConfig.toolConfig.autoConfirmation:
+            filteredContent = filterTagsFromText(content, "monologue")
+            writeFile(processedOutputFile, filteredContent)
 
         return processedOutputFile
 
-    def _processMultipleOutputs(self, outputFile: str) -> list[str]:
+    def _processMultipleXmlOutputs(self, outputFile: str) -> list[str]:
         """Process file containing multiple outputs and return processed file paths."""
         processedOutputFiles = self.splitScratchpadMultipleOutputXml(outputFile, self.agentSetting.documentTag)
-        for processedOutputFile in processedOutputFiles:
-            content = readFile(processedOutputFile)
-            filteredContent = filterTagsFromText(content, "monologue")
-            writeFile(processedOutputFile, filteredContent)
+
+        if self.agentConfig.toolConfig.autoConfirmation:
+            for processedOutputFile in processedOutputFiles:
+                content = readFile(processedOutputFile)
+                filteredContent = filterTagsFromText(content, "monologue")
+                writeFile(processedOutputFile, filteredContent)
+
         return processedOutputFiles
 
     def _extractAndLogScratchpad(self, outputContent: str, thinkingTag: str = "scratchpad") -> None:
