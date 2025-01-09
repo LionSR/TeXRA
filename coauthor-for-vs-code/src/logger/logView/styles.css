@@ -28,7 +28,8 @@ body {
   display: flex;
   flex-direction: column;
   width: 120px;
-  min-width: 120px;
+  min-width: 80px;
+  max-width: 400px;
   font-size: 11px;
   border-left: 1px solid var(--vscode-panel-border);
   height: 100%;
@@ -192,4 +193,28 @@ body {
 .warn,
 .error {
   color: inherit;
+}
+
+/* Split.js styles */
+.gutter {
+  background-color: var(--vscode-panel-border);
+  position: relative;
+}
+
+.gutter:hover {
+  background-color: var(--vscode-focusBorder);
+}
+
+.gutter-horizontal {
+  cursor: col-resize;
+  width: 1px;
+}
+
+.gutter-horizontal::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
 }

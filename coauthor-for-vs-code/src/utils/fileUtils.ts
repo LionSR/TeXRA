@@ -225,7 +225,7 @@ export async function findFileInBuild(
                   workspacePath,
                   path.join(searchDir, fileName),
                 );
-                logger.debug(CHANNEL, `Found file: ${relativePath}`);
+                // logger.debug(CHANNEL, `Found file: ${relativePath}`);
                 return relativePath;
               }
             } else if (fileName.startsWith(pattern)) {
@@ -234,7 +234,7 @@ export async function findFileInBuild(
                 workspacePath,
                 path.join(searchDir, fileName),
               );
-              logger.debug(CHANNEL, `Found file: ${relativePath}`);
+              // logger.debug(CHANNEL, `Found file: ${relativePath}`);
               return relativePath;
             }
           }

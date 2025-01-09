@@ -80,18 +80,18 @@ class ModelHandler(ABC):
         """Check if this is a Google model."""
         return self.config.provider == ModelProvider.GOOGLE
 
-    def process_image(self, figureFile: str, file_extension: str) -> tuple[str, str]:
+    def processImage(self, figureFile: str, fileExtension: str) -> tuple[str, str]:
         """Process image for models.
 
         Args:
             figureFile: Path to the image file
-            file_extension: File extension (e.g. '.jpg', '.pdf')
+            fileExtension: File extension (e.g. '.jpg', '.pdf')
 
         Returns:
             Tuple of (base64 encoded image data, media type)
         """
         img_data = getBase64EncodedImage(figureFile)
-        ext = file_extension.lower()
+        ext = fileExtension.lower()
 
         media_types = {
             ".jpg": "image/jpeg",
@@ -101,7 +101,7 @@ class ModelHandler(ABC):
         }
 
         if ext not in media_types:
-            raise ValueError(f"Unsupported file extension: {file_extension}")
+            raise ValueError(f"Unsupported file extension: {fileExtension}")
 
         media_type = media_types[ext]
         if ext == ".pdf" and media_type == "image/png":
@@ -115,7 +115,7 @@ class ModelHandler(ABC):
         This is a shared implementation that can be used by all providers.
         Individual providers can override if needed.
         """
-        image_contents = []
+        imageContents = []
         added_figures = []
 
         for figureFile in figureFiles:
@@ -123,20 +123,20 @@ class ModelHandler(ABC):
                 logger.error(f"File not found or empty: {figureFile}")
                 continue
 
-            file_extension = os.path.splitext(figureFile)[1].lower()
+            fileExtension = os.path.splitext(figureFile)[1].lower()
 
             try:
-                img_data, media_type = self.process_image(figureFile, file_extension)
+                img_data, media_type = self.processImage(figureFile, fileExtension)
                 logger.debug(f"Processed image: {figureFile}, type: {media_type}")
 
                 if isinstance(img_data, list):
                     logger.debug(f"Adding {len(img_data)} pages to the image contents")
                     for i, data in enumerate(img_data):
-                        image_contents.append({"file_name": f"{os.path.basename(figureFile)}_page_{i+1}", "data": data, "media_type": media_type})
+                        imageContents.append({"file_name": f"{os.path.basename(figureFile)}_page_{i+1}", "data": data, "media_type": media_type})
                     added_figures.extend([f"{figureFile}_page_{i+1}" for i in range(len(img_data))])
                 else:
                     logger.debug(f"Adding single page to the image contents: {figureFile}")
-                    image_contents.append({"file_name": os.path.basename(figureFile), "data": img_data, "media_type": media_type})
+                    imageContents.append({"file_name": os.path.basename(figureFile), "data": img_data, "media_type": media_type})
                     added_figures.append(figureFile)
             except Exception as e:
                 logger.error(f"Failed to process image {figureFile}: {e}")
@@ -145,7 +145,7 @@ class ModelHandler(ABC):
         logger.info(f"Using images: {figureFiles}")
         logger.info(f"Successfully added: {added_figures}")
 
-        return self.create_image_content(image_contents)
+        return self.createImageContent(imageContents)
 
     def check_stop_conditions(
         self,
@@ -212,7 +212,7 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -233,12 +233,12 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for the model."""
         pass
 
     @abstractmethod
-    def extract_response(
+    def extractResponse(
         self,
         responseObject: Any,
         endTag: str,
@@ -295,6 +295,6 @@ class ModelHandler(ABC):
         pass
 
     @abstractmethod
-    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
+    def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if the model should continue generating based on stop reason and response."""
         pass

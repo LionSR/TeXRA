@@ -10,7 +10,7 @@ import {
 // Local imports - log
 import * as logger from '../../logger/logUtils';
 
-const CHANNEL = 'Commands';
+const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export async function handleTestConnection(): Promise<void> {

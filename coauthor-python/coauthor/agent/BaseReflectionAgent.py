@@ -62,7 +62,7 @@ class BaseReflectionAgent(ABC):
 
         # Initialize client and check scratchpad usage
         self.client = self.modelHandler.getClient()
-        self.use_scratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
+        self.useScratchpad = "<scratchpad>" in self.agentSetting.prefills if self.agentSetting.prefills else False
 
         # Set output files
         self.outputFile[0] = self.getOutputFile(currRound=0)
@@ -291,7 +291,7 @@ class BaseReflectionAgent(ABC):
             logger.info(f"Response time: {responseTime:.2f}s")
 
             # Extract and validate response
-            newResponse, responseUsage, stopReason = self.modelHandler.extract_response(
+            newResponse, responseUsage, stopReason = self.modelHandler.extractResponse(
                 responseObject, self.agentSetting.endTag, self.agentConfig.toolConfig.autoConfirmation
             )
 
@@ -362,7 +362,7 @@ class BaseReflectionAgent(ABC):
             logger.info(f"Starting continuation #{stateRound.continuationCount}")
 
             # Check if model should continue generating
-            if self.modelHandler.should_continue(stopReason, newResponse, self.agentSetting):
+            if self.modelHandler.shouldContinue(stopReason, newResponse, self.agentSetting):
                 logger.info("Should continue - adding continuation message to conversation")
                 self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSetting, self.agentConfig)
                 continue
@@ -433,7 +433,7 @@ class BaseReflectionAgent(ABC):
             writePromptToXml(systemPrompt, userPrefix, userRequest, self.agentConfig.inputFile, self.agentConfig.agent)
 
         # Initialize messages with prompts
-        messages = self.modelHandler.initialize_messages(
+        messages = self.modelHandler.initializeMessages(
             userPrefix,
             userRequest,
             figureFiles=toolState.figureFiles,
@@ -563,14 +563,14 @@ class BaseReflectionAgent(ABC):
             # Multiple output files case
             logger.debug(f"Processing multiple outputs for {outputFile}")
             logger.debug(f"Output files: {self.agentConfig.outputFiles}")
-            processedFiles = self.outputHandler._processMultipleOutputs(outputFile)
+            processedFiles = self.outputHandler._processMultipleXmlOutputs(outputFile)
             self.outputHandler._handleMultipleOutputs(processedFiles)
             self.outputHandler.outputFiles[currRound] = processedFiles
             self.outputHandler._replaceInputCommands(self.baseFiles, processedFiles)
         else:
             # Single output file case
             logger.debug(f"Processing single output for {outputFile}")
-            processedFile = self.outputHandler._processSingleOutput(outputFile)
+            processedFile = self.outputHandler._processSingleXmlOutput(outputFile)
             self.outputHandler._handleSingleOutput(processedFile)
             self.outputHandler.outputFiles[currRound] = [processedFile]
 

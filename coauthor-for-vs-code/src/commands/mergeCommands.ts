@@ -1,39 +1,58 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
 
-const CHANNEL = 'Commands';
-logger.initialize(CHANNEL);
+// Local imports - agent
+import { executeMergeAgent } from '../agent/executeAgent';
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.merge', handleMerge),
+    vscode.commands.registerCommand(
+      'coauthor.merge',
+      (inputFile: string, baseFile: string, editedFile: string) =>
+        handleMerge(context, inputFile, baseFile, editedFile),
+    ),
   );
 }
 
 async function handleMerge(
+  context: vscode.ExtensionContext,
   inputFile: string,
   baseFile: string,
   editedFile: string,
 ) {
-  const model = getConfig('merge.defaultModel', 'sonnet+');
-  const terminalName = `Merge@${model}`;
-  const terminal_new = vscode.window.createTerminal(terminalName);
-  terminal_new.show();
+  if (!editedFile || (!baseFile && !inputFile)) {
+    const errorMsg =
+      'Both input file and edited file must be specified for merge operation';
+    vscode.window.showErrorMessage(errorMsg);
+    return;
+  }
 
-  if (editedFile && (baseFile || inputFile)) {
-    const fileToUse = baseFile || inputFile;
-    terminal_new.sendText(
-      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
+  const model = getConfig('merge.defaultModel', 'sonnet+');
+  const fileToUse = baseFile || inputFile;
+
+  try {
+    await executeMergeAgent(model, fileToUse, editedFile, context);
+  } catch (error) {
+    const allowTerminalFallback = getConfig<boolean>(
+      'execution.allowTerminalFallback',
+      false,
     );
-  } else {
-    vscode.window.showErrorMessage(
-      'Both input file and edited file must be specified for merge operation',
+    if (!allowTerminalFallback) {
+      throw error;
+    }
+    // If direct execution fails and terminal fallback is allowed, fall back to terminal execution
+    vscode.window.showWarningMessage(
+      `Direct execution failed, falling back to terminal: ${error}`,
+    );
+
+    const terminalName = `Merge@${model}`;
+    const terminalNew = vscode.window.createTerminal(terminalName);
+    terminalNew.show();
+    terminalNew.sendText(
+      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
     );
   }
 }

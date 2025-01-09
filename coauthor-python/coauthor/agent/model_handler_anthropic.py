@@ -31,7 +31,7 @@ class AnthropicHandler(ModelHandler):
     def getClient(self) -> Anthropic:
         """Get Anthropic client."""
         api_key = self.get_api_key()
-        logger.info("Using Anthropic API key.")
+        logger.info("Using Anthropic API.")
         return Anthropic(api_key=api_key)
 
     def createResponse(
@@ -53,7 +53,7 @@ class AnthropicHandler(ModelHandler):
         )
         # rememeber to use snake_case for the keys since these are from the apis
 
-    def initialize_messages(
+    def initializeMessages(
         self,
         userPrefix: str,
         userRequest: str,
@@ -113,7 +113,7 @@ class AnthropicHandler(ModelHandler):
         messages.append({"role": "user", "content": content})
         return messages
 
-    def create_image_content(self, image_contents: list) -> list[dict]:
+    def createImageContent(self, imageContents: list) -> list[dict]:
         """Create image content for Anthropic models."""
 
         def create_content_pair(image: dict) -> list[dict]:
@@ -123,9 +123,9 @@ class AnthropicHandler(ModelHandler):
                 {"type": "document" if is_pdf else "image", "source": {"type": "base64", "media_type": image["media_type"], "data": image["data"]}},
             ]
 
-        return [item for image in image_contents for item in create_content_pair(image)]
+        return [item for image in imageContents for item in create_content_pair(image)]
 
-    def extract_response(
+    def extractResponse(
         self,
         responseObject: Any,
         endTag: str,
@@ -231,7 +231,7 @@ class AnthropicHandler(ModelHandler):
         logger.info("Adding User message")
         logger.debug(userMessageContinuation)
 
-        # better to merge with extract_response?
+        # better to merge with extractResponse?
         # Solution 1: keep updating the last assistant message
         if messages[-1]["role"] == "user":
             if messages[-2]["role"] == "assistant":
@@ -340,7 +340,7 @@ class AnthropicHandler(ModelHandler):
                     # Initialize content list with single message
                     last_message["content"] = [{"type": "text", "text": toolState.accumulatedOutput, "cache_control": {"type": "ephemeral"}}]
 
-    def should_continue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
+    def shouldContinue(self, stopReason: str, newResponse: str, agentSetting: AgentSetting) -> bool:
         """Determine if Anthropic model should continue generating."""
         logger.info("Determining if should continue for Anthropic model via Anthropic API")
         return stopReason not in ("max_tokens", "stop_sequence") and not agentSetting.has_endTag(newResponse)

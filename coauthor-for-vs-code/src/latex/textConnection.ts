@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'LaTeX';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export interface ConnectionResult {

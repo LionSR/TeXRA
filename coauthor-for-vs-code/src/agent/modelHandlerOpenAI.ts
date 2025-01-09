@@ -4,9 +4,6 @@
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { readFile, fileExists } from '../utils/fileUtils';
 
@@ -20,9 +17,6 @@ import { ToolState } from './ToolState';
 
 const K_SLICE = 200;
 
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
-
 /**
  * OpenAI-specific handlers.
  */
@@ -30,7 +24,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   /** Returns OpenAI client with configured API key. */
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
-    logger.info(CHANNEL, 'Using OpenAI API key.');
+    this.logger.info('Using OpenAI API.');
     return new OpenAI({ apiKey });
   }
 
@@ -48,20 +42,23 @@ export class ModelHandlerOpenAI extends ModelHandler {
       [this.config.name.toLowerCase().includes('o1')
         ? 'max_completion_tokens'
         : 'max_tokens']: this.config.maxOutputTokens,
-      temperature: this.config.name.toLowerCase().includes('o1')
-        ? 1.0
-        : temperature,
+      temperature,
+      stream: true,
     };
 
-    if (endTag && !this.config.name.toLowerCase().includes('o1')) {
-      kwargs.stop = [endTag];
+    if (this.config.useOpenRouter) {
+      kwargs.http = {
+        baseURL: this.getBaseUrl(),
+      };
     }
 
-    if (this.config.name.toLowerCase() === 'o1') {
-      kwargs.reasoning_effort = 'high';
+    try {
+      const response = await client.chat.completions.create(kwargs);
+      return response;
+    } catch (err) {
+      this.logger.error(`Error in createResponse: ${err}`);
+      throw err;
     }
-
-    return client.chat.completions.create(kwargs);
   }
 
   /** Initializes message array with system prompt and user content. */
@@ -93,11 +90,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add images if provided
       if (figureFiles) {
-        content.push(...this.createImageContent(figureFiles));
+        content.push(...(await this.createImageMessage(figureFiles)));
       }
 
       // Add user request
-      content.push({ type: 'text', text: userRequest });
+      const request = { type: 'text', text: userRequest };
+      content.push(request);
 
       messages.push({ role: 'user', content });
     }
@@ -144,8 +142,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): [string, any, string] {
     if (!responseObject.choices?.length) {
       const errorMsg = 'Invalid response from API: missing choices';
-      logger.error(CHANNEL, errorMsg);
-      logger.debug(CHANNEL, responseObject);
+      this.logger.error(errorMsg);
+      this.logger.debug(responseObject);
       throw new Error(errorMsg);
     }
 
@@ -172,8 +170,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): void {
     // Skip if model supports assistant prefill
     if (this.capabilities.supportsAssistantPrefill) {
-      logger.debug(
-        CHANNEL,
+      this.logger.debug(
         'Skipping continuation - assistant prefill is supported',
       );
       return;
@@ -189,8 +186,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
       `Start your response at the next token after: "${prefillTokens}"`;
 
     // Add continuation message
-    logger.info(CHANNEL, 'Adding continuation message to conversation');
-    logger.debug(CHANNEL, `Continuation message: ${userMessageContinuation}`);
+    this.logger.info('Adding continuation message to conversation');
+    this.logger.debug(`Continuation message: ${userMessageContinuation}`);
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
@@ -230,7 +227,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     messages.push({ role: 'assistant', content: fileContent });
 
     if (hasEndTag(agentSetting, fileContent)) {
-      logger.debug(CHANNEL, 'End tag detected - skipping continuation');
+      this.logger.debug('End tag detected - skipping continuation');
       if (Array.isArray(messages[messages.length - 1].content)) {
         messages[messages.length - 1].content[
           messages[messages.length - 1].content.length - 1
@@ -241,8 +238,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       return [true, messages];
     }
 
-    logger.warn(
-      CHANNEL,
+    this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
     toolState.updateAccumulatedOutput(fileContent);
@@ -327,14 +323,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    logger.debug(
-      CHANNEL,
-      'Updating message content for OpenAI API compatible models',
-    );
+    // this.logger.debug(
+    //   'Updating message content for OpenAI API compatible models',
+    // );
 
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
     if (messages[messages.length - 1].role === 'user') {
-      logger.debug(CHANNEL, 'Last message is a user message');
+      this.logger.debug('Last message is a user message');
       if (
         messages[messages.length - 1].content.includes(
           'Your response got cut off',
@@ -348,15 +343,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
               text: bestConnector + newResponse,
             });
           } else {
-            logger.error(CHANNEL, 'Second last message content is not a list');
+            this.logger.error('Second last message content is not a list');
             messages[messages.length - 2].content = toolState.accumulatedOutput;
           }
           // Remove continuation prompt
           messages.pop();
         }
       } else {
-        logger.debug(
-          CHANNEL,
+        this.logger.debug(
           'Last message is a request message rather than a ask to continue after cut off',
         );
         // otherwise last message is a request message rather than a ask to continue after cut off
@@ -374,8 +368,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    logger.info(
-      CHANNEL,
+    this.logger.info(
       'Determining if should continue for OpenAI model via OpenAI API',
     );
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);

@@ -1,13 +1,7 @@
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - agent components
 import { BaseReflectionAgent } from './BaseReflectionAgent';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { getOutputFileName } from './OutputHandler';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
 
 /**
  * Direct agent implementation that processes requests in a single pass.
