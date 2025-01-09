@@ -335,7 +335,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
       }
 
-      this.logger.debug(`Anthropic prefill: ${prefill}`);
+      this.logger.info(`Anthropic prefill: ${prefill}`);
 
       if (
         toolState.accumulatedOutput === '<scratchpad>' &&
@@ -454,7 +454,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    this.logger.debug('Updating message content for Anthropic models');
+    // this.logger.debug('Updating message content for Anthropic models');
     if (messages[messages.length - 1].role === 'assistant') {
       const lastMessage = messages[messages.length - 1];
 

@@ -14,10 +14,13 @@ import { executeCommand } from '../utils/execUtils';
 // Local imports - latex utils
 import { runLatexIndent } from './latexindent';
 
-const CHANNEL = 'LaTeX';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-async function processDiffFile(diffFileName: string): Promise<void> {
+async function processDiffFile(
+  diffFileName: string,
+  channel: string = CHANNEL,
+): Promise<void> {
   try {
     const content = await readFile(diffFileName);
     const lines = content.split('\n');
@@ -68,44 +71,39 @@ async function processDiffFile(diffFileName: string): Promise<void> {
     }
 
     await writeFile(diffFileName, newContent);
-    logger.debug(CHANNEL, `Line breaks added to ${diffFileName}`);
+    // logger.debug(channel, `Line breaks added to ${diffFileName}`);
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error processing diff file: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }
 }
 
-async function processTikzPictureEndings(filePath: string): Promise<void> {
-  try {
-    const content = await readFile(filePath);
+async function processTikzPictureEndings(
+  filePath: string,
+  channel: string = CHANNEL,
+): Promise<void> {
+  const content = await readFile(filePath);
 
-    let newContent = content;
-    const patterns = [
-      [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
-      [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
-      [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
-      [
-        /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;/g,
-        '$1\\end{tikzpicture}};\\DIFaddendFL',
-      ],
-    ];
+  let newContent = content;
+  const patterns = [
+    [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
+    [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
+    [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
+    [
+      /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;/g,
+      '$1\\end{tikzpicture}};\\DIFaddendFL',
+    ],
+  ];
 
-    for (const [pattern, replacement] of patterns) {
-      newContent = newContent.replace(pattern, replacement as string);
-    }
-
-    await writeFile(filePath, newContent);
-    logger.debug(CHANNEL, `Tikzpicture endings fixed in ${filePath}`);
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error processing tikzpicture endings: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
+  for (const [pattern, replacement] of patterns) {
+    newContent = newContent.replace(pattern, replacement as string);
   }
+
+  await writeFile(filePath, newContent);
+  // logger.debug(channel, `Tikzpicture endings fixed in ${filePath}`);
 }
 
 export async function runLatexdiff(
@@ -113,17 +111,18 @@ export async function runLatexdiff(
   editedFile: string,
   suffix: string = '_diff',
   runIndent: boolean = false,
+  channel: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if (!inputFile) {
-      logger.warn(CHANNEL, 'Input file is empty or undefined');
+      logger.warn(channel, 'Input file is empty or undefined');
       return undefined;
     }
 
     // Check if both files exist
     if (!(await fileExists(inputFile)) || !(await fileExists(editedFile))) {
       logger.warn(
-        CHANNEL,
+        channel,
         `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`,
       );
       return undefined;
@@ -135,7 +134,7 @@ export async function runLatexdiff(
       if (!(await runLatexIndent(editedFile))) indentResults.push(editedFile);
       if (indentResults.length > 0) {
         logger.warn(
-          CHANNEL,
+          channel,
           `Failed to indent files:\n${indentResults.join('\n')}\nProceeding with latexdiff anyway.`,
         );
       }
@@ -160,7 +159,7 @@ export async function runLatexdiff(
     }
     if (invalidFiles.length > 0) {
       logger.warn(
-        CHANNEL,
+        channel,
         `Files missing document environment:\n${invalidFiles.join('\n')}\nSkipping latexdiff.`,
       );
       return undefined;
@@ -217,7 +216,7 @@ export async function runLatexdiff(
       `"${editedFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel: CHANNEL });
+    const result = await executeCommand(command, { channel });
     if (!result.success || !result.stdout) {
       throw new Error('Failed to run latexdiff');
     }
@@ -225,14 +224,14 @@ export async function runLatexdiff(
     // Write the output to the diff file
     await writeFile(outputPath, result.stdout);
 
-    await processDiffFile(outputPath);
-    await processTikzPictureEndings(outputPath);
+    await processDiffFile(outputPath, channel);
+    await processTikzPictureEndings(outputPath, channel);
 
-    logger.info(CHANNEL, 'LaTeX diff completed successfully');
+    logger.info(channel, 'LaTeXdiff completed successfully');
     return diffFileName;
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error running LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -242,6 +241,7 @@ export async function runLatexdiff(
 export async function runLatexdiffvc(
   inputFile: string,
   commitHash: string,
+  channel: string = CHANNEL,
 ): Promise<string> {
   try {
     // Use readFile which now handles workspace paths
@@ -251,7 +251,7 @@ export async function runLatexdiffvc(
       !inputContent.includes('\\begin{document}') ||
       !inputContent.includes('\\end{document}')
     ) {
-      logger.error(CHANNEL, 'File missing document environment');
+      logger.error(channel, 'File missing document environment');
       vscode.window.showWarningMessage(
         'File must contain \\begin{document} and \\end{document}',
       );
@@ -277,19 +277,19 @@ export async function runLatexdiffvc(
       `"${inputFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel: CHANNEL });
+    const result = await executeCommand(command, { channel });
     if (!result.success) {
       throw new Error('Failed to run latexdiff-vc');
     }
 
-    await processDiffFile(outputPath);
-    await processTikzPictureEndings(outputPath);
+    await processDiffFile(outputPath, channel);
+    await processTikzPictureEndings(outputPath, channel);
 
-    logger.info(CHANNEL, 'LaTeX diff VC completed successfully');
+    logger.info(channel, 'LaTeXdiff VC completed successfully');
     return path.basename(diffFileName);
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error running LaTeX diff VC: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -299,47 +299,49 @@ export async function runLatexdiffvc(
 export async function runLatexdiffvcMultiple(
   inputFiles: string[],
   commitHash: string,
+  channel: string = CHANNEL,
 ): Promise<void> {
-  logger.debug(CHANNEL, `Processing multiple files with commit ${commitHash}`);
+  logger.debug(channel, `Processing multiple files with commit ${commitHash}`);
 
   if (!inputFiles || inputFiles.length === 0) {
-    logger.error(CHANNEL, 'No input files provided');
+    logger.error(channel, 'No input files provided');
     vscode.window.showErrorMessage('No input files provided');
     return;
   }
 
   for (const inputFile of inputFiles) {
     try {
-      await runLatexdiffvc(inputFile, commitHash);
+      await runLatexdiffvc(inputFile, commitHash, channel);
     } catch (err) {
       logger.error(
-        CHANNEL,
+        channel,
         `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
 
-  logger.info(CHANNEL, 'All LaTeX diff operations completed');
+  logger.info(channel, 'All LaTeX diff operations completed');
 }
 
 export async function runLatexdiffForRound(
   baseFile: string,
   outputFile: string,
   round: number,
+  channel: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
-      return await runLatexdiff(baseFile, outputFile, '_diff');
+      return await runLatexdiff(baseFile, outputFile, '_diff', false, channel);
     } else {
       logger.warn(
-        CHANNEL,
+        channel,
         `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`,
       );
       return undefined;
     }
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error in runLatexdiffForRound: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
@@ -349,6 +351,7 @@ export async function runLatexdiffForRound(
 export async function runLatexdiffBetweenRounds(
   outputFile1: string,
   outputFile2: string,
+  channel: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if ((await fileExists(outputFile1)) && (await fileExists(outputFile2))) {
@@ -356,7 +359,7 @@ export async function runLatexdiffBetweenRounds(
       const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
 
       if (!firstRoundMatch || !secondRoundMatch) {
-        logger.warn(CHANNEL, 'Could not extract round numbers from file names');
+        logger.warn(channel, 'Could not extract round numbers from file names');
         return undefined;
       }
 
@@ -364,17 +367,23 @@ export async function runLatexdiffBetweenRounds(
       const secondRound = secondRoundMatch[1];
       const diffSuffix = `_diffr${secondRound}r${firstRound}`;
 
-      return await runLatexdiff(outputFile1, outputFile2, diffSuffix);
+      return await runLatexdiff(
+        outputFile1,
+        outputFile2,
+        diffSuffix,
+        false,
+        channel,
+      );
     } else {
       logger.warn(
-        CHANNEL,
+        channel,
         `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`,
       );
       return undefined;
     }
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error in runLatexdiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
@@ -384,11 +393,12 @@ export async function runLatexdiffBetweenRounds(
 export async function runLatexdiffMultiple(
   inputFiles: string[],
   editedFiles: string[],
+  channel: string = CHANNEL,
 ): Promise<void> {
   try {
     if (inputFiles.length !== editedFiles.length) {
       logger.error(
-        CHANNEL,
+        channel,
         'The number of input files must match the number of edited files. Stopping latexdiff.',
       );
       vscode.window.showErrorMessage(
@@ -404,19 +414,25 @@ export async function runLatexdiffMultiple(
 
     for (let i = 0; i < inputFiles.length; i++) {
       try {
-        await runLatexdiff(inputFiles[i], editedFiles[i]);
+        await runLatexdiff(
+          inputFiles[i],
+          editedFiles[i],
+          '_diff',
+          false,
+          channel,
+        );
         results.success.push(inputFiles[i]);
       } catch (err) {
         results.failed.push(inputFiles[i]);
         logger.error(
-          CHANNEL,
+          channel,
           `Error processing ${inputFiles[i]}: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
 
     const summary = [
-      'LaTeX diff operations completed:',
+      'LaTeXdiff operations completed:',
       results.success.length > 0
         ? `\nSuccessful:\n${results.success.join('\n')}`
         : '',
@@ -425,10 +441,10 @@ export async function runLatexdiffMultiple(
         : '',
     ].join('');
 
-    logger.info(CHANNEL, summary);
+    logger.info(channel, summary);
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error in runLatexdiffMultiple: ${err instanceof Error ? err.message : String(err)}`,
     );
   }

@@ -113,7 +113,7 @@ async function handleGetTexCount(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Running texcount...' });
 
-        const result = await getTexCount(filePath, mergeOption.value);
+        const result = await getTexCount(filePath, mergeOption.value, CHANNEL);
 
         if (result) {
           // Extract key statistics using regex
