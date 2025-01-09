@@ -25,7 +25,7 @@ prompts:
     When correcting a professional \LaTeX document, you must:
     \begin{itemize}
         \item Use appropriate notation and terminology consistently throughout both documents.
-        \item Maintain the comments that start with \% in the documents.
+        \item Maintain the comments that start with `%' in the documents.
         \item Ensure proper referencing between the main text and supplementary materials.
         \item Follow best practices for \LaTeX writing, including proper use of environments, equations, and citations.
         \item Preserve the overall structure of both documents while making improvements.

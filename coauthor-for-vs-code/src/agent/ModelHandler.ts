@@ -78,7 +78,9 @@ export abstract class ModelHandler {
       // Fall back to environment variable
       const envKey = process.env.OPENROUTER_API_KEY;
       if (!envKey) {
-        throw new Error('Missing OPENROUTER_API_KEY in both VS Code settings and environment');
+        throw new Error(
+          'Missing OPENROUTER_API_KEY in both VS Code settings and environment',
+        );
       }
       return envKey;
     }
@@ -89,12 +91,14 @@ export abstract class ModelHandler {
     if (key) {
       return key;
     }
-    
+
     // Fall back to environment variable
     const envKey = `${this.config.provider.toUpperCase()}_API_KEY`;
     const envValue = process.env[envKey];
     if (!envValue) {
-      throw new Error(`Missing API key for ${this.config.provider} in both VS Code settings and environment (${envKey})`);
+      throw new Error(
+        `Missing API key for ${this.config.provider} in both VS Code settings and environment (${envKey})`,
+      );
     }
     return envValue;
   }

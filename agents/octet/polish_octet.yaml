@@ -13,7 +13,7 @@ prompts:
     When writing a professional *.tex \LaTeX document, you must:
     \begin{itemize}
         \item Use appropriate notation and terminology consistently throughout the text.
-        \item Keep the comments that start with \% in the document. For example, do not delete ``\% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
+        \item Keep the comments that start with `%' in the document. For example, do not delete ``% We found the time step $\delta=1/16=0.0625$ to give sufficient accuracy for our simulations.'' in the output.
         \item If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
         \item Use $\ldots$ or $\cdots$ rather than $\dots$ or ``...'' to achieve an ellipsis following the best practice of chktex.
         \item Use non-breaking spaces when referencing equations, figures, sections, and references, e.g., use ``Eq.~\ref{eq:label}''; ``see Fig.~\ref{fig:label}''; ``Section~\ref{sec:label}''; ``see Ref.~\cite{Jarzynski1997Nonequilibrium}''.
