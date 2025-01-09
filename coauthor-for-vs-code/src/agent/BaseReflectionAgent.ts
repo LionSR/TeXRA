@@ -89,9 +89,9 @@ export abstract class BaseReflectionAgent {
     // Update model handler's logger
     this.modelHandler.setLogger(this.logger);
 
-    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
-    this.logger.debug(
+    this.logger.info(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
+    this.logger.info(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
+    this.logger.info(
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
     );
 
@@ -519,20 +519,20 @@ export abstract class BaseReflectionAgent {
 
       // Write or append to output file
       if (!exists) {
-        this.logger.debug(`Creating new file: ${outputFile}`);
+        this.logger.info(`Creating new file: ${outputFile}`);
         await writeFile(outputFile, processedResponse);
       } else {
-        this.logger.debug(`Appending to existing file: ${outputFile}`);
+        this.logger.info(`Appending to existing file: ${outputFile}`);
         await appendFile(outputFile, bestConnector + processedResponse);
       }
 
       // Log response boundaries
       this.logger.info(`Response preview:`);
-      this.logger.debug(
-        `First ${K_SLICE} chars: ${processedResponse.slice(0, K_SLICE)}`,
+      this.logger.info(
+        `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
       );
-      this.logger.debug(
-        `Last ${K_SLICE} chars: ${processedResponse.slice(-K_SLICE)}`,
+      this.logger.info(
+        `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
       );
 
       // Update message content
@@ -618,7 +618,7 @@ export abstract class BaseReflectionAgent {
     );
     const inputInfo = `input file ${this.agentConfig.inputFile} and/or input files ${this.agentConfig.inputFiles}`;
     this.logger.info(
-      `\n\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+      `\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
     );
     this.logger.info(`Completed round ${currRound}`);
   }
@@ -687,6 +687,9 @@ export abstract class BaseReflectionAgent {
           this.agentConfig.inputFile,
         );
         if (extractedFigures) {
+          this.logger.info(
+            `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
+          );
           toolState.addFigureFiles(extractedFigures);
         }
       }
@@ -707,7 +710,7 @@ export abstract class BaseReflectionAgent {
     this.logger.info(
       `\n------------------------------------------------------------`,
     );
-    this.logger.info(`\nProcessing round ${currRound}`);
+    this.logger.info(`Processing round ${currRound}`);
     const stateGlobal = AgentStateGlobal.initialize();
 
     const messages: any[] = [];
@@ -851,7 +854,7 @@ export abstract class BaseReflectionAgent {
     this.logger.info(
       `\n------------------------------------------------------------`,
     );
-    this.logger.info(`\nProcessing round ${currRound}`);
+    this.logger.info(`Processing round ${currRound}`);
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
@@ -940,7 +943,7 @@ export abstract class BaseReflectionAgent {
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 
-    this.logger.info(`Round 0 completed\n`);
+    // this.logger.info(`Round 0 completed\n`);
     this.logger.info(
       `\n------------------------------------------------------------`,
     );
@@ -949,7 +952,7 @@ export abstract class BaseReflectionAgent {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
-      this.logger.info(`Round 1 completed\n`);
+      // this.logger.info(`Round 1 completed\n`);
       this.logger.info(
         `\n------------------------------------------------------------`,
       );
