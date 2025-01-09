@@ -133,14 +133,10 @@ export abstract class BaseReflectionAgent {
    * @returns Task ID string used for logging and output naming
    */
   private getTaskId(): string {
-    return (
-      this.agentConfig.agent +
-      '-' +
-      `@${this.agentConfig.model}` +
-      (this.agentConfig.outputNameOverride ||
-        (this.agentConfig.inputFile &&
-          path.basename(this.agentConfig.inputFile)))
+    const baseName = path.basename(
+      this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
     );
+    return `${this.agentConfig.agent}-${this.agentConfig.model}-${baseName}`;
   }
 
   /**
