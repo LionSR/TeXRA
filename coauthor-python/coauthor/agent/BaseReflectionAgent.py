@@ -364,7 +364,7 @@ class BaseReflectionAgent(ABC):
             # Check if model should continue generating
             if self.modelHandler.shouldContinue(stopReason, newResponse, self.agentSetting):
                 logger.debug("Should continue - adding continuation message to conversation")
-                self.modelHandler.add_continue_message(messages, stateRound, toolState, self.agentSetting, self.agentConfig)
+                self.modelHandler.addContinueMessage(messages, stateRound, toolState, self.agentSetting, self.agentConfig)
                 continue
 
         return stateRound, stateGlobal, toolState, endTurn
@@ -445,7 +445,7 @@ class BaseReflectionAgent(ABC):
         toolState.update_accumulatedOutput(prefill)
 
         # Initialize output and handle prefill
-        endTurn, messages = self.modelHandler.initialize_output_and_prefill(
+        endTurn, messages = self.modelHandler.initializeOutputAndPrefill(
             self.agentConfig,
             self.agentSetting,
             messages,
@@ -507,13 +507,13 @@ class BaseReflectionAgent(ABC):
         if not userMessage.strip():
             return stateRound, stateGlobal, messages, True
 
-        messages = self.modelHandler.create_reflection_messages(messages, userMessage, toolState.figureFiles)
+        messages = self.modelHandler.createReflectionMessages(messages, userMessage, toolState.figureFiles)
 
         # Handle prefill for reflection round
         prefill = self._getPrefillForRound(currRound)
         toolState.update_accumulatedOutput(prefill)
 
-        endTurn, messages = self.modelHandler.initialize_output_and_prefill(
+        endTurn, messages = self.modelHandler.initializeOutputAndPrefill(
             self.agentConfig,
             self.agentSetting,
             messages,
