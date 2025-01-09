@@ -79,7 +79,7 @@ class AnthropicHandler(ModelHandler):
         # Note: Anthropic handles system prompts differently via createResponse()
         return [{"role": "user", "content": content}]
 
-    def create_reflection_messages(
+    def createReflectionMessages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -175,7 +175,7 @@ class AnthropicHandler(ModelHandler):
 
         return newResponse, responseObject.usage, stopReason
 
-    def add_continue_message(
+    def addContinueMessage(
         self,
         messages: list[dict],
         stateRound: AgentStateRound,
@@ -244,7 +244,7 @@ class AnthropicHandler(ModelHandler):
         elif messages[-1]["role"] == "assistant":
             messages.append({"role": "user", "content": userMessageContinuation.strip()})
 
-    def initialize_output_and_prefill(
+    def initializeOutputAndPrefill(
         self,
         agentConfig: AgentConfig,
         agentSetting: AgentSetting,

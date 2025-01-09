@@ -86,7 +86,7 @@ class OpenAIHandler(ModelHandler):
 
         return messages
 
-    def create_reflection_messages(
+    def createReflectionMessages(
         self,
         messages: list[dict],
         userMessage: str,
@@ -144,7 +144,7 @@ class OpenAIHandler(ModelHandler):
 
         return newResponse, responseObject.usage, stopReason
 
-    def add_continue_message(
+    def addContinueMessage(
         self,
         messages: list[dict],
         stateRound: AgentStateRound,
@@ -173,7 +173,7 @@ class OpenAIHandler(ModelHandler):
         logger.info(f"Continuation message: {userMessageContinuation}")
         messages.append({"role": "user", "content": [{"type": "text", "text": userMessageContinuation}]})
 
-    def initialize_output_and_prefill(
+    def initializeOutputAndPrefill(
         self,
         agentConfig: AgentConfig,
         agentSetting: AgentSetting,
@@ -207,7 +207,7 @@ class OpenAIHandler(ModelHandler):
         toolState.update_accumulatedOutput(fileContent)
         state = AgentStateRound.initialize(0)
         toolState.lastResponse = toolState.accumulatedOutput
-        self.add_continue_message(messages, state, toolState, agentSetting, agentConfig)
+        self.addContinueMessage(messages, state, toolState, agentSetting, agentConfig)
 
         # here state is somehow not possible to be passed outside?
         # also here continue message is added here, not like later it was handled separately. We should make them consistent...
