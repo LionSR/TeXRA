@@ -22,10 +22,10 @@ from .agent_load import load_agent_settings_and_prompts
 from .response_usage import ResponseUsageBase, OpenAIAPIResponseUsage, AnthropicAPIResponseUsage
 from .output_handler import OutputHandler
 from .logdb import (
-    create_log_entry,
-    update_log_statistics,
-    update_log_outputFiles,
-    get_log_entry,
+    createLogEntry,
+    updateLogStatistics,
+    updateLogAndOutputFiles,
+    getLogEntry,
 )
 
 # Model infrastructure
@@ -59,10 +59,10 @@ __all__ = [
     "OpenAIAPIResponseUsage",
     "AnthropicAPIResponseUsage",
     "OutputHandler",
-    "create_log_entry",
-    "update_log_statistics",
-    "update_log_outputFiles",
-    "get_log_entry",
+    "createLogEntry",
+    "updateLogStatistics",
+    "updateLogAndOutputFiles",
+    "getLogEntry",
     # Model infrastructure
     "ModelConfig",
     "ModelProvider",
