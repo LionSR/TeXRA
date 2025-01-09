@@ -170,6 +170,7 @@ export class OutputHandler {
 
   /** Processes single output file with XML splitting and filtering. */
   public async processSingleXmlOutput(outputFile: string): Promise<string> {
+    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
     const processedOutputFile = await this.splitScratchpadOutputXml(
       outputFile,
       this.agentSetting.documentTag,
@@ -186,6 +187,9 @@ export class OutputHandler {
   public async processMultipleXmlOutputs(
     outputFile: string,
   ): Promise<string[]> {
+    this.logger.debug(
+      `Splitting multiple scratchpad output XML: ${outputFile}`,
+    );
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
       outputFile,
       this.agentSetting.documentTag,
@@ -220,14 +224,10 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
-
     const { dir, name, ext } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
-    // this.logger.debug(`TeX file: ${texFile}`);
 
     let outputContent = await readFile(outputFile);
-    outputContent = await this.processXmlContent(outputContent);
 
     if (this.agentSetting.agentType === 'CoT') {
       this.extractAndLogScratchpad(outputContent, thinkingTag);
@@ -251,7 +251,8 @@ export class OutputHandler {
         await writeFile(texFile, latexDocument);
         return texFile;
       } else {
-        throw new Error(`No ${documentTag} found in output file`);
+        this.logger.error(`No ${documentTag} found in output file`);
+        return texFile;
       }
     } catch (err) {
       this.logger.error(
@@ -270,11 +271,7 @@ export class OutputHandler {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string[]> {
-    this.logger.debug(
-      `Splitting multiple scratchpad output XML: ${outputFile}`,
-    );
     let outputContent = await readFile(outputFile);
-    outputContent = await this.processXmlContent(outputContent);
 
     if (this.agentSetting.agentType === 'CoT') {
       this.extractAndLogScratchpad(outputContent, thinkingTag);
@@ -297,7 +294,8 @@ export class OutputHandler {
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
       } else {
-        throw new Error(`No ${documentTag} found in output file`);
+        this.logger.error(`No ${documentTag} found in output file`);
+        return [];
       }
     } catch (err) {
       this.logger.error(
@@ -357,24 +355,23 @@ export class OutputHandler {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
     let content = await readFile(filePath);
 
-    if (
-      content.startsWith('<scratchpad>') ||
-      content.startsWith('<rebuttal_package>')
-    ) {
-      if (!content.endsWith(`</${documentTag}>`)) {
-        if (
-          !content.includes(`</${documentTag}>`) &&
-          content.includes(`<${documentTag}>`)
-        ) {
-          content += `\n</${documentTag}>`;
-        } else {
-          content = content.replace(
-            new RegExp(`</${documentTag}>.*$`, 's'),
-            '',
-          );
-          if (content.includes(`<${documentTag}>`)) {
-            content += `\n<${documentTag}>`;
-          }
+    content = await this.processXmlContent(content);
+
+    // if (
+    //   content.startsWith('<scratchpad>') ||
+    //   content.startsWith('<rebuttal_package>')
+    // ) {
+
+    if (!content.endsWith(`</${documentTag}>`)) {
+      if (
+        !content.includes(`</${documentTag}>`) &&
+        content.includes(`<${documentTag}>`)
+      ) {
+        content += `\n</${documentTag}>`;
+      } else {
+        content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
+        if (content.includes(`<${documentTag}>`)) {
+          content += `\n<${documentTag}>`;
         }
       }
     }

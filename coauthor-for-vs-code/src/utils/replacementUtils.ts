@@ -93,6 +93,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
     '\\begin{latex_document}': '<latex_document>',
+    'Here is the revised \\LaTeX document.\n\n```latex':
+      'Here is the revised \\LaTeX document.\n\n<latex_document>',
     // Scratchpad and latex_document handling
     '<scratchpad>\n<scratchpad>\n': '<scratchpad>\n',
     '<scratchpad>\n```latex\n': '<scratchpad>\n<latex_document>\n',
