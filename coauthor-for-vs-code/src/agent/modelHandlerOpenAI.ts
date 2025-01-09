@@ -323,9 +323,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    this.logger.debug(
-      'Updating message content for OpenAI API compatible models',
-    );
+    // this.logger.debug(
+    //   'Updating message content for OpenAI API compatible models',
+    // );
 
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
     if (messages[messages.length - 1].role === 'user') {

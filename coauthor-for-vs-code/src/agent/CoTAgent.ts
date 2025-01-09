@@ -58,7 +58,7 @@ export class CoTAgent extends BaseReflectionAgent {
 
         // Then process output files
         await this.processOutputFiles(outputFile, currRound);
-        this.logger.debug(`Output files processed for round ${currRound}`);
+        this.logger.info(`Output files processed for round ${currRound}`);
       }
 
       // Finally handle logging in base class
