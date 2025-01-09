@@ -1,5 +1,9 @@
 // Standard library imports
 import * as path from 'path';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
+const execAsync = promisify(exec);
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -40,6 +44,30 @@ export async function compileLatex2Pdf(
       channel,
       `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
     );
+    return false;
+  }
+}
+
+/**
+ * Check if latexdiff is installed on the system
+ */
+export async function checkLatexdiffInstalled(): Promise<boolean> {
+  try {
+    await execAsync('latexdiff --version');
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Check if latexdiff-vc is installed on the system
+ */
+export async function checkLatexdiffVcInstalled(): Promise<boolean> {
+  try {
+    await execAsync('latexdiff-vc --version');
+    return true;
+  } catch (err) {
     return false;
   }
 }
