@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - utilities
-import { readFile, fileExists } from '../utils/fileUtils';
+import { readFile, fileExists, writeFile } from '../utils/fileUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -226,7 +226,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         text: PseudoPrefillMsgContentString,
       });
       this.logger.info(
-        `Added pseudo prefill message to messages: ${PseudoPrefillMsgContentString}`,
+        `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
       );
       return [false, messages];
     }
@@ -235,7 +235,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     messages.push({ role: 'assistant', content: fileContent });
 
     if (hasEndTag(agentSetting, fileContent)) {
-      this.logger.debug('End tag detected - skipping continuation');
+      this.logger.info('End tag detected - skipping continuation');
       if (Array.isArray(messages[messages.length - 1].content)) {
         messages[messages.length - 1].content[
           messages[messages.length - 1].content.length - 1
@@ -246,10 +246,15 @@ export class ModelHandlerOpenAI extends ModelHandler {
       return [true, messages];
     }
 
-    this.logger.warn(
+    this.logger.info(
       'Output file exists but no end tag found - continuing from file',
     );
-    toolState.updateAccumulatedOutput(fileContent);
+    if (fileContent.includes(prefill)) {
+      toolState.updateAccumulatedOutput(fileContent);
+    } else {
+      toolState.updateAccumulatedOutput(prefill + fileContent);
+      await writeFile(outputFile, toolState.accumulatedOutput);
+    }
     const state = AgentStateRound.initialize(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessage(
