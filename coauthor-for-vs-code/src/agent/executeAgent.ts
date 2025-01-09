@@ -6,9 +6,6 @@ import { glob } from 'glob';
 // Third-party imports
 // (none needed)
 
-// Local imports - log
-import * as logger from '../logger/logUtils';
-
 // Local imports - utilities
 import { getAgentsDirectory } from '../utils/pathUtils';
 
@@ -20,9 +17,7 @@ import { MODEL_CONFIGS } from './ModelRegistry';
 import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
-
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
+import { MergeAgent } from './MergeAgent';
 
 type AgentConstructor = {
   new (
@@ -54,7 +49,7 @@ export async function getAgentPath(
 
     if (matches.length === 0) {
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      logger.error(CHANNEL, `${errorMsg} from ${basePath}`);
+      vscode.window.showErrorMessage(`${errorMsg} from ${basePath}`);
       throw new Error(errorMsg);
     }
 
@@ -62,7 +57,7 @@ export async function getAgentPath(
     return path.join(basePath, path.dirname(matches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
+    vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
   }
 }
@@ -82,7 +77,11 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
  * Get agent name with optional multiple suffix.
  */
 function getAgentName(baseAgent: string, outputFiles: string[] | null): string {
-  return outputFiles ? `${baseAgent}_multiple` : baseAgent;
+  if (outputFiles && outputFiles.length > 1) {
+    // logger.info(CHANNEL, `Switching to multiple output mode`);
+    return `${baseAgent}_multiple`;
+  }
+  return baseAgent;
 }
 
 /**
@@ -142,8 +141,62 @@ export async function executeAgent(
     // Run the agent
     await agent.run();
   } catch (err) {
-    const errorMsg = `Error executing agent: ${err instanceof Error ? err.message : String(err)}`;
-    logger.error(CHANNEL, errorMsg);
+    const errorMsg = `Error executing agent ${agentConfig.agent}: ${err instanceof Error ? err.message : String(err)}`;
+    vscode.window.showErrorMessage(errorMsg);
+    throw new Error(errorMsg);
+  }
+}
+
+/**
+ * Run merge agent to handle file merging operations.
+ */
+export async function executeMergeAgent(
+  model: string,
+  inputFile: string,
+  editedFile: string,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  try {
+    // Create agent config for merge operation
+    const agentConfig = createAgentConfig({
+      agent: 'merge',
+      model,
+      inputFile,
+      editedFile,
+    });
+
+    // Get model configuration
+    if (!(model in MODEL_CONFIGS)) {
+      throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
+    }
+
+    const modelConfig = MODEL_CONFIGS[model];
+    const modelHandler = ModelFactory.createHandler(modelConfig);
+
+    // Get agent path and load settings/prompts
+    const agentPath = await getAgentPath('merge', context);
+    const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+      agentPath,
+      'merge',
+    );
+
+    // Create and run merge agent
+    const agent = new MergeAgent(
+      modelHandler,
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      agentPath,
+    );
+
+    // Initialize agent
+    await agent.init();
+
+    // Run the agent
+    await agent.run();
+  } catch (err) {
+    const errorMsg = `Error executing merge agent: ${err instanceof Error ? err.message : String(err)}`;
+    vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
   }
 }

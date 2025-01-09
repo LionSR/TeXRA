@@ -22,6 +22,16 @@ function updateStreamTabs(streams, activeStream) {
 }
 
 function setupEventListeners() {
+  // Initialize Split.js
+  Split(['.content-area', '.tabs'], {
+    sizes: [80, 20],
+    minSize: [400, 80],
+    gutterSize: 1,
+    snapOffset: 0,
+    dragInterval: 1,
+    direction: 'horizontal',
+  });
+
   // Stream switching
   document.getElementById('streamTabs').addEventListener('click', (event) => {
     if (event.target.classList.contains('tab')) {
@@ -65,6 +75,9 @@ window.addEventListener('message', (event) => {
         logContent.innerHTML = message.messages.map(formatLogEntry).join('');
         logContent.scrollTop = logContent.scrollHeight;
       }
+      break;
+    case 'clearLogs':
+      logContent.innerHTML = '';
       break;
     case 'appendLog':
       if (message.stream === currentStream) {

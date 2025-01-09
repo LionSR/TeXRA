@@ -1,11 +1,21 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 // (none needed)
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import { AgentLogger } from '../logger/AgentLogger';
+
+// Local imports - utilities
+import { fileExists } from '../utils/fileUtils';
+import {
+  getBase64EncodedImage,
+  countPdfPages,
+  singlePagePdf2Png,
+  multiPagePdf2Png,
+  processPdfInput,
+} from '../utils/imgUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -22,9 +32,6 @@ const CONFIRMATION_CONTINUE_LIMIT = 20;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
-
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
@@ -34,6 +41,7 @@ export abstract class ModelHandler {
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
+  protected logger: AgentLogger;
 
   constructor(config: ModelConfig) {
     this.config = config;
@@ -43,6 +51,15 @@ export abstract class ModelHandler {
       : DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
+    // Initialize with default channel, will be overwritten by agent
+    this.logger = new AgentLogger('Agent');
+  }
+
+  /**
+   * Updates the logger instance.
+   */
+  public setLogger(logger: AgentLogger): void {
+    this.logger = logger;
   }
 
   /**
@@ -111,6 +128,109 @@ export abstract class ModelHandler {
   }
 
   /**
+   * Process image for models.
+   * @param figureFile Path to the image file
+   * @param fileExtension File extension (e.g. '.jpg', '.pdf')
+   * @returns Tuple of [base64 encoded image data, media type]
+   */
+  protected async processImage(
+    figureFile: string,
+    fileExtension: string,
+  ): Promise<[string | string[], string]> {
+    let imgData: string | string[];
+    const ext = fileExtension.toLowerCase();
+
+    const mediaTypes: { [key: string]: string } = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.pdf':
+        this.capabilities.supportsNativePdf &&
+        (await countPdfPages(figureFile)) > 1
+          ? 'application/pdf'
+          : 'image/png',
+    };
+
+    if (!(ext in mediaTypes)) {
+      throw new Error(`Unsupported file extension: ${fileExtension}`);
+    }
+
+    const mediaType = mediaTypes[ext];
+    if (ext === '.pdf' && mediaType === 'image/png') {
+      const pdfResult = await processPdfInput(figureFile);
+      if (pdfResult === null) {
+        throw new Error(`Failed to process PDF file: ${figureFile}`);
+      }
+      imgData = pdfResult;
+    } else {
+      imgData = await getBase64EncodedImage(figureFile);
+    }
+
+    return [imgData, mediaType];
+  }
+
+  /**
+   * Create image messages for the conversation.
+   * This is a shared implementation that can be used by all providers.
+   * Individual providers can override if needed.
+   */
+  public async createImageMessage(figureFiles: string[]): Promise<any[]> {
+    const imageContents: any[] = [];
+    const addedFigures: string[] = [];
+
+    for (const figureFile of figureFiles) {
+      if (!(await fileExists(figureFile))) {
+        this.logger.error(`File not found: ${figureFile}`);
+        continue;
+      }
+
+      const fileExtension = path.extname(figureFile).toLowerCase();
+
+      try {
+        const [imgData, mediaType] = await this.processImage(
+          figureFile,
+          fileExtension,
+        );
+        this.logger.debug(`Processed image: ${figureFile}, type: ${mediaType}`);
+
+        if (Array.isArray(imgData)) {
+          this.logger.debug(
+            `Adding ${imgData.length} pages to the image contents`,
+          );
+          for (let i = 0; i < imgData.length; i++) {
+            imageContents.push({
+              file_name: `${path.basename(figureFile)}_page_${i + 1}`,
+              data: imgData[i],
+              media_type: mediaType,
+            });
+            addedFigures.push(`${figureFile}_page_${i + 1}`);
+          }
+        } else {
+          this.logger.debug(
+            `Adding single page to the image contents: ${figureFile}`,
+          );
+          imageContents.push({
+            file_name: path.basename(figureFile),
+            data: imgData,
+            media_type: mediaType,
+          });
+          addedFigures.push(figureFile);
+        }
+      } catch (err) {
+        this.logger.error(`Failed to process image ${figureFile}: ${err}`);
+        continue;
+      }
+    }
+
+    if (figureFiles.length > 0) {
+      this.logger.info(`Trying to load images: ${figureFiles}`);
+      this.logger.info(`Successfully added: ${addedFigures}`);
+    }
+
+    return this.createImageContent(imageContents);
+  }
+
+  /**
    * Evaluates conversation stop conditions based on model response and state.
    * @returns Tuple of [endTurn: should end current turn, shouldStop: should stop conversation]
    */
@@ -136,12 +256,10 @@ export abstract class ModelHandler {
       stateGlobal.totalOutputTokens > maxOutputTokens;
 
     if (maxOutputTokensExceeded) {
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
-      logger.warn(
-        CHANNEL,
+      this.logger.warn(
         `Total output tokens: ${stateGlobal.totalOutputTokens}, First input tokens: ${stateGlobal.firstInputTokens}`,
       );
     }
@@ -151,8 +269,7 @@ export abstract class ModelHandler {
 
     // Print debug info if stopping
     if (shouldStop) {
-      logger.debug(
-        CHANNEL,
+      this.logger.debug(
         `StopFlags:
                 endTurn: ${endTurn}
                 encounterDocumentTag: ${encounterDocumentTag}
