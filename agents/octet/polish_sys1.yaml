@@ -19,7 +19,7 @@ prompts:
         \item Never break the response into multiple parts or sections
         \item Follow the best practices that will result in zero warnings when checked by chktex
         \item Use appropriate notation and terminology consistently throughout the text
-        \item Keep the comments that start with \% in the document
+        \item Keep the comments that start with `%' in the document
         \item Use either `` or '' as an alternative to `"'
         \item When writing formal \LaTeX documents rather than thinking in the scratchpad, never barely list things like 1.\ 2.\ 3.\ \ldots{} as in markdown
         \item \textbf{IMPORTANT:} You must give the complete output containing all the sections in the order they are given in the input file

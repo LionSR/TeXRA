@@ -16,7 +16,7 @@ prompts:
         \begin{itemize}
             \item Follow best practices that will result in zero warnings when checked by chktex.
             \item Use appropriate notation and terminology consistently throughout all documents.
-            \item Keep the comments that start with \% in the documents.
+            \item Keep the comments that start with `%' in the documents.
             \item Use either `` or '' as an alternative to `"'.
             \item Ensure that you maintain the structure and formatting of each individual document while making improvements.
             \item Adhere to NSF guidelines and requirements for each section of the proposal.
