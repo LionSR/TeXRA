@@ -1,11 +1,11 @@
 // Standard library imports
-// (none needed)
+import * as path from 'path';
 
 // Third-party imports
 // (none needed)
 
 // Local imports - log
-import * as logger from '../logger/logUtils';
+import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - latex utils
 import {
@@ -46,9 +46,6 @@ import { OutputHandler } from './OutputHandler';
 
 const K_SLICE = 200;
 
-const CHANNEL = 'Agent';
-logger.initialize(CHANNEL);
-
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
  * Provides core functionality for processing inputs, managing state, and handling outputs
@@ -66,6 +63,7 @@ export abstract class BaseReflectionAgent {
   protected client: any;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
+  protected logger: AgentLogger;
   /** Handler for output file processing and validation. */
   protected outputHandler: OutputHandler;
   /** Cached user variables to avoid recomputation */
@@ -84,16 +82,18 @@ export abstract class BaseReflectionAgent {
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
 
-    logger.debug(CHANNEL, `AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    logger.debug(
-      CHANNEL,
-      `AgentSetting: ${JSON.stringify(this.agentSetting)}\n`,
-    );
-    logger.debug(
-      CHANNEL,
+    // Initialize logger with unique channel ID
+    const channelId = `${this.agentConfig.agent}-${this.getTaskId()}`;
+    this.logger = new AgentLogger(channelId);
+
+    // Update model handler's logger
+    this.modelHandler.setLogger(this.logger);
+
+    this.logger.info(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
+    this.logger.info(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
+    this.logger.info(
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
     );
-    // logger.debug(CHANNEL, `ModelHandler: ${this.modelHandler}\n`);
 
     // Initialize basic attributes
     this.outputFile = ['', ''];
@@ -122,9 +122,23 @@ export abstract class BaseReflectionAgent {
       this.modelHandler,
       this.logId,
       this.baseFiles,
+      this.logger,
     );
 
-    logger.info(CHANNEL, `Processing file: ${this.agentConfig.inputFile}`);
+    this.logger.info(`Processing file: ${this.agentConfig.inputFile}`);
+  }
+
+  /**
+   * Gets unique task ID from output name override or input filename.
+   * @returns Task ID string used for logging and output naming
+   */
+  private getTaskId(): string {
+    return (
+      this.agentConfig.outputNameOverride ||
+      (this.agentConfig.inputFile &&
+        path.basename(this.agentConfig.inputFile)) +
+        `@${this.agentConfig.model}`
+    );
   }
 
   /**
@@ -258,13 +272,11 @@ export abstract class BaseReflectionAgent {
             const fileContent = await readFile(filePath);
             userVars[`${varName}_FILE`] = filePath;
             userVars[`${varName}_CONTENT`] = fileContent;
-            logger.info(
-              CHANNEL,
+            this.logger.info(
               `Found from [requiredFiles] the [VAR '${varName}']: ${filePath}`,
             );
           } catch (err) {
-            logger.warn(
-              CHANNEL,
+            this.logger.warn(
               `[Required file] ${filePath} not found from [VAR '${varName}']`,
             );
           }
@@ -282,13 +294,11 @@ export abstract class BaseReflectionAgent {
           const fileContent = await readFile(fullPath);
           userVars[`${varName}_FILE`] = fullPath;
           userVars[`${varName}_CONTENT`] = fileContent;
-          logger.info(
-            CHANNEL,
+          this.logger.info(
             `Found from [requiredFilesInternal] the [VAR '${varName}']: ${fullPath}`,
           );
         } catch (err) {
-          logger.warn(
-            CHANNEL,
+          this.logger.warn(
             `[Required file internal] ${fullPath} not found from [VAR '${varName}']`,
           );
         }
@@ -324,13 +334,11 @@ export abstract class BaseReflectionAgent {
                 const fileContent = await readFile(categoryValue);
                 userVars[`${varName}_FILE`] = categoryValue;
                 userVars[`${varName}_CONTENT`] = fileContent;
-                logger.info(
-                  CHANNEL,
+                this.logger.info(
                   `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${categoryValue}`,
                 );
               } catch (err) {
-                logger.warn(
-                  CHANNEL,
+                this.logger.warn(
                   `File ${categoryValue} not found from [Pattern '${pattern}']`,
                 );
               }
@@ -344,14 +352,12 @@ export abstract class BaseReflectionAgent {
                     const fileContent = await readFile(file);
                     userVars[`${varName}_FILE`] = file;
                     userVars[`${varName}_CONTENT`] = fileContent;
-                    logger.info(
-                      CHANNEL,
+                    this.logger.info(
                       `Found from [Pattern '${pattern}'] the [VAR '${varName}']: ${file}`,
                     );
                     break; // Stop after first match
                   } catch (err) {
-                    logger.warn(
-                      CHANNEL,
+                    this.logger.warn(
                       `File ${file} not found from [Pattern '${pattern}']`,
                     );
                   }
@@ -445,7 +451,7 @@ export abstract class BaseReflectionAgent {
       );
       const responseTime = (Date.now() - startTime) / 1000;
       stateRound.updateResponseTime(responseTime);
-      logger.info(CHANNEL, `Response time: ${responseTime.toFixed(2)}s`);
+      this.logger.info(`Response time: ${responseTime.toFixed(2)}s`);
 
       // Extract and validate response
       const [newResponse, responseUsage, stopReason] =
@@ -455,8 +461,8 @@ export abstract class BaseReflectionAgent {
           this.agentConfig.toolConfig.autoConfirmation,
         );
 
-      logger.info(CHANNEL, `Stop reason: ${stopReason}`);
-      logger.info(CHANNEL, `Token usage: ${JSON.stringify(responseUsage)}`);
+      this.logger.info(`Stop reason: ${stopReason}`);
+      this.logger.info(`Token usage: ${JSON.stringify(responseUsage)}`);
 
       // Compute statistics and update states
       const APIUsage = this.modelHandler.computeResponseUsage(
@@ -465,8 +471,8 @@ export abstract class BaseReflectionAgent {
       );
       stateRound.updateTokenCounts(APIUsage);
       stateGlobal.updateFromCurrRound(stateRound);
-      logger.debug(CHANNEL, `State round: ${JSON.stringify(stateRound)}`);
-      logger.debug(CHANNEL, `State global: ${JSON.stringify(stateGlobal)}`);
+      this.logger.debug(`State round: ${JSON.stringify(stateRound)}`);
+      this.logger.debug(`State global: ${JSON.stringify(stateGlobal)}`);
 
       // Early exit for repetition
       const repetitionResult = checkForMassiveRepetition(
@@ -474,10 +480,9 @@ export abstract class BaseReflectionAgent {
         newResponse,
       );
       if (repetitionResult.massiveRepetitionDetected) {
-        logger.error(CHANNEL, `The new response is: ${newResponse}`);
-        logger.error(
-          CHANNEL,
-          'Massive repetition detected - skipping this response',
+        this.logger.error(`The new response is: ${newResponse}`);
+        this.logger.error(
+          `Massive repetition detected - skipping this response`,
         );
         break;
       }
@@ -514,22 +519,20 @@ export abstract class BaseReflectionAgent {
 
       // Write or append to output file
       if (!exists) {
-        logger.debug(CHANNEL, `Creating new file: ${outputFile}`);
+        this.logger.info(`Creating new file: ${outputFile}`);
         await writeFile(outputFile, processedResponse);
       } else {
-        logger.debug(CHANNEL, `Appending to existing file: ${outputFile}`);
+        this.logger.info(`Appending to existing file: ${outputFile}`);
         await appendFile(outputFile, bestConnector + processedResponse);
       }
 
       // Log response boundaries
-      logger.info(CHANNEL, 'Response preview:');
-      logger.debug(
-        CHANNEL,
-        `First ${K_SLICE} chars: ${processedResponse.slice(0, K_SLICE)}`,
+      this.logger.info(`Response preview:`);
+      this.logger.info(
+        `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
       );
-      logger.debug(
-        CHANNEL,
-        `Last ${K_SLICE} chars: ${processedResponse.slice(-K_SLICE)}`,
+      this.logger.info(
+        `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
       );
 
       // Update message content
@@ -556,8 +559,7 @@ export abstract class BaseReflectionAgent {
 
       // Handle continuation
       stateRound.incrementContinuation();
-      logger.info(
-        CHANNEL,
+      this.logger.info(
         `Starting continuation #${stateRound.continuationCount}`,
       );
 
@@ -569,9 +571,8 @@ export abstract class BaseReflectionAgent {
           this.agentSetting,
         )
       ) {
-        logger.info(
-          CHANNEL,
-          'Should continue - adding continuation message to conversation',
+        this.logger.info(
+          `Should continue - adding continuation message to conversation`,
         );
         this.modelHandler.addContinueMessage(
           messages,
@@ -616,11 +617,10 @@ export abstract class BaseReflectionAgent {
       currRound,
     );
     const inputInfo = `input file ${this.agentConfig.inputFile} and/or input files ${this.agentConfig.inputFiles}`;
-    logger.info(
-      CHANNEL,
-      `\n\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+    this.logger.info(
+      `\nProcessed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
     );
-    logger.info(CHANNEL, `Completed round ${currRound}`);
+    this.logger.info(`Completed round ${currRound}`);
   }
 
   /**
@@ -687,6 +687,9 @@ export abstract class BaseReflectionAgent {
           this.agentConfig.inputFile,
         );
         if (extractedFigures) {
+          this.logger.info(
+            `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
+          );
           toolState.addFigureFiles(extractedFigures);
         }
       }
@@ -704,7 +707,10 @@ export abstract class BaseReflectionAgent {
 
     // Initialize state and messages
     const currRound = 0;
-    logger.info(CHANNEL, `\n\nProcessing round ${currRound}`);
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
+    this.logger.info(`Processing round ${currRound}`);
     const stateGlobal = AgentStateGlobal.initialize();
 
     const messages: any[] = [];
@@ -845,7 +851,10 @@ export abstract class BaseReflectionAgent {
     }
 
     // Initialize reflection round
-    logger.info(CHANNEL, `\n\nProcessing round ${currRound}`);
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
+    this.logger.info(`Processing round ${currRound}`);
     const stateRound = AgentStateRound.initialize(currRound);
 
     // Prepare reflection message
@@ -934,13 +943,19 @@ export abstract class BaseReflectionAgent {
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 
-    logger.info(CHANNEL, `Round 0 completed\n`);
+    // this.logger.info(`Round 0 completed\n`);
+    this.logger.info(
+      `\n------------------------------------------------------------`,
+    );
 
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
-      logger.info(CHANNEL, 'Round 1 completed\n');
+      // this.logger.info(`Round 1 completed\n`);
+      this.logger.info(
+        `\n------------------------------------------------------------`,
+      );
     }
   }
 
@@ -961,7 +976,7 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.toolConfig.autoExtractTikzFigureReflect
     ) {
       for (const outputFile of outputFiles) {
-        logger.debug(CHANNEL, `Extracting TikZ figures from ${outputFile}`);
+        this.logger.debug(`Extracting TikZ figures from ${outputFile}`);
         const extractedTikzFigures =
           await extractAndCompileTikzPicturesWithLabels(outputFile);
         if (extractedTikzFigures) {
@@ -989,26 +1004,38 @@ export abstract class BaseReflectionAgent {
       this.agentConfig.outputFiles.length > 0
     ) {
       // Multiple output files case
-      logger.debug(CHANNEL, `Processing multiple outputs for ${outputFile}`);
-      logger.debug(CHANNEL, `Output files: ${this.agentConfig.outputFiles}`);
-      const processedFiles =
-        await this.outputHandler.processMultipleOutputs(outputFile);
-      if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(processedFiles);
-        this.outputHandler.outputFiles[currRound] = processedFiles;
-        await this.outputHandler.replaceInputCommands(
-          this.baseFiles,
-          processedFiles,
+      this.logger.debug(`Processing multiple outputs for ${outputFile}`);
+      this.logger.debug(`Output files: ${this.agentConfig.outputFiles}`);
+
+      if (this.agentSetting.agentType === 'CoT') {
+        const processedFiles =
+          await this.outputHandler.processMultipleXmlOutputs(outputFile);
+        if (processedFiles.length > 0) {
+          await this.outputHandler.handleMultipleOutputs(processedFiles);
+          this.outputHandler.outputFiles[currRound] = processedFiles;
+          await this.outputHandler.replaceInputCommands(
+            this.baseFiles,
+            processedFiles,
+          );
+        }
+      } else {
+        this.logger.error(
+          'Direct agent with multiple output files is not yet supported',
         );
       }
     } else {
       // Single output file case
-      logger.debug(CHANNEL, `Processing single output for ${outputFile}`);
-      const processedFile =
-        await this.outputHandler.processSingleOutput(outputFile);
-      if (processedFile) {
-        await this.outputHandler.handleSingleOutput(processedFile);
-        this.outputHandler.outputFiles[currRound] = [processedFile];
+      this.logger.debug(`Processing single output for ${outputFile}`);
+      if (this.agentSetting.agentType === 'CoT') {
+        const processedFile =
+          await this.outputHandler.processSingleXmlOutput(outputFile);
+        if (processedFile) {
+          await this.outputHandler.handleSingleOutput(processedFile);
+          this.outputHandler.outputFiles[currRound] = [processedFile];
+        }
+      } else {
+        await this.outputHandler.handleSingleOutput(outputFile);
+        this.outputHandler.outputFiles[currRound] = [outputFile];
       }
     }
 

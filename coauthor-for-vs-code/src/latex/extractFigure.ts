@@ -7,7 +7,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { readFile, fileExists } from '../utils/fileUtils';
 
-const CHANNEL = 'LaTeX';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 /**
@@ -71,10 +71,9 @@ export async function extractFigurePathsFromLatex(
         path.join(latexDir, p.replace(/^\/+|\/+$/g, '')),
       );
       graphicspaths.push(normalizedPath);
-      logger.debug(CHANNEL, `Added graphicspath: ${normalizedPath}`);
     }
 
-    logger.debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
+    // logger.debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
 
     // Find all matches in the content for both patterns
     for (const pattern of figurePatterns) {
@@ -93,7 +92,6 @@ export async function extractFigurePathsFromLatex(
             const relPath = path.relative(latexDir, pathToCheck);
             if (await fileExists(relPath)) {
               figurePaths.push(relPath);
-              logger.debug(CHANNEL, `Found figure: ${relPath}`);
               break;
             }
           }
@@ -101,7 +99,6 @@ export async function extractFigurePathsFromLatex(
       }
     }
 
-    logger.debug(CHANNEL, `Found figures: ${figurePaths.join(', ')}`);
     return figurePaths;
   } catch (err) {
     logger.error(

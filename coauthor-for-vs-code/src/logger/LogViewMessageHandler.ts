@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from './logUtils';
 import { LogViewProvider } from './LogViewProvider';
 
-const CHANNEL = 'LogViewMessageHandler';
+const CHANNEL = 'MessageHandler';
 
 export class LogViewMessageHandler {
   constructor(private readonly provider: LogViewProvider) {}

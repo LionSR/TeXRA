@@ -46,21 +46,17 @@ async function cleanupTempFiles(
   basePath: string,
   tempFilePattern: string,
 ): Promise<void> {
-  try {
-    const files = fs.readdirSync(basePath);
-    const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
+  const files = fs.readdirSync(basePath);
+  const tempFiles = files.filter((file) => file.startsWith(tempFilePattern));
 
-    for (const file of tempFiles) {
-      const fullPath = path.join(basePath, file);
-      try {
-        fs.unlinkSync(fullPath);
-        logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
-      } catch (err) {
-        logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
-      }
+  for (const file of tempFiles) {
+    const fullPath = path.join(basePath, file);
+    try {
+      fs.unlinkSync(fullPath);
+      logger.debug(CHANNEL, `Cleaned up temporary file: ${file}`);
+    } catch (err) {
+      logger.warn(CHANNEL, `Failed to delete temporary file ${file}: ${err}`);
     }
-  } catch (err) {
-    logger.warn(CHANNEL, `Error cleaning up temporary files: ${err}`);
   }
 }
 
@@ -106,7 +102,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
       logger.error(CHANNEL, 'No workspace path found');
-      return 0;
+      return 1;
     }
 
     // Check if file exists
@@ -137,7 +133,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 /**
  * Convert a single page of a PDF to a PNG image
  * @param pdfPath Path to the PDF file (relative to workspace)
- * @param pageNum Page number to convert (0-indexed)
+ * @param pageNum Page number to convert (1-indexed)
  * @param quality Quality of the output PNG image (default: 300)
  * @param maxSize Maximum size of the output image (default: [1024, 1024])
  * @returns Promise<string> Base64 encoded PNG image
@@ -257,7 +253,7 @@ export async function multiPagePdf2Png(
     const pagesToConvert = Math.min(pageCount, maxPages);
 
     const base64Images: string[] = [];
-    for (let pageNum = 0; pageNum < pagesToConvert; pageNum++) {
+    for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
       const base64Image = await singlePagePdf2Png(
         pdfPath,
         pageNum,
@@ -312,7 +308,7 @@ export async function processPdfInput(
     const finalMaxSize: [number, number] = maxSize || [1024, 1024];
 
     if (pageCount === 1) {
-      return await singlePagePdf2Png(pdfPath, 0, finalQuality, finalMaxSize);
+      return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);
     } else {
       return await multiPagePdf2Png(
         pdfPath,

@@ -19,7 +19,7 @@ import { renderPrompt } from '../utils/promptUtils';
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
 
-const CHANNEL = 'LaTeX';
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 // Configure nunjucks
@@ -44,10 +44,12 @@ const TIKZ_TEMPLATE = `
 /**
  * Extract TikZ pictures with their labels from a LaTeX file
  * @param latexFile Path to the LaTeX file
+ * @param channel Optional channel for logging
  * @returns Array of [label, tikzpictures] tuples
  */
 export async function extractTikzPicturesWithLabels(
   latexFile: string,
+  channel: string = CHANNEL,
 ): Promise<[string, string[]][]> {
   try {
     const content = await readFile(latexFile);
@@ -71,14 +73,14 @@ export async function extractTikzPicturesWithLabels(
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        logger.debug(CHANNEL, `Found TikZ picture with label: ${label}`);
+        logger.debug(channel, `Found TikZ picture with label: ${label}`);
       }
     }
 
     return labeledTikzPictures;
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error extracting TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -91,6 +93,7 @@ export async function extractTikzPicturesWithLabels(
  * @param label Label for the figure
  * @param buildDir Build directory path
  * @param suffix Optional suffix for multiple pictures with same label
+ * @param channel Optional channel for logging
  * @returns Path to created LaTeX file
  */
 export async function createStandaloneLatexWithLabels(
@@ -98,6 +101,7 @@ export async function createStandaloneLatexWithLabels(
   label: string,
   buildDir: string,
   suffix?: string,
+  channel: string = CHANNEL,
 ): Promise<string> {
   try {
     // Use renderPrompt instead of nunjucks directly
@@ -111,12 +115,12 @@ export async function createStandaloneLatexWithLabels(
 
     // Write file
     await writeFile(filePath, standaloneContent);
-    logger.debug(CHANNEL, `Created standalone LaTeX file: ${filePath}`);
+    logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
 
     return filePath;
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error creating standalone LaTeX: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -126,10 +130,12 @@ export async function createStandaloneLatexWithLabels(
 /**
  * Extract and compile TikZ pictures from a LaTeX file
  * @param latexFile Path to the LaTeX file
+ * @param channel Optional channel for logging
  * @returns Array of paths to compiled PDF files
  */
 export async function extractAndCompileTikzPicturesWithLabels(
   latexFile: string,
+  channel: string = CHANNEL,
 ): Promise<string[]> {
   try {
     // Setup build directory
@@ -138,10 +144,13 @@ export async function extractAndCompileTikzPicturesWithLabels(
     const buildDir = path.join(inputDir, 'build', inputName);
     await createDirectory(buildDir);
 
-    logger.debug(CHANNEL, `Extracting TikZ pictures from ${latexFile}`);
-    const labeledTikzPictures = await extractTikzPicturesWithLabels(latexFile);
+    logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
+    const labeledTikzPictures = await extractTikzPicturesWithLabels(
+      latexFile,
+      channel,
+    );
     logger.debug(
-      CHANNEL,
+      channel,
       `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
     );
 
@@ -164,13 +173,14 @@ export async function extractAndCompileTikzPicturesWithLabels(
           label,
           buildDir,
           suffix,
+          channel,
         );
-        await compileLatex2Pdf(texFile);
+        await compileLatex2Pdf(texFile, channel);
 
         const pdfFile = texFile.replace(/\.tex$/, '.pdf');
         if (await fileExists(pdfFile)) {
           compiledFiles.push(pdfFile);
-          logger.debug(CHANNEL, `Successfully compiled: ${pdfFile}`);
+          logger.debug(channel, `Successfully compiled: ${pdfFile}`);
         }
       }
     }
@@ -178,7 +188,7 @@ export async function extractAndCompileTikzPicturesWithLabels(
     return compiledFiles;
   } catch (err) {
     logger.error(
-      CHANNEL,
+      channel,
       `Error extracting and compiling TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;

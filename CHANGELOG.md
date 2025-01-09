@@ -84,7 +84,7 @@
 ## [0.11.4]
 
 - **Added:**
-  - Scratchpad functionality implementation with use_scratchpad and use_scratchpad_reflect flags
+  - Scratchpad functionality implementation with useScratchpad and useScratchpad_reflect flags
 - **Changed:**
   - Renamed user_prefix_vars to userVars throughout the codebase for clarity
   - Refactored prompt handling and user variable updates
