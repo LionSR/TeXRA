@@ -110,6 +110,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       enableCommandUris: true,
       localResourceRoots: [
         vscode.Uri.joinPath(this._extensionUri, 'src', 'logger', 'logView'),
+        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
       ],
     };
 
