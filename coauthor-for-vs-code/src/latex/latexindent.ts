@@ -11,12 +11,18 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { deleteFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
+import { checkToolInstalled } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
+    // Check if latexindent is installed
+    if (!(await checkToolInstalled('latexindent'))) {
+      return false;
+    }
+
     // Get latexindent config from settings
     const config = vscode.workspace.getConfiguration('coauthor.latex');
     const latexindentConfig = config.get<string>('latexindentConfig');
