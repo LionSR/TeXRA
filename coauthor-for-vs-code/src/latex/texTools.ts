@@ -18,17 +18,20 @@ const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 // Installation instructions for each tool
-export const LATEXDIFF_INSTRUCTIONS = 'Installation instructions:\n' +
+export const LATEXDIFF_INSTRUCTIONS =
+  'Installation instructions:\n' +
   '- Mac: brew install latexdiff\n' +
   '- Ubuntu: sudo apt-get install latexdiff\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
-export const LATEXINDENT_INSTRUCTIONS = 'Installation instructions:\n' +
+export const LATEXINDENT_INSTRUCTIONS =
+  'Installation instructions:\n' +
   '- Mac: brew install latexindent\n' +
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
 
-export const TEXCOUNT_INSTRUCTIONS = 'Installation instructions:\n' +
+export const TEXCOUNT_INSTRUCTIONS =
+  'Installation instructions:\n' +
   '- Mac: brew install texcount\n' +
   '- Ubuntu: sudo apt-get install texlive-extra-utils\n' +
   '- Windows: Install through MiKTeX or TeX Live package manager';
@@ -42,20 +45,28 @@ interface ToolConfig {
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
   latexdiff: {
     command: 'latexdiff --version',
-    errorMessage: 'latexdiff is not installed. Please install it to use this feature.\n' + LATEXDIFF_INSTRUCTIONS
+    errorMessage:
+      'latexdiff is not installed. Please install it to use this feature.\n' +
+      LATEXDIFF_INSTRUCTIONS,
   },
   'latexdiff-vc': {
     command: 'latexdiff-vc --version',
-    errorMessage: 'latexdiff-vc is not installed. Please install it to use this feature.\n' + LATEXDIFF_INSTRUCTIONS
+    errorMessage:
+      'latexdiff-vc is not installed. Please install it to use this feature.\n' +
+      LATEXDIFF_INSTRUCTIONS,
   },
   latexindent: {
     command: 'latexindent --version',
-    errorMessage: 'latexindent is not installed. Please install it to use this feature.\n' + LATEXINDENT_INSTRUCTIONS
+    errorMessage:
+      'latexindent is not installed. Please install it to use this feature.\n' +
+      LATEXINDENT_INSTRUCTIONS,
   },
   texcount: {
     command: 'texcount --version',
-    errorMessage: 'texcount is not installed. Please install it to use this feature.\n' + TEXCOUNT_INSTRUCTIONS
-  }
+    errorMessage:
+      'texcount is not installed. Please install it to use this feature.\n' +
+      TEXCOUNT_INSTRUCTIONS,
+  },
 };
 
 // Export error messages for backward compatibility
@@ -72,7 +83,7 @@ export const TEXCOUNT_ERROR = TOOL_CONFIGS.texcount.errorMessage;
  */
 export async function checkToolInstalled(
   tool: keyof typeof TOOL_CONFIGS,
-  showError: boolean = true
+  showError: boolean = true,
 ): Promise<boolean> {
   try {
     await execAsync(TOOL_CONFIGS[tool].command);

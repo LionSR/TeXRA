@@ -470,8 +470,7 @@ export abstract class BaseReflectionAgent {
       );
       stateRound.updateTokenCounts(APIUsage);
       stateGlobal.updateFromCurrRound(stateRound);
-      this.logger.debug(`State round: ${JSON.stringify(stateRound)}`);
-      this.logger.debug(`State global: ${JSON.stringify(stateGlobal)}`);
+      // this.logger.debug(`stateRound: ${JSON.stringify(stateRound)}`);
 
       // Early exit for repetition
       const repetitionResult = checkForMassiveRepetition(
@@ -796,6 +795,8 @@ export abstract class BaseReflectionAgent {
         finalEndTurn,
         currRound,
       );
+
+      this.logger.debug(`stateGlobal: ${JSON.stringify(updatedStateGlobal)}`);
 
       return [
         updatedStateRound,
