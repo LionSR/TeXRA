@@ -17,7 +17,7 @@ import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
 
 const execAsync = promisify(exec);
 
-const CHANNEL = 'imgUtils';
+const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
 
 // Define the temporary directory path

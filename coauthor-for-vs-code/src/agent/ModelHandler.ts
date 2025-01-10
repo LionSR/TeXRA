@@ -12,8 +12,6 @@ import { fileExists } from '../utils/fileUtils';
 import {
   getBase64EncodedImage,
   countPdfPages,
-  singlePagePdf2Png,
-  multiPagePdf2Png,
   processPdfInput,
 } from '../utils/imgUtils';
 
