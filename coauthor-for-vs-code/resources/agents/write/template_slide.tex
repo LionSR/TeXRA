@@ -1,0 +1,42 @@
+\documentclass{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{dolphin}
+
+\setbeamertemplate{footline}[page number]
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{frametitle}[default][center]
+
+\AtBeginSection[]
+{
+\begin{frame}<beamer>
+\frametitle{Outline}
+\tableofcontents[currentsection]
+\end{frame}
+}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{physics}
+\usepackage{hyperref}
+\usepackage{natbib}
+
+% Include any other packages needed use \usepackage{...} 
+% Include any other external preamble in the paper using \input{...}
+
+% Title information
+\title{Title of the Presentation}
+\author{Authors of the Paper}
+\institute{Institution}
+\date{\today}
+
+\begin{document}
+
+% SLIDE_CONTENT
+
+\begin{frame}[allowframebreaks]{Reference}
+\bibliography{the bib file used to generate the paper} 
+\end{frame}
+
+\end{document}

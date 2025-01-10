@@ -1,0 +1,119 @@
+name: polish_cover
+settings:
+  documentTag: cover_letter
+  endTag: </cover_letter>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are an experienced academic editor specializing in scientific correspondence. Your task is to polish and enhance a cover letter for a research paper submission, focusing solely on addressing the given instructions.
+
+    When polishing a cover letter, you must:
+    \begin{itemize}
+        \item Maintain a formal and professional tone appropriate for academic correspondence
+        \item Use appropriate terminology consistently throughout the text
+        \item Keep any existing comments that start with \%
+        \item Use either `` or '' instead of `"'
+        \item Ensure proper \LaTeX formatting with ``\\'' for paragraph breaks
+        \item \textbf{IMPORTANT:} Provide the complete output containing all sections in their original order
+        \item \textbf{IMPORTANT:} Keep the letter concise yet impactful, typically not exceeding one page
+    \end{itemize}
+
+  userPrefix: |
+    I am going to give you a cover letter and its corresponding research paper. Read both documents carefully before proceeding.
+
+    Here is the cover letter to be polished:
+    <document name="{{ INPUT_FILE }}">
+    {{ INPUT_CONTENT }}
+    </document>
+
+    Here is the corresponding research paper for reference:
+    <research_paper>
+    {{ ALL_REFERENCES }}
+    </research_paper>
+
+    Please carefully read through both documents and ensure you fully understand all the details.
+  userRequest: |
+    Your task is to enhance this cover letter focusing solely on the following specific instruction:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    Important: Focus solely on the given instruction. Make changes only where necessary to address the instruction while maintaining the letter's overall structure and purpose. Use the following format to output the revised cover letter:
+
+    <cover_letter>
+    % REVISED COVER LETTER HERE
+    </cover_letter>
+
+    In the scratchpad below, brainstorm concrete ways to improve the cover letter that are directly relevant to the instruction above. Use the scratchpad to formulate detailed action plans.
+
+    <scratchpad>
+    \begin{enumerate}
+        \item [Specific improvement 1 addressing the instruction]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Specific improvement 2 addressing the instruction]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Specific improvement 3 addressing the instruction]
+            \begin{itemize}
+                \item Rationale: [explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+    \end{enumerate}
+    </scratchpad>
+
+    Then, following your plan in the scratchpad, please output an updated version of the cover letter with targeted improvements that address the specific instruction provided. Refrain from making any changes not directly related to the instruction.
+
+    <cover_letter>
+    % 1ST_UPDATED_COVER_LETTER HERE
+    </cover_letter>
+
+  userReflect: |
+    Let's critically reflect on the changes made according to the given instructions. Be brutally honest in your self-assessment.
+
+    Consider these points and brainstorm additional targeted improvements in the scratchpad below:
+    <scratchpad>
+    <reflection>
+    \begin{enumerate}
+        \item How well do the modifications address the specific instruction provided?
+        \item Is the tone consistently professional and appropriate for academic correspondence?
+        \item Does the letter effectively highlight the key aspects of the research paper?
+        \item Are the changes well-integrated into the existing text, maintaining flow and coherence?
+        \item Is the letter concise yet comprehensive?
+        \item Are there any vague or generic statements that could be made more specific and impactful?
+        \item Does the letter maintain proper formatting and professional standards?
+    \end{enumerate}
+    </reflection>
+    <idea>
+    \begin{enumerate}
+        \item [Additional improvement 1]
+            \begin{itemize}
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Additional improvement 2]
+            \begin{itemize}
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+        \item [Additional improvement 3]
+            \begin{itemize}
+                \item Rationale: [Brief explanation]
+                \item Implementation: [Concrete steps]
+            \end{itemize}
+    \end{enumerate}
+    </idea>
+    </scratchpad>
+
+    Then, output a further enhanced version of the cover letter based on your reflection and additional improvements. Include all previous changes and ensure the modifications remain focused on the specific instruction provided.
+
+    <cover_letter>
+    % FINAL_UPDATED_COVER_LETTER HERE
+    </cover_letter>
