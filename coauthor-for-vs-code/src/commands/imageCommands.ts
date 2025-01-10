@@ -207,11 +207,11 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
 
     // Get page number from user
     const pageNum = await vscode.window.showInputBox({
-      prompt: 'Enter page number to convert (0-based, default: 0)',
-      value: '0',
+      prompt: 'Enter page number to convert (1-based, default: 1)',
+      value: '1',
       validateInput: (value) => {
         const num = parseInt(value);
-        return num >= 0 ? null : 'Please enter a non-negative number';
+        return num > 0 ? null : 'Please enter a positive number';
       },
     });
 
