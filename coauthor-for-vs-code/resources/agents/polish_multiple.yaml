@@ -1,5 +1,5 @@
-name: polish_tex_multiple
-inherits: polish_tex
+name: polish_multiple
+inherits: polish
 settings:
   agentType: CoT
   documentTag: latex_documents
