@@ -179,7 +179,7 @@ export async function runLatexdiff(
     if (invalidFiles.length > 0) {
       logger.warn(
         channel,
-        `Files missing document environment:\n${invalidFiles.join('\n')}\nSkipping latexdiff.`,
+        `Files missing document environment: ${invalidFiles.join(', ')}\nSkipping latexdiff.`,
       );
       return undefined;
     }
