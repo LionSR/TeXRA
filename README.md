@@ -45,6 +45,45 @@ CoAuthor is built as a TypeScript-based VS Code extension that provides:
    - OpenAI API key
    - Anthropic API key
 
+## Required Dependencies
+
+CoAuthor requires several system dependencies for full functionality:
+
+### LaTeX Distribution
+- Install a LaTeX distribution:
+  - Windows: 
+    - MiKTeX ([download](https://miktex.org/download)) or
+    - TeX Live ([download](https://tug.org/texlive/windows.html))
+  - macOS: MacTeX ([download](https://www.tug.org/mactex/mactex-download.html))
+  - Linux: TeX Live (`sudo apt-get install texlive-full` for Ubuntu)
+
+### Perl
+- Required for LaTeX tools and document processing
+- Windows: Included with MiKTeX
+- macOS: Pre-installed
+- Linux: Install via package manager (`sudo apt-get install perl` for Ubuntu)
+
+### GraphicsMagick/ImageMagick
+Required for PDF and image processing. Install either GraphicsMagick (recommended) or ImageMagick:
+
+#### GraphicsMagick (Recommended)
+- Windows: [Download from GraphicsMagick website](http://www.graphicsmagick.org/download.html)
+- macOS: `brew install graphicsmagick`
+- Linux: `sudo apt-get install graphicsmagick`
+
+#### ImageMagick (Alternative)
+- Windows: [Download from ImageMagick website](https://imagemagick.org/script/download.php).  Check [detailed installation guide](https://github.com/yakovmeister/pdf2image/blob/HEAD/docs/gm-installation.md#user-content-fn-1-f7f37a073c154c15b8ec0322771634a3). 
+- macOS: `brew install imagemagick`
+- Linux: `sudo apt-get install imagemagick`
+
+### Ghostscript
+Required by GraphicsMagick/ImageMagick for PDF processing:
+- Windows: [Download from Ghostscript website](https://ghostscript.com/releases/gsdnld.html) You might have to install version 9.52 from [https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs952](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs952)
+- macOS: `brew install ghostscript`
+- Linux: `sudo apt-get install ghostscript`
+
+After installing these dependencies, ensure they are accessible from the command line by adding them to your system's PATH environment variable if necessary.
+
 ## Basic Usage
 
 1. Open a LaTeX or text file in VS Code
