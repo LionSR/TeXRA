@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 export const showInfoMessage = vscode.window.showInformationMessage;
+export const showWarningMessage = vscode.window.showWarningMessage;
 export const showErrorMessage = vscode.window.showErrorMessage;
 
 export function getConfig<T>(path: string, defaultValue?: T): T {
