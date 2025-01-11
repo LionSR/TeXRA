@@ -92,7 +92,7 @@ async function selectInputFile(
 
   if (fileUri && fileUri[0]) {
     const relativePath = getRelativePath(fileUri[0].fsPath);
-    showInfoMessage(`Selected file: ${relativePath}`);
+    // showInfoMessage(`Selected file: ${relativePath}`);
     logger.info(CHANNEL, `Selected file: ${relativePath}`);
     return relativePath;
   }
