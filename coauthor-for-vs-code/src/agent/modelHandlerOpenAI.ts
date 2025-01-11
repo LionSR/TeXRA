@@ -88,7 +88,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       });
     } else {
       if (systemPrompt) {
-        // note that for openai native models, they have been renamed to "developer" but "system" still works
+        // note that for openai native o1 models, they have been renamed to "developer" but "system" still works
         messages.push({ role: 'system', content: systemPrompt });
       }
 
@@ -100,11 +100,15 @@ export class ModelHandlerOpenAI extends ModelHandler {
         content.push(...(await this.createImageMessage(figureFiles)));
       }
 
-      // Add user request
-      const request = { type: 'text', text: userRequest };
-      content.push(request);
-
       messages.push({ role: 'user', content });
+
+      // Add user request
+      messages.push({
+        role: this.config.name.toLowerCase().includes('o1')
+          ? 'developer'
+          : 'user',
+        content: [{ type: 'text', text: userRequest }],
+      });
     }
 
     return messages;
@@ -122,7 +126,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
       content.push(...this.createImageContent(figureFiles));
     }
     content.push({ type: 'text', text: userMessage });
-    messages.push({ role: 'user', content });
+    const role = this.config.name.toLowerCase().includes('o1')
+      ? 'developer'
+      : 'user';
+    messages.push({ role, content });
     return messages;
   }
 
@@ -224,7 +231,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
       }
 
-      const PseudoPrefillMsgContentString = `Start your response with\n${prefill}`;
+      const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
       messages[messages.length - 1].content.push({
         type: 'text',
         text: PseudoPrefillMsgContentString,
