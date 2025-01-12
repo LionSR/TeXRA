@@ -115,5 +115,5 @@ prompts:
     </idea>
     </scratchpad>
 
-    Then, following your plan in the above scratchpad, output a further enhanced and complete version of the \LaTeX document in the `<latex_document>' tag. Include all the changes you added in the previous step.
+    Then, following your plan in the above scratchpad, output a further enhanced and complete version of the \LaTeX document in the `<latex_document>' tag based on the previous version you just revised. Include all the changes you added in the previous iteration.
     Remember to stay laser-focused on the specific instruction provided or the additional plan in the above scratchpad. Only modify sections explicitly mentioned in the instruction or the additional plan in the above scratchpad, unless changes in one section directly necessitate adjustments in another for consistency.
