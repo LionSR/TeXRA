@@ -232,7 +232,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
 
       const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
-      messages[messages.length - 1].content.push({
+      messages.at(-1).content.push({
         type: 'text',
         text: PseudoPrefillMsgContentString,
       });
@@ -252,12 +252,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.info('End tag detected - skipping continuation');
-      if (Array.isArray(messages[messages.length - 1].content)) {
-        messages[messages.length - 1].content[
-          messages[messages.length - 1].content.length - 1
+      if (Array.isArray(messages.at(-1).content)) {
+        messages.at(-1).content[
+          messages.at(-1).content.length - 1
         ].text = fileContent;
       } else {
-        messages[messages.length - 1].content = fileContent;
+        messages.at(-1).content = fileContent;
       }
       return [true, messages];
     }
@@ -352,36 +352,36 @@ export class ModelHandlerOpenAI extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    // this.logger.debug(
-    //   'Updating message content for OpenAI API compatible models',
-    // );
+    this.logger.debug(
+      'Updating message content for OpenAI API compatible models',
+    );
 
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
-    if (messages[messages.length - 1].role === 'user') {
+    if (messages.at(-1)?.role === 'user') {
       this.logger.debug('Last message is a user message');
       if (
-        messages[messages.length - 1].content.includes(
+        messages.at(-1)?.content.includes(
           'Your response got cut off',
         )
       ) {
         // the second last message is an assistant message must be a assistant message
-        if (messages[messages.length - 2].role === 'assistant') {
-          if (Array.isArray(messages[messages.length - 2].content)) {
-            messages[messages.length - 2].content.push({
+        if (messages.at(-2).role === 'assistant') {
+          if (Array.isArray(messages.at(-2)?.content)) {
+            messages.at(-2).content.push({
               type: 'text',
               text: bestConnector + newResponse,
             });
           } else {
             this.logger.error('Second last message content is not a list');
-            messages[messages.length - 2].content = toolState.accumulatedOutput;
+            messages.at(-2).content = toolState.accumulatedOutput;
           }
           // Remove continuation prompt
           messages.pop();
         }
       } else {
-        // this.logger.debug(
-        //   'Last message is a request message rather than a ask to continue after cut off',
-        // );
+        this.logger.debug(
+          'Last message is a request message rather than a ask to continue after cut off',
+        );
         messages.push({
           role: 'assistant',
           content: [{ type: 'text', text: toolState.accumulatedOutput }],

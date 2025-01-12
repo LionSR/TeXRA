@@ -66,13 +66,12 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messages.at(-1);
     if (this.capabilities.supportsAssistantPrefill) {
       // although OpenAI models do not support assistant prefill, some models (such as Anthropic) via OpenRouter might do
       if (lastMessage.role === 'assistant') {
         if (Array.isArray(lastMessage.content)) {
-          lastMessage.content[lastMessage.content.length - 1].text =
-            bestConnector + newResponse;
+          lastMessage.content.at(-1).text = bestConnector + newResponse;
         } else if (typeof lastMessage.content === 'string') {
           lastMessage.content = toolState.accumulatedOutput;
         }
