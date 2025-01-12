@@ -112,14 +112,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Manage cache control for previous messages
     if (
       this.capabilities.supportsPromptCaching &&
-      Array.isArray(messages[messages.length - 1].content)
+      Array.isArray(messages.at(-1).content)
     ) {
-      const prevContent = messages[messages.length - 1].content;
+      const prevContent = messages.at(-1).content;
       if (prevContent.length >= 2) {
         delete prevContent[prevContent.length - 2].cache_control;
       } else if (prevContent.length === 1) {
-        delete messages[0].content[messages[0].content.length - 1]
-          .cache_control;
+        delete messages[0].content.at(-1).cache_control;
       }
     }
 
@@ -290,23 +289,22 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.info('Adding User message');
     this.logger.debug(userMessageContinuation);
 
-    if (messages[messages.length - 1].role === 'user') {
-      if (messages[messages.length - 2]?.role === 'assistant') {
+    if (messages.at(-1).role === 'user') {
+      if (messages.at(-2).role === 'assistant') {
         this.logger.warn(
           'Appending new response to the previous assistant message',
         );
-        if (Array.isArray(messages[messages.length - 2].content)) {
-          messages[messages.length - 2].content.push({
+        if (Array.isArray(messages.at(-2).content)) {
+          messages.at(-2).content.push({
             type: 'text',
             text: '\n' + toolState.lastResponse.trim(),
           });
-        } else if (typeof messages[messages.length - 2].content === 'string') {
-          messages[messages.length - 2].content +=
-            '\n' + toolState.lastResponse.trim();
+        } else if (typeof messages.at(-2).content === 'string') {
+          messages.at(-2).content += '\n' + toolState.lastResponse.trim();
         }
       }
-      messages[messages.length - 1].content = userMessageContinuation.trim();
-    } else if (messages[messages.length - 1].role === 'assistant') {
+      messages.at(-1).content = userMessageContinuation.trim();
+    } else if (messages.at(-1).role === 'assistant') {
       messages.push({
         role: 'user',
         content: userMessageContinuation.trim(),
@@ -372,21 +370,21 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
-      if (Array.isArray(messages[messages.length - 1].content)) {
-        messages[messages.length - 1].content[
-          messages[messages.length - 1].content.length - 1
+      if (Array.isArray(messages.at(-1).content)) {
+        messages.at(-1).content[
+          messages.at(-1).content.length - 1
         ].text = fileContent;
       } else {
-        messages[messages.length - 1].content = fileContent;
+        messages.at(-1).content = fileContent;
       }
 
       if (
-        messages[messages.length - 1].content[
-          messages[messages.length - 1].content.length - 1
+        messages.at(-1).content[
+          messages.at(-1).content.length - 1
         ]?.cache_control
       ) {
-        delete messages[messages.length - 1].content[
-          messages[messages.length - 1].content.length - 1
+        delete messages.at(-1).content[
+          messages.at(-1).content.length - 1
         ].cache_control;
       }
       return [true, messages];
@@ -459,8 +457,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
     autoConfirmation = false,
   ): void {
     // this.logger.debug('Updating message content for Anthropic models');
-    if (messages[messages.length - 1].role === 'assistant') {
-      const lastMessage = messages[messages.length - 1];
+    if (messages.at(-1).role === 'assistant') {
+      const lastMessage = messages.at(-1);
 
       if (Array.isArray(lastMessage.content)) {
         const newMessage = { type: 'text', text: bestConnector + newResponse };
@@ -472,17 +470,15 @@ export class ModelHandlerAnthropic extends ModelHandler {
       if (this.capabilities.supportsPromptCaching) {
         if (Array.isArray(lastMessage.content)) {
           // Add cache_control to new message
-          lastMessage.content[lastMessage.content.length - 1].cache_control = {
+          lastMessage.content.at(-1).cache_control = {
             type: 'ephemeral',
           };
           // Remove cache control from previous message if it exists
           if (
             lastMessage.content.length >= 2 &&
-            typeof lastMessage.content[lastMessage.content.length - 2] ===
-              'object'
+            typeof lastMessage.content.at(-2) === 'object'
           ) {
-            delete lastMessage.content[lastMessage.content.length - 2]
-              .cache_control;
+            delete lastMessage.content.at(-2).cache_control;
           }
         } else {
           // Initialize content list with single message

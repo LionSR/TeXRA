@@ -218,7 +218,7 @@ export class WebviewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ) {
-    vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
+    // vscode.window.showInformationMessage(`Selected file: ${message.filePath}`);
     const baseFileNameForInput = path.basename(
       message.filePath,
       path.extname(message.filePath),
