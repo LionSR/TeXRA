@@ -14,7 +14,7 @@ prompts:
         \item Follow best practices to ensure zero warnings when checked by chktex.
         \item Use consistent and appropriate mathematical notation and terminology throughout all chapters.
         \item Use \begin{align} ... \end{align} for displayed equations without line breaks before and after the equation. Use $...$ for inline equations.
-        \item IMPORTANT: Use $\bt$ for $\beta$, $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\mathbf{x}$, $\Ra$ for $\Rightarrow$ etc as defined in command.tex using \newcommand.
+        \item IMPORTANT: Strictly use $\bt$ for $\beta$, $\de$ for $\delta$, $\der$ for $\partial$, $\bx$ for $\mathbf{x}$, $\Ra$ for $\Rightarrow$ etc as defined in command.tex using \newcommand.
         \item Preserve comments starting with % in the document. For example, do not delete ``% We found the time step $t=1/16=0.0625$ to give sufficient accuracy for our simulations.\n'' in the output.
         \item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
         \item For quotations, use ``Schr\"odinger'' instead of "Schrodinger". Prefer `` and '' over "".
