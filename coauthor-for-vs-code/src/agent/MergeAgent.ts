@@ -55,7 +55,7 @@ export class MergeAgent extends DirectAgent {
     const roundNum = parseInt(roundMatch[1], 10);
 
     // Get model name (last part)
-    const model = parts[parts.length - 1];
+    const model = parts.at(-1) || '';
 
     return [base, agent, roundNum, model];
   }

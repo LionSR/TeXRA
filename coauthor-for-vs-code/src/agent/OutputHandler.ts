@@ -313,8 +313,8 @@ export class OutputHandler {
   ): Promise<string[]> {
     const outputFiles: string[] = [];
     const outputParts = path.basename(outputFile).split('_');
-    const agent = outputParts[outputParts.length - 3];
-    const model = outputParts[outputParts.length - 1].split('.')[0];
+    const agent = outputParts.at(-3) || '';
+    const model = outputParts.at(-1)?.split('.')[0] || '';
 
     const roundMatch = outputFile.match(/_r(\d+)_/);
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
