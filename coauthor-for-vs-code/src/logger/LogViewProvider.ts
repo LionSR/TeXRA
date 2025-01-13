@@ -38,6 +38,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
   private _streamStatus: Map<string, 'running' | 'error' | 'stopped'> = new Map();
+  private _activeStream: string = '';
+  private readonly _activeStreamKey = 'coauthor.activeLogStream';
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -98,6 +100,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     } else {
       this._logStreams.clear();
     }
+
+    // Load active stream
+    const savedActiveStream = this.context.workspaceState.get<string>(this._activeStreamKey);
+    if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
+      this._activeStream = savedActiveStream;
+    } else {
+      this._activeStream = Array.from(this._logStreams.keys())[0] || '';
+    }
   }
 
   private _saveState() {
@@ -107,6 +117,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     );
     const stateObj = Object.fromEntries(persistentStreams);
     this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
+
+    // Save active stream
+    this.context.workspaceState.update(this._activeStreamKey, this._activeStream);
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -172,18 +185,22 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     if (!this._view) return;
 
     const streams = Array.from(this._logStreams.keys());
-    const currentStream = streams[0] || '';
+    
+    // Use stored active stream, fallback to first stream if active stream doesn't exist
+    if (!streams.includes(this._activeStream)) {
+      this._activeStream = streams[0] || '';
+    }
 
     this._view.webview.postMessage({
       command: 'updateStreams',
       streams,
-      currentStream,
+      currentStream: this._activeStream,
     });
-    this.updateLogContent(currentStream);
+    this.updateLogContent(this._activeStream);
 
     // Update status for current stream
-    if (currentStream) {
-      const status = this._streamStatus.get(currentStream);
+    if (this._activeStream) {
+      const status = this._streamStatus.get(this._activeStream);
       if (status) {
         this._view.webview.postMessage({
           command: 'updateStatus',
@@ -299,6 +316,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
         command: 'updateStatus',
         status: status,
       });
+    }
+  }
+
+  public setActiveStream(stream: string) {
+    if (this._logStreams.has(stream)) {
+      this._activeStream = stream;
+      this._saveState();
+      this._updateWebview();
     }
   }
 }

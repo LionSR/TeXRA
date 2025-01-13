@@ -35,7 +35,7 @@ export class LogViewMessageHandler {
     // Get the stream and update the content
     const streams = this.provider.getLogStreams();
     if (streams.has(stream)) {
-      this.provider.updateLogContent(stream);
+      this.provider.setActiveStream(stream);
     }
   }
 
