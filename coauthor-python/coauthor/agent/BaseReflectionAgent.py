@@ -54,7 +54,7 @@ class BaseReflectionAgent(ABC):
         # logger.debug(f"AgentPrompt: {self.agentPrompt}\n")
 
         logger.debug(f"ModelConfig: {self.modelHandler.config}\n")
-        logger.debug(f"ModelHandler: {self.modelHandler}\n")
+        # logger.debug(f"ModelHandler Config: {self.modelHandler.config}\n")
 
         # Initialize basic attributes
         self.outputFile = ["", ""]
