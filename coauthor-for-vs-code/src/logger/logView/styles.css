@@ -183,6 +183,80 @@ body {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 8px;
+  position: relative;
+  opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.status-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.status-indicator::after {
+  content: attr(data-status);
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.status-indicator:hover::after {
+  opacity: 1;
+}
+
+.status-indicator.running {
+  background-color: var(--vscode-testing-runAction, #2ea043);
+  box-shadow: 0 0 4px var(--vscode-testing-runAction, #2ea043);
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.error {
+  background-color: var(--vscode-testing-iconFailed, #f14c4c);
+  box-shadow: 0 0 4px var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.status-indicator.stopped {
+  background-color: var(--vscode-testing-iconSkipped, #cca700);
+  box-shadow: 0 0 4px var(--vscode-testing-iconSkipped, #cca700);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+}
+
 .header-actions {
   display: flex;
   gap: 4px;

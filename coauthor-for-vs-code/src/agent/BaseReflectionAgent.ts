@@ -45,6 +45,7 @@ import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 
 const K_SLICE = 200;
+const SEPARATOR ="\n------------------------------------------------------------\n";
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -89,7 +90,7 @@ export abstract class BaseReflectionAgent {
     // Update model handler's logger
     this.modelHandler.setLogger(this.logger);
 
-    this.logger.info("------------------------------------------------------------")
+    this.logger.info(SEPARATOR);
     this.logger.info(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
     this.logger.info(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
     this.logger.info(
@@ -711,9 +712,7 @@ export abstract class BaseReflectionAgent {
 
     // Initialize state and messages
     const currRound = 0;
-    this.logger.info(
-      `\n------------------------------------------------------------`,
-    );
+    this.logger.info(SEPARATOR);
     this.logger.info(`Processing round ${currRound}`);
     const stateGlobal = AgentStateGlobal.initialize();
 
@@ -857,9 +856,7 @@ export abstract class BaseReflectionAgent {
     }
 
     // Initialize reflection round
-    this.logger.info(
-      `\n------------------------------------------------------------`,
-    );
+    this.logger.info(SEPARATOR);
     this.logger.info(`Processing round ${currRound}`);
     const stateRound = AgentStateRound.initialize(currRound);
 
@@ -946,25 +943,19 @@ export abstract class BaseReflectionAgent {
    * Manages initial processing and optional reflection rounds.
    */
   public async run(): Promise<void> {
-    // this.logger.info(
-    //   `\n------------------------------------------------------------`,
-    // );
+    // this.logger.info(SEPARATOR);
     const [stateRound, stateGlobal, messages, endTurn, toolState] =
       await this.process();
 
     // this.logger.info(`Round 0 completed\n`);
-    // this.logger.info(
-    //   `\n------------------------------------------------------------`,
-    // );
+    // this.logger.info(SEPARATOR);
 
     if (this.agentConfig.reflect && endTurn) {
       // Create a new ToolState for reflection round
       const toolStateReflection = ToolState.initialize();
       await this.reflect(stateGlobal, messages, toolStateReflection);
       // this.logger.info(`Round 1 completed\n`);
-      // this.logger.info(
-      //   `\n------------------------------------------------------------`,
-      // );
+      // this.logger.info(SEPARATOR);
     }
   }
 
