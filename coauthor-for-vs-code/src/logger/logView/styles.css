@@ -50,8 +50,7 @@ body {
   padding: 4px;
 }
 
-.clear-button,
-.delete-button {
+.clear-button {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -64,20 +63,8 @@ body {
   font-size: 11px;
 }
 
-.delete-button {
-  color: var(--vscode-errorForeground, #ff6b6b);
-}
-
-.clear-button:hover,
-.delete-button:hover {
+.clear-button:hover {
   background-color: var(--vscode-list-hoverBackground);
-}
-
-.delete-button:hover {
-  background-color: var(
-    --vscode-inputValidation-errorBackground,
-    rgba(255, 0, 0, 0.1)
-  );
 }
 
 .x-icon {
@@ -85,7 +72,27 @@ body {
   font-size: 14px;
 }
 
+.tab-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.tab-container:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.tab-container.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+}
+
+.tab-container.active .tab {
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
 .tab {
+  flex: 1;
   padding: 4px 8px;
   cursor: pointer;
   border: none;
@@ -96,16 +103,47 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: var(--vscode-font-family);
-  width: 100%;
+  min-width: 0;
 }
 
 .tab:hover {
-  background-color: var(--vscode-list-hoverBackground);
+  background: none;
 }
 
-.tab.active {
-  background-color: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+.tab-delete {
+  display: none;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  cursor: pointer;
+  margin-right: 4px;
+  font-size: 11px;
+}
+
+.tab-container:hover .tab-delete {
+  display: flex;
+  align-items: center;
+}
+
+.tab-delete:hover {
+  opacity: 1;
+  color: var(--vscode-errorForeground);
+}
+
+.tab-delete i {
+  font-size: 12px;
+}
+
+.codicon {
+  font-family: codicon;
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.codicon-trash:before {
+  content: "\eb9f";
 }
 
 .log-container {
