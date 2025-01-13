@@ -82,8 +82,8 @@ function setupEventListeners() {
   });
 
   // Clear all streams
-  document.getElementById('clearAllBtn').addEventListener('click', () => {
-    vscode.postMessage({ command: 'clearAll' });
+  document.getElementById('deleteAllBtn').addEventListener('click', () => {
+    vscode.postMessage({ command: 'deleteAll' });
   });
 
   // Delete current stream
