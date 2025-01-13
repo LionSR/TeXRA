@@ -89,6 +89,7 @@ export abstract class BaseReflectionAgent {
     // Update model handler's logger
     this.modelHandler.setLogger(this.logger);
 
+    this.logger.info("------------------------------------------------------------")
     this.logger.info(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
     this.logger.info(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
     this.logger.info(
