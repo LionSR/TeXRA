@@ -226,6 +226,12 @@ body {
   opacity: 1;
 }
 
+.status-indicator.ready {
+  background-color: var(--vscode-descriptionForeground, #888888);
+  box-shadow: none;
+  opacity: 0.5;
+}
+
 .status-indicator.running {
   background-color: var(--vscode-testing-runAction, #2ea043);
   box-shadow: 0 0 4px var(--vscode-testing-runAction, #2ea043);
