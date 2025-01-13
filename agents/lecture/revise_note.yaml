@@ -17,7 +17,7 @@ prompts:
     \begin{itemize}
         \item Use \begin{align} ... \end{align} for displayed equations. Use $...$ for inline equations in both scratchpad and final output. 
         \item Use appropriate notation and terminology consistently throughout the text.
-        \item Use non-breaking spaces when referencing references (e.g., ``Ref.~\cite{Jarzynski1997Nonequilibrium}'').
+        \item Use non-breaking spaces when referencing references (e.g., ``~\cite{Jarzynski1997Nonequilibrium}'').
         \item Use either `` or '' as an alternative to `"`. For quotation, prefer ``Schr\"{o}dinger'' over "Schrodinger".
         \item Treat formulas as part of the sentences and add punctuation accordingly in the displayed math environments depends on the next sentence.
         \item Keep comments that start with % in the document.
