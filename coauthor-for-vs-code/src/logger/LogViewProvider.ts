@@ -233,7 +233,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, 'running');
       }
-      this._updateWebview();
+      // Automatically switch to new stream
+      this.setActiveStream(stream);
     }
 
     const logMessage: ColoredLogMessage = {
