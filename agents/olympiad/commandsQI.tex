@@ -1,0 +1,41 @@
+\newcommand{\be}{\begin{equation}}
+		\newcommand{\ee}{\end{equation}}
+
+\usepackage{bbm}
+\usepackage{dsfont}
+\usepackage[makeroom]{cancel}
+
+\newcommand{\Id}{\mathds{1}}
+\newcommand{\norm}[1]{\left\Vert{#1}\right\Vert}
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand*\dd{\mathop{}\!\mathrm{d}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\Tr}{Tr}
+\newcommand{\CNOT}{\text{CNOT}}
+\newcommand{\SWAP}{\text{SWAP}}
+
+%%% tikz
+\usepackage{tikz}
+\usetikzlibrary{shapes,shapes.geometric,arrows,quotes,angles,decorations.pathmorphing,decorations,decorations.markings,patterns,shapes.gates.logic,decorations.pathreplacing,circuits.logic.US}
+% \usetikzlibrary{quantikz}
+\usetikzlibrary{quantikz2}
+\newcommand{\middlewave}[1]{\raisebox{0.5em}{\uwave{\hspace{#1}}}}
+\tikzstyle{arrow} = [->,>=stealth, thick]
+\tikzstyle{wavy} = [decorate, decoration={coil, aspect=0}, thick]
+\tikzstyle{circb}=[circle,draw=black,fill=black]
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\newcommand\gauss[2]{1/(#2*sqrt(2*pi))*exp(-((x-#1)^2)/(2*#2^2))} % Gauss 
+\usepackage{makecell}
+
+% Define block styles
+\tikzstyle{decision} = [diamond, draw, text width=4.5em, text badly centered, node distance=2cm, inner sep=0pt]
+\tikzstyle{block} = [rectangle, draw, text width=10em, text centered, node distance=2.5cm, minimum height=2em]
+\tikzstyle{line} = [draw, -latex']
+
+% color
+\PassOptionsToPackage{svgnames,dvipsnames,table}{xcolor}
+\RequirePackage[svgnames,dvipsnames,table]{xcolor}
+

@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.16.10",
+  "version": "0.17.10",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -36,7 +36,8 @@
               "paper2slide",
               "paper2poster",
               "paper2note",
-              "polish_cover"
+              "polish_cover",
+              "solve_qi"
             ],
             "description": "List of available agents",
             "scope": "resource"
