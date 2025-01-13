@@ -86,29 +86,56 @@ function getAgentName(baseAgent: string, outputFiles: string[] | null | undefine
 }
 
 /**
- * Run the specified agent with given configuration.
+ * Common function to execute any agent with proper logging and status handling
  */
-export async function executeAgent(
-  agentConfig: Partial<AgentConfig>,
+async function executeAgentWithLogging<T extends DirectAgent | CoTAgent | MergeAgent>(
+  agentName: string,
+  createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Ensure required fields
-    if (!agentConfig.model || !agentConfig.agent) {
-      throw new Error('Missing required fields: model and/or agent');
-    }
-
     // Get logger instance
     const logViewProvider = LogViewProvider.getInstance();
     if (!logViewProvider) {
       throw new Error('LogViewProvider not initialized');
     }
-
-    const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
     
     // Update status to running
     logViewProvider.updateStreamStatus(agentName, 'running');
 
+    // Create and initialize agent
+    const agent = await createAgentFn();
+    await agent.init();
+
+    try {
+      // Run the agent
+      await agent.run();
+      // Update status to stopped on successful completion
+      logViewProvider.updateStreamStatus(agentName, 'stopped');
+    } catch (err) {
+      // Update status to error if agent run fails
+      logViewProvider.updateStreamStatus(agentName, 'error');
+      throw err;
+    }
+  } catch (err) {
+    const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
+    vscode.window.showErrorMessage(errorMsg);
+    throw new Error(errorMsg);
+  }
+}
+
+export async function executeAgent(
+  agentConfig: Partial<AgentConfig>,
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  // Ensure required fields
+  if (!agentConfig.model || !agentConfig.agent) {
+    throw new Error('Missing required fields: model and/or agent');
+  }
+
+  const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
+  
+  await executeAgentWithLogging(agentName, async () => {
     // Create full agent config
     const fullConfig = createAgentConfig(agentConfig);
 
@@ -127,7 +154,7 @@ export async function executeAgent(
     // Create model handler
     const modelHandler = ModelFactory.createHandler(modelConfig);
 
-    // Get agent name and path
+    // Get agent path
     const agentPath = await getAgentPath(fullConfig.agent, context);
 
     // Load settings and prompts
@@ -138,32 +165,14 @@ export async function executeAgent(
 
     // Get appropriate agent class and create instance
     const AgentClass = getAgentClass(agentSetting);
-    const agent = new AgentClass(
+    return new AgentClass(
       modelHandler,
       fullConfig,
       agentSetting,
       agentPrompt,
       agentPath,
     );
-
-    // Initialize agent
-    await agent.init();
-
-    try {
-      // Run the agent
-      await agent.run();
-      // Update status to stopped on successful completion
-      logViewProvider.updateStreamStatus(agentName, 'stopped');
-    } catch (err) {
-      // Update status to error if agent run fails
-      logViewProvider.updateStreamStatus(agentName, 'error');
-      throw err;
-    }
-  } catch (err) {
-    const errorMsg = `Error executing agent ${agentConfig.agent}: ${err instanceof Error ? err.message : String(err)}`;
-    vscode.window.showErrorMessage(errorMsg);
-    throw new Error(errorMsg);
-  }
+  }, context);
 }
 
 /**
@@ -175,7 +184,9 @@ export async function executeMergeAgent(
   editedFile: string,
   context: vscode.ExtensionContext,
 ): Promise<void> {
-  try {
+  const agentName = 'merge';
+  
+  await executeAgentWithLogging(agentName, async () => {
     // Create agent config for merge operation
     const agentConfig = createAgentConfig({
       agent: 'merge',
@@ -199,23 +210,12 @@ export async function executeMergeAgent(
       'merge',
     );
 
-    // Create and run merge agent
-    const agent = new MergeAgent(
+    return new MergeAgent(
       modelHandler,
       agentConfig,
       agentSetting,
       agentPrompt,
       agentPath,
     );
-
-    // Initialize agent
-    await agent.init();
-
-    // Run the agent
-    await agent.run();
-  } catch (err) {
-    const errorMsg = `Error executing merge agent: ${err instanceof Error ? err.message : String(err)}`;
-    vscode.window.showErrorMessage(errorMsg);
-    throw new Error(errorMsg);
-  }
+  }, context);
 }
