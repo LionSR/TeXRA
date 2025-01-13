@@ -18,6 +18,7 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
+import { LogViewProvider } from '../logger/LogViewProvider';
 
 type AgentConstructor = {
   new (
@@ -76,7 +77,7 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
 /**
  * Get agent name with optional multiple suffix.
  */
-function getAgentName(baseAgent: string, outputFiles: string[] | null): string {
+function getAgentName(baseAgent: string, outputFiles: string[] | null | undefined): string {
   if (outputFiles && outputFiles.length > 1) {
     // logger.info(CHANNEL, `Switching to multiple output mode`);
     return `${baseAgent}_multiple`;
@@ -97,6 +98,17 @@ export async function executeAgent(
       throw new Error('Missing required fields: model and/or agent');
     }
 
+    // Get logger instance
+    const logViewProvider = LogViewProvider.getInstance();
+    if (!logViewProvider) {
+      throw new Error('LogViewProvider not initialized');
+    }
+
+    const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
+    
+    // Update status to running
+    logViewProvider.updateStreamStatus(agentName, 'running');
+
     // Create full agent config
     const fullConfig = createAgentConfig(agentConfig);
 
@@ -116,7 +128,6 @@ export async function executeAgent(
     const modelHandler = ModelFactory.createHandler(modelConfig);
 
     // Get agent name and path
-    const agentName = getAgentName(fullConfig.agent, fullConfig.outputFiles);
     const agentPath = await getAgentPath(fullConfig.agent, context);
 
     // Load settings and prompts
@@ -138,8 +149,16 @@ export async function executeAgent(
     // Initialize agent
     await agent.init();
 
-    // Run the agent
-    await agent.run();
+    try {
+      // Run the agent
+      await agent.run();
+      // Update status to stopped on successful completion
+      logViewProvider.updateStreamStatus(agentName, 'stopped');
+    } catch (err) {
+      // Update status to error if agent run fails
+      logViewProvider.updateStreamStatus(agentName, 'error');
+      throw err;
+    }
   } catch (err) {
     const errorMsg = `Error executing agent ${agentConfig.agent}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);

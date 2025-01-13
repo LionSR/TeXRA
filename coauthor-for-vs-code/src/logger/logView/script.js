@@ -1,5 +1,6 @@
 const vscode = acquireVsCodeApi();
 let currentStream = '';
+let streamStatuses = new Map();
 
 import Split from 'split.js';
 
@@ -21,6 +22,34 @@ function updateStreamTabs(streams, activeStream) {
 
   // Update current stream name
   document.getElementById('currentStreamName').textContent = activeStream;
+  
+  // Update status for the active stream
+  updateStatus(streamStatuses.get(activeStream) || 'stopped');
+}
+
+function updateStatus(status) {
+  const statusIndicator = document.getElementById('statusIndicator');
+  if (!statusIndicator) return;
+
+  // Remove all existing status classes
+  statusIndicator.classList.remove('running', 'error', 'stopped');
+
+  // Add the new status class
+  if (status) {
+    statusIndicator.classList.add(status);
+    // Set tooltip text
+    const tooltipText = {
+      running: 'Task is running',
+      error: 'Task failed with error',
+      stopped: 'Task completed',
+    }[status] || 'Ready';
+    statusIndicator.setAttribute('data-status', tooltipText);
+
+    // Store status for current stream
+    if (currentStream) {
+      streamStatuses.set(currentStream, status);
+    }
+  }
 }
 
 function setupEventListeners() {
@@ -91,6 +120,9 @@ window.addEventListener('message', (event) => {
         }
         logContent.scrollTop = logContent.scrollHeight;
       }
+      break;
+    case 'updateStatus':
+      updateStatus(message.status);
       break;
   }
 });
