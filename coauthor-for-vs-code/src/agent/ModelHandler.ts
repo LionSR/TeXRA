@@ -145,6 +145,17 @@ export abstract class ModelHandler {
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
+  get isO1full(): boolean {
+    const nameLowerCased = this.config.name.toLowerCase();
+    if (nameLowerCased.includes('o1-') || nameLowerCased.includes('o1-preview')) { return false; } 
+    return nameLowerCased.includes('o1');
+  }
+
+  get isO1Family(): boolean {
+    const nameLowerCased = this.config.name.toLowerCase();
+    return nameLowerCased.includes('o1');
+  }
+
   /**
    * Process image for models.
    * @param figureFile Path to the image file
