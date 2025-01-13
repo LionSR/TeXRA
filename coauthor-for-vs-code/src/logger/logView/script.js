@@ -14,9 +14,12 @@ function updateStreamTabs(streams, activeStream) {
   tabsContainer.innerHTML = streams
     .map(
       (stream) =>
-        `<button class="tab ${
-          stream === activeStream ? 'active' : ''
-        }" data-stream="${stream}">${stream}</button>`,
+        `<div class="tab-container ${stream === activeStream ? 'active' : ''}">
+          <button class="tab" data-stream="${stream}">${stream}</button>
+          <button class="tab-delete" data-stream="${stream}" title="Delete stream">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </div>`,
     )
     .join('');
 
@@ -68,16 +71,22 @@ function setupEventListeners() {
     direction: 'horizontal',
   });
 
-  // Stream switching
+  // Stream switching and deletion
   document.getElementById('streamTabs').addEventListener('click', (event) => {
-    if (event.target.classList.contains('tab')) {
-      const stream = event.target.dataset.stream;
+    const tabElement = event.target.closest('.tab');
+    const deleteButton = event.target.closest('.tab-delete');
+    
+    if (tabElement) {
+      const stream = tabElement.dataset.stream;
       currentStream = stream;
-      document.querySelectorAll('.tab').forEach((t) => {
-        t.classList.toggle('active', t.dataset.stream === stream);
+      document.querySelectorAll('.tab-container').forEach((t) => {
+        t.classList.toggle('active', t.querySelector('.tab').dataset.stream === stream);
       });
       document.getElementById('currentStreamName').textContent = stream;
       vscode.postMessage({ command: 'switchStream', stream });
+    } else if (deleteButton) {
+      const stream = deleteButton.dataset.stream;
+      vscode.postMessage({ command: 'deleteStream', stream });
     }
   });
 
@@ -89,11 +98,6 @@ function setupEventListeners() {
   // Clear all streams
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
     vscode.postMessage({ command: 'deleteAll' });
-  });
-
-  // Delete current stream
-  document.getElementById('deleteStreamBtn').addEventListener('click', () => {
-    vscode.postMessage({ command: 'deleteStream', stream: currentStream });
   });
 }
 
