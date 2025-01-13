@@ -1,12 +1,12 @@
 name: solve_qi
 
 settings:
+  agentType: direct
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
   prefills:
-    - <scratchpad>
-    - <scratchpad>
+    - <latex_document>\documentclass{exerciseQI}\n\input{commandsQI.tex}
   requiredFiles:
     DOCUMENT_CLS: exerciseQI.cls
     COMMAND: commandsQI.tex
@@ -22,7 +22,7 @@ prompts:
         \item Follow best practices to ensure zero warnings when checked by chktex.
         \item Use consistent mathematical notation following quantum information theory conventions.
         \item Use \begin{align} ... \end{align} for displayed equations without line breaks before and after. Use $...$ for inline equations.
-        \item Use appropriate quantum notation: |\psi\rangle for states, \bra{\psi} for bras, \ket{\psi} for kets, \braket{\phi|\psi} for inner products.
+        \item Use appropriate quantum notation: \psi for states, \bra{\psi} for bras, \ket{\psi} for kets, \braket{\phi|\psi} for inner products.
         \item Use \begin{problem} for standard problems and \begin{problem*} for challenging problems.
         \item Use \begin{answer} ... \end{answer} within problem environments for solutions.
         \item Break down complex solutions into clear steps with appropriate explanations.
@@ -55,63 +55,23 @@ prompts:
     Please carefully read through the entire problem and ensure you fully understand all the requirements.
 
   userRequest: |
-    Your task is to solve the quantum information theory problem focusing on the following specific instruction:
+    Your task is to solve the quantum information theory problem. 
+    {% if INSTRUCTION %}
+    Focusing on the following specific instruction:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
+    {% endif %}
 
-    First, analyze the problem and brainstorm your solution approach in the scratchpad:
-
-    <scratchpad>
-    \begin{enumerate}
-    \item [Problem Analysis]
-        \begin{itemize}
-        \item Key Concepts: [List the relevant quantum concepts]
-        \item Required Tools: [Mathematical tools and theorems needed]
-        \item Solution Strategy: [Outline of solution steps]
-        \end{itemize}
-    \item [Solution Components]
-        \begin{itemize}
-        \item Mathematical Framework: [Required equations and notation]
-        \item Proof Structure: [If proof is needed]
-        \item Computational Steps: [If numerical solution is needed]
-        \item Visual Aids: [If quantum circuits or diagrams are needed]
-        \end{itemize}
-    \end{enumerate}
-    </scratchpad>
-
-    Then, following your plan in the scratchpad, output a complete solution in \LaTeX format:
+    Analyze the problem and brainstorm your solution approach carefully.Output a complete solution in \LaTeX format including both the problem (in \begin{problem} ... \end{problem}) and the solution (in \begin{answer} ... \end{answer}):
     <latex_document>
     % LATEX_SOLUTION_HERE
+    % It should be a full latex document that can be compiled with pdflatex. So include the preamble and the document class.
     </latex_document>
 
   userReflect: |
     Let's critically reflect on the solution provided. Consider these points and brainstorm potential improvements:
-
-    <scratchpad>
-    <reflection>
-    Consider: (i) Mathematical rigor and completeness (ii) Clarity of explanations (iii) Proper use of notation and definitions (iv) Effectiveness of solution strategy (v) Pedagogical value (vi) Potential alternative approaches (vii) Additional insights or connections to other concepts
-    </reflection>
-
-    <improvements>
-    \begin{enumerate}
-    \item [Mathematical Enhancement]
-        \begin{itemize}
-            \item Rationale: [Brief explanation]
-            \item Implementation: [Specific mathematical additions/clarifications]
-        \end{itemize}
-    \item [Pedagogical Enhancement]
-        \begin{itemize}
-            \item Rationale: [Brief explanation]
-            \item Implementation: [Additional explanations/insights]
-        \end{itemize}
-    \item [Technical Enhancement]
-        \begin{itemize}
-            \item Rationale: [Brief explanation]
-            \item Implementation: [Improved notation/formatting]
-        \end{itemize}
-    \end{enumerate}
-    </scratchpad>
+    (i) Mathematical rigor and completeness (ii) Clarity of explanations (iii) Proper use of notation and definitions (iv) Effectiveness of solution strategy (v) Pedagogical value (vi) Potential alternative approaches (vii) Additional insights or connections to other concepts
 
     Based on these reflections, output an enhanced version of the solution:
     <latex_document>
