@@ -23,8 +23,12 @@ function updateStreamTabs(streams, activeStream) {
   // Update current stream name
   document.getElementById('currentStreamName').textContent = activeStream;
   
-  // Update status for the active stream
-  updateStatus(streamStatuses.get(activeStream) || 'stopped');
+  // Update status based on whether there's an active stream
+  if (!activeStream) {
+    updateStatus('ready');
+  } else {
+    updateStatus(streamStatuses.get(activeStream) || 'stopped');
+  }
 }
 
 function updateStatus(status) {
@@ -32,7 +36,7 @@ function updateStatus(status) {
   if (!statusIndicator) return;
 
   // Remove all existing status classes
-  statusIndicator.classList.remove('running', 'error', 'stopped');
+  statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
 
   // Add the new status class
   if (status) {
@@ -42,11 +46,12 @@ function updateStatus(status) {
       running: 'Task is running',
       error: 'Task failed with error',
       stopped: 'Task completed',
+      ready: 'Ready'
     }[status] || 'Ready';
     statusIndicator.setAttribute('data-status', tooltipText);
 
     // Store status for current stream
-    if (currentStream) {
+    if (currentStream && status !== 'ready') {
       streamStatuses.set(currentStream, status);
     }
   }
