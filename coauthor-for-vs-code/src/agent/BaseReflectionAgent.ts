@@ -138,7 +138,7 @@ export abstract class BaseReflectionAgent {
     const baseName = path.basename(
       this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
     );
-    return `${this.agentConfig.agent}@${this.agentConfig.model}#${baseName}`;
+    return `${this.agentConfig.agent}@${this.agentConfig.model}: ${baseName}`;
   }
 
   /**
