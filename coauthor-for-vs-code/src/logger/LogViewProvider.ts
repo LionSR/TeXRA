@@ -291,7 +291,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public clearAllStreams() {
+  public deleteAllStreams() {
     this._logStreams.clear();
     this._saveState();
     if (this._view) {

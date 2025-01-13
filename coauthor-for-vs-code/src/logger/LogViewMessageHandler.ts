@@ -20,8 +20,8 @@ export class LogViewMessageHandler {
       case 'clearStream':
         this.handleClearStream(message.stream);
         break;
-      case 'clearAll':
-        this.handleClearAll();
+      case 'deleteAll':
+        this.handledeleteAll();
         break;
       case 'deleteStream':
         this.handleDeleteStream(message.stream);
@@ -43,8 +43,8 @@ export class LogViewMessageHandler {
     this.provider.clearStream(stream);
   }
 
-  private handleClearAll() {
-    this.provider.clearAllStreams();
+  private handledeleteAll() {
+    this.provider.deleteAllStreams();
   }
 
   private handleDeleteStream(stream: string) {
