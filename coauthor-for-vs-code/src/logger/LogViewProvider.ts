@@ -27,6 +27,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
 const NON_PERSISTENT_CHANNELS = new Set([...OUTPUT_CHANNEL_ONLY, 'ImgUtils']);
 
 export class LogViewProvider implements vscode.WebviewViewProvider {
+  private static _instance: LogViewProvider | undefined;
   private _view?: vscode.WebviewView;
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
   private readonly _contentProvider: LogViewContentProvider;
@@ -36,6 +37,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
+  private _streamStatus: Map<string, 'running' | 'error' | 'stopped'> = new Map();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -47,6 +49,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._messageHandler = new LogViewMessageHandler(this);
     this._loadState();
 
+    // Set instance
+    LogViewProvider._instance = this;
+
     // Listen for workspace folder changes
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -54,6 +59,10 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
         this._updateWebview();
       }),
     );
+  }
+
+  public static getInstance(): LogViewProvider | undefined {
+    return this._instance;
   }
 
   public dispose() {
@@ -171,6 +180,17 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       currentStream,
     });
     this.updateLogContent(currentStream);
+
+    // Update status for current stream
+    if (currentStream) {
+      const status = this._streamStatus.get(currentStream);
+      if (status) {
+        this._view.webview.postMessage({
+          command: 'updateStatus',
+          status: status,
+        });
+      }
+    }
   }
 
   public addLogMessage(
@@ -183,8 +203,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Create stream if it doesn't exist and set initial status
     if (!this._logStreams.has(stream)) {
       this._logStreams.set(stream, []);
+      // Set initial status to running for new streams
+      if (!this._streamStatus.has(stream)) {
+        this.updateStreamStatus(stream, 'running');
+      }
       this._updateWebview();
     }
 
@@ -228,6 +253,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       stream: stream,
       messages: messages,
     });
+
+    // Send current status for the stream
+    const status = this._streamStatus.get(stream) || 'stopped';
+    this._view.webview.postMessage({
+      command: 'updateStatus',
+      status: status,
+    });
   }
 
   public getLogStreams(): Map<string, ColoredLogMessage[]> {
@@ -256,6 +288,17 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._logStreams.delete(stream);
       this._saveState();
       this._updateWebview();
+    }
+  }
+
+  public updateStreamStatus(stream: string, status: 'running' | 'error' | 'stopped') {
+    this._streamStatus.set(stream, status);
+    if (this._view) {
+      // Always update status for the stream being updated
+      this._view.webview.postMessage({
+        command: 'updateStatus',
+        status: status,
+      });
     }
   }
 }
