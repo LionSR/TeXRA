@@ -207,6 +207,12 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           status: status,
         });
       }
+    } else {
+      // If no active stream, show ready state
+      this._view.webview.postMessage({
+        command: 'updateStatus',
+        status: 'ready',
+      });
     }
   }
 
