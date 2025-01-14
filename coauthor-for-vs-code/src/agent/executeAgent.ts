@@ -77,7 +77,10 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
 /**
  * Get agent name with optional multiple suffix.
  */
-function getAgentName(baseAgent: string, outputFiles: string[] | null | undefined): string {
+function getAgentName(
+  baseAgent: string,
+  outputFiles: string[] | null | undefined,
+): string {
   if (outputFiles && outputFiles.length > 1) {
     // logger.info(CHANNEL, `Switching to multiple output mode`);
     return `${baseAgent}_multiple`;
@@ -88,7 +91,9 @@ function getAgentName(baseAgent: string, outputFiles: string[] | null | undefine
 /**
  * Common function to execute any agent with proper logging and status handling
  */
-async function executeAgentWithLogging<T extends DirectAgent | CoTAgent | MergeAgent>(
+async function executeAgentWithLogging<
+  T extends DirectAgent | CoTAgent | MergeAgent,
+>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
@@ -99,7 +104,7 @@ async function executeAgentWithLogging<T extends DirectAgent | CoTAgent | MergeA
     if (!logViewProvider) {
       throw new Error('LogViewProvider not initialized');
     }
-    
+
     // Update status to running
     logViewProvider.updateStreamStatus(agentName, 'running');
 
@@ -134,45 +139,49 @@ export async function executeAgent(
   }
 
   const agentName = getAgentName(agentConfig.agent, agentConfig.outputFiles);
-  
-  await executeAgentWithLogging(agentName, async () => {
-    // Create full agent config
-    const fullConfig = createAgentConfig(agentConfig);
 
-    // Get model configuration
-    const modelName = fullConfig.model;
-    if (!(modelName in MODEL_CONFIGS)) {
-      throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
-    }
+  await executeAgentWithLogging(
+    agentName,
+    async () => {
+      // Create full agent config
+      const fullConfig = createAgentConfig(agentConfig);
 
-    const modelConfig = MODEL_CONFIGS[modelName];
-    // Only override useOpenRouter if it's not already True in the model config
-    if (!modelConfig.useOpenRouter) {
-      modelConfig.useOpenRouter = fullConfig.toolConfig.useOpenRouter;
-    }
+      // Get model configuration
+      const modelName = fullConfig.model;
+      if (!(modelName in MODEL_CONFIGS)) {
+        throw new Error(`Model ${modelName} not found in MODEL_CONFIGS`);
+      }
 
-    // Create model handler
-    const modelHandler = ModelFactory.createHandler(modelConfig);
+      const modelConfig = MODEL_CONFIGS[modelName];
+      // Only override useOpenRouter if it's not already True in the model config
+      if (!modelConfig.useOpenRouter) {
+        modelConfig.useOpenRouter = fullConfig.toolConfig.useOpenRouter;
+      }
 
-    // Get agent path
-    const agentPath = await getAgentPath(fullConfig.agent, context);
+      // Create model handler
+      const modelHandler = ModelFactory.createHandler(modelConfig);
 
-    // Load settings and prompts
-    const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-      agentPath,
-      agentName,
-    );
+      // Get agent path
+      const agentPath = await getAgentPath(fullConfig.agent, context);
 
-    // Get appropriate agent class and create instance
-    const AgentClass = getAgentClass(agentSetting);
-    return new AgentClass(
-      modelHandler,
-      fullConfig,
-      agentSetting,
-      agentPrompt,
-      agentPath,
-    );
-  }, context);
+      // Load settings and prompts
+      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+        agentPath,
+        agentName,
+      );
+
+      // Get appropriate agent class and create instance
+      const AgentClass = getAgentClass(agentSetting);
+      return new AgentClass(
+        modelHandler,
+        fullConfig,
+        agentSetting,
+        agentPrompt,
+        agentPath,
+      );
+    },
+    context,
+  );
 }
 
 /**
@@ -185,37 +194,41 @@ export async function executeMergeAgent(
   context: vscode.ExtensionContext,
 ): Promise<void> {
   const agentName = 'merge';
-  
-  await executeAgentWithLogging(agentName, async () => {
-    // Create agent config for merge operation
-    const agentConfig = createAgentConfig({
-      agent: 'merge',
-      model,
-      inputFile,
-      editedFile,
-    });
 
-    // Get model configuration
-    if (!(model in MODEL_CONFIGS)) {
-      throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
-    }
+  await executeAgentWithLogging(
+    agentName,
+    async () => {
+      // Create agent config for merge operation
+      const agentConfig = createAgentConfig({
+        agent: 'merge',
+        model,
+        inputFile,
+        editedFile,
+      });
 
-    const modelConfig = MODEL_CONFIGS[model];
-    const modelHandler = ModelFactory.createHandler(modelConfig);
+      // Get model configuration
+      if (!(model in MODEL_CONFIGS)) {
+        throw new Error(`Model ${model} not found in MODEL_CONFIGS`);
+      }
 
-    // Get agent path and load settings/prompts
-    const agentPath = await getAgentPath('merge', context);
-    const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-      agentPath,
-      'merge',
-    );
+      const modelConfig = MODEL_CONFIGS[model];
+      const modelHandler = ModelFactory.createHandler(modelConfig);
 
-    return new MergeAgent(
-      modelHandler,
-      agentConfig,
-      agentSetting,
-      agentPrompt,
-      agentPath,
-    );
-  }, context);
+      // Get agent path and load settings/prompts
+      const agentPath = await getAgentPath('merge', context);
+      const [agentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
+        agentPath,
+        'merge',
+      );
+
+      return new MergeAgent(
+        modelHandler,
+        agentConfig,
+        agentSetting,
+        agentPrompt,
+        agentPath,
+      );
+    },
+    context,
+  );
 }
