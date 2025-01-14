@@ -17,12 +17,10 @@ import { capitalize, uncapitalize } from './utils.js';
 
 export function setDefaultState() {
   // Hide output name override by default
-  const outputNameOverrideDiv = document.getElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = document.getElementById(
-    'toggleOutputNameOverride',
-  );
-  outputNameOverrideDiv.style.display = 'none';
-  toggleOutputNameOverrideDiv.textContent = '▼';
+  const outputNameOverride = document.getElementById('outputNameOverride');
+  const toggleOutputNameOverrideDiv = document.getElementById('toggleOutputNameOverride');
+  if (outputNameOverride) outputNameOverride.style.display = 'none';
+  if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '>';
 
   // Initialize auto-extract toggle with empty circle
   const autoExtractToggle = safeGetElementById('toggleAutoExtract');
@@ -99,17 +97,15 @@ export function restoreState() {
       }
     });
 
-    const outputNameOverrideDiv = document.getElementById('outputNameOverride');
-    const toggleOutputNameOverrideDiv = document.getElementById(
-      'toggleOutputNameOverride',
-    );
+    const outputNameOverride = document.getElementById('outputNameOverride');
+    const toggleOutputNameOverrideDiv = document.getElementById('toggleOutputNameOverride');
     if (previousState.outputNameOverrideVisible) {
-      outputNameOverrideDiv.style.display = 'inline-block';
-      toggleOutputNameOverrideDiv.textContent = '▲';
-      outputNameOverrideDiv.value = previousState.outputNameOverride || '';
+      if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
+      if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '<';
+      safeSetElementValue('outputNameOverride', previousState.outputNameOverride || '');
     } else {
-      outputNameOverrideDiv.style.display = 'none';
-      toggleOutputNameOverrideDiv.textContent = '▼';
+      if (outputNameOverride) outputNameOverride.style.display = 'none';
+      if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '>';
     }
   } else {
     // If there's no previous state, set to default
@@ -121,7 +117,11 @@ export function restoreState() {
 }
 
 export function saveState() {
-  const state = {};
+  const state = {
+    outputNameOverrideVisible:
+      safeGetElementById('outputNameOverride')?.style.display === 'inline-block',
+    outputNameOverride: safeGetElementValue('outputNameOverride'),
+  };
 
   VALUE_ELEMENTS.forEach((id) => {
     const value = safeGetElementValue(id);
@@ -142,13 +142,6 @@ export function saveState() {
       containerDiv && containerDiv.style.display === 'block';
     state[id] = getSelectedFiles(elementDiv);
   });
-
-  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-  if (outputNameOverrideDiv) {
-    state.outputNameOverrideVisible =
-      outputNameOverrideDiv.style.display !== 'none';
-    state.outputNameOverride = outputNameOverrideDiv.value;
-  }
 
   vscode.setState(state);
 }
