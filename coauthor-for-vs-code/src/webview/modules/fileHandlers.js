@@ -151,8 +151,10 @@ export function handleRecentCommits(message) {
 }
 
 export function handleCheckboxChange(event) {
-  const checkboxId = event.target.id;
-  const isChecked = event.target.checked;
+  const checkbox = event?.target || this;
+  const checkboxId = checkbox.id;
+  const isChecked = checkbox.checked;
+
   vscode.postMessage({
     command: `update${capitalize(checkboxId)}`,
     value: isChecked,
