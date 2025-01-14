@@ -371,21 +371,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
       if (Array.isArray(messages.at(-1).content)) {
-        messages.at(-1).content[
-          messages.at(-1).content.length - 1
-        ].text = fileContent;
+        messages.at(-1).content[messages.at(-1).content.length - 1].text =
+          fileContent;
       } else {
         messages.at(-1).content = fileContent;
       }
 
       if (
-        messages.at(-1).content[
-          messages.at(-1).content.length - 1
-        ]?.cache_control
+        messages.at(-1).content[messages.at(-1).content.length - 1]
+          ?.cache_control
       ) {
-        delete messages.at(-1).content[
-          messages.at(-1).content.length - 1
-        ].cache_control;
+        delete messages.at(-1).content[messages.at(-1).content.length - 1]
+          .cache_control;
       }
       return [true, messages];
     }
