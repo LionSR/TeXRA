@@ -78,6 +78,22 @@ export function restoreState() {
     autoExtractToggle.innerHTML = `Auto ${indicator}<i class="fa-solid fa-angle-down"></i>`;
     autoExtractOptions.style.display = 'none';
 
+    // Initialize tool use toggle state
+    const toggleToolUse = safeGetElementById('toggleToolUse');
+    const toolUseOptions = safeGetElementById('toolUseOptions');
+    const hasToolUseChecked = [
+      'attachTeXCount',
+      'usePrefillFromInput',
+      'printInputPrompt',
+      'autoConfirmation',
+    ].some((id) => safeGetElementChecked(id));
+    const toolUseIndicator = hasToolUseChecked ? '●' : '○';
+
+    if (toggleToolUse) {
+      toggleToolUse.innerHTML = `Tool Use ${toolUseIndicator}<i class="fa-solid fa-angle-down"></i>`;
+      toolUseOptions.style.display = 'none';
+    }
+
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
       const selectDiv = safeGetElementById(id);
