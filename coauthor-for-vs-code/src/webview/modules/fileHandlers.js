@@ -222,7 +222,7 @@ export function toggleOutputNameOverride() {
   const input = safeGetElementById('outputNameOverride');
   const toggleIcon = safeGetElementById('toggleOutputNameOverride');
   if (!input || !toggleIcon) return;
-  
+
   const isVisible = input.style.display !== 'none';
   input.style.display = isVisible ? 'none' : 'inline-block';
   toggleIcon.textContent = isVisible ? '>' : '<';
