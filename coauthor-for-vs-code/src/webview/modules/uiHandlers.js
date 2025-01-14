@@ -31,6 +31,45 @@ export function setupUIHandlers() {
     }
   });
 
+  // Add auto-extract toggle handler
+  function updateAutoToggleState() {
+    const autoExtractToggle = safeGetElementById('toggleAutoExtract');
+    const autoExtractOptions = safeGetElementById('autoExtractOptions');
+    const isVisible = autoExtractOptions.style.display === 'block';
+
+    // Check if any auto-extract checkbox is checked
+    const hasChecked = [
+      'autoExtractFigure',
+      'autoExtractTikzFigure',
+      'autoExtractTikzFigureReflect',
+    ].some((id) => safeGetElementChecked(id));
+
+    const indicator = hasChecked ? '●' : '○';
+    const direction = isVisible ? 'up' : 'down';
+
+    autoExtractToggle.innerHTML = `Auto ${indicator}<i class="fa-solid fa-angle-${direction}"></i>`;
+  }
+
+  addEventListenerSafely('toggleAutoExtract', 'click', function () {
+    const autoExtractOptions = safeGetElementById('autoExtractOptions');
+    const isVisible = autoExtractOptions.style.display === 'block';
+
+    autoExtractOptions.style.display = isVisible ? 'none' : 'block';
+    updateAutoToggleState();
+  });
+
+  // Add checkbox change listeners for auto-extract options
+  [
+    'autoExtractFigure',
+    'autoExtractTikzFigure',
+    'autoExtractTikzFigureReflect',
+  ].forEach((id) => {
+    addEventListenerSafely(id, 'change', function () {
+      updateAutoToggleState();
+      handleCheckboxChange.call(this);
+    });
+  });
+
   // Add event listeners for the empty buttons
   ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
     (type) => {

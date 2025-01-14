@@ -262,6 +262,40 @@
               >
             </div>
             <div class="file-select-actions">
+              <span
+                id="toggleAutoExtract"
+                class="auto-toggle"
+                title="Auto-extract options"
+              >
+                Auto ○<i class="fa-solid fa-angle-down"></i>
+              </span>
+              <div
+                id="autoExtractOptions"
+                class="auto-extract-options"
+                style="display: none"
+              >
+                <div class="auto-extract-options-content">
+                  <label
+                    ><input type="checkbox" id="autoExtractFigure" /><i
+                      class="fas fa-image"
+                    ></i>
+                    Extract Figures</label
+                  >
+                  <label
+                    ><input type="checkbox" id="autoExtractTikzFigure" /><i
+                      class="fas fa-draw-polygon"
+                    ></i>
+                    Extract TikZ Figures</label
+                  >
+                  <label
+                    ><input
+                      type="checkbox"
+                      id="autoExtractTikzFigureReflect"
+                    /><i class="fas fa-sync-alt"></i> Extract TikZ Figures
+                    (Reflect)</label
+                  >
+                </div>
+              </div>
               <button
                 id="emptyFigureFileButton"
                 class="icon-button"
@@ -363,19 +397,6 @@
       </div>
       <div class="tool-use-execute">
         <div class="checkbox-grid">
-          <label
-            ><input type="checkbox" id="autoExtractFigure" />
-            <i class="fas fa-image"></i> Auto-extract Figs</label
-          >
-          <label
-            ><input type="checkbox" id="autoExtractTikzFigure" />
-            <i class="fas fa-draw-polygon"></i> Auto-extract TikZ Figs</label
-          >
-          <label
-            ><input type="checkbox" id="autoExtractTikzFigureReflect" />
-            <i class="fas fa-sync-alt"></i> Auto-extract TikZ
-            Figs(Reflect)</label
-          >
           <label
             ><input type="checkbox" id="attachTeXCount" />
             <i class="fas fa-calculator"></i> Attach Tex Count</label
