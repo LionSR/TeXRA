@@ -11,7 +11,7 @@ class ToolConfig:
     autoExtractFigure: bool = False
     autoExtractTikzFigure: bool = False
     autoExtractTikzFigureReflect: bool = False
-    includeTexCount: bool = False
+    attachTeXCount: bool = False
     autoConfirmation: bool = False
     printInputPrompt: bool = False
     useOpenRouter: bool = False
