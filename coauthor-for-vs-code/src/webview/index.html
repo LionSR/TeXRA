@@ -57,7 +57,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="inputFile"
-                ><i class="fas fa-file-import"></i> Input File:</label
+                ><i class="fas fa-file-import"></i> Input File</label
               >
             </div>
             <div class="file-select-actions">
@@ -85,7 +85,7 @@
               <span
                 id="toggleMultipleInputFiles"
                 class="toggle-icon"
-                title="More"
+                title="Multiple"
                 >▼</span
               >
               <button
@@ -127,7 +127,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="referenceFile"
-              ><i class="fas fa-book"></i> Reference File:</label
+              ><i class="fas fa-book"></i> Reference File</label
             >
             <div class="file-select-actions">
               <button
@@ -147,7 +147,7 @@
               <span
                 id="toggleMultipleReferenceFiles"
                 class="toggle-icon"
-                title="More"
+                title="Multiple"
                 >▼</span
               >
               <button
@@ -192,7 +192,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="auxiliaryFile"
-              ><i class="fas fa-file-circle-plus"></i> Auxiliary File:</label
+              ><i class="fas fa-file-circle-plus"></i> Auxiliary File</label
             >
             <div class="file-select-actions">
               <button
@@ -212,7 +212,7 @@
               <span
                 id="toggleMultipleAuxiliaryFiles"
                 class="toggle-icon"
-                title="More"
+                title="Multiple"
                 >▼</span
               >
               <button
@@ -258,7 +258,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="figureFile"
-                ><i class="fas fa-image"></i> Figure File:</label
+                ><i class="fas fa-image"></i> Figure File</label
               >
             </div>
             <div class="file-select-actions">
@@ -306,7 +306,7 @@
               <span
                 id="toggleMultipleFigureFiles"
                 class="toggle-icon"
-                title="More"
+                title="Multiple"
                 >▼</span
               >
               <button
@@ -340,14 +340,36 @@
         </div>
         <div class="file-select">
           <div class="file-select-header">
-            <label for="multipleOutputFilesSelect">
+            <div class="file-select-label-group">
+              <span class="optional-label">Override Output Name</span>
+              <span
+                id="toggleOutputNameOverride"
+                class="toggle-icon"
+                title="Toggle Output Name Override"
+                >></span
+              >
+              <input
+                type="text"
+                id="outputNameOverride"
+                class="vscode-input"
+                placeholder="(include extension)"
+                style="display: none"
+              />
+            </div>
+            <div class="file-select-actions"></div>
+          </div>
+        </div>
+        <div class="file-select">
+          <div class="file-select-header">
+            <div class="file-select-label-group">
+              <span class="optional-label">Multiple Output Files</span>
               <span
                 id="toggleMultipleOutputFiles"
                 class="toggle-icon"
-                title="More"
+                title="Multiple"
                 >▼</span
-              ><span class="advanced-feature">Multiple File Output</span>
-            </label>
+              >
+            </div>
             <div class="file-select-actions">
               <button
                 id="emptyMultipleOutputFilesButton"
@@ -380,7 +402,7 @@
       <div class="instruction-box">
         <div class="instruction-header">
           <label for="instructionInput"
-            ><i class="fas fa-pencil-alt"></i> Specific Instructions:</label
+            ><i class="fas fa-pencil-alt"></i> Instructions</label
           >
           <button
             id="emptyInstructionsButton"
@@ -419,20 +441,6 @@
           >
         </div>
         <div class="execute-row">
-          <div class="output-name-override-container">
-            <span
-              id="toggleOutputNameOverride"
-              class="toggle-icon"
-              title="Toggle Output Name Override"
-              >▼</span
-            >Override output name:
-            <br />
-            <input
-              type="text"
-              id="outputNameOverride"
-              placeholder="(include extension)"
-            />
-          </div>
           <button id="executeButton">
             <i class="fas fa-play"></i> Execute
           </button>
@@ -477,7 +485,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="baseFile"
-                ><i class="fas fa-file-alt"></i> Base File:</label
+                ><i class="fas fa-file-alt"></i> Base File</label
               >
             </div>
             <div class="file-select-actions">
@@ -505,7 +513,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="editedFile"
-                ><i class="fas fa-file-edit"></i> Edited File:</label
+                ><i class="fas fa-file-edit"></i> Edited File</label
               >
               <button id="mergeButton" class="icon-button" title="Merge">
                 <i class="fas fa-code-merge"></i>Merge
@@ -550,7 +558,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="commit"
-                ><i class="fas fa-code-commit"></i> Commit:</label
+                ><i class="fas fa-code-commit"></i> Commit</label
               >
               <button
                 id="latexdiffvcButton"
