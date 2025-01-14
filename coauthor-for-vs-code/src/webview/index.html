@@ -9,7 +9,7 @@
     />
     <link
       rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
     />
     <link rel="stylesheet" href="${styleUri}" />
     <script type="importmap" nonce="${nonce}">
@@ -57,7 +57,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="inputFile"
-                ><i class="fas fa-file-alt"></i> Input File:</label
+                ><i class="fas fa-file-import"></i> Input File:</label
               >
             </div>
             <div class="file-select-actions">
@@ -127,7 +127,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="referenceFile"
-              ><i class="fas fa-file-alt"></i> Reference File:</label
+              ><i class="fas fa-book"></i> Reference File:</label
             >
             <div class="file-select-actions">
               <button
@@ -192,7 +192,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="auxiliaryFile"
-              ><i class="fas fa-file-alt"></i> Auxiliary File:</label
+              ><i class="fas fa-file-circle-plus"></i> Auxiliary File:</label
             >
             <div class="file-select-actions">
               <button
@@ -258,7 +258,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="figureFile"
-                ><i class="fas fa-file-alt"></i> Figure File:</label
+                ><i class="fas fa-image"></i> Figure File:</label
               >
             </div>
             <div class="file-select-actions">
@@ -382,7 +382,7 @@
           >
           <label
             ><input type="checkbox" id="usePrefillFromInput" />
-            <i class="fas fa-file-import"></i> Use Prefill from Input</label
+            <i class="fas fa-file-pen"></i> Use Prefill from Input</label
           >
           <label
             ><input type="checkbox" id="printInputPrompt" />
@@ -424,10 +424,10 @@
         <div class="button-group">
           <span>For the Selected Agent and Files:</span>
           <button id="packButton" class="icon-button" title="Pack Files">
-            <i class="fas fa-box"></i>Pack
+            <i class="fas fa-boxes-packing"></i>Pack
           </button>
           <button id="cleanButton" class="icon-button" title="Clean Files">
-            <i class="fas fa-trash-alt"></i>Clean
+            <i class="fas fa-broom"></i>Clean
           </button>
         </div>
         <div class="button-group">
@@ -494,7 +494,7 @@
                 class="icon-button"
                 title="LaTeXDiff the edited file with the base file"
               >
-                <i class="fas fa-file-medical-alt"></i>latexdiff
+                <i class="fas fa-plus-minus"></i>latexdiff
               </button>
             </div>
             <div class="file-select-actions">
@@ -536,21 +536,21 @@
                 class="icon-button"
                 title="LaTeXDiff with another git commit"
               >
-                <i class="fas fa-file-medical-alt"></i>latexdiff-vc
+                <i class="fas fa-plus-minus"></i>latexdiff-vc
               </button>
               <button
                 id="packLatexdiffvcButton"
                 class="icon-button"
                 title="Pack"
               >
-                <i class="fas fa-box"></i>Pack
+                <i class="fas fa-boxes-packing"></i>Pack
               </button>
               <button
                 id="cleanLatexdiffvcButton"
                 class="icon-button"
                 title="Clean"
               >
-                <i class="fas fa-trash-alt"></i>Clean
+                <i class="fas fa-broom"></i>Clean
               </button>
             </div>
             <div class="file-select-actions">
