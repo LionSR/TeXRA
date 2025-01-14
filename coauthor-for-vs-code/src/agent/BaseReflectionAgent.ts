@@ -415,7 +415,6 @@ export abstract class BaseReflectionAgent {
       AUTO_CONFIRMATION: this.agentConfig.toolConfig.autoConfirmation,
       USE_PREFILL_FROM_INPUT: this.agentConfig.toolConfig.usePrefillFromInput,
       PRINT_INPUT_PROMPT: this.agentConfig.toolConfig.printInputPrompt,
-      USE_OPENROUTER: this.agentConfig.toolConfig.useOpenRouter,
     };
   }
 
