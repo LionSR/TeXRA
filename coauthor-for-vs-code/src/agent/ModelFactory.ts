@@ -8,6 +8,7 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
 } from './modelHandlerOpenRouter';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 /** Factory class for instantiating appropriate model handlers based on configuration. */
 export class ModelFactory {
@@ -20,7 +21,7 @@ export class ModelFactory {
   static createHandler(config: ModelConfig): ModelHandler {
     // Use OpenRouter if model requires it or if explicitly configured in toolConfig
     const useOpenRouter =
-      config.openRouterOnly || config.toolConfig?.useOpenRouter;
+      config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
 
     if (useOpenRouter) {
       // Set OpenRouter model name if not provided

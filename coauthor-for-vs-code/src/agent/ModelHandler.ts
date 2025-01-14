@@ -54,7 +54,6 @@ export abstract class ModelHandler {
         attachTeXCount: false,
         autoConfirmation: false,
         printInputPrompt: false,
-        useOpenRouter: false,
       },
     };
     this.capabilities = config.capabilities;
@@ -81,11 +80,11 @@ export abstract class ModelHandler {
   public getApiKey(): string {
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
-      this.config.openRouterOnly || this.config.toolConfig?.useOpenRouter;
+      this.config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
 
     if (useOpenRouter) {
       // Try VS Code settings first
-      const key = getConfig('apiKeys.openrouter') as string;
+      const key = getConfig('apiKeys.openRouter') as string;
       if (key) {
         return key;
       }
@@ -124,7 +123,7 @@ export abstract class ModelHandler {
   public getBaseUrl(): string | null {
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
-      this.config.openRouterOnly || this.config.toolConfig?.useOpenRouter;
+      this.config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
 
     if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
