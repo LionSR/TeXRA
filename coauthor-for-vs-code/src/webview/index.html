@@ -262,38 +262,40 @@
               >
             </div>
             <div class="file-select-actions">
-              <span
-                id="toggleAutoExtract"
-                class="auto-toggle"
-                title="Auto-extract options"
-              >
-                Auto ○<i class="fa-solid fa-angle-down"></i>
-              </span>
-              <div
-                id="autoExtractOptions"
-                class="auto-extract-options"
-                style="display: none"
-              >
-                <div class="auto-extract-options-content">
-                  <label
-                    ><input type="checkbox" id="autoExtractFigure" /><i
-                      class="fas fa-image"
-                    ></i>
-                    Extract Figures</label
-                  >
-                  <label
-                    ><input type="checkbox" id="autoExtractTikzFigure" /><i
-                      class="fas fa-draw-polygon"
-                    ></i>
-                    Extract TikZ Figures</label
-                  >
-                  <label
-                    ><input
-                      type="checkbox"
-                      id="autoExtractTikzFigureReflect"
-                    /><i class="fas fa-sync-alt"></i> Extract TikZ Figures
-                    (Reflect)</label
-                  >
+              <div class="dropdown-container dropdown-right">
+                <span
+                  id="toggleAutoExtract"
+                  class="auto-toggle"
+                  title="Auto-extract options"
+                >
+                  Auto ○<i class="fa-solid fa-angle-down"></i>
+                </span>
+                <div
+                  id="autoExtractOptions"
+                  class="auto-extract-options"
+                  style="display: none"
+                >
+                  <div class="auto-extract-options-content">
+                    <label
+                      ><input type="checkbox" id="autoExtractFigure" /><i
+                        class="fas fa-image"
+                      ></i>
+                      Extract Figures</label
+                    >
+                    <label
+                      ><input type="checkbox" id="autoExtractTikzFigure" /><i
+                        class="fas fa-draw-polygon"
+                      ></i>
+                      Extract TikZ Figures</label
+                    >
+                    <label
+                      ><input
+                        type="checkbox"
+                        id="autoExtractTikzFigureReflect"
+                      /><i class="fas fa-sync-alt"></i> Extract TikZ Figures
+                      (Reflect)</label
+                    >
+                  </div>
                 </div>
               </div>
               <button
@@ -418,23 +420,34 @@
         ></textarea>
       </div>
       <div class="tool-use-execute">
-        <div class="checkbox-grid">
-          <label
-            ><input type="checkbox" id="attachTeXCount" />
-            <i class="fas fa-calculator"></i> Attach Tex Count</label
+        <div class="dropdown-container dropdown-left">
+          <span id="toggleToolUse" class="auto-toggle" title="Tool Use options">
+            Tool Use ○<i class="fa-solid fa-angle-down"></i>
+          </span>
+          <div
+            id="toolUseOptions"
+            class="auto-extract-options"
+            style="display: none"
           >
-          <label
-            ><input type="checkbox" id="usePrefillFromInput" />
-            <i class="fas fa-file-pen"></i> Use Prefill from Input</label
-          >
-          <label
-            ><input type="checkbox" id="printInputPrompt" />
-            <i class="fas fa-file-code"></i> Print Input Prompt</label
-          >
-          <label
-            ><input type="checkbox" id="autoConfirmation" />
-            <i class="fas fa-check-circle"></i> Auto Confirmation</label
-          >
+            <div class="auto-extract-options-content">
+              <label
+                ><input type="checkbox" id="attachTeXCount" />
+                <i class="fas fa-calculator"></i> Attach TeX Count</label
+              >
+              <label
+                ><input type="checkbox" id="usePrefillFromInput" />
+                <i class="fas fa-file-pen"></i> Use Prefill from Input</label
+              >
+              <label
+                ><input type="checkbox" id="autoConfirmation" />
+                <i class="fas fa-check-circle"></i> Auto Confirmation</label
+              >
+              <label
+                ><input type="checkbox" id="printInputPrompt" />
+                <i class="fas fa-file-code"></i> Print Input Prompt</label
+              >
+            </div>
+          </div>
         </div>
         <div class="execute-row">
           <button id="executeButton">
