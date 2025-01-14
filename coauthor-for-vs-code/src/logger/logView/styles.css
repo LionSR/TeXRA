@@ -143,7 +143,7 @@ body {
 }
 
 .codicon-trash:before {
-  content: "\eb9f";
+  content: '\eb9f';
 }
 
 .log-container {

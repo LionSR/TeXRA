@@ -37,7 +37,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
-  private _streamStatus: Map<string, 'running' | 'error' | 'stopped'> = new Map();
+  private _streamStatus: Map<string, 'running' | 'error' | 'stopped'> =
+    new Map();
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'coauthor.activeLogStream';
 
@@ -102,7 +103,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Load active stream
-    const savedActiveStream = this.context.workspaceState.get<string>(this._activeStreamKey);
+    const savedActiveStream = this.context.workspaceState.get<string>(
+      this._activeStreamKey,
+    );
     if (savedActiveStream && this._logStreams.has(savedActiveStream)) {
       this._activeStream = savedActiveStream;
     } else {
@@ -119,7 +122,10 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
 
     // Save active stream
-    this.context.workspaceState.update(this._activeStreamKey, this._activeStream);
+    this.context.workspaceState.update(
+      this._activeStreamKey,
+      this._activeStream,
+    );
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -185,7 +191,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     if (!this._view) return;
 
     const streams = Array.from(this._logStreams.keys());
-    
+
     // Use stored active stream, fallback to first stream if active stream doesn't exist
     if (!streams.includes(this._activeStream)) {
       this._activeStream = streams[0] || '';
@@ -315,7 +321,10 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public updateStreamStatus(stream: string, status: 'running' | 'error' | 'stopped') {
+  public updateStreamStatus(
+    stream: string,
+    status: 'running' | 'error' | 'stopped',
+  ) {
     this._streamStatus.set(stream, status);
     if (this._view) {
       // Always update status for the stream being updated
