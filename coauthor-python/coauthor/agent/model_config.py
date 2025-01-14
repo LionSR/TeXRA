@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+from .tool_config import ToolConfig
+
 # Default configuration values
 DEFAULT_CONTEXT_WINDOW = 128000
 
@@ -42,5 +44,6 @@ class ModelConfig:
     outputPrice: float
     contextWindow: int = DEFAULT_CONTEXT_WINDOW
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
-    useOpenRouter: bool = False  # Whether to use OpenRouter for this model
-    openrouterFullName: str | None = None  # Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
+    openRouterOnly: bool = False  # Whether this model is only available through OpenRouter
+    openrouterFullName: str | None = None  # Full model name for OpenRouter
+    toolConfig: ToolConfig | None = None  # Reference to tool configuration
