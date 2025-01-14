@@ -2,6 +2,8 @@
  * Configuration types and constants for language model interactions and capabilities.
  */
 
+import { ToolConfig } from './ToolConfig';
+
 /**
  * Default configuration values
  */
@@ -49,6 +51,7 @@ export interface ModelConfig {
   outputPrice: number;
   contextWindow: number;
   capabilities: ModelCapabilities;
-  useOpenRouter: boolean; // Whether to use OpenRouter for this model
+  openRouterOnly: boolean; // Whether this model is only available through OpenRouter
   openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
+  toolConfig?: ToolConfig; // Reference to tool configuration
 }
