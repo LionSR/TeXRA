@@ -91,10 +91,25 @@ body {
   border-radius: 4px;
   padding: 10px;
   margin-bottom: 15px;
+  overflow: hidden;
 }
 
 .file-select {
   margin-bottom: 8px;
+}
+
+/* Make optional sections more compact */
+.file-select:has(.optional-label) {
+  margin-bottom: 2px;
+}
+
+.optional-label {
+  color: var(--vscode-descriptionForeground);
+  font-weight: normal;
+  font-size: calc(var(--vscode-font-size) * 0.9);
+  white-space: nowrap;
+  min-width: 120px;
+  opacity: 0.8;
 }
 
 .file-select-header {
@@ -102,7 +117,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 5px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .file-select-header label {
@@ -114,7 +129,22 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex-wrap: wrap; /* Allow wrapping if space is limited */
+  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-select-label-group .vscode-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0 0 0 5px;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
 }
 
 .file-select-label-group label {
@@ -124,8 +154,9 @@ body {
 .file-select-actions {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: nowrap;
+  margin-left: auto;
 }
 
 .action-button,
@@ -270,8 +301,8 @@ body {
 
 .file-select select {
   width: 100%;
-  padding: 4px;
-  height: 28px;
+  padding: 4px 8px;
+  height: 24px;
   border: 1px solid var(--input-border);
   border-radius: 3px;
   background-color: var(--dropdown-background);
@@ -284,10 +315,20 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   margin-top: 5px;
+  padding: 0;
 }
 
 .multiple-files-content {
   width: 100%;
+  padding: 0;
+}
+
+.multiple-files-content .vscode-input {
+  margin: 0;
+  width: 100%;
+  height: 24px;
+  padding: 2px 6px;
+  box-sizing: border-box;
 }
 
 .multiple-files-header {
@@ -428,17 +469,15 @@ body {
   gap: 5px;
 }
 
-#outputNameOverride {
-  width: 100%;
-  padding: 4px;
-  border: 1px solid var(--input-border);
-  border-radius: 3px;
-  background-color: var(--input-background);
-  color: var(--input-foreground);
-  font-size: var(--vscode-font-size);
+.execute-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 #executeButton {
+  white-space: nowrap;
   padding: 6px 12px;
   font-size: calc(var(--vscode-font-size) * 1.15);
   background-color: #007acc;
@@ -446,7 +485,6 @@ body {
   border: none;
   border-radius: 3px;
   cursor: pointer;
-  align-self: flex-end;
 }
 
 #executeButton:hover {
@@ -465,19 +503,18 @@ body {
   font-weight: bold;
 }
 
-.output-name-override-container {
-  margin-bottom: 5px;
-}
-
 .toggle-icon {
   cursor: pointer;
   user-select: none;
-  margin: 0 5px;
+  margin: 0;
   position: relative;
+  padding: 0 2px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.8;
 }
 
 .toggle-icon::after {
-  content: 'More';
+  content: 'Multiple';
   position: absolute;
   top: 100%;
   left: 50%;
@@ -550,38 +587,6 @@ button .fas {
 
 .checkbox-grid input[type='checkbox'] {
   margin-right: 5px;
-}
-
-.execute-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-.output-name-override-container {
-  display: flex;
-  align-items: center;
-  flex-grow: 1;
-  margin-right: 10px;
-}
-
-#toggleOutputNameOverride {
-  cursor: pointer;
-  margin-right: 5px;
-}
-
-#outputNameOverride {
-  flex-grow: 1;
-  padding: 4px;
-  border: 1px solid var(--input-border);
-  border-radius: 3px;
-  background-color: var(--input-background);
-  color: var(--input-foreground);
-}
-
-#executeButton {
-  white-space: nowrap;
 }
 
 .auto-toggle {
@@ -665,4 +670,52 @@ button .fas {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.optional-label {
+  color: var(--vscode-foreground);
+  font-weight: normal;
+  font-size: var(--vscode-font-size);
+  white-space: nowrap;
+  min-width: 160px;
+}
+
+.input-container {
+  width: 100%;
+  margin: 5px 0;
+}
+
+.vscode-input {
+  width: 100%;
+  height: 28px;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.vscode-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.vscode-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.multiple-files-content .vscode-input {
+  margin: 0;
+  width: 100%;
+}
+
+/* When toggled (input is visible), make the label more prominent */
+.file-select-label-group:has(.vscode-input[style*="inline-block"]) .optional-label,
+.file-select-label-group:has(.vscode-input[style*="inline-block"]) .toggle-icon,
+.file-select:has(.multiple-files-container[style*="block"]) .optional-label,
+.file-select:has(.multiple-files-container[style*="block"]) .toggle-icon {
+  color: var(--vscode-foreground);
+  opacity: 1;
 }
