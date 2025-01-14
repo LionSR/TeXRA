@@ -219,16 +219,13 @@ export function toggleMultipleOutputFiles() {
 }
 
 export function toggleOutputNameOverride() {
-  const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
+  const input = safeGetElementById('outputNameOverride');
   const toggleIcon = safeGetElementById('toggleOutputNameOverride');
-  if (!outputNameOverrideDiv || !toggleIcon) return;
-  if (outputNameOverrideDiv.style.display === 'none') {
-    outputNameOverrideDiv.style.display = 'inline-block';
-    toggleIcon.textContent = '▲';
-  } else {
-    outputNameOverrideDiv.style.display = 'none';
-    toggleIcon.textContent = '▼';
-  }
+  if (!input || !toggleIcon) return;
+  
+  const isVisible = input.style.display !== 'none';
+  input.style.display = isVisible ? 'none' : 'inline-block';
+  toggleIcon.textContent = isVisible ? '>' : '<';
   saveState();
 }
 
