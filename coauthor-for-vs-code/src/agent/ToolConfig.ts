@@ -7,5 +7,4 @@ export interface ToolConfig {
   attachTeXCount: boolean;
   autoConfirmation: boolean;
   printInputPrompt: boolean;
-  useOpenRouter: boolean;
 }

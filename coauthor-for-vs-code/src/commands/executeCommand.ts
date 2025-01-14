@@ -111,6 +111,11 @@ async function executeViaTerminal(config: AgentConfig): Promise<void> {
     }
   });
 
+  // Add useOpenRouter from VS Code settings if enabled
+  if (getConfig<boolean>('useOpenRouter', false)) {
+    command += ' --useOpenRouter';
+  }
+
   if (config.instruction) {
     const escapedInstructions = config.instruction
       .replace(/\\/g, '\\\\')
