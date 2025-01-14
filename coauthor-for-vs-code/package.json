@@ -41,6 +41,31 @@
             ],
             "description": "List of available agents",
             "scope": "resource"
+          },
+          "coauthor.models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "sonnet3++",
+              "sonnet3+",
+              "opus3",
+              "haiku3+",
+              "o1",
+              "o1preview",
+              "o1-",
+              "gpt4o",
+              "gpt4o-",
+              "gpt4ol",
+              "gpt4t",
+              "geminiexp",
+              "gemini2f",
+              "gemini1p+",
+              "gemini1f+"
+            ],
+            "description": "List of available models",
+            "scope": "resource"
           }
         }
       },
