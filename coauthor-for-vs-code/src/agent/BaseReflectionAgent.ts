@@ -410,7 +410,7 @@ export abstract class BaseReflectionAgent {
         this.agentConfig.toolConfig.autoExtractTikzFigure,
       AUTO_EXTRACT_TIKZ_FIGURE_REFLECT:
         this.agentConfig.toolConfig.autoExtractTikzFigureReflect,
-      INCLUDE_TEX_COUNT: this.agentConfig.toolConfig.includeTexCount,
+      INCLUDE_TEX_COUNT: this.agentConfig.toolConfig.attachTeXCount,
       AUTO_CONFIRMATION: this.agentConfig.toolConfig.autoConfirmation,
       USE_PREFILL_FROM_INPUT: this.agentConfig.toolConfig.usePrefillFromInput,
       PRINT_INPUT_PROMPT: this.agentConfig.toolConfig.printInputPrompt,
@@ -663,7 +663,7 @@ export abstract class BaseReflectionAgent {
     const toolState = ToolState.initialize();
 
     // Handle tex count if enabled
-    if (this.agentConfig.toolConfig.includeTexCount) {
+    if (this.agentConfig.toolConfig.attachTeXCount) {
       toolState.texcountStats = await getTexCountStats(inputFiles);
     }
 
@@ -967,7 +967,7 @@ export abstract class BaseReflectionAgent {
     currRound: number,
     toolState: ToolState,
   ): Promise<void> {
-    if (this.agentConfig.toolConfig.includeTexCount) {
+    if (this.agentConfig.toolConfig.attachTeXCount) {
       toolState.texcountStats = await getTexCountStats(outputFiles);
     }
 
