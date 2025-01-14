@@ -24,6 +24,15 @@ export function setDefaultState() {
   outputNameOverrideDiv.style.display = 'none';
   toggleOutputNameOverrideDiv.textContent = '▼';
 
+  // Initialize auto-extract toggle with empty circle
+  const autoExtractToggle = safeGetElementById('toggleAutoExtract');
+  const autoExtractOptions = safeGetElementById('autoExtractOptions');
+  if (autoExtractToggle && autoExtractOptions) {
+    autoExtractToggle.innerHTML =
+      'Auto ○<i class="fa-solid fa-angle-down"></i>';
+    autoExtractOptions.style.display = 'none';
+  }
+
   // Initialize all multiple file selections to hidden
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
@@ -53,6 +62,20 @@ export function restoreState() {
     CHECK_BOXES.forEach((id) => {
       safeSetElementChecked(id, previousState[id] || false);
     });
+
+    // Initialize auto-extract toggle in closed state
+    const autoExtractToggle = safeGetElementById('toggleAutoExtract');
+    const autoExtractOptions = safeGetElementById('autoExtractOptions');
+    const hasChecked = [
+      'autoExtractFigure',
+      'autoExtractTikzFigure',
+      'autoExtractTikzFigureReflect',
+    ].some((id) => safeGetElementChecked(id));
+    const indicator = hasChecked ? '●' : '○';
+
+    autoExtractToggle.classList.remove('active');
+    autoExtractToggle.innerHTML = `Auto ${indicator}<i class="fa-solid fa-angle-down"></i>`;
+    autoExtractOptions.style.display = 'none';
 
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
