@@ -153,10 +153,8 @@ export async function executeAgent(
       }
 
       const modelConfig = MODEL_CONFIGS[modelName];
-      // Only override useOpenRouter if it's not already True in the model config
-      if (!modelConfig.useOpenRouter) {
-        modelConfig.useOpenRouter = fullConfig.toolConfig.useOpenRouter;
-      }
+      // Only set toolConfig reference - no need to override openRouterOnly
+      modelConfig.toolConfig = fullConfig.toolConfig;
 
       // Create model handler
       const modelHandler = ModelFactory.createHandler(modelConfig);

@@ -44,7 +44,19 @@ export abstract class ModelHandler {
   protected logger: AgentLogger;
 
   constructor(config: ModelConfig) {
-    this.config = config;
+    this.config = {
+      ...config,
+      toolConfig: config.toolConfig || {
+        usePrefillFromInput: false,
+        autoExtractFigure: false,
+        autoExtractTikzFigure: false,
+        autoExtractTikzFigureReflect: false,
+        attachTeXCount: false,
+        autoConfirmation: false,
+        printInputPrompt: false,
+        useOpenRouter: false,
+      },
+    };
     this.capabilities = config.capabilities;
     this.continueLimit = this.capabilities.likesToAskForConfirmation
       ? CONFIRMATION_CONTINUE_LIMIT
@@ -67,7 +79,11 @@ export abstract class ModelHandler {
    * @throws Error if required API key is missing from environment
    */
   public getApiKey(): string {
-    if (this.config.useOpenRouter) {
+    // Use OpenRouter if model requires it or if explicitly configured
+    const useOpenRouter =
+      this.config.openRouterOnly || this.config.toolConfig?.useOpenRouter;
+
+    if (useOpenRouter) {
       // Try VS Code settings first
       const key = getConfig('apiKeys.openrouter') as string;
       if (key) {
@@ -106,7 +122,11 @@ export abstract class ModelHandler {
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
-    if (this.config.useOpenRouter) {
+    // Use OpenRouter if model requires it or if explicitly configured
+    const useOpenRouter =
+      this.config.openRouterOnly || this.config.toolConfig?.useOpenRouter;
+
+    if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
     }
 

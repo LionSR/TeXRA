@@ -35,7 +35,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'sonnet++': {
     name: 'sonnet++',
@@ -53,7 +53,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsNativePdf: true,
       likesToAskForConfirmation: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'sonnet+': {
     name: 'sonnet+',
@@ -69,7 +69,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   sonnet: {
     name: 'sonnet',
@@ -84,7 +84,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'haiku+': {
     name: 'haiku+',
@@ -102,7 +102,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsVision: false,
       likesToAskForConfirmation: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   haiku: {
     name: 'haiku',
@@ -118,7 +118,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
 
   // ===== OpenAI Reasoning Models =====
@@ -137,7 +137,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsVision: true,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   o1preview: {
     name: 'o1preview',
@@ -154,7 +154,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsVision: false,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'o1-': {
     name: 'o1-',
@@ -171,7 +171,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsVision: false,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
 
   // ===== OpenAI Models =====
@@ -189,7 +189,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   gpt4t: {
     name: 'gpt4t',
@@ -205,7 +205,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: false,
       supportsReasoning: false,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'gpt4o-': {
     name: 'gpt4o-',
@@ -221,7 +221,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsPredictiveOutput: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   gpt4ol: {
     name: 'gpt4ol',
@@ -237,7 +237,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
 
   // ===== Google Gemini Models =====
@@ -254,7 +254,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsVision: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   gemini2fthinking: {
     name: 'gemini2fthinking',
@@ -270,7 +270,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsNativePdf: false,
       supportsVision: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   gemini2f: {
     name: 'gemini2f',
@@ -286,7 +286,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'gemini1p+': {
     name: 'gemini1p+',
@@ -302,7 +302,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
   'gemini1f+': {
     name: 'gemini1f+',
@@ -318,7 +318,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: false,
+    openRouterOnly: false,
   },
 
   // ===== OpenRouter Models =====
@@ -332,7 +332,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     inputPrice: 3.0,
     outputPrice: 3.0,
     capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
-    useOpenRouter: true,
+    openRouterOnly: true,
   },
   'qwq-32b': {
     name: 'qwq-32b',
@@ -347,6 +347,6 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    useOpenRouter: true,
+    openRouterOnly: true,
   },
 };
