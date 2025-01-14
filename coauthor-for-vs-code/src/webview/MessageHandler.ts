@@ -140,7 +140,7 @@ export class WebviewMessageHandler {
         autoExtractFigure: message.autoExtractFigure,
         autoExtractTikzFigure: message.autoExtractTikzFigure,
         autoExtractTikzFigureReflect: message.autoExtractTikzFigureReflect,
-        includeTexCount: message.includeTexCount,
+        attachTeXCount: message.attachTeXCount,
         usePrefillFromInput: message.usePrefillFromInput,
         autoConfirmation: message.autoConfirmation,
         printInputPrompt: message.printInputPrompt,

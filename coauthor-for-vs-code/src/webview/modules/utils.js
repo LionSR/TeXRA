@@ -10,7 +10,7 @@ export const CHECK_BOXES = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
   'autoExtractTikzFigureReflect',
-  'includeTexCount',
+  'attachTeXCount',
   'usePrefillFromInput',
   'printInputPrompt',
   'autoConfirmation',

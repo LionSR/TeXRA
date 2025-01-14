@@ -73,7 +73,7 @@ class AgentConfig:
             "autoExtractFigure",
             "autoExtractTikzFigure",
             "autoExtractTikzFigureReflect",
-            "includeTexCount",
+            "attachTeXCount",
             "autoConfirmation",
             "printInputPrompt",
         }
