@@ -417,7 +417,7 @@ export function setupUIHandlers() {
   });
 
   // Add event listeners for current file buttons
-  ['Input', 'Reference', 'Auxiliary', 'Figure'].forEach((type) => {
+  ['Input', 'Reference', 'Auxiliary'].forEach((type) => {
     const currentFileButtonId = `current${capitalize(type)}FileButton`;
     addEventListenerSafely(currentFileButtonId, 'click', () => {
       vscode.postMessage({
