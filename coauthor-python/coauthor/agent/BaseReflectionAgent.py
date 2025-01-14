@@ -240,7 +240,7 @@ class BaseReflectionAgent(ABC):
             "AUTO_EXTRACT_FIGURE": self.agentConfig.toolConfig.autoExtractFigure,
             "AUTO_EXTRACT_TIKZ_FIGURE": self.agentConfig.toolConfig.autoExtractTikzFigure,
             "AUTO_EXTRACT_TIKZ_FIGURE_REFLECT": self.agentConfig.toolConfig.autoExtractTikzFigureReflect,
-            "INCLUDE_TEX_COUNT": self.agentConfig.toolConfig.includeTexCount,
+            "INCLUDE_TEX_COUNT": self.agentConfig.toolConfig.attachTeXCount,
             "AUTO_CONFIRMATION": self.agentConfig.toolConfig.autoConfirmation,
             "USE_PREFILL_FROM_INPUT": self.agentConfig.toolConfig.usePrefillFromInput,
             "PRINT_INPUT_PROMPT": self.agentConfig.toolConfig.printInputPrompt,
@@ -390,7 +390,7 @@ class BaseReflectionAgent(ABC):
         toolState = ToolState.initialize()
 
         # Handle tex count if enabled
-        if self.agentConfig.toolConfig.includeTexCount:
+        if self.agentConfig.toolConfig.attachTeXCount:
             toolState.texcountStats = getTexcountStats(inputFiles)
 
         # Handle prefill from input if enabled
@@ -473,7 +473,7 @@ class BaseReflectionAgent(ABC):
 
     def __handleToolStateForOutput(self, outputFiles: list[str], currRound: int, toolState: ToolState):
         """Helper method to handle tex count and TikZ figure extraction for output files."""
-        if self.agentConfig.toolConfig.includeTexCount:
+        if self.agentConfig.toolConfig.attachTeXCount:
             toolState.texcountStats = getTexcountStats(outputFiles)
 
         if self.modelHandler.capabilities.supportsVision and self.agentConfig.toolConfig.autoExtractTikzFigureReflect:

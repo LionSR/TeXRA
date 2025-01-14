@@ -191,7 +191,7 @@ export function setupUIHandlers() {
     const autoExtractTikzFigureReflect = safeGetElementChecked(
       'autoExtractTikzFigureReflect',
     );
-    const includeTexCount = safeGetElementChecked('includeTexCount');
+    const attachTeXCount = safeGetElementChecked('attachTeXCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');
     const printInputPrompt = safeGetElementChecked('printInputPrompt');
@@ -218,7 +218,7 @@ export function setupUIHandlers() {
       autoExtractFigure: autoExtractFigure,
       autoExtractTikzFigure: autoExtractTikzFigure,
       autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
-      includeTexCount: includeTexCount,
+      attachTeXCount: attachTeXCount,
       usePrefillFromInput: usePrefillFromInput,
       autoConfirmation: autoConfirmation,
       printInputPrompt: printInputPrompt,

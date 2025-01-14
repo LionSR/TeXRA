@@ -531,7 +531,7 @@
   - Reorganized and optimized import statements
   - Created new helper functions to reduce code duplication
 - Added --autoExtractFigure option to automatically extract the list of figures from input files
-- Added --includeTexCount option to include tex count statistics in user messages
+- Added --attachTeXCount option to include tex count statistics in user messages
 - Updated CLI commands to support new options
 - Improved error handling and logging for better user feedback and debugging
 - Various minor improvements and bug fixes
