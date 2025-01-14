@@ -14,8 +14,13 @@ class ModelFactory:
     @staticmethod
     def create_handler(config: ModelConfig) -> ModelHandler:
         """Create model handler based on provider and OpenRouter configuration."""
-        # Handle OpenRouter configuration
-        if config.useOpenRouter:
+        # Use OpenRouter if model requires it or if explicitly configured
+        use_openrouter = (
+            config.openRouterOnly or 
+            (config.toolConfig and config.toolConfig.useOpenRouter)
+        )
+        
+        if use_openrouter:
             # Set OpenRouter model name if not provided
             if not config.openrouterFullName:
                 config.openrouterFullName = f"{config.provider.value}/{config.fullName}"
