@@ -44,9 +44,15 @@ export class WebviewContentProvider {
       const uiHandlersUri = webview.asWebviewUri(uiHandlersPath);
       const utilsUri = webview.asWebviewUri(utilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
+
       const agents = getConfig<string[]>('agents', []);
       const agentOptions = agents
         .map((agent) => `<option value="${agent}">${agent}</option>`)
+        .join('\n');
+
+      const models = getConfig<string[]>('models', []);
+      const modelOptions = models
+        .map((model) => `<option value="${model}">${model}</option>`)
         .join('\n');
 
       // Replace placeholders in HTML with actual content
@@ -56,6 +62,7 @@ export class WebviewContentProvider {
         .replace('${scriptUri}', scriptUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace('${agentOptions}', agentOptions)
+        .replace('${modelOptions}', modelOptions)
         .replace(/\${cspSource}/g, webview.cspSource)
         .replace('${utilsUri}', utilsUri.toString())
         .replace('${stateManagerUri}', stateManagerUri.toString())
