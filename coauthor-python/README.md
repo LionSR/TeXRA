@@ -351,14 +351,14 @@ CoAuthor supports various flags that can be used with most commands:
   - `--autoExtractFigure`: Automatically extract figures from input
   - `--autoExtractTikzFigure`: Extract and compile TikZ figures
   - `--autoExtractTikzFigureReflect`: Include TikZ reflection
-  - `--includeTexCount`: Include tex count statistics
+  - `--attachTeXCount`: Attach tex count statistics
   - `--autoConfirmation`: Automatically confirm model's questions
   - `--printInputPrompt`: Print the input prompt to an XML file
 
 Example usage:
 
 ```bash
-coauthor run polish_tex --inputFile paper.tex --reflect --autoExtractFigure --includeTexCount
+coauthor run polish_tex --inputFile paper.tex --reflect --autoExtractFigure --attachTeXCount
 ```
 
 ### Figure and TikZ Extraction
@@ -368,7 +368,7 @@ CoAuthor can automatically extract and process figures from your LaTeX documents
 - Use `--autoExtractFigure` to automatically extract the list of figures from the input file
 - Use `--autoExtractTikzFigure` to extract and compile TikZ figures from the input file
 - Use `--autoExtractTikzFigureReflect` to include TikZ reflection in the output
-- Use `--includeTexCount` to include the tex count statistics in the user message
+- Use `--attachTeXCount` to include the tex count statistics in the user message
 
 Example:
 

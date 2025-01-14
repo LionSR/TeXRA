@@ -68,7 +68,7 @@ def shared_arguments(func):
         click.option("--autoExtractFigure", is_flag=True, help="Automatically extract the list of figures from the input file"),
         click.option("--autoExtractTikzFigure", is_flag=True, help="Automatically extract TikZ figures from the input file"),
         click.option("--autoExtractTikzFigureReflect", is_flag=True, help="Include TikZ reflection in the output"),
-        click.option("--includeTexCount", is_flag=True, help="Include the tex count statistics in the user message"),
+        click.option("--attachTeXCount", is_flag=True, help="Include the tex count statistics in the user message"),
         click.option("--usePrefillFromInput", is_flag=True, help="Use the prefill from the input file"),
         click.option("--autoConfirmation", is_flag=True, help="Automatically confirm model's questions"),
         click.option("--printInputPrompt", is_flag=True, help="Print the input prompt to an XML file"),

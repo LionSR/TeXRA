@@ -78,7 +78,7 @@ def createLogEntry(agentConfig: AgentConfig, agentSetting: AgentSetting) -> int:
                     "autoExtractFigure": agentConfig.toolConfig.autoExtractFigure,
                     "autoExtractTikzFigure": agentConfig.toolConfig.autoExtractTikzFigure,
                     "autoExtractTikzFigureReflect": agentConfig.toolConfig.autoExtractTikzFigureReflect,
-                    "includeTexCount": agentConfig.toolConfig.includeTexCount,
+                    "attachTeXCount": agentConfig.toolConfig.attachTeXCount,
                     "usePrefillFromInput": agentConfig.toolConfig.usePrefillFromInput,
                     "autoConfirmation": agentConfig.toolConfig.autoConfirmation,
                 }
