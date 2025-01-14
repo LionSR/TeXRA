@@ -25,7 +25,7 @@ function updateStreamTabs(streams, activeStream) {
 
   // Update current stream name
   document.getElementById('currentStreamName').textContent = activeStream;
-  
+
   // Update status based on whether there's an active stream
   if (!activeStream) {
     updateStatus('ready');
@@ -45,12 +45,13 @@ function updateStatus(status) {
   if (status) {
     statusIndicator.classList.add(status);
     // Set tooltip text
-    const tooltipText = {
-      running: 'Task is running',
-      error: 'Task failed with error',
-      stopped: 'Task completed',
-      ready: 'Ready'
-    }[status] || 'Ready';
+    const tooltipText =
+      {
+        running: 'Task is running',
+        error: 'Task failed with error',
+        stopped: 'Task completed',
+        ready: 'Ready',
+      }[status] || 'Ready';
     statusIndicator.setAttribute('data-status', tooltipText);
 
     // Store status for current stream
@@ -75,12 +76,15 @@ function setupEventListeners() {
   document.getElementById('streamTabs').addEventListener('click', (event) => {
     const tabElement = event.target.closest('.tab');
     const deleteButton = event.target.closest('.tab-delete');
-    
+
     if (tabElement) {
       const stream = tabElement.dataset.stream;
       currentStream = stream;
       document.querySelectorAll('.tab-container').forEach((t) => {
-        t.classList.toggle('active', t.querySelector('.tab').dataset.stream === stream);
+        t.classList.toggle(
+          'active',
+          t.querySelector('.tab').dataset.stream === stream,
+        );
       });
       document.getElementById('currentStreamName').textContent = stream;
       vscode.postMessage({ command: 'switchStream', stream });
