@@ -48,9 +48,6 @@ export const MODELS = [
   'gemini2f',
   'gemini1p+',
   'gemini1f+',
-  'gemini1p+OR',
-  'gemini1f+OR',
-  'llama3+OR',
 ];
 
 export const HISTORY_DIR = 'History';
