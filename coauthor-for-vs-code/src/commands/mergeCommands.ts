@@ -51,9 +51,15 @@ async function handleMerge(
     const terminalName = `Merge@${model}`;
     const terminalNew = vscode.window.createTerminal(terminalName);
     terminalNew.show();
-    terminalNew.sendText(
-      `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`,
-    );
+
+    let command = `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`;
+    
+    // Add useOpenRouter from VS Code settings if enabled
+    if (getConfig<boolean>('useOpenRouter', false)) {
+      command += ' --useOpenRouter';
+    }
+
+    terminalNew.sendText(command);
   }
 }
 

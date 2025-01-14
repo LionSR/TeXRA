@@ -144,7 +144,6 @@ export class WebviewMessageHandler {
         usePrefillFromInput: message.usePrefillFromInput,
         autoConfirmation: message.autoConfirmation,
         printInputPrompt: message.printInputPrompt,
-        useOpenRouter: message.useOpenRouter,
       };
 
       const agentConfig: AgentConfig = {

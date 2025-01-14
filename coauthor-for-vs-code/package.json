@@ -22,6 +22,12 @@
       {
         "title": "CoAuthor",
         "properties": {
+          "coauthor.useOpenRouter": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to use OpenRouter for API calls when possible",
+            "scope": "resource"
+          },
           "coauthor.agents": {
             "type": "array",
             "items": {
@@ -410,7 +416,7 @@
             "scope": "application",
             "password": true
           },
-          "coauthor.apiKeys.openrouter": {
+          "coauthor.apiKeys.openRouter": {
             "type": "string",
             "default": "",
             "description": "OpenRouter API key for various models",
