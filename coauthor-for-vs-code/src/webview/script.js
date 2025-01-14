@@ -3,6 +3,23 @@ import { restoreState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
 
+// Add this function to handle textarea auto-resize
+function autoResizeTextarea(textarea) {
+  // Reset height to auto to get the correct scrollHeight
+  textarea.style.height = 'auto';
+  const maxHeight = 400;
+
+  // Calculate the new height
+  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+  // Set new height
+  textarea.style.height = newHeight + 'px';
+
+  // Show/hide scrollbar based on content height
+  textarea.style.overflowY =
+    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+
 window.onload = function () {
   const dataRequests = [
     'getTheme',
@@ -20,6 +37,24 @@ window.onload = function () {
 
   // Set default state for new folders
   restoreState();
+
+  // Setup auto-resize for instruction textarea
+  const instructionInput = document.getElementById('instructionInput');
+  if (instructionInput) {
+    // Initial resize
+    autoResizeTextarea(instructionInput);
+
+    // Add input and change event listeners
+    instructionInput.addEventListener('input', () => {
+      autoResizeTextarea(instructionInput);
+    });
+
+    // Handle paste events
+    instructionInput.addEventListener('paste', () => {
+      // Use setTimeout to let the paste complete
+      setTimeout(() => autoResizeTextarea(instructionInput), 0);
+    });
+  }
 };
 
 setupMessageHandlers();
