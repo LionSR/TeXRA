@@ -18,8 +18,11 @@ export class ModelFactory {
    * @throws Error if provider is unsupported
    */
   static createHandler(config: ModelConfig): ModelHandler {
-    // Handle OpenRouter configuration
-    if (config.useOpenRouter) {
+    // Use OpenRouter if model requires it or if explicitly configured in toolConfig
+    const useOpenRouter =
+      config.openRouterOnly || config.toolConfig?.useOpenRouter;
+
+    if (useOpenRouter) {
       // Set OpenRouter model name if not provided
       if (!config.openrouterFullName) {
         config.openrouterFullName = `${config.provider}/${config.fullName}`;

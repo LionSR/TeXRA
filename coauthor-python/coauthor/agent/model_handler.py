@@ -12,7 +12,7 @@ from .agent_dataclass import AgentSetting
 from .agent_config import AgentConfig
 from .agent_state import AgentStateRound, AgentStateGlobal
 
-from .model_config import ModelConfig, ModelProvider
+from .model_config import ModelConfig, ModelProvider, ToolConfig
 from .tool_state import ToolState
 
 
@@ -30,14 +30,26 @@ class ModelHandler(ABC):
 
     def __init__(self, config: ModelConfig):
         self.config = config
+        # Initialize toolConfig with defaults if not provided
+        if self.config.toolConfig is None:
+            self.config.toolConfig = ToolConfig()
         self.capabilities = config.capabilities
-        self.continueLimit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likesToAskForConfirmation else DEFAULT_CONTINUE_LIMIT
+        self.continueLimit = (
+            CONFIRMATION_CONTINUE_LIMIT 
+            if self.capabilities.likesToAskForConfirmation 
+            else DEFAULT_CONTINUE_LIMIT
+        )
         self.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT
         self.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
-        if self.config.useOpenRouter:
+        use_openrouter = (
+            self.config.openRouterOnly or 
+            (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
+        )
+        
+        if use_openrouter:
             if key := os.getenv("OPENROUTER_API_KEY"):
                 return key
             raise ValueError("Missing OPENROUTER_API_KEY in environment")
@@ -49,7 +61,12 @@ class ModelHandler(ABC):
 
     def get_base_url(self) -> str | None:
         """Get base URL based on provider and OpenRouter configuration."""
-        if self.config.useOpenRouter:
+        use_openrouter = (
+            self.config.openRouterOnly or 
+            (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
+        )
+        
+        if use_openrouter:
             return "https://openrouter.ai/api/v1"
 
         # Provider-specific base URLs
