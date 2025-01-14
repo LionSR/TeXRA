@@ -147,7 +147,12 @@ export abstract class ModelHandler {
 
   get isO1full(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
-    if (nameLowerCased.includes('o1-') || nameLowerCased.includes('o1-preview')) { return false; } 
+    if (
+      nameLowerCased.includes('o1-') ||
+      nameLowerCased.includes('o1-preview')
+    ) {
+      return false;
+    }
     return nameLowerCased.includes('o1');
   }
 

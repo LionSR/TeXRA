@@ -45,7 +45,8 @@ import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 
 const K_SLICE = 200;
-const SEPARATOR ="\n------------------------------------------------------------\n";
+const SEPARATOR =
+  '\n------------------------------------------------------------\n';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.

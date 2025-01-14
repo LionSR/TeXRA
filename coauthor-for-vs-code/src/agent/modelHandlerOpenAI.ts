@@ -104,9 +104,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add user request
       messages.push({
-        role: this.isO1Family
-          ? 'system'
-          : 'user',
+        role: this.isO1Family ? 'system' : 'user',
         content: [{ type: 'text', text: userRequest }],
       });
     }
@@ -126,9 +124,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       content.push(...this.createImageContent(figureFiles));
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.isO1Family
-      ? 'system'
-      : 'user';
+    const role = this.isO1Family ? 'system' : 'user';
     messages.push({ role, content });
     return messages;
   }
@@ -253,9 +249,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.info('End tag detected - skipping continuation');
       if (Array.isArray(messages.at(-1).content)) {
-        messages.at(-1).content[
-          messages.at(-1).content.length - 1
-        ].text = fileContent;
+        messages.at(-1).content[messages.at(-1).content.length - 1].text =
+          fileContent;
       } else {
         messages.at(-1).content = fileContent;
       }
@@ -359,11 +354,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
     if (messages.at(-1)?.role === 'user') {
       this.logger.debug('Last message is a user message');
-      if (
-        messages.at(-1)?.content.includes(
-          'Your response got cut off',
-        )
-      ) {
+      if (messages.at(-1)?.content.includes('Your response got cut off')) {
         // the second last message is an assistant message must be a assistant message
         if (messages.at(-2).role === 'assistant') {
           if (Array.isArray(messages.at(-2)?.content)) {
