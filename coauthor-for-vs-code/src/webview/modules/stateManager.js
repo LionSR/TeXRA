@@ -18,9 +18,12 @@ import { capitalize, uncapitalize } from './utils.js';
 export function setDefaultState() {
   // Hide output name override by default
   const outputNameOverride = document.getElementById('outputNameOverride');
-  const toggleOutputNameOverrideDiv = document.getElementById('toggleOutputNameOverride');
+  const toggleOutputNameOverrideDiv = document.getElementById(
+    'toggleOutputNameOverride',
+  );
   if (outputNameOverride) outputNameOverride.style.display = 'none';
-  if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '>';
+  if (toggleOutputNameOverrideDiv)
+    toggleOutputNameOverrideDiv.textContent = '>';
 
   // Initialize auto-extract toggle with empty circle
   const autoExtractToggle = safeGetElementById('toggleAutoExtract');
@@ -98,14 +101,21 @@ export function restoreState() {
     });
 
     const outputNameOverride = document.getElementById('outputNameOverride');
-    const toggleOutputNameOverrideDiv = document.getElementById('toggleOutputNameOverride');
+    const toggleOutputNameOverrideDiv = document.getElementById(
+      'toggleOutputNameOverride',
+    );
     if (previousState.outputNameOverrideVisible) {
       if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-      if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '<';
-      safeSetElementValue('outputNameOverride', previousState.outputNameOverride || '');
+      if (toggleOutputNameOverrideDiv)
+        toggleOutputNameOverrideDiv.textContent = '<';
+      safeSetElementValue(
+        'outputNameOverride',
+        previousState.outputNameOverride || '',
+      );
     } else {
       if (outputNameOverride) outputNameOverride.style.display = 'none';
-      if (toggleOutputNameOverrideDiv) toggleOutputNameOverrideDiv.textContent = '>';
+      if (toggleOutputNameOverrideDiv)
+        toggleOutputNameOverrideDiv.textContent = '>';
     }
   } else {
     // If there's no previous state, set to default
@@ -119,7 +129,8 @@ export function restoreState() {
 export function saveState() {
   const state = {
     outputNameOverrideVisible:
-      safeGetElementById('outputNameOverride')?.style.display === 'inline-block',
+      safeGetElementById('outputNameOverride')?.style.display ===
+      'inline-block',
     outputNameOverride: safeGetElementValue('outputNameOverride'),
   };
 
