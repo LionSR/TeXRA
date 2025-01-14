@@ -281,19 +281,6 @@ body {
   margin-right: 5px;
 }
 
-/* Remove these conflicting styles */
-.full-width-button {
-  width: auto;
-  text-align: left;
-}
-
-/* Ensure consistent styling for all buttons */
-.file-select-actions .action-button,
-.button-container .action-button {
-  font-size: calc(var(--vscode-font-size) * 0.9);
-  white-space: nowrap;
-}
-
 .file-select label {
   display: block;
   margin-bottom: 2px;
@@ -449,33 +436,16 @@ body {
   flex-wrap: wrap; /* Allow wrapping if space is limited */
 }
 
-.checkbox-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-}
-
-.checkbox-grid label {
-  display: flex;
-  align-items: center;
-  font-size: var(--vscode-font-size);
-}
-
-.checkbox-grid input[type='checkbox'] {
-  margin-right: 5px;
-}
-
 .execute-column {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 .execute-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  margin-top: 10px;
 }
 
 #executeButton {
@@ -549,11 +519,6 @@ button .fas {
   font-size: 0.9em;
 }
 
-.checkbox-grid .fas {
-  font-size: 0.9em;
-  color: var(--vscode-checkbox-foreground);
-}
-
 .file-select-header label .fas,
 .instruction-header label .fas {
   margin-right: 5px;
@@ -570,57 +535,27 @@ button .fas {
 
 .tool-use-execute {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 10px;
+  gap: 10px;
 }
 
-.checkbox-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-}
-
-.checkbox-grid label {
-  display: flex;
-  align-items: center;
-  font-size: var(--vscode-font-size);
-}
-
-.checkbox-grid input[type='checkbox'] {
-  margin-right: 5px;
-}
-
-.auto-toggle {
-  cursor: pointer;
-  user-select: none;
-  color: var(--vscode-foreground);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  font-size: var(--vscode-font-size);
-  border-radius: var(--border-radius);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-button-border);
-  transition: background-color 0.2s;
+.tool-use-options {
   position: relative;
 }
 
-.auto-toggle:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+/* Update the execute-row styles */
+.execute-row {
+  display: flex;
+  align-items: center;
 }
 
-.auto-toggle i {
-  font-size: 0.8em;
-  color: var(--vscode-foreground);
-  margin-left: 1px;
-}
-
+/* Update auto-extract-options to accommodate both dropdowns */
 .auto-extract-options {
   position: absolute;
   top: 100%;
-  right: 0;
+  left: 0; /* Changed from right: 0 to left: 0 for consistency */
   z-index: 100;
   margin-top: 2px;
   background: var(--vscode-menu-background);
@@ -736,4 +671,200 @@ button .fas {
 .file-select:has(#multipleOutputFilesContainer[style*='none'])
   #selectMultipleOutputFilesButton {
   display: none;
+}
+
+.auto-toggle {
+  cursor: pointer;
+  user-select: none;
+  color: var(--vscode-foreground);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  font-size: var(--vscode-font-size);
+  border-radius: var(--border-radius);
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-border);
+  transition: background-color 0.2s;
+  position: relative;
+  pointer-events: none;
+}
+
+#toggleAutoExtract,
+#toggleToolUse {
+  pointer-events: auto;
+}
+
+.auto-toggle i {
+  font-size: 0.8em;
+  color: var(--vscode-foreground);
+  margin-left: 1px;
+  pointer-events: none;
+}
+
+/* Dropdown positioning containers */
+.dropdown-container {
+  position: relative;
+}
+
+.dropdown-right .auto-extract-options {
+  right: 0;
+  left: auto;
+}
+
+.dropdown-left .auto-extract-options {
+  left: 0;
+  right: auto;
+}
+
+.auto-extract-options {
+  position: absolute;
+  top: 100%;
+  z-index: 100;
+  margin-top: 2px;
+  background: var(--vscode-menu-background);
+  border: 1px solid var(--vscode-menu-border);
+  border-radius: var(--border-radius);
+  box-shadow: var(--vscode-widget-shadow);
+  min-width: 200px;
+  display: none;
+  font-size: calc(var(--vscode-font-size) * 0.9);
+  padding: 4px;
+  white-space: nowrap;
+}
+
+.auto-extract-options-content {
+  background: var(--vscode-menu-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: var(--border-radius);
+  box-shadow: inset 0 0 0 1px var(--vscode-menu-border);
+}
+
+.auto-extract-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  border-radius: calc(var(--border-radius) - 1px);
+  font-weight: normal;
+}
+
+.auto-extract-options label:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.auto-extract-options input[type='checkbox'] {
+  margin: 0;
+}
+
+.auto-extract-options i {
+  width: 16px;
+  text-align: center;
+  color: var(--vscode-textLink-foreground);
+  opacity: 0.8;
+}
+
+.file-select-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.optional-label {
+  color: var(--vscode-foreground);
+  font-weight: normal;
+  font-size: var(--vscode-font-size);
+  white-space: nowrap;
+  min-width: 160px;
+}
+
+.input-container {
+  width: 100%;
+  margin: 5px 0;
+}
+
+.vscode-input {
+  width: 100%;
+  height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 3px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.vscode-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.vscode-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.multiple-files-content .vscode-input {
+  margin: 0;
+  width: 100%;
+}
+
+/* When toggled (input is visible), make the label more prominent */
+.file-select-label-group:has(.vscode-input[style*='inline-block'])
+  .optional-label,
+.file-select-label-group:has(.vscode-input[style*='inline-block']) .toggle-icon,
+.file-select:has(.multiple-files-container[style*='block']) .optional-label,
+.file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
+  color: var(--vscode-foreground);
+  opacity: 1;
+}
+
+/* Add these styles */
+.file-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Add this specific selector for Multiple Output Files section */
+.file-select:has(#multipleOutputFilesContainer[style*='none'])
+  #emptyMultipleOutputFilesButton,
+.file-select:has(#multipleOutputFilesContainer[style*='none'])
+  #selectMultipleOutputFilesButton {
+  display: none;
+}
+
+.auto-toggle {
+  cursor: pointer;
+  user-select: none;
+  color: var(--vscode-foreground);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  font-size: var(--vscode-font-size);
+  border-radius: var(--border-radius);
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-border);
+  transition: background-color 0.2s;
+  pointer-events: none;
+}
+
+#toggleAutoExtract,
+#toggleToolUse {
+  pointer-events: auto;
+}
+
+.auto-toggle i {
+  font-size: 0.8em;
+  color: var(--vscode-foreground);
+  margin-left: 1px;
+  pointer-events: none;
+}
+
+.auto-toggle:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
 }

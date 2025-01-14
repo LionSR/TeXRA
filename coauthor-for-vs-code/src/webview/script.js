@@ -61,4 +61,72 @@ setupMessageHandlers();
 
 document.addEventListener('DOMContentLoaded', function () {
   setupUIHandlers();
+
+  // Tool Use dropdown toggle
+  const toggleToolUse = document.getElementById('toggleToolUse');
+  const toolUseOptions = document.getElementById('toolUseOptions');
+
+  if (toggleToolUse && toolUseOptions) {
+    // Initial state
+    updateToolUseToggleState();
+
+    toggleToolUse.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toolUseOptions.style.display =
+        toolUseOptions.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    const toolUseOptions = document.getElementById('toolUseOptions');
+    const autoExtractOptions = document.getElementById('autoExtractOptions');
+    const toggleToolUse = document.getElementById('toggleToolUse');
+    const toggleAutoExtract = document.getElementById('toggleAutoExtract');
+
+    if (
+      !toggleToolUse?.contains(e.target) &&
+      !toolUseOptions?.contains(e.target)
+    ) {
+      toolUseOptions.style.display = 'none';
+    }
+    if (
+      !toggleAutoExtract?.contains(e.target) &&
+      !autoExtractOptions?.contains(e.target)
+    ) {
+      autoExtractOptions.style.display = 'none';
+    }
+  });
+
+  // Update checkbox states in toggle button
+  function updateToolUseToggleState() {
+    const toggleToolUse = document.getElementById('toggleToolUse');
+    const checkboxes = [
+      'attachTeXCount',
+      'usePrefillFromInput',
+      'printInputPrompt',
+      'autoConfirmation',
+    ];
+
+    const checkedCount = checkboxes.filter(
+      (id) => document.getElementById(id)?.checked,
+    ).length;
+
+    if (toggleToolUse) {
+      toggleToolUse.innerHTML = `Tool Use ${checkedCount > 0 ? '●' : '○'}<i class="fa-solid fa-angle-down"></i>`;
+    }
+  }
+
+  // Add change listeners to all tool use checkboxes
+  [
+    'attachTeXCount',
+    'usePrefillFromInput',
+    'printInputPrompt',
+    'autoConfirmation',
+  ].forEach((id) => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) {
+      checkbox.addEventListener('change', updateToolUseToggleState);
+    }
+  });
 });

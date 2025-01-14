@@ -14,7 +14,6 @@ export const CHECK_BOXES = [
   'usePrefillFromInput',
   'printInputPrompt',
   'autoConfirmation',
-  'useOpenRouter',
 ];
 
 export const VALUE_ELEMENTS = [
