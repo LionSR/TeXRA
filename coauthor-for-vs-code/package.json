@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.17.6",
+  "version": "0.17.7",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -513,6 +513,14 @@
       {
         "command": "coauthor.testYamlBrackets",
         "title": "CoAuthor: Test YAML Bracket Handling"
+      },
+      {
+        "command": "coauthor.stopAgent",
+        "title": "CoAuthor: Stop Agent"
+      },
+      {
+        "command": "coauthor.execute",
+        "title": "CoAuthor: Execute"
       }
     ],
     "viewsContainers": {
