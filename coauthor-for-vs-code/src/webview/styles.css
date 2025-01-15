@@ -136,6 +136,7 @@ body {
   flex: 1;
   min-width: 0;
   min-height: 24px;
+  position: relative;
 }
 
 .file-select-label-group .vscode-input {
@@ -491,26 +492,7 @@ body {
   height: 24px;
 }
 
-.toggle-icon::after {
-  content: 'Multiple';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 0.8em;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-}
 
-.toggle-icon:hover::after {
-  opacity: 1;
-}
 
 .fas {
   margin-right: 5px;
@@ -873,4 +855,19 @@ button .fas {
 
 .auto-toggle:hover {
   background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.file-select-label-group:hover::after {
+  content: attr(title);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  white-space: nowrap;
+  z-index: 1000;
 }
