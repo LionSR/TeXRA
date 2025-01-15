@@ -69,7 +69,7 @@ def getAgentClass(settings: dict) -> type[BaseReflectionAgent]:
     return DirectAgent if settings.get("agentType") == "direct" else CoTAgent
 
 
-def run_agent(agent: str, **kwargs: Any) -> None:
+def runAgent(agent: str, **kwargs: Any) -> None:
     """Initialize and run the specified agent with given configuration."""
     agentName = getAgentName(agent, kwargs.get("outputFiles"))
     agentPath = getAgentPath(agentName)
@@ -100,7 +100,7 @@ def run_agent(agent: str, **kwargs: Any) -> None:
     agent_instance.run()
 
 
-def run_merge_agent(model: str, inputFile: str, editedFile: str) -> None:
+def runMergeAgent(model: str, inputFile: str, editedFile: str) -> None:
     """Initialize and run merge agent to handle file merging operations."""
     agentConfig = createAgentConfig(agent="merge", model=model, inputFile=inputFile, editedFile=editedFile)
 

@@ -8,7 +8,7 @@ from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
 from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_datetime
 
 
-def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str | None = None) -> None:
+def runPackSingle(model: str, inputFile: str, agent: str, output_folder: str | None = None) -> None:
     """Pack LaTeX files and related outputs into timestamped history directory, cleaning temp files."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
     inputDir = os.path.dirname(inputFile)
@@ -54,7 +54,7 @@ def run_pack_single(model: str, inputFile: str, agent: str, output_folder: str |
     return output_folder
 
 
-def run_pack_multiple(model: str, inputFile: str, inputFiles: list[str], agent: str, outputNameOverride: str | None = None) -> None:
+def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: str, outputNameOverride: str | None = None) -> None:
     """Pack multiple LaTeX files and their outputs into a single history directory."""
     # Initialize baseName and output_dir
     if outputNameOverride:
@@ -82,7 +82,7 @@ def run_pack_multiple(model: str, inputFile: str, inputFiles: list[str], agent: 
     # Pack input files
     for inputFile in inputFiles:
         logger.info(f"\nPacking files to: {common_output_folder}")
-        run_pack_single(model, inputFile, agent, output_folder=common_output_folder)
+        runPackSingle(model, inputFile, agent, output_folder=common_output_folder)
 
     # Pack additional XML files
     for pattern in additional_patterns:

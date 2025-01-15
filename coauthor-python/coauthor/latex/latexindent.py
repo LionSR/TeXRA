@@ -5,7 +5,7 @@ import glob
 from ..logger import logger
 
 
-def run_latexindent(filePath: str) -> bool:
+def runLatexindent(filePath: str) -> bool:
     """Run latexindent on a LaTeX file and clean up backup files."""
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
     command = ["latexindent", filePath, "-w", "-s"]

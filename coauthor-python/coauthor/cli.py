@@ -8,19 +8,19 @@ from coauthor.latex import (
 )
 from coauthor.latex import runLatexdiff, runLatexdiffvc, runLatexdiffvc_multiple, getTexcount
 from coauthor.housekeeping import (
-    run_clean_single,
-    run_pack_single,
-    run_clean_build,
-    run_indent_tex,
-    run_clean_output,
-    run_clean_multiple,
-    run_pack_multiple,
-    run_pack_latexdiff_vc,
-    run_pack_latexdiff_vc_multiple,
+    runCleanSingle,
+    runPackSingle,
+    runCleanBuild,
+    runIndentTex,
+    runCleanOutput,
+    runCleanMultiple,
+    runPackMultiple,
+    runPaclLatexdiffvc,
+    runPaclLatexdiffvcMultiple,
 )
 from coauthor.logger import logger
 
-from coauthor.execute import run_agent, run_merge_agent
+from coauthor.execute import runAgent, runMergeAgent
 
 # Add the parent directory to the system path for the windows users
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -92,7 +92,7 @@ def cli():
 @click.option("--editedFile", required=True, help="Path to the edited file")
 def merge(model, inputFile, editedFile):
     """Run merge agent from CLI"""
-    run_merge_agent(model, inputFile, editedFile)
+    runMergeAgent(model, inputFile, editedFile)
 
 
 @cli.command()
@@ -101,7 +101,7 @@ def merge(model, inputFile, editedFile):
 def run(agent: str, **kwargs):
     """Run any agent except merge from CLI"""
     print(kwargs)
-    run_agent(agent, **kwargs)
+    runAgent(agent, **kwargs)
 
 
 # Housekeeping operations
@@ -109,17 +109,17 @@ def run(agent: str, **kwargs):
 
 @cli.command()
 def clean_output():
-    run_clean_output()
+    runCleanOutput()
 
 
 @cli.command()
 def clean_build():
-    run_clean_build()
+    runCleanBuild()
 
 
 @cli.command()
 def indent_tex():
-    run_indent_tex()
+    runIndentTex()
 
 
 @cli.command()
@@ -127,7 +127,7 @@ def indent_tex():
 @click.option("--model", required=False, default="sonnet+", help="Model to use")
 @click.option("--inputFile", required=True, help="Path to the input file")
 def clean_single(model, inputFile, agent):
-    run_clean_single(model, inputFile, agent)
+    runCleanSingle(model, inputFile, agent)
 
 
 @cli.command()
@@ -136,7 +136,7 @@ def clean_single(model, inputFile, agent):
 @click.option("--inputFile", required=True, help="Path to the input file")
 @click.option("--outputNameOverride", type=str, default=None, help="Override base output name")
 def pack_single(model, inputFile, agent, outputNameOverride):
-    run_pack_single(model, inputFile, agent, outputNameOverride)
+    runPackSingle(model, inputFile, agent, outputNameOverride)
 
 
 @cli.command()
@@ -145,7 +145,7 @@ def pack_single(model, inputFile, agent, outputNameOverride):
 @click.option("--inputFile", required=True, help="Path to the input file")
 @click.option("--inputFiles", required=True, help="Paths to the input files")
 def clean_multiple(model, inputFile, inputFiles, agent):
-    run_clean_multiple(model, inputFile, inputFiles, agent)
+    runCleanMultiple(model, inputFile, inputFiles, agent)
 
 
 @cli.command()
@@ -155,7 +155,7 @@ def clean_multiple(model, inputFile, inputFiles, agent):
 @click.option("--inputFiles", required=True, help="Paths to the input files")
 @click.option("--outputNameOverride", type=str, default=None, help="Override base output name")
 def pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride):
-    run_pack_multiple(model, inputFile, inputFiles, agent, outputNameOverride)
+    runPackMultiple(model, inputFile, inputFiles, agent, outputNameOverride)
 
 
 @cli.command()
@@ -191,7 +191,7 @@ def latexdiff_vc_multiple(inputFiles, commitHash):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
 def pack_latexdiff_vc(inputFile, commitHash, clean):
-    run_pack_latexdiff_vc(inputFile, commitHash, clean)
+    runPaclLatexdiffvc(inputFile, commitHash, clean)
 
 
 @cli.command()
@@ -199,7 +199,7 @@ def pack_latexdiff_vc(inputFile, commitHash, clean):
 @click.option("--commitHash", required=True, help="Commit hash to compare against")
 @click.option("--clean", is_flag=True, default=False, help="Clean files without packing")
 def pack_latexdiff_vc_multiple(inputFiles, commitHash, clean):
-    run_pack_latexdiff_vc_multiple(inputFiles, commitHash, clean)
+    runPaclLatexdiffvcMultiple(inputFiles, commitHash, clean)
 
 
 @cli.command()
