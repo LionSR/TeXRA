@@ -6,8 +6,8 @@ from ..utils.exec import executeCommand
 
 def compile_latex_to_pdf(latexFile: str) -> bool:
     """Compile a LaTeX file to PDF using pdflatex."""
-    output_directory = os.path.dirname(latexFile)
-    command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + output_directory, latexFile]
+    outputDirectory = os.path.dirname(latexFile)
+    command = ["pdflatex", "-interaction=nonstopmode", "-output-directory=" + outputDirectory, latexFile]
 
     try:
         success, stdout, stderr = executeCommand(command, captureOutput=True)
