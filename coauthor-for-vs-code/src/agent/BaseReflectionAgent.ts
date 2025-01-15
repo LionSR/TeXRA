@@ -70,6 +70,10 @@ export abstract class BaseReflectionAgent {
   protected outputHandler: OutputHandler;
   /** Cached user variables to avoid recomputation */
   protected userVars: Record<string, any>;
+  private isInterrupted: boolean = false;
+
+  // Static map to track running agents by their stream ID
+  private static runningAgents: Map<string, BaseReflectionAgent> = new Map();
 
   constructor(
     modelHandler: ModelHandler,
@@ -129,6 +133,9 @@ export abstract class BaseReflectionAgent {
     );
 
     this.logger.info(`Processing file: ${this.agentConfig.inputFile}`);
+
+    // Register this agent instance
+    BaseReflectionAgent.runningAgents.set(channelId, this);
   }
 
   /**
@@ -437,6 +444,11 @@ export abstract class BaseReflectionAgent {
     let endTurn = false;
 
     while (!endTurn) {
+      // Check for interruption before each cycle
+      if (this.checkInterruption()) {
+        return [stateRound, stateGlobal, toolState, true];
+      }
+
       const exists = await fileExists(outputFile);
       const startTime = Date.now();
       const systemPrompt = await renderPrompt(
@@ -943,19 +955,23 @@ export abstract class BaseReflectionAgent {
    * Manages initial processing and optional reflection rounds.
    */
   public async run(): Promise<void> {
-    // this.logger.info(SEPARATOR);
-    const [stateRound, stateGlobal, messages, endTurn, toolState] =
-      await this.process();
+    try {
+      this.logger.info(SEPARATOR);
+      const [stateRound, stateGlobal, messages, endTurn, toolState] =
+        await this.process();
+      this.logger.info(`Round 0 completed\n`);
+      this.logger.info(SEPARATOR);
 
-    // this.logger.info(`Round 0 completed\n`);
-    // this.logger.info(SEPARATOR);
-
-    if (this.agentConfig.reflect && endTurn) {
-      // Create a new ToolState for reflection round
-      const toolStateReflection = ToolState.initialize();
-      await this.reflect(stateGlobal, messages, toolStateReflection);
-      // this.logger.info(`Round 1 completed\n`);
-      // this.logger.info(SEPARATOR);
+      // Check for interruption before reflection
+      if (!this.isInterrupted && this.agentConfig.reflect && endTurn) {
+        const toolStateReflection = ToolState.initialize();
+        await this.reflect(stateGlobal, messages, toolStateReflection);
+        this.logger.info(`Round 1 completed\n`);
+        this.logger.info(SEPARATOR);
+      }
+    } finally {
+      // Always clean up, whether execution completed or was interrupted
+      this.cleanup();
     }
   }
 
@@ -1029,5 +1045,41 @@ export abstract class BaseReflectionAgent {
     }
 
     await this.outputHandler.handleLatexdiff(currRound);
+  }
+
+  /**
+   * Interrupts the agent's execution
+   */
+  public interrupt(): void {
+    this.isInterrupted = true;
+    this.logger.info('Agent execution interrupted by user');
+  }
+
+  /**
+   * Checks if the agent should stop due to interruption
+   */
+  private checkInterruption(): boolean {
+    if (this.isInterrupted) {
+      this.logger.info('Stopping due to user interruption');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Gets a running agent by its stream ID
+   */
+  public static getRunningAgent(
+    streamId: string,
+  ): BaseReflectionAgent | undefined {
+    return BaseReflectionAgent.runningAgents.get(streamId);
+  }
+
+  /**
+   * Removes a running agent from tracking
+   */
+  private cleanup(): void {
+    const channelId = this.getTaskId();
+    BaseReflectionAgent.runningAgents.delete(channelId);
   }
 }
