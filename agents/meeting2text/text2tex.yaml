@@ -3,6 +3,7 @@ settings:
   documentTag: latex_document
   endTag: </latex_document>
   outputExt: tex
+  isRewrite: false
   prefills:
     - <scratchpad>
     - <scratchpad>

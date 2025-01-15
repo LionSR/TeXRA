@@ -3,6 +3,7 @@ name: txt2tex
 settings:
   documentTag: txt_content
   endTag: </latex_document>
+  isRewrite: false
   outputExt: tex
   prefills:
     - <latex_document> \chapter

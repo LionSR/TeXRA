@@ -2,6 +2,7 @@ name: translate2chn
 settings:
   documentTag: latex_document
   endTag: </latex_document>
+  isRewrite: false
   outputExt: tex
   prefills:
     - <scratchpad>
