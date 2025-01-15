@@ -521,6 +521,14 @@
       {
         "command": "coauthor.execute",
         "title": "CoAuthor: Execute"
+      },
+      {
+        "command": "coauthor.pack",
+        "title": "CoAuthor: Pack Files"
+      },
+      {
+        "command": "coauthor.clean",
+        "title": "CoAuthor: Clean Files"
       }
     ],
     "viewsContainers": {

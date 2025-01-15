@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 // Local imports - webview
 import { LogViewContentProvider } from './LogViewContentProvider';
 import { LogViewMessageHandler } from './LogViewMessageHandler';
+import { TaskState, fromObject } from './TaskState';
+import { AgentLogger } from './AgentLogger';
 
 interface ColoredLogMessage {
   message: string;
@@ -16,11 +18,14 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'TestCommands',
   'fileSelectionCommands',
   'packCommands',
+  'cleanCommands',
   'MessageHandler',
   'AgentLoad',
   'Housekeeping',
   'LaTeXCommands',
   'Utils',
+  'LogViewProvider',
+  'executeAgent',
 ]);
 
 // Channels that should not be persisted in workspace storage
@@ -33,6 +38,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private readonly _contentProvider: LogViewContentProvider;
   private readonly _messageHandler: LogViewMessageHandler;
   private readonly _storageKey = 'coauthor.logStreams';
+  private readonly _taskStateKey = 'coauthor.taskStates';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
@@ -41,6 +47,8 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     new Map();
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'coauthor.activeLogStream';
+  private _taskStates: Map<string, TaskState> = new Map();
+  private readonly logger: AgentLogger;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -51,6 +59,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._contentProvider = new LogViewContentProvider(context);
     this._messageHandler = new LogViewMessageHandler(this);
     this._loadState();
+    this.logger = new AgentLogger('LogViewProvider');
 
     // Set instance
     LogViewProvider._instance = this;
@@ -111,6 +120,21 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     } else {
       this._activeStream = Array.from(this._logStreams.keys())[0] || '';
     }
+
+    // Load task states
+    const savedTaskStates = this.context.workspaceState.get<{
+      [key: string]: Record<string, any>;
+    }>(this._taskStateKey);
+    if (savedTaskStates) {
+      this._taskStates = new Map(
+        Object.entries(savedTaskStates).map(([stream, state]) => [
+          stream,
+          fromObject(state),
+        ]),
+      );
+    } else {
+      this._taskStates.clear();
+    }
   }
 
   private _saveState() {
@@ -126,6 +150,10 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._activeStreamKey,
       this._activeStream,
     );
+
+    // Save task states
+    const taskStatesObj = Object.fromEntries(this._taskStates.entries());
+    this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -306,6 +334,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   public deleteAllStreams() {
     this._logStreams.clear();
+    this._taskStates.clear();
     this._saveState();
     if (this._view) {
       this._view.webview.postMessage({ command: 'clearLogs' });
@@ -316,6 +345,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   public deleteStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._logStreams.delete(stream);
+      this._taskStates.delete(stream);
       this._saveState();
       this._updateWebview();
     }
@@ -341,5 +371,43 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._saveState();
       this._updateWebview();
     }
+  }
+
+  public setTaskState(streamId: string, taskState: TaskState): void {
+    this.logger.debug(`Setting task state for stream: ${streamId}`);
+    this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
+    this._taskStates.set(streamId, taskState);
+    this.saveTaskStates();
+    this.logger.debug(
+      `Current task states: ${JSON.stringify(Array.from(this._taskStates.entries()))}`,
+    );
+  }
+
+  public getTaskState(streamId: string): TaskState | undefined {
+    this.logger.debug(`Getting task state for stream: ${streamId}`);
+    const taskState = this._taskStates.get(streamId);
+    if (!taskState) {
+      this.logger.warn(`No task state found for stream: ${streamId}`);
+    } else {
+      this.logger.debug(`Found task state: ${JSON.stringify(taskState)}`);
+    }
+    return taskState;
+  }
+
+  private loadTaskStates(): void {
+    this.logger.debug('Loading task states from workspace state');
+    const savedTaskStates =
+      this.context.workspaceState.get<[string, TaskState][]>(
+        this._taskStateKey,
+      ) || [];
+    this.logger.debug(`Loaded task states: ${JSON.stringify(savedTaskStates)}`);
+    this._taskStates = new Map(savedTaskStates);
+  }
+
+  private saveTaskStates(): void {
+    this.logger.debug('Saving task states to workspace state');
+    const taskStatesArray = Array.from(this._taskStates.entries());
+    this.logger.debug(`Saving task states: ${JSON.stringify(taskStatesArray)}`);
+    this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
   }
 }
