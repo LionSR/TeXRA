@@ -109,7 +109,9 @@ body {
   font-size: calc(var(--vscode-font-size) * 0.9);
   white-space: nowrap;
   min-width: 120px;
-  min-height: 24px;
+  display: flex;
+  align-items: center;
+  height: 24px;
   opacity: 0.7;
 }
 
@@ -129,17 +131,18 @@ body {
 .file-select-label-group {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 0px;
   flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
+  min-height: 24px;
 }
 
 .file-select-label-group .vscode-input {
   flex: 1;
   min-width: 0;
   height: 24px;
-  margin: 0 0 0 5px;
+  margin: 0;
   padding: 4px 8px;
   box-sizing: border-box;
   background-color: var(--vscode-input-background);
@@ -483,6 +486,9 @@ body {
   padding: 0 2px;
   color: var(--vscode-descriptionForeground);
   opacity: 0.8;
+  display: flex;
+  align-items: center;
+  height: 24px;
 }
 
 .toggle-icon::after {
