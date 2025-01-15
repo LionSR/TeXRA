@@ -5,7 +5,7 @@ from ..logger import logger
 from ..utils.file import deleteFile, moveFile, findFile
 
 from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
-from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_datetime
+from .utils import getAgent_first_name_chunk, get_file_patterns, getFolderDatetime
 
 
 def runPackSingle(model: str, inputFile: str, agent: str, outputFolder: str | None = None) -> None:
@@ -32,7 +32,7 @@ def runPackSingle(model: str, inputFile: str, agent: str, outputFolder: str | No
     # this includes the original input file, f"{base}_{agent}_r{round}_{model}",
     # so even if no output file from llm is genereated, the output folder will still be created
     if moved_files or copied_files:
-        now = get_folder_datetime(inputDir, file_patterns, PACK_EXTENSIONS)
+        now = getFolderDatetime(inputDir, file_patterns, PACK_EXTENSIONS)
         if outputFolder is None:
             outputFolder = os.path.join(inputDir, HISTORY_DIR, f"{now}_{baseName}_{agent}_{model}")
         os.makedirs(outputFolder, exist_ok=True)
@@ -56,15 +56,10 @@ def runPackSingle(model: str, inputFile: str, agent: str, outputFolder: str | No
 
 def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: str, outputNameOverride: str | None = None) -> None:
     """Pack multiple LaTeX files and their outputs into a single history directory."""
-    # Initialize baseName and output_dir
-    if outputNameOverride:
-        baseName = os.path.splitext(os.path.basename(outputNameOverride))[0]
-        output_dir = os.path.dirname(outputNameOverride)
-    elif inputFile:
-        baseName = os.path.splitext(os.path.basename(inputFile))[0]
-        output_dir = os.path.dirname(inputFile)
-    else:
-        raise ValueError("Either inputFile or outputNameOverride must be provided")
+    # Initialize baseName and outputDir
+    fileToPack = outputNameOverride or inputFile
+    baseName = os.path.splitext(os.path.basename(fileToPack))[0]
+    outputDir = os.path.dirname(fileToPack)
 
     agent_first_name_chunk = getAgent_first_name_chunk(agent)
     file_patterns = get_file_patterns(baseName, model, agent_first_name_chunk)
@@ -73,8 +68,8 @@ def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: st
     additional_patterns = [f"{baseName}_{agent_first_name_chunk}_r0_{model}.xml", f"{baseName}_{agent_first_name_chunk}_r1_{model}.xml"]
     file_patterns.extend(additional_patterns)
 
-    now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
-    commonOutputFolder = os.path.join(output_dir, HISTORY_DIR, f"{now}_{baseName}_multiple_{agent}_{model}")
+    now = getFolderDatetime(outputDir, file_patterns, PACK_EXTENSIONS)
+    commonOutputFolder = os.path.join(outputDir, HISTORY_DIR, f"{now}_{baseName}_multiple_{agent}_{model}")
 
     # Ensure the output folder exists
     os.makedirs(commonOutputFolder, exist_ok=True)
@@ -86,7 +81,7 @@ def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: st
 
     # Pack additional XML files
     for pattern in additional_patterns:
-        filePath = os.path.join(output_dir, pattern)
+        filePath = os.path.join(outputDir, pattern)
         if os.path.exists(filePath):
             moveFile(filePath, commonOutputFolder)
 
