@@ -11,7 +11,7 @@ def runPaclLatexdiffvc(inputFile: str, commitHash: str, clean: bool = False) -> 
     """Pack or clean latexdiff-vc output files into timestamped directory or remove them."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
     inputDir = os.path.dirname(inputFile)
-    output_folder = None if clean else os.path.join(inputDir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{baseName}_{commitHash}")
+    outputFolder = None if clean else os.path.join(inputDir, "Diffs", f"{datetime.now().strftime('%Y%m%d%H%M')}_{baseName}_{commitHash}")
 
     file_patterns = [f"{baseName}-diff{commitHash}"]
     files_to_process = []
@@ -33,14 +33,14 @@ def runPaclLatexdiffvc(inputFile: str, commitHash: str, clean: bool = False) -> 
                 deleteFile(filePath)
             logger.info("Cleanup finished")
         else:  # move files to output folder
-            os.makedirs(output_folder, exist_ok=True)
+            os.makedirs(outputFolder, exist_ok=True)
             for filePath in files_to_process:
-                moveFile(filePath, output_folder)
+                moveFile(filePath, outputFolder)
 
             for filePath in files_to_delete:
                 deleteFile(filePath)
 
-            logger.info(f"Files packed to: {output_folder}")
+            logger.info(f"Files packed to: {outputFolder}")
     else:
         logger.warning("No files found to process.")
 

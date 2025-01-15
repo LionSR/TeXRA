@@ -8,7 +8,7 @@ from .constants import PACK_EXTENSIONS, TEMP_EXTENSIONS, HISTORY_DIR
 from .utils import getAgent_first_name_chunk, get_file_patterns, get_folder_datetime
 
 
-def runPackSingle(model: str, inputFile: str, agent: str, output_folder: str | None = None) -> None:
+def runPackSingle(model: str, inputFile: str, agent: str, outputFolder: str | None = None) -> None:
     """Pack LaTeX files and related outputs into timestamped history directory, cleaning temp files."""
     baseName = os.path.splitext(os.path.basename(inputFile))[0]
     inputDir = os.path.dirname(inputFile)
@@ -33,16 +33,16 @@ def runPackSingle(model: str, inputFile: str, agent: str, output_folder: str | N
     # so even if no output file from llm is genereated, the output folder will still be created
     if moved_files or copied_files:
         now = get_folder_datetime(inputDir, file_patterns, PACK_EXTENSIONS)
-        if output_folder is None:
-            output_folder = os.path.join(inputDir, HISTORY_DIR, f"{now}_{baseName}_{agent}_{model}")
-        os.makedirs(output_folder, exist_ok=True)
+        if outputFolder is None:
+            outputFolder = os.path.join(inputDir, HISTORY_DIR, f"{now}_{baseName}_{agent}_{model}")
+        os.makedirs(outputFolder, exist_ok=True)
         for filePath in moved_files:
-            moveFile(filePath, output_folder)
+            moveFile(filePath, outputFolder)
         for filePath in copied_files:
-            shutil.copy(filePath, output_folder)
+            shutil.copy(filePath, outputFolder)
             logger.info(f"Copied file: {filePath}")
 
-        logger.info(f"Files packed to: {output_folder}")
+        logger.info(f"Files packed to: {outputFolder}")
 
     for pattern in file_patterns:
         for ext in TEMP_EXTENSIONS:
@@ -51,7 +51,7 @@ def runPackSingle(model: str, inputFile: str, agent: str, output_folder: str | N
                 deleteFile(filePath)
 
     logger.info(f"Packing finished: {inputFile}.")
-    return output_folder
+    return outputFolder
 
 
 def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: str, outputNameOverride: str | None = None) -> None:
@@ -74,21 +74,21 @@ def runPackMultiple(model: str, inputFile: str, inputFiles: list[str], agent: st
     file_patterns.extend(additional_patterns)
 
     now = get_folder_datetime(output_dir, file_patterns, PACK_EXTENSIONS)
-    common_output_folder = os.path.join(output_dir, HISTORY_DIR, f"{now}_{baseName}_multiple_{agent}_{model}")
+    commonOutputFolder = os.path.join(output_dir, HISTORY_DIR, f"{now}_{baseName}_multiple_{agent}_{model}")
 
     # Ensure the output folder exists
-    os.makedirs(common_output_folder, exist_ok=True)
+    os.makedirs(commonOutputFolder, exist_ok=True)
 
     # Pack input files
     for inputFile in inputFiles:
-        logger.info(f"\nPacking files to: {common_output_folder}")
-        runPackSingle(model, inputFile, agent, output_folder=common_output_folder)
+        logger.info(f"\nPacking files to: {commonOutputFolder}")
+        runPackSingle(model, inputFile, agent, outputFolder=commonOutputFolder)
 
     # Pack additional XML files
     for pattern in additional_patterns:
         filePath = os.path.join(output_dir, pattern)
         if os.path.exists(filePath):
-            moveFile(filePath, common_output_folder)
+            moveFile(filePath, commonOutputFolder)
 
-    logger.info(f"All files packed to: {common_output_folder}")
-    return common_output_folder
+    logger.info(f"All files packed to: {commonOutputFolder}")
+    return commonOutputFolder
