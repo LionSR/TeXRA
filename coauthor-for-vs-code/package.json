@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.17.7",
+  "version": "0.17.8",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -54,10 +54,10 @@
               "type": "string"
             },
             "default": [
-              "sonnet3++",
-              "sonnet3+",
-              "opus3",
-              "haiku3+",
+              "sonnet++",
+              "sonnet+",
+              "opus",
+              "haiku+",
               "o1",
               "o1preview",
               "o1-",
