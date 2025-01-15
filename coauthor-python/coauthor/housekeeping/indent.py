@@ -8,7 +8,7 @@ from ..utils.file import deleteFile
 from .constants import EXCLUDED_DIRS
 
 
-def run_indent_tex() -> None:
+def runIndentTex() -> None:
     """Recursively indent all .tex files using latexindent and clean up temporary files."""
     latexindent_config = os.environ.get("LATEXINDENT_CONFIG")
 

@@ -5,22 +5,22 @@ Provides utilities for cleaning, packing, and maintaining LaTeX files and build 
 
 from .constants import *
 from .utils import *
-from .clean import run_clean_single, run_clean_multiple, run_clean_build, run_clean_output
-from .pack import run_pack_single, run_pack_multiple
-from .indent import run_indent_tex
-from .latexdiff import run_pack_latexdiff_vc, run_pack_latexdiff_vc_multiple
+from .clean import runCleanSingle, runCleanMultiple, runCleanBuild, runCleanOutput
+from .pack import runPackSingle, runPackMultiple
+from .indent import runIndentTex
+from .latexdiff import runPaclLatexdiffvc, runPaclLatexdiffvcMultiple
 
 __all__ = [
     # Cleaning operations
-    "run_clean_single",
-    "run_clean_multiple",
-    "run_clean_build",
-    "run_clean_output",
+    "runCleanSingle",
+    "runCleanMultiple",
+    "runCleanBuild",
+    "runCleanOutput",
     # Packing operations
-    "run_pack_single",
-    "run_pack_multiple",
-    "run_pack_latexdiff_vc",
-    "run_pack_latexdiff_vc_multiple",
+    "runPackSingle",
+    "runPackMultiple",
+    "runPaclLatexdiffvc",
+    "runPaclLatexdiffvcMultiple",
     # Formatting operations
-    "run_indent_tex",
+    "runIndentTex",
 ]
