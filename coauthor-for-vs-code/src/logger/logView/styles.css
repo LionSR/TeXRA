@@ -336,3 +336,31 @@ body {
   top: 0;
   bottom: 0;
 }
+
+.stop-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 3px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.stop-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stop-button:not(:disabled):hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.stop-icon {
+  color: #ff3333;
+  font-size: 16px;
+}
