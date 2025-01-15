@@ -3,6 +3,7 @@ settings:
   documentTag: beamer_poster
   endTag: </beamer_poster>
   outputExt: tex
+  isRewrite: false
   prefills:
     - <scratchpad>
     - <scratchpad>

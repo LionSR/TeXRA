@@ -3,6 +3,7 @@ settings:
   documentTag: cover_letter
   endTag: </cover_letter>
   outputExt: tex
+  isRewrite: false
   prefills:
     - <scratchpad>
     - <scratchpad>

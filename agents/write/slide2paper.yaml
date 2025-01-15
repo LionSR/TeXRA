@@ -4,6 +4,7 @@ settings:
   documentTag: research_paper
   endTag: </research_paper>
   outputExt: tex
+  isRewrite: false
   prefills:
     - <scratchpad>
     - <scratchpad>

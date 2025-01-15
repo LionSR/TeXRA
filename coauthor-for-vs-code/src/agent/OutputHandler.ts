@@ -105,6 +105,7 @@ export class OutputHandler {
   /** Runs latexdiff on single output file. */
   public async handleSingleOutput(outputFile: string): Promise<void> {
     if (
+      this.agentSetting.isRewrite &&
       this.agentConfig.inputFile.includes('.tex') &&
       outputFile.includes('.tex')
     ) {
@@ -135,6 +136,7 @@ export class OutputHandler {
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
     if (
+      this.agentSetting.isRewrite &&
       Array.isArray(this.agentConfig.outputFiles) &&
       this.agentConfig.outputFiles.length > 0 &&
       Array.isArray(outputFiles) &&
@@ -400,14 +402,21 @@ export class OutputHandler {
       `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
     );
 
-    // Generate diffs between base files and current round
-    for (let i = 0; i < this.baseFiles.length; i++) {
-      const baseFile = this.baseFiles[i];
-      const outputFile = this.outputFiles[currRound][i];
-      await runLatexdiffForRound(baseFile, outputFile, currRound, this.channel);
+    // Generate diffs between base files and current round only if it's a rewrite task
+    if (this.agentSetting.isRewrite) {
+      for (let i = 0; i < this.baseFiles.length; i++) {
+        const baseFile = this.baseFiles[i];
+        const outputFile = this.outputFiles[currRound][i];
+        await runLatexdiffForRound(
+          baseFile,
+          outputFile,
+          currRound,
+          this.channel,
+        );
+      }
     }
 
-    // Generate diffs between consecutive rounds
+    // Always generate diffs between consecutive rounds, regardless of isRewrite setting
     for (let r = 1; r <= currRound; r++) {
       for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
         const outputFile1 = this.outputFiles[r - 1][i];
