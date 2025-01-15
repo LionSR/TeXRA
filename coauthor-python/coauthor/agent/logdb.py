@@ -180,7 +180,7 @@ def updateLogStatistics(logId: int, stateGlobal: AgentStateGlobal, stateRound: A
         raise
 
 
-def updateLogAndOutputFiles(logId: int, outputFile: str, all_outputFiles: list[str] | None = None) -> None:
+def updateLogAndOutputFiles(logId: int, outputFile: str, allOutputFiles: list[str] | None = None) -> None:
     """Update output files for a specific log entry."""
     if logId is None:
         logger.warning("No log ID provided, skipping output files update")
@@ -198,8 +198,8 @@ def updateLogAndOutputFiles(logId: int, outputFile: str, all_outputFiles: list[s
 
             actual_files = json.loads(row[0]) if row[0] else []
 
-            if all_outputFiles:
-                for file in all_outputFiles:
+            if allOutputFiles:
+                for file in allOutputFiles:
                     if file not in actual_files:
                         actual_files.append(file)
             elif outputFile and outputFile not in actual_files:
