@@ -136,7 +136,11 @@ def clean_single(model, inputFile, agent):
 @click.option("--inputFile", required=True, help="Path to the input file")
 @click.option("--outputNameOverride", type=str, default=None, help="Override base output name")
 def pack_single(model, inputFile, agent, outputNameOverride):
-    runPackSingle(model, inputFile, agent, outputNameOverride)
+    if outputNameOverride:
+        fileToPack = outputNameOverride
+    else:
+        fileToPack = inputFile
+    runPackSingle(model, fileToPack, agent)
 
 
 @cli.command()
