@@ -32,8 +32,50 @@ export class LogViewMessageHandler {
       case 'stopStream':
         vscode.commands.executeCommand('coauthor.stopAgent', message.stream);
         break;
+      case 'packStream':
+        await this.handlePackStream(message.stream);
+        break;
+      case 'cleanStream':
+        await this.handleCleanStream(message.stream);
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
+  }
+
+  private async handlePackStream(stream: string) {
+    const taskState = this.provider.getTaskState(stream);
+    if (!taskState) {
+      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      return;
+    }
+
+    // Execute pack command with task state
+    await vscode.commands.executeCommand('coauthor.pack', {
+      agent: taskState.agent,
+      model: taskState.model,
+      inputFile: taskState.inputFile,
+      outputNameOverride: taskState.outputNameOverride,
+      multipleOutputFiles: taskState.multipleOutputFiles,
+      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+    });
+  }
+
+  private async handleCleanStream(stream: string) {
+    const taskState = this.provider.getTaskState(stream);
+    if (!taskState) {
+      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      return;
+    }
+
+    // Execute clean command with task state
+    await vscode.commands.executeCommand('coauthor.clean', {
+      agent: taskState.agent,
+      model: taskState.model,
+      inputFile: taskState.inputFile,
+      outputNameOverride: taskState.outputNameOverride,
+      multipleOutputFiles: taskState.multipleOutputFiles,
+      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+    });
   }
 }

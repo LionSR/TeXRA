@@ -14,6 +14,9 @@ import { getTexCount } from '../latex/texcount';
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
 
+// Local imports - housekeeping
+import { runIndentTex } from '../housekeeping';
+
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
@@ -24,6 +27,7 @@ export function registerLatexCommands(context: vscode.ExtensionContext) {
       handleIndentCurrentTex,
     ),
     vscode.commands.registerCommand('coauthor.getTexCount', handleGetTexCount),
+    vscode.commands.registerCommand('coauthor.indentTex', runIndentTex),
   );
 }
 
@@ -159,4 +163,5 @@ async function handleGetTexCount(): Promise<void> {
 export const latexCommands = {
   handleIndentCurrentTex,
   handleGetTexCount,
+  runIndentTex,
 };
