@@ -104,7 +104,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add user request
       messages.push({
-        role: this.isO1Family ? 'system' : 'user',
+        role: this.isO1full ? 'system' : 'user',
         content: [{ type: 'text', text: userRequest }],
       });
     }
@@ -124,7 +124,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       content.push(...this.createImageContent(figureFiles));
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.isO1Family ? 'system' : 'user';
+    const role = this.isO1full ? 'system' : 'user';
     messages.push({ role, content });
     return messages;
   }
