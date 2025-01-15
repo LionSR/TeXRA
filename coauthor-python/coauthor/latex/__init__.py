@@ -14,7 +14,7 @@ from .latexdiff import (
     runLatexdiffvc,
     runLatexdiffvc_multiple,
 )
-from .latexindent import run_latexindent
+from .latexindent import runLatexindent
 from .text_connection import bestConnectionMethod
 from .texcount import getTexcount, getTexcountStats
 from .tikzpicture import compile_latex_to_pdf, extract_and_compile_tikzpictures_with_labels
@@ -29,7 +29,7 @@ __all__ = [
     "runLatexdiffvc_multiple",
     "process_tikzpicture_endings_diff",
     # Document formatting and compilation
-    "run_latexindent",
+    "runLatexindent",
     "compile_latex_to_pdf",
     # Figure and TikZ handling
     "extract_figurePaths_from_latex",
