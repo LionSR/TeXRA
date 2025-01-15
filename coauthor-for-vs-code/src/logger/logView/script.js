@@ -37,7 +37,9 @@ function updateStreamTabs(streams, activeStream) {
 function updateStatus(status) {
   const statusIndicator = document.getElementById('statusIndicator');
   const stopButton = document.getElementById('stopStreamBtn');
-  if (!statusIndicator || !stopButton) return;
+  const packButton = document.getElementById('packStreamBtn');
+  const cleanButton = document.getElementById('cleanStreamBtn');
+  if (!statusIndicator || !stopButton || !packButton || !cleanButton) return;
 
   // Remove all existing status classes
   statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
@@ -55,12 +57,16 @@ function updateStatus(status) {
       }[status] || 'Ready';
     statusIndicator.setAttribute('data-status', tooltipText);
 
-    // Update stop button state and tooltip
+    // Update button states
     stopButton.disabled = status !== 'running';
     stopButton.title =
       status === 'running'
         ? 'Request task interruption (note: current API call will complete)'
         : 'No running task to stop';
+
+    // Pack and clean buttons are enabled when task is stopped or errored
+    packButton.disabled = status === 'running' || status === 'ready';
+    cleanButton.disabled = status === 'running' || status === 'ready';
 
     // Store status for current stream
     if (currentStream && status !== 'ready') {
@@ -70,38 +76,12 @@ function updateStatus(status) {
 }
 
 function setupEventListeners() {
-  // Initialize Split.js
-  const split = Split(['.content-area', '.tabs'], {
-    sizes: [80, 20],
-    minSize: [400, 80],
-    gutterSize: 1,
-    snapOffset: 0,
-    dragInterval: 1,
-    direction: 'horizontal',
-  });
-
-  // Stop current stream
-  document.getElementById('stopStreamBtn').addEventListener('click', () => {
-    if (currentStream) {
-      vscode.postMessage({ command: 'stopStream', stream: currentStream });
-    }
-  });
-
-  // Stream switching and deletion
-  document.getElementById('streamTabs').addEventListener('click', (event) => {
-    const tabElement = event.target.closest('.tab');
-    const deleteButton = event.target.closest('.tab-delete');
-
-    if (tabElement) {
-      const stream = tabElement.dataset.stream;
-      currentStream = stream;
-      document.querySelectorAll('.tab-container').forEach((t) => {
-        t.classList.toggle(
-          'active',
-          t.querySelector('.tab').dataset.stream === stream,
-        );
-      });
-      document.getElementById('currentStreamName').textContent = stream;
+  // Stream tab click handler
+  document.getElementById('streamTabs').addEventListener('click', (e) => {
+    const tabButton = e.target.closest('.tab');
+    const deleteButton = e.target.closest('.tab-delete');
+    if (tabButton) {
+      const stream = tabButton.dataset.stream;
       vscode.postMessage({ command: 'switchStream', stream });
     } else if (deleteButton) {
       const stream = deleteButton.dataset.stream;
@@ -109,14 +89,45 @@ function setupEventListeners() {
     }
   });
 
-  // Clear current stream
-  document.getElementById('clearStreamBtn').addEventListener('click', () => {
-    vscode.postMessage({ command: 'clearStream', stream: currentStream });
+  // Stop button click handler
+  document.getElementById('stopStreamBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'stopStream', stream: currentStream });
+    }
   });
 
-  // Clear all streams
+  // Pack button click handler
+  document.getElementById('packStreamBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'packStream', stream: currentStream });
+    }
+  });
+
+  // Clean button click handler
+  document.getElementById('cleanStreamBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'cleanStream', stream: currentStream });
+    }
+  });
+
+  // Clear button click handler
+  document.getElementById('clearStreamBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'clearStream', stream: currentStream });
+    }
+  });
+
+  // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
     vscode.postMessage({ command: 'deleteAll' });
+  });
+
+  // Initialize split view
+  Split(['.content-area', '.tabs'], {
+    sizes: [80, 20],
+    minSize: [200, 100],
+    gutterSize: 5,
+    cursor: 'col-resize',
   });
 }
 

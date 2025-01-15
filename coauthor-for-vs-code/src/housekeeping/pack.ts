@@ -111,12 +111,15 @@ export async function runPackSingle(
         operations.push(`Copying: ${file} -> ${destination}`);
         await copyFile(file, destination);
       }
-      if (operations.length > 0) {
+      // if only inputFile is packed, don't show message
+      // potential improvement here
+      if (operations.length > 1) {
+        logger.info(CHANNEL, `Files packed into ${outputFolder}`);
+        vscode.window.showInformationMessage(
+          `Files packed into ${outputFolder}`,
+        );
         logger.debug(CHANNEL, `File operations:\n${operations.join('\n')}`);
       }
-
-      logger.info(CHANNEL, `Files packed into ${outputFolder}`);
-      vscode.window.showInformationMessage(`Files packed into ${outputFolder}`);
     } catch (err) {
       logger.error(
         CHANNEL,
@@ -161,22 +164,16 @@ export async function runPackMultiple(
   let baseName: string;
   let outputDir: string;
 
-  if (outputNameOverride) {
-    baseName = path.parse(outputNameOverride).name;
-    outputDir = path.dirname(outputNameOverride);
-  } else {
-    baseName = path.parse(inputFile).name;
-    outputDir = path.dirname(inputFile);
-  }
+  const fileToPack = outputNameOverride || inputFile;
+  baseName = path.parse(fileToPack).name;
+  outputDir = path.dirname(fileToPack);
 
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-  const commonOutputFolder =
-    outputNameOverride ||
-    path.join(
-      outputDir,
-      HISTORY_DIR,
-      `${now}_${baseName}_multiple_${agent}_${model}`,
-    );
+  const commonOutputFolder = path.join(
+    outputDir,
+    HISTORY_DIR,
+    `${now}_${baseName}_multiple_${agent}_${model}`,
+  );
   logger.debug(CHANNEL, `Common output folder: ${commonOutputFolder}`);
 
   try {
@@ -184,8 +181,7 @@ export async function runPackMultiple(
     logger.debug(CHANNEL, `Created output directory: ${commonOutputFolder}`);
 
     // Pack the main input file
-    await runPackSingle(model, inputFile, agent, commonOutputFolder);
-
+    await runPackSingle(model, fileToPack, agent, commonOutputFolder);
     // Pack additional files
     if (inputFiles && inputFiles.length > 0) {
       for (const file of inputFiles) {
@@ -217,5 +213,43 @@ export async function runPackMultiple(
       `Error during multiple pack operation: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
+  }
+}
+
+export async function runPack(
+  model: string,
+  inputFile: string,
+  agent: string,
+  outputFiles: string[] = [],
+  outputNameOverride?: string,
+): Promise<string> {
+  logger.debug(
+    CHANNEL,
+    `Starting pack with model=${model}, inputFile=${inputFile}, agent=${agent}, outputNameOverride=${outputNameOverride}`,
+  );
+  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
+
+  if (!inputFile || !model || !agent) {
+    logger.error(
+      CHANNEL,
+      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
+    );
+    vscode.window.showErrorMessage('Missing required parameters for pack');
+    return '';
+  }
+
+  const fileToPack = outputNameOverride || inputFile;
+
+  // Use multiple mode if there are output files
+  if (outputFiles.length > 0) {
+    return runPackMultiple(
+      model,
+      inputFile,
+      agent,
+      outputFiles,
+      outputNameOverride,
+    );
+  } else {
+    return runPackSingle(model, inputFile, agent, outputNameOverride);
   }
 }
