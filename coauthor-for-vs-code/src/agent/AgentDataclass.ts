@@ -10,6 +10,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   requiredFilesInternal: {},
   defaultOutputFiles: [],
   filePatternsContain: [],
+  isRewrite: true,
 };
 
 /** Default prompt templates for agent interactions. */
@@ -26,6 +27,7 @@ export interface AgentSetting {
   agentType: 'CoT' | 'direct';
   documentTag: string;
   temperature: number | null;
+  isRewrite: boolean;
 
   /** Generation settings */
   prefills: string[];
