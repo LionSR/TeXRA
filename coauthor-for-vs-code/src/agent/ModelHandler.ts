@@ -175,6 +175,14 @@ export abstract class ModelHandler {
     return nameLowerCased.includes('o1');
   }
 
+  get isO1miniOrPreview(): boolean {
+    const nameLowerCased = this.config.name.toLowerCase();
+    return (
+      nameLowerCased.includes('o1-mini') ||
+      nameLowerCased.includes('o1-preview')
+    );
+  }
+
   get isO1Family(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     return nameLowerCased.includes('o1');
