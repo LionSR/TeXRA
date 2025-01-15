@@ -36,7 +36,8 @@ function updateStreamTabs(streams, activeStream) {
 
 function updateStatus(status) {
   const statusIndicator = document.getElementById('statusIndicator');
-  if (!statusIndicator) return;
+  const stopButton = document.getElementById('stopStreamBtn');
+  if (!statusIndicator || !stopButton) return;
 
   // Remove all existing status classes
   statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
@@ -49,10 +50,17 @@ function updateStatus(status) {
       {
         running: 'Task is running',
         error: 'Task failed with error',
-        stopped: 'Task completed',
+        stopped: 'Task completed or interrupted',
         ready: 'Ready',
       }[status] || 'Ready';
     statusIndicator.setAttribute('data-status', tooltipText);
+
+    // Update stop button state and tooltip
+    stopButton.disabled = status !== 'running';
+    stopButton.title =
+      status === 'running'
+        ? 'Request task interruption (note: current API call will complete)'
+        : 'No running task to stop';
 
     // Store status for current stream
     if (currentStream && status !== 'ready') {
@@ -70,6 +78,13 @@ function setupEventListeners() {
     snapOffset: 0,
     dragInterval: 1,
     direction: 'horizontal',
+  });
+
+  // Stop current stream
+  document.getElementById('stopStreamBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'stopStream', stream: currentStream });
+    }
   });
 
   // Stream switching and deletion
