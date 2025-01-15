@@ -34,21 +34,14 @@ class ModelHandler(ABC):
         if self.config.toolConfig is None:
             self.config.toolConfig = ToolConfig()
         self.capabilities = config.capabilities
-        self.continueLimit = (
-            CONFIRMATION_CONTINUE_LIMIT 
-            if self.capabilities.likesToAskForConfirmation 
-            else DEFAULT_CONTINUE_LIMIT
-        )
+        self.continueLimit = CONFIRMATION_CONTINUE_LIMIT if self.capabilities.likesToAskForConfirmation else DEFAULT_CONTINUE_LIMIT
         self.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT
         self.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR
 
     def get_api_key(self) -> str:
         """Get API key based on provider and OpenRouter configuration."""
-        use_openrouter = (
-            self.config.openRouterOnly or 
-            (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
-        )
-        
+        use_openrouter = self.config.openRouterOnly or (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
+
         if use_openrouter:
             if key := os.getenv("OPENROUTER_API_KEY"):
                 return key
@@ -61,11 +54,8 @@ class ModelHandler(ABC):
 
     def get_base_url(self) -> str | None:
         """Get base URL based on provider and OpenRouter configuration."""
-        use_openrouter = (
-            self.config.openRouterOnly or 
-            (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
-        )
-        
+        use_openrouter = self.config.openRouterOnly or (self.config.toolConfig and self.config.toolConfig.useOpenRouter)
+
         if use_openrouter:
             return "https://openrouter.ai/api/v1"
 

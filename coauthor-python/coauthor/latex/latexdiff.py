@@ -6,7 +6,7 @@ from ..utils.file import writeFile, readFile
 from ..utils.replacement import getReplacementsByCategory, applyReplacementRegex
 from ..utils.exec import executeCommand
 
-from .latexindent import run_latexindent
+from .latexindent import runLatexindent
 
 
 def process_diff_file(diffFileName: str) -> None:
@@ -71,7 +71,7 @@ def runLatexdiff(inputFile: str, outputFile: str, suffix: str = "_diff", run_ind
         return None
 
     if run_indent:
-        if not run_latexindent(inputFile) or not run_latexindent(outputFile):
+        if not runLatexindent(inputFile) or not runLatexindent(outputFile):
             logger.warning("Failed to indent one or both files. Proceeding with latexdiff anyway.")
 
     # Check if both input and output files contain \begin{document} and \end{document}
