@@ -75,6 +75,11 @@ export abstract class BaseReflectionAgent {
   // Static map to track running agents by their stream ID
   private static runningAgents: Map<string, BaseReflectionAgent> = new Map();
 
+  /** Public getter for agent configuration */
+  public get config(): AgentConfig {
+    return this.agentConfig;
+  }
+
   constructor(
     modelHandler: ModelHandler,
     agentConfig: AgentConfig,

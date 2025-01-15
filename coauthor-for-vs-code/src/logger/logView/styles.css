@@ -364,3 +364,36 @@ body {
   color: #ff3333;
   font-size: 16px;
 }
+
+.pack-button,
+.clean-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  margin-left: 8px;
+  border: none;
+  border-radius: 3px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 11px;
+  transition: background-color 0.2s;
+}
+
+.pack-button:hover,
+.clean-button:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.pack-button:disabled,
+.clean-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pack-button i,
+.clean-button i {
+  margin-right: 4px;
+  font-size: 12px;
+}
