@@ -4,6 +4,7 @@ settings:
   documentTag: lecture_note
   endTag: </lecture_note>
   outputExt: tex
+  isRewrite: false
   prefills:
     - |
       Here is the output lecture note <lecture_note>.

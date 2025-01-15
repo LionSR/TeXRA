@@ -3,6 +3,7 @@ settings:
   documentTag: research_proposal
   endTag: </research_proposal>
   outputExt: tex
+  isRewrite: false
   prefills:
     - <scratchpad>
     - <scratchpad>

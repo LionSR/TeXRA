@@ -76,4 +76,4 @@ prompts:
     Based on these reflections, output an enhanced version of the solution:
     <latex_document>
     % ENHANCED_LATEX_SOLUTION_HERE
-    </latex_document> 
+    </latex_document>
