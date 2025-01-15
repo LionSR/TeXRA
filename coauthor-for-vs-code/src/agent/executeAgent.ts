@@ -19,6 +19,10 @@ import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
 import { LogViewProvider } from '../logger/LogViewProvider';
+import { AgentLogger } from '../logger/AgentLogger';
+
+const CHANNEL = 'executeAgent';
+const logger = new AgentLogger(CHANNEL);
 
 type AgentConstructor = {
   new (
@@ -28,6 +32,12 @@ type AgentConstructor = {
     agentPrompt: AgentPrompt,
     agentPath: string,
   ): DirectAgent | CoTAgent;
+};
+
+type AgentWithConfig = {
+  config: AgentConfig;
+  init(): Promise<void>;
+  run(): Promise<void>;
 };
 
 /**
@@ -91,9 +101,7 @@ function getAgentName(
 /**
  * Common function to execute any agent with proper logging and status handling
  */
-async function executeAgentWithLogging<
-  T extends DirectAgent | CoTAgent | MergeAgent,
->(
+async function executeAgentWithLogging<T extends AgentWithConfig>(
   agentName: string,
   createAgentFn: () => Promise<T>,
   context: vscode.ExtensionContext,
@@ -111,6 +119,49 @@ async function executeAgentWithLogging<
     // Create and initialize agent
     const agent = await createAgentFn();
     await agent.init();
+
+    // Store task state
+    const config = agent.config;
+    const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+    logger.debug(`Storing task state for stream: ${fullStreamId}`);
+    logger.debug(`Config for task state: ${JSON.stringify(config)}`);
+    logViewProvider.setTaskState(fullStreamId, {
+      agent: config.agent,
+      model: config.model,
+      reflect: config.reflect ? 'True' : 'False',
+      inputFile: config.inputFile || '',
+      referenceFile: config.referenceFile || '',
+      auxiliaryFile: config.auxiliaryFile || '',
+      figureFile: config.figureFile || '',
+      outputNameOverride: config.outputNameOverride || '',
+      multipleInputFiles: config.inputFiles || [],
+      multipleReferenceFiles: config.referenceFiles || [],
+      multipleAuxiliaryFiles: config.auxiliaryFiles || [],
+      multipleFigureFiles: config.figureFiles || [],
+      multipleOutputFiles: config.outputFiles || [],
+      multipleInputFilesVisible:
+        Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
+      multipleReferenceFilesVisible:
+        Array.isArray(config.referenceFiles) &&
+        config.referenceFiles.length > 0,
+      multipleAuxiliaryFilesVisible:
+        Array.isArray(config.auxiliaryFiles) &&
+        config.auxiliaryFiles.length > 0,
+      multipleFigureFilesVisible:
+        Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
+      multipleOutputFilesVisible:
+        Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
+      autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
+      autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
+      autoExtractTikzFigureReflect:
+        config.toolConfig?.autoExtractTikzFigureReflect || false,
+      attachTeXCount: config.toolConfig?.attachTeXCount || false,
+      usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
+      printInputPrompt: config.toolConfig?.printInputPrompt || false,
+      autoConfirmation: config.toolConfig?.autoConfirmation || false,
+      outputNameOverrideVisible: !!config.outputNameOverride,
+    });
+    logger.debug(`Task state stored for stream: ${fullStreamId}`);
 
     try {
       // Run the agent

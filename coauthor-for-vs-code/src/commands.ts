@@ -5,6 +5,7 @@ import { registerFileSelectionCommands } from './commands/fileSelectionCommands'
 import { registerLatexdiffCommands } from './commands/latexdiffCommmands';
 import { registerGitCommands } from './commands/gitCommands';
 import { registerPackCommands } from './commands/packCommands';
+import { registerCleanCommands } from './commands/cleanCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
 import { CoAuthorViewProvider } from './ViewProvider';
@@ -32,6 +33,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     latexdiff: registerLatexdiffCommands(context),
     git: registerGitCommands(context),
     pack: registerPackCommands(context),
+    clean: registerCleanCommands(context),
     merge: registerMergeCommands(context),
     execute: registerExecuteCommand(context),
     latex: registerLatexCommands(context),
