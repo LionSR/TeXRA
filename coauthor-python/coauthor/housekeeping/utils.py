@@ -34,7 +34,7 @@ def get_file_patterns(base: str, model: str, agent: str, totalRounds: int = 4) -
     return patterns
 
 
-def get_folder_datetime(inputDir: str, file_patterns: list[str], extensions: list[str]) -> str:
+def getFolderDatetime(inputDir: str, file_patterns: list[str], extensions: list[str]) -> str:
     """Get formatted datetime string based on most recent file modification time."""
     most_recent_time = None
     for pattern in file_patterns:
