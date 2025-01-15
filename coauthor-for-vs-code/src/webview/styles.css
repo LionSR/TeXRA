@@ -27,6 +27,11 @@
 
   /* Border radius */
   --border-radius: 3px;
+
+  /* Add this new variable for icon color */
+  --icon-color: var(
+    --vscode-textLink-foreground
+  ); /* This gives us the VS Code blue color */
 }
 
 body {
@@ -52,27 +57,8 @@ body {
 .select-group i {
   margin-right: var(--spacing-small);
   font-size: 1.2em;
-  color: var(--vscode-foreground);
+  color: var(--icon-color);
   position: relative;
-}
-
-.select-group i:hover::after {
-  content: attr(title);
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 100%;
-  margin-top: 5px;
-  padding: 4px 8px;
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  border-radius: var(--border-radius);
-  font-size: var(--font-size);
-  font-family: var(--font-family);
-  font-weight: normal;
-  white-space: nowrap;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .select-group select {
@@ -104,11 +90,11 @@ body {
 }
 
 .optional-label {
-  color: var(--vscode-descriptionForeground);
+  color: var(--text-color);
   font-weight: normal;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: var(--font-size);
   white-space: nowrap;
-  min-width: 120px;
+  min-width: 160px;
   display: flex;
   align-items: center;
   height: 24px;
@@ -146,10 +132,10 @@ body {
   margin: 0;
   padding: 4px 8px;
   box-sizing: border-box;
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border);
-  border-radius: 3px;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
 }
 
 .file-select-label-group label {
@@ -167,67 +153,21 @@ body {
 .action-button,
 .icon-button {
   padding: 4px 8px;
-  font-size: calc(var(--vscode-font-size));
+  font-size: var(--font-size);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 1px solid var(--input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
 }
 
 .action-button:hover,
 .icon-button:hover {
   background-color: var(--icon-button-hover-background);
-}
-
-.action-button::after,
-.icon-button::after {
-  content: attr(title);
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 0.8em;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: 1000;
-}
-
-.action-button:hover::after,
-.icon-button:hover::after {
-  opacity: 1;
-}
-
-.icon-button {
-  padding: 4px;
-  font-size: calc(var(--vscode-font-size));
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 1px solid var(--input-border);
-  border-radius: 3px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.icon-button:hover {
-  background-color: var(--icon-button-hover-background);
-}
-
-.icon-button .fas {
-  color: var(--icon-button-foreground);
 }
 
 .button-group {
@@ -242,43 +182,20 @@ body {
 
 .action-button {
   padding: 4px 8px;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.9);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 1px solid var(--input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
 }
 
 .action-button:hover {
   background-color: var(--icon-button-hover-background);
-}
-
-.action-button::after {
-  content: attr(title);
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 0.8em;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.2s;
-  pointer-events: none;
-  z-index: 1000;
-}
-
-.action-button:hover::after {
-  opacity: 1;
 }
 
 .action-button .fas {
@@ -288,7 +205,7 @@ body {
 .file-select label {
   display: block;
   margin-bottom: 2px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 .file-select select {
@@ -296,10 +213,10 @@ body {
   padding: 4px 8px;
   height: 28px;
   border: 1px solid var(--input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   background-color: var(--dropdown-background);
   color: var(--dropdown-foreground);
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 .multiple-files-container {
@@ -330,9 +247,9 @@ body {
 .multiple-files-list {
   background-color: var(--dropdown-background);
   border: 1px solid var(--dropdown-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   padding: 5px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   max-height: 100px;
   overflow-y: auto;
 }
@@ -361,7 +278,7 @@ body {
 .instruction-box label {
   display: block;
   margin-bottom: 2px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 #instructionInput {
@@ -371,8 +288,8 @@ body {
   padding: 8px;
   border: 1px solid var(--input-border);
   border-radius: 4px;
-  font-family: var(--vscode-editor-font-family, var(--font-family));
-  font-size: var(--vscode-editor-font-size, var(--font-size));
+  font-family: var(--font-family);
+  font-size: var(--font-size);
   resize: none;
   overflow-y: auto;
   background-color: var(--input-background);
@@ -390,7 +307,7 @@ body {
 .checkbox-group label {
   display: flex;
   align-items: center;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 .checkbox-group input[type='checkbox'] {
@@ -399,7 +316,7 @@ body {
 
 #executeButton {
   padding: 6px 12px;
-  font-size: calc(var(--vscode-font-size) * 1.15);
+  font-size: calc(var(--font-size) * 1.15);
   background-color: #007acc;
   color: white;
   border: none;
@@ -416,7 +333,7 @@ body {
 }
 
 .section-header {
-  font-size: calc(var(--vscode-font-size) * 1.1);
+  font-size: calc(var(--font-size) * 1.1);
   font-weight: bold;
   margin-top: 5px;
   margin-bottom: 5px;
@@ -430,7 +347,7 @@ body {
 
 .button-group label {
   display: block;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   margin-bottom: 5px;
 }
 
@@ -455,7 +372,7 @@ body {
 #executeButton {
   white-space: nowrap;
   padding: 6px 12px;
-  font-size: calc(var(--vscode-font-size) * 1.15);
+  font-size: calc(var(--font-size) * 1.15);
   background-color: #007acc;
   color: white;
   border: none;
@@ -475,7 +392,7 @@ body {
 }
 
 .instruction-header label {
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   font-weight: bold;
 }
 
@@ -485,7 +402,7 @@ body {
   margin: 0;
   position: relative;
   padding: 0 2px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--text-color);
   opacity: 0.8;
   display: flex;
   align-items: center;
@@ -498,7 +415,7 @@ body {
 
 h5 .fas {
   font-size: 0.9em;
-  color: var(--vscode-textLink-foreground);
+  color: var(--icon-color);
 }
 
 button .fas {
@@ -507,8 +424,8 @@ button .fas {
 
 .file-select-header label .fas,
 .instruction-header label .fas {
-  margin-right: 5px;
-  color: var(--vscode-textLink-foreground);
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
 }
 
 .small-button .fas {
@@ -544,22 +461,22 @@ button .fas {
   left: 0; /* Changed from right: 0 to left: 0 for consistency */
   z-index: 100;
   margin-top: 2px;
-  background: var(--vscode-menu-background);
-  border: 1px solid var(--vscode-menu-border);
+  background: var(--background-color);
+  border: 1px solid var(--dropdown-border);
   border-radius: var(--border-radius);
   box-shadow: var(--vscode-widget-shadow);
   min-width: 200px;
   display: none;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.9);
   padding: 4px;
   white-space: nowrap;
 }
 
 .auto-extract-options-content {
-  background: var(--vscode-menu-background);
-  border: 1px solid var(--vscode-input-border);
+  background: var(--background-color);
+  border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
-  box-shadow: inset 0 0 0 1px var(--vscode-menu-border);
+  box-shadow: inset 0 0 0 1px var(--dropdown-border);
 }
 
 .auto-extract-options label {
@@ -567,7 +484,7 @@ button .fas {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  color: var(--vscode-foreground);
+  color: var(--text-color);
   cursor: pointer;
   border-radius: calc(var(--border-radius) - 1px);
   font-weight: normal;
@@ -584,7 +501,7 @@ button .fas {
 .auto-extract-options i {
   width: 16px;
   text-align: center;
-  color: var(--vscode-textLink-foreground);
+  color: var(--icon-color);
   opacity: 0.8;
 }
 
@@ -596,9 +513,9 @@ button .fas {
 }
 
 .optional-label {
-  color: var(--vscode-foreground);
+  color: var(--text-color);
   font-weight: normal;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   white-space: nowrap;
   min-width: 160px;
 }
@@ -667,12 +584,11 @@ button .fas {
   align-items: center;
   gap: 2px;
   padding: 4px 6px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   border-radius: var(--border-radius);
   background: var(--vscode-button-secondaryBackground);
   border: 1px solid var(--vscode-button-border);
   transition: background-color 0.2s;
-  position: relative;
   pointer-events: none;
 }
 
@@ -748,7 +664,7 @@ button .fas {
 .auto-extract-options i {
   width: 16px;
   text-align: center;
-  color: var(--vscode-textLink-foreground);
+  color: var(--icon-color);
   opacity: 0.8;
 }
 
@@ -785,12 +701,13 @@ button .fas {
 }
 
 .vscode-input:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--input-border);
   outline-offset: -1px;
 }
 
 .vscode-input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--text-color);
+  opacity: 0.7;
 }
 
 .multiple-files-content .vscode-input {
@@ -831,7 +748,7 @@ button .fas {
   align-items: center;
   gap: 2px;
   padding: 4px 6px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   border-radius: var(--border-radius);
   background: var(--vscode-button-secondaryBackground);
   border: 1px solid var(--vscode-button-border);
@@ -853,19 +770,4 @@ button .fas {
 
 .auto-toggle:hover {
   background: var(--vscode-button-secondaryHoverBackground);
-}
-
-.file-select-label-group:hover::after {
-  content: attr(title);
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  padding: 2px 4px;
-  border-radius: 3px;
-  font-size: 0.8em;
-  white-space: nowrap;
-  z-index: 1000;
 }
