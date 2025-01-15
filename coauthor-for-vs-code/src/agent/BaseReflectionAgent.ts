@@ -1028,6 +1028,12 @@ export abstract class BaseReflectionAgent {
       this.logger.debug(`Processing multiple outputs for ${outputFile}`);
       this.logger.debug(`Output files: ${this.agentConfig.outputFiles}`);
 
+      // if the agentType is CoT, we need to process the output files
+      // Then I realize that in fact it does not make sense to have multiple output files
+      // while to extract it from a single tex file. So in this case, we really need to
+      // use XML and use XML splitting to get the output files.
+      // Which would be different than the single output file case below.
+
       const processedFiles =
         await this.outputHandler.processMultipleXmlOutputs(outputFile);
       if (processedFiles.length > 0) {
@@ -1041,8 +1047,11 @@ export abstract class BaseReflectionAgent {
     } else {
       // Single output file case
       this.logger.debug(`Processing single output for ${outputFile}`);
-      const processedFile =
-        await this.outputHandler.processSingleXmlOutput(outputFile);
+      let processedFile = outputFile;
+      if (this.agentSetting.agentType === 'CoT') {
+        processedFile =
+          await this.outputHandler.processSingleXmlOutput(outputFile);
+      }
       if (processedFile) {
         await this.outputHandler.handleSingleOutput(processedFile);
         this.outputHandler.outputFiles[currRound] = [processedFile];
