@@ -87,6 +87,9 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
 /**
  * Gets API key from VS Code settings
  */
+
+// it should also be possible to fallback to openrouter for this maybe
+// Use Vercel ai sdk for this for convenience?
 function getApiKey(provider: 'openai' | 'anthropic'): string {
   const apiKey = vscode.workspace
     .getConfiguration('coauthor.apiKeys')
