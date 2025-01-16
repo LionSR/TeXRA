@@ -799,3 +799,38 @@ button .fas {
   padding: 2px 6px;
   font-size: calc(var(--font-size) * 0.9);
 }
+
+/* Hide multiple file operation buttons when containers are not toggled */
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #emptyMultipleInputFilesButton,
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #selectMultipleInputFilesButton,
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #addOpenedFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #emptyMultipleReferenceFilesButton,
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #selectMultipleReferenceFilesButton,
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #addOpenedReferenceFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #emptyMultipleAuxiliaryFilesButton,
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #selectMultipleAuxiliaryFilesButton,
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #addOpenedAuxiliaryFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleFigureFilesContainer[style*='none'])
+  #emptyMultipleFigureFilesButton,
+.file-select:has(#multipleFigureFilesContainer[style*='none'])
+  #selectMultipleFigureFilesButton {
+  display: none;
+}

@@ -47,7 +47,7 @@ export function setupUIHandlers() {
     const indicator = hasChecked ? '●' : '○';
     const direction = isVisible ? 'up' : 'down';
 
-    autoExtractToggle.innerHTML = `Auto ${indicator}<i class="fa-solid fa-angle-${direction}"></i>`;
+    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="fa-solid fa-angle-${direction}"></i>`;
   }
 
   addEventListenerSafely('toggleAutoExtract', 'click', function () {

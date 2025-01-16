@@ -30,7 +30,7 @@ export function setDefaultState() {
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
   if (autoExtractToggle && autoExtractOptions) {
     autoExtractToggle.innerHTML =
-      'Auto ○<i class="fa-solid fa-angle-down"></i>';
+      'Auto Extract ○<i class="fa-solid fa-angle-down"></i>';
     autoExtractOptions.style.display = 'none';
   }
 
@@ -75,7 +75,7 @@ export function restoreState() {
     const indicator = hasChecked ? '●' : '○';
 
     autoExtractToggle.classList.remove('active');
-    autoExtractToggle.innerHTML = `Auto ${indicator}<i class="fa-solid fa-angle-down"></i>`;
+    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="fa-solid fa-angle-down"></i>`;
     autoExtractOptions.style.display = 'none';
 
     // Initialize tool use toggle state
