@@ -11,6 +11,12 @@ import { getAgentsDirectory } from './utils/pathUtils';
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
+/*
+TODO: 
+- make it possible to right click 
+- make it possible to create new files like in vs code
+*/
+
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
     FileItem | undefined | null | void
@@ -19,6 +25,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     FileItem | undefined | null | void
   > = this._onDidChangeTreeData.event;
   private fileSystemWatcher: vscode.FileSystemWatcher | undefined;
+  private editingItem: FileItem | undefined;
 
   constructor(
     private workspaceRoot: string | undefined,
@@ -26,6 +33,139 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   ) {
     // Initialize file system watcher
     this.setupFileSystemWatcher();
+    this.registerCommands();
+  }
+
+  private registerCommands() {
+    if (!this.context) return;
+
+    // Register commands for new file/folder creation
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'coauthor.folderExplorer.newFile',
+        (node: FileItem) => this.createNew(node, false),
+      ),
+      vscode.commands.registerCommand(
+        'coauthor.folderExplorer.newFolder',
+        (node: FileItem) => this.createNew(node, true),
+      ),
+      vscode.commands.registerCommand(
+        'coauthor.folderExplorer.rename',
+        (node: FileItem) => this.startRename(node),
+      ),
+      vscode.commands.registerCommand(
+        'coauthor.folderExplorer.delete',
+        (node: FileItem) => this.deleteItem(node),
+      ),
+    );
+  }
+
+  private async createNew(node: FileItem | undefined, isFolder: boolean) {
+    try {
+      const parentPath =
+        node?.resourceUri.fsPath ||
+        (this.context ? await getAgentsDirectory(this.context) : undefined);
+
+      if (!parentPath) {
+        throw new Error('No valid parent path found');
+      }
+
+      // Create a temporary item for in-place editing
+      const tempName = isFolder ? 'New Folder' : 'new-file.yaml';
+      const resourceUri = vscode.Uri.file(path.join(parentPath, tempName));
+
+      const newItem = new FileItem(
+        tempName,
+        resourceUri,
+        isFolder
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+      );
+
+      // Set the item in editing mode
+      newItem.editing = true;
+      this.editingItem = newItem;
+
+      // Refresh the tree to show the new item in editing mode
+      this.refresh();
+
+      // Start the rename process immediately
+      this.startRename(newItem);
+    } catch (err) {
+      logger.error(
+        CHANNEL,
+        `Error creating new ${isFolder ? 'folder' : 'file'}: ${err}`,
+      );
+      vscode.window.showErrorMessage(
+        `Failed to create new ${isFolder ? 'folder' : 'file'}`,
+      );
+    }
+  }
+
+  private async startRename(item: FileItem) {
+    if (!item) return;
+
+    this.editingItem = item;
+    item.editing = true;
+    this.refresh();
+
+    // Show the rename input box
+    const newName = await vscode.window.showInputBox({
+      value: item.label,
+      prompt: `Enter new name for ${item.label}`,
+      validateInput: (value) => {
+        if (!value) return 'Name cannot be empty';
+        if (value.includes('/') || value.includes('\\'))
+          return 'Name cannot contain path separators';
+        return null;
+      },
+    });
+
+    // Handle the rename result
+    if (newName && newName !== item.label) {
+      try {
+        const oldPath = item.resourceUri.fsPath;
+        const newPath = path.join(path.dirname(oldPath), newName);
+
+        // For new items, create them
+        if (!(await this.fileExists(oldPath))) {
+          if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
+            // Create new file
+            await vscode.workspace.fs.writeFile(
+              vscode.Uri.file(newPath),
+              new Uint8Array(),
+            );
+          } else {
+            // Create new folder
+            await vscode.workspace.fs.createDirectory(vscode.Uri.file(newPath));
+          }
+        } else {
+          // Rename existing item
+          await vscode.workspace.fs.rename(
+            vscode.Uri.file(oldPath),
+            vscode.Uri.file(newPath),
+            { overwrite: false },
+          );
+        }
+      } catch (err) {
+        logger.error(CHANNEL, `Error renaming item: ${err}`);
+        vscode.window.showErrorMessage('Failed to rename item');
+      }
+    }
+
+    // Clear editing state
+    this.editingItem = undefined;
+    item.editing = false;
+    this.refresh();
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   public async setupFileSystemWatcher() {
@@ -65,6 +205,14 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   getTreeItem(element: FileItem): vscode.TreeItem {
+    if (element.editing) {
+      element.contextValue = 'editing';
+    } else {
+      element.contextValue =
+        element.collapsibleState === vscode.TreeItemCollapsibleState.None
+          ? 'file'
+          : 'folder';
+    }
     return element;
   }
 
@@ -148,9 +296,50 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       return [];
     }
   }
+
+  private async deleteItem(item: FileItem) {
+    if (!item) return;
+
+    const isFolder =
+      item.collapsibleState === vscode.TreeItemCollapsibleState.Collapsed;
+    const confirmMessage = `Are you sure you want to delete ${isFolder ? 'folder' : 'file'} "${item.label}"?`;
+    const confirmButton = 'Delete';
+
+    const choice = await vscode.window.showWarningMessage(
+      confirmMessage,
+      { modal: true },
+      confirmButton,
+    );
+
+    if (choice === confirmButton) {
+      try {
+        if (isFolder) {
+          await vscode.workspace.fs.delete(item.resourceUri, {
+            recursive: true,
+          });
+        } else {
+          await vscode.workspace.fs.delete(item.resourceUri);
+        }
+        logger.info(
+          CHANNEL,
+          `Successfully deleted ${isFolder ? 'folder' : 'file'}: ${item.resourceUri.fsPath}`,
+        );
+      } catch (err) {
+        logger.error(
+          CHANNEL,
+          `Error deleting ${isFolder ? 'folder' : 'file'}: ${err}`,
+        );
+        vscode.window.showErrorMessage(
+          `Failed to delete ${isFolder ? 'folder' : 'file'}`,
+        );
+      }
+    }
+  }
 }
 
 class FileItem extends vscode.TreeItem {
+  public editing: boolean = false;
+
   constructor(
     public readonly label: string,
     public readonly resourceUri: vscode.Uri,
