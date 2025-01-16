@@ -273,6 +273,7 @@ body {
 
 .instruction-box {
   margin-bottom: 5px;
+  position: relative;
 }
 
 .instruction-box label {
@@ -286,6 +287,7 @@ body {
   min-height: 150px;
   max-height: 400px;
   padding: 8px;
+  padding-bottom: 40px;
   border: 1px solid var(--input-border);
   border-radius: 4px;
   font-family: var(--font-family);
@@ -315,13 +317,20 @@ body {
 }
 
 #executeButton {
-  padding: 6px 12px;
-  font-size: calc(var(--font-size) * 1.15);
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  font-size: calc(var(--font-size) * 1);
   background-color: #007acc;
   color: white;
   border: none;
   border-radius: 3px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 10;
 }
 
 #executeButton:hover {
@@ -365,23 +374,7 @@ body {
 }
 
 .execute-row {
-  display: flex;
-  align-items: center;
-}
-
-#executeButton {
-  white-space: nowrap;
-  padding: 6px 12px;
-  font-size: calc(var(--font-size) * 1.15);
-  background-color: #007acc;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-#executeButton:hover {
-  background-color: #005999;
+  display: none;
 }
 
 .instruction-header {
@@ -433,13 +426,13 @@ button .fas {
 }
 
 #executeButton .fas {
-  margin-right: var(--spacing-small);
+  margin-right: 2px;
+  font-size: 0.9em;
 }
 
 /* Update the execute-row styles */
 .execute-row {
-  display: flex;
-  align-items: center;
+  display: none;
 }
 
 /* Update auto-extract-options to accommodate both dropdowns */
@@ -778,11 +771,7 @@ button .fas {
   margin-right: 5px;
 }
 
-.execute-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
-}
+
 
 /* Update dropdown positioning for tool use */
 .dropdown-container {
@@ -799,6 +788,7 @@ button .fas {
   padding: 2px 6px;
   font-size: calc(var(--font-size) * 0.9);
 }
+
 
 /* Hide multiple file operation buttons when containers are not toggled */
 .file-select:has(#multipleInputFilesContainer[style*='none'])
