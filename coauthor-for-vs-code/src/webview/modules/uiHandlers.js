@@ -160,6 +160,20 @@ export function setupUIHandlers() {
     addEventListenerSafely(id, 'change', handleCheckboxChange);
   });
 
+  // Add click handlers for file type icons and commit icon
+  const fileTypeIcons = document.querySelectorAll('.file-select-header label .fas.clickable');
+  fileTypeIcons.forEach(icon => {
+    icon.addEventListener('click', () => {
+      // If it's the commit icon, refresh commits
+      if (icon.classList.contains('fa-code-commit')) {
+        vscode.postMessage({ command: 'refreshCommits' });
+      } else {
+        // Otherwise refresh all files
+        vscode.postMessage({ command: 'refreshAllFiles' });
+      }
+    });
+  });
+
   addEventListenerSafely('emptyInstructionsButton', 'click', function () {
     const instructionInput = safeGetElementById('instructionInput');
     if (instructionInput) {
@@ -172,7 +186,6 @@ export function setupUIHandlers() {
     cleanOutputButton: 'cleanOutput',
     cleanBuildButton: 'cleanBuild',
     indentTexButton: 'indentTex',
-    refreshCommitsButton: 'refreshCommits',
   };
 
   Object.entries(buttonCommands).forEach(([id, command]) => {
@@ -282,8 +295,20 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('refreshAllFilesButton', 'click', function () {
-    vscode.postMessage({ command: 'refreshAllFiles' });
+  // Add event listener for the refresh button
+  addEventListenerSafely('refreshEditedFileButton', 'click', function () {
+    const baseFile = safeGetElementValue('baseFile');
+    if (baseFile) {
+      vscode.postMessage({
+        command: 'requestEditedFile',
+        baseFile: baseFile,
+      });
+    } else {
+      vscode.postMessage({
+        command: 'showInformationMessage',
+        text: 'Please select a base file first.',
+      });
+    }
   });
 
   ['pack', 'clean'].forEach((action) => {
@@ -472,22 +497,6 @@ export function setupUIHandlers() {
       baseFile: baseFile,
     });
     updateEditedFileSelect(baseFile);
-  });
-
-  // Add event listener for the refresh button
-  addEventListenerSafely('refreshEditedFileButton', 'click', function () {
-    const baseFile = safeGetElementValue('baseFile');
-    if (baseFile) {
-      vscode.postMessage({
-        command: 'requestEditedFile',
-        baseFile: baseFile,
-      });
-    } else {
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: 'Please select a base file first.',
-      });
-    }
   });
 
   MULTIPLE_SELECTIONS.forEach((id) => {
