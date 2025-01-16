@@ -1,4 +1,4 @@
-name: ocr_tex
+name: ocr
 settings:
   agentType: CoT
   documentTag: latex_document
