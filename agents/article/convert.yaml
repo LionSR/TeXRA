@@ -1,4 +1,4 @@
-name: convert_tex
+name: convert
 settings:
   agentType: CoT
   documentTag: latex_document

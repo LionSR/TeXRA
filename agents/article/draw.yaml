@@ -1,4 +1,4 @@
-name: draw_tex
+name: draw
 settings:
   agentType: CoT
   documentTag: latex_document
