@@ -551,14 +551,13 @@
         {
           "type": "webview",
           "id": "coauthor.logView",
-          "name": "CoAuthor Tasks",
+          "name": "CoAuthor: Tasks",
           "contextualTitle": "CoAuthor Tasks"
         },
         {
           "id": "coauthor.folderExplorer",
-          "name": "CoAuthor Agents",
-          "when": "workbenchState != empty",
-          "contextualTitle": "CoAuthor Agents"
+          "name": "Agents",
+          "when": "workbenchState != empty"
         }
       ]
     }
