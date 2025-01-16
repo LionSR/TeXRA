@@ -54,10 +54,12 @@ body {
   flex: 1;
 }
 
-.select-group i {
+/* Make this style more specific to override other .fas styles */
+.compact-selections .select-group i.fas {
   margin-right: var(--spacing-small);
   font-size: 1.2em;
-  color: var(--icon-color);
+  color: var(--text-color) !important;
+  opacity: 0.8;
   position: relative;
 }
 
@@ -823,4 +825,24 @@ button .fas {
 .file-select:has(#multipleFigureFilesContainer[style*='none'])
   #selectMultipleFigureFilesButton {
   display: none;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.clickable:hover {
+  color: var(--button-hover-background);
+}
+
+/* Update existing icon styles */
+.file-select-header label .fas {
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
+.file-select-header label .fas.clickable:hover {
+  opacity: 1;
 }
