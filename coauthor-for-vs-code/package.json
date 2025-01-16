@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.17.9",
+  "version": "0.17.10",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.93.1"
@@ -529,6 +529,26 @@
       {
         "command": "coauthor.clean",
         "title": "CoAuthor: Clean Files"
+      },
+      {
+        "command": "coauthor.folderExplorer.newFile",
+        "title": "New File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "coauthor.folderExplorer.newFolder",
+        "title": "New Folder",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "coauthor.folderExplorer.rename",
+        "title": "Rename",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "coauthor.folderExplorer.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -558,6 +578,42 @@
           "id": "coauthor.folderExplorer",
           "name": "Agents",
           "when": "workbenchState != empty"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "coauthor.folderExplorer.newFile",
+          "when": "view == coauthor.folderExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "coauthor.folderExplorer.newFolder",
+          "when": "view == coauthor.folderExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "coauthor.folderExplorer.newFile",
+          "when": "view == coauthor.folderExplorer && viewItem == folder",
+          "group": "1_modification"
+        },
+        {
+          "command": "coauthor.folderExplorer.newFolder",
+          "when": "view == coauthor.folderExplorer && viewItem == folder",
+          "group": "1_modification"
+        },
+        {
+          "command": "coauthor.folderExplorer.rename",
+          "when": "view == coauthor.folderExplorer && viewItem != editing",
+          "group": "2_modification"
+        },
+        {
+          "command": "coauthor.folderExplorer.delete",
+          "when": "view == coauthor.folderExplorer && viewItem != editing",
+          "group": "3_modification"
         }
       ]
     }
