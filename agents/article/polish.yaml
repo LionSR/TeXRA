@@ -1,4 +1,4 @@
-name: polish_tex
+name: polish
 settings:
   agentType: CoT
   documentTag: latex_document
