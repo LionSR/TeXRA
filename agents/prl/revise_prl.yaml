@@ -11,9 +11,6 @@ settings:
     - pattern: "preamble"
       varName: "PREAMBLE"
       categories: ["auxiliaryFile", "auxiliaryFiles"]
-    - pattern: "main"
-      varName: "MAIN"
-      categories: ["inputFile", "inputFiles"]
     - pattern: "supp"
       varName: "SUPP"
       categories: ["inputFile", "inputFiles"]

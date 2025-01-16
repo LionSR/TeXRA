@@ -1,4 +1,4 @@
-name: replies/draft_rebuttal
+name: draft_rebuttal
 
 settings:
   documentTag: rebuttal_package
