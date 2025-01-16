@@ -161,8 +161,10 @@ export function setupUIHandlers() {
   });
 
   // Add click handlers for file type icons and commit icon
-  const fileTypeIcons = document.querySelectorAll('.file-select-header label .fas.clickable');
-  fileTypeIcons.forEach(icon => {
+  const fileTypeIcons = document.querySelectorAll(
+    '.file-select-header label .fas.clickable',
+  );
+  fileTypeIcons.forEach((icon) => {
     icon.addEventListener('click', () => {
       // If it's the commit icon, refresh commits
       if (icon.classList.contains('fa-code-commit')) {
