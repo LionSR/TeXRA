@@ -343,7 +343,10 @@ export abstract class BaseReflectionAgent {
 
           if (category.endsWith('File')) {
             // Single file categories
-            if (categoryValue && pattern in categoryValue.toLowerCase()) {
+            if (
+              categoryValue &&
+              categoryValue.toLowerCase().includes(pattern)
+            ) {
               try {
                 const fileContent = await readFile(categoryValue);
                 userVars[`${varName}_FILE`] = categoryValue;
@@ -361,7 +364,7 @@ export abstract class BaseReflectionAgent {
             // Multiple file categories
             if (categoryValue) {
               for (const file of categoryValue) {
-                if (pattern in file.toLowerCase()) {
+                if (file.toLowerCase().includes(pattern)) {
                   try {
                     const fileContent = await readFile(file);
                     userVars[`${varName}_FILE`] = file;

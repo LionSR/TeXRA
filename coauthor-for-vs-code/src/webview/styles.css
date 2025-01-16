@@ -773,8 +773,6 @@ button .fas {
   margin-right: 5px;
 }
 
-
-
 /* Update dropdown positioning for tool use */
 .dropdown-container {
   position: relative;
@@ -790,7 +788,6 @@ button .fas {
   padding: 2px 6px;
   font-size: calc(var(--font-size) * 0.9);
 }
-
 
 /* Hide multiple file operation buttons when containers are not toggled */
 .file-select:has(#multipleInputFilesContainer[style*='none'])
