@@ -57,17 +57,10 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="inputFile"
-                ><i class="fas fa-file-import"></i> Input</label
+                ><i class="fas fa-file-import clickable" title="Input (Click to refresh)"></i> Input</label
               >
             </div>
             <div class="file-select-actions">
-              <button
-                id="refreshAllFilesButton"
-                class="action-button"
-                title="Refresh all file lists"
-              >
-                <i class="fas fa-sync-alt"></i>
-              </button>
               <button
                 id="currentInputFileButton"
                 class="action-button"
@@ -127,7 +120,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="referenceFile"
-              ><i class="fas fa-book"></i> Reference</label
+              ><i class="fas fa-book clickable" title="Reference (Click to refresh)"></i> Reference</label
             >
             <div class="file-select-actions">
               <button
@@ -192,7 +185,7 @@
         <div class="file-select">
           <div class="file-select-header">
             <label for="auxiliaryFile"
-              ><i class="fas fa-file-circle-plus"></i> Auxiliary</label
+              ><i class="fas fa-file-circle-plus clickable" title="Auxiliary (Click to refresh)"></i> Auxiliary</label
             >
             <div class="file-select-actions">
               <button
@@ -258,7 +251,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="figureFile"
-                ><i class="fas fa-image"></i> Figure</label
+                ><i class="fas fa-image clickable" title="Figure (Click to refresh)"></i> Figure</label
               >
               <div class="dropdown-container dropdown-left">
                 <span
@@ -521,7 +514,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="editedFile"
-                ><i class="fas fa-file-edit"></i> Edited File</label
+                ><i class="fas fa-file-edit clickable" title="Edited (Click to refresh)"></i> Edited File</label
               >
               <button id="mergeButton" class="icon-button" title="Merge">
                 <i class="fas fa-code-merge"></i>Merge
@@ -535,13 +528,6 @@
               </button>
             </div>
             <div class="file-select-actions">
-              <button
-                id="refreshEditedFileButton"
-                class="action-button"
-                title="Refresh edited files"
-              >
-                <i class="fas fa-sync-alt"></i>
-              </button>
               <button
                 id="currentEditedFileButton"
                 class="action-button"
@@ -566,7 +552,7 @@
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="commit"
-                ><i class="fas fa-code-commit"></i> Commit</label
+                ><i class="fas fa-code-commit clickable" title="Commit (Click to refresh)"></i> Commit</label
               >
               <button
                 id="latexdiffvcButton"
@@ -591,13 +577,6 @@
               </button>
             </div>
             <div class="file-select-actions">
-              <button
-                id="refreshCommitsButton"
-                class="icon-button"
-                title="Refresh"
-              >
-                <i class="fas fa-sync"></i>
-              </button>
             </div>
           </div>
           <select id="commit">
