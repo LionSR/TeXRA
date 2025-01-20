@@ -26,6 +26,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'Utils',
   'LogViewProvider',
   'executeAgent',
+  'ImgUtils',
 ]);
 
 // Channels that should not be persisted in workspace storage
