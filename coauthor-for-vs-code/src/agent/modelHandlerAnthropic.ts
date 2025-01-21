@@ -30,6 +30,8 @@ import { ToolState } from './ToolState';
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
+
+// The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
 export class ModelHandlerAnthropic extends ModelHandler {
   /** Initializes an Anthropic API client using the configured API key. */
   getClient(): Anthropic {
