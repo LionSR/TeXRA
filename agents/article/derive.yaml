@@ -1,4 +1,4 @@
-name: derive
+name: derive_weak
 
 settings:
   agentType: CoT
@@ -20,6 +20,13 @@ prompts:
         \item Break down complex expressions into their constituent parts and show how they combine.
         \item Show every single step in calculations - never skip steps or use phrases like ``after careful collection of terms'' or ``after some algebra''.
         \item When expanding expressions, show the complete expansion with all terms written out explicitly.
+        \item Present every calculation in full detail, even if similar to previous calculations:
+            \begin{itemize}
+                \item Never use phrases like ``Similarly,'' or ``Proceeding analogously,'' to skip steps
+                \item Show the complete derivation for each term, even if the steps mirror previous calculations
+                \item Write out all intermediate steps explicitly for each case
+                \item If patterns emerge, point them out after showing the full calculations
+            \end{itemize}
         \item Use multi-line align environments extensively with line breaks (\\) to show each mathematical manipulation clearly.
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
         \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
@@ -61,12 +68,13 @@ prompts:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
-    Important: Focus solely on the given instruction. Start from fundamental principles and show every single step, deriving all coefficients explicitly.
+    Important: Focus solely on the given instruction. Start from fundamental principles and show every single step, deriving all coefficients explicitly. Show every calculation in full detail, even if similar to previous calculations.
 
     In the scratchpad below, plan how to expand the mathematical derivations to show every step clearly. Consider:
     - What are the fundamental principles and definitions we start from
     - Where additional steps are needed
     - Which coefficients need explicit derivation
+    - Which calculations need to be shown in full (even if similar to others)
     - How to break down complex expressions
     - How to break long equations across multiple lines
     - What explanatory text to add between equation blocks
@@ -84,6 +92,7 @@ prompts:
             \begin{itemize}
                 \item Current state: [Brief description of current derivation]
                 \item Missing steps: [List steps that need to be shown]
+                \item Similar calculations to expand: [List calculations that need full derivation despite similarity]
                 \item Coefficients to derive: [List coefficients needing explicit derivation]
                 \item Implementation: [How to expand the derivation]
             \end{itemize}
@@ -91,6 +100,7 @@ prompts:
             \begin{itemize}
                 \item Current state: [Brief description]
                 \item Missing steps: [List steps]
+                \item Similar calculations to expand: [List calculations needing full derivation]
                 \item Coefficients to derive: [List coefficients]
                 \item Implementation: [Expansion plan]
             \end{itemize}
@@ -112,6 +122,8 @@ prompts:
         \item Are we truly starting from first principles, or did we assume any results?
         \item Have we derived all coefficients explicitly, or are any still undefined?
         \item Are there any steps that are still too large or could be broken down further?
+        \item Have we shown every calculation in full, even those similar to previous ones?
+        \item Are there any places where we used phrases like ``Similarly'' or ``Analogously'' instead of showing the full calculation?
         \item Is each mathematical manipulation clearly explained?
         \item Are long equations formatted for optimal readability?
         \item Is notation used consistently throughout?
