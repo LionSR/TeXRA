@@ -35,6 +35,7 @@
             },
             "default": [
               "correct",
+              "derive",
               "polish",
               "draw",
               "ocr",
@@ -67,6 +68,7 @@
               "gpt4t",
               "geminiexp",
               "gemini2f",
+              "gemini2fT",
               "gemini1p+",
               "gemini1f+"
             ],
