@@ -256,8 +256,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  gemini2fthinking: {
-    name: 'gemini2fthinking',
+  gemini2fT: {
+    name: 'gemini2fT',
     fullName: 'gemini-2.0-flash-thinking-exp-01-21',
     openrouterFullName: 'google/gemini-2.0-flash-thinking-exp-01-21',
     provider: ModelProvider.GOOGLE,
