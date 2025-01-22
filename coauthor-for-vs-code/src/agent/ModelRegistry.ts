@@ -258,8 +258,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   gemini2fthinking: {
     name: 'gemini2fthinking',
-    fullName: 'gemini-2.0-flash-thinking-exp-1219',
-    openrouterFullName: 'google/gemini-2.0-flash-thinking-exp-1219',
+    fullName: 'gemini-2.0-flash-thinking-exp-01-21',
+    openrouterFullName: 'google/gemini-2.0-flash-thinking-exp-01-21',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
     contextWindow: 32768,
@@ -362,8 +362,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: true,
   },
-  'deepseek-R1': {
-    name: 'deepseek-R1',
+  'DS-R1': {
+    name: 'DS-R1',
     fullName: 'deepseek/deepseek-R1',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.OTHERS,
