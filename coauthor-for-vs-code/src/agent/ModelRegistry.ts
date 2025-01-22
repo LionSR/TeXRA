@@ -261,8 +261,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gemini-2.0-flash-thinking-exp-01-21',
     openrouterFullName: 'google/gemini-2.0-flash-thinking-exp-01-21',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 8192,
-    contextWindow: 32768,
+    maxOutputTokens: 65535,
+    contextWindow: 1048576,
     inputPrice: 0.075,
     outputPrice: 0.3,
     capabilities: {
