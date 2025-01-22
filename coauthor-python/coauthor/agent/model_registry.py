@@ -187,8 +187,8 @@ MODEL_CONFIGS: dict[str, ModelConfig] = {
         outputPrice=5.0,
         capabilities=ModelCapabilities(supportsVision=True),
     ),
-    "gemini2fthinking": ModelConfig(
-        name="gemini2fthinking",
+    "gemini2fT": ModelConfig(
+        name="gemini2fT",
         fullName="gemini-2.0-flash-thinking-exp-1219",
         openrouterFullName="google/gemini-2.0-flash-thinking-exp-1219",
         provider=ModelProvider.GOOGLE,
