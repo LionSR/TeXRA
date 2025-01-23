@@ -30,9 +30,10 @@ import {
   getXmlFormatFromFiles,
 } from '../utils/promptUtils';
 import {
-  getReplacementsByCategory,
-  applyReplacementRegex,
   applyReplacements,
+  applyReplacementRegex,
+  getReplacementsByCategory,
+  getAllReplacements,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
 
@@ -520,7 +521,7 @@ export abstract class BaseReflectionAgent {
       }
       processedResponse = applyReplacements(
         processedResponse,
-        getReplacementsByCategory('all'),
+        getAllReplacements(),
       ).trim();
       processedResponse = applyReplacementRegex(
         processedResponse,
