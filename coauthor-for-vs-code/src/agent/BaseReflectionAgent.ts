@@ -31,9 +31,9 @@ import {
 } from '../utils/promptUtils';
 import {
   applyReplacements,
-  applyReplacementRegex,
   getReplacementsByCategory,
   getAllReplacements,
+  getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
 
@@ -514,19 +514,18 @@ export abstract class BaseReflectionAgent {
         this.modelHandler.capabilities.likesToAskForConfirmation &&
         this.agentConfig.toolConfig.autoConfirmation
       ) {
-        processedResponse = applyReplacementRegex(
+        processedResponse = applyReplacements(
           processedResponse,
-          getReplacementsByCategory('autoConfirmation'),
+          getReplacementsByCategory('autoConfirmation')!,
         );
       }
       processedResponse = applyReplacements(
         processedResponse,
         getAllReplacements(),
       ).trim();
-      processedResponse = applyReplacementRegex(
+      processedResponse = applyReplacements(
         processedResponse,
-        getReplacementsByCategory('inlineMath'),
-        'g',
+        getAllReplacementsRegex(),
       ).trim();
 
       toolState.updateLastResponse(processedResponse);

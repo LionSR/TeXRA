@@ -12,6 +12,8 @@ interface ReplacementCategory {
   name: string;
   description: string;
   patterns: { [key: string]: string };
+  isRegex?: boolean;
+  flags?: string; // Optional regex flags
 }
 
 // ===== LaTeX Content Formatting =====
@@ -20,6 +22,7 @@ interface ReplacementCategory {
 const EQUATION_REPLACEMENTS: ReplacementCategory = {
   name: 'equations',
   description: 'Fixes for LaTeX equation spacing and formatting',
+  isRegex: false,
   patterns: {
     '\n\n\\begin{align}': '\n\\begin{align}',
     '\\end{align}\n\n': '\\end{align}\n',
@@ -121,6 +124,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
 const SECTION_REPLACEMENTS: ReplacementCategory = {
   name: 'sections',
   description: 'Fixes for section spacing in LaTeX documents',
+  isRegex: false,
   patterns: {
     '\\end{align}\n\\section': '\\end{align}\n\n\n\\section',
     '\\end{equation}\n\\section': '\\end{equation}\n\n\n\\section',
@@ -137,6 +141,8 @@ const SECTION_REPLACEMENTS: ReplacementCategory = {
 const TIKZ_REPLACEMENTS: ReplacementCategory = {
   name: 'tikz',
   description: 'Fixes for TikZ picture formatting and structure',
+  isRegex: true,
+  flags: 'gms',
   patterns: {
     '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
       '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
@@ -152,6 +158,7 @@ const TIKZ_REPLACEMENTS: ReplacementCategory = {
 const CHARACTER_REPLACEMENTS: ReplacementCategory = {
   name: 'characters',
   description: 'Fixes for special characters and diacritics',
+  isRegex: false,
   patterns: {
     ansätze: 'ans{\\"a}tze',
     Rényi: "R{\\'e}nyi",
@@ -165,6 +172,7 @@ const CHARACTER_REPLACEMENTS: ReplacementCategory = {
 const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_xml',
   description: 'Fixes specific to XML output processing',
+  isRegex: false,
   patterns: {
     // Basic tag fixes
     // \end{document> etc is a real mistake that need to be fixed!!! Do not change these
@@ -218,6 +226,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
 const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'scratchpad_xml',
   description: 'Fixes for scratchpad XML processing',
+  isRegex: false,
   patterns: {
     // Duplicate scratchpad tag fixes - remove redundant tags
     '<scratchpad><scratchpad>': '<scratchpad>',
@@ -254,6 +263,7 @@ const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
 const STYLE_REPLACEMENTS: ReplacementCategory = {
   name: 'style',
   description: 'Style improvements and word choice fixes',
+  isRegex: false,
   patterns: {
     delve: 'discuss',
     'delving into': 'discussing',
@@ -272,6 +282,8 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
 const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   name: 'inlineMath',
   description: 'Fixes for LaTeX inline math formatting',
+  isRegex: true,
+  flags: 'g',
   patterns: {
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
   },
@@ -280,6 +292,8 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
 const AUTO_CONFIRM_REPLACEMENTS: ReplacementCategory = {
   name: 'autoConfirmation',
   description: 'Fixes for auto confirmation writing with regex patterns',
+  isRegex: true,
+  flags: 'gms',
   patterns: {
     // Match the entire confirmation message block and reformat
     '<latex_code>\\s*<monologue>\\[Due to length limits,[^\\n]*\\n(.*?)</monologue>':
@@ -294,37 +308,41 @@ const AUTO_CONFIRM_REPLACEMENTS: ReplacementCategory = {
 };
 
 /**
- * Get all replacement patterns combined into a single dictionary.
+ * Get all non-regex replacements combined into a single category.
  */
-export function getAllReplacements(): { [key: string]: string } {
-  const allReplacements: { [key: string]: string } = {};
+export function getAllReplacements(): ReplacementCategory {
+  const allPatterns: { [key: string]: string } = {};
   const categories = [
     // LaTeX Content Formatting
     EQUATION_REPLACEMENTS,
     SECTION_REPLACEMENTS,
-    TIKZ_REPLACEMENTS,
     CHARACTER_REPLACEMENTS,
-    INLINE_MATH_REPLACEMENTS,
     // XML/Structural Formatting
     LATEX_XML_REPLACEMENTS,
     SCRATCHPAD_XML_REPLACEMENTS,
-    // Style and Content Improvements
     STYLE_REPLACEMENTS,
-    // AUTO_CONFIRM_REPLACEMENTS,
   ];
 
   for (const category of categories) {
-    Object.assign(allReplacements, category.patterns);
+    if (!category.isRegex) {
+      Object.assign(allPatterns, category.patterns);
+    }
   }
-  return allReplacements;
+
+  return {
+    name: 'all',
+    description: 'Combined non-regex replacements',
+    isRegex: false,
+    patterns: allPatterns,
+  };
 }
 
 /**
  * Get replacement patterns for a specific category.
  */
-export function getReplacementsByCategory(categoryName: string): {
-  [key: string]: string;
-} {
+export function getReplacementsByCategory(
+  categoryName: string,
+): ReplacementCategory | undefined {
   const categories: { [key: string]: ReplacementCategory } = {
     equations: EQUATION_REPLACEMENTS,
     sections: SECTION_REPLACEMENTS,
@@ -337,47 +355,48 @@ export function getReplacementsByCategory(categoryName: string): {
     inlineMath: INLINE_MATH_REPLACEMENTS,
   };
 
-  return categories[categoryName]?.patterns || {};
+  return categories[categoryName];
 }
 
 /**
- * Apply a dictionary of replacements to the given text.
+ * Get all regex replacement categories in order of application.
+ */
+export function getAllReplacementsRegex(): ReplacementCategory[] {
+  return [INLINE_MATH_REPLACEMENTS, TIKZ_REPLACEMENTS];
+}
+
+/**
+ * Apply replacements to text, handling both regex and non-regex patterns.
  */
 export function applyReplacements(
   text: string,
-  replacements: { [key: string]: string },
+  replacements: ReplacementCategory | ReplacementCategory[],
 ): string {
-  try {
-    for (const [old, newText] of Object.entries(replacements)) {
-      text = text.replaceAll(old, newText);
-    }
-    return text;
-  } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error applying replacements: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    throw err;
-  }
-}
+  // Convert single category to array for unified handling
+  const replacementArray = Array.isArray(replacements)
+    ? replacements
+    : [replacements];
 
-/**
- * Apply a dictionary of regex replacements to the given text.
- */
-export function applyReplacementRegex(
-  text: string,
-  replacements: { [key: string]: string },
-  flags: string = '',
-): string {
-  for (const [pattern, repl] of Object.entries(replacements)) {
-    try {
-      text = text.replace(new RegExp(pattern, flags), repl);
-    } catch (regexErr) {
-      // Log specific regex errors but continue with other replacements
-      logger.error(
-        CHANNEL,
-        `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
-      );
+  // Process all replacements in order
+  for (const category of replacementArray) {
+    if (category.isRegex) {
+      for (const [pattern, repl] of Object.entries(category.patterns)) {
+        try {
+          text = text.replace(
+            new RegExp(pattern, category.flags),
+            repl as string,
+          );
+        } catch (regexErr) {
+          logger.error(
+            CHANNEL,
+            `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
+          );
+        }
+      }
+    } else {
+      for (const [old, newText] of Object.entries(category.patterns)) {
+        text = text.replaceAll(old, newText as string);
+      }
     }
   }
   return text;
