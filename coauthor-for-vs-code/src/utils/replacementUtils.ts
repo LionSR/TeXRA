@@ -77,6 +77,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n    \n&=': '\n    &=',
     '\n    ,\n': ',\n',
     '\!\n    ': '\n    ',
+    '\n    =\n': ' =',
 
     // Fix extra spacing in specific contexts
     'e^{\\,i\\,': 'e^{i ',
@@ -85,7 +86,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '-\\,i\\,': '-i',
     '\\,i\\,': ' i ',
     '-\\,': '-',
-    '\,&': ' &',
+    '\\,&': ' &',
     '{-\\,0}': '{0}',
     '{-\\,1}': '{1}',
     // Remove unnecessary skip commands
@@ -372,6 +373,8 @@ export function getReplacementsByCategory(
 export function getAllReplacementsRegex(): ReplacementCategory[] {
   return [INLINE_MATH_REPLACEMENTS, TIKZ_REPLACEMENTS];
 }
+
+// maybe i can even do this for strings<some length...
 
 /**
  * Apply replacements to text, handling both regex and non-regex patterns.
