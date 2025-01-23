@@ -129,7 +129,7 @@ export async function runLatexdiff(
   inputFile: string,
   editedFile: string,
   suffix: string = '_diff',
-  runIndent: boolean = false,
+  runIndent: boolean = true,
   channel: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
