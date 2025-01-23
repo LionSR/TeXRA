@@ -27,6 +27,7 @@ import {
   runLatexdiffBetweenRounds,
   ensureLatexdiffInstalled,
 } from '../latex/latexdiff';
+import { runLatexIndent } from '../latex/latexindent';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -86,6 +87,21 @@ export class OutputHandler {
     this.channel = this.logger.channelId;
   }
 
+  /** Runs latexindent on a file if it has .tex extension */
+  private async indentLatexFile(filePath: string): Promise<void> {
+    if (filePath.endsWith('.tex')) {
+      this.logger.debug(`Running latexindent on ${filePath}`);
+      await runLatexIndent(filePath);
+    }
+  }
+
+  /** Runs latexindent on multiple files */
+  private async indentLatexFiles(filePaths: string[]): Promise<void> {
+    for (const filePath of filePaths) {
+      await this.indentLatexFile(filePath);
+    }
+  }
+
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
     if (this.agentConfig.toolConfig.autoConfirmation) {
@@ -106,8 +122,10 @@ export class OutputHandler {
     return content;
   }
 
-  /** Runs latexdiff on single output file. */
+  /** Handles output file processing and validation for agent responses. */
   public async handleSingleOutput(outputFile: string): Promise<void> {
+    await this.indentLatexFile(outputFile);
+
     if (
       this.agentSetting.isRewrite &&
       this.agentConfig.inputFile.includes('.tex') &&
@@ -136,6 +154,8 @@ export class OutputHandler {
 
   /** Runs latexdiff on multiple output files. */
   public async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
+    await this.indentLatexFiles(outputFiles);
+
     this.logger.debug(
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
     );
