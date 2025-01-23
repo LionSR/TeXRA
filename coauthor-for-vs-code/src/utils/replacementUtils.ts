@@ -43,11 +43,12 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '[-5pt]': '',
     '[-6pt]': '',
     '[-7pt]': '',
-    // remove
+    // remove for \\
     ' \\;': ' ',
     ' \\; ': ' ',
     ' \\,\\': ' \\',
     '\\,\n': '\n',
+    '\n    \\\\': '\\\\',
     // removing extra spaces
     '\\;+\\;': '+',
     '\\;-\\;': '-',
@@ -58,14 +59,27 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '-\\;': '-',
     '=\\;': '=',
     '\\!\\!': '',
+    // parentheses fixes
     '\\bigl(': '(',
     '\\bigr)': ')',
     '\\bigl[': '[',
     '\\bigr]': ']',
+    '\\Bigl(': '\\left(',
+    '\\Bigr)': '\\right)',
+    '\\Bigl[': '\\left[',
+    '\\Bigr]': '\\right]',
+    '\\biggl(': '\\left(',
+    '\\biggr(': '\\right(',
+    '\\biggl[': '\\left[',
+    '\\biggr]': '\\right]',
+    '\\Biggl[': '\\left[',
+    '\\Biggr[': '\\right[',
+    '\\Biggl(': '\\left(',
+    '\\Biggr)': '\\right)',
     // nonumber:
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
-    // extra equation spacing fixes
+    // extra \, spacing fixes
     'e^{\\,i\\,': 'e^{i ',
     'e^{\\,': 'e^{',
     // extra space fixes
@@ -91,6 +105,15 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\dd\\t\\,': '\\dd\\t~',
     '\\dd\\bx\\,': '\\dd\\bx~',
     '\\dd\\bz\\,': '\\dd\\bz~',
+  },
+};
+
+// LaTeX inline math formatting fixes
+const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
+  name: 'inlineMath',
+  description: 'Fixes for LaTeX inline math formatting',
+  patterns: {
+    '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
   },
 };
 
@@ -269,6 +292,7 @@ export function getAllReplacements(): { [key: string]: string } {
     SECTION_REPLACEMENTS,
     TIKZ_REPLACEMENTS,
     CHARACTER_REPLACEMENTS,
+    INLINE_MATH_REPLACEMENTS,
     // XML/Structural Formatting
     LATEX_XML_REPLACEMENTS,
     SCRATCHPAD_XML_REPLACEMENTS,
@@ -298,6 +322,7 @@ export function getReplacementsByCategory(categoryName: string): {
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
     autoConfirmation: AUTO_CONFIRM_REPLACEMENTS,
+    inlineMath: INLINE_MATH_REPLACEMENTS,
   };
 
   return categories[categoryName]?.patterns || {};
