@@ -78,6 +78,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n    ,\n': ',\n',
     '\!\n    ': '\n    ',
     '\n    =\n': ' =',
+    '\n     &\n    -': '\n    & -',
+    '(\n    ': '(',
+    '\n    )': ')',
 
     // Fix extra spacing in specific contexts
     'e^{\\,i\\,': 'e^{i ',
@@ -295,6 +298,7 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
     '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands with arbitrary integers
     '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands with arbitrary integers
+    '\\\\hspace\\{-?\\d+pt\\}': '',
   },
 };
 
