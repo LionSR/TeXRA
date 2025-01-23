@@ -30,29 +30,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n\n\\begin{equation}': '\n\\begin{equation}',
     '\\end{equation}\n\n': '\\end{equation}\n',
 
-    // Remove unnecessary pt spacing commands
-    '[1pt]': '',
-    '[2pt]': '',
-    '[3pt]': '',
-    '[4pt]': '',
-    '[5pt]': '',
-    '[6pt]': '',
-    '[7pt]': '',
-    '[8pt]': '',
-    '[9pt]': '',
-    '[10pt]': '',
-    '[-1pt]': '',
-    '[-2pt]': '',
-    '[-3pt]': '',
-    '[-4pt]': '',
-    '[-5pt]': '',
-    '[-6pt]': '',
-    '[-7pt]': '',
-
-    // Remove unnecessary hspace commands
-    '\\hspace[3pt]': '',
-    '\\hspace[55pt]': '',
-
     // Fix backslash spacing
     ' \\;': ' ',
     ' \\; ': ' ',
@@ -70,7 +47,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '-\\;': '-',
     '=\\;': '=',
     '\\!\\!': '',
-
     // Standardize parentheses sizing
     '\\bigl(': '(',
     '\\bigr)': ')',
@@ -80,20 +56,27 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\Bigr)': '\\right)',
     '\\Bigl[': '\\left[',
     '\\Bigr]': '\\right]',
+    '\\Bigl\\{': '\\left\\{',
+    '\\Bigr\\}': '\\right\\}',
     '\\biggl(': '\\left(',
     '\\biggr(': '\\right(',
     '\\biggl[': '\\left[',
     '\\biggr]': '\\right]',
-    '\\Biggl[': '\\left[',
-    '\\Biggr[': '\\right[',
+    '\\biggl\\{': '\\left\\{',
+    '\\biggr\\}': '\\right\\}',
     '\\Biggl(': '\\left(',
     '\\Biggr)': '\\right)',
+    '\\Biggl[': '\\left[',
+    '\\Biggr[': '\\right[',
+    '\\Biggl\\{': '\\left\\{',
+    '\\Biggr\\}': '\\right\\}',
 
     // Align environment formatting
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
     '\n    \n&=': '\n    &=',
     '\n    ,\n': ',\n',
+    '\!\n    ': '\n    ',
 
     // Fix extra spacing in specific contexts
     'e^{\\,i\\,': 'e^{i ',
@@ -101,9 +84,10 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '-\\,i\\, ': '-i ',
     '-\\,i\\,': '-i',
     '\\,i\\,': ' i ',
-    '-\,': '-',
+    '-\\,': '-',
     '\,&': ' &',
-
+    '{-\\,0}': '{0}',
+    '{-\\,1}': '{1}',
     // Remove unnecessary skip commands
     '\\medskip\n': '',
     '\\smallskip\n': '',
@@ -133,6 +117,12 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Fix dollar signs: 40: You should put punctuation outside inner math mode.
     '.$': '$.',
     ',$': '$,',
+    '$-\\,': '$-',
+    '.  ': '. ',
+    // Single fix for extra \;, \, etc: aggressive
+    '\\;': ' ',
+    '\\,': ' ',
+    '\\left[\\dots\\right]': '[\\dots]',
   },
 };
 
@@ -302,6 +292,8 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   flags: 'g',
   patterns: {
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
+    '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands with arbitrary integers
+    '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands with arbitrary integers
   },
 };
 
