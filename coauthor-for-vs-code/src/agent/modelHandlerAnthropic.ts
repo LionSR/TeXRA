@@ -11,6 +11,7 @@ import {
   applyReplacements,
   applyReplacementRegex,
   getReplacementsByCategory,
+  getAllReplacements,
 } from '../utils/replacementUtils';
 import {
   CONFIRMATION_PROMPT_PATTERNS,
@@ -332,7 +333,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
       if (
         toolState.accumulatedOutput.includes('<scratchpad>') &&
-        prefill === '<scratchpad>'
+        prefill === '<scratchpad>' // this is not so neat
       ) {
         await writeFile(outputFile, prefill);
       } else if (agentSetting.outputExt === 'xml') {
@@ -345,15 +346,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
-    fileContent = applyReplacements(
-      fileContent,
-      getReplacementsByCategory('all'),
-    ).trim();
+    fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
     fileContent = applyReplacementRegex(
       fileContent,
       getReplacementsByCategory('inlineMath'),
       'g',
     ).trim();
+    await writeFile(outputFile, fileContent);
 
     if (
       this.capabilities.likesToAskForConfirmation &&
