@@ -522,6 +522,11 @@ export abstract class BaseReflectionAgent {
         processedResponse,
         getReplacementsByCategory('all'),
       ).trim();
+      processedResponse = applyReplacementRegex(
+        processedResponse,
+        getReplacementsByCategory('inlineMath'),
+        'g',
+      ).trim();
 
       toolState.updateLastResponse(processedResponse);
 
