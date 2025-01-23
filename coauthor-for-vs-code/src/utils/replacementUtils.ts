@@ -24,11 +24,13 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes for LaTeX equation spacing and formatting',
   isRegex: false,
   patterns: {
+    // Environment spacing fixes
     '\n\n\\begin{align}': '\n\\begin{align}',
     '\\end{align}\n\n': '\\end{align}\n',
     '\n\n\\begin{equation}': '\n\\begin{equation}',
     '\\end{equation}\n\n': '\\end{equation}\n',
-    // o1 model's overformatting
+
+    // Remove unnecessary pt spacing commands
     '[1pt]': '',
     '[2pt]': '',
     '[3pt]': '',
@@ -46,15 +48,19 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '[-5pt]': '',
     '[-6pt]': '',
     '[-7pt]': '',
+
+    // Remove unnecessary hspace commands
     '\\hspace[3pt]': '',
     '\\hspace[55pt]': '',
-    // remove for \\
+
+    // Fix backslash spacing
     ' \\;': ' ',
     ' \\; ': ' ',
     ' \\,\\': ' \\',
     '\\,\n': '\n',
     '\n    \\\\': '\\\\',
-    // removing extra spaces
+
+    // Fix operator spacing
     '\\;+\\;': '+',
     '\\;-\\;': '-',
     '\\;*\\;': '*',
@@ -64,7 +70,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '-\\;': '-',
     '=\\;': '=',
     '\\!\\!': '',
-    // parentheses fixes
+
+    // Standardize parentheses sizing
     '\\bigl(': '(',
     '\\bigr)': ')',
     '\\bigl[': '[',
@@ -81,23 +88,28 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\Biggr[': '\\right[',
     '\\Biggl(': '\\left(',
     '\\Biggr)': '\\right)',
-    // nonumber:
+
+    // Align environment formatting
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
     '\n    \n&=': '\n    &=',
     '\n    ,\n': ',\n',
 
-    // extra \, spacing fixes
+    // Fix extra spacing in specific contexts
     'e^{\\,i\\,': 'e^{i ',
     'e^{\\,': 'e^{',
-    '\,i\,': ' i ',
+    '-\\,i\\, ': '-i ',
+    '-\\,i\\,': '-i',
+    '\\,i\\,': ' i ',
     '-\,': '-',
     '\,&': ' &',
-    // skip fixes
+
+    // Remove unnecessary skip commands
     '\\medskip\n': '',
     '\\smallskip\n': '',
     '\\bigskip\n': '',
-    // correcting potential mistakes of the model
+
+    // Fix incorrect math operator commands
     '\\\\cos': '\\cos',
     '\\\\sin': '\\sin',
     '\\\\tan': '\\tan',
@@ -109,7 +121,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\alpha': '\\alpha',
     '\\\\beta': '\\beta',
     '\\\\gamma': '\\gamma',
-    // Max's writing habit
+
+    // Max's writing style preferences
     '\\dd\\bze\\,': '\\dd\\bze~',
     '\\dd\\bxi\\,': '\\dd\\bxi~',
     '\\dd\\beta\\,': '\\dd\\beta~',
@@ -117,6 +130,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\dd\\t\\,': '\\dd\\t~',
     '\\dd\\bx\\,': '\\dd\\bx~',
     '\\dd\\bz\\,': '\\dd\\bz~',
+    // Fix dollar signs: 40: You should put punctuation outside inner math mode.
+    '.$': '$.',
+    ',$': '$,',
   },
 };
 
@@ -132,25 +148,6 @@ const SECTION_REPLACEMENTS: ReplacementCategory = {
     '\\end{equation}\n\\subsection': '\\end{equation}\n\n\n\\subsection',
     '\\end{align}\n\\paragraph': '\\end{align}\n\n\n\\paragraph',
     '\\end{equation}\n\\paragraph': '\\end{equation}\n\n\n\\paragraph',
-  },
-};
-
-// TikZ picture fixes
-// Using ECMAScript 2018 named capture groups (?<name>pattern)
-// Similar to Python's (?P<name>pattern)
-const TIKZ_REPLACEMENTS: ReplacementCategory = {
-  name: 'tikz',
-  description: 'Fixes for TikZ picture formatting and structure',
-  isRegex: true,
-  flags: 'gms',
-  patterns: {
-    '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
-      '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
-    '\\end{document}\\s*\\chapter': '\\chapter',
-    '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
-    '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
-    '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
-      '$1\\end{tikzpicture}};\DIFaddendFL',
   },
 };
 
@@ -277,6 +274,25 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
 };
 
 // ===== Regex replacements =====
+
+// TikZ picture fixes
+// Using ECMAScript 2018 named capture groups (?<name>pattern)
+// Similar to Python's (?P<name>pattern)
+const TIKZ_REPLACEMENTS: ReplacementCategory = {
+  name: 'tikz',
+  description: 'Fixes for TikZ picture formatting and structure',
+  isRegex: true,
+  flags: 'gms',
+  patterns: {
+    '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
+      '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
+    '\\end{document}\\s*\\chapter': '\\chapter',
+    '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
+    '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
+    '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
+      '$1\\end{tikzpicture}};\DIFaddendFL',
+  },
+};
 
 // LaTeX inline math formatting fixes
 const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
