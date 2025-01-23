@@ -43,6 +43,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '[-5pt]': '',
     '[-6pt]': '',
     '[-7pt]': '',
+    '\\hspace[3pt]': '',
+    '\\hspace[55pt]': '',
     // remove for \\
     ' \\;': ' ',
     ' \\; ': ' ',
@@ -80,12 +82,18 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
     '\n    \n&=': '\n    &=',
+    '\n    ,\n': ',\n',
+
     // extra \, spacing fixes
     'e^{\\,i\\,': 'e^{i ',
     'e^{\\,': 'e^{',
+    '\,i\,': ' i ',
+    '-\,': '-',
+    '\,&': ' &',
     // skip fixes
     '\\medskip\n': '',
     '\\smallskip\n': '',
+    '\\bigskip\n': '',
     // correcting potential mistakes of the model
     '\\\\cos': '\\cos',
     '\\\\sin': '\\sin',
@@ -106,15 +114,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\dd\\t\\,': '\\dd\\t~',
     '\\dd\\bx\\,': '\\dd\\bx~',
     '\\dd\\bz\\,': '\\dd\\bz~',
-  },
-};
-
-// LaTeX inline math formatting fixes
-const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
-  name: 'inlineMath',
-  description: 'Fixes for LaTeX inline math formatting',
-  patterns: {
-    '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
   },
 };
 
@@ -168,16 +167,17 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes specific to XML output processing',
   patterns: {
     // Basic tag fixes
-    '\\end{document>}': '\\end{document}',
-    '\\end{figure>}': '\\end{figure}',
-    '\\end{tikzpicture>}': '\\end{tikzpicture}',
-    '\\end{revised_statement>}': '</revised_statement>',
-    '\\end{scope>}': '\\end{scope}',
-    '\\end{latex_document>}': '</latex_document>\n',
-    '\\end{output>}': '\\end{output}',
-    '\\end{response>}': '\\end{response}',
-    '\\end{scratchpad>}': '</scratchpad>',
-    '\\end{itemize>}': '\\end{itemize}',
+    // \end{document> etc is a real mistake that need to be fixed!!! Do not change these
+    '\\end{document>': '\\end{document}',
+    '\\end{figure>': '\\end{figure}',
+    '\\end{tikzpicture>': '\\end{tikzpicture}',
+    '\\end{revised_statement>': '</revised_statement>',
+    '\\end{scope>': '\\end{scope}',
+    '\\end{latex_document>': '</latex_document>\n',
+    '\\end{output>': '\\end{output}',
+    '\\end{response>': '\\end{response}',
+    '\\end{scratchpad>': '</scratchpad>',
+    '\\end{itemize>': '\\end{itemize}',
     // LaTeX to XML conversions
     '\\end{scratchpad}': '</scratchpad>',
     '\\end\n': '\\end{document}\n',
@@ -263,6 +263,17 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     realm: 'area',
     intricate: 'complex',
     '"exact"': "``exact''",
+  },
+};
+
+// ===== Regex replacements =====
+
+// LaTeX inline math formatting fixes
+const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
+  name: 'inlineMath',
+  description: 'Fixes for LaTeX inline math formatting',
+  patterns: {
+    '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
   },
 };
 
