@@ -177,39 +177,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     let stopReason = responseObject.stop_reason;
     let newResponse = responseObject.content[0].text.trim();
 
-    // Handle auto confirmation
     if (this.capabilities.likesToAskForConfirmation && autoConfirmation) {
       newResponse = wrapConfirmationPrompts(newResponse);
-    }
 
-    // Check for confirmation patterns
-    if (
-      CONFIRMATION_PROMPT_PATTERNS.some((pattern) =>
-        newResponse.toLowerCase().includes(pattern.toLowerCase()),
-      )
-    ) {
-      stopReason = 'ask_for_confirmation';
-    }
-
-    // Handle output tags if present
-    if (
-      newResponse.includes('<output>') &&
-      this.capabilities.likesToAskForConfirmation &&
-      autoConfirmation
-    ) {
-      this.logger.warn(
-        'Output tag detected - extracting latex code from <output> tags',
-      );
-      const extractedResponse = extractTextFromTag(newResponse, 'output');
-      if (extractedResponse !== newResponse) {
-        this.logger.warn('Extracted content from <output> tags');
-        newResponse = extractedResponse;
-      } else {
-        this.logger.warn('No <output> tags found in response');
+      // Check for confirmation patterns
+      if (
+        CONFIRMATION_PROMPT_PATTERNS.some((pattern) =>
+          newResponse.toLowerCase().includes(pattern.toLowerCase()),
+        )
+      ) {
+        stopReason = 'ask_for_confirmation';
       }
-    }
 
-    if (autoConfirmation) {
       // Apply formatting
       newResponse = applyReplacementRegex(
         newResponse,
@@ -217,6 +196,20 @@ export class ModelHandlerAnthropic extends ModelHandler {
         'gms',
       );
       newResponse = filterTagsFromText(newResponse, 'monologue');
+
+      // Handle output tags if present
+      if (newResponse.includes('<output>')) {
+        this.logger.warn(
+          'Output tag detected - extracting latex code from <output> tags',
+        );
+        const extractedResponse = extractTextFromTag(newResponse, 'output');
+        if (extractedResponse !== newResponse) {
+          this.logger.warn('Extracted content from <output> tags');
+          newResponse = extractedResponse;
+        } else {
+          this.logger.warn('No <output> tags found in response');
+        }
+      }
     }
 
     // Add end tag if needed
