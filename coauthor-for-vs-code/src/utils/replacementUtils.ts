@@ -79,10 +79,11 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // nonumber:
     '\n    \\nonumber\\\\': '\\nonumber\\\\',
     '\n    +': ' +',
+    '\n    \n&=': '\n    &=',
     // extra \, spacing fixes
     'e^{\\,i\\,': 'e^{i ',
     'e^{\\,': 'e^{',
-    // extra space fixes
+    // skip fixes
     '\\medskip\n': '',
     '\\smallskip\n': '',
     // correcting potential mistakes of the model

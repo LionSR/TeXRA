@@ -20,7 +20,7 @@ prompts:
         \item Break down complex expressions into their constituent parts and show how they combine.
         \item Show every single step in calculations - never skip steps or use phrases like ``after careful collection of terms'' or ``after some algebra''.
         \item When expanding expressions, show the complete expansion with all terms written out explicitly.
-        \item Use multi-line align environments extensively with line breaks (\\) to show each mathematical manipulation clearly.
+        \item Use multi-line align environments extensively with line breaks (meaning multiple &= paired with \\) to show each mathematical manipulation clearly.
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
         \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
         \item When simplifying complex expressions:
