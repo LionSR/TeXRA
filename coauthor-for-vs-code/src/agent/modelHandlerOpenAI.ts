@@ -10,6 +10,7 @@ import {
   applyReplacements,
   getReplacementsByCategory,
 } from '../utils/replacementUtils';
+import { applyReplacementRegex } from '../utils/replacementUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -242,6 +243,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
     fileContent = applyReplacements(
       fileContent,
       getReplacementsByCategory('all'),
+    ).trim();
+    fileContent = applyReplacementRegex(
+      fileContent,
+      getReplacementsByCategory('inlineMath'),
+      'g',
     ).trim();
 
     messages.push({ role: 'assistant', content: fileContent });
