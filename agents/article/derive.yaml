@@ -27,7 +27,7 @@ prompts:
                 \item Write out all intermediate steps explicitly for each case
                 \item If patterns emerge, point them out after showing the full calculations
             \end{itemize}
-        \item Use multi-line align environments extensively with line breaks (\\) to show each mathematical manipulation clearly.
+        \item Use multi-line align environments extensively with line breaks (meaning multiple &= paired with \\) to show each mathematical manipulation clearly.
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
         \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
         \item When simplifying complex expressions:
