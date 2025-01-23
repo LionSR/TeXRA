@@ -29,6 +29,17 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\end{align}\n\n': '\\end{align}\n',
     '\n\n\\begin{equation}': '\n\\begin{equation}',
     '\\end{equation}\n\n': '\\end{equation}\n',
+    // Fix reference numbering
+    'figure \\ref{': 'figure~\\ref{',
+    'table \\ref{': 'table~\\ref{',
+    'equation \\ref{': 'equation~\\ref{',
+    'Fig. \\ref{': 'Fig.~\\ref{',
+    'Table \\ref{': 'Table~\\ref{',
+    'Equation \\ref{': 'Equation~\\ref{',
+    'eq. \\ref{': 'eq.~\\ref{',
+    'eqn. \\ref{': 'eqn.~\\ref{',
+    'Eq. \\ref{': 'Eq.~\\ref{',
+    'Eqs. \\ref{': 'Eqs.~\\ref{',
 
     // Fix backslash spacing
     ' \\;': ' ',
