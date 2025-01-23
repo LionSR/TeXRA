@@ -91,14 +91,18 @@ export class OutputHandler {
     if (this.agentConfig.toolConfig.autoConfirmation) {
       content = filterTagsFromText(content, 'monologue');
     }
-    content = applyReplacements(
-      content,
-      getReplacementsByCategory('latex_xml'),
-    );
-    content = applyReplacements(
-      content,
-      getReplacementsByCategory('scratchpad_xml'),
-    );
+
+    const latexXmlReplacements = getReplacementsByCategory('latex_xml');
+    if (latexXmlReplacements) {
+      content = applyReplacements(content, latexXmlReplacements);
+    }
+
+    const scratchpadXmlReplacements =
+      getReplacementsByCategory('scratchpad_xml');
+    if (scratchpadXmlReplacements) {
+      content = applyReplacements(content, scratchpadXmlReplacements);
+    }
+
     return content;
   }
 

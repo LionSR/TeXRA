@@ -9,9 +9,9 @@ import { readFile, writeFile, fileExists } from '../utils/fileUtils';
 import { filterTagsFromText, extractTextFromTag } from '../utils/xmlUtils';
 import {
   applyReplacements,
-  applyReplacementRegex,
   getReplacementsByCategory,
   getAllReplacements,
+  getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import {
   CONFIRMATION_PROMPT_PATTERNS,
@@ -191,10 +191,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
 
       // Apply formatting
-      newResponse = applyReplacementRegex(
+      newResponse = applyReplacements(
         newResponse,
-        getReplacementsByCategory('autoConfirmation'),
-        'gms',
+        getReplacementsByCategory('autoConfirmation')!,
       );
       newResponse = filterTagsFromText(newResponse, 'monologue');
 
@@ -347,10 +346,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
     fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacementRegex(
+    fileContent = applyReplacements(
       fileContent,
-      getReplacementsByCategory('inlineMath'),
-      'g',
+      getAllReplacementsRegex(),
     ).trim();
     await writeFile(outputFile, fileContent);
 
@@ -359,10 +357,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
       agentConfig.toolConfig.autoConfirmation
     ) {
       fileContent = filterTagsFromText(fileContent, 'monologue');
-      fileContent = applyReplacementRegex(
+      fileContent = applyReplacements(
         fileContent,
-        getReplacementsByCategory('autoConfirmation'),
-        'gms',
+        getReplacementsByCategory('autoConfirmation')!,
       );
     }
     fileContent = fileContent.trim();

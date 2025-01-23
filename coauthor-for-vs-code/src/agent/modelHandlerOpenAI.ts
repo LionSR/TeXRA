@@ -8,9 +8,9 @@ import OpenAI from 'openai';
 import { readFile, fileExists, writeFile } from '../utils/fileUtils';
 import {
   applyReplacements,
-  applyReplacementRegex,
   getReplacementsByCategory,
   getAllReplacements,
+  getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 
 // Local imports - agent components
@@ -242,10 +242,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     let fileContent = await readFile(outputFile);
     fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
-    fileContent = applyReplacementRegex(
+    fileContent = applyReplacements(
       fileContent,
-      getReplacementsByCategory('inlineMath'),
-      'g',
+      getAllReplacementsRegex(),
     ).trim();
     await writeFile(outputFile, fileContent);
 
