@@ -349,6 +349,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
       fileContent,
       getReplacementsByCategory('all'),
     ).trim();
+    fileContent = applyReplacementRegex(
+      fileContent,
+      getReplacementsByCategory('inlineMath'),
+      'g',
+    ).trim();
 
     if (
       this.capabilities.likesToAskForConfirmation &&
