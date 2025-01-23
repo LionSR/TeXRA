@@ -16,7 +16,7 @@ prompts:
 
     When writing a professional *.tex \LaTeX document, you must: 
     - The document class is lecture.cls. Math commands defined in commands_qi.tex file should be used.
-    - Use \begin{equation} ... \end{equation} for single-line displayed equations. Use \begin{align} ... \end{align} for multi-line displayed equations. Use $...$ for inline equations.
+    - Use \begin{equation} ... \end{equation} for single-line displayed equations. Use \begin{align} ... \end{align} for multi-line displayed equations (meaning multiple &= paired with \\). Use $...$ for inline equations.
     - Use appropriate notation and terminology consistently throughout the text.
     - If there are duplicate labels, handle the collision correctly by renaming one of them using a condensed label and adjust accordingly where the labelled items are referenced.
     - You should use $\ldots$ or $\cdots$ rather than $\dots$ nor ``...'' to achieve an ellipsis following the best practice of chktex.
