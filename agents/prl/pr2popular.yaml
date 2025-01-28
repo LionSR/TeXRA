@@ -10,6 +10,9 @@ settings:
     - pattern: "cover_letter"
       varName: "COVER_LETTER"
       categories: ["inputFile", "inputFiles"]
+    - pattern: "CoverLetter"
+      varName: "COVER_LETTER"
+      categories: ["inputFile", "inputFiles"]
     - pattern: "justification"
       varName: "JUSTIFICATION"
       categories: ["inputFile", "inputFiles", "auxiliaryFile", "auxiliaryFiles"]
