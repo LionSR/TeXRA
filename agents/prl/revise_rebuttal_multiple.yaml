@@ -1,0 +1,219 @@
+name: revise_rebuttal
+
+settings:
+  documentTag: rebuttal_package
+  endTag: </rebuttal_package>
+  outputExt: xml
+  prefills:
+    - <rebuttal_package>\n<scratchpad>
+    - <rebuttal_package>\n<scratchpad>
+  requiredFiles:
+    COVER_LETTER: replies/cover_letter.txt
+    EDITOR_LETTER: replies/editor_letter.txt
+    REFEREE_REPORT_A: replies/report_a.txt
+    REFEREE_REPORT_B: replies/report_b.txt
+  requiredFilesInternal:
+    EXAMPLE_REBUTTAL_PACKAGE: example_rebuttal_package.txt
+  defaultOutputFiles:
+    - replies/reply_to_editor.tex
+    - replies/reply_to_referees.tex
+    - replies/list_of_major_changes.tex
+  filePatternsContain:
+    - pattern: "main"
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
+    - pattern: "Paper"
+      varName: "MAIN"
+      categories: ["inputFile", "inputFiles"]
+    - pattern: "supp"
+      varName: "SUPP"
+      categories: ["inputFile", "inputFiles"]
+    - pattern: "instruction"
+      varName: "FILE_INSTRUCTION"
+      categories: ["inputFiles", "auxiliaryFile", "auxiliaryFiles"]
+    - pattern: "reply_to_editor"
+      varName: "REPLY_TO_EDITOR"
+      categories: ["inputFiles"]
+    - pattern: "reply_to_referees"
+      varName: "REPLY_TO_REFEREES"
+      categories: ["inputFiles"]
+    - pattern: "list_of_major_changes"
+      varName: "LIST_OF_MAJOR_CHANGES"
+      categories: ["inputFiles"]
+    - pattern: "editor_letter"
+      varName: "EDITOR_LETTER_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report_a"
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report_b"
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report1"
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report2"
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
+
+prompts:
+  systemPrompt: |
+    You are physicist Prof. Ignacio Cirac.
+    Your task is to revise and improve a comprehensive rebuttal package for a research paper submitted to Physical Review Journals. This includes refining the response to referee comments, the letter to the editor, the list of major changes, and the revised versions of the main paper and supplementary materials. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
+
+    When revising the rebuttal package, you must:
+    \begin{itemize}
+        \item Maintain and enhance the use of appropriate notation and terminology consistent with the field of physics.
+        \item Ensure a professional and respectful tone while strengthening the defense of the research.
+        \item Improve the specificity and detail of responses to referee comments, including more concrete examples and clearer references to changes made in the paper.
+        \item Enhance the accuracy and clarity of all mathematical equations and scientific concepts.
+        \item Refine the balance between addressing referee concerns and maintaining the integrity of the original research.
+        \item Improve the use of \LaTeX{} formatting for all scientific notation and equations.
+        \item Further tailor the responses to the specific context of the research paper in physics.
+        \item Deepen the demonstration of understanding of the research topic and its broader implications in the field of physics.
+    \end{itemize}
+
+    When revising professional *.tex \LaTeX documents, you must:
+    \begin{itemize}
+      \item Enhance the use of professional LaTeX commands and environments for all scientific notation and equations. Use $\beta$, $J_1$, and $\approx$ instead of their unicode version
+      \item For quotation, prefer ``Schr\"odinger'' over "Schrodinger". Use either `` or '' as an alternative to `"'.
+      \item Use $0.1\%$ instead of ``0.1%''
+      \item Ensure proper use of enumerate and itemize environments for lists.
+      \item Improve overall LaTeX structure and formatting for better readability and professionalism.
+      \item When making references in the replies to the paper, use \cref{...} instead of spelled out references like ``Sec.~II.C'' or ``Eq.~(1)''.
+      \item Contents wrapped inside \begin{referee}{A} (or B) and \end{referee} environments come from the referee report. You should not make any changes to them.
+    \end{itemize}
+
+  userPrefix: |
+    You will be revising a rebuttal package for a paper submitted to Physical Review Journals. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
+
+    <documents>
+    {% if EXAMPLE_REBUTTAL_PACKAGE %}
+    <documents>
+    % The example rebuttal package.
+    {{ EXAMPLE_REBUTTAL_PACKAGE }}
+    </documents>
+    {% endif %}
+    <document name="{{ REPLY_TO_EDITOR_FILE }}">
+    % The current version of the letter to the editor.
+    {{ REPLY_TO_EDITOR_CONTENT }}
+    </document>
+    <document name="{{ REPLY_TO_REFEREES_FILE }}">
+    % The current version of the point-by-point response to referee comments.
+    {{ REPLY_TO_REFEREES_CONTENT }}
+    </document>
+    <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
+    % The current version of the list of major changes.
+    {{ LIST_OF_MAJOR_CHANGES_CONTENT }}
+    </document>
+    <document name="{{ MAIN_FILE }}">
+    % The current version of the main paper.
+    {{ MAIN_CONTENT }}
+    </document>
+    {% if SUPP_FILE %}
+    <document name="{{ SUPP_FILE }}">
+    % The current version of the supplementary materials.
+    {{ SUPP_CONTENT }}
+    </document>
+    {% endif %}
+    <document name="{{ EDITOR_LETTER_CONTENT_FILE }}">
+    % The full text of the editor's decision letter.
+    {{ EDITOR_LETTER_CONTENT }}
+    </document>
+    {% if REFEREE_REPORT_A_FILE %}
+    <document name="{{ REFEREE_REPORT_A_FILE }}">
+    % The full text of the first referee's report.
+    {{ REFEREE_REPORT_A_CONTENT }}
+    </document>
+    {% endif %}
+    {% if REFEREE_REPORT_B_FILE %}
+    <document name="{{ REFEREE_REPORT_B_FILE }}">
+    % The full text of the second referee's report.
+    {{ REFEREE_REPORT_B_CONTENT }}
+    </document>
+    {% endif %}
+    {% if FILE_INSTRUCTION_FILE %}
+    <document name="{FILE_INSTRUCTION_FILE}">
+    % The instructions on how to revise the rebuttal package.
+    {{ FILE_INSTRUCTION_CONTENT }}
+    </document>
+    {% endif %}
+    </documents>
+
+  userRequest: |
+    Please carefully review all the provided documents, including the current rebuttal package and the referee reports. Then, before revising the full rebuttal package, write out your revision plan inside the `<scratchpad>' tag. Please make sure you understand the latex formatting structure and latex conventions of the current draft rebuttal package, as you should respect them in the revised version. Consider how to improve each component of the rebuttal package, ensuring all referee comments are addressed more effectively and that changes to the paper are clearly communicated. You should include all the changes you added in the previous step.
+
+    After your planning, revise the rebuttal package further to include the following improvements:
+
+    \begin{enumerate}
+        \item An enhanced 1-page cover letter to the editor. Refine the summary of key points and strengthen the overall argument. Write this inside the <document name="{{ REPLY_TO_EDITOR_FILE }}"></document> tag.
+        \item An improved point-by-point response to the referee comments. Write this inside the <document name="{{ REPLY_TO_REFEREES_FILE }}"></document> tag. To do this:
+        \begin{itemize}
+            \item Ensure all referee comments are accurately represented in the \begin{referee}{A} (or B) and \end{referee} environments. Do not correct the referee's grammar or wording.
+            \item Enhance each response in the \begin{response} and \end{response} environments, providing more specific details, stronger arguments, and clearer references to changes in the paper.
+            \item Improve the tone to be more respectful and diplomatic while maintaining firmness in your responses.
+            \item Strengthen the use of ``They Say, I Say'' principles and the ``Show, not tell'' approach in your rebuttals.
+            \item If there are incoherent draft points in the responses, you must do your best efforts to understand their logic and find a logical way to embed them into the responses.
+            \item If there are indicated TODOs left in the draft responses, do your best efforts to address them based on the instructions and the context.
+            \item Be clear about what needs to be changed in the paper and its supplementary materials (or appendices).
+        \end{itemize}
+        \item Refine the concluding paragraph for each referee to further persuade them of the paper's merits.
+        \item An updated and more detailed list of major changes made to the paper. Write this inside the <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}"></document> tag. Ensure changes are clearly explained and their importance is emphasized.
+        \item Further revised versions of the main paper and supplementary materials that better address the referee comments and align with the improved rebuttal letter. Include specific enhancements to clarity, argumentation, and presentation.
+    \end{enumerate}
+
+    {% if INSTRUCTION %}
+    Specific instructions that you must follow:
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+    {% endif %}
+
+    The whole rebuttal package should be written in LaTeX format, coherent with each other and the original paper.
+    Write the revised rebuttal package in the following format:
+
+    <rebuttal_package>
+    <scratchpad>
+    your detailed plan here
+    </scratchpad>
+    <document name="{{ REPLY_TO_EDITOR_FILE }}">
+    % Insert the revised letter to the editor here
+    </document>
+
+    <document name="{{ REPLY_TO_REFEREES_FILE }}">
+    % Insert the revised point-by-point response to referees here
+    </document>
+
+    <document name="{{ LIST_OF_MAJOR_CHANGES_FILE }}">
+    % Insert the revised list of major changes here
+    </document>
+
+    <document name="{{ MAIN_FILE }}">
+    % Insert the further revised text of the main paper here. Present the full text.   
+    </document>
+
+    {% if SUPP_FILE %}
+    <document name="{{ SUPP_FILE }}">
+    % Insert the further revised text of the supplementary materials here. You only need to insert the sections that will be changed.
+    </document>
+    {% endif %}
+
+    </rebuttal_package>
+
+    Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Journals. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
+
+  userReflect: |
+    Your revised output is still not specific enough to the paper and doesn't show sufficient improvement over the original version.
+    After thoroughly and critically reviewing the original rebuttal package, the referee reports, and the example, write a new revised rebuttal package that satisfies the following requirements:
+    <requirements>
+    \begin{itemize}
+        \item Significantly increases the level of specific details, with clear and precise references to changes in the new version of the paper.
+        \item Ensures all referee comments are addressed more comprehensively, using more concrete and convincing physical arguments relevant to the paper's content.
+        \item Improves the style and tone to more closely match the provided example, while maintaining a high level of professionalism and expertise in physics.
+        \item Enhances the clarity and persuasiveness of the arguments presented in both the letter to the editor and the responses to referees.
+        \item Provides a more detailed and well-structured list of major changes, clearly linking each change to specific referee comments or overall improvement of the paper.
+        \item If any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' or ``It is important to note that...'' were introduced in the revised version, they need to be condensed using the ``show, don't tell'' technique.
+        \item The revised version should also be self-contained and not rely on the previous version. Therefore, you cannot write ``Our extended simulations now cover...'' or ``we have now expanded our simulations to cover...'' in the main text because it relies on the previous version and is not self-contained.
+        \item Physical Review Journals are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
+    \end{itemize}
+    </requirements>
