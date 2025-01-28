@@ -5,7 +5,7 @@
 // Local imports - log
 import * as logger from '../logger/logUtils';
 
-const CHANNEL = 'Utils';
+const CHANNEL = 'ReplacementUtils';
 logger.initialize(CHANNEL);
 
 interface ReplacementCategory {
