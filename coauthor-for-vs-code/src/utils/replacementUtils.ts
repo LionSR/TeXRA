@@ -268,13 +268,17 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
   isRegex: false,
   patterns: {
     delve: 'discuss',
-    'delving into': 'discussing',
-    "It's important to note": 'Note that',
-    'our exploration': 'our discussion',
     embark: 'start',
     realm: 'area',
     intricate: 'complex',
+    parameterizing: 'parametrizing',
     '"exact"': "``exact''",
+    'delving into': 'discussing',
+    "It's important to note": 'Note that',
+    'our exploration': 'our discussion',
+    'inter-layer': 'interlayer',
+    'Near the 50\\%': 'Near 50\\%',
+    'on the order of': 'of the order of',
   },
 };
 
