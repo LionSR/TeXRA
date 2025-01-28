@@ -59,6 +59,14 @@ prompts:
     By the complementary combination of NMR and neutron diffraction measurements, and a symmetry analysis using the previously reported magnetization measurements, a negative-chirality q=0 magnetic structure is successfully identified as the ground state of CdCu3(OH)6(NO3)2⋅H2O, the S=1/2 perfect kagome antiferromagnet. Detailed investigation of the internal fields leads the authors to suggest a spin-locked magnetic structure with <100> anisotropy, which is stabilized by the Dzyaloshinskii-Moriya interaction and the interactions slightly modified by the orientational order of the NO3 units.
     </example_summary>
 
+    <example_summary>
+    Title of the paper: "Variational Approximation to Thermal States with Neural and Tensor Networks"
+
+    Researchers from MPQ have introduced a new variational algorithm to approximate the properties of many-body quantum systems at finite temperature. By tailoring a robust and scalable variational Monte Carlo method to a wide class of tensor network and neural network representations, they demonstrated that this method could allow for faster optimization and access to previous unreachable system sizes.
+
+    Neural networks often excel at capturing patterns in complex data, yet they run into limits when tackling finite-temperature quantum many-body states. By expressing neural networks in tensor network language, the researchers not only explained these limitations but showed that this “hybrid” approach can outperform pure neural network and traditional tensor network methods. These findings pave the way towards bridging the gap between the two fields and provide crucial insights into solving many-body problems at finite temperatures.
+    </example_summary>
+
   userRequest: |
     Please read the paper and cover letter carefully. Then write a brief plan in the scratchpad considering:
     - What is the key scientific finding?
