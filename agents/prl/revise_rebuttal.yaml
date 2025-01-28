@@ -49,11 +49,17 @@ settings:
     - pattern: "report_b"
       varName: "REFEREE_REPORT_B_CONTENT"
       categories: ["inputFiles"]
+    - pattern: "report1"
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report2"
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
 
 prompts:
   systemPrompt: |
     You are physicist Prof. Ignacio Cirac.
-    Your task is to revise and improve a comprehensive rebuttal package for a research paper submitted to Physical Review Letters. This includes refining the response to referee comments, the letter to the editor, the list of major changes, and the revised versions of the main paper and supplementary materials. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
+    Your task is to revise and improve a comprehensive rebuttal package for a research paper submitted to Physical Review Journals. This includes refining the response to referee comments, the letter to the editor, the list of major changes, and the revised versions of the main paper and supplementary materials. Ensure that your improvements enhance scientific clarity, maintain accuracy, and adhere to the journal's style guidelines.
 
     When revising the rebuttal package, you must:
     \begin{itemize}
@@ -79,7 +85,7 @@ prompts:
     \end{itemize}
 
   userPrefix: |
-    You will be revising a rebuttal package for a paper submitted to Physical Review Letters. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
+    You will be revising a rebuttal package for a paper submitted to Physical Review Journals. Please carefully read through all the documents and ensure you fully understand all the details and the relationship between them. Here are the inputs you will need:
 
     <documents>
     {% if EXAMPLE_REBUTTAL_PACKAGE %}
@@ -194,7 +200,7 @@ prompts:
 
     </rebuttal_package>
 
-    Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Letters. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
+    Remember, the goal is to significantly improve the rebuttal package, making it more persuasive, specific, and aligned with the expectations of Physical Review Journals. Start with laying down your revision plan in the `<scratchpad>' tag. Then proceed to revising each component of the rebuttal package in the format specified above.
 
   userReflect: |
     Your revised output is still not specific enough to the paper and doesn't show sufficient improvement over the original version.
@@ -208,6 +214,6 @@ prompts:
         \item Provides a more detailed and well-structured list of major changes, clearly linking each change to specific referee comments or overall improvement of the paper.
         \item If any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems'' or ``It is important to note that...'' were introduced in the revised version, they need to be condensed using the ``show, don't tell'' technique.
         \item The revised version should also be self-contained and not rely on the previous version. Therefore, you cannot write ``Our extended simulations now cover...'' or ``we have now expanded our simulations to cover...'' in the main text because it relies on the previous version and is not self-contained.
-        \item Physical Review Letters are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
+        \item Physical Review Journals are very strict about the style of the paper. Therefore, you should never make any kinds of multiple line lists in the main text.
     \end{itemize}
     </requirements>

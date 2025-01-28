@@ -40,6 +40,12 @@ settings:
     - pattern: "report_b"
       varName: "REFEREE_REPORT_B_CONTENT"
       categories: ["inputFiles"]
+    - pattern: "report1"
+      varName: "REFEREE_REPORT_A_CONTENT"
+      categories: ["inputFiles"]
+    - pattern: "report2"
+      varName: "REFEREE_REPORT_B_CONTENT"
+      categories: ["inputFiles"]
 
 prompts:
   systemPrompt: |
@@ -63,7 +69,7 @@ prompts:
     - Only use enumerate and itemize environments for lists.
 
   userPrefix: |
-    You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Letters. Here are the inputs you will need:
+    You will be drafting a reply letter to referee reports for a paper submitted to Physical Review Journals. Here are the inputs you will need:
 
     {% if EXAMPLE_REBUTTAL_PACKAGE_FILE %}
     <documents name="{{ EXAMPLE_REBUTTAL_PACKAGE_FILE }}">
