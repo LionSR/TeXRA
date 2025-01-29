@@ -69,8 +69,8 @@
               "geminiexp",
               "gemini2f",
               "gemini2fT",
-              "gemini1p+",
-              "gemini1f+"
+              "DSV3",
+              "DSR1"
             ],
             "description": "List of available models",
             "scope": "resource"
