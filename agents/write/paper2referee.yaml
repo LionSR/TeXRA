@@ -37,6 +37,11 @@ prompts:
     {{ INPUT_CONTENT }}
     </research_paper>
 
+    Here are previous correspondence between the authors and the editor, and the previous referee report:
+    <correspondence>
+    {{ ADDITIONAL_INPUTS }}
+    </correspondence>
+
     Please carefully read through the entire research paper above and ensure you fully understand all the details before writing your report.
 
     {% if REFERENCE_FILE %}
