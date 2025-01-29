@@ -70,7 +70,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\Bigl\\{': '\\left\\{',
     '\\Bigr\\}': '\\right\\}',
     '\\biggl(': '\\left(',
-    '\\biggr(': '\\right(',
+    '\\biggr)': '\\right)',
     '\\biggl[': '\\left[',
     '\\biggr]': '\\right]',
     '\\biggl\\{': '\\left\\{',
@@ -78,7 +78,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\Biggl(': '\\left(',
     '\\Biggr)': '\\right)',
     '\\Biggl[': '\\left[',
-    '\\Biggr[': '\\right[',
+    '\\Biggr]': '\\right]',
     '\\Biggl\\{': '\\left\\{',
     '\\Biggr\\}': '\\right\\}',
 
@@ -92,6 +92,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n     &\n    -': '\n    & -',
     '(\n    ': '(',
     '\n    )': ')',
+    '\n     &\n    \\times': '\n    & \\times',
 
     // Fix extra spacing in specific contexts
     'e^{\\,i\\,': 'e^{i ',
@@ -136,8 +137,13 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '.  ': '. ',
     // Single fix for extra \;, \, etc: aggressive
     '\\;': ' ',
+    ' \\, d\\': '~ d\\',
+    ' \\, ': ' ',
+    '\\, \\,': ' \\',
     '\\,': ' ',
     '\\left[\\dots\\right]': '[\\dots]',
+    // Unusal line/paragraph separators
+    '/[\u2028\u2029]/g': '\n',
   },
 };
 
@@ -193,6 +199,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
     '\\begin{latex_document}': '<latex_document>',
+    // the following logic is tricky, we might have to use some regex to match the tags
+    '```latex\n\\documentclass[': '<latex_document>\n\\documentclass[',
+    '<latex_document>\n```latex': '<latex_document>\n',
     'Here is the revised \\LaTeX document.\n\n```latex':
       'Here is the revised \\LaTeX document.\n\n<latex_document>',
     // Scratchpad and latex_document handling
@@ -283,9 +292,8 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     'with results shown': 'with the results shown',
     'imaginary time evolution': 'imaginary-time evolution',
     // 'underscores': ''
-    'showcasing': 'showing',
-    'paradigm shift': 'big change'
-
+    showcasing: 'showing',
+    'paradigm shift': 'big change',
   },
 };
 
