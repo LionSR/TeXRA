@@ -279,6 +279,13 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     'inter-layer': 'interlayer',
     'Near the 50\\%': 'Near 50\\%',
     'on the order of': 'of the order of',
+    'improves consistently': 'consistently improves',
+    'with results shown': 'with the results shown',
+    'imaginary time evolution': 'imaginary-time evolution',
+    // 'underscores': ''
+    'showcasing': 'showing',
+    'paradigm shift': 'big change'
+
   },
 };
 
