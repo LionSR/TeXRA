@@ -348,8 +348,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: true,
   },
-  'deepseek-V3': {
-    name: 'deepseek-V3',
+  DSV3: {
+    name: 'DSV3',
     fullName: 'deepseek/deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat',
     provider: ModelProvider.OTHERS,
@@ -362,15 +362,15 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: true,
   },
-  'DS-R1': {
-    name: 'DS-R1',
+  DSR1: {
+    name: 'DSR1',
     fullName: 'deepseek/deepseek-R1',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.OTHERS,
-    maxOutputTokens: 8192,
-    contextWindow: 64000,
-    inputPrice: 0.55,
-    outputPrice: 2.19,
+    maxOutputTokens: 164000,
+    contextWindow: 164000,
+    inputPrice: 8,
+    outputPrice: 8,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsReasoning: true,
