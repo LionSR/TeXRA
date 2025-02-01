@@ -76,7 +76,6 @@ prompts:
     - Which coefficients need explicit derivation
     - Which calculations need to be shown in full (even if similar to others)
     - How to break down complex expressions
-    - How to break long equations across multiple lines
     - What explanatory text to add between equation blocks
     - How to maintain consistency in notation
     Use the scratchpad to outline the detailed mathematical steps you plan to add.
