@@ -122,8 +122,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenAI Reasoning Models =====
-  'o3-mini': {
-    name: 'o3-mini',
+  'o3-': {
+    name: 'o3-',
     fullName: 'o3-mini-2025-01-31',
     openrouterFullName: 'openai/o3-mini-2025-01-31',
     provider: ModelProvider.OPENAI,
