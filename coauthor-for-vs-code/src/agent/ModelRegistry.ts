@@ -122,6 +122,23 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenAI Reasoning Models =====
+  'o3-mini': {
+    name: 'o3-mini',
+    fullName: 'o3-mini-2025-01-31',
+    openrouterFullName: 'openai/o3-mini-2025-01-31',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 100000,
+    contextWindow: 200000,
+    inputPrice: 3.0,
+    outputPrice: 12.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      supportsVision: true,
+      supportsReasoning: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   o1: {
     name: 'o1',
     fullName: 'o1-2024-12-17',
@@ -241,10 +258,10 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== Google Gemini Models =====
-  geminiexp: {
-    name: 'geminiexp',
+  gemini2p: {
+    name: 'gemini2p',
     fullName: 'gemini-exp-1206',
-    openrouterFullName: 'google/gemini-1.5-pro-exp-0120',
+    openrouterFullName: 'google/gemini-exp-1206:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 4096,
     contextWindow: 2097152,
@@ -259,7 +276,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   gemini2fT: {
     name: 'gemini2fT',
     fullName: 'gemini-2.0-flash-thinking-exp-01-21',
-    openrouterFullName: 'google/gemini-2.0-flash-thinking-exp-01-21',
+    openrouterFullName: 'google/gemini-2.0-flash-thinking-exp:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 65535,
     contextWindow: 1048576,
@@ -275,7 +292,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   gemini2f: {
     name: 'gemini2f',
     fullName: 'gemini-2.0-flash-exp',
-    openrouterFullName: 'google/gemini-2.0-flash-exp',
+    openrouterFullName: 'google/gemini-2.0-flash-exp:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
     contextWindow: 1048576,
@@ -291,7 +308,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'gemini1p+': {
     name: 'gemini1p+',
     fullName: 'gemini-1.5-pro-latest',
-    openrouterFullName: 'google/gemini-1.5-pro-latest',
+    openrouterFullName: 'google/gemini-1.5-pro',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
     contextWindow: 1048576,
@@ -307,7 +324,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'gemini1f+': {
     name: 'gemini1f+',
     fullName: 'gemini-1.5-fresh-latest',
-    openrouterFullName: 'google/gemini-1.5-fresh-latest',
+    openrouterFullName: 'google/gemini-1.5-fresh',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
     contextWindow: 1048576,
@@ -334,15 +351,15 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
     openRouterOnly: true,
   },
-  'qwq-32b': {
-    name: 'qwq-32b',
-    fullName: 'qwen/qwq-32b-preview',
-    openrouterFullName: 'qwen/qwq-32b-preview',
+  'qvq-72b': {
+    name: 'qvq-72b',
+    fullName: 'qwen/qvq-72b-preview',
+    openrouterFullName: 'qwen/qvq-72b-preview',
     provider: ModelProvider.OTHERS,
-    maxOutputTokens: 32768,
-    contextWindow: 32768,
-    inputPrice: 0.15,
-    outputPrice: 0.6,
+    maxOutputTokens: 4096,
+    contextWindow: 128000,
+    inputPrice: 0.25,
+    outputPrice: 0.5,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
     } satisfies ModelCapabilities,
