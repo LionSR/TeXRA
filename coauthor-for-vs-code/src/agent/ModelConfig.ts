@@ -14,6 +14,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsPromptCaching: false,
   supportsAutoPromptCaching: false,
   supportsReasoning: false,
+  reasoning_effort: 'high',
   supportsVision: true,
   supportsNativePdf: false,
   supportsAssistantPrefill: false,
@@ -34,6 +35,7 @@ export interface ModelCapabilities {
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
   supportsReasoning: boolean;
+  reasoning_effort: 'high' | 'medium' | 'low';
   supportsVision: boolean;
   supportsNativePdf: boolean;
   supportsAssistantPrefill: boolean;
