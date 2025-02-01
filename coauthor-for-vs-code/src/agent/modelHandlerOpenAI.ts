@@ -45,11 +45,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const kwargs: any = {
       model: this.config.fullName,
       messages,
-      [this.config.name.toLowerCase().includes('o1')
-        ? 'max_completion_tokens'
-        : 'max_tokens']: this.config.maxOutputTokens,
+      [this.isOReasoningModel ? 'max_completion_tokens' : 'max_tokens']:
+        this.config.maxOutputTokens,
     };
-    if (!this.config.name.toLowerCase().includes('o1')) {
+    if (!this.isOReasoningModel) {
       if (endTag) {
         kwargs.stop = [endTag];
       }
@@ -57,7 +56,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
 
     // Handle O1 models
-    if (this.config.name.toLowerCase() === 'o1') {
+    if (this.isOReasoningModelFull) {
       kwargs.reasoning_effort = 'high';
     }
 
@@ -80,7 +79,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const messages: any[] = [];
 
     // Handle system prompt differently for O1 models
-    if (this.config.name.includes('o1-') || this.config.name === 'o1preview') {
+    if (this.isO1miniOrPreview) {
+      // O1 mini and preview models do not support system prompt
       messages.push({
         role: 'user',
         content: [
@@ -106,7 +106,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
       // Add user request
       messages.push({
-        role: this.isO1full ? 'system' : 'user',
+        role: this.isOReasoningModelFull ? 'system' : 'user',
         content: [{ type: 'text', text: userRequest }],
       });
     }
@@ -126,7 +126,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       content.push(...this.createImageContent(figureFiles));
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.isO1full ? 'system' : 'user';
+    const role = this.isOReasoningModelFull ? 'system' : 'user';
     messages.push({ role, content });
     return messages;
   }

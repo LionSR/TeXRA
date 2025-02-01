@@ -11,6 +11,9 @@ export const EXCLUDED_DIRS = new Set([
 export const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 
 export const TEMP_EXTENSIONS = [
+  '.bak',
+  '.bak0',
+  '.bak1',
   '.pdf',
   '.aux',
   '.bbl',
@@ -36,6 +39,7 @@ export const MODELS = [
   'sonnet++',
   'haiku+',
   'haiku',
+  'o3-',
   'o1',
   'o1preview',
   'o1-',
@@ -43,11 +47,14 @@ export const MODELS = [
   'gpt4o',
   'gpt4o-',
   'gpt4t',
-  'geminiexp',
   'gemini2p',
+  'gemini2fT',
   'gemini2f',
   'gemini1p+',
   'gemini1f+',
+  'qvq-72b',
+  'DSV3',
+  'DSR1',
 ];
 
 export const HISTORY_DIR = 'History';

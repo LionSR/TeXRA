@@ -164,7 +164,7 @@ export abstract class ModelHandler {
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
-  get isO1full(): boolean {
+  get isOReasoningModelFull(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     if (
       nameLowerCased.includes('o1-') ||
@@ -172,7 +172,7 @@ export abstract class ModelHandler {
     ) {
       return false;
     }
-    return nameLowerCased.includes('o1');
+    return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
   }
 
   get isO1miniOrPreview(): boolean {
@@ -183,9 +183,9 @@ export abstract class ModelHandler {
     );
   }
 
-  get isO1Family(): boolean {
+  get isOReasoningModel(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
-    return nameLowerCased.includes('o1');
+    return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
   }
 
   /**
