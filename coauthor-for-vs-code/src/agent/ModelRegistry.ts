@@ -134,8 +134,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
-      supportsVision: true,
+      supportsVision: false,
       supportsReasoning: true,
+      reasoning_effort: 'high',
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
