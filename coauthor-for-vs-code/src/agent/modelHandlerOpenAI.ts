@@ -199,7 +199,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Add continuation message
     this.logger.info(
-      'Adding continuation message to conversation. Continuation message:\n${userMessageContinuation}',
+      `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
     messages.push({
       role: 'user',
