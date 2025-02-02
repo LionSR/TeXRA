@@ -18,6 +18,70 @@ interface ReplacementCategory {
 
 // ===== LaTeX Content Formatting =====
 
+// LaTeX spacing and punctuation fixes
+const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
+  name: 'latex_spacing',
+  description:
+    'Fixes for LaTeX spacing, punctuation, and formatting [for O1 model]',
+  isRegex: false,
+  patterns: {
+    // Basic spacing fixes
+    ' \\;': ' ',
+    ' \\; ': ' ',
+    ' \\,\\': ' \\',
+    '\\,\n': '\n',
+    '\n    \\\\': '\\\\',
+    '\\!\\!': '',
+    '.  ': '. ',
+
+    // Operator spacing
+    '\\;+\\;': '+',
+    '\\;-\\;': '-',
+    '\\;*\\;': '*',
+    '\\;/\\;': '/',
+    '\\;=\\;': '=',
+    '+\\;': '+',
+    '-\\;': '-',
+    '=\\;': '=',
+
+    // Align environment formatting
+    '\n    \\nonumber\\\\': '\\nonumber\\\\',
+    '\n    +': ' +',
+    '\n    \n&=': '\n    &=',
+    '\n    ,\n': ',\n',
+    '\!\n    ': '\n    ',
+    '\n    =\n': ' =',
+    '\n     &\n    -': '\n    & -',
+    '(\n    ': '(',
+    '\n    )': ')',
+    '\n     &\n    \\times': '\n    & \\times',
+
+    // Specific context spacing
+    'e^{\\,i\\,': 'e^{i ',
+    'e^{\\,': 'e^{',
+    '-\\,i\\, ': '-i ',
+    '-\\,i\\,': '-i',
+    '\\,i\\,': ' i ',
+    '-\\,': '-',
+    '\\,&': ' &',
+    '{-\\,0}': '{0}',
+    '{-\\,1}': '{1}',
+
+    // Skip commands
+    '\\medskip\n': '',
+    '\\smallskip\n': '',
+    '\\bigskip\n': '',
+
+    // Punctuation in math mode
+    '.$': '$.',
+    ',$': '$,',
+    '$-\\,': '$-',
+
+    // Simplify delimiters
+    '\\left[\\dots\\right]': '[\\dots]',
+  },
+};
+
 // Common LaTeX equation spacing fixes
 const EQUATION_REPLACEMENTS: ReplacementCategory = {
   name: 'equations',
@@ -41,74 +105,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     'Eq. \\ref{': 'Eq.~\\ref{',
     'Eqs. \\ref{': 'Eqs.~\\ref{',
 
-    // Fix backslash spacing
-    ' \\;': ' ',
-    ' \\; ': ' ',
-    ' \\,\\': ' \\',
-    '\\,\n': '\n',
-    '\n    \\\\': '\\\\',
-
-    // Fix operator spacing
-    '\\;+\\;': '+',
-    '\\;-\\;': '-',
-    '\\;*\\;': '*',
-    '\\;/\\;': '/',
-    '\\;=\\;': '=',
-    '+\\;': '+',
-    '-\\;': '-',
-    '=\\;': '=',
-    '\\!\\!': '',
-    // Standardize parentheses sizing
-    '\\bigl(': '(',
-    '\\bigr)': ')',
-    '\\bigl[': '[',
-    '\\bigr]': ']',
-    '\\Bigl(': '\\left(',
-    '\\Bigr)': '\\right)',
-    '\\Bigl[': '\\left[',
-    '\\Bigr]': '\\right]',
-    '\\Bigl\\{': '\\left\\{',
-    '\\Bigr\\}': '\\right\\}',
-    '\\biggl(': '\\left(',
-    '\\biggr)': '\\right)',
-    '\\biggl[': '\\left[',
-    '\\biggr]': '\\right]',
-    '\\biggl\\{': '\\left\\{',
-    '\\biggr\\}': '\\right\\}',
-    '\\Biggl(': '\\left(',
-    '\\Biggr)': '\\right)',
-    '\\Biggl[': '\\left[',
-    '\\Biggr]': '\\right]',
-    '\\Biggl\\{': '\\left\\{',
-    '\\Biggr\\}': '\\right\\}',
-
-    // Align environment formatting
-    '\n    \\nonumber\\\\': '\\nonumber\\\\',
-    '\n    +': ' +',
-    '\n    \n&=': '\n    &=',
-    '\n    ,\n': ',\n',
-    '\!\n    ': '\n    ',
-    '\n    =\n': ' =',
-    '\n     &\n    -': '\n    & -',
-    '(\n    ': '(',
-    '\n    )': ')',
-    '\n     &\n    \\times': '\n    & \\times',
-
-    // Fix extra spacing in specific contexts
-    'e^{\\,i\\,': 'e^{i ',
-    'e^{\\,': 'e^{',
-    '-\\,i\\, ': '-i ',
-    '-\\,i\\,': '-i',
-    '\\,i\\,': ' i ',
-    '-\\,': '-',
-    '\\,&': ' &',
-    '{-\\,0}': '{0}',
-    '{-\\,1}': '{1}',
-    // Remove unnecessary skip commands
-    '\\medskip\n': '',
-    '\\smallskip\n': '',
-    '\\bigskip\n': '',
-
     // Fix incorrect math operator commands
     '\\\\cos': '\\cos',
     '\\\\sin': '\\sin',
@@ -122,27 +118,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\beta': '\\beta',
     '\\\\gamma': '\\gamma',
 
-    // Max's writing style preferences
-    '\\dd\\bze\\,': '\\dd\\bze~',
-    '\\dd\\bxi\\,': '\\dd\\bxi~',
-    '\\dd\\beta\\,': '\\dd\\beta~',
-    '\\dd\\tau\\,': '\\dd\\tau~',
-    '\\dd\\t\\,': '\\dd\\t~',
-    '\\dd\\bx\\,': '\\dd\\bx~',
-    '\\dd\\bz\\,': '\\dd\\bz~',
-    // Fix dollar signs: 40: You should put punctuation outside inner math mode.
-    '.$': '$.',
-    ',$': '$,',
-    '$-\\,': '$-',
-    '.  ': '. ',
-    // Single fix for extra \;, \, etc: aggressive
-    '\\;': ' ',
-    ' \\, d\\': '~ d\\',
-    ' \\, ': ' ',
-    '\\, \\,': ' \\',
-    '\\,': ' ',
-    '\\left[\\dots\\right]': '[\\dots]',
-    // Unusal line/paragraph separators
+    // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
   },
 };
@@ -294,10 +270,79 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     // 'underscores': ''
     showcasing: 'showing',
     'paradigm shift': 'big change',
+    envisage: 'imagine',
+    // typo
+    Normalizing: 'Normalizing',
+    thermodynamical: 'thermodynamic',
+    conditon: 'condition',
+  },
+};
+
+// Personal writing style preferences
+const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
+  name: 'personal_style',
+  description:
+    'Personal writing style preferences for specific LaTeX commands and spacing',
+  isRegex: false,
+  patterns: {
+    // Differential spacing preferences
+    '\\dd s\\,': '\\dd s~',
+    '\\dd\\bze\\,': '\\dd\\bze~',
+    '\\dd\\bxi\\,': '\\dd\\bxi~',
+    '\\dd\\beta\\,': '\\dd\\beta~',
+    '\\dd\\tau\\,': '\\dd\\tau~',
+    '\\dd\\t\\,': '\\dd\\t~',
+    '\\dd\\bx\\,': '\\dd\\bx~',
+    '\\dd\\bz\\,': '\\dd\\bz~',
+    '\\dd\\bze_{\\tauf}\\,': '\\dd\\bze_{\\tauf}~',
+    '\\quad\\Ra': '~~~\\Ra',
+    // Spacing cleanup preferences
+    '\\;': ' ',
+    ' \\, d\\': '~ d\\',
+    ' \\, ': ' ',
+    '\\, \\,': ' \\',
+    '\\,': ' ',
+    // Hyphenation preferences
+    nonnegative: 'non-negative',
+    finitetime: 'finite-time',
   },
 };
 
 // ===== Regex replacements =====
+
+// Parentheses sizing standardization
+const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
+  name: 'parentheses',
+  description: 'Standardize parentheses sizing using regex patterns',
+  isRegex: true,
+  flags: 'g',
+  patterns: {
+    // Regular parentheses
+    '\\\\bigl\\(([^\\n]*?)\\\\bigr\\)': '($1)',
+    '\\\\bigl\\[([^\\n]*?)\\\\bigr\\]': '[$1]',
+
+    // Big to \left \right
+    '\\\\Big\\(([^\\n]*?)\\\\Big\\)': '\\left($1\\right)',
+    '\\\\Big\\[([^\\n]*?)\\\\Big\\]': '\\left[$1\\right]',
+    '\\\\Big\\{([^\\n]*?)\\\\Big\\}': '\\left\\{$1\\right\\}',
+
+    // Big parentheses to \left \right
+
+    '\\\\Bigl\\(([^\\n]*?)\\\\Bigr\\)': '\\left($1\\right)',
+    '\\\\Bigl\\[([^\\n]*?)\\\\Bigr\\]': '\\left[$1\\right]',
+    '\\\\Bigl\\\\{([^\\n]*?)\\\\Bigr\\\\}': '\\left\\{$1\\right\\}',
+
+    // Bigger parentheses
+    '\\\\biggl\\(([^\\n]*?)\\\\biggr\\)': '\\left($1\\right)',
+    '\\\\biggl\\[([^\\n]*?)\\\\biggr\\]': '\\left[$1\\right]',
+    '\\\\biggl\\\\{([^\\n]*?)\\\\biggr\\\\}': '\\left\\{$1\\right\\}',
+
+    // Biggest parentheses
+    '\\\\Biggl\\(([^\\n]*?)\\\\Biggr\\)': '\\left($1\\right)',
+    '\\\\Biggl\\[([^\\n]*?)\\\\Biggr\\]': '\\left[$1\\right]',
+    '\\\\Biggl\\\\{([^\\n]*?)\\\\Biggr\\\\}': '\\left\\{$1\\right\\}',
+  },
+};
 
 // TikZ picture fixes
 // Using ECMAScript 2018 named capture groups (?<name>pattern)
@@ -327,8 +372,11 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   patterns: {
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
     '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands with arbitrary integers
+    '\\[-?\\d+mm\\]': '', // Remove [Nmm] spacing commands with arbitrary integers
+    '\\[0\\.-?\\d+mm\\]': '', // Remove [0.Nmm] spacing commands with arbitrary integers
     '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands with arbitrary integers
-    '\\\\hspace\\{-?\\d+pt\\}': '',
+    '\\\\hspace\\{-?\\d+mm\\}': '',
+    // '“([a-zA-Z0-9_]+)”': '``$1''',
   },
 };
 
@@ -360,10 +408,13 @@ export function getAllReplacements(): ReplacementCategory {
     EQUATION_REPLACEMENTS,
     SECTION_REPLACEMENTS,
     CHARACTER_REPLACEMENTS,
+    LATEX_SPACING_REPLACEMENTS,
     // XML/Structural Formatting
     LATEX_XML_REPLACEMENTS,
     SCRATCHPAD_XML_REPLACEMENTS,
     STYLE_REPLACEMENTS,
+    // Personal Style
+    PERSONAL_STYLE_REPLACEMENTS,
   ];
 
   for (const category of categories) {
@@ -396,6 +447,8 @@ export function getReplacementsByCategory(
     style: STYLE_REPLACEMENTS,
     autoConfirmation: AUTO_CONFIRM_REPLACEMENTS,
     inlineMath: INLINE_MATH_REPLACEMENTS,
+    personal_style: PERSONAL_STYLE_REPLACEMENTS,
+    latex_spacing: LATEX_SPACING_REPLACEMENTS,
   };
 
   return categories[categoryName];
@@ -405,7 +458,11 @@ export function getReplacementsByCategory(
  * Get all regex replacement categories in order of application.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  return [INLINE_MATH_REPLACEMENTS, TIKZ_REPLACEMENTS];
+  return [
+    INLINE_MATH_REPLACEMENTS,
+    TIKZ_REPLACEMENTS,
+    PARENTHESES_REPLACEMENTS,
+  ];
 }
 
 // maybe i can even do this for strings<some length...
