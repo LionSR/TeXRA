@@ -28,6 +28,10 @@ prompts:
                 \item If patterns emerge, point them out after showing the full calculations
             \end{itemize}
         \item Use multi-line align environments extensively with line breaks (meaning multiple &= paired with \\) to show each mathematical manipulation clearly.
+        \item However, equations that do not benefit from line breaks should not be broken. For example, you should write `we have $(\dd B_\tau)^2 = \dd \tau$, $\dd \tau \dd B_\tau = 0$, and $(\dd \tau)^2 = 0$.' rather than `we have 
+        \begin{align}
+            (\dd B_\tau)^2 = \dd \tau, \quad \dd \tau \dd B_\tau = 0, \quad (\dd \tau)^2 = 0.
+        \end{align}'
         \item Include explanatory text between equation blocks to justify each step and explain the mathematical reasoning being applied.
         \item Format long equations by breaking them at appropriate points (e.g., at plus/minus signs) for readability.
         \item When simplifying complex expressions:

@@ -39,11 +39,15 @@ prompts:
                 \item Explicitly show how terms combine or cancel
                 \item Write out the final simplified form with all coefficients derived
             \end{itemize}
+        \item However, equations that do not benefit from line breaks should not be broken. For example, you should write `we have $(\dd B_\tau)^2 = \dd \tau$, $\dd \tau \dd B_\tau = 0$, and $(\dd \tau)^2 = 0$.' rather than `we have 
+        \begin{align}
+            (\dd B_\tau)^2 = \dd \tau, \quad \dd \tau \dd B_\tau = 0, \quad (\dd \tau)^2 = 0.
+        \end{align}'
         \item Use consistent mathematical notation throughout:
             \begin{itemize}
                 \item Use $\bt$ for $\beta$
                 \item Use $\de$ for $\delta$
-                \item Use $\der$ for $\partial$
+                \item Use $\der$ fo $\partial$
                 \item Use $\bx$ for $\mathbf{x}$
                 \item Use $\Ra$ for $\Rightarrow$
                 \item Follow all other commands defined in command.tex
@@ -63,6 +67,7 @@ prompts:
                 \item Never use \;
             \end{itemize}
         \item Use $...$ for inline equations.
+        \item Use \cref{eqn:...} for referencing equations. Use \ref{ch:...} for referencing chapters. Use \ref{sec:...} for referencing sections.
     \end{itemize}
 
   userPrefix: |
