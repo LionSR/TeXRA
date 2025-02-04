@@ -79,6 +79,10 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
 
     // Simplify delimiters
     '\\left[\\dots\\right]': '[\\dots]',
+
+    //
+    '\\displaystyle': '',
+    '\\Longleftrightarrow': '\\LRa',
   },
 };
 
@@ -275,6 +279,8 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     Normalizing: 'Normalizing',
     thermodynamical: 'thermodynamic',
     conditon: 'condition',
+    necessitates: 'requires',
+    "’": "'",
   },
 };
 
@@ -373,9 +379,15 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
     '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$',
     '\\[-?\\d+pt\\]': '', // Remove [Npt] spacing commands with arbitrary integers
     '\\[-?\\d+mm\\]': '', // Remove [Nmm] spacing commands with arbitrary integers
+    '\\[-?\\d+ex\\]': '', // Remove [Nex] spacing commands with arbitrary integers
     '\\[0\\.-?\\d+mm\\]': '', // Remove [0.Nmm] spacing commands with arbitrary integers
+    '\\[0\\.-?\\d+ex\\]': '', // Remove [0.Nex] spacing commands with arbitrary integers
     '\\\\hspace\\[-?\\d+pt\\]': '', // Remove \hspace[Npt] commands with arbitrary integers
-    '\\\\hspace\\{-?\\d+mm\\}': '',
+    '\\\\hspace\\{-?\\d+mm\\}': '', // Remove \hspace{Nmm} commands with arbitrary integers
+    '\\\\hspace\\{-?\\d+ex\\}': '', // Remove \hspace{Nex} commands with arbitrary integers
+    '\\\\vspace\\{-?\\d+pt\\}': '', // Remove \vspace[Npt] commands with arbitrary integers
+    '\\\\vspace\\{-?\\d+mm\\}': '', // Remove \vspace{Nmm} commands with arbitrary integers
+    '\\\\vspace\\{-?\\d+ex\\}': '\n', // Remove \vspace{Nex} commands with arbitrary integers
     // '“([a-zA-Z0-9_]+)”': '``$1''',
   },
 };
