@@ -9,7 +9,7 @@ import { sync as globSync } from 'glob';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile } from '../utils/fileUtils';
+import { deleteFile, getWorkspacePath } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
 import { checkToolInstalled } from './texTools';
 
@@ -20,6 +20,12 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
     // Check if latexindent is installed
     if (!(await checkToolInstalled('latexindent'))) {
+      return false;
+    }
+
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      logger.error(CHANNEL, 'No workspace path found');
       return false;
     }
 
@@ -46,20 +52,33 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     const fileBaseName = path.basename(filePath, '.tex');
     const fileDir = path.dirname(filePath);
 
+    logger.debug(CHANNEL, `File base name: ${fileBaseName}`);
+    logger.debug(CHANNEL, `File directory: ${fileDir}`);
+    logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
+
     // Get all backup files matching the patterns, relative to workspace
     const backupPatterns = [
-      path.join(fileDir, `${fileBaseName}.tex.bak*`),
-      path.join(fileDir, `${fileBaseName}.tex.bak`),
-      path.join(fileDir, `${fileBaseName}.bak*`),
-      path.join(fileDir, `${fileBaseName}.bak`),
-    ];
+      `${fileBaseName}.tex.bak*`,
+      `${fileBaseName}.tex.bak`,
+      `${fileBaseName}.bak*`,
+      `${fileBaseName}.bak`,
+    ].map((pattern) => path.join(fileDir, pattern).replace(/\\/g, '/')); // Normalize to forward slashes for glob
+
+    logger.debug(CHANNEL, `Backup patterns: ${JSON.stringify(backupPatterns)}`);
 
     // Clean up backup files from workspace directory
     for (const pattern of backupPatterns) {
+      logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
       const backupFiles = globSync(pattern, {
-        cwd: process.cwd(),
-        absolute: false,
+        cwd: workspacePath,
+        nodir: true,
+        absolute: false, // Get paths relative to workspace
       });
+
+      logger.debug(
+        CHANNEL,
+        `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
+      );
 
       for (const backupFile of backupFiles) {
         try {
