@@ -286,7 +286,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     thermodynamical: 'thermodynamic',
     conditon: 'condition',
     necessitates: 'requires',
-    "’": "'",
+    '’': "'",
   },
 };
 
