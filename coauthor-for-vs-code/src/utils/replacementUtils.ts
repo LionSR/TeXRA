@@ -124,6 +124,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
 
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
+    '\\frac12': '\\ha',
   },
 };
 
@@ -174,6 +175,11 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{response>': '\\end{response}',
     '\\end{scratchpad>': '</scratchpad>',
     '\\end{itemize>': '\\end{itemize}',
+    // Gemini problems
+    '</minipage>': '\\end{minipage}',
+    '\\begin{figure*}}': '\\begin{figure*}',
+    '\\begin{figure}}': '\\begin{figure}',
+    '\n\\minipage}': '\n\\end{minipage}',
     // LaTeX to XML conversions
     '\\end{scratchpad}': '</scratchpad>',
     '\\end\n': '\\end{document}\n',
