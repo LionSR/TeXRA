@@ -261,10 +261,10 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Google Gemini Models =====
   gemini2p: {
     name: 'gemini2p',
-    fullName: 'gemini-exp-1206',
-    openrouterFullName: 'google/gemini-exp-1206:free',
+    fullName: 'gemini-2.0-pro-exp-02-05',
+    openrouterFullName: 'google/gemini-2.0-pro-exp-02-05:free',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 4096,
+    maxOutputTokens: 8192,
     contextWindow: 2097152,
     inputPrice: 1.25,
     outputPrice: 5.0,
@@ -292,13 +292,13 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   gemini2f: {
     name: 'gemini2f',
-    fullName: 'gemini-2.0-flash-exp',
-    openrouterFullName: 'google/gemini-2.0-flash-exp:free',
+    fullName: 'gemini-2.0-flash-001',
+    openrouterFullName: 'google/gemini-2.0-flash-001',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 8192,
     contextWindow: 1048576,
-    inputPrice: 0.075,
-    outputPrice: 0.3,
+    inputPrice: 0.1,
+    outputPrice: 0.4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsNativePdf: true,
