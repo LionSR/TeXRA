@@ -346,28 +346,35 @@ export class OutputHandler {
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
-      if (doc.name) {
-        const source = doc.name;
-        this.logger.debug(`XML Source: ${source}`);
-        const content = doc.content;
-
-        if (source && content) {
-          const { ext } = path.parse(source);
-          const extension = ext.replace('.', '') || 'tex';
-          const texFile = getOutputFileName(
-            source,
-            agent,
-            model,
-            extension,
-            currRound,
-          );
-          await writeFile(texFile, content.trim());
-          outputFiles.push(texFile);
-          this.logger.debug(`TeX file written: ${texFile}`);
-        } else {
-          this.logger.error(`Invalid document structure in document tag`);
-        }
+      // Skip documents with empty/undefined name or content
+      if (!doc.name || doc.name === 'unknown' || !doc.content) {
+        this.logger.warn(`Skipping document with empty name or content`);
+        continue;
       }
+
+      const source = doc.name.trim();
+      // Skip if source is empty after trimming
+      if (!source) {
+        this.logger.warn(
+          `Skipping document with empty source name after trimming`,
+        );
+        continue;
+      }
+
+      this.logger.debug(`XML Source: ${source}`);
+
+      const { ext } = path.parse(source);
+      const extension = ext.replace('.', '') || 'tex';
+      const texFile = getOutputFileName(
+        source,
+        agent,
+        model,
+        extension,
+        currRound,
+      );
+      await writeFile(texFile, doc.content.trim());
+      outputFiles.push(texFile);
+      this.logger.debug(`TeX file written: ${texFile}`);
     }
 
     return outputFiles;
