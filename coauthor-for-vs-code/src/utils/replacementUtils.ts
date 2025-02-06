@@ -217,6 +217,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
     // Special cases for monologue handling
     '</monologue><monologue>': '</monologue>\\n<monologue>', // Add newline between monologues
+    // empty xml document tag
+    '<document name="">': '<document name="unknown">',
   },
 };
 
