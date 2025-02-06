@@ -77,8 +77,10 @@ export function hasEndTag(
   return [
     settings.endTag,
     settings.documentTag && `</${settings.documentTag}>`,
-    '\\end{document}',
+    // '\\end{document}',
   ].some((tag) => tag && fileContent.includes(tag));
+
+  // \end{document} is not the right criteria for prefill multiple output files. but maybe it is useful for DirectAgent?
 }
 
 /**

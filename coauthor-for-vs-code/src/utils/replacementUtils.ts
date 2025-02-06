@@ -121,7 +121,10 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\alpha': '\\alpha',
     '\\\\beta': '\\beta',
     '\\\\gamma': '\\gamma',
-
+    '\\\\mathbf': '\\mathbf',
+    '\\\\mathbb': '\\mathbb',
+    '\\\\mathcal': '\\mathcal',
+    '\\\\text{': '\\text{',
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
     '\\frac12': '\\ha',
