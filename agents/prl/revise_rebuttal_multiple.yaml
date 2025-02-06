@@ -8,7 +8,7 @@ settings:
     - <rebuttal_package>\n<scratchpad>
     - <rebuttal_package>\n<scratchpad>
   requiredFiles:
-    COVER_LETTER: replies/cover_letter.txt
+    COVER_LETTER: replies/cover_letter.tex
     EDITOR_LETTER: replies/editor_letter.txt
     REFEREE_REPORT_A: replies/report_a.txt
     REFEREE_REPORT_B: replies/report_b.txt
