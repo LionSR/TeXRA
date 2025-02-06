@@ -311,9 +311,11 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Spacing cleanup preferences
     '\\;': ' ',
     ' \\, d\\': '~ d\\',
-    ' \\, ': ' ',
-    '\\, \\,': ' \\',
-    '\\,': ' ',
+    ' \\,  ': ' ',
+    '  \\, ': ' ',
+    ' \\, ': ' \\',
+    '\\, \\,': ' \\,',
+    // '\\,': ' ',
     // Hyphenation preferences
     nonnegative: 'non-negative',
     finitetime: 'finite-time',
