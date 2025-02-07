@@ -168,7 +168,7 @@ export abstract class ModelHandler {
     const nameLowerCased = this.config.name.toLowerCase();
     if (
       nameLowerCased.includes('o1-') ||
-      nameLowerCased.includes('o1-preview')
+      nameLowerCased.includes('o1preview')
     ) {
       return false;
     }
@@ -178,6 +178,8 @@ export abstract class ModelHandler {
   get isO1miniOrPreview(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     return (
+      nameLowerCased.includes('o1-') ||
+      nameLowerCased.includes('o1preview') ||
       nameLowerCased.includes('o1-mini') ||
       nameLowerCased.includes('o1-preview')
     );
