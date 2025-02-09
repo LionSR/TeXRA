@@ -26,8 +26,14 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
   isRegex: false,
   patterns: {
     // Basic spacing fixes
+    ', \\;': ', ',
     ' \\;': ' ',
     ' \\; ': ' ',
+    ' \\,\\nn': ' \\nn',
+    ',\\,\\': ', ',
+    ')\\,\\': ') \\',
+    '}\\,\\': '} \\',
+    '|\\,\\': '| \\',
     ' \\,\\': ' \\',
     '\\,\n': '\n',
     '\n    \\\\': '\\\\',
@@ -51,6 +57,7 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '\n    ,\n': ',\n',
     '\!\n    ': '\n    ',
     '\n    =\n': ' =',
+    '\n    \propto\n': ' =',
     '\n     &\n    -': '\n    & -',
     '(\n    ': '(',
     '\n    )': ')',
@@ -124,7 +131,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\mathbf': '\\mathbf',
     '\\\\mathbb': '\\mathbb',
     '\\\\mathcal': '\\mathcal',
+    '\\\\der': '\\der',
     '\\\\text{': '\\text{',
+
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
     '\\frac12': '\\ha',
@@ -184,10 +193,12 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\begin{figure}}': '\\begin{figure}',
     '\n\\minipage}': '\n\\end{minipage}',
     // LaTeX to XML conversions
+    '\\end{idea}': '</idea>',
     '\\end{scratchpad}': '</scratchpad>',
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
     '\\begin{latex_document}': '<latex_document>',
+    '\\end{latex_document}': '</latex_document>',
     // the following logic is tricky, we might have to use some regex to match the tags
     '```latex\n\\documentclass[': '<latex_document>\n\\documentclass[',
     '<latex_document>\n```latex': '<latex_document>\n',
@@ -200,6 +211,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</latex_document>\n```\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
+    // ```latex
+    '```latex\n<latex_document>\n': '\n<latex_document>\n',
     // Document nesting and structure
     '\\end{document}\\n\\n\\<document name=':
       '\\end{document}\\n</document>\\n\\<document name=',
@@ -292,6 +305,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     conditon: 'condition',
     necessitates: 'requires',
     '’': "'",
+    'one–step': 'one-step',
   },
 };
 
@@ -312,10 +326,13 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\dd\\bx\\,': '\\dd\\bx~',
     '\\dd\\bz\\,': '\\dd\\bz~',
     '\\dd\\bze_{\\tauf}\\,': '\\dd\\bze_{\\tauf}~',
+    "\\dd x'": "\\dd x'~",
     '\\quad\\Ra': '~~~\\Ra',
     // Spacing cleanup preferences
     '\\;': ' ',
     ' \\, d\\': '~ d\\',
+    ' \\,|': ' |',
+    '|\\, ': '| ',
     ' \\,  ': ' ',
     '  \\, ': ' ',
     ' \\, ': ' \\',
