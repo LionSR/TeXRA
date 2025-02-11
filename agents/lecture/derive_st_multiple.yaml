@@ -44,21 +44,23 @@ prompts:
         \end{align}
         Here, $\rho(\bze_{0:\tf})$ is the probability density of observing a specific trajectory $\bze_{0:\tf}$ in the forward process, and $\rho_R(\bze_{0:\tf})$ is the probability density of observing this path under the reverse process defined as follows:
         \begin{align}
-            \rho_R(\bze_{0:\tf}) &= \rho_\tf(\bze_\tf)\rho_R(\bze_{\tf-1:0}|\bze_\tf),\\
-                                &= \rho_\tf(\bze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf),\\
-                                &= \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf). \label{eqn:rhoR}
+            \rho_R(\bze_{0:\tf})
+            &= \rho_\tf(\bze_\tf)\rho_R(\bze_{\tf-1:0}|\bze_\tf),\\
+            &= \rho_\tf(\bze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf),\\
+            &= \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf). \label{eqn:rhoR}
         \end{align}
         In words: the backward probability starts with the marginal distribution $\rho_\tf$ of the forward process and uses the \emph{forward process} with reversed momenta and odd control parameters to run backward. $\Sig(\bze_{0:\tf})$ represents the total entropy production (including both system and environmental contributions) along the trajectory $\bze_{0:\tf}$. We derived \cref{eqn:traj_prob_ratio} in Chapter~\ref{ch:STOCH_THERM} as \cref{eqn:ep_traj} for the discrete-time Markov Chain, but it is also applicable to a wide range of physical systems, such as Hamiltonian systems and overdamped Langevin systems.
 
         If we integrate over all trajectories that result in a specific entropy production $\Sig$ in \cref{eqn:traj_prob_ratio}, we obtain
         \begin{align}
-            \cP(\Sig) &= \int \dd\bze_{0:\tf}~ \rho(\bze_{0:\tf})\de(\Sig(\bze_{0:\tf})-\Sig)~~~~\text{(by definition of $P$)}\nn\\
-                    &= \int \dd\bze_{0:\tf}~ \rho_R(\bze_{0:\tf})e^{\Sig(\bze_{0:\tf})}\de(\Sig(\bze_{0:\tf})-\Sig)  ~~~~\text{(using eqn. \ref{eqn:traj_prob_ratio})}\nn\\
-                    &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho_R(\bze_{0:\tf})\de(\Sig(\bze_{0:\tf})-\Sig)~~~~\text{(using property of the delta-function)} \nn\\
-                    &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(\Sig(\bze_{0:\tf})-\Sig)  ~~~~\text{(using eqn. \ref{eqn:rhoR})}\nn\\
-                    &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(-\Sig(\tbze_{\tf:0})-\Sig) ~~~~\text{(using $\Sig(\bze_{0:\tf}) = -\Sig(\tbze_{\tf:0})$)}\nn\\
-                    &= e^{+\Sig}\int \dd\tbze_{\tf:0}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(\Sig(\tbze_{\tf:0})+\Sig) ~~~~\text{(using $\dd\tbze_{\tf:0}=\dd\bze_{0:\tf}$)}\nn\\
-                    &= e^{\Sig} \cP_R(-\Sig), ~~~~\text{(by definition of $P_R$)}\nn\\
+            \cP(\Sig)
+            &= \int \dd\bze_{0:\tf}~ \rho(\bze_{0:\tf})\de(\Sig(\bze_{0:\tf})-\Sig)~~~~\text{(by definition of $P$)}\nn\\
+            &= \int \dd\bze_{0:\tf}~ \rho_R(\bze_{0:\tf})e^{\Sig(\bze_{0:\tf})}\de(\Sig(\bze_{0:\tf})-\Sig)  ~~~~\text{(using eqn. \ref{eqn:traj_prob_ratio})}\nn\\
+            &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho_R(\bze_{0:\tf})\de(\Sig(\bze_{0:\tf})-\Sig)~~~~\text{(using property of the delta-function)} \nn\\
+            &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(\Sig(\bze_{0:\tf})-\Sig)  ~~~~\text{(using eqn. \ref{eqn:rhoR})}\nn\\
+            &= e^{+\Sig}\int \dd\bze_{0:\tf}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(-\Sig(\tbze_{\tf:0})-\Sig) ~~~~\text{(using $\Sig(\bze_{0:\tf}) = -\Sig(\tbze_{\tf:0})$)}\nn\\
+            &= e^{+\Sig}\int \dd\tbze_{\tf:0}~ \rho^R_\tf(\tbze_\tf)\rho_{\tbla}(\tbze_{\tf-1:0}|\tbze_\tf)\de(\Sig(\tbze_{\tf:0})+\Sig) ~~~~\text{(using $\dd\tbze_{\tf:0}=\dd\bze_{0:\tf}$)}\nn\\
+            &= e^{\Sig} \cP_R(-\Sig), ~~~~\text{(by definition of $P_R$)}\nn\\
         \end{align}
         </example>
         \item Use consistent mathematical notation throughout all chapters:

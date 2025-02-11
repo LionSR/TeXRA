@@ -39,6 +39,7 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '\n    \\\\': '\\\\',
     '\\!\\!': '',
     '.  ': '. ',
+    ' nn\n': ' \\nn\n',
 
     // Operator spacing
     '\\;+\\;': '+',
@@ -81,7 +82,7 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
 
     // Punctuation in math mode
     '.$': '$.',
-    ',$': '$,',
+    // ',$': '$,', // this is problematic for eg. tikz figure xticklabels={$-\Sig$,0$,\Sig$},
     '$-\\,': '$-',
 
     // Simplify delimiters
@@ -197,6 +198,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{scratchpad}': '</scratchpad>',
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
+    '</enumerate>': '\\end{enumerate}',
+    '</enumerate}': '\\end{enumerate}',
+    
     '\\begin{latex_document}': '<latex_document>',
     '\\end{latex_document}': '</latex_document>',
     // the following logic is tricky, we might have to use some regex to match the tags
@@ -207,12 +211,14 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Scratchpad and latex_document handling
     '<scratchpad>\n<scratchpad>\n': '<scratchpad>\n',
     '<scratchpad>\n```latex\n': '<scratchpad>\n<latex_document>\n',
+    '<scratchpad>```latex': '<scratchpad>\n<latex_document>',
     '```\n</scratchpad>\n</latex_document>': '</latex_document>',
     '</latex_document>\n```\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n</latex_document>': '</latex_document>\n',
     '</latex_document>\n\n</latex_document>': '</latex_document>\n',
     // ```latex
     '```latex\n<latex_document>\n': '\n<latex_document>\n',
+    '<latex_document>\n<latex_document>': '<latex_document>',
     // Document nesting and structure
     '\\end{document}\\n\\n\\<document name=':
       '\\end{document}\\n</document>\\n\\<document name=',
@@ -326,6 +332,7 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\dd\\bx\\,': '\\dd\\bx~',
     '\\dd\\bz\\,': '\\dd\\bz~',
     '\\dd\\bze_{\\tauf}\\,': '\\dd\\bze_{\\tauf}~',
+    '\\dd x ': '\\dd x~ ',
     "\\dd x'": "\\dd x'~",
     '\\quad\\Ra': '~~~\\Ra',
     // Spacing cleanup preferences
