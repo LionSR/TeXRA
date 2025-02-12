@@ -120,12 +120,40 @@ export async function runCleanBuild(): Promise<void> {
         const entries = await readDirectory(buildDir);
         // First delete all files
         for (const [name, type] of entries) {
+          const fullPath = path.join(buildDir, name);
           if (type === vscode.FileType.File) {
-            const filePath = path.join(buildDir, name);
-            await deleteFile(filePath);
+            await deleteFile(fullPath);
+          } else if (type === vscode.FileType.Directory) {
+            const subEntries = await readDirectory(fullPath);
+            if (subEntries.length === 0) {
+              deleteFile(fullPath);
+              logger.debug(CHANNEL, `Removed empty directory: ${fullPath}`);
+            }
+            for (const [name, type] of subEntries) {
+              if (type === vscode.FileType.Directory) {
+                const subPath = path.join(fullPath, name);
+                const stats = await vscode.workspace.fs.stat(
+                  vscode.Uri.file(subPath),
+                );
+                const size = stats.size;
+                if (size === 0) {
+                  deleteFile(subPath);
+                  logger.debug(CHANNEL, `Removed empty directory: ${subPath}`);
+                }
+              }
+            }
           }
         }
-        logger.debug(CHANNEL, `Cleaned build directory: ${buildDir}`);
+        // Check if build directory itself is empty
+        const remainingEntries = await readDirectory(buildDir);
+        if (remainingEntries.length === 0) {
+          await vscode.workspace.fs.delete(vscode.Uri.file(buildDir), {
+            recursive: true,
+          });
+          logger.debug(CHANNEL, `Removed empty build directory: ${buildDir}`);
+        } else {
+          logger.debug(CHANNEL, `Cleaned build directory: ${buildDir}`);
+        }
       } catch (err) {
         logger.error(
           CHANNEL,
