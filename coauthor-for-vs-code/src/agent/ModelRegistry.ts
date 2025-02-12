@@ -377,6 +377,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.28,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      // supportsAssistantPrefill: true,
+      // supportsAutoPromptCaching: true,
+      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
     } satisfies ModelCapabilities,
     openRouterOnly: true,
   },
@@ -391,6 +394,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 8,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      // supportsAssistantPrefill: true,
+      // supportsAutoPromptCaching: true,
+      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
       supportsReasoning: true,
     } satisfies ModelCapabilities,
     openRouterOnly: true,
