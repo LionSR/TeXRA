@@ -250,6 +250,7 @@ export abstract class ModelHandler {
       const fileExtension = path.extname(figureFile).toLowerCase();
 
       try {
+        this.logger.debug(`Processing image: ${figureFile}`);
         const [imgData, mediaType] = await this.processImage(
           figureFile,
           fileExtension,
