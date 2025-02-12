@@ -430,6 +430,13 @@
             "description": "Google API key for Gemini models",
             "scope": "application",
             "password": true
+          },
+          "coauthor.apiKeys.deepseek": {
+            "type": "string",
+            "default": "",
+            "description": "DeepSeek API key for DeepSeek models",
+            "scope": "application",
+            "password": true
           }
         }
       }
