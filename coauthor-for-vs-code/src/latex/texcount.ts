@@ -2,12 +2,43 @@
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { fileExists } from '../utils/fileUtils';
+import { fileExists, readFile } from '../utils/fileUtils';
 import { executeCommand } from '../utils/execUtils';
 import { checkToolInstalled } from './texTools';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
+
+/**
+ * Check if a LaTeX file contains Chinese-related packages
+ * @param filePath Path to the LaTeX file
+ * @returns Promise<boolean> True if the file contains Chinese packages
+ */
+async function hasChinesePackages(filePath: string): Promise<boolean> {
+  try {
+    const content = await readFile(filePath);
+    const chinesePackages = [
+      'xeCJK',
+      'ctexart',
+      'ctex',
+      'CJK',
+      'xeCJK',
+      'ctexrep',
+      'ctexbook',
+    ];
+    return chinesePackages.some(
+      (pkg) =>
+        content.includes(`\\usepackage{${pkg}}`) ||
+        content.includes(`\\documentclass{${pkg}}`),
+    );
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error checking Chinese packages: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
 
 /**
  * Get full statistics for LaTeX documents using the texcount Perl script
@@ -49,6 +80,16 @@ export async function getTexCount(
       if (merge) {
         command.push('-merge');
       }
+
+      // Add Chinese counting support if Chinese packages are detected
+      if (await hasChinesePackages(filePath)) {
+        command.push('-ch-only'); // Use Chinese-only mode for accurate character counting
+        logger.debug(
+          channel,
+          `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
+        );
+      }
+
       command.push(`"${filePath}"`);
 
       const result = await executeCommand(command, {
