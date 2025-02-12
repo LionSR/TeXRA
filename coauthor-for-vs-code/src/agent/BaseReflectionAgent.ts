@@ -1,5 +1,6 @@
 // Standard library imports
 import * as path from 'path';
+import * as fs from 'fs';
 
 // Third-party imports
 // (none needed)
@@ -304,9 +305,9 @@ export abstract class BaseReflectionAgent {
       for (const [varName, filePath] of Object.entries(
         this.agentSetting.requiredFilesInternal,
       )) {
-        const fullPath = `${this.agentPath}/${filePath}`;
+        const fullPath = path.join(this.agentPath, filePath);
         try {
-          const fileContent = await readFile(fullPath);
+          const fileContent = await fs.promises.readFile(fullPath, 'utf-8');
           userVars[`${varName}_FILE`] = fullPath;
           userVars[`${varName}_CONTENT`] = fileContent;
           this.logger.info(
