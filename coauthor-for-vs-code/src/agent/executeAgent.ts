@@ -177,6 +177,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
+    // here I'd like to print what model @ ${agentConfig.model} too
   }
 }
 
