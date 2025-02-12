@@ -118,6 +118,7 @@ export async function runCleanBuild(): Promise<void> {
     if (await fileExists(buildDir)) {
       try {
         const entries = await readDirectory(buildDir);
+        // First delete all files
         for (const [name, type] of entries) {
           if (type === vscode.FileType.File) {
             const filePath = path.join(buildDir, name);
@@ -141,6 +142,7 @@ export async function runCleanBuild(): Promise<void> {
         if (
           type === vscode.FileType.Directory &&
           !EXCLUDED_DIRS.has(name.toLowerCase())
+          // this excludes the build directory, is it correct?
         ) {
           const fullPath = path.join(dirPath, name);
           await cleanBuildDir(fullPath);
