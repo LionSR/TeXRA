@@ -74,7 +74,9 @@ async function processDiffFile(
         addBlock = false;
         documentStarted = true;
       } else if (
-        (line.includes('%DIF ADD') || line.includes('Here is')) &&
+        (line.includes('%DIF ADD') ||
+          line.includes('Here is') ||
+          line.includes('以下是')) &&
         !documentStarted
       ) {
         addBlock = true;
