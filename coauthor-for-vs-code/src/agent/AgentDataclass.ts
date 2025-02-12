@@ -74,13 +74,15 @@ export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,
 ): boolean {
-  return [
+  const endTagLists = [
     settings.endTag,
     settings.documentTag && `</${settings.documentTag}>`,
-    // '\\end{document}',
-  ].some((tag) => tag && fileContent.includes(tag));
+  ];
 
-  // \end{document} is not the right criteria for prefill multiple output files. but maybe it is useful for DirectAgent?
+  if (settings.agentType === 'CoT') {
+    endTagLists.push('\\end{document}');
+  }
+  return endTagLists.some((tag) => tag && fileContent.includes(tag));
 }
 
 /**
