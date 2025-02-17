@@ -1,0 +1,23 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+  "files.exclude": {
+    "out": true, // set this to true to hide the "out" folder with the compiled JS files
+    "dist": true, // set this to true to hide the "dist" folder with the compiled JS files
+    "node_modules": true, // set this to true to hide the "node_modules" folder
+    "package-lock.json": true, // set this to true to hide the "package-lock.json" file
+    ".prettierrc": true, // set this to true to hide the ".prettierrc" file
+    "LICENSE": true, // set this to true to hide the "LICENSE" file
+    "vsc-extension-quickstart.md": true // set this to true to hide the "vsc-extension-quickstart" folder
+  },
+  "search.exclude": {
+    "out": true, // set this to false to include "out" folder in search results
+    "dist": true, // set this to false to include "dist" folder in search results
+    "node_modules": true, // set this to false to include "node_modules" folder in search results
+    "package-lock.json": true, // set this to false to include "package-lock.json" file in search results
+    ".prettierrc": true, // set this to false to include ".prettierrc" file in search results
+    "LICENSE": true, // set this to false to include "LICENSE" file in search results
+    "vsc-extension-quickstart.md": true // set this to false to include "vsc-extension-quickstart" folder in search results
+  },
+  // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
+  "typescript.tsc.autoDetect": "off"
+}
