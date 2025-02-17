@@ -11,4 +11,4 @@ export {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from './latexdiff';
-export { runIndentTex } from './indent';
+export { runIndentTeX } from './indent';
