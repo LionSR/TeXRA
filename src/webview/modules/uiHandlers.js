@@ -184,18 +184,6 @@ export function setupUIHandlers() {
     }
   });
 
-  const buttonCommands = {
-    cleanOutputButton: 'cleanOutput',
-    cleanBuildButton: 'cleanBuild',
-    indentTexButton: 'indentTex',
-  };
-
-  Object.entries(buttonCommands).forEach(([id, command]) => {
-    addEventListenerSafely(id, 'click', () => {
-      vscode.postMessage({ command });
-    });
-  });
-
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');

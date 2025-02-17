@@ -444,18 +444,21 @@
     "commands": [
       {
         "command": "coauthor.cleanOutput",
-        "title": "Clean Output",
-        "category": "CoAuthor"
+        "title": "Clean All LLM Output Files",
+        "category": "CoAuthor",
+        "icon": "$(clear-all)"
       },
       {
         "command": "coauthor.cleanBuild",
-        "title": "Clean Build",
-        "category": "CoAuthor"
+        "title": "Clean All Build Files",
+        "category": "CoAuthor",
+        "icon": "$(trash)"
       },
       {
-        "command": "coauthor.indentTex",
-        "title": "Indent TeX",
-        "category": "CoAuthor"
+        "command": "coauthor.indentTeX",
+        "title": "Indent All LaTeX Files",
+        "category": "CoAuthor",
+        "icon": "$(indent)"
       },
       {
         "command": "coauthor.getRecentCommits",
@@ -468,7 +471,7 @@
         "category": "CoAuthor"
       },
       {
-        "command": "coauthor.indentCurrentTex",
+        "command": "coauthor.indentCurrentTeX",
         "title": "Indent Current TeX",
         "category": "CoAuthor",
         "icon": "$(indent)",
@@ -510,70 +513,84 @@
         "category": "CoAuthor"
       },
       {
-        "command": "coauthor.getTexCount",
-        "title": "CoAuthor: Count Words in Current TeX File",
+        "command": "coauthor.getTeXCount",
+        "title": "Count Words in Current TeX File",
         "category": "CoAuthor",
         "icon": "$(symbol-number)",
         "enablement": "!virtualWorkspace"
       },
       {
         "command": "coauthor.testConnection",
-        "title": "CoAuthor: Test Text Connection Methods"
+        "title": "Test Text Connection Methods",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.testAgentLoading",
-        "title": "CoAuthor: Test Agent Loading"
+        "title": "Test Agent Loading",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.loadSpecificAgent",
-        "title": "CoAuthor: Load Specific Agent"
+        "title": "Load Specific Agent",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.parseXml",
-        "title": "CoAuthor: Parse XML Structure"
+        "title": "Parse XML Structure",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.parseYaml",
-        "title": "CoAuthor: Parse YAML Structure"
+        "title": "Parse YAML Structure",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.testYamlBrackets",
-        "title": "CoAuthor: Test YAML Bracket Handling"
+        "title": "Test YAML Bracket Handling",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.stopAgent",
-        "title": "CoAuthor: Stop Agent"
+        "title": "Stop Agent",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.execute",
-        "title": "CoAuthor: Execute"
+        "title": "Execute Agent",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.pack",
-        "title": "CoAuthor: Pack Files"
+        "title": "Pack Files",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.clean",
-        "title": "CoAuthor: Clean Files"
+        "title": "Clean Files",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.folderExplorer.newFile",
         "title": "New File",
+        "category": "CoAuthor",
         "icon": "$(new-file)"
       },
       {
         "command": "coauthor.folderExplorer.newFolder",
         "title": "New Folder",
+        "category": "CoAuthor",
         "icon": "$(new-folder)"
       },
       {
         "command": "coauthor.folderExplorer.rename",
         "title": "Rename",
+        "category": "CoAuthor",
         "icon": "$(edit)"
       },
       {
         "command": "coauthor.folderExplorer.delete",
         "title": "Delete",
+        "category": "CoAuthor",
         "icon": "$(trash)"
       }
     ],
@@ -611,16 +628,31 @@
       "editor/title": [
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "coauthor.indentCurrentTex",
+          "command": "coauthor.indentCurrentTeX",
           "group": "navigation@3"
         },
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "coauthor.getTexCount",
+          "command": "coauthor.getTeXCount",
           "group": "navigation@4"
         }
       ],
       "view/title": [
+        {
+          "command": "coauthor.indentTeX",
+          "when": "view == coauthor.logView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "coauthor.cleanOutput",
+          "when": "view == coauthor.logView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "coauthor.cleanBuild",
+          "when": "view == coauthor.logView",
+          "group": "navigation@3"
+        },
         {
           "command": "coauthor.folderExplorer.newFile",
           "when": "view == coauthor.folderExplorer",
