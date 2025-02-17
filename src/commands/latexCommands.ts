@@ -9,13 +9,13 @@ import { getRelativePath } from '../utils/fileUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from '../latex/latexindent';
-import { getTexCount } from '../latex/texcount';
+import { getTeXCount } from '../latex/texcount';
 
 // Local imports - commands
 import { fileSelectionCommands } from './fileSelectionCommands';
 
 // Local imports - housekeeping
-import { runIndentTex } from '../housekeeping';
+import { runIndentTeX } from '../housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -23,15 +23,15 @@ logger.initialize(CHANNEL);
 export function registerLatexCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.indentCurrentTex',
-      handleIndentCurrentTex,
+      'coauthor.indentCurrentTeX',
+      handleIndentCurrentTeX,
     ),
-    vscode.commands.registerCommand('coauthor.getTexCount', handleGetTexCount),
-    vscode.commands.registerCommand('coauthor.indentTex', runIndentTex),
+    vscode.commands.registerCommand('coauthor.getTeXCount', handleGetTeXCount),
+    vscode.commands.registerCommand('coauthor.indentTeX', runIndentTeX),
   );
 }
 
-async function handleIndentCurrentTex(): Promise<void> {
+async function handleIndentCurrentTeX(): Promise<void> {
   try {
     const relativePath = await fileSelectionCommands.getCurrentFile();
     if (!relativePath) {
@@ -66,12 +66,12 @@ async function handleIndentCurrentTex(): Promise<void> {
       vscode.window.showErrorMessage('Failed to indent LaTeX file');
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error in indentTex command: ${err}`);
+    logger.error(CHANNEL, `Error in indentTeX command: ${err}`);
     vscode.window.showErrorMessage('Error indenting LaTeX file');
   }
 }
 
-async function handleGetTexCount(): Promise<void> {
+async function handleGetTeXCount(): Promise<void> {
   try {
     // Get active editor
     const editor = vscode.window.activeTextEditor;
@@ -117,7 +117,7 @@ async function handleGetTexCount(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Running texcount...' });
 
-        const result = await getTexCount(filePath, mergeOption.value, CHANNEL);
+        const result = await getTeXCount(filePath, mergeOption.value, CHANNEL);
 
         if (result) {
           // Extract key statistics using regex
@@ -154,14 +154,14 @@ async function handleGetTexCount(): Promise<void> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in getTexCount command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in getTeXCount command: ${err instanceof Error ? err.message : String(err)}`,
     );
     vscode.window.showErrorMessage('Error getting tex count');
   }
 }
 
 export const latexCommands = {
-  handleIndentCurrentTex,
-  handleGetTexCount,
-  runIndentTex,
+  handleIndentCurrentTeX,
+  handleGetTeXCount,
+  runIndentTeX,
 };

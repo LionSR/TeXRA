@@ -19,4 +19,4 @@ export {
 export { compileLatex2Pdf } from './texTools';
 
 // Export texcount functionality
-export { getTexCountStats } from './texcount';
+export { getTeXCountStats } from './texcount';
