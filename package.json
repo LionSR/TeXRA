@@ -663,7 +663,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/LionSR/coauthor-for-vs-code.git"
+    "url": "https://github.com/LionSR/coauthor.git"
   },
   "license": "MIT",
   "author": "Sirui LU",
@@ -676,9 +676,9 @@
     "vscode"
   ],
   "bugs": {
-    "url": "https://github.com/LionSR/coauthor-for-vs-code/issues"
+    "url": "https://github.com/LionSR/coauthor/issues"
   },
-  "homepage": "https://github.com/LionSR/coauthor-for-vs-code#readme",
+  "homepage": "https://github.com/LionSR/coauthor#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@types/yaml": "^1.9.6",
