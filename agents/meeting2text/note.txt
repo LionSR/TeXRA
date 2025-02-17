@@ -1,5 +1,0 @@
-If provided, here is a running research note before the discussion for the background information:
-<research_note>
-{RESEARCH_NOTE}
-</research_note>
-BUT, the research note is only for the background information without any contents of the discussion. You should still follow the discussion order and the logical flow of the discussion. You MUST NOT copy contents from the research note.
