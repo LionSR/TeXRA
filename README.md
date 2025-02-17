@@ -108,14 +108,14 @@ Although many models are supported, we recommend using Anthropic sonnet+/opus or
 
 CoAuthor supports a variety of intelligent agents, including but not limited to:
 
-- `correct_tex`: Fix typos and minor errors in LaTeX documents
-- `polish_tex`: Improve the writing style and clarity of LaTeX documents
-- `draw_tex`: Create or enhance TikZ figures in LaTeX documents
-- `write_tex`: Generate new LaTeX content based on instructions
+- `correct`: Fix typos and minor errors in LaTeX documents
+- `polish`: Improve the writing style and clarity of LaTeX documents
+- `draw`: Create or enhance TikZ figures in LaTeX documents
+- `write`: Generate new LaTeX content based on instructions
 - `meeting2text`: Convert meeting transcripts into structured text
 - `paper2note`: Transform research papers into lecture notes
 - `txt2tex`: Convert plain text to LaTeX format
-- `merge_tex`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
+- `merge`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
 - `slide2paper`: Convert presentation slides into a research paper format
 - `paper2slide`: Convert research paper into a latex beamer presentation slides
 
