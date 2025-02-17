@@ -1,10 +1,10 @@
 # Build and version directories
 build/
-Versions/
 History/
 
 # Backup and recording files
 *.bak0
+*.bak1
 recordings/
 FiguresEx/
 Diffs/
@@ -16,11 +16,8 @@ Diffs/
 *_gpt4*.*
 *gemini*.*
 *o1*.*
+*o3*.*
 *diff*.*
 
 # Main outputs
 main.pdf
-
-# Utility files
-git_dropbox_sync.sh
-coauthor_logs.db
