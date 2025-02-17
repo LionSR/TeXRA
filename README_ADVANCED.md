@@ -1,7 +1,5 @@
 # CoAuthor Frontend (VS Code Extension)
 
-This is the frontend component of the CoAuthor project, a Visual Studio Code extension that provides a user-friendly interface for interacting with the CoAuthor backend for academic writing assistance.
-
 ## Features
 
 - Seamless integration with VS Code for academic writing assistance
@@ -13,35 +11,13 @@ This is the frontend component of the CoAuthor project, a Visual Studio Code ext
 - Robust logging system for debugging and monitoring
 - Modular architecture for future extensibility
 
-## Project Structure
-
-The extension is organized into several key components:
-
-```
-src/
-├── commands/         # Command implementations
-├── models/          # Model-specific implementations
-├── types/           # TypeScript type definitions
-├── utils/           # Utility functions and helpers
-├── logView/         # Logging view implementation
-├── webview/         # Frontend UI components
-├── commands.ts      # Command registration
-├── extension.ts     # Extension entry point
-├── folderExplorer.ts # Folder exploration functionality
-├── housekeeping.ts  # File management operations
-├── terminal.ts      # Terminal integration
-├── textConnection.ts # Text processing utilities
-├── utils.ts         # Common utilities
-└── ViewProvider.ts  # WebView management
-```
-
 ## Installation
 
 ### For Users
 
-For quick installation, refer to the [main README](../README.md), which allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
+For quick installation, refer to the [main README](README.md), which allows you to quickly install the latest version of the extension directly from within VS Code, without needing to compile the extension yourself.
 
-### Manual Installation (For developers or customization)
+## Manual Installation (For developers or customization)
 
 If you want to customize or contribute to the extension, follow these steps:
 
@@ -74,7 +50,7 @@ If you want to customize or contribute to the extension, follow these steps:
    npm run build
    ```
 
-## Usage
+## Detailed Usage Instructions
 
 CoAuthor frontend provides several commands that can be accessed via the command palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) or through the CoAuthor sidebar.
 
@@ -110,7 +86,7 @@ This process ensures that your instructions are carried out thoroughly and intel
 
 The CoAuthor sidebar provides several buttons and controls for easy interaction:
 
-1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct_tex, polish_tex, draw_tex).
+1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct, polish, draw).
 2. **Model Selection**: Select the AI model to use for the agent (e.g., Sonnet+, Opus, GPT-4).
 3. **Reflect**: Toggle whether the AI should perform a reflection step after the initial agent.
 4. **Execute**: Run the selected agent with the chosen settings and files.
@@ -204,9 +180,9 @@ You can customize the list of available agents in your VS Code settings:
 
 ```json
 "coauthor.agents": [
-  "correct_tex",
-  "polish_tex",
-  "draw_tex",
+  "correct",
+  "polish",
+  "draw",
   "meeting2text",
   "paper2note",
   "txt2tex",
@@ -222,7 +198,7 @@ Customize the extension through VS Code settings:
 
 ```json
 {
-  "coauthor.agents": ["correct_tex", "polish_tex", "draw_tex"],
+  "coauthor.agents": ["correct", "polish", "draw"],
   "coauthor.includedDirectories": [
     "Discrete-Time",
     "FiguresEx",
