@@ -444,59 +444,77 @@
     "commands": [
       {
         "command": "coauthor.cleanOutput",
-        "title": "CoAuthor: Clean Output"
+        "title": "Clean Output",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.cleanBuild",
-        "title": "CoAuthor: Clean Build"
+        "title": "Clean Build",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.indentTex",
-        "title": "CoAuthor: Indent TeX"
+        "title": "Indent TeX",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.getRecentCommits",
-        "title": "CoAuthor: Get Recent Commits"
+        "title": "Get Recent Commits",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.refreshCommits",
-        "title": "CoAuthor: Refresh Commits"
+        "title": "Refresh Commits",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.indentCurrentTex",
-        "title": "CoAuthor: Indent Current TeX"
+        "title": "Indent Current TeX",
+        "category": "CoAuthor",
+        "icon": "$(indent)",
+        "enablement": "!virtualWorkspace"
       },
       {
         "command": "coauthor.countPdfPages",
-        "title": "CoAuthor: Count PDF Pages"
+        "title": "Count PDF Pages",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.encodeImageToBase64",
-        "title": "CoAuthor: Encode Image to Base64"
+        "title": "Encode Image to Base64",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.convertPdfToImages",
-        "title": "CoAuthor: Convert PDF to Images"
+        "title": "Convert PDF to Images",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.testPdfToImage",
-        "title": "CoAuthor: Test PDF to Image Conversion"
+        "title": "Test PDF to Image Conversion",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.extractFigurePaths",
-        "title": "CoAuthor: Extract Figure Paths from LaTeX"
+        "title": "Extract Figure Paths from LaTeX",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.extractTikzFigures",
-        "title": "CoAuthor: Extract TikZ Figures from Current File"
+        "title": "Extract TikZ Figures from Current File",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.compileTikzFigures",
-        "title": "CoAuthor: Compile TikZ Figures from Current File"
+        "title": "Compile TikZ Figures from Current File",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.getTexCount",
-        "title": "CoAuthor: Count Words in Current TeX File"
+        "title": "CoAuthor: Count Words in Current TeX File",
+        "category": "CoAuthor",
+        "icon": "$(symbol-number)",
+        "enablement": "!virtualWorkspace"
       },
       {
         "command": "coauthor.testConnection",
@@ -590,6 +608,18 @@
       ]
     },
     "menus": {
+      "editor/title": [
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "coauthor.indentCurrentTex",
+          "group": "navigation@3"
+        },
+        {
+          "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
+          "command": "coauthor.getTexCount",
+          "group": "navigation@4"
+        }
+      ],
       "view/title": [
         {
           "command": "coauthor.folderExplorer.newFile",
