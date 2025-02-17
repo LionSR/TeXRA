@@ -1,6 +1,0 @@
-Title: {{title}}
-Author: {{author}}
-Year: {{year}}
-\begin{document}
-{{content}}
-\end{document}
