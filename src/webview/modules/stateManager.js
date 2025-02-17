@@ -51,7 +51,7 @@ export function restoreState() {
   const previousState = vscode.getState();
   if (previousState) {
     const defaultValues = {
-      agent: 'correct_tex',
+      agent: 'correct',
       reflect: 'True',
       commit: 'HEAD',
     };

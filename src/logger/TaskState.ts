@@ -43,7 +43,7 @@ export interface TaskState {
 export function fromObject(obj: Record<string, any>): TaskState {
   return {
     // Basic task info
-    agent: obj.agent || 'correct_tex',
+    agent: obj.agent || 'correct',
     model: obj.model || '',
     reflect: obj.reflect || 'True',
 
