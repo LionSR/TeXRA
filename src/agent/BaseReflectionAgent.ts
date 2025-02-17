@@ -13,7 +13,7 @@ import {
   extractAndCompileTikzPicturesWithLabels,
   extractFigurePathsFromLatex,
   bestConnectionMethod,
-  getTexCountStats,
+  getTeXCountStats,
 } from '../latex';
 
 // Local imports - utilities
@@ -690,7 +690,7 @@ export abstract class BaseReflectionAgent {
 
     // Handle tex count if enabled
     if (this.agentConfig.toolConfig.attachTeXCount) {
-      toolState.texcountStats = await getTexCountStats(inputFiles);
+      toolState.texcountStats = await getTeXCountStats(inputFiles);
     }
 
     // Handle prefill from input if enabled
@@ -998,7 +998,7 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
   ): Promise<void> {
     if (this.agentConfig.toolConfig.attachTeXCount) {
-      toolState.texcountStats = await getTexCountStats(outputFiles);
+      toolState.texcountStats = await getTeXCountStats(outputFiles);
     }
 
     if (

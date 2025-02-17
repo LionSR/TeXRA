@@ -47,7 +47,7 @@ async function hasChinesePackages(filePath: string): Promise<boolean> {
  * @param channel The channel to use for logging
  * @returns Promise<string | null> String containing full texcount output for all files, or null if an error occurred
  */
-export async function getTexCount(
+export async function getTeXCount(
   filePaths: string | string[],
   merge: boolean = false,
   channel: string = CHANNEL,
@@ -97,7 +97,7 @@ export async function getTexCount(
         truncate: false, // Don't truncate texcount output as we need the full statistics
       });
       if (result.success && result.stdout) {
-        allOutputs.push(`Tex Count Results for ${filePath}:\n${result.stdout}`);
+        allOutputs.push(`TeX Count Results for ${filePath}:\n${result.stdout}`);
         logger.debug(channel, `Successfully counted ${filePath}`);
       } else {
         logger.error(channel, `Error getting tex count for ${filePath}`);
@@ -108,7 +108,7 @@ export async function getTexCount(
 
     if (allOutputs.length > 0) {
       const combinedOutput = allOutputs.join('\n\n');
-      logger.info(channel, `Combined Tex Count Results:\n${combinedOutput}`);
+      logger.info(channel, `Combined TeX Count Results:\n${combinedOutput}`);
       return combinedOutput;
     }
 
@@ -116,7 +116,7 @@ export async function getTexCount(
   } catch (err) {
     logger.error(
       channel,
-      `Error in getTexCount: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in getTeXCount: ${err instanceof Error ? err.message : String(err)}`,
     );
     return null;
   }
@@ -128,12 +128,12 @@ export async function getTexCount(
  * @param channel The channel to use for logging
  * @returns Promise<string | null> String containing formatted texcount statistics with XML tags, or null if an error occurred
  */
-export async function getTexCountStats(
+export async function getTeXCountStats(
   filePaths: string | string[],
   channel: string = CHANNEL,
 ): Promise<string | null> {
-  const texcountStats = await getTexCount(filePaths, false, channel);
+  const texcountStats = await getTeXCount(filePaths, false, channel);
   return texcountStats
-    ? `Tex Count Statistics:<texcount>\n${texcountStats}\n</texcount>\n\n`
+    ? `TeX Count Statistics:<texcount>\n${texcountStats}\n</texcount>\n\n`
     : null;
 }

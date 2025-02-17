@@ -23,7 +23,7 @@ import { EXCLUDED_DIRS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-export async function runIndentTex(): Promise<void> {
+export async function runIndentTeX(): Promise<void> {
   logger.debug(CHANNEL, 'Starting LaTeX indentation process');
 
   const config = getConfig<string>('latex.latexindentConfig', '');
