@@ -614,13 +614,13 @@
         {
           "type": "webview",
           "id": "coauthor.logView",
-          "name": "CoAuthor: Tasks",
-          "contextualTitle": "CoAuthor Tasks",
+          "name": "CoAuthor: Dashboard",
+          "contextualTitle": "Dashboard",
           "icon": "$(server-process)"
         },
         {
           "id": "coauthor.folderExplorer",
-          "name": "Agents",
+          "name": "TeX Agents",
           "when": "workbenchState != empty"
         }
       ]
