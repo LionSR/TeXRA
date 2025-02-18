@@ -601,6 +601,13 @@
           "title": "CoAuthor",
           "icon": "resources/scholarly-duck.svg"
         }
+      ],
+      "panel": [
+        {
+          "id": "coauthor-panel",
+          "title": "CoAuthor Dashboard",
+          "icon": "$(server-process)"
+        }
       ]
     },
     "views": {
@@ -612,16 +619,18 @@
           "contextualTitle": "CoAuthor"
         },
         {
+          "id": "coauthor.folderExplorer",
+          "name": "TeX Agents",
+          "when": "workbenchState != empty"
+        }
+      ],
+      "coauthor-panel": [
+        {
           "type": "webview",
           "id": "coauthor.logView",
           "name": "CoAuthor: Dashboard",
           "contextualTitle": "Dashboard",
           "icon": "$(server-process)"
-        },
-        {
-          "id": "coauthor.folderExplorer",
-          "name": "TeX Agents",
-          "when": "workbenchState != empty"
         }
       ]
     },
