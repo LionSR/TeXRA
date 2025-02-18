@@ -5,13 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src https:; font-src https://cdnjs.cloudflare.com;"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src https: vscode-resource:; font-src ${cspSource} vscode-resource:;"
     />
     <link rel="stylesheet" href="${styleUri}" />
+    <link rel="stylesheet" href="${codiconUri}" />
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -33,19 +30,19 @@
     <div class="content-wrapper">
       <div class="compact-selections">
         <div class="select-group">
-          <i class="fas fa-tasks" title="Agent"></i>
+          <i class="codicon codicon-sparkle" title="Agent"></i>
           <select id="agent">
             ${agentOptions}
           </select>
         </div>
         <div class="select-group">
-          <i class="fas fa-robot" title="Model"></i>
+          <i class="codicon codicon-robot" title="Model"></i>
           <select id="model">
             ${modelOptions}
           </select>
         </div>
         <div class="select-group">
-          <i class="fas fa-sync-alt" title="Reflect"></i>
+          <i class="codicon codicon-refresh" title="Reflect"></i>
           <select id="reflect">
             <option value="True">True</option>
             <option value="False">False</option>
@@ -58,7 +55,7 @@
             <div class="file-select-label-group">
               <label for="inputFile"
                 ><i
-                  class="fas fa-file-import clickable"
+                  class="codicon codicon-file-code clickable"
                   title="Input (Click to refresh)"
                 ></i>
                 Input</label
@@ -70,14 +67,14 @@
                 class="action-button"
                 title="Set current file as input"
               >
-                <i class="fas fa-file-code"></i>
+                <i class="codicon codicon-file-code"></i>
               </button>
               <button
                 id="emptyInputFileButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
               <span
                 id="toggleMultipleInputFiles"
@@ -90,21 +87,21 @@
                 class="icon-button"
                 title="Add opened files as input"
               >
-                <i class="fas fa-folder-open"></i>
+                <i class="codicon codicon-folder-opened"></i>
               </button>
               <button
                 id="emptyMultipleInputFilesButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="codicon codicon-trash"></i>
               </button>
               <button
                 id="selectMultipleInputFilesButton"
                 class="icon-button"
                 title="Add"
               >
-                <i class="fas fa-plus"></i>
+                <i class="codicon codicon-add"></i>
               </button>
             </div>
           </div>
@@ -125,7 +122,7 @@
           <div class="file-select-header">
             <label for="referenceFile"
               ><i
-                class="fas fa-book clickable"
+                class="codicon codicon-book clickable"
                 title="Reference (Click to refresh)"
               ></i>
               Reference</label
@@ -136,14 +133,14 @@
                 class="action-button"
                 title="Set current file as reference"
               >
-                <i class="fas fa-file-code"></i>
+                <i class="codicon codicon-file-code"></i>
               </button>
               <button
                 id="emptyReferenceFileButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
               <span
                 id="toggleMultipleReferenceFiles"
@@ -156,21 +153,21 @@
                 class="icon-button"
                 title="Add opened files as reference"
               >
-                <i class="fas fa-folder-open"></i>
+                <i class="codicon codicon-folder-opened"></i>
               </button>
               <button
                 id="emptyMultipleReferenceFilesButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="codicon codicon-trash"></i>
               </button>
               <button
                 id="selectMultipleReferenceFilesButton"
                 class="icon-button"
                 title="Add"
               >
-                <i class="fas fa-plus"></i>
+                <i class="codicon codicon-add"></i>
               </button>
             </div>
           </div>
@@ -194,7 +191,7 @@
           <div class="file-select-header">
             <label for="auxiliaryFile"
               ><i
-                class="fas fa-file-circle-plus clickable"
+                class="codicon codicon-file-add clickable"
                 title="Auxiliary (Click to refresh)"
               ></i>
               Auxiliary</label
@@ -205,14 +202,14 @@
                 class="action-button"
                 title="Set current file as auxiliary"
               >
-                <i class="fas fa-file-code"></i>
+                <i class="codicon codicon-file-code"></i>
               </button>
               <button
                 id="emptyAuxiliaryFileButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
               <span
                 id="toggleMultipleAuxiliaryFiles"
@@ -225,21 +222,21 @@
                 class="icon-button"
                 title="Add opened files as auxiliary"
               >
-                <i class="fas fa-folder-open"></i>
+                <i class="codicon codicon-folder-opened"></i>
               </button>
               <button
                 id="emptyMultipleAuxiliaryFilesButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="codicon codicon-trash"></i>
               </button>
               <button
                 id="selectMultipleAuxiliaryFilesButton"
                 class="icon-button"
                 title="Add"
               >
-                <i class="fas fa-plus"></i>
+                <i class="codicon codicon-add"></i>
               </button>
             </div>
           </div>
@@ -264,7 +261,7 @@
             <div class="file-select-label-group">
               <label for="figureFile"
                 ><i
-                  class="fas fa-image clickable"
+                  class="codicon codicon-file-media clickable"
                   title="Figure (Click to refresh)"
                 ></i>
                 Figure</label
@@ -275,7 +272,7 @@
                   class="auto-toggle"
                   title="Auto-extract options"
                 >
-                  Auto Extract ○<i class="fa-solid fa-angle-down"></i>
+                  Auto Extract ○<i class="codicon codicon-chevron-down"></i>
                 </span>
                 <div
                   id="autoExtractOptions"
@@ -285,13 +282,13 @@
                   <div class="auto-extract-options-content">
                     <label
                       ><input type="checkbox" id="autoExtractFigure" /><i
-                        class="fas fa-image"
+                        class="codicon codicon-image"
                       ></i>
                       Figures</label
                     >
                     <label
                       ><input type="checkbox" id="autoExtractTikzFigure" /><i
-                        class="fas fa-draw-polygon"
+                        class="codicon codicon-polygon"
                       ></i
                       >TikZ Figures</label
                     >
@@ -299,7 +296,7 @@
                       ><input
                         type="checkbox"
                         id="autoExtractTikzFigureReflect"
-                      /><i class="fas fa-sync-alt"></i> TikZ
+                      /><i class="codicon codicon-refresh"></i> TikZ
                       Figures(Reflect)</label
                     >
                   </div>
@@ -312,7 +309,7 @@
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
               <span
                 id="toggleMultipleFigureFiles"
@@ -325,14 +322,14 @@
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="codicon codicon-trash"></i>
               </button>
               <button
                 id="selectMultipleFigureFilesButton"
                 class="icon-button"
                 title="Add"
               >
-                <i class="fas fa-plus"></i>
+                <i class="codicon codicon-add"></i>
               </button>
             </div>
           </div>
@@ -385,14 +382,14 @@
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-trash-alt"></i>
+                <i class="codicon codicon-trash"></i>
               </button>
               <button
                 id="selectMultipleOutputFilesButton"
                 class="icon-button"
                 title="Add"
               >
-                <i class="fas fa-plus"></i>
+                <i class="codicon codicon-add"></i>
               </button>
             </div>
           </div>
@@ -412,7 +409,7 @@
         <div class="instruction-header">
           <div class="instruction-header-left">
             <label for="instructionInput"
-              ><i class="fas fa-pencil-alt"></i> Instruction</label
+              ><i class="codicon codicon-edit"></i> Instruction</label
             >
             <div class="dropdown-container dropdown-left">
               <span
@@ -420,7 +417,7 @@
                 class="auto-toggle"
                 title="Tool Use options"
               >
-                Tool Use ○<i class="fa-solid fa-angle-down"></i>
+                Tool Use ○<i class="codicon codicon-chevron-down"></i>
               </span>
               <div
                 id="toolUseOptions"
@@ -430,63 +427,68 @@
                 <div class="auto-extract-options-content">
                   <label
                     ><input type="checkbox" id="attachTeXCount" />
-                    <i class="fas fa-calculator"></i> Attach TeX Count</label
+                    <i class="codicon codicon-symbol-numeric"></i> Attach TeX
+                    Count</label
                   >
                   <label
                     ><input type="checkbox" id="usePrefillFromInput" />
-                    <i class="fas fa-file-pen"></i> Use Prefill from
+                    <i class="codicon codicon-edit"></i> Use Prefill from
                     Input</label
                   >
                   <label
                     ><input type="checkbox" id="autoConfirmation" />
-                    <i class="fas fa-check-circle"></i> Auto Confirmation</label
+                    <i class="codicon codicon-check"></i> Auto
+                    Confirmation</label
                   >
                   <label
                     ><input type="checkbox" id="printInputPrompt" />
-                    <i class="fas fa-file-code"></i> Print Input Prompt</label
+                    <i class="codicon codicon-file-code"></i> Print Input
+                    Prompt</label
                   >
                 </div>
               </div>
             </div>
           </div>
           <button
-            id="emptyInstructionsButton"
+            id="eraseInstructionsButton"
             class="icon-button"
-            title="Empty"
+            title="Erase Instructions"
           >
-            <i class="fas fa-eraser"></i>
+            <i class="codicon codicon-clear-all"></i>
           </button>
         </div>
         <textarea
           id="instructionInput"
           placeholder="Enter your specific instructions such as: Gently correct mathematical mistakes and typos."
         ></textarea>
-        <button id="executeButton"><i class="fas fa-play"></i> Execute</button>
+        <button id="executeButton">
+          <i class="codicon codicon-play"></i> Execute
+        </button>
       </div>
       <div class="section">
         <h6 class="section-header">
-          <i class="fas fa-broom"></i> Housekeeping
+          <i class="codicon codicon-trash"></i> Housekeeping
         </h6>
         <div class="button-group">
           <span>For the Selected Agent and Files:</span>
           <button id="packButton" class="icon-button" title="Pack Files">
-            <i class="fas fa-boxes-packing"></i>Pack
+            <i class="codicon codicon-package"></i>Pack
           </button>
           <button id="cleanButton" class="icon-button" title="Clean Files">
-            <i class="fas fa-broom"></i>Clean
+            <i class="codicon codicon-trash"></i>Clean
           </button>
         </div>
       </div>
 
       <div class="section">
         <h6 class="section-header">
-          <i class="fas fa-code-branch"></i> Smart Diffs
+          <i class="codicon codicon-source-control"></i> Smart Diffs
         </h6>
         <div class="file-select">
           <div class="file-select-header">
             <div class="file-select-label-group">
               <label for="baseFile"
-                ><i class="fas fa-file-alt"></i> Base File</label
+                ><i class="codicon codicon-file"></i> Base File</label
               >
             </div>
             <div class="file-select-actions">
@@ -495,14 +497,14 @@
                 class="action-button"
                 title="Set current file as base"
               >
-                <i class="fas fa-file-code"></i>
+                <i class="codicon codicon-file-code"></i>
               </button>
               <button
                 id="emptyBaseFileButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
             </div>
           </div>
@@ -515,20 +517,20 @@
             <div class="file-select-label-group">
               <label for="editedFile"
                 ><i
-                  class="fas fa-file-edit clickable"
+                  class="codicon codicon-edit clickable"
                   title="Edited (Click to refresh)"
                 ></i>
                 Edited File</label
               >
               <button id="mergeButton" class="icon-button" title="Merge">
-                <i class="fas fa-code-merge"></i>Merge
+                <i class="codicon codicon-merge"></i>Merge
               </button>
               <button
                 id="latexdiffButton"
                 class="icon-button"
                 title="LaTeXDiff the edited file with the base file"
               >
-                <i class="fas fa-plus-minus"></i>latexdiff
+                <i class="codicon codicon-diff-single"></i>latexdiff
               </button>
             </div>
             <div class="file-select-actions">
@@ -537,14 +539,14 @@
                 class="action-button"
                 title="Set current file as edited"
               >
-                <i class="fas fa-file-code"></i>
+                <i class="codicon codicon-file-code"></i>
               </button>
               <button
                 id="emptyEditedFileButton"
                 class="icon-button"
                 title="Empty"
               >
-                <i class="fas fa-times"></i>
+                <i class="codicon codicon-close"></i>
               </button>
             </div>
           </div>
@@ -557,7 +559,7 @@
             <div class="file-select-label-group">
               <label for="commit"
                 ><i
-                  class="fas fa-code-commit clickable"
+                  class="codicon codicon-git-commit clickable"
                   title="Commit (Click to refresh)"
                 ></i>
                 Commit</label
@@ -567,21 +569,21 @@
                 class="icon-button"
                 title="LaTeXDiff with another git commit"
               >
-                <i class="fas fa-plus-minus"></i>latexdiff-vc
+                <i class="codicon codicon-diff-single"></i>latexdiff-vc
               </button>
               <button
                 id="packLatexdiffvcButton"
                 class="icon-button"
                 title="Pack"
               >
-                <i class="fas fa-boxes-packing"></i>Pack
+                <i class="codicon codicon-package"></i>Pack
               </button>
               <button
                 id="cleanLatexdiffvcButton"
                 class="icon-button"
                 title="Clean"
               >
-                <i class="fas fa-broom"></i>Clean
+                <i class="codicon codicon-trash"></i>Clean
               </button>
             </div>
             <div class="file-select-actions"></div>

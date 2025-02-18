@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -615,7 +615,8 @@
           "type": "webview",
           "id": "coauthor.logView",
           "name": "CoAuthor: Tasks",
-          "contextualTitle": "CoAuthor Tasks"
+          "contextualTitle": "CoAuthor Tasks",
+          "icon": "$(server-process)"
         },
         {
           "id": "coauthor.folderExplorer",
@@ -735,7 +736,8 @@
     "academic",
     "writing",
     "coauthor",
-    "vscode"
+    "vscode",
+    "research"
   ],
   "bugs": {
     "url": "https://github.com/LionSR/coauthor/issues"
@@ -744,6 +746,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@types/yaml": "^1.9.6",
+    "@vscode/codicons": "^0.0.36",
     "better-sqlite3": "^11.7.0",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
