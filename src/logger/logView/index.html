@@ -5,13 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} https://cdnjs.cloudflare.com 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src https://cdnjs.cloudflare.com;"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
     />
     <link rel="stylesheet" href="${styleUri}" />
+    <link rel="stylesheet" href="${codiconUri}" />
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -39,13 +36,13 @@
               <span class="stop-icon">■</span> Stop
             </button>
             <button class="pack-button" id="packStreamBtn">
-              <i class="fas fa-boxes-packing"></i> Pack
+              <i class="codicon codicon-package"></i> Pack
             </button>
             <button class="clean-button" id="cleanStreamBtn">
-              <i class="fas fa-broom"></i> Clean
+              <i class="codicon codicon-trash"></i> Clean
             </button>
             <button class="clear-button" id="clearStreamBtn">
-              <span class="x-icon">✕</span> Clear
+              <i class="codicon codicon-clear-all"></i> Clear
             </button>
           </div>
         </div>
@@ -57,7 +54,7 @@
         </div>
         <div class="clear-all-container">
           <button class="clear-button danger" id="deleteAllBtn">
-            <span class="x-icon">✕</span> Delete All
+            <i class="codicon codicon-trash"></i> Delete All
           </button>
         </div>
       </div>

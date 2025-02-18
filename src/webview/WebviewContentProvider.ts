@@ -45,6 +45,25 @@ export class WebviewContentProvider {
       const utilsUri = webview.asWebviewUri(utilsPath);
       const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
 
+      const codiconPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.css',
+      );
+      const codiconsFontPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.ttf',
+      );
+      const codiconUri = webview.asWebviewUri(codiconPath);
+      const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
+
       const agents = getConfig<string[]>('agents', []);
       const agentOptions = agents
         .map((agent) => `<option value="${agent}">${agent}</option>`)
@@ -69,7 +88,9 @@ export class WebviewContentProvider {
         .replace('${messageHandlersUri}', messageHandlersUri.toString())
         .replace('${fileHandlersUri}', fileHandlersUri.toString())
         .replace('${uiHandlersUri}', uiHandlersUri.toString())
-        .replace('${vscodeApiUri}', vscodeApiUri.toString());
+        .replace('${vscodeApiUri}', vscodeApiUri.toString())
+        .replace('${codiconUri}', codiconUri.toString())
+        .replace('${codiconsFontUri}', codiconsFontUri.toString());
     } catch (err) {
       logger.error(
         CHANNEL,
