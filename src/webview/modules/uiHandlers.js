@@ -176,7 +176,7 @@ export function setupUIHandlers() {
     });
   });
 
-  addEventListenerSafely('emptyInstructionsButton', 'click', function () {
+  addEventListenerSafely('eraseInstructionsButton', 'click', function () {
     const instructionInput = safeGetElementById('instructionInput');
     if (instructionInput) {
       instructionInput.value = '';

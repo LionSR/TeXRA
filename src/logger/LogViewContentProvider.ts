@@ -35,11 +35,29 @@ export class LogViewContentProvider {
         'split.es.js',
       );
 
+      const codiconPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.css',
+      );
+      const codiconsFontPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'node_modules',
+        '@vscode',
+        'codicons',
+        'dist',
+        'codicon.ttf',
+      );
       let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
       const nonce = this.getNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const scriptUri = webview.asWebviewUri(scriptPath);
       const splitJsUri = webview.asWebviewUri(splitJsPath);
+      const codiconUri = webview.asWebviewUri(codiconPath);
+      const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
 
       // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for LogView');
@@ -47,6 +65,8 @@ export class LogViewContentProvider {
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
         .replace('${splitJsUri}', splitJsUri.toString())
+        .replace('${codiconUri}', codiconUri.toString())
+        .replace('${codiconsFontUri}', codiconsFontUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace(/\${cspSource}/g, webview.cspSource);
     } catch (err) {
