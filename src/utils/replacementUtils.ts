@@ -91,6 +91,9 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     //
     '\\displaystyle': '',
     '\\Longleftrightarrow': '\\LRa',
+
+    // for o1/o3 but at last:
+    '=    \\': '= \\',
   },
 };
 
@@ -134,6 +137,13 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\mathcal': '\\mathcal',
     '\\\\der': '\\der',
     '\\\\text{': '\\text{',
+    '\\\\tilde{': '\\tilde',
+    '\\\\textit{': '\\textit',
+    '\\\\textbf{': '\\textbf',
+    '\\\\underline{': '\\underline',
+    '\\\\overbrace{': '\\overbrace',
+    '\\\\underbrace{': '\\underbrace',
+    '\\e^{': 'e^{',
 
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',

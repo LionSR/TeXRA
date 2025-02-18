@@ -639,12 +639,12 @@
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "coauthor.indentCurrentTeX",
-          "group": "navigation@3"
+          "group": "navigation"
         },
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
           "command": "coauthor.getTeXCount",
-          "group": "navigation@4"
+          "group": "navigation"
         }
       ],
       "view/title": [
