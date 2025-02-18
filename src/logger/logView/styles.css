@@ -132,14 +132,24 @@ body {
   color: var(--vscode-errorForeground);
 }
 
-.tab-delete i {
+.tab-delete .codicon {
   font-size: 12px;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+}
+
+.tab-delete:hover .codicon {
+  opacity: 1;
+  color: var(--vscode-errorForeground);
 }
 
 .codicon {
   font-family: codicon;
   font-size: 14px;
   line-height: 14px;
+  margin-right: 4px;
+  color: var(--vscode-foreground);
+  opacity: 0.8;
 }
 
 .codicon-trash:before {
@@ -392,8 +402,41 @@ body {
   cursor: not-allowed;
 }
 
+.pack-button .codicon,
+.clean-button .codicon {
+  margin-right: 4px;
+  font-size: 14px;
+}
+
 .pack-button i,
 .clean-button i {
   margin-right: 4px;
   font-size: 12px;
+}
+
+/* Button icon styles */
+.pack-button .codicon,
+.clean-button .codicon,
+.clear-button .codicon {
+  margin-right: 4px;
+  font-size: 14px;
+}
+
+/* Tab delete icon */
+.tab-delete .codicon {
+  font-size: 12px;
+  color: var(--vscode-foreground);
+  opacity: 0.7;
+  margin-right: 0;
+}
+
+.tab-delete:hover .codicon {
+  opacity: 1;
+  color: var(--vscode-errorForeground);
+}
+
+/* Remove Font Awesome specific styles */
+.fas,
+.fa-solid {
+  display: none;
 }

@@ -14,6 +14,7 @@
   --icon-button-background: rgba(var(--button-background), 0.3);
   --icon-button-hover-background: rgba(var(--button-hover-background), 0.5);
   --icon-button-foreground: var(--vscode-editor-foreground);
+  --icon-color: var(--vscode-textLink-foreground);
 
   /* Typography */
   --font-size: var(--vscode-font-size);
@@ -27,11 +28,6 @@
 
   /* Border radius */
   --border-radius: 3px;
-
-  /* Add this new variable for icon color */
-  --icon-color: var(
-    --vscode-textLink-foreground
-  ); /* This gives us the VS Code blue color */
 }
 
 body {
@@ -54,13 +50,11 @@ body {
   flex: 1;
 }
 
-/* Make this style more specific to override other .fas styles */
-.compact-selections .select-group i.fas {
+.select-group .codicon {
   margin-right: var(--spacing-small);
-  font-size: 1.2em;
-  color: var(--text-color) !important;
+  font-size: var(--font-size);
+  color: var(--text-color);
   opacity: 0.8;
-  position: relative;
 }
 
 .select-group select {
@@ -77,8 +71,8 @@ body {
   background-color: var(--dropdown-background);
   border: 1px solid var(--dropdown-border);
   border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 15px;
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
   overflow: hidden;
 }
 
@@ -155,10 +149,10 @@ body {
 .action-button,
 .icon-button {
   padding: 4px 8px;
-  font-size: var(--font-size);
+  font-size: calc(var(--font-size) * 0.8);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
-  border: 1px solid var(--input-border);
+  border: 0.5px solid var(--input-border);
   border-radius: var(--border-radius);
   cursor: pointer;
   white-space: nowrap;
@@ -172,14 +166,27 @@ body {
   background-color: var(--icon-button-hover-background);
 }
 
+.action-button .codicon,
+.icon-button .codicon {
+  margin-right: var(--spacing-small);
+  font-size: calc(var(--font-size) * 0.8);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
+.action-button:hover .codicon,
+.icon-button:hover .codicon {
+  opacity: 1;
+}
+
 .button-group {
-  margin-bottom: 10px;
+  margin-bottom: var(--spacing-medium);
 }
 
 .button-group label {
   display: block;
   font-size: var(--vscode-font-size);
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-small);
 }
 
 .action-button {
@@ -198,10 +205,6 @@ body {
 
 .action-button:hover {
   background-color: var(--icon-button-hover-background);
-}
-
-.action-button .fas {
-  margin-right: var(--spacing-small);
 }
 
 .file-select label {
@@ -225,7 +228,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-top: 5px;
+  margin-top: var(--spacing-small);
   padding: 0;
 }
 
@@ -243,14 +246,14 @@ body {
 }
 
 .multiple-files-header {
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-small);
 }
 
 .multiple-files-list {
   background-color: var(--dropdown-background);
   border: 1px solid var(--dropdown-border);
   border-radius: var(--border-radius);
-  padding: 5px;
+  padding: var(--spacing-small);
   font-size: var(--font-size);
   max-height: 100px;
   overflow-y: auto;
@@ -274,7 +277,7 @@ body {
 }
 
 .instruction-box {
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-small);
   position: relative;
 }
 
@@ -327,7 +330,7 @@ body {
   background-color: #007acc;
   color: white;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -339,8 +342,14 @@ body {
   background-color: #005999;
 }
 
+#executeButton .codicon {
+  margin-right: var(--spacing-small);
+  font-size: var(--font-size);
+  color: white;
+}
+
 .section {
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-small);
 }
 
 .section-header {
@@ -364,7 +373,7 @@ body {
 
 .button-container {
   display: flex;
-  gap: 5px;
+  gap: var(--spacing-small);
   flex-wrap: wrap; /* Allow wrapping if space is limited */
 }
 
@@ -372,7 +381,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  margin-top: 10px;
+  margin-top: var(--spacing-medium);
 }
 
 .execute-row {
@@ -391,6 +400,12 @@ body {
   font-weight: bold;
 }
 
+.instruction-header label .codicon {
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
 .toggle-icon {
   cursor: pointer;
   user-select: none;
@@ -404,32 +419,10 @@ body {
   height: 24px;
 }
 
-.fas {
-  margin-right: 5px;
-}
-
-h5 .fas {
-  font-size: 0.9em;
-  color: var(--icon-color);
-}
-
-button .fas {
-  font-size: 0.9em;
-}
-
-.file-select-header label .fas,
-.instruction-header label .fas {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-}
-
-.small-button .fas {
-  margin-right: 3px;
-}
-
-#executeButton .fas {
-  margin-right: 2px;
-  font-size: 0.9em;
+.codicon {
+  font-family: codicon;
+  font-size: var(--font-size);
+  line-height: var(--font-size);
 }
 
 /* Update the execute-row styles */
@@ -505,7 +498,7 @@ button .fas {
 
 .input-container {
   width: 100%;
-  margin: 5px 0;
+  margin: var(--spacing-small) 0;
 }
 
 .vscode-input {
@@ -513,7 +506,7 @@ button .fas {
   height: 24px;
   padding: 4px 8px;
   border: 1px solid var(--vscode-input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font-family: var(--vscode-font-family);
@@ -585,6 +578,13 @@ button .fas {
   color: var(--vscode-foreground);
   margin-left: 1px;
   pointer-events: none;
+}
+
+.auto-toggle .codicon {
+  font-size: 12px;
+  margin-left: 1px;
+  margin-right: 0;
+  color: var(--vscode-foreground);
 }
 
 /* Dropdown positioning containers */
@@ -668,7 +668,7 @@ button .fas {
 
 .input-container {
   width: 100%;
-  margin: 5px 0;
+  margin: var(--spacing-small) 0;
 }
 
 .vscode-input {
@@ -676,7 +676,7 @@ button .fas {
   height: 24px;
   padding: 4px 8px;
   border: 1px solid var(--vscode-input-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font-family: var(--vscode-font-family);
@@ -759,18 +759,18 @@ button .fas {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 5px;
+  margin-bottom: var(--spacing-small);
 }
 
 .instruction-header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-medium);
 }
 
 .instruction-header label {
   font-size: var(--font-size);
-  margin-right: 5px;
+  margin-right: var(--spacing-small);
 }
 
 /* Update dropdown positioning for tool use */
@@ -824,20 +824,21 @@ button .fas {
   display: none;
 }
 
-.clickable {
+.codicon.clickable {
   cursor: pointer;
   transition: color 0.2s ease;
 }
 
-.clickable:hover {
+.codicon.clickable:hover {
+  opacity: 1;
   color: var(--button-hover-background);
 }
 
 /* Update existing icon styles */
-.file-select-header label .fas {
+.file-select-header label .codicon,
+.instruction-header label .codicon {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
-  opacity: 0.8;
 }
 
 .file-select-header label .fas.clickable:hover {
