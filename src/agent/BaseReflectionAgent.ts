@@ -103,9 +103,9 @@ export abstract class BaseReflectionAgent {
     this.modelHandler.setLogger(this.logger);
 
     this.logger.info(SEPARATOR);
-    this.logger.info(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    this.logger.info(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
-    this.logger.info(
+    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
+    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
+    this.logger.debug(
       `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
     );
 
@@ -553,11 +553,11 @@ export abstract class BaseReflectionAgent {
       }
 
       // Log response boundaries
-      this.logger.info(`Response preview:`);
-      this.logger.info(
+      this.logger.debug(`Response preview:`);
+      this.logger.debug(
         `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
       );
-      this.logger.info(
+      this.logger.debug(
         `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
       );
 

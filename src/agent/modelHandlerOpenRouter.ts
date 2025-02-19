@@ -16,7 +16,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    this.logger.info(`Using OpenRouter API key. Base URL: ${baseUrl}`);
+    this.logger.debug(`Using OpenRouter API key. Base URL: ${baseUrl}`);
     return new OpenAI({
       apiKey,
       baseURL: baseUrl,

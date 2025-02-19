@@ -37,7 +37,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Initializes an Anthropic API client using the configured API key. */
   getClient(): Anthropic {
     const apiKey = this.getApiKey();
-    this.logger.info('Using Anthropic API.');
+    this.logger.debug('Using Anthropic API.');
     return new Anthropic({ apiKey });
   }
 
