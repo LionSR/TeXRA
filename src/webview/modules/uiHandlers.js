@@ -165,15 +165,12 @@ export function setupUIHandlers() {
     '.file-select-header label .fas.clickable',
   );
   fileTypeIcons.forEach((icon) => {
-    icon.addEventListener('click', () => {
-      // If it's the commit icon, refresh commits
-      if (icon.classList.contains('fa-code-commit')) {
+    // Only handle commit icon clicks since file refreshes are handled by the file watcher
+    if (icon.classList.contains('fa-code-commit')) {
+      icon.addEventListener('click', () => {
         vscode.postMessage({ command: 'refreshCommits' });
-      } else {
-        // Otherwise refresh all files
-        vscode.postMessage({ command: 'refreshAllFiles' });
-      }
-    });
+      });
+    }
   });
 
   addEventListenerSafely('eraseInstructionsButton', 'click', function () {
@@ -284,22 +281,6 @@ export function setupUIHandlers() {
       text: `Merging files: ${inputFile} and ${editedFile}`,
     });
   });
-
-  // Add event listener for the refresh button
-  // addEventListenerSafely('refreshEditedFileButton', 'click', function () {
-  //   const baseFile = safeGetElementValue('baseFile');
-  //   if (baseFile) {
-  //     vscode.postMessage({
-  //       command: 'requestEditedFile',
-  //       baseFile: baseFile,
-  //     });
-  //   } else {
-  //     vscode.postMessage({
-  //       command: 'showInformationMessage',
-  //       text: 'Please select a base file first.',
-  //     });
-  //   }
-  // });
 
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}Button`, 'click', function () {
