@@ -11,7 +11,10 @@ import {
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
-  if (!selectDiv) return console.error(`Element with id '${id}' not found`);
+  if (!selectDiv) {
+    console.error(`[FileHandlers] Element with id '${id}' not found`);
+    return;
+  }
   selectDiv.innerHTML =
     '<option value="">None</option>' +
     files.map((file) => `<option value="${file}">${file}</option>`).join('');

@@ -63,6 +63,10 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
       await this.messageHandler.handleMessage(message, webviewView);
     });
 
+    this.setupInitialState(webviewView);
+  }
+
+  private async setupInitialState(webviewView: vscode.WebviewView) {
     webviewView.webview.postMessage({ command: 'requestBaseFile' });
   }
 }
