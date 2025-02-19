@@ -6,7 +6,10 @@ import * as vscode from 'vscode';
 import * as logger from './logger/logUtils';
 
 // Local imports
-import { getAgentsDirectory } from './utils/pathUtils';
+import {
+  getBuiltInAgentsDirectory,
+  getCustomAgentsDirectory,
+} from './utils/pathUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -24,7 +27,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   readonly onDidChangeTreeData: vscode.Event<
     FileItem | undefined | null | void
   > = this._onDidChangeTreeData.event;
-  private fileSystemWatcher: vscode.FileSystemWatcher | undefined;
+  private fileSystemWatchers: vscode.FileSystemWatcher[] = [];
   private editingItem: FileItem | undefined;
 
   constructor(
@@ -64,7 +67,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     try {
       const parentPath =
         node?.resourceUri.fsPath ||
-        (this.context ? await getAgentsDirectory(this.context) : undefined);
+        (this.context
+          ? await getBuiltInAgentsDirectory(this.context)
+          : undefined);
 
       if (!parentPath) {
         throw new Error('No valid parent path found');
@@ -174,22 +179,39 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         return;
       }
 
-      const watchPath = await getAgentsDirectory(this.context);
+      // Watch both built-in and custom directories
+      const builtInPath = await getBuiltInAgentsDirectory(this.context);
+      const customPath = await getCustomAgentsDirectory();
 
-      // Dispose of existing watcher if any
-      this.fileSystemWatcher?.dispose();
+      // Dispose of existing watchers
+      this.dispose();
 
-      // Create new watcher for the directory
-      this.fileSystemWatcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(watchPath, '**/*'),
-      );
+      // Create watchers for both directories
+      this.fileSystemWatchers = [
+        vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(builtInPath, '**/*'),
+        ),
+      ];
+
+      if (customPath) {
+        this.fileSystemWatchers.push(
+          vscode.workspace.createFileSystemWatcher(
+            new vscode.RelativePattern(customPath, '**/*'),
+          ),
+        );
+      }
 
       // Watch for all file system events
-      this.fileSystemWatcher.onDidCreate(() => this.refresh());
-      this.fileSystemWatcher.onDidDelete(() => this.refresh());
-      this.fileSystemWatcher.onDidChange(() => this.refresh());
+      this.fileSystemWatchers.forEach((watcher) => {
+        watcher.onDidCreate(() => this.refresh());
+        watcher.onDidDelete(() => this.refresh());
+        watcher.onDidChange(() => this.refresh());
+      });
 
-      logger.info(CHANNEL, `File system watcher set up for: ${watchPath}`);
+      logger.info(
+        CHANNEL,
+        `File system watchers set up for: ${[builtInPath, customPath].filter(Boolean).join(', ')}`,
+      );
     } catch (err) {
       logger.error(CHANNEL, `Error setting up file system watcher: ${err}`);
     }
@@ -197,7 +219,8 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   // Add dispose method to clean up resources
   dispose() {
-    this.fileSystemWatcher?.dispose();
+    this.fileSystemWatchers.forEach((watcher) => watcher.dispose());
+    this.fileSystemWatchers = [];
   }
 
   refresh(): void {
@@ -217,28 +240,44 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   async getChildren(element?: FileItem): Promise<FileItem[]> {
-    if (element) {
-      // If element is provided, get its children
-      const dirPath = element.resourceUri.fsPath;
-      return this.getFilesInDirectory(dirPath);
-    } else {
-      // For root level, use getAgentsDirectory
-      if (!this.context) {
-        logger.error(CHANNEL, 'Extension context not available');
-        return Promise.resolve([]);
-      }
+    if (!this.context) {
+      logger.error(CHANNEL, 'Extension context not available');
+      return Promise.resolve([]);
+    }
 
-      try {
-        const absolutePath = await getAgentsDirectory(this.context);
-        logger.debug(CHANNEL, `Reading from: ${absolutePath}`);
-        return this.getFilesInDirectory(absolutePath);
-      } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error getting agents directory: ${err instanceof Error ? err.message : String(err)}`,
+    try {
+      if (element) {
+        // If element is provided, get its children
+        return this.getFilesInDirectory(element.resourceUri.fsPath);
+      } else {
+        // For root level, create Built-in and Custom root items
+        const items: FileItem[] = [];
+
+        // Add Built-in Agents folder
+        const builtInPath = await getBuiltInAgentsDirectory(this.context);
+        const builtInItem = new FileItem(
+          'Built-in Agents',
+          vscode.Uri.file(builtInPath),
+          vscode.TreeItemCollapsibleState.Collapsed,
         );
-        return Promise.resolve([]);
+        items.push(builtInItem);
+
+        // Add Custom Agents folder if configured
+        const customPath = await getCustomAgentsDirectory();
+        if (customPath) {
+          const customItem = new FileItem(
+            'Custom Agents',
+            vscode.Uri.file(customPath),
+            vscode.TreeItemCollapsibleState.Collapsed,
+          );
+          items.push(customItem);
+        }
+
+        return items;
       }
+    } catch (err) {
+      logger.error(CHANNEL, `Error getting children: ${err}`);
+      return [];
     }
   }
 
