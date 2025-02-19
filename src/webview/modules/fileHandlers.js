@@ -18,12 +18,21 @@ export function updateFileSelect(id, files) {
 }
 
 export function updateEditedFileSelect(baseFile) {
+  const editedFileDiv = safeGetElementById('editedFile');
+  if (!editedFileDiv) return;
+
   if (baseFile) {
+    // Store current edited file selection
+    const currentEditedFile = editedFileDiv.value;
+
+    // Request updated list of edited files
     vscode.postMessage({
       command: 'requestEditedFile',
       baseFile: baseFile,
+      preserveSelection: currentEditedFile, // Pass current selection to preserve it if still valid
     });
   } else {
+    // Only clear if there's no base file
     updateFileSelect('editedFile', []);
   }
 }
