@@ -70,9 +70,21 @@ export function setupMessageHandlers() {
         });
         break;
       case 'setBaseFile':
-        updateFileSelect('baseFile', message.files);
         const baseFileDiv = safeGetElementById('baseFile');
         if (baseFileDiv) {
+          const currentBaseFile = baseFileDiv.value; // Store current value
+          updateFileSelect('baseFile', message.files);
+
+          // If preserveBaseFile is true and we had a previous value, restore it
+          if (
+            message.preserveBaseFile &&
+            currentBaseFile &&
+            message.files.includes(currentBaseFile)
+          ) {
+            baseFileDiv.value = currentBaseFile;
+          }
+
+          // Always update edited files based on current base file
           updateEditedFileSelect(baseFileDiv.value);
         }
         break;
