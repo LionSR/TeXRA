@@ -509,6 +509,7 @@ export class WebviewMessageHandler {
     webviewView.webview.postMessage({
       command: 'setBaseFile',
       files: baseFiles,
+      preserveBaseFile: true,
     });
   }
 
