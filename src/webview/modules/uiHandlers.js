@@ -286,20 +286,20 @@ export function setupUIHandlers() {
   });
 
   // Add event listener for the refresh button
-  addEventListenerSafely('refreshEditedFileButton', 'click', function () {
-    const baseFile = safeGetElementValue('baseFile');
-    if (baseFile) {
-      vscode.postMessage({
-        command: 'requestEditedFile',
-        baseFile: baseFile,
-      });
-    } else {
-      vscode.postMessage({
-        command: 'showInformationMessage',
-        text: 'Please select a base file first.',
-      });
-    }
-  });
+  // addEventListenerSafely('refreshEditedFileButton', 'click', function () {
+  //   const baseFile = safeGetElementValue('baseFile');
+  //   if (baseFile) {
+  //     vscode.postMessage({
+  //       command: 'requestEditedFile',
+  //       baseFile: baseFile,
+  //     });
+  //   } else {
+  //     vscode.postMessage({
+  //       command: 'showInformationMessage',
+  //       text: 'Please select a base file first.',
+  //     });
+  //   }
+  // });
 
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}Button`, 'click', function () {
