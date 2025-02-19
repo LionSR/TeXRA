@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -394,7 +394,7 @@
         "properties": {
           "coauthor.explorer.agentsDirectory": {
             "type": "string",
-            "default": "agents",
+            "default": "",
             "description": "Root path for the CoAuthor file explorer view. Can be absolute or relative to workspace root.",
             "scope": "resource"
           }
