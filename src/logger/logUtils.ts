@@ -138,7 +138,7 @@ function createLoggerForChannel(channel: string): winston.Logger {
   }
 
   // Create output channel with the CoAuthor prefix
-  const channelName = 'CoAuthor: ' + channel;
+  const channelName = 'CoAuthor ' + channel;
   const outputChannel = vscode.window.createOutputChannel(channelName);
 
   // Create transport
