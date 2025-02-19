@@ -20,29 +20,50 @@ async function copyDefaultAgents(context: vscode.ExtensionContext) {
     'agents',
   );
 
+  console.log('Resources path:', resourcesPath);
+  console.log('Global storage path:', globalStoragePath);
+
   try {
     // Ensure the global storage agents directory exists
     await vscode.workspace.fs.createDirectory(
       vscode.Uri.file(globalStoragePath),
     );
+    console.log('Created or verified global storage directory');
 
     // Read all files from resources/agents
     const files = await fs.promises.readdir(resourcesPath);
+    console.log('Found files in resources:', files);
 
     for (const file of files) {
       const sourcePath = path.join(resourcesPath, file);
       const targetPath = path.join(globalStoragePath, file);
 
+      console.log(`Processing file: ${file}`);
+      console.log(`Source path: ${sourcePath}`);
+      console.log(`Target path: ${targetPath}`);
+
+      // Check if source is a directory
+      const stats = await fs.promises.stat(sourcePath);
+      if (stats.isDirectory()) {
+        console.log(`Skipping directory: ${file}`);
+        continue;
+      }
+      
+      // In the future new versions should update prompt?
+
       // Only copy if target doesn't exist
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(targetPath));
+        console.log(`File already exists at target: ${file}`);
       } catch {
         // File doesn't exist, copy it
+        console.log(`Copying file: ${file}`);
         const content = await fs.promises.readFile(sourcePath);
         await vscode.workspace.fs.writeFile(
           vscode.Uri.file(targetPath),
           content,
         );
+        console.log(`Successfully copied: ${file}`);
       }
     }
   } catch (error) {
