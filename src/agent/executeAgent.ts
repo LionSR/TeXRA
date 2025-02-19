@@ -7,7 +7,10 @@ import { glob } from 'glob';
 // (none needed)
 
 // Local imports - utilities
-import { getAgentsDirectory } from '../utils/pathUtils';
+import {
+  getBuiltInAgentsDirectory,
+  getCustomAgentsDirectory,
+} from '../utils/pathUtils';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';
@@ -48,24 +51,40 @@ export async function getAgentPath(
   context: vscode.ExtensionContext,
 ): Promise<string> {
   try {
-    const basePath = await getAgentsDirectory(context);
+    // First check custom agents directory
+    const customDir = await getCustomAgentsDirectory();
+    if (customDir) {
+      const customMatches = await glob(`**/${agentName}.yaml`, {
+        cwd: customDir,
+        dot: false,
+        nodir: true,
+        absolute: false,
+      });
 
-    // Use glob to find the yaml file recursively
-    const matches = await glob(`**/${agentName}.yaml`, {
-      cwd: basePath,
+      if (customMatches.length > 0) {
+        return path.join(customDir, path.dirname(customMatches[0]));
+      }
+    }
+
+    // If not found in custom directory, check built-in directory
+    const builtInDir = await getBuiltInAgentsDirectory(context);
+    const builtInMatches = await glob(`**/${agentName}.yaml`, {
+      cwd: builtInDir,
       dot: false,
       nodir: true,
       absolute: false,
     });
 
-    if (matches.length === 0) {
+    if (builtInMatches.length === 0) {
       const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-      vscode.window.showErrorMessage(`${errorMsg} from ${basePath}`);
+      vscode.window.showErrorMessage(
+        `${errorMsg} in either custom or built-in directories`,
+      );
       throw new Error(errorMsg);
     }
 
     // Return the directory containing the yaml file
-    return path.join(basePath, path.dirname(matches[0]));
+    return path.join(builtInDir, path.dirname(builtInMatches[0]));
   } catch (err) {
     const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
