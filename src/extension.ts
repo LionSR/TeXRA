@@ -48,7 +48,7 @@ async function copyDefaultAgents(context: vscode.ExtensionContext) {
         console.log(`Skipping directory: ${file}`);
         continue;
       }
-      
+
       // In the future new versions should update prompt?
 
       // Only copy if target doesn't exist
