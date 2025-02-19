@@ -1,3 +1,4 @@
+import { vscode } from './vscodeApi.js';
 import {
   updateFileSelect,
   updateEditedFileSelect,
@@ -17,12 +18,19 @@ import { capitalize, uncapitalize } from './utils.js';
 export function setupMessageHandlers() {
   window.addEventListener('message', (event) => {
     const message = event.data;
+
     switch (message.command) {
       case 'setTheme':
         document.body.className = message.theme;
         break;
       case 'modelSelected':
         safeSetElementValue('model', message.model);
+        break;
+      case 'checkRestoredBaseFile':
+        const restoredBaseFileDiv = safeGetElementById('baseFile');
+        if (restoredBaseFileDiv && restoredBaseFileDiv.value) {
+          updateEditedFileSelect(restoredBaseFileDiv.value);
+        }
         break;
       // File selection
       case 'setInputFile':
@@ -70,10 +78,28 @@ export function setupMessageHandlers() {
         });
         break;
       case 'setBaseFile':
-        updateFileSelect('baseFile', message.files);
-        const baseFileDiv = safeGetElementById('baseFile');
-        if (baseFileDiv) {
-          updateEditedFileSelect(baseFileDiv.value);
+        const currentBaseFileDiv = safeGetElementById('baseFile');
+        if (currentBaseFileDiv) {
+          const currentBaseFile = currentBaseFileDiv.value;
+          updateFileSelect('baseFile', message.files);
+
+          // Get the stored state
+          const state = vscode.getState();
+          const storedBaseFile = state?.baseFile;
+
+          // First try to restore from stored state, then fallback to current if preserveBaseFile
+          if (storedBaseFile && message.files.includes(storedBaseFile)) {
+            currentBaseFileDiv.value = storedBaseFile;
+          } else if (
+            message.preserveBaseFile &&
+            currentBaseFile &&
+            message.files.includes(currentBaseFile)
+          ) {
+            currentBaseFileDiv.value = currentBaseFile;
+          }
+
+          // Always update edited files based on final base file value
+          updateEditedFileSelect(currentBaseFileDiv.value);
         }
         break;
     }
