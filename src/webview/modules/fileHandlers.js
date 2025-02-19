@@ -11,19 +11,31 @@ import {
 
 export function updateFileSelect(id, files) {
   const selectDiv = document.getElementById(id);
-  if (!selectDiv) return console.error(`Element with id '${id}' not found`);
+  if (!selectDiv) {
+    console.error(`[FileHandlers] Element with id '${id}' not found`);
+    return;
+  }
   selectDiv.innerHTML =
     '<option value="">None</option>' +
     files.map((file) => `<option value="${file}">${file}</option>`).join('');
 }
 
 export function updateEditedFileSelect(baseFile) {
+  const editedFileDiv = safeGetElementById('editedFile');
+  if (!editedFileDiv) return;
+
   if (baseFile) {
+    // Store current edited file selection
+    const currentEditedFile = editedFileDiv.value;
+
+    // Request updated list of edited files
     vscode.postMessage({
       command: 'requestEditedFile',
       baseFile: baseFile,
+      preserveSelection: currentEditedFile, // Pass current selection to preserve it if still valid
     });
   } else {
+    // Only clear if there's no base file
     updateFileSelect('editedFile', []);
   }
 }
