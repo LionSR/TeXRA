@@ -17,7 +17,7 @@ export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   getClient(): OpenAI {
     const apiKey = this.getApiKey();
     const baseUrl = this.getBaseUrl();
-    this.logger.info(`Using Google API key. Base URL: ${baseUrl}`);
+    this.logger.debug(`Using Google API key. Base URL: ${baseUrl}`);
     return new OpenAI({
       apiKey,
       baseURL: baseUrl,

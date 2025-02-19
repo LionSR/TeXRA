@@ -203,6 +203,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\begin{figure*}}': '\\begin{figure*}',
     '\\begin{figure}}': '\\begin{figure}',
     '\n\\minipage}': '\n\\end{minipage}',
+    '\\minipage}': '\\end{minipage}',
     // LaTeX to XML conversions
     '\\end{idea}': '</idea>',
     '\\end{scratchpad}': '</scratchpad>',
