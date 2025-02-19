@@ -300,7 +300,6 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     embark: 'start',
     realm: 'area',
     intricate: 'complex',
-    parameterizing: 'parametrizing',
     '"exact"': "``exact''",
     'delving into': 'discussing',
     "It's important to note": 'Note that',
@@ -315,13 +314,13 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     showcasing: 'showing',
     'paradigm shift': 'big change',
     envisage: 'imagine',
-    // typo
+    // typos
+    parameterizing: 'parametrizing',
     Normalizing: 'Normalizing',
     thermodynamical: 'thermodynamic',
     conditon: 'condition',
     necessitates: 'requires',
     '’': "'",
-    'one–step': 'one-step',
   },
 };
 
@@ -355,9 +354,17 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     ' \\, ': ' \\',
     '\\, \\,': ' \\,',
     // '\\,': ' ',
-    // Hyphenation preferences
+
+    // Hyphenation preferences of physical review style
     nonnegative: 'non-negative',
     finitetime: 'finite-time',
+    'one–step': 'one-step',
+    'multi-scale': 'multiscale',
+    'area law scaling': 'area-law scaling',
+    'machine learning model': 'machine-learning model',
+    'machine learning task': 'machine-learning task',
+    // UK vs US spelling
+    analogue: 'analog',
   },
 };
 
