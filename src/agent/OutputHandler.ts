@@ -477,6 +477,9 @@ export class OutputHandler {
     for (const outputFile of outputFiles) {
       if (!outputFile) continue;
       const content = await readFile(outputFile);
+      // if both the main file and the file is in a sudirectory, such as newVersions/main.tex and newVersions/theta_minustheta_mapping.tex
+      // then the input command \\input{theta_minustheta_mapping.tex} would also work, but will not be caught by this? I am not sure.
+      // Also it looks like "_" is not being caught by this, why? above worked for newCoolingAppB for example.
       const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
         baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
       );
