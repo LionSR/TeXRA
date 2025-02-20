@@ -71,17 +71,6 @@
         }
       },
       {
-        "title": "Agent Settings",
-        "properties": {
-          "coauthor.agent.pauseForConfirmation": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether to pause for confirmation after each agent even with reflect=True",
-            "scope": "resource"
-          }
-        }
-      },
-      {
         "title": "Model Settings",
         "properties": {
           "coauthor.model.useOpenRouter": {
@@ -336,23 +325,12 @@
         }
       },
       {
-        "title": "Python Environment",
-        "properties": {
-          "coauthor.python.virtualEnvString": {
-            "type": "string",
-            "default": "",
-            "description": "Command to activate Python virtual environment (e.g., 'source venv/bin/activate' for Unix or 'venv\\Scripts\\activate.bat' for Windows). Leave empty to use system Python.",
-            "scope": "resource"
-          }
-        }
-      },
-      {
         "title": "Execution",
         "properties": {
-          "coauthor.execution.allowTerminalFallback": {
+          "coauthor.agent.pauseForConfirmation": {
             "type": "boolean",
             "default": false,
-            "description": "Whether to allow falling back to terminal execution when direct execution fails",
+            "description": "Whether to pause for confirmation after each agent even with reflect=True",
             "scope": "resource"
           }
         }
