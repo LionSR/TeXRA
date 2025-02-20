@@ -213,7 +213,7 @@ body {
 }
 
 .message-warn {
-  color: var(--vscode-inputValidation-warningForeground, #ddb100);
+  color: var(--vscode-inputValidation-warningForeground, #dd8500d6);
 }
 
 .message-error {
