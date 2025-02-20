@@ -35,8 +35,8 @@ import { ToolState } from './ToolState';
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
 export class ModelHandlerAnthropic extends ModelHandler {
   /** Initializes an Anthropic API client using the configured API key. */
-  getClient(): Anthropic {
-    const apiKey = this.getApiKey();
+  async getClient(): Promise<Anthropic> {
+    const apiKey = await this.getApiKey();
     this.logger.debug('Using Anthropic API.');
     return new Anthropic({ apiKey });
   }
