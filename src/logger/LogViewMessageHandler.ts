@@ -38,6 +38,9 @@ export class LogViewMessageHandler {
       case 'cleanStream':
         await this.handleCleanStream(message.stream);
         break;
+      case 'runAgain':
+        await this.handleRunAgain(message.stream);
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
@@ -62,6 +65,47 @@ export class LogViewMessageHandler {
       multipleOutputFiles: taskState.multipleOutputFiles,
       multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
     });
+  }
+
+  private async handleRunAgain(stream: string) {
+    logger.debug(CHANNEL, `Attempting to re-run stream with ID: ${stream}`);
+    const taskState = this.provider.getTaskState(stream);
+    if (!taskState) {
+      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      return;
+    }
+    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+
+    // Convert task state to agent config
+    const agentConfig = {
+      agent: taskState.agent,
+      model: taskState.model,
+      reflect: taskState.reflect === 'True',
+      instructions: taskState.instructions,
+      inputFile: taskState.inputFile,
+      referenceFile: taskState.referenceFile || undefined,
+      auxiliaryFile: taskState.auxiliaryFile || undefined,
+      figureFile: taskState.figureFile || undefined,
+      outputNameOverride: taskState.outputNameOverride || undefined,
+      inputFiles: taskState.multipleInputFiles,
+      referenceFiles: taskState.multipleReferenceFiles,
+      auxiliaryFiles: taskState.multipleAuxiliaryFiles,
+      figureFiles: taskState.multipleFigureFiles,
+      outputFiles: taskState.multipleOutputFiles,
+      toolConfig: {
+        autoExtractFigure: taskState.autoExtractFigure,
+        autoExtractTikzFigure: taskState.autoExtractTikzFigure,
+        autoExtractTikzFigureReflect: taskState.autoExtractTikzFigureReflect,
+        attachTeXCount: taskState.attachTeXCount,
+        usePrefillFromInput: taskState.usePrefillFromInput,
+        printInputPrompt: taskState.printInputPrompt,
+        autoConfirmation: taskState.autoConfirmation,
+      },
+    };
+
+    // Execute the agent with the restored config
+    await vscode.commands.executeCommand('coauthor.execute', agentConfig);
   }
 
   private async handleCleanStream(stream: string) {

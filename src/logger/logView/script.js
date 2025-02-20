@@ -39,7 +39,15 @@ function updateStatus(status) {
   const stopButton = document.getElementById('stopStreamBtn');
   const packButton = document.getElementById('packStreamBtn');
   const cleanButton = document.getElementById('cleanStreamBtn');
-  if (!statusIndicator || !stopButton || !packButton || !cleanButton) return;
+  const runAgainButton = document.getElementById('runAgainBtn');
+  if (
+    !statusIndicator ||
+    !stopButton ||
+    !packButton ||
+    !cleanButton ||
+    !runAgainButton
+  )
+    return;
 
   // Remove all existing status classes
   statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
@@ -57,16 +65,34 @@ function updateStatus(status) {
       }[status] || 'Ready';
     statusIndicator.setAttribute('data-status', tooltipText);
 
-    // Update button states
-    stopButton.disabled = status !== 'running';
-    stopButton.title =
-      status === 'running'
-        ? 'Request task interruption (note: current API call will complete)'
-        : 'No running task to stop';
+    // Update button states and tooltips
+    const isRunning = status === 'running';
+    const isReady = status === 'ready';
+    const isTaskActive = isRunning || isReady;
 
-    // Pack and clean buttons are enabled when task is stopped or errored
-    packButton.disabled = status === 'running' || status === 'ready';
-    cleanButton.disabled = status === 'running' || status === 'ready';
+    // Stop button
+    stopButton.disabled = !isRunning;
+    stopButton.title = isRunning
+      ? 'Request task interruption (note: current API call will complete)'
+      : 'No running task to stop';
+
+    // Run Again button
+    runAgainButton.disabled = isTaskActive;
+    runAgainButton.title = isTaskActive
+      ? 'Cannot run task while another task is active'
+      : 'Run this task again';
+
+    // Pack button
+    packButton.disabled = isTaskActive;
+    packButton.title = isTaskActive
+      ? 'Cannot pack while task is active'
+      : 'Pack the output for this agent';
+
+    // Clean button
+    cleanButton.disabled = isTaskActive;
+    cleanButton.title = isTaskActive
+      ? 'Cannot clean while task is active'
+      : 'Clean the output for this agent';
 
     // Store status for current stream
     if (currentStream && status !== 'ready') {
@@ -120,6 +146,17 @@ function setupEventListeners() {
   // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
     vscode.postMessage({ command: 'deleteAll' });
+  });
+
+  // Run Again button
+  const runAgainBtn = document.getElementById('runAgainBtn');
+  runAgainBtn.addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({
+        command: 'runAgain',
+        stream: currentStream,
+      });
+    }
   });
 
   // Initialize split view
