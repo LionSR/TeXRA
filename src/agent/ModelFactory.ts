@@ -21,7 +21,7 @@ export class ModelFactory {
   static createHandler(config: ModelConfig): ModelHandler {
     // Use OpenRouter if model requires it or if explicitly configured in toolConfig
     const useOpenRouter =
-      config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
+      config.openRouterOnly || getConfig<boolean>('model.useOpenRouter', false);
 
     if (useOpenRouter) {
       // Set OpenRouter model name if not provided
