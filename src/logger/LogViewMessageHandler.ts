@@ -44,11 +44,14 @@ export class LogViewMessageHandler {
   }
 
   private async handlePackStream(stream: string) {
+    logger.debug(CHANNEL, `Attempting to pack stream with ID: ${stream}`);
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
       logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
       return;
     }
+    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute pack command with task state
     await vscode.commands.executeCommand('coauthor.pack', {
@@ -62,11 +65,14 @@ export class LogViewMessageHandler {
   }
 
   private async handleCleanStream(stream: string) {
+    logger.debug(CHANNEL, `Attempting to clean stream with ID: ${stream}`);
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
       logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
       return;
     }
+    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute clean command with task state
     await vscode.commands.executeCommand('coauthor.clean', {

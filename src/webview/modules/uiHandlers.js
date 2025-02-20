@@ -162,7 +162,7 @@ export function setupUIHandlers() {
 
   // Add click handlers for file type icons and commit icon
   const fileTypeIcons = document.querySelectorAll(
-    '.file-select-header label .fas.clickable',
+    '.file-select-header label .codicon.clickable',
   );
   fileTypeIcons.forEach((icon) => {
     // Only handle commit icon clicks since file refreshes are handled by the file watcher
