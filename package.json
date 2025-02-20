@@ -371,7 +371,7 @@
         }
       },
       {
-        "title": "CoAuthor: Merge",
+        "title": "CoAuthor: Merge Operations",
         "properties": {
           "coauthor.merge.defaultModel": {
             "type": "string",
