@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.5",
+  "version": "0.18.6",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -371,7 +371,7 @@
         }
       },
       {
-        "title": "CoAuthor: Merge",
+        "title": "CoAuthor: Merge Operations",
         "properties": {
           "coauthor.merge.defaultModel": {
             "type": "string",
@@ -419,40 +419,17 @@
       {
         "title": "CoAuthor: API Keys",
         "properties": {
-          "coauthor.apiKeys.openai": {
-            "type": "string",
-            "default": "",
-            "description": "OpenAI API key for GPT models",
+          "coauthor.apiKeys.set": {
+            "type": "null",
             "scope": "application",
-            "password": true
+            "markdownDescription": "API keys are now stored securely. [Click here to set an API key](command:coauthor.setApiKey)",
+            "readOnly": true
           },
-          "coauthor.apiKeys.anthropic": {
-            "type": "string",
-            "default": "",
-            "description": "Anthropic API key for Claude models",
+          "coauthor.apiKeys.remove": {
+            "type": "null",
             "scope": "application",
-            "password": true
-          },
-          "coauthor.apiKeys.openRouter": {
-            "type": "string",
-            "default": "",
-            "description": "OpenRouter API key for various models",
-            "scope": "application",
-            "password": true
-          },
-          "coauthor.apiKeys.google": {
-            "type": "string",
-            "default": "",
-            "description": "Google API key for Gemini models",
-            "scope": "application",
-            "password": true
-          },
-          "coauthor.apiKeys.deepseek": {
-            "type": "string",
-            "default": "",
-            "description": "DeepSeek API key for DeepSeek models",
-            "scope": "application",
-            "password": true
+            "markdownDescription": "API keys are now stored securely. [Click here to remove the stored key](command:coauthor.removeApiKey)",
+            "readOnly": true
           }
         }
       },
@@ -619,6 +596,16 @@
         "title": "Delete",
         "category": "CoAuthor",
         "icon": "$(trash)"
+      },
+      {
+        "command": "coauthor.setApiKey",
+        "title": "Set API Key",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.removeApiKey",
+        "title": "Remove API Key",
+        "category": "CoAuthor"
       }
     ],
     "viewsContainers": {

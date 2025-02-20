@@ -27,6 +27,8 @@ export enum ModelProvider {
   ANTHROPIC = 'anthropic',
   OPENAI = 'openai',
   GOOGLE = 'google',
+  DEEPSEEK = 'deepseek',
+  XAI = 'xai',
   OTHERS = 'others',
 }
 
