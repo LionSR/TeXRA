@@ -70,7 +70,7 @@ export async function executeCommand(
         : output?.trim() || null;
 
     if (stderr && stderr.trim()) {
-      logger.warn(
+      logger.debug(
         options.channel || CHANNEL,
         `Command stderr: ${processOutput(stderr)}`,
       );
