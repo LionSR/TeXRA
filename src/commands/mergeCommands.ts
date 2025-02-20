@@ -36,30 +36,7 @@ async function handleMerge(
   try {
     await executeMergeAgent(model, fileToUse, editedFile, context);
   } catch (error) {
-    const allowTerminalFallback = getConfig<boolean>(
-      'execution.allowTerminalFallback',
-      false,
-    );
-    if (!allowTerminalFallback) {
-      throw error;
-    }
-    // If direct execution fails and terminal fallback is allowed, fall back to terminal execution
-    vscode.window.showWarningMessage(
-      `Direct execution failed, falling back to terminal: ${error}`,
-    );
-
-    const terminalName = `Merge@${model}`;
-    const terminalNew = vscode.window.createTerminal(terminalName);
-    terminalNew.show();
-
-    let command = `coauthor merge --inputFile="${fileToUse}" --editedFile="${editedFile}" --model=${model}`;
-
-    // Add useOpenRouter from VS Code settings if enabled
-    if (getConfig<boolean>('model.useOpenRouter', false)) {
-      command += ' --useOpenRouter';
-    }
-
-    terminalNew.sendText(command);
+    throw error;
   }
 }
 
