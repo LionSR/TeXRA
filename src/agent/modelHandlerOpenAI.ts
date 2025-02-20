@@ -28,10 +28,11 @@ const K_SLICE = 200;
  */
 export class ModelHandlerOpenAI extends ModelHandler {
   /** Returns OpenAI client with configured API key. */
-  getClient(): OpenAI {
-    const apiKey = this.getApiKey();
+  async getClient(): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
     this.logger.debug('Using OpenAI API.');
-    return new OpenAI({ apiKey });
+    return new OpenAI({ apiKey, baseURL });
   }
 
   /** Creates a chat completion with model-specific parameters. */

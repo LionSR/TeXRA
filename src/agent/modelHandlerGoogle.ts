@@ -14,14 +14,11 @@ import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
  */
 export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   /** Returns OpenAI client configured with Google's base URL. */
-  getClient(): OpenAI {
-    const apiKey = this.getApiKey();
-    const baseUrl = this.getBaseUrl();
-    this.logger.debug(`Using Google API key. Base URL: ${baseUrl}`);
-    return new OpenAI({
-      apiKey,
-      baseURL: baseUrl,
-    });
+  async getClient(): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
+    this.logger.debug(`Using Google API key. Base URL: ${baseURL}`);
+    return new OpenAI({ apiKey, baseURL });
   }
 
   /** Computes cost based on Google's token usage format. */
