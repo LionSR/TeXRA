@@ -449,13 +449,29 @@
               </div>
             </div>
           </div>
-          <button
-            id="eraseInstructionsButton"
-            class="icon-button"
-            title="Erase Instructions"
-          >
-            <i class="codicon codicon-clear-all"></i>
-          </button>
+          <div class="instruction-header-actions">
+            <button
+              id="packButton"
+              class="icon-button"
+              title="Pack the output for this agent"
+            >
+              <i class="codicon codicon-package"></i>
+            </button>
+            <button
+              id="cleanButton"
+              class="icon-button"
+              title="Clean the output for this agent"
+            >
+              <i class="codicon codicon-trash"></i>
+            </button>
+            <button
+              id="eraseInstructionsButton"
+              class="icon-button"
+              title="Erase Instructions"
+            >
+              <i class="codicon codicon-clear-all"></i>
+            </button>
+          </div>
         </div>
         <textarea
           id="instructionInput"
@@ -465,21 +481,6 @@
           <i class="codicon codicon-play"></i> Execute
         </button>
       </div>
-      <div class="section">
-        <h6 class="section-header">
-          <i class="codicon codicon-trash"></i> Housekeeping
-        </h6>
-        <div class="button-group">
-          <span>For the Selected Agent and Files:</span>
-          <button id="packButton" class="icon-button" title="Pack Files">
-            <i class="codicon codicon-package"></i>Pack
-          </button>
-          <button id="cleanButton" class="icon-button" title="Clean Files">
-            <i class="codicon codicon-trash"></i>Clean
-          </button>
-        </div>
-      </div>
-
       <div class="section">
         <h6 class="section-header">
           <i class="codicon codicon-source-control"></i> Smart Diffs
@@ -494,7 +495,7 @@
             <div class="file-select-actions">
               <button
                 id="currentBaseFileButton"
-                class="action-button"
+                class="icon-button"
                 title="Set current file as base"
               >
                 <i class="codicon codicon-file-code"></i>
@@ -522,12 +523,12 @@
                 ></i>
                 Edited File</label
               >
-              <button id="mergeButton" class="icon-button" title="Merge">
+              <button id="mergeButton" class="action-button" title="Merge">
                 <i class="codicon codicon-merge"></i>Merge
               </button>
               <button
                 id="latexdiffButton"
-                class="icon-button"
+                class="action-button"
                 title="LaTeXDiff the edited file with the base file"
               >
                 <i class="codicon codicon-diff-single"></i>latexdiff
@@ -536,7 +537,7 @@
             <div class="file-select-actions">
               <button
                 id="currentEditedFileButton"
-                class="action-button"
+                class="icon-button"
                 title="Set current file as edited"
               >
                 <i class="codicon codicon-file-code"></i>
@@ -566,21 +567,21 @@
               >
               <button
                 id="latexdiffvcButton"
-                class="icon-button"
+                class="action-button"
                 title="LaTeXDiff with another git commit"
               >
                 <i class="codicon codicon-diff-single"></i>latexdiff-vc
               </button>
               <button
                 id="packLatexdiffvcButton"
-                class="icon-button"
+                class="action-button"
                 title="Pack"
               >
                 <i class="codicon codicon-package"></i>Pack
               </button>
               <button
                 id="cleanLatexdiffvcButton"
-                class="icon-button"
+                class="action-button"
                 title="Clean"
               >
                 <i class="codicon codicon-trash"></i>Clean
