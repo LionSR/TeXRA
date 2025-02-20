@@ -6,6 +6,7 @@ import { LogViewContentProvider } from './LogViewContentProvider';
 import { LogViewMessageHandler } from './LogViewMessageHandler';
 import { TaskState, fromObject } from './TaskState';
 import { AgentLogger } from './AgentLogger';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 interface ColoredLogMessage {
   message: string;
@@ -268,6 +269,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Skip debug messages if verbose output is disabled
+    if (
+      level === 'debug' &&
+      !getConfig<boolean>('logger.verboseOutput', false)
+    ) {
+      return;
+    }
+
     // Create stream if it doesn't exist and set initial status
     if (!this._logStreams.has(stream)) {
       this._logStreams.set(stream, []);
@@ -314,10 +323,15 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     if (!this._logStreams.has(stream)) return;
 
     const messages = this._logStreams.get(stream)!;
+    // Filter debug messages if verbose output is disabled
+    const displayMessages = getConfig<boolean>('logger.verboseOutput', false)
+      ? messages
+      : messages.filter((msg) => msg.level !== 'debug');
+
     this._view.webview.postMessage({
       command: 'updateLogs',
       stream: stream,
-      messages: messages,
+      messages: displayMessages,
     });
 
     // Send current status for the stream
