@@ -5,6 +5,10 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import {
+  getApiKey as getSecretApiKey,
+  ApiProvider,
+} from '../utils/secretUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -90,18 +94,14 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
 
 // it should also be possible to fallback to openrouter for this maybe
 // Use Vercel ai sdk for this for convenience?
-function getApiKey(provider: 'openai' | 'anthropic'): string {
-  const apiKey = vscode.workspace
-    .getConfiguration('coauthor.apiKeys')
-    .get<string>(provider);
-
-  if (!apiKey) {
+async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
+  try {
+    return await getSecretApiKey(provider as ApiProvider);
+  } catch (error) {
     throw new Error(
-      `${provider.toUpperCase()} API key not found in settings (coauthor.apiKeys.${provider})`,
+      `${provider.toUpperCase()} API key not found. Please set it using the "Set API Key" command.`,
     );
   }
-
-  return apiKey;
 }
 
 /**
@@ -114,7 +114,7 @@ export async function bestConnectionMethod(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const apiKey = openaiApiKey || getApiKey('openai');
+    const apiKey = openaiApiKey || (await getApiKey('openai'));
     const { prompt } = preparePrompt(str1, str2);
     const client = new OpenAI({ apiKey });
 
@@ -162,7 +162,7 @@ export async function bestConnectionMethodAnthropic(
   n: number = 10,
 ): Promise<ConnectionResult> {
   try {
-    const apiKey = anthropicApiKey || getApiKey('anthropic');
+    const apiKey = anthropicApiKey || (await getApiKey('anthropic'));
     const { prompt } = preparePrompt(str1, str2);
     const client = new Anthropic({ apiKey });
 

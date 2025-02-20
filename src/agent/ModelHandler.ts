@@ -16,6 +16,10 @@ import {
 } from '../utils/imgUtils';
 
 import { getConfig } from '../frontend-utils/commonUtils';
+import {
+  getApiKey as getSecretApiKey,
+  ApiProvider,
+} from '../utils/secretUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -77,44 +81,30 @@ export abstract class ModelHandler {
    * Retrieves API key from environment variables based on provider and OpenRouter configuration.
    * @throws Error if required API key is missing from environment
    */
-  public getApiKey(): string {
+  public async getApiKey(): Promise<string> {
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
       this.config.openRouterOnly ||
       getConfig<boolean>('model.useOpenRouter', false);
 
     if (useOpenRouter) {
-      // Try VS Code settings first
-      const key = getConfig('apiKeys.openRouter') as string;
-      if (key) {
-        return key;
-      }
-      // Fall back to environment variable
-      const envKey = process.env.OPENROUTER_API_KEY;
-      if (!envKey) {
+      try {
+        return await getSecretApiKey('openRouter');
+      } catch (error) {
         throw new Error(
-          'Missing OPENROUTER_API_KEY in both VS Code settings and environment',
+          'Missing OpenRouter API key. Please set it using the "Set API Key" command.',
         );
       }
-      return envKey;
     }
 
-    const provider = this.config.provider.toLowerCase();
-    // Try VS Code settings first
-    const key = getConfig(`apiKeys.${provider}`) as string;
-    if (key) {
-      return key;
-    }
-
-    // Fall back to environment variable
-    const envKey = `${this.config.provider.toUpperCase()}_API_KEY`;
-    const envValue = process.env[envKey];
-    if (!envValue) {
+    const provider = this.config.provider.toLowerCase() as ApiProvider;
+    try {
+      return await getSecretApiKey(provider);
+    } catch (error) {
       throw new Error(
-        `Missing API key for ${this.config.provider} in both VS Code settings and environment (${envKey})`,
+        `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
       );
     }
-    return envValue;
   }
 
   /**
@@ -137,6 +127,8 @@ export abstract class ModelHandler {
         'https://generativelanguage.googleapis.com/v1beta/openai/',
       [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
       [ModelProvider.ANTHROPIC]: null, // Anthropic uses default base URL
+      [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
+      [ModelProvider.XAI]: 'https://api.x.ai/v1',
       [ModelProvider.OTHERS]: null,
     };
     return BASE_URLS[this.config.provider];
@@ -148,6 +140,8 @@ export abstract class ModelHandler {
       ModelProvider.OPENAI,
       ModelProvider.GOOGLE,
       ModelProvider.OTHERS,
+      ModelProvider.DEEPSEEK,
+      ModelProvider.XAI,
     ].includes(this.config.provider);
   }
 
@@ -349,7 +343,7 @@ export abstract class ModelHandler {
   }
 
   /** Creates and configures a client instance for the specific model provider. */
-  abstract getClient(): any;
+  abstract getClient(): Promise<any>;
 
   /**
    * Generates a model response using the provider's API.
