@@ -37,6 +37,31 @@ body {
   font-family: var(--font-family);
   font-size: var(--font-size);
   font-weight: var(--font-weight);
+  min-height: 100vh;
+  margin: 0;
+  padding: var(--spacing-medium);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.latrexdiffs-section {
+  margin-top: auto;
+  padding-top: var(--spacing-large);
 }
 
 .compact-selections {
@@ -453,7 +478,7 @@ body {
   top: 100%;
   left: 0; /* Changed from right: 0 to left: 0 for consistency */
   z-index: 100;
-  margin-top: 2px;
+  margin-top: var(--spacing-tiny);
   background: var(--background-color);
   border: 1px solid var(--dropdown-border);
   border-radius: var(--border-radius);
@@ -575,7 +600,7 @@ body {
   color: var(--vscode-foreground);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--spacing-tiny);
   padding: 4px 6px;
   font-size: var(--font-size);
   border-radius: var(--border-radius);
@@ -623,7 +648,7 @@ body {
   position: absolute;
   top: 100%;
   z-index: 100;
-  margin-top: 2px;
+  margin-top: var(--spacing-tiny);
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-menu-border);
   border-radius: var(--border-radius);
@@ -746,7 +771,7 @@ body {
   color: var(--vscode-foreground);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--spacing-tiny);
   padding: 4px 6px;
   font-size: var(--font-size);
   border-radius: var(--border-radius);
