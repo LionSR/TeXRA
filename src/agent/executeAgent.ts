@@ -132,13 +132,24 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       throw new Error('LogViewProvider not initialized');
     }
 
-    // Create and initialize agent
+    // Create agent to get config for stream ID
     const agent = await createAgentFn();
-    await agent.init();
 
     // Get the full stream ID
     const config = agent.config;
     const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+
+    // Check if this stream is already running
+    const currentStatus = logViewProvider.getStreamStatus(fullStreamId);
+    if (currentStatus === 'running') {
+      const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
+      // vscode.window.showErrorMessage(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Initializes user variables
+    await agent.init();
+
     logger.debug(`Creating stream with ID: ${fullStreamId}`);
     logger.debug(
       `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
