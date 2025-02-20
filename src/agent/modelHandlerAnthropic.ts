@@ -328,7 +328,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
       }
 
-      this.logger.info(`Anthropic prefill:\n${prefill}`);
+      this.logger.debug(`Adding prefill message:\n${prefill}`);
 
       if (
         toolState.accumulatedOutput.includes('<scratchpad>') &&

@@ -5,6 +5,7 @@ import Transport from 'winston-transport';
 
 // Local imports - logView
 import { LogViewProvider } from './LogViewProvider';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const { combine, timestamp } = winston.format;
 
@@ -59,8 +60,21 @@ class VSCodeTransport extends Transport {
   log(info: any, callback: () => void) {
     const { level, message, timestamp } = info;
     const emoji = emojis[level as keyof typeof emojis];
+
     // Plain format for output channel - no escaping needed
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
+
+    // Always write to output channel (plain text)
+    this.channel.appendLine(formattedMessage);
+
+    // Skip debug messages in LogView if verbose output is disabled
+    if (
+      level === 'debug' &&
+      !getConfig<boolean>('logger.verboseOutput', false)
+    ) {
+      callback();
+      return;
+    }
 
     // Escape HTML tags in message for LogView
     const escapedMessage = escapeHtml(message);
@@ -72,9 +86,6 @@ class VSCodeTransport extends Transport {
       `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
       `<span class="message-${level}">${escapedMessage}</span>` +
       `</div>`;
-
-    // Always write to output channel (plain text)
-    this.channel.appendLine(formattedMessage);
 
     // Write to LogView if available (with colors and escaped HTML)
     if (this.logViewProvider) {

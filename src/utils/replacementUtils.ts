@@ -318,7 +318,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     // typos
     parameterizing: 'parametrizing',
     Normalizing: 'Normalizing',
-    thermodynamical: 'thermodynamic',
+    // thermodynamical: 'thermodynamic', // problematic with thermodynamically
     conditon: 'condition',
     necessitates: 'requires',
     '’': "'",
