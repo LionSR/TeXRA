@@ -117,8 +117,7 @@ export abstract class BaseReflectionAgent {
     ];
     this.userVars = {};
 
-    // Initialize client and check scratchpad usage
-    this.client = this.modelHandler.getClient();
+    // Check scratchpad usage
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
@@ -143,6 +142,14 @@ export abstract class BaseReflectionAgent {
 
     // Register this agent instance
     BaseReflectionAgent.runningAgents.set(channelId, this);
+  }
+
+  /**
+   * Initializes the client asynchronously.
+   * Must be called before using any client operations.
+   */
+  protected async initializeClient(): Promise<void> {
+    this.client = await this.modelHandler.getClient();
   }
 
   /**
@@ -970,6 +977,9 @@ export abstract class BaseReflectionAgent {
    */
   public async run(): Promise<void> {
     try {
+      // Initialize client before starting
+      await this.initializeClient();
+
       this.logger.info(SEPARATOR);
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
