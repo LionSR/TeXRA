@@ -22,6 +22,7 @@
   --font-weight: var(--vscode-font-weight);
 
   /* Spacing */
+  --spacing-tiny: 2px;
   --spacing-small: 5px;
   --spacing-medium: 10px;
   --spacing-large: 15px;
@@ -146,65 +147,74 @@ body {
   margin-left: auto;
 }
 
-.action-button,
 .icon-button {
-  padding: 4px 8px;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
   font-size: calc(var(--font-size) * 0.8);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   border: 0.5px solid var(--input-border);
   border-radius: var(--border-radius);
   cursor: pointer;
-  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.action-button:hover,
 .icon-button:hover {
   background-color: var(--icon-button-hover-background);
 }
 
-.action-button .codicon,
 .icon-button .codicon {
-  margin-right: var(--spacing-small);
-  font-size: calc(var(--font-size) * 0.8);
+  margin: 0;
+  font-size: calc(var(--font-size) * 0.9);
   color: var(--icon-color);
   opacity: 0.8;
 }
 
-.action-button:hover .codicon,
 .icon-button:hover .codicon {
   opacity: 1;
 }
 
+/* Text buttons (like latexdiff) */
+.action-button {
+  padding: 2px 6px;
+  margin-right: var(--spacing-small);
+  font-size: calc(var(--font-size) * 0.9);
+  background-color: var(--icon-button-background);
+  color: var(--icon-button-foreground);
+  border: 0.5px solid var(--input-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-tiny);
+}
+
+.action-button:hover {
+  background-color: var(--icon-button-hover-background);
+}
+
+.action-button .codicon {
+  font-size: calc(var(--font-size) * 0.9);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
+.action-button:hover .codicon {
+  opacity: 1;
+}
+
 .button-group {
-  margin-bottom: var(--spacing-medium);
+  margin-bottom: var(--spacing-small);
 }
 
 .button-group label {
   display: block;
   font-size: var(--vscode-font-size);
   margin-bottom: var(--spacing-small);
-}
-
-.action-button {
-  padding: 4px 8px;
-  font-size: calc(var(--font-size) * 0.9);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 1px solid var(--input-border);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.action-button:hover {
-  background-color: var(--icon-button-hover-background);
 }
 
 .file-select label {
@@ -264,11 +274,6 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.small-button {
-  width: 100%;
-  padding: 2px 4px;
 }
 
 .remove-button {
@@ -393,6 +398,18 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-small);
+}
+
+.instruction-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.instruction-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .instruction-header label {

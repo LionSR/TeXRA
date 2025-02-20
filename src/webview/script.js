@@ -62,6 +62,28 @@ setupMessageHandlers();
 document.addEventListener('DOMContentLoaded', function () {
   setupUIHandlers();
 
+  // Pack and Clean button handlers
+  const packButton = document.getElementById('packButton');
+  const cleanButton = document.getElementById('cleanButton');
+
+  if (packButton) {
+    packButton.addEventListener('click', () => {
+      const agent = document.getElementById('agent')?.value;
+      if (agent) {
+        vscode.postMessage({ command: 'packFiles', agent });
+      }
+    });
+  }
+
+  if (cleanButton) {
+    cleanButton.addEventListener('click', () => {
+      const agent = document.getElementById('agent')?.value;
+      if (agent) {
+        vscode.postMessage({ command: 'cleanFiles', agent });
+      }
+    });
+  }
+
   // Tool Use dropdown toggle
   const toggleToolUse = document.getElementById('toggleToolUse');
   const toolUseOptions = document.getElementById('toolUseOptions');
