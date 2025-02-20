@@ -71,6 +71,17 @@
         }
       },
       {
+        "title": "CoAuthor: Agent Settings",
+        "properties": {
+          "coauthor.agent.pauseForConfirmation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to pause for confirmation after each agent even with reflect=True",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "CoAuthor: Model Settings",
         "properties": {
           "coauthor.model.useOpenRouter": {
