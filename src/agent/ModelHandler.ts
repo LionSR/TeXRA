@@ -127,9 +127,9 @@ export abstract class ModelHandler {
         'https://generativelanguage.googleapis.com/v1beta/openai/',
       [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
       [ModelProvider.ANTHROPIC]: null, // Anthropic uses default base URL
-      [ModelProvider.OTHERS]: null,
       [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
       [ModelProvider.XAI]: 'https://api.x.ai/v1',
+      [ModelProvider.OTHERS]: null,
     };
     return BASE_URLS[this.config.provider];
   }
