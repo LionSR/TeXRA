@@ -1,3 +1,33 @@
+:root {
+  /* Colors */
+  --background-color: var(--vscode-sideBar-background);
+  --text-color: var(--vscode-sideBar-foreground);
+  --button-background: var(--vscode-button-background);
+  --button-foreground: var(--vscode-button-foreground);
+  --button-hover-background: var(--vscode-button-hoverBackground);
+  --input-background: var(--vscode-input-background);
+  --input-foreground: var(--vscode-input-foreground);
+  --input-border: var(--vscode-input-border);
+  --icon-button-background: var(--vscode-button-secondaryBackground);
+  --icon-button-hover-background: var(--vscode-button-secondaryHoverBackground);
+  --icon-button-foreground: var(--vscode-button-secondaryForeground);
+  --icon-color: var(--vscode-textLink-foreground);
+
+  /* Typography */
+  --font-size: var(--vscode-font-size);
+  --font-family: var(--vscode-font-family);
+  --font-weight: var(--vscode-font-weight);
+
+  /* Spacing */
+  --spacing-tiny: 2px;
+  --spacing-small: 5px;
+  --spacing-medium: 10px;
+  --spacing-large: 15px;
+
+  /* Border radius */
+  --border-radius: 3px;
+}
+
 body {
   padding: 0;
   margin: 0;
@@ -69,7 +99,7 @@ body {
 
 .x-icon {
   font-family: codicon;
-  font-size: 14px;
+  font-size: var(--font-size);
 }
 
 .tab-container {
@@ -145,7 +175,7 @@ body {
 
 .codicon {
   font-family: codicon;
-  font-size: 14px;
+  font-size: var(--font-size);
   line-height: 14px;
   margin-right: 4px;
   color: var(--vscode-foreground);
@@ -242,7 +272,8 @@ body {
   height: 8px;
   border-radius: 50%;
   display: inline-block;
-  margin-left: 8px;
+  margin-left: var(--spacing-small);
+  margin-right: var(--spacing-small);
   position: relative;
   opacity: 0.8;
   transition: all 0.3s ease;
@@ -346,80 +377,51 @@ body {
   top: 0;
   bottom: 0;
 }
-
-.stop-button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border: none;
-  border-radius: 3px;
-  background-color: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  cursor: pointer;
-  font-size: 12px;
-  margin-right: 8px;
-}
-
-.stop-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.stop-button:not(:disabled):hover {
-  background-color: var(--vscode-button-secondaryHoverBackground);
-}
-
-.stop-icon {
-  color: #ff3333;
-  font-size: 16px;
-}
-
-.pack-button,
-.clean-button {
+/* Common button styles */
+.action-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 4px 8px;
-  margin-left: 8px;
   border: none;
-  border-radius: 3px;
-  background-color: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
+  border-radius: var(--border-radius);
+  background-color: var(--icon-button-background);
+  color: var(--icon-button-foreground);
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(var(--font-size) * 0.9);
   transition: background-color 0.2s;
+  gap: var(--spacing-small);
 }
 
-.pack-button:hover,
-.clean-button:hover {
-  background-color: var(--vscode-button-secondaryHoverBackground);
+.action-button:hover {
+  background-color: var(--icon-button-hover-background);
 }
 
-.pack-button:disabled,
-.clean-button:disabled {
+.action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.pack-button .codicon,
-.clean-button .codicon {
-  margin-right: 4px;
-  font-size: 14px;
+.action-button .codicon {
+  font-size: calc(var(--font-size) * 0.9);
+  color: var(--icon-button-foreground);
 }
 
-.pack-button i,
-.clean-button i {
-  margin-right: 4px;
-  font-size: 12px;
+/* Button-specific styles */
+.stop-button {
+  margin-right: var(--spacing-tiny);
 }
 
-/* Button icon styles */
-.pack-button .codicon,
-.clean-button .codicon,
-.clear-button .codicon {
-  margin-right: 4px;
-  font-size: 14px;
+.stop-icon {
+  color: #ff3333;
+  font-size: calc(var(--font-size) * 1.2);
+}
+
+.pack-button,
+.clean-button,
+.run-button,
+.clear-button {
+  margin-left: var(--spacing-tiny);
 }
 
 /* Tab delete icon */
