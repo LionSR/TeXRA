@@ -16,6 +16,7 @@ import { registerTestCommands } from './commands/testCommands';
 import { registerXmlCommands } from './commands/xmlCommands';
 import { registerYamlCommands } from './commands/yamlCommands';
 import { registerAgentCommands } from './commands/agentCommands';
+import { registerApiKeyCommands } from './commands/apiKeyCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -43,6 +44,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     xml: registerXmlCommands(context),
     yaml: registerYamlCommands(context),
     agent: registerAgentCommands(context),
+    apiKey: registerApiKeyCommands(context),
   };
 
   // Register webview provider
@@ -69,3 +71,4 @@ export { figureCommands } from './commands/figCommands';
 export { testCommands } from './commands/testCommands';
 export { xmlCommands } from './commands/xmlCommands';
 export { yamlCommands } from './commands/yamlCommands';
+export { apiKeyCommands } from './commands/apiKeyCommands';
