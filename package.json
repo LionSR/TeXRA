@@ -22,12 +22,6 @@
       {
         "title": "CoAuthor",
         "properties": {
-          "coauthor.useOpenRouter": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether to use OpenRouter for API calls when possible",
-            "scope": "resource"
-          },
           "coauthor.agents": {
             "type": "array",
             "items": {
@@ -72,6 +66,17 @@
               "DSR1"
             ],
             "description": "List of available models",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Model Settings",
+        "properties": {
+          "coauthor.model.useOpenRouter": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to use OpenRouter for API calls when possible",
             "scope": "resource"
           }
         }
