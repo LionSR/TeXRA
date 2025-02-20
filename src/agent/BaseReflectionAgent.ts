@@ -102,13 +102,6 @@ export abstract class BaseReflectionAgent {
     // Update model handler's logger
     this.modelHandler.setLogger(this.logger);
 
-    this.logger.info(SEPARATOR);
-    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
-    this.logger.debug(
-      `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
-    );
-
     // Initialize basic attributes
     this.outputFile = ['', ''];
     this.outputFiles = { 0: [], 1: [] };
@@ -125,8 +118,7 @@ export abstract class BaseReflectionAgent {
     this.outputFile[0] = this.getOutputFile(0);
     this.outputFile[1] = this.getOutputFile(1);
 
-    // Initialize logging and database entry
-    // TODO: Implement logging to SQLite database
+    // Initialize logging
     this.logId = 0;
 
     this.outputHandler = new OutputHandler(
@@ -137,8 +129,6 @@ export abstract class BaseReflectionAgent {
       this.baseFiles,
       this.logger,
     );
-
-    this.logger.info(`Processing file: ${this.agentConfig.inputFile}`);
 
     // Register this agent instance
     BaseReflectionAgent.runningAgents.set(channelId, this);
@@ -174,6 +164,13 @@ export abstract class BaseReflectionAgent {
    * Must be called after constructor before using the agent.
    */
   public async init(): Promise<void> {
+    this.logger.info(SEPARATOR);
+    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
+    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
+    this.logger.debug(
+      `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
+    );
+
     this.userVars = await this.getUserVars();
   }
 
@@ -675,12 +672,6 @@ export abstract class BaseReflectionAgent {
     endTurn: boolean,
     currRound: number = 0,
   ): Promise<string[]> {
-    // TODO: Implement logging to SQLite database
-    // if (this.logId !== null) {
-    //   updateLogStatistics(this.logId, stateGlobal, stateRound, currRound);
-    // }
-    // updateLogOutputFiles(this.logId, outputFile, this.outputHandler.outputFiles[currRound]);
-
     // Print statistics at the end of each round
     this.outputHandler.printStatistics(stateGlobal);
 

@@ -90,7 +90,7 @@ export async function runIndentTeX(): Promise<void> {
               logger.debug(CHANNEL, `Command output: ${result.stdout}`);
             }
             if (result.stderr) {
-              logger.warn(CHANNEL, `Command stderr: ${result.stderr}`);
+              logger.debug(CHANNEL, `Command stderr: ${result.stderr}`);
             }
             logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
           } catch (err) {
