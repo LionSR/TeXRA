@@ -95,18 +95,23 @@ export async function handleClean(config: any) {
     return;
   }
 
-  const inputFiles = config.multipleInputFilesVisible
-    ? config.multipleInputFiles || []
+  const outputFiles = config.multipleOutputFilesVisible
+    ? config.multipleOutputFiles || []
     : [];
 
-  if (inputFiles.length > 0) {
+  if (outputFiles.length > 0) {
+    logger.info(
+      CHANNEL,
+      `Running clean multiple with ${outputFiles.length} files`,
+    );
     await runCleanMultiple(
       config.model,
       config.inputFile,
       config.agent,
-      inputFiles,
+      outputFiles,
     );
   } else {
+    logger.info(CHANNEL, `Running clean single`);
     await runCleanSingle(config.model, config.inputFile, config.agent);
   }
 }

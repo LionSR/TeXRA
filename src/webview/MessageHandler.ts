@@ -505,7 +505,7 @@ export class WebviewMessageHandler {
 
   private async updateBaseFileSelect(webviewView: vscode.WebviewView) {
     const baseFiles = await listInputFiles();
-    logger.debug(CHANNEL, `Updating base files: ${baseFiles.join(', ')}`);
+    // logger.debug(CHANNEL, `Updating base files: ${baseFiles.join(', ')}`);
     webviewView.webview.postMessage({
       command: 'setBaseFile',
       files: baseFiles,
