@@ -160,7 +160,13 @@ export abstract class BaseReflectionAgent {
     const baseName = path.basename(
       this.agentConfig.outputNameOverride || this.agentConfig.inputFile,
     );
-    return `${this.agentConfig.agent}@${this.agentConfig.model}: ${baseName}`;
+    // Use the potentially modified agent name (with _multiple suffix if applicable)
+    const agentName =
+      Array.isArray(this.agentConfig.outputFiles) &&
+      this.agentConfig.outputFiles.length > 1
+        ? `${this.agentConfig.agent}_multiple`
+        : this.agentConfig.agent;
+    return `${agentName}@${this.agentConfig.model}: ${baseName}`;
   }
 
   /**

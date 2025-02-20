@@ -142,6 +142,13 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     // Store task state
     const config = agent.config;
     const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
+    logger.debug(`Creating stream with ID: ${fullStreamId}`);
+    logger.debug(
+      `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
+    );
+    logger.debug(
+      `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}`,
+    );
     logger.debug(`Storing task state for stream: ${fullStreamId}`);
     logger.debug(`Config for task state: ${JSON.stringify(config)}`);
     logViewProvider.setTaskState(fullStreamId, {
