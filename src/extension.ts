@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - core
 import * as logger from './logger/logUtils';
+import { initializeSecrets } from './utils/secretUtils';
 
 // Local imports - components
 import { LogViewProvider } from './logger/LogViewProvider';
@@ -72,6 +73,9 @@ async function copyDefaultAgents(context: vscode.ExtensionContext) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  // Initialize secrets storage
+  initializeSecrets(context);
+
   // Create and register the log view provider
   const logViewProvider = new LogViewProvider(context);
   logger.setLogViewProvider(logViewProvider);
