@@ -1,9 +1,12 @@
+import { AgentConfig } from '../agent/AgentConfig';
+
 /** Interface for storing task execution state */
 export interface TaskState {
   // Basic task info
   agent: string;
   model: string;
   reflect: string;
+  instructions: string;
 
   // File selections
   inputFile: string;
@@ -46,7 +49,7 @@ export function fromObject(obj: Record<string, any>): TaskState {
     agent: obj.agent || 'correct',
     model: obj.model || '',
     reflect: obj.reflect || 'True',
-
+    instructions: obj.instructions || '',
     // File selections
     inputFile: obj.inputFile || '',
     referenceFile: obj.referenceFile || '',
