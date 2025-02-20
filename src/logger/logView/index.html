@@ -32,25 +32,40 @@
             ></span>
           </div>
           <div class="header-actions">
-            <button class="stop-button" id="stopStreamBtn" disabled>
-              <span class="stop-icon">■</span> Stop
+            <button
+              class="action-button stop-button"
+              id="stopStreamBtn"
+              disabled
+              title="Request task interruption (note: current API call will complete)"
+            >
+              <span class="codicon codicon-debug-stop"></span>
             </button>
             <button
-              class="pack-button"
+              class="action-button run-button"
+              id="runAgainBtn"
+              disabled
+              title="Run this task again"
+            >
+              <i class="codicon codicon-play"></i>
+            </button>
+            <button
+              class="action-button pack-button"
               id="packStreamBtn"
+              disabled
               title="Pack the output for this agent"
             >
-              <i class="codicon codicon-package"></i> Pack
+              <i class="codicon codicon-package"></i>
             </button>
             <button
-              class="clean-button"
+              class="action-button clean-button"
               id="cleanStreamBtn"
+              disabled
               title="Clean the output for this agent"
             >
-              <i class="codicon codicon-trash"></i> Clean
+              <i class="codicon codicon-trash"></i>
             </button>
             <button
-              class="clear-button"
+              class="action-button clear-button"
               id="eraseStreamBtn"
               title="Erase the stream output for this agent"
             >
