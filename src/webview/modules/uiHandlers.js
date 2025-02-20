@@ -47,7 +47,7 @@ export function setupUIHandlers() {
     const indicator = hasChecked ? '●' : '○';
     const direction = isVisible ? 'up' : 'down';
 
-    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="fa-solid fa-angle-${direction}"></i>`;
+    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-${direction}"></i>`;
   }
 
   addEventListenerSafely('toggleAutoExtract', 'click', function () {
@@ -166,7 +166,7 @@ export function setupUIHandlers() {
   );
   fileTypeIcons.forEach((icon) => {
     // Only handle commit icon clicks since file refreshes are handled by the file watcher
-    if (icon.classList.contains('fa-code-commit')) {
+    if (icon.classList.contains('codicon-git-commit')) {
       icon.addEventListener('click', () => {
         vscode.postMessage({ command: 'refreshCommits' });
       });
