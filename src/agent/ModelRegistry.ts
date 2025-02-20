@@ -339,6 +339,35 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     openRouterOnly: false,
   },
 
+  // ===== xAI Models =====
+  grok2: {
+    name: 'grok2',
+    fullName: 'grok-2-1212',
+    openrouterFullName: 'grok-ai/grok-2-1212',
+    provider: ModelProvider.XAI,
+    maxOutputTokens: 131072,
+    contextWindow: 131072,
+    inputPrice: 2.0,
+    outputPrice: 10.0,
+    capabilities: DEFAULT_MODEL_CAPABILITIES satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  grok2v: {
+    name: 'grok2v',
+    fullName: 'grok-2-1212-vision',
+    openrouterFullName: 'grok-ai/grok-2-1212-vision',
+    provider: ModelProvider.XAI,
+    maxOutputTokens: 32768,
+    contextWindow: 32768,
+    inputPrice: 2.0,
+    outputPrice: 10.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsVision: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+
   // ===== OpenRouter Models =====
   'llama3+': {
     name: 'llama3+',
