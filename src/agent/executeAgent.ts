@@ -132,14 +132,11 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       throw new Error('LogViewProvider not initialized');
     }
 
-    // Update status to running
-    logViewProvider.updateStreamStatus(agentName, 'running');
-
     // Create and initialize agent
     const agent = await createAgentFn();
     await agent.init();
 
-    // Store task state
+    // Get the full stream ID
     const config = agent.config;
     const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
     logger.debug(`Creating stream with ID: ${fullStreamId}`);
@@ -149,6 +146,12 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     logger.debug(
       `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}`,
     );
+
+    // Switch to this stream and set its status to running
+    logViewProvider.setActiveStream(fullStreamId);
+    logViewProvider.updateStreamStatus(fullStreamId, 'running');
+
+    // Store task state
     logger.debug(`Storing task state for stream: ${fullStreamId}`);
     logger.debug(`Config for task state: ${JSON.stringify(config)}`);
     logViewProvider.setTaskState(fullStreamId, {
@@ -193,17 +196,16 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       // Run the agent
       await agent.run();
       // Update status to stopped on successful completion
-      logViewProvider.updateStreamStatus(agentName, 'stopped');
+      logViewProvider.updateStreamStatus(fullStreamId, 'stopped');
     } catch (err) {
       // Update status to error if agent run fails
-      logViewProvider.updateStreamStatus(agentName, 'error');
+      logViewProvider.updateStreamStatus(fullStreamId, 'error');
       throw err;
     }
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
     throw new Error(errorMsg);
-    // here I'd like to print what model @ ${agentConfig.model} too
   }
 }
 

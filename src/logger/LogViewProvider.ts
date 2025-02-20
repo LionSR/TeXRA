@@ -277,15 +277,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Create stream if it doesn't exist and set initial status
+    // Create stream if it doesn't exist
     if (!this._logStreams.has(stream)) {
       this._logStreams.set(stream, []);
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
         this.updateStreamStatus(stream, 'running');
       }
-      // Automatically switch to new stream
-      this.setActiveStream(stream);
     }
 
     const logMessage: ColoredLogMessage = {
