@@ -840,7 +840,3 @@ body {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
 }
-
-.file-select-header label .fas.clickable:hover {
-  opacity: 1;
-}
