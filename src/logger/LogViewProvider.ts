@@ -375,14 +375,23 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     stream: string,
     status: 'running' | 'error' | 'stopped',
   ) {
+    if (!this._logStreams.has(stream)) {
+      return;
+    }
+
     this._streamStatus.set(stream, status);
-    if (this._view) {
-      // Always update status for the stream being updated
+    if (this._view && stream === this._activeStream) {
       this._view.webview.postMessage({
         command: 'updateStatus',
         status: status,
       });
     }
+  }
+
+  public getStreamStatus(
+    stream: string,
+  ): 'running' | 'error' | 'stopped' | undefined {
+    return this._streamStatus.get(stream);
   }
 
   public setActiveStream(stream: string) {
