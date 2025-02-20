@@ -15,6 +15,30 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     this.messageHandler = new WebviewMessageHandler(context);
     this.contentProvider = new WebviewContentProvider(context);
     this.setupFileWatcher();
+    this.setupConfigurationWatcher();
+  }
+
+  private setupConfigurationWatcher() {
+    // Watch for configuration changes
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (
+          e.affectsConfiguration('coauthor.agents') ||
+          e.affectsConfiguration('coauthor.models') ||
+          e.affectsConfiguration('coauthor.files')
+        ) {
+          this.refreshOptionsAndView();
+        }
+      }),
+    );
+  }
+
+  private refreshOptionsAndView() {
+    if (this.webviewView) {
+      this.webviewView.webview.html = this.contentProvider.getHtmlContent(
+        this.webviewView.webview,
+      );
+    }
   }
 
   private setupFileWatcher() {
