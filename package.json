@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.4",
+  "version": "0.18.5",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -22,12 +22,6 @@
       {
         "title": "CoAuthor",
         "properties": {
-          "coauthor.useOpenRouter": {
-            "type": "boolean",
-            "default": false,
-            "description": "Whether to use OpenRouter for API calls when possible",
-            "scope": "resource"
-          },
           "coauthor.agents": {
             "type": "array",
             "items": {
@@ -72,6 +66,28 @@
               "DSR1"
             ],
             "description": "List of available models",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Agent Settings",
+        "properties": {
+          "coauthor.agent.pauseForConfirmation": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to pause for confirmation after each agent even with reflect=True",
+            "scope": "resource"
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Model Settings",
+        "properties": {
+          "coauthor.model.useOpenRouter": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to use OpenRouter for API calls when possible",
             "scope": "resource"
           }
         }
@@ -437,6 +453,17 @@
             "description": "DeepSeek API key for DeepSeek models",
             "scope": "application",
             "password": true
+          }
+        }
+      },
+      {
+        "title": "CoAuthor: Logger",
+        "properties": {
+          "coauthor.logger.verboseOutput": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to show verbose debug messages in the logger view",
+            "scope": "resource"
           }
         }
       }

@@ -239,7 +239,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         type: 'text',
         text: PseudoPrefillMsgContentString,
       });
-      this.logger.info(
+      this.logger.debug(
         `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
       );
       return [false, messages];
