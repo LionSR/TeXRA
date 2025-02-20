@@ -80,7 +80,7 @@ export abstract class ModelHandler {
   public getApiKey(): string {
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
-      this.config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
+      this.config.openRouterOnly || getConfig<boolean>('model.useOpenRouter', false);
 
     if (useOpenRouter) {
       // Try VS Code settings first
@@ -123,7 +123,7 @@ export abstract class ModelHandler {
   public getBaseUrl(): string | null {
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
-      this.config.openRouterOnly || getConfig<boolean>('useOpenRouter', false);
+      this.config.openRouterOnly || getConfig<boolean>('model.useOpenRouter', false);
 
     if (useOpenRouter) {
       return 'https://openrouter.ai/api/v1';
