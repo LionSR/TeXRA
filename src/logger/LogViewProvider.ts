@@ -344,7 +344,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     return this._logStreams;
   }
 
-  public clearStream(stream: string) {
+  public eraseStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._logStreams.get(stream)!.length = 0;
       this._saveState();

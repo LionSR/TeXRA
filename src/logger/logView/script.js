@@ -110,10 +110,10 @@ function setupEventListeners() {
     }
   });
 
-  // Clear button click handler
-  document.getElementById('clearStreamBtn').addEventListener('click', () => {
+  // Erase button click handler
+  document.getElementById('eraseStreamBtn').addEventListener('click', () => {
     if (currentStream) {
-      vscode.postMessage({ command: 'clearStream', stream: currentStream });
+      vscode.postMessage({ command: 'eraseStream', stream: currentStream });
     }
   });
 
