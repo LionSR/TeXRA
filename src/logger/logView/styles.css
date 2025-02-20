@@ -434,9 +434,3 @@ body {
   opacity: 1;
   color: var(--vscode-errorForeground);
 }
-
-/* Remove Font Awesome specific styles */
-.fas,
-.fa-solid {
-  display: none;
-}
