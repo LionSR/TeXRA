@@ -84,7 +84,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 4px 4px;
   cursor: pointer;
   border: none;
   background: none;
@@ -382,7 +382,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 8px;
+  padding: 4px 4px;
   border: none;
   border-radius: var(--border-radius);
   background-color: var(--icon-button-background);
