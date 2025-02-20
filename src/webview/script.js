@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function () {
     ).length;
 
     if (toggleToolUse) {
-      toggleToolUse.innerHTML = `Tool Use ${checkedCount > 0 ? '●' : '○'}<i class="fa-solid fa-angle-down"></i>`;
+      toggleToolUse.innerHTML = `Tool Use ${checkedCount > 0 ? '●' : '○'}<i class="codicon codicon-chevron-down"></i>`;
     }
   }
 

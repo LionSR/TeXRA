@@ -30,7 +30,7 @@ export function setDefaultState() {
   const autoExtractOptions = safeGetElementById('autoExtractOptions');
   if (autoExtractToggle && autoExtractOptions) {
     autoExtractToggle.innerHTML =
-      'Auto Extract ○<i class="fa-solid fa-angle-down"></i>';
+      'Auto Extract ○<i class="codicon codicon-chevron-down"></i>';
     autoExtractOptions.style.display = 'none';
   }
 
@@ -75,7 +75,7 @@ export function restoreState() {
     const indicator = hasChecked ? '●' : '○';
 
     autoExtractToggle.classList.remove('active');
-    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="fa-solid fa-angle-down"></i>`;
+    autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-down"></i>`;
     autoExtractOptions.style.display = 'none';
 
     // Initialize tool use toggle state
@@ -90,7 +90,7 @@ export function restoreState() {
     const toolUseIndicator = hasToolUseChecked ? '●' : '○';
 
     if (toggleToolUse) {
-      toggleToolUse.innerHTML = `Tool Use ${toolUseIndicator}<i class="fa-solid fa-angle-down"></i>`;
+      toggleToolUse.innerHTML = `Tool Use ${toolUseIndicator}<i class="codicon codicon-chevron-down"></i>`;
       toolUseOptions.style.display = 'none';
     }
 
