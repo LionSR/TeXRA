@@ -13,13 +13,13 @@ import { ToolState } from './ToolState';
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   /** Returns OpenAI client configured with OpenRouter settings. */
-  getClient(): OpenAI {
-    const apiKey = this.getApiKey();
-    const baseUrl = this.getBaseUrl();
-    this.logger.debug(`Using OpenRouter API key. Base URL: ${baseUrl}`);
+  async getClient(): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
+    this.logger.debug(`Using OpenRouter API key. Base URL: ${baseURL}`);
     return new OpenAI({
       apiKey,
-      baseURL: baseUrl,
+      baseURL,
     });
   }
 
@@ -51,11 +51,16 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
  * Handler for Anthropic models using OpenAI-compatible API via OpenRouter.
  */
 export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
-  /** Returns OpenAI client configured with Anthropic's base URL. */
-  getClient(): OpenAI {
+  /** Returns OpenAI client configured with OpenRouter settings for Anthropic models. */
+  async getClient(): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
+    this.logger.debug(
+      `Using OpenRouter API key for Anthropic model. Base URL: ${baseURL}`,
+    );
     return new OpenAI({
-      apiKey: this.getApiKey(),
-      baseURL: this.getBaseUrl(),
+      apiKey,
+      baseURL,
     });
   }
 
