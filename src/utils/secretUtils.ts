@@ -33,6 +33,7 @@ export const API_PROVIDERS = [
   'anthropic',
   'openRouter',
   'google',
+  'xai',
   'deepseek',
 ] as const;
 export type ApiProvider = (typeof API_PROVIDERS)[number];
