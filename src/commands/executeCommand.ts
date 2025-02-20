@@ -112,7 +112,7 @@ async function executeViaTerminal(config: AgentConfig): Promise<void> {
   });
 
   // Add useOpenRouter from VS Code settings if enabled
-  if (getConfig<boolean>('useOpenRouter', false)) {
+  if (getConfig<boolean>('model.useOpenRouter', false)) {
     command += ' --useOpenRouter';
   }
 
