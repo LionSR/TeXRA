@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.6",
+  "version": "0.18.7",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -71,7 +71,7 @@
         }
       },
       {
-        "title": "CoAuthor: Agent Settings",
+        "title": "Agent Settings",
         "properties": {
           "coauthor.agent.pauseForConfirmation": {
             "type": "boolean",
@@ -82,7 +82,7 @@
         }
       },
       {
-        "title": "CoAuthor: Model Settings",
+        "title": "Model Settings",
         "properties": {
           "coauthor.model.useOpenRouter": {
             "type": "boolean",
@@ -93,7 +93,7 @@
         }
       },
       {
-        "title": "CoAuthor: File Handling",
+        "title": "File Handling",
         "properties": {
           "coauthor.files.included.inputDirectories": {
             "type": "array",
@@ -324,7 +324,7 @@
         }
       },
       {
-        "title": "CoAuthor: LaTeX",
+        "title": "LaTeX",
         "properties": {
           "coauthor.latex.latexindentConfig": {
             "type": "string",
@@ -336,7 +336,7 @@
         }
       },
       {
-        "title": "CoAuthor: Python Environment",
+        "title": "Python Environment",
         "properties": {
           "coauthor.python.virtualEnvString": {
             "type": "string",
@@ -347,7 +347,7 @@
         }
       },
       {
-        "title": "CoAuthor: Execution",
+        "title": "Execution",
         "properties": {
           "coauthor.execution.allowTerminalFallback": {
             "type": "boolean",
@@ -358,7 +358,7 @@
         }
       },
       {
-        "title": "CoAuthor: Git",
+        "title": "Git",
         "properties": {
           "coauthor.git.numberOfCommitsToShow": {
             "type": "number",
@@ -371,7 +371,7 @@
         }
       },
       {
-        "title": "CoAuthor: Merge Operations",
+        "title": "Merge Operations",
         "properties": {
           "coauthor.merge.defaultModel": {
             "type": "string",
@@ -406,7 +406,7 @@
         }
       },
       {
-        "title": "CoAuthor: File Explorer",
+        "title": "File Explorer",
         "properties": {
           "coauthor.explorer.agentsDirectory": {
             "type": "string",
@@ -417,7 +417,7 @@
         }
       },
       {
-        "title": "CoAuthor: API Keys",
+        "title": "API Keys",
         "properties": {
           "coauthor.apiKeys.set": {
             "type": "null",
@@ -434,7 +434,7 @@
         }
       },
       {
-        "title": "CoAuthor: Logger",
+        "title": "Logger",
         "properties": {
           "coauthor.logger.verboseOutput": {
             "type": "boolean",
