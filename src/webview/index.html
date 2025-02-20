@@ -28,462 +28,463 @@
 
   <body>
     <div class="content-wrapper">
-      <div class="compact-selections">
-        <div class="select-group">
-          <i class="codicon codicon-sparkle" title="Agent"></i>
-          <select id="agent">
-            ${agentOptions}
-          </select>
-        </div>
-        <div class="select-group">
-          <i class="codicon codicon-robot" title="Model"></i>
-          <select id="model">
-            ${modelOptions}
-          </select>
-        </div>
-        <div class="select-group">
-          <i class="codicon codicon-refresh" title="Reflect"></i>
-          <select id="reflect">
-            <option value="True">True</option>
-            <option value="False">False</option>
-          </select>
-        </div>
-      </div>
-      <div class="file-selection-group">
-        <div class="file-select">
-          <div class="file-select-header">
-            <div class="file-select-label-group">
-              <label for="inputFile"
-                ><i
-                  class="codicon codicon-file-code clickable"
-                  title="Input (Click to refresh)"
-                ></i>
-                Input</label
-              >
-            </div>
-            <div class="file-select-actions">
-              <button
-                id="currentInputFileButton"
-                class="action-button"
-                title="Set current file as input"
-              >
-                <i class="codicon codicon-file-code"></i>
-              </button>
-              <button
-                id="emptyInputFileButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-close"></i>
-              </button>
-              <span
-                id="toggleMultipleInputFiles"
-                class="toggle-icon"
-                title="Multiple"
-                >▼</span
-              >
-              <button
-                id="addOpenedFilesButton"
-                class="icon-button"
-                title="Add opened files as input"
-              >
-                <i class="codicon codicon-folder-opened"></i>
-              </button>
-              <button
-                id="emptyMultipleInputFilesButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-trash"></i>
-              </button>
-              <button
-                id="selectMultipleInputFilesButton"
-                class="icon-button"
-                title="Add"
-              >
-                <i class="codicon codicon-add"></i>
-              </button>
-            </div>
+      <div class="main-content">
+        <div class="compact-selections">
+          <div class="select-group">
+            <i class="codicon codicon-sparkle" title="Agent"></i>
+            <select id="agent">
+              ${agentOptions}
+            </select>
           </div>
-          <select id="inputFile">
-            <option value="">None</option>
-          </select>
-          <div
-            id="multipleInputFilesContainer"
-            class="multiple-files-container"
-            style="display: none"
-          >
-            <div class="multiple-files-content">
-              <div id="multipleInputFiles" class="multiple-files-list"></div>
-            </div>
+          <div class="select-group">
+            <i class="codicon codicon-robot" title="Model"></i>
+            <select id="model">
+              ${modelOptions}
+            </select>
+          </div>
+          <div class="select-group">
+            <i class="codicon codicon-refresh" title="Reflect"></i>
+            <select id="reflect">
+              <option value="True">True</option>
+              <option value="False">False</option>
+            </select>
           </div>
         </div>
-        <div class="file-select">
-          <div class="file-select-header">
-            <label for="referenceFile"
-              ><i
-                class="codicon codicon-book clickable"
-                title="Reference (Click to refresh)"
-              ></i>
-              Reference</label
+        <div class="file-selection-group">
+          <div class="file-select">
+            <div class="file-select-header">
+              <div class="file-select-label-group">
+                <label for="inputFile"
+                  ><i
+                    class="codicon codicon-file-code clickable"
+                    title="Input (Click to refresh)"
+                  ></i>
+                  Input</label
+                >
+              </div>
+              <div class="file-select-actions">
+                <button
+                  id="currentInputFileButton"
+                  class="action-button"
+                  title="Set current file as input"
+                >
+                  <i class="codicon codicon-file-code"></i>
+                </button>
+                <button
+                  id="emptyInputFileButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-close"></i>
+                </button>
+                <span
+                  id="toggleMultipleInputFiles"
+                  class="toggle-icon"
+                  title="Multiple"
+                  >▼</span
+                >
+                <button
+                  id="addOpenedFilesButton"
+                  class="icon-button"
+                  title="Add opened files as input"
+                >
+                  <i class="codicon codicon-folder-opened"></i>
+                </button>
+                <button
+                  id="emptyMultipleInputFilesButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-trash"></i>
+                </button>
+                <button
+                  id="selectMultipleInputFilesButton"
+                  class="icon-button"
+                  title="Add"
+                >
+                  <i class="codicon codicon-add"></i>
+                </button>
+              </div>
+            </div>
+            <select id="inputFile">
+              <option value="">None</option>
+            </select>
+            <div
+              id="multipleInputFilesContainer"
+              class="multiple-files-container"
+              style="display: none"
             >
-            <div class="file-select-actions">
-              <button
-                id="currentReferenceFileButton"
-                class="action-button"
-                title="Set current file as reference"
-              >
-                <i class="codicon codicon-file-code"></i>
-              </button>
-              <button
-                id="emptyReferenceFileButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-close"></i>
-              </button>
-              <span
-                id="toggleMultipleReferenceFiles"
-                class="toggle-icon"
-                title="Multiple"
-                >▼</span
-              >
-              <button
-                id="addOpenedReferenceFilesButton"
-                class="icon-button"
-                title="Add opened files as reference"
-              >
-                <i class="codicon codicon-folder-opened"></i>
-              </button>
-              <button
-                id="emptyMultipleReferenceFilesButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-trash"></i>
-              </button>
-              <button
-                id="selectMultipleReferenceFilesButton"
-                class="icon-button"
-                title="Add"
-              >
-                <i class="codicon codicon-add"></i>
-              </button>
+              <div class="multiple-files-content">
+                <div id="multipleInputFiles" class="multiple-files-list"></div>
+              </div>
             </div>
           </div>
-          <select id="referenceFile">
-            <option value="">None</option>
-          </select>
-          <div
-            id="multipleReferenceFilesContainer"
-            class="multiple-files-container"
-            style="display: none"
-          >
-            <div class="multiple-files-content">
-              <div
-                id="multipleReferenceFiles"
-                class="multiple-files-list"
-              ></div>
-            </div>
-          </div>
-        </div>
-        <div class="file-select">
-          <div class="file-select-header">
-            <label for="auxiliaryFile"
-              ><i
-                class="codicon codicon-file-add clickable"
-                title="Auxiliary (Click to refresh)"
-              ></i>
-              Auxiliary</label
-            >
-            <div class="file-select-actions">
-              <button
-                id="currentAuxiliaryFileButton"
-                class="action-button"
-                title="Set current file as auxiliary"
-              >
-                <i class="codicon codicon-file-code"></i>
-              </button>
-              <button
-                id="emptyAuxiliaryFileButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-close"></i>
-              </button>
-              <span
-                id="toggleMultipleAuxiliaryFiles"
-                class="toggle-icon"
-                title="Multiple"
-                >▼</span
-              >
-              <button
-                id="addOpenedAuxiliaryFilesButton"
-                class="icon-button"
-                title="Add opened files as auxiliary"
-              >
-                <i class="codicon codicon-folder-opened"></i>
-              </button>
-              <button
-                id="emptyMultipleAuxiliaryFilesButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-trash"></i>
-              </button>
-              <button
-                id="selectMultipleAuxiliaryFilesButton"
-                class="icon-button"
-                title="Add"
-              >
-                <i class="codicon codicon-add"></i>
-              </button>
-            </div>
-          </div>
-          <select id="auxiliaryFile">
-            <option value="">None</option>
-          </select>
-          <div
-            id="multipleAuxiliaryFilesContainer"
-            class="multiple-files-container"
-            style="display: none"
-          >
-            <div class="multiple-files-content">
-              <div
-                id="multipleAuxiliaryFiles"
-                class="multiple-files-list"
-              ></div>
-            </div>
-          </div>
-        </div>
-        <div class="file-select">
-          <div class="file-select-header">
-            <div class="file-select-label-group">
-              <label for="figureFile"
+          <div class="file-select">
+            <div class="file-select-header">
+              <label for="referenceFile"
                 ><i
-                  class="codicon codicon-file-media clickable"
-                  title="Figure (Click to refresh)"
+                  class="codicon codicon-book clickable"
+                  title="Reference (Click to refresh)"
                 ></i>
-                Figure</label
+                Reference</label
+              >
+              <div class="file-select-actions">
+                <button
+                  id="currentReferenceFileButton"
+                  class="action-button"
+                  title="Set current file as reference"
+                >
+                  <i class="codicon codicon-file-code"></i>
+                </button>
+                <button
+                  id="emptyReferenceFileButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-close"></i>
+                </button>
+                <span
+                  id="toggleMultipleReferenceFiles"
+                  class="toggle-icon"
+                  title="Multiple"
+                  >▼</span
+                >
+                <button
+                  id="addOpenedReferenceFilesButton"
+                  class="icon-button"
+                  title="Add opened files as reference"
+                >
+                  <i class="codicon codicon-folder-opened"></i>
+                </button>
+                <button
+                  id="emptyMultipleReferenceFilesButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-trash"></i>
+                </button>
+                <button
+                  id="selectMultipleReferenceFilesButton"
+                  class="icon-button"
+                  title="Add"
+                >
+                  <i class="codicon codicon-add"></i>
+                </button>
+              </div>
+            </div>
+            <select id="referenceFile">
+              <option value="">None</option>
+            </select>
+            <div
+              id="multipleReferenceFilesContainer"
+              class="multiple-files-container"
+              style="display: none"
+            >
+              <div class="multiple-files-content">
+                <div
+                  id="multipleReferenceFiles"
+                  class="multiple-files-list"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div class="file-select">
+            <div class="file-select-header">
+              <label for="auxiliaryFile"
+                ><i
+                  class="codicon codicon-file-add clickable"
+                  title="Auxiliary (Click to refresh)"
+                ></i>
+                Auxiliary</label
+              >
+              <div class="file-select-actions">
+                <button
+                  id="currentAuxiliaryFileButton"
+                  class="action-button"
+                  title="Set current file as auxiliary"
+                >
+                  <i class="codicon codicon-file-code"></i>
+                </button>
+                <button
+                  id="emptyAuxiliaryFileButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-close"></i>
+                </button>
+                <span
+                  id="toggleMultipleAuxiliaryFiles"
+                  class="toggle-icon"
+                  title="Multiple"
+                  >▼</span
+                >
+                <button
+                  id="addOpenedAuxiliaryFilesButton"
+                  class="icon-button"
+                  title="Add opened files as auxiliary"
+                >
+                  <i class="codicon codicon-folder-opened"></i>
+                </button>
+                <button
+                  id="emptyMultipleAuxiliaryFilesButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-trash"></i>
+                </button>
+                <button
+                  id="selectMultipleAuxiliaryFilesButton"
+                  class="icon-button"
+                  title="Add"
+                >
+                  <i class="codicon codicon-add"></i>
+                </button>
+              </div>
+            </div>
+            <select id="auxiliaryFile">
+              <option value="">None</option>
+            </select>
+            <div
+              id="multipleAuxiliaryFilesContainer"
+              class="multiple-files-container"
+              style="display: none"
+            >
+              <div class="multiple-files-content">
+                <div
+                  id="multipleAuxiliaryFiles"
+                  class="multiple-files-list"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div class="file-select">
+            <div class="file-select-header">
+              <div class="file-select-label-group">
+                <label for="figureFile"
+                  ><i
+                    class="codicon codicon-file-media clickable"
+                    title="Figure (Click to refresh)"
+                  ></i>
+                  Figure</label
+                >
+                <div class="dropdown-container dropdown-left">
+                  <span
+                    id="toggleAutoExtract"
+                    class="auto-toggle"
+                    title="Auto-extract options"
+                  >
+                    Auto Extract ○<i class="codicon codicon-chevron-down"></i>
+                  </span>
+                  <div
+                    id="autoExtractOptions"
+                    class="auto-extract-options"
+                    style="display: none"
+                  >
+                    <div class="auto-extract-options-content">
+                      <label
+                        ><input type="checkbox" id="autoExtractFigure" /><i
+                          class="codicon codicon-file-media"
+                        ></i>
+                        Figures</label
+                      >
+                      <label
+                        ><input type="checkbox" id="autoExtractTikzFigure" /><i
+                          class="codicon codicon-file-code"
+                        ></i
+                        >TikZ Figures</label
+                      >
+                      <label
+                        ><input
+                          type="checkbox"
+                          id="autoExtractTikzFigureReflect"
+                        /><i class="codicon codicon-refresh"></i> TikZ
+                        Figures(Reflect)</label
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="file-select-actions">
+                <button
+                  id="emptyFigureFileButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-close"></i>
+                </button>
+                <span
+                  id="toggleMultipleFigureFiles"
+                  class="toggle-icon"
+                  title="Multiple"
+                  >▼</span
+                >
+                <button
+                  id="emptyMultipleFigureFilesButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-trash"></i>
+                </button>
+                <button
+                  id="selectMultipleFigureFilesButton"
+                  class="icon-button"
+                  title="Add"
+                >
+                  <i class="codicon codicon-add"></i>
+                </button>
+              </div>
+            </div>
+            <select id="figureFile">
+              <option value="">None</option>
+            </select>
+            <div
+              id="multipleFigureFilesContainer"
+              class="multiple-files-container"
+              style="display: none"
+            >
+              <div class="multiple-files-content">
+                <div id="multipleFigureFiles" class="multiple-files-list"></div>
+              </div>
+            </div>
+          </div>
+          <div class="file-select">
+            <div class="file-select-header">
+              <div
+                class="file-select-label-group"
+                title="Optional: Customize the output filename (including extension)"
+              >
+                <span id="toggleOutputNameOverride" class="toggle-icon">></span>
+                <span class="optional-label">Output Filename</span>
+                <input
+                  type="text"
+                  id="outputNameOverride"
+                  class="vscode-input"
+                  placeholder="(including extension)"
+                  style="display: none"
+                />
+              </div>
+              <div class="file-select-actions"></div>
+            </div>
+          </div>
+          <div class="file-select">
+            <div class="file-select-header">
+              <div class="file-select-label-group">
+                <span
+                  id="toggleMultipleOutputFiles"
+                  class="toggle-icon"
+                  title="Multiple"
+                  >▼</span
+                >
+                <span class="optional-label">Multiple Outputs</span>
+              </div>
+              <div class="file-select-actions">
+                <button
+                  id="emptyMultipleOutputFilesButton"
+                  class="icon-button"
+                  title="Empty"
+                >
+                  <i class="codicon codicon-trash"></i>
+                </button>
+                <button
+                  id="selectMultipleOutputFilesButton"
+                  class="icon-button"
+                  title="Add"
+                >
+                  <i class="codicon codicon-add"></i>
+                </button>
+              </div>
+            </div>
+            <div
+              id="multipleOutputFilesContainer"
+              class="multiple-files-container"
+              style="display: none"
+            >
+              <div class="multiple-files-content">
+                <div id="multipleOutputFiles" class="multiple-files-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="instruction-box">
+          <div class="instruction-header">
+            <div class="instruction-header-left">
+              <label for="instructionInput"
+                ><i class="codicon codicon-edit"></i> Instruction</label
               >
               <div class="dropdown-container dropdown-left">
                 <span
-                  id="toggleAutoExtract"
+                  id="toggleToolUse"
                   class="auto-toggle"
-                  title="Auto-extract options"
+                  title="Tool Use options"
                 >
-                  Auto Extract ○<i class="codicon codicon-chevron-down"></i>
+                  Tool Use ○<i class="codicon codicon-chevron-down"></i>
                 </span>
                 <div
-                  id="autoExtractOptions"
+                  id="toolUseOptions"
                   class="auto-extract-options"
                   style="display: none"
                 >
                   <div class="auto-extract-options-content">
                     <label
-                      ><input type="checkbox" id="autoExtractFigure" /><i
-                        class="codicon codicon-file-media"
-                      ></i>
-                      Figures</label
+                      ><input type="checkbox" id="attachTeXCount" />
+                      <i class="codicon codicon-symbol-numeric"></i> Attach TeX
+                      Count</label
                     >
                     <label
-                      ><input type="checkbox" id="autoExtractTikzFigure" /><i
-                        class="codicon codicon-file-code"
-                      ></i
-                      >TikZ Figures</label
+                      ><input type="checkbox" id="usePrefillFromInput" />
+                      <i class="codicon codicon-edit"></i> Use Prefill from
+                      Input</label
                     >
                     <label
-                      ><input
-                        type="checkbox"
-                        id="autoExtractTikzFigureReflect"
-                      /><i class="codicon codicon-refresh"></i> TikZ
-                      Figures(Reflect)</label
+                      ><input type="checkbox" id="autoConfirmation" />
+                      <i class="codicon codicon-check"></i> Auto
+                      Confirmation</label
+                    >
+                    <label
+                      ><input type="checkbox" id="printInputPrompt" />
+                      <i class="codicon codicon-file-code"></i> Print Input
+                      Prompt</label
                     >
                   </div>
                 </div>
               </div>
             </div>
-            <div class="file-select-actions">
+            <div class="instruction-header-actions">
               <button
-                id="emptyFigureFileButton"
+                id="packButton"
                 class="icon-button"
-                title="Empty"
+                title="Pack the output for this agent"
               >
-                <i class="codicon codicon-close"></i>
+                <i class="codicon codicon-package"></i>
               </button>
-              <span
-                id="toggleMultipleFigureFiles"
-                class="toggle-icon"
-                title="Multiple"
-                >▼</span
-              >
               <button
-                id="emptyMultipleFigureFilesButton"
+                id="cleanButton"
                 class="icon-button"
-                title="Empty"
+                title="Clean the output for this agent"
               >
                 <i class="codicon codicon-trash"></i>
               </button>
               <button
-                id="selectMultipleFigureFilesButton"
+                id="eraseInstructionsButton"
                 class="icon-button"
-                title="Add"
+                title="Erase Instructions"
               >
-                <i class="codicon codicon-add"></i>
+                <i class="codicon codicon-clear-all"></i>
               </button>
             </div>
           </div>
-          <select id="figureFile">
-            <option value="">None</option>
-          </select>
-          <div
-            id="multipleFigureFilesContainer"
-            class="multiple-files-container"
-            style="display: none"
-          >
-            <div class="multiple-files-content">
-              <div id="multipleFigureFiles" class="multiple-files-list"></div>
-            </div>
-          </div>
-        </div>
-        <div class="file-select">
-          <div class="file-select-header">
-            <div
-              class="file-select-label-group"
-              title="Optional: Customize the output filename (including extension)"
-            >
-              <span id="toggleOutputNameOverride" class="toggle-icon">></span>
-              <span class="optional-label">Output Filename</span>
-              <input
-                type="text"
-                id="outputNameOverride"
-                class="vscode-input"
-                placeholder="(including extension)"
-                style="display: none"
-              />
-            </div>
-            <div class="file-select-actions"></div>
-          </div>
-        </div>
-        <div class="file-select">
-          <div class="file-select-header">
-            <div class="file-select-label-group">
-              <span
-                id="toggleMultipleOutputFiles"
-                class="toggle-icon"
-                title="Multiple"
-                >▼</span
-              >
-              <span class="optional-label">Multiple Outputs</span>
-            </div>
-            <div class="file-select-actions">
-              <button
-                id="emptyMultipleOutputFilesButton"
-                class="icon-button"
-                title="Empty"
-              >
-                <i class="codicon codicon-trash"></i>
-              </button>
-              <button
-                id="selectMultipleOutputFilesButton"
-                class="icon-button"
-                title="Add"
-              >
-                <i class="codicon codicon-add"></i>
-              </button>
-            </div>
-          </div>
-          <div
-            id="multipleOutputFilesContainer"
-            class="multiple-files-container"
-            style="display: none"
-          >
-            <div class="multiple-files-content">
-              <div id="multipleOutputFiles" class="multiple-files-list"></div>
-            </div>
-          </div>
+          <textarea
+            id="instructionInput"
+            placeholder="Enter your specific instructions such as: Gently correct mathematical mistakes and typos."
+          ></textarea>
+          <button id="executeButton">
+            <i class="codicon codicon-play"></i> Execute
+          </button>
         </div>
       </div>
-      <p></p>
-      <div class="instruction-box">
-        <div class="instruction-header">
-          <div class="instruction-header-left">
-            <label for="instructionInput"
-              ><i class="codicon codicon-edit"></i> Instruction</label
-            >
-            <div class="dropdown-container dropdown-left">
-              <span
-                id="toggleToolUse"
-                class="auto-toggle"
-                title="Tool Use options"
-              >
-                Tool Use ○<i class="codicon codicon-chevron-down"></i>
-              </span>
-              <div
-                id="toolUseOptions"
-                class="auto-extract-options"
-                style="display: none"
-              >
-                <div class="auto-extract-options-content">
-                  <label
-                    ><input type="checkbox" id="attachTeXCount" />
-                    <i class="codicon codicon-symbol-numeric"></i> Attach TeX
-                    Count</label
-                  >
-                  <label
-                    ><input type="checkbox" id="usePrefillFromInput" />
-                    <i class="codicon codicon-edit"></i> Use Prefill from
-                    Input</label
-                  >
-                  <label
-                    ><input type="checkbox" id="autoConfirmation" />
-                    <i class="codicon codicon-check"></i> Auto
-                    Confirmation</label
-                  >
-                  <label
-                    ><input type="checkbox" id="printInputPrompt" />
-                    <i class="codicon codicon-file-code"></i> Print Input
-                    Prompt</label
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="instruction-header-actions">
-            <button
-              id="packButton"
-              class="icon-button"
-              title="Pack the output for this agent"
-            >
-              <i class="codicon codicon-package"></i>
-            </button>
-            <button
-              id="cleanButton"
-              class="icon-button"
-              title="Clean the output for this agent"
-            >
-              <i class="codicon codicon-trash"></i>
-            </button>
-            <button
-              id="eraseInstructionsButton"
-              class="icon-button"
-              title="Erase Instructions"
-            >
-              <i class="codicon codicon-clear-all"></i>
-            </button>
-          </div>
-        </div>
-        <textarea
-          id="instructionInput"
-          placeholder="Enter your specific instructions such as: Gently correct mathematical mistakes and typos."
-        ></textarea>
-        <button id="executeButton">
-          <i class="codicon codicon-play"></i> Execute
-        </button>
-      </div>
-      <div class="section">
+      <div class="latrexdiffs-section">
         <h6 class="section-header">
-          <i class="codicon codicon-source-control"></i> Smart Diffs
+          <i class="codicon codicon-source-control"></i> LaTeXDiffs
         </h6>
         <div class="file-select">
           <div class="file-select-header">
