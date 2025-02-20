@@ -20,8 +20,8 @@ export class LogViewMessageHandler {
       case 'switchStream':
         this.provider.setActiveStream(message.stream);
         break;
-      case 'clearStream':
-        this.provider.clearStream(message.stream);
+      case 'eraseStream':
+        this.provider.eraseStream(message.stream);
         break;
       case 'deleteStream':
         this.provider.deleteStream(message.stream);

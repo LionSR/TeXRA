@@ -186,6 +186,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes specific to XML output processing',
   isRegex: false,
   patterns: {
+    // random tag fixes
+    '<ctrl96>': '',
     // Basic tag fixes
     // \end{document> etc is a real mistake that need to be fixed!!! Do not change these
     '\\end{document>': '\\end{document}',
