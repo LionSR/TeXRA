@@ -202,7 +202,8 @@ function getOrCreateLogger(channel: string): winston.Logger {
 export function getTimestamp(): string {
   return new Date()
     .toLocaleString('en-US', {
-      year: 'numeric',
+      year: '2-digit',
+      // we do not want to show the year
       month: '2-digit',
       day: '2-digit',
       hour12: false,
