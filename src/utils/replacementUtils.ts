@@ -94,6 +94,9 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
 
     // for o1/o3 but at last:
     '=    \\': '= \\',
+    ' rho_': '  \\rho_',
+    ' rho^': '  \\rho^',
+    ' rho\\': '  \\rho\\',
   },
 };
 
