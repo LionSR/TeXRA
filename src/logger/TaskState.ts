@@ -6,7 +6,7 @@ export interface TaskState {
   agent: string;
   model: string;
   reflect: string;
-  instructions: string;
+  instruction: string;
 
   // File selections
   inputFile: string;
@@ -49,7 +49,7 @@ export function fromObject(obj: Record<string, any>): TaskState {
     agent: obj.agent || 'correct',
     model: obj.model || '',
     reflect: obj.reflect || 'True',
-    instructions: obj.instructions || '',
+    instruction: obj.instruction || '',
     // File selections
     inputFile: obj.inputFile || '',
     referenceFile: obj.referenceFile || '',
