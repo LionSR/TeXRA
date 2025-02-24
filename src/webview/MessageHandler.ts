@@ -150,7 +150,7 @@ export class WebviewMessageHandler {
         agent: message.agent,
         model: message.model,
         reflect: message.reflect === 'True',
-        instruction: message.instructions,
+        instruction: message.instruction,
         inputFile: message.inputFile,
         inputFiles: getFilesIfNotEmpty(message.inputFiles),
         referenceFile: message.referenceFile,

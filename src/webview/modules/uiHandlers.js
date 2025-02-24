@@ -221,7 +221,7 @@ export function setupUIHandlers() {
         ? outputNameOverrideDiv.value.trim()
         : null;
 
-    const instructions = safeGetElementValue('instructionInput');
+    const instruction = safeGetElementValue('instructionInput');
 
     const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
     const autoExtractTikzFigure = safeGetElementChecked(
@@ -250,8 +250,8 @@ export function setupUIHandlers() {
       auxiliaryFiles: auxiliaryFiles,
       figureFile: figureFile,
       figureFiles: figureFiles,
-      // instructions
-      instructions: instructions,
+      // instruction
+      instruction: instruction,
       // options
       autoExtractFigure: autoExtractFigure,
       autoExtractTikzFigure: autoExtractTikzFigure,

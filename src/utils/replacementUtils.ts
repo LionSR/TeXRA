@@ -97,6 +97,8 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     ' rho_': '  \\rho_',
     ' rho^': '  \\rho^',
     ' rho\\': '  \\rho\\',
+
+    '\\sum\\limits_': '\\sum_',
   },
 };
 
@@ -384,6 +386,8 @@ const PARENTHESES_REPLACEMENTS: ReplacementCategory = {
   flags: 'g',
   patterns: {
     // Regular parentheses
+    '\\\\big\\(([^\\n]*?)\\\\big\\)': '($1)',
+    '\\\\big\\[([^\\n]*?)\\\\big\\]': '[$1]',
     '\\\\bigl\\(([^\\n]*?)\\\\bigr\\)': '($1)',
     '\\\\bigl\\[([^\\n]*?)\\\\bigr\\]': '[$1]',
 

@@ -169,7 +169,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       agent: config.agent,
       model: config.model,
       reflect: config.reflect ? 'True' : 'False',
-      instructions: config.instruction || '',
+      instruction: config.instruction || '',
       inputFile: config.inputFile || '',
       referenceFile: config.referenceFile || '',
       auxiliaryFile: config.auxiliaryFile || '',
