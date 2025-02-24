@@ -28,7 +28,7 @@ export const VALUE_ELEMENTS = [
   'referenceFile',
   'editedFile',
   'baseFile',
-  // instructions
+  // instruction
   'instructionInput',
   // output
   'outputNameOverride',
