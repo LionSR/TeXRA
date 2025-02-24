@@ -82,7 +82,7 @@ export class LogViewMessageHandler {
       agent: taskState.agent,
       model: taskState.model,
       reflect: taskState.reflect === 'True',
-      instructions: taskState.instructions,
+      instruction: taskState.instruction,
       inputFile: taskState.inputFile,
       referenceFile: taskState.referenceFile || undefined,
       auxiliaryFile: taskState.auxiliaryFile || undefined,
