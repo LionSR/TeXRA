@@ -13,6 +13,7 @@ import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 // Local imports - components
 import { LogViewProvider } from './logger/LogViewProvider';
 import { FolderExplorer } from './FolderExplorer';
+import { CoAuthorViewProvider } from './ViewProvider';
 import { registerCommands } from './commands';
 
 async function copyDefaultAgents(context: vscode.ExtensionContext) {
@@ -77,8 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize secrets storage
   initializeSecrets(context);
 
-  // Create and register the log view provider
+  // Create and register the view providers
   const logViewProvider = new LogViewProvider(context);
+  const mainViewProvider = new CoAuthorViewProvider(context);
   logger.setLogViewProvider(logViewProvider);
 
   // Copy default agents
@@ -91,11 +93,20 @@ export function activate(context: vscode.ExtensionContext) {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
   const folderExplorer = new FolderExplorer(workspaceRoot, context);
 
-  // Register the tree data provider and log view provider
+  // Register the tree data provider and webview providers
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'coauthor.logView',
       logViewProvider,
+    ),
+    vscode.window.registerWebviewViewProvider(
+      'coauthor.mainView',
+      mainViewProvider,
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true,
+        },
+      },
     ),
     vscode.window.registerTreeDataProvider(
       'coauthor.folderExplorer',

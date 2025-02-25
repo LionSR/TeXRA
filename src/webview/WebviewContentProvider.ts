@@ -23,6 +23,13 @@ export class WebviewContentProvider {
 
       const htmlPath = getWebviewPath('index.html');
       const cssPath = getWebviewPath('styles.css');
+      const commonCssPath = vscode.Uri.joinPath(
+        this.context.extensionUri,
+        'src',
+        'common',
+        'styles',
+        'common.css',
+      );
       const mainScriptPath = getWebviewPath('script.js');
 
       // Get URIs for all modules
@@ -37,6 +44,7 @@ export class WebviewContentProvider {
 
       const nonce = this.getNonce();
       const styleUri = webview.asWebviewUri(cssPath);
+      const commonStyleUri = webview.asWebviewUri(commonCssPath);
       const scriptUri = webview.asWebviewUri(mainScriptPath);
       const stateManagerUri = webview.asWebviewUri(stateManagerPath);
       const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
@@ -77,6 +85,7 @@ export class WebviewContentProvider {
       // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for webview');
       return htmlContent
+        .replace('${commonStyleUri}', commonStyleUri.toString())
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
         .replace(/\${nonce}/g, nonce)

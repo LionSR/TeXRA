@@ -1,32 +1,30 @@
-:root {
-  /* Colors */
-  --background-color: var(--vscode-sideBar-background);
-  --text-color: var(--vscode-sideBar-foreground);
-  --button-background: var(--vscode-button-background);
-  --button-foreground: var(--vscode-button-foreground);
-  --button-hover-background: var(--vscode-button-hoverBackground);
-  --input-background: var(--vscode-input-background);
-  --input-foreground: var(--vscode-input-foreground);
-  --input-border: var(--vscode-input-border);
-  --icon-button-background: var(--vscode-button-secondaryBackground);
-  --icon-button-hover-background: var(--vscode-button-secondaryHoverBackground);
-  --icon-button-foreground: var(--vscode-button-secondaryForeground);
-  --icon-color: var(--vscode-textLink-foreground);
+/**
+ * LogView specific styles
+ * For common styles, see ../../common/styles/common.css
+ */
 
-  /* Typography */
-  --font-size: var(--vscode-font-size);
-  --font-family: var(--vscode-font-family);
-  --font-weight: var(--vscode-font-weight);
+/* LogView-specific customizations for buttons and UI elements */
 
-  /* Spacing */
-  --spacing-tiny: 2px;
-  --spacing-small: 5px;
-  --spacing-medium: 10px;
-  --spacing-large: 15px;
+/* Style specific to the log view tabs and buttons */
 
-  /* Border radius */
-  --border-radius: 3px;
+/* Common codicon styling */
+.codicon {
+  font-family: codicon;
+  font-size: var(--font-size);
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  top: 0;
 }
+
+/* Action button styling */
+
+/* Icon button styling */
+/* Common styles end */
+
+/* LogView specific styles */
 
 body {
   padding: 0;
@@ -178,17 +176,7 @@ body {
   color: var(--vscode-errorForeground);
 }
 
-.codicon {
-  font-family: codicon;
-  font-size: var(--font-size);
-  line-height: 1;
-  margin-right: 4px;
-  color: var(--vscode-foreground);
-  opacity: 0.8;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-}
+/* Codicon styles from common.css */
 
 .codicon-trash:before {
   content: '\eb9f';
@@ -385,41 +373,12 @@ body {
   top: 0;
   bottom: 0;
 }
-/* Common button styles */
-.action-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 6px;
-  border: 0.5px solid var(--input-border);
-  border-radius: var(--border-radius);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  cursor: pointer;
-  font-size: calc(var(--font-size) * 0.9);
-  transition:
-    background-color 0.2s,
-    transform 0.1s;
-  gap: var(--spacing-tiny);
-  height: 24px;
-}
+/* Action button styles from common.css */
 
-.action-button:hover {
-  background-color: var(--icon-button-hover-background);
-  transform: translateY(-1px);
-}
-
+/* Add LogView specific disabled state */
 .action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.action-button .codicon {
-  font-size: calc(var(--font-size) * 0.9);
-  color: var(--icon-button-foreground);
-  margin-right: 2px;
-  position: relative;
-  top: 0;
 }
 
 /* Button-specific styles */
@@ -445,8 +404,6 @@ body {
   color: var(--vscode-foreground);
   opacity: 0.7;
   margin-right: 0;
-  position: relative;
-  top: 0;
 }
 
 .tab-delete:hover .codicon {

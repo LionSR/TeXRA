@@ -71,6 +71,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview'),
         vscode.Uri.joinPath(
           this.context.extensionUri,
+          'src',
+          'common',
+          'styles',
+        ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
           'node_modules',
           '@vscode',
           'codicons',
