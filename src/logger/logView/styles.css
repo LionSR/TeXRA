@@ -5,25 +5,6 @@
 
 /* LogView-specific customizations for buttons and UI elements */
 
-/* Style specific to the log view tabs and buttons */
-
-/* Common codicon styling */
-.codicon {
-  font-family: codicon;
-  font-size: var(--font-size);
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  top: 0;
-}
-
-/* Action button styling */
-
-/* Icon button styling */
-/* Common styles end */
-
 /* LogView specific styles */
 
 body {

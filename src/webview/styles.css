@@ -5,25 +5,6 @@
 
 /* WebView-specific customizations for buttons and UI elements */
 
-/* Specific styles for the main WebView interface */
-
-/* Common codicon styling */
-.codicon {
-  font-family: codicon;
-  font-size: var(--font-size);
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  top: 0;
-}
-
-/* Action button styling */
-
-/* Icon button styling */
-/* Common styles end */
-
 /* WebView specific styles */
 
 body {
@@ -324,12 +305,12 @@ body {
 
 #executeButton {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
+  bottom: 16px;
+  right: 16px;
   padding: 3px 10px;
   font-size: calc(var(--font-size) * 1);
-  background-color: #007acc;
-  color: white;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
   border: none;
   border-radius: var(--border-radius);
   cursor: pointer;
@@ -341,13 +322,13 @@ body {
 }
 
 #executeButton:hover {
-  background-color: #005999;
+  background-color: var(--vscode-button-hoverBackground);
 }
 
 #executeButton .codicon {
   margin-right: var(--spacing-small);
   font-size: var(--font-size);
-  color: white;
+  color: var(--vscode-button-foreground);
   position: relative;
   top: 0;
 }
@@ -757,9 +738,8 @@ body {
   gap: var(--spacing-tiny);
   padding: 4px 6px;
   font-size: var(--font-size);
-  border-radius: var(--border-radius);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-button-border);
+  background: transparent;
+  border: none;
   transition: background-color 0.2s;
   pointer-events: auto;
 }
@@ -777,7 +757,7 @@ body {
 }
 
 .auto-toggle:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+  background: var(--vscode-list-hoverBackground);
 }
 
 .instruction-header {

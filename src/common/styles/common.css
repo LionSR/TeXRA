@@ -56,10 +56,9 @@
   padding: 2px 6px;
   margin-right: var(--spacing-small);
   font-size: calc(var(--font-size) * 0.9);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 0.5px solid var(--input-border);
-  border-radius: var(--border-radius);
+  background-color: transparent;
+  color: var(--vscode-foreground);
+  border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -70,7 +69,7 @@
 }
 
 .action-button:hover {
-  background-color: var(--icon-button-hover-background);
+  background-color: var(--vscode-list-hoverBackground);
 }
 
 .action-button:disabled {
@@ -80,13 +79,12 @@
 
 .action-button .codicon {
   font-size: calc(var(--font-size) * 0.9);
-  color: var(--icon-color);
-  opacity: 0.8;
+  color: var(--vscode-foreground);
   margin-right: 2px;
 }
 
 .action-button:hover .codicon {
-  opacity: 1;
+  color: var(--vscode-textLink-foreground);
 }
 
 /* Icon button styling */
@@ -95,10 +93,9 @@
   height: 24px;
   padding: 2px;
   font-size: calc(var(--font-size) * 0.8);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 0.5px solid var(--input-border);
-  border-radius: var(--border-radius);
+  background-color: transparent;
+  color: var(--vscode-foreground);
+  border: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -107,18 +104,17 @@
 }
 
 .icon-button:hover {
-  background-color: var(--icon-button-hover-background);
+  background-color: var(--vscode-list-hoverBackground);
 }
 
 .icon-button .codicon {
   margin: 0;
   font-size: calc(var(--font-size) * 0.9);
-  color: var(--icon-color);
-  opacity: 0.8;
+  color: var(--vscode-foreground);
 }
 
 .icon-button:hover .codicon {
-  opacity: 1;
+  color: var(--vscode-textLink-foreground);
 }
 
 /* Input styling */
