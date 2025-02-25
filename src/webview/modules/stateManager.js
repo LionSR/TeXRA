@@ -1,5 +1,11 @@
 import { vscode } from './vscodeApi.js';
-import { MULTIPLE_SELECTIONS, CHECK_BOXES, VALUE_ELEMENTS } from './utils.js';
+import {
+  MULTIPLE_SELECTIONS,
+  CHECK_BOXES,
+  VALUE_ELEMENTS,
+  CHECK_BOXES_TOOL_USE,
+  CHECK_BOXES_AUTO_EXTRACT,
+} from './constants.js';
 import {
   hideEmptyMultipleFileSelects,
   setMultipleFileSelectVisibility,
