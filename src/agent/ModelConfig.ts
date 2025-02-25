@@ -19,6 +19,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsNativePdf: false,
   supportsAssistantPrefill: false,
   supportsPredictiveOutput: false,
+  supportsTokenCounting: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -41,6 +42,7 @@ export interface ModelCapabilities {
   supportsNativePdf: boolean;
   supportsAssistantPrefill: boolean;
   supportsPredictiveOutput: boolean;
+  supportsTokenCounting: boolean;
 }
 
 /** Complete configuration for a language model instance. */
