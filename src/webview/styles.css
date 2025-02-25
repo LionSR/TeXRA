@@ -301,6 +301,11 @@ body {
   align-items: center;
 }
 
+.output-filename-override {
+  border-top: 1px solid var(--dropdown-border);
+  padding-top: 8px;
+}
+
 .remove-button {
   color: #ff4444;
   cursor: pointer;
