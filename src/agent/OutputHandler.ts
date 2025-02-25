@@ -8,7 +8,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExists } from '../utils/fileUtils';
+import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import {
   filterTagsFromText,
   addCdataToTags,

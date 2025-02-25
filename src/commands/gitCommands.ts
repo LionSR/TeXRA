@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { getConfig } from '../frontend-utils/commonUtils';
-import { getWorkspacePath } from '../utils/fileUtils';
+import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(

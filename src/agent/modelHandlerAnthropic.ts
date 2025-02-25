@@ -5,7 +5,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
 // Local imports - utilities
-import { readFile, writeFile, fileExists } from '../utils/fileUtils';
+import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import { filterTagsFromText, extractTextFromTag } from '../utils/xmlUtils';
 import {
   applyReplacements,
@@ -60,13 +60,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     };
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
-    if (
-      this.config.fullName === 'claude-3-7-sonnet-20250219' &&
-      this.capabilities.supportsReasoning
-    ) {
+    if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit
-      options.max_tokens = 128000;
+      options.max_tokens = this.config.maxOutputTokens;
       options.thinking = {
         type: 'enabled',
         budget_tokens: 32000,
@@ -129,16 +126,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     };
     content.push(message);
 
-    // Manage cache control for previous messages
+    // Since Anthropic now automatically checks for cache hits at previous positions,
+    // we only need to remove cache_control from previous message to avoid
+    // exceeding the 4 cache breakpoint limit
     if (
       this.capabilities.supportsPromptCaching &&
-      Array.isArray(messages.at(-1).content)
+      Array.isArray(messages.at(-1)?.content)
     ) {
       const prevContent = messages.at(-1).content;
-      if (prevContent.length >= 2) {
-        delete prevContent[prevContent.length - 2].cache_control;
-      } else if (prevContent.length === 1) {
-        delete messages[0].content.at(-1).cache_control;
+      for (let i = 0; i < prevContent.length; i++) {
+        if (prevContent[i]?.cache_control) {
+          delete prevContent[i].cache_control;
+        }
       }
     }
 
@@ -414,13 +413,22 @@ export class ModelHandlerAnthropic extends ModelHandler {
         messages.at(-1).content = fileContent;
       }
 
+      // With the updated Anthropic prompt caching, we don't need to manually maintain cache controls
+      // Remove any existing cache_control to avoid reaching the 4 breakpoint limit
       if (
-        messages.at(-1).content[messages.at(-1).content.length - 1]
-          ?.cache_control
+        Array.isArray(messages.at(-1).content) &&
+        messages.at(-1).content.length > 0
       ) {
-        delete messages.at(-1).content[messages.at(-1).content.length - 1]
-          .cache_control;
+        for (let i = 0; i < messages.at(-1).content.length; i++) {
+          if (
+            typeof messages.at(-1).content[i] === 'object' &&
+            messages.at(-1).content[i]?.cache_control
+          ) {
+            delete messages.at(-1).content[i].cache_control;
+          }
+        }
       }
+
       endTurn = true;
       return [endTurn, messages];
     }
@@ -492,7 +500,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     toolState: ToolState,
     autoConfirmation = false,
   ): void {
-    // this.logger.debug('Updating message content for Anthropic models');
     if (messages.at(-1).role === 'assistant') {
       const lastMessage = messages.at(-1);
 
@@ -505,17 +512,24 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
       if (this.capabilities.supportsPromptCaching) {
         if (Array.isArray(lastMessage.content)) {
-          // Add cache_control to new message
+          // With the updated Anthropic prompt caching, we only need to add cache_control
+          // to the new message - Anthropic will automatically check for cache hits
+          // at previous positions
+
+          // First clear any existing cache control points to stay under the 4 breakpoint limit
+          for (let i = 0; i < lastMessage.content.length - 1; i++) {
+            if (
+              typeof lastMessage.content[i] === 'object' &&
+              lastMessage.content[i]?.cache_control
+            ) {
+              delete lastMessage.content[i].cache_control;
+            }
+          }
+
+          // Add cache_control to the new message
           lastMessage.content.at(-1).cache_control = {
             type: 'ephemeral',
           };
-          // Remove cache control from previous message if it exists
-          if (
-            lastMessage.content.length >= 2 &&
-            typeof lastMessage.content.at(-2) === 'object'
-          ) {
-            delete lastMessage.content.at(-2).cache_control;
-          }
         } else {
           // Initialize content list with single message
           lastMessage.content = [

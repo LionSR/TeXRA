@@ -13,7 +13,7 @@ import {
   readDirectory,
   fileExists,
   findFileInBuild,
-} from '../utils/fileUtils';
+} from '../utils/workspaceFileUtils';
 
 // Local imports - housekeeping
 import {

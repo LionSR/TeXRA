@@ -162,9 +162,11 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     logViewProvider.setActiveStream(fullStreamId);
     logViewProvider.updateStreamStatus(fullStreamId, 'running');
 
-    // Store task state
-    logger.debug(`Storing task state for stream: ${fullStreamId}`);
-    logger.debug(`Config for task state: ${JSON.stringify(config)}`);
+    // Store taskState
+    logger.debug(`Storing taskState for stream: ${fullStreamId}`);
+    logger.debug(`Config for taskState: ${JSON.stringify(config)}`);
+
+    // TODO:this is really mess, we should either use a unified data structure for TaskState and AgentConfig, or define a function that converts AgentConfig to TaskState for it. We have this mess in @TaskState.ts and @LogViewMessageHandler.ts too.
     logViewProvider.setTaskState(fullStreamId, {
       agent: config.agent,
       model: config.model,
@@ -217,6 +219,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
+    logger.error(errorMsg);
     throw new Error(errorMsg);
   }
 }
