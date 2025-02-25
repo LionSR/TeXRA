@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { readFile, fileExists } from '../utils/fileUtils';
+import { readFile, fileExists } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

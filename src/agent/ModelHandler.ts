@@ -8,7 +8,7 @@ import * as path from 'path';
 import { AgentLogger } from '../logger/AgentLogger';
 
 // Local imports - utilities
-import { fileExists } from '../utils/fileUtils';
+import { fileExists } from '../utils/workspaceFileUtils';
 import {
   getBase64EncodedImage,
   countPdfPages,

@@ -13,7 +13,7 @@ import {
   readDirectory,
   fileExists,
   getWorkspacePath,
-} from '../utils/fileUtils';
+} from '../utils/workspaceFileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 import { executeCommand } from '../utils/execUtils';
 

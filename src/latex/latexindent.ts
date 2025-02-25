@@ -9,7 +9,7 @@ import { sync as globSync } from 'glob';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { deleteFile, getWorkspacePath } from '../utils/fileUtils';
+import { deleteFile, getWorkspacePath } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
 import { checkToolInstalled } from './texTools';
 
