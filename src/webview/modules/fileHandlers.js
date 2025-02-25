@@ -224,6 +224,25 @@ export function toggleMultipleOutputFiles() {
     safeGetElementById('multipleOutputFilesContainer').style.display !== 'none';
   if (!isVisible) {
     initializeOutputFiles();
+
+    // Make sure the Output Filename toggle works when Multiple Outputs is enabled
+    const outputNameOverrideInput = safeGetElementById('outputNameOverride');
+    const outputNameOverrideToggle = safeGetElementById(
+      'toggleOutputNameOverride',
+    );
+
+    if (outputNameOverrideInput && outputNameOverrideToggle) {
+      // Get the current state from the stored state
+      const state = vscode.getState();
+      const isOutputNameOverrideVisible =
+        state && state.outputNameOverrideVisible;
+
+      // Restore the output name override toggle state
+      if (isOutputNameOverrideVisible) {
+        outputNameOverrideInput.style.display = 'inline-block';
+        outputNameOverrideToggle.textContent = '<';
+      }
+    }
   } else {
     toggleMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
   }
@@ -238,6 +257,12 @@ export function toggleOutputNameOverride() {
   const isVisible = input.style.display !== 'none';
   input.style.display = isVisible ? 'none' : 'inline-block';
   toggleIcon.textContent = isVisible ? '>' : '<';
+
+  // Store the visibility state in the vscode state
+  const state = vscode.getState() || {};
+  state.outputNameOverrideVisible = !isVisible;
+  vscode.setState(state);
+
   saveState();
 }
 
@@ -257,6 +282,25 @@ export function emptyMultipleFiles(containerId, toggleId) {
   container.style.display = 'none';
   const toggleIconDiv = safeGetElementById(toggleId);
   if (toggleIconDiv) toggleIconDiv.textContent = '▼';
+
+  // Reset Output Filename override if we're emptying multiple output files
+  if (containerId === 'multipleOutputFiles') {
+    const outputNameOverrideInput = safeGetElementById('outputNameOverride');
+    const outputNameOverrideToggle = safeGetElementById(
+      'toggleOutputNameOverride',
+    );
+
+    if (outputNameOverrideInput && outputNameOverrideToggle) {
+      outputNameOverrideInput.style.display = 'none';
+      outputNameOverrideToggle.textContent = '>';
+
+      // Update the state
+      const state = vscode.getState() || {};
+      state.outputNameOverrideVisible = false;
+      vscode.setState(state);
+    }
+  }
+
   saveState();
 }
 
