@@ -23,14 +23,13 @@ import {
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSetting } from './AgentDataclass';
+import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ModelConfig, ModelProvider, ModelCapabilities } from './ModelConfig';
 import { ToolState } from './ToolState';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
-const CONFIRMATION_CONTINUE_LIMIT = 20;
 
 // Default token limits
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
@@ -57,14 +56,11 @@ export abstract class ModelHandler {
         autoExtractTikzFigureReflect: false,
         reflect: false,
         attachTeXCount: false,
-        autoConfirmation: false,
         printInputPrompt: false,
       },
     };
     this.capabilities = config.capabilities;
-    this.continueLimit = this.capabilities.likesToAskForConfirmation
-      ? CONFIRMATION_CONTINUE_LIMIT
-      : DEFAULT_CONTINUE_LIMIT;
+    this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent
@@ -392,7 +388,6 @@ export abstract class ModelHandler {
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-    autoConfirmation?: boolean,
   ): [string, any, string];
 
   /**
@@ -441,7 +436,6 @@ export abstract class ModelHandler {
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
-    autoConfirmation?: boolean,
   ): void;
 
   /**

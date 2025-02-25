@@ -104,10 +104,6 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
-    if (this.agentConfig.toolConfig.autoConfirmation) {
-      content = filterTagsFromText(content, 'monologue');
-    }
-
     const latexXmlReplacements = getReplacementsByCategory('latex_xml');
     if (latexXmlReplacements) {
       content = applyReplacements(content, latexXmlReplacements);
@@ -203,9 +199,6 @@ export class OutputHandler {
       this.agentSetting.documentTag,
     );
     let content = await readFile(processedOutputFile);
-    if (this.agentConfig.toolConfig.autoConfirmation) {
-      content = filterTagsFromText(content, 'monologue');
-    }
     await writeFile(processedOutputFile, content);
     return processedOutputFile;
   }
@@ -221,13 +214,6 @@ export class OutputHandler {
       outputFile,
       this.agentSetting.documentTag,
     );
-    if (this.agentConfig.toolConfig.autoConfirmation) {
-      for (const processedOutputFile of processedOutputFiles) {
-        let content = await readFile(processedOutputFile);
-        content = filterTagsFromText(content, 'monologue');
-        await writeFile(processedOutputFile, content);
-      }
-    }
     return processedOutputFiles;
   }
 
