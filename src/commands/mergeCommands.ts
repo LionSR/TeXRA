@@ -35,8 +35,8 @@ async function handleMerge(
 
   try {
     await executeMergeAgent(model, fileToUse, editedFile, context);
-  } catch (error) {
-    throw error;
+  } catch (err) {
+    throw err;
   }
 }
 

@@ -90,16 +90,16 @@ async function handleLatexdiff(
     // Verify the file exists
     try {
       await vscode.workspace.fs.stat(fullPath);
-    } catch (error) {
+    } catch (err) {
       if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
+        err instanceof vscode.FileSystemError &&
+        err.code === 'FileNotFound'
       ) {
         throw new Error(
           `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
         );
       }
-      throw error;
+      throw err;
     }
 
     const doc = await vscode.window.showTextDocument(fullPath);
@@ -116,9 +116,9 @@ async function handleLatexdiff(
     setTimeout(async () => {
       await vscode.commands.executeCommand('latex-workshop.view');
     }, 5000);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+      `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -151,19 +151,21 @@ async function handleLatexdiffvc(
       path.join(workspacePath, path.dirname(fileToUse), diffFileName),
     );
 
+    // do we have to use fs.stat? cannot we use something like fileExists?
+
     // Verify the file exists
     try {
       await vscode.workspace.fs.stat(fullPath);
-    } catch (error) {
+    } catch (err) {
       if (
-        error instanceof vscode.FileSystemError &&
-        error.code === 'FileNotFound'
+        err instanceof vscode.FileSystemError &&
+        err.code === 'FileNotFound'
       ) {
         throw new Error(
           `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
         );
       }
-      throw error;
+      throw err;
     }
 
     const doc = await vscode.window.showTextDocument(fullPath);
@@ -177,9 +179,9 @@ async function handleLatexdiffvc(
     setTimeout(async () => {
       await vscode.commands.executeCommand('latex-workshop.view');
     }, 5000);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error creating LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+      `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -202,9 +204,9 @@ async function handlePackLatexdiffvc(
     );
     const fileToUse = baseFile || inputFile;
     await runPackLatexdiffvc(fileToUse, commitHash, clean);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error packing LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+      `Error packing LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -226,9 +228,9 @@ async function handlePackLatexdiffvcMultiple(
     );
     logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
     await runPackLatexdiffvcMultiple(inputFiles, commitHash, clean);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error packing LaTeX diffs: ${error instanceof Error ? error.message : String(error)}`,
+      `Error packing LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -250,9 +252,9 @@ async function handleCleanLatexdiffvc(
     );
     const fileToUse = baseFile || inputFile;
     await runCleanLatexdiffvc(fileToUse, commitHash);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error cleaning LaTeX diff: ${error instanceof Error ? error.message : String(error)}`,
+      `Error cleaning LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
@@ -270,9 +272,9 @@ async function handleCleanLatexdiffvcMultiple(
     logger.debug(CHANNEL, `Command called with: commitHash=${commitHash}`);
     logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
     await runCleanLatexdiffvcMultiple(inputFiles, commitHash);
-  } catch (error) {
+  } catch (err) {
     vscode.window.showErrorMessage(
-      `Error cleaning LaTeX diffs: ${error instanceof Error ? error.message : String(error)}`,
+      `Error cleaning LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }

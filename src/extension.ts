@@ -67,8 +67,8 @@ async function copyDefaultAgents(context: vscode.ExtensionContext) {
         console.log(`Successfully copied: ${file}`);
       }
     }
-  } catch (error) {
-    console.error('Error copying default agents:', error);
+  } catch (err) {
+    console.error('Error copying default agents:', err);
   }
 }
 

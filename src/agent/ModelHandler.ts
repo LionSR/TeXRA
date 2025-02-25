@@ -90,7 +90,7 @@ export abstract class ModelHandler {
     if (useOpenRouter) {
       try {
         return await getSecretApiKey('openRouter');
-      } catch (error) {
+      } catch (err) {
         throw new Error(
           'Missing OpenRouter API key. Please set it using the "Set API Key" command.',
         );
@@ -100,7 +100,7 @@ export abstract class ModelHandler {
     const provider = this.config.provider.toLowerCase() as ApiProvider;
     try {
       return await getSecretApiKey(provider);
-    } catch (error) {
+    } catch (err) {
       throw new Error(
         `Missing API key for ${this.config.provider}. Please set it using the "Set API Key" command.`,
       );
