@@ -7,4 +7,5 @@ export interface ToolConfig {
   attachTeXCount: boolean;
   autoConfirmation: boolean;
   printInputPrompt: boolean;
+  reflect: boolean;
 }

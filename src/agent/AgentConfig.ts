@@ -6,7 +6,6 @@ import { ToolConfig } from './ToolConfig';
  */
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   model: 'sonnet+',
-  reflect: false,
   agent: 'correct',
   instruction: '',
   inputFile: '',
@@ -27,7 +26,6 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
 export interface AgentConfig {
   // Core configuration
   model: string;
-  reflect: boolean;
   agent: string;
   instruction: string;
 
