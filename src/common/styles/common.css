@@ -1,0 +1,167 @@
+/**
+ * Common CSS styles for Coauthor UI components
+ * Used by both the main WebView and LogView interfaces
+ * 
+ * This file centralizes shared styling to ensure consistency
+ * and make the codebase more maintainable.
+ */
+
+:root {
+  /* Colors */
+  --background-color: var(--vscode-sideBar-background);
+  --text-color: var(--vscode-sideBar-foreground);
+  --button-background: var(--vscode-button-background);
+  --button-foreground: var(--vscode-button-foreground);
+  --button-hover-background: var(--vscode-button-hoverBackground);
+  --input-background: var(--vscode-input-background);
+  --input-foreground: var(--vscode-input-foreground);
+  --input-border: var(--vscode-input-border);
+  --dropdown-background: var(--vscode-dropdown-background);
+  --dropdown-foreground: var(--vscode-dropdown-foreground);
+  --dropdown-border: var(--vscode-dropdown-border);
+  --icon-button-background: var(--vscode-button-secondaryBackground);
+  --icon-button-hover-background: var(--vscode-button-secondaryHoverBackground);
+  --icon-button-foreground: var(--vscode-button-secondaryForeground);
+  --icon-color: var(--vscode-textLink-foreground);
+
+  /* Typography */
+  --font-size: var(--vscode-font-size);
+  --font-family: var(--vscode-font-family);
+  --font-weight: var(--vscode-font-weight);
+
+  /* Spacing */
+  --spacing-tiny: 2px;
+  --spacing-small: 5px;
+  --spacing-medium: 10px;
+  --spacing-large: 15px;
+
+  /* Border radius */
+  --border-radius: 3px;
+}
+
+/* Common codicon styling */
+.codicon {
+  font-family: codicon;
+  font-size: var(--font-size);
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  top: 0;
+}
+
+/* Action button styling */
+.action-button {
+  padding: 2px 6px;
+  margin-right: var(--spacing-small);
+  font-size: calc(var(--font-size) * 0.9);
+  background-color: var(--icon-button-background);
+  color: var(--icon-button-foreground);
+  border: 0.5px solid var(--input-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-tiny);
+  transition: background-color 0.2s;
+  height: 24px;
+}
+
+.action-button:hover {
+  background-color: var(--icon-button-hover-background);
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-button .codicon {
+  font-size: calc(var(--font-size) * 0.9);
+  color: var(--icon-color);
+  opacity: 0.8;
+  margin-right: 2px;
+}
+
+.action-button:hover .codicon {
+  opacity: 1;
+}
+
+/* Icon button styling */
+.icon-button {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  font-size: calc(var(--font-size) * 0.8);
+  background-color: var(--icon-button-background);
+  color: var(--icon-button-foreground);
+  border: 0.5px solid var(--input-border);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.icon-button:hover {
+  background-color: var(--icon-button-hover-background);
+}
+
+.icon-button .codicon {
+  margin: 0;
+  font-size: calc(var(--font-size) * 0.9);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
+.icon-button:hover .codicon {
+  opacity: 1;
+}
+
+/* Input styling */
+.vscode-input {
+  width: 100%;
+  height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  box-sizing: border-box;
+}
+
+.vscode-input:focus {
+  outline: 1px solid var(--input-border);
+  outline-offset: -1px;
+}
+
+.vscode-input::placeholder {
+  color: var(--text-color);
+  opacity: 0.7;
+}
+
+/* Container styling */
+.container-box {
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+}
+
+/* Dropdown/Select styling */
+select {
+  padding: 4px 8px;
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+  background-color: var(--dropdown-background);
+  color: var(--dropdown-foreground);
+  font-size: var(--font-size);
+  cursor: pointer;
+}
