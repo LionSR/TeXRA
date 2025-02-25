@@ -13,7 +13,7 @@ import {
   showErrorMessage,
   getConfig,
 } from '../frontend-utils/commonUtils';
-import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
+import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
 
 const CHANNEL = 'fileSelectionCommands';

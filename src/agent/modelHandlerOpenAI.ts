@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - utilities
-import { readFile, fileExists, writeFile } from '../utils/fileUtils';
+import { readFile, fileExists, writeFile } from '../utils/workspaceFileUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,

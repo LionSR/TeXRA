@@ -22,7 +22,7 @@ import {
   writeFile,
   appendFile,
   fileExists,
-} from '../utils/fileUtils';
+} from '../utils/workspaceFileUtils';
 import {
   renderPrompt,
   getListOfFiles,

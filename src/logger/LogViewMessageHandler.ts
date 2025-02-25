@@ -50,13 +50,13 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Attempting to pack stream with ID: ${stream}`);
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
-      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
       return;
     }
-    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute pack command with task state
+    // Execute pack command with taskState
     await vscode.commands.executeCommand('coauthor.pack', {
       agent: taskState.agent,
       model: taskState.model,
@@ -71,13 +71,13 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Attempting to re-run stream with ID: ${stream}`);
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
-      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
       return;
     }
-    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Convert task state to agent config
+    // Convert taskState to agentConfig
     const agentConfig = {
       agent: taskState.agent,
       model: taskState.model,
@@ -112,13 +112,13 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Attempting to clean stream with ID: ${stream}`);
     const taskState = this.provider.getTaskState(stream);
     if (!taskState) {
-      logger.warn(CHANNEL, `No task state found for stream: ${stream}`);
+      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
       return;
     }
-    logger.debug(CHANNEL, `Found task state for stream: ${stream}`);
+    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Execute clean command with task state
+    // Execute clean command with taskState
     await vscode.commands.executeCommand('coauthor.clean', {
       agent: taskState.agent,
       model: taskState.model,
