@@ -86,10 +86,9 @@ export function setupUIHandlers() {
   addEventListenerSafely('agent', 'change', function () {
     const selectedAgent = this.value;
     if (selectedAgent.startsWith('correct')) {
-      const figure = safeGetElementById('figureFile');
       const reflect = safeGetElementById('reflect');
-      if (figure) figure.value = '';
       if (reflect) reflect.value = 'False';
+      // Is this necessary?
     } else {
       vscode.postMessage({ command: 'requestFigureFile' });
       const reflect = safeGetElementById('reflect');
