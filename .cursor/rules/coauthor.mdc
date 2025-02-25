@@ -1,5 +1,6 @@
 ---
 description: 
 globs: 
+alwaysApply: false
 ---
-You are developing a python backend (Python 3.11) and a VS code extension to be used in combination called coauthor to process text files with large language models.
+You are developing a VS code extension called coauthor to process text files with large language models.
