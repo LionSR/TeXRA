@@ -72,10 +72,12 @@ export function setupMessageHandlers() {
         });
         break;
       case 'setOpenedFiles':
-        MULTIPLE_SELECTIONS.forEach((id) => {
+        // Only update the specified file type's multiple selection
+        if (message.fileType) {
+          const id = `multiple${capitalize(message.fileType)}Files`;
           const toggleId = `toggle${capitalize(id)}`;
           updateMultipleFileSelect(id, toggleId, message.files);
-        });
+        }
         break;
       case 'setBaseFile':
         const currentBaseFileDiv = safeGetElementById('baseFile');

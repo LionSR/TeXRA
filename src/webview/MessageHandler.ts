@@ -108,7 +108,7 @@ export class WebviewMessageHandler {
       case 'getCurrentFile':
         return this.handleGetCurrentFile(message, webviewView);
       case 'addOpenedFiles':
-        return this.handleAddOpenedFiles(webviewView);
+        return this.handleAddOpenedFiles(message.fileType, webviewView);
     }
   }
 
@@ -484,11 +484,15 @@ export class WebviewMessageHandler {
     }
   }
 
-  private async handleAddOpenedFiles(webviewView: vscode.WebviewView) {
+  private async handleAddOpenedFiles(
+    fileType: string,
+    webviewView: vscode.WebviewView,
+  ) {
     const openedFiles = await this.getOpenedFiles();
     webviewView.webview.postMessage({
       command: 'setOpenedFiles',
       files: openedFiles,
+      fileType: fileType,
     });
   }
 

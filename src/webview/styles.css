@@ -802,7 +802,7 @@ body {
 .file-select:has(#multipleInputFilesContainer[style*='none'])
   #selectMultipleInputFilesButton,
 .file-select:has(#multipleInputFilesContainer[style*='none'])
-  #addOpenedFilesButton {
+  #addOpenedInputFilesButton {
   display: none;
 }
 
