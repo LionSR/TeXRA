@@ -168,20 +168,23 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
 
     // TODO:this is really mess, we should either use a unified data structure for TaskState and AgentConfig, or define a function that converts AgentConfig to TaskState for it. We have this mess in @TaskState.ts and @LogViewMessageHandler.ts too.
     logViewProvider.setTaskState(fullStreamId, {
+      // Parameters
       agent: config.agent,
       model: config.model,
-      reflect: config.reflect ? 'True' : 'False',
       instruction: config.instruction || '',
+      // Input/Output configuration
       inputFile: config.inputFile || '',
       referenceFile: config.referenceFile || '',
       auxiliaryFile: config.auxiliaryFile || '',
       figureFile: config.figureFile || '',
       outputNameOverride: config.outputNameOverride || '',
+      // Multiple file selections
       multipleInputFiles: config.inputFiles || [],
       multipleReferenceFiles: config.referenceFiles || [],
       multipleAuxiliaryFiles: config.auxiliaryFiles || [],
       multipleFigureFiles: config.figureFiles || [],
       multipleOutputFiles: config.outputFiles || [],
+      // Multiple file selection visibility
       multipleInputFilesVisible:
         Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
       multipleReferenceFilesVisible:
@@ -194,10 +197,13 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
         Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
       multipleOutputFilesVisible:
         Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
+      // Auto extract settings
       autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
       autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
       autoExtractTikzFigureReflect:
         config.toolConfig?.autoExtractTikzFigureReflect || false,
+      // Tool use settings
+      reflect: config.toolConfig?.reflect || false,
       attachTeXCount: config.toolConfig?.attachTeXCount || false,
       usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
       printInputPrompt: config.toolConfig?.printInputPrompt || false,

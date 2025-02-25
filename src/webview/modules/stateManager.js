@@ -52,7 +52,6 @@ export function restoreState() {
   if (previousState) {
     const defaultValues = {
       agent: 'correct',
-      reflect: 'True',
       commit: 'HEAD',
     };
 
@@ -67,12 +66,10 @@ export function restoreState() {
     // Initialize auto-extract toggle in closed state
     const autoExtractToggle = safeGetElementById('toggleAutoExtract');
     const autoExtractOptions = safeGetElementById('autoExtractOptions');
-    const hasChecked = [
-      'autoExtractFigure',
-      'autoExtractTikzFigure',
-      'autoExtractTikzFigureReflect',
-    ].some((id) => safeGetElementChecked(id));
-    const indicator = hasChecked ? '●' : '○';
+    const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
+      safeGetElementChecked(id),
+    );
+    const indicator = hasAutoExtractChecked ? '●' : '○';
 
     autoExtractToggle.classList.remove('active');
     autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-down"></i>`;
@@ -81,12 +78,9 @@ export function restoreState() {
     // Initialize tool use toggle state
     const toggleToolUse = safeGetElementById('toggleToolUse');
     const toolUseOptions = safeGetElementById('toolUseOptions');
-    const hasToolUseChecked = [
-      'attachTeXCount',
-      'usePrefillFromInput',
-      'printInputPrompt',
-      'autoConfirmation',
-    ].some((id) => safeGetElementChecked(id));
+    const hasToolUseChecked = CHECK_BOXES_TOOL_USE.some((id) =>
+      safeGetElementChecked(id),
+    );
     const toolUseIndicator = hasToolUseChecked ? '●' : '○';
 
     if (toggleToolUse) {
