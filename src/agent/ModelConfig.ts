@@ -20,7 +20,6 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsAssistantPrefill: false,
   supportsPredictiveOutput: false,
   likesToAskForConfirmation: false,
-  supportsExtendedThinking: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -44,7 +43,6 @@ export interface ModelCapabilities {
   supportsAssistantPrefill: boolean;
   supportsPredictiveOutput: boolean;
   likesToAskForConfirmation: boolean;
-  supportsExtendedThinking: boolean;
 }
 
 /** Complete configuration for a language model instance. */
