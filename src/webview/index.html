@@ -30,27 +30,6 @@
   <body>
     <div class="content-wrapper">
       <div class="main-content">
-        <div class="compact-selections">
-          <div class="select-group">
-            <i class="codicon codicon-sparkle" title="Agent"></i>
-            <select id="agent">
-              ${agentOptions}
-            </select>
-          </div>
-          <div class="select-group">
-            <i class="codicon codicon-robot" title="Model"></i>
-            <select id="model">
-              ${modelOptions}
-            </select>
-          </div>
-          <div class="select-group">
-            <i class="codicon codicon-refresh" title="Reflect"></i>
-            <select id="reflect">
-              <option value="True">True</option>
-              <option value="False">False</option>
-            </select>
-          </div>
-        </div>
         <div class="file-selection-group">
           <div class="file-select">
             <div class="file-select-header">
@@ -426,6 +405,10 @@
                 >
                   <div class="auto-extract-options-content">
                     <label
+                      ><input type="checkbox" id="reflect" />
+                      <i class="codicon codicon-refresh"></i> Reflect</label
+                    >
+                    <label
                       ><input type="checkbox" id="attachTeXCount" />
                       <i class="codicon codicon-symbol-numeric"></i> Attach TeX
                       Count</label
@@ -477,6 +460,20 @@
             id="instructionInput"
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></textarea>
+          <div class="model-selection-footer">
+            <div class="select-group">
+              <i class="codicon codicon-sparkle" title="Agent"></i>
+              <select id="agent">
+                ${agentOptions}
+              </select>
+            </div>
+            <div class="select-group">
+              <i class="codicon codicon-robot" title="Model"></i>
+              <select id="model">
+                ${modelOptions}
+              </select>
+            </div>
+          </div>
           <button id="executeButton">
             <i class="codicon codicon-play"></i> Execute
           </button>

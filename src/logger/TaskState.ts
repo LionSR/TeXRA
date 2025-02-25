@@ -5,7 +5,6 @@ export interface TaskState {
   // Basic task info
   agent: string;
   model: string;
-  reflect: string;
   instruction: string;
 
   // File selections
@@ -29,10 +28,13 @@ export interface TaskState {
   multipleFigureFilesVisible: boolean;
   multipleOutputFilesVisible: boolean;
 
-  // Tool use settings
+  // Auto extract settings
   autoExtractFigure: boolean;
   autoExtractTikzFigure: boolean;
   autoExtractTikzFigureReflect: boolean;
+
+  // Tool use settings
+  reflect: boolean;
   attachTeXCount: boolean;
   usePrefillFromInput: boolean;
   printInputPrompt: boolean;
@@ -48,7 +50,6 @@ export function fromObject(obj: Record<string, any>): TaskState {
     // Basic task info
     agent: obj.agent || 'correct',
     model: obj.model || '',
-    reflect: obj.reflect || 'True',
     instruction: obj.instruction || '',
     // File selections
     inputFile: obj.inputFile || '',
@@ -71,10 +72,13 @@ export function fromObject(obj: Record<string, any>): TaskState {
     multipleFigureFilesVisible: obj.multipleFigureFilesVisible || false,
     multipleOutputFilesVisible: obj.multipleOutputFilesVisible || false,
 
-    // Tool use settings
+    // Auto extract settings
     autoExtractFigure: obj.autoExtractFigure || false,
     autoExtractTikzFigure: obj.autoExtractTikzFigure || false,
     autoExtractTikzFigureReflect: obj.autoExtractTikzFigureReflect || false,
+
+    // Tool use settings
+    reflect: obj.reflect || false,
     attachTeXCount: obj.attachTeXCount || false,
     usePrefillFromInput: obj.usePrefillFromInput || false,
     printInputPrompt: obj.printInputPrompt || false,

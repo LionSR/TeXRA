@@ -984,7 +984,11 @@ export abstract class BaseReflectionAgent {
       this.logger.info(SEPARATOR);
 
       // Check for interruption before reflection
-      if (!this.isInterrupted && this.agentConfig.reflect && endTurn) {
+      if (
+        !this.isInterrupted &&
+        this.agentConfig.toolConfig.reflect &&
+        endTurn
+      ) {
         const toolStateReflection = ToolState.initialize();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.info(`Round 1 completed\n`);

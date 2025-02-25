@@ -3,6 +3,8 @@ import { restoreState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
 
+import { CHECK_BOXES_TOOL_USE } from './modules/utils.js';
+
 // Add this function to handle textarea auto-resize
 function autoResizeTextarea(textarea) {
   // Reset height to auto to get the correct scrollHeight
@@ -123,14 +125,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // Update checkbox states in toggle button
   function updateToolUseToggleState() {
     const toggleToolUse = document.getElementById('toggleToolUse');
-    const checkboxes = [
-      'attachTeXCount',
-      'usePrefillFromInput',
-      'printInputPrompt',
-      'autoConfirmation',
-    ];
 
-    const checkedCount = checkboxes.filter(
+    const checkedCount = CHECK_BOXES_TOOL_USE.filter(
       (id) => document.getElementById(id)?.checked,
     ).length;
 
@@ -140,12 +136,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Add change listeners to all tool use checkboxes
-  [
-    'attachTeXCount',
-    'usePrefillFromInput',
-    'printInputPrompt',
-    'autoConfirmation',
-  ].forEach((id) => {
+  CHECK_BOXES_TOOL_USE.forEach((id) => {
     const checkbox = document.getElementById(id);
     if (checkbox) {
       checkbox.addEventListener('change', updateToolUseToggleState);

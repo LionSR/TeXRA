@@ -6,21 +6,29 @@ export const MULTIPLE_SELECTIONS = [
   'multipleOutputFiles',
 ];
 
-export const CHECK_BOXES = [
+export const CHECK_BOXES_AUTO_EXTRACT = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
   'autoExtractTikzFigureReflect',
+];
+
+export const CHECK_BOXES_TOOL_USE = [
   'attachTeXCount',
   'usePrefillFromInput',
   'printInputPrompt',
   'autoConfirmation',
+  'reflect',
+];
+
+export const CHECK_BOXES = [
+  ...CHECK_BOXES_AUTO_EXTRACT,
+  ...CHECK_BOXES_TOOL_USE,
 ];
 
 export const VALUE_ELEMENTS = [
   // parameters
   'agent',
   'model',
-  'reflect',
   // files
   'inputFile',
   'auxiliaryFile',
