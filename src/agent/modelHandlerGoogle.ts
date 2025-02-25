@@ -11,6 +11,9 @@ import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 
 /**
  * Handler for Google models using OpenAI-compatible API.
+ * The Flash Thinking model is an experimental model and has the following limitations:
+ * Thoughts are only shown in Google AI Studio
+ * Therefore we cannot extract them from the response yet
  */
 export class ModelHandlerGoogle extends ModelHandlerOpenAI {
   /** Returns OpenAI client configured with Google's base URL. */

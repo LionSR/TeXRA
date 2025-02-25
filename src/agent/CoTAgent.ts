@@ -71,11 +71,9 @@ export class CoTAgent extends BaseReflectionAgent {
       );
 
       return result;
-    } catch (error) {
-      this.logger.error(
-        `Error in handleOutput for round ${currRound}: ${error}`,
-      );
-      throw error; // Re-throw to maintain error propagation
+    } catch (err) {
+      this.logger.error(`Error in handleOutput for round ${currRound}: ${err}`);
+      throw err; // Re-throw to maintain error propagation
     }
   }
 }

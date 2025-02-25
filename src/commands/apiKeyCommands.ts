@@ -42,9 +42,9 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `${provider} API key has been set`,
         );
-      } catch (error) {
+      } catch (err) {
         vscode.window.showErrorMessage(
-          `Failed to set ${provider} API key: ${error}`,
+          `Failed to set ${provider} API key: ${err}`,
         );
       }
     },
@@ -67,9 +67,9 @@ export function registerApiKeyCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `${provider} API key has been removed`,
         );
-      } catch (error) {
+      } catch (err) {
         vscode.window.showErrorMessage(
-          `Failed to remove ${provider} API key: ${error}`,
+          `Failed to remove ${provider} API key: ${err}`,
         );
       }
     },

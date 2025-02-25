@@ -25,8 +25,8 @@ export const executeCommand = {
     try {
       // Run the agent directly
       await executeAgent(config, context);
-    } catch (error) {
-      throw error;
+    } catch (err) {
+      throw err;
     }
   },
 };
