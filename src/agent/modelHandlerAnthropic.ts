@@ -64,10 +64,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit
       options.max_tokens = this.config.maxOutputTokens;
-      options.thinking = {
-        type: 'enabled',
-        budget_tokens: 32000,
-      };
+      if (this.capabilities.supportsReasoning) {
+        options.thinking = {
+          type: 'enabled',
+          budget_tokens: 32000,
+        };
+      }
     }
 
     return client.beta.messages.create(options);
