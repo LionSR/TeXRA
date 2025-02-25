@@ -738,8 +738,9 @@ body {
   gap: var(--spacing-tiny);
   padding: 4px 6px;
   font-size: var(--font-size);
-  background: transparent;
-  border: none;
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-border);
+  border-radius: var(--border-radius);
   transition: background-color 0.2s;
   pointer-events: auto;
 }
