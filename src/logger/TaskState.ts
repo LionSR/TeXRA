@@ -38,7 +38,6 @@ export interface TaskState {
   attachTeXCount: boolean;
   usePrefillFromInput: boolean;
   printInputPrompt: boolean;
-  autoConfirmation: boolean;
 
   // Output name override visibility
   outputNameOverrideVisible: boolean;
@@ -82,7 +81,6 @@ export function fromObject(obj: Record<string, any>): TaskState {
     attachTeXCount: obj.attachTeXCount || false,
     usePrefillFromInput: obj.usePrefillFromInput || false,
     printInputPrompt: obj.printInputPrompt || false,
-    autoConfirmation: obj.autoConfirmation || false,
 
     // Output name override visibility
     outputNameOverrideVisible: obj.outputNameOverrideVisible || false,

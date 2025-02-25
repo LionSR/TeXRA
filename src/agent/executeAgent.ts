@@ -207,7 +207,6 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       attachTeXCount: config.toolConfig?.attachTeXCount || false,
       usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
       printInputPrompt: config.toolConfig?.printInputPrompt || false,
-      autoConfirmation: config.toolConfig?.autoConfirmation || false,
       outputNameOverrideVisible: !!config.outputNameOverride,
     });
     logger.debug(`Task state stored for stream: ${fullStreamId}`);

@@ -203,8 +203,6 @@ export abstract class BaseReflectionAgent {
   private getBasicVars(): Record<string, any> {
     return {
       MODEL: this.agentConfig.model,
-      MODEL_LIKES_TO_ASK_FOR_CONFIRMATION:
-        this.modelHandler.capabilities.likesToAskForConfirmation,
       INSTRUCTION: this.agentConfig.instruction,
       IS_OPENAI_MODEL: this.modelHandler.isOpenai,
       IS_ANTHROPIC_MODEL: this.modelHandler.isAnthropic,
@@ -439,7 +437,6 @@ export abstract class BaseReflectionAgent {
       AUTO_EXTRACT_TIKZ_FIGURE_REFLECT:
         this.agentConfig.toolConfig.autoExtractTikzFigureReflect,
       INCLUDE_TEX_COUNT: this.agentConfig.toolConfig.attachTeXCount,
-      AUTO_CONFIRMATION: this.agentConfig.toolConfig.autoConfirmation,
       USE_PREFILL_FROM_INPUT: this.agentConfig.toolConfig.usePrefillFromInput,
       PRINT_INPUT_PROMPT: this.agentConfig.toolConfig.printInputPrompt,
     };
@@ -462,11 +459,10 @@ export abstract class BaseReflectionAgent {
     outputFile: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
     let endTurn = false;
-
     while (!endTurn) {
       // Check for interruption before each cycle
-      if (this.checkInterruption()) {
-        return [stateRound, stateGlobal, toolState, true];
+      if (await this.checkInterruption()) {
+        break;
       }
 
       const exists = await fileExists(outputFile);
@@ -491,7 +487,6 @@ export abstract class BaseReflectionAgent {
         this.modelHandler.extractResponse(
           responseObject,
           this.agentSetting.endTag,
-          this.agentConfig.toolConfig.autoConfirmation,
         );
 
       this.logger.debug(`Stop reason: ${stopReason}`);
@@ -502,6 +497,7 @@ export abstract class BaseReflectionAgent {
         responseUsage,
         responseTime,
       );
+
       stateRound.updateTokenCounts(APIUsage);
       stateGlobal.updateFromCurrRound(stateRound);
       // this.logger.debug(`stateRound: ${JSON.stringify(stateRound)}`);
@@ -521,15 +517,6 @@ export abstract class BaseReflectionAgent {
 
       // Chain response processing operations
       let processedResponse = newResponse;
-      if (
-        this.modelHandler.capabilities.likesToAskForConfirmation &&
-        this.agentConfig.toolConfig.autoConfirmation
-      ) {
-        processedResponse = applyReplacements(
-          processedResponse,
-          getReplacementsByCategory('autoConfirmation')!,
-        );
-      }
       processedResponse = applyReplacements(
         processedResponse,
         getAllReplacements(),
@@ -577,7 +564,6 @@ export abstract class BaseReflectionAgent {
         bestConnector,
         processedResponse,
         toolState,
-        this.agentConfig.toolConfig.autoConfirmation,
       );
 
       // Check stop conditions
