@@ -148,11 +148,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-    autoConfirmation = false,
-  ): [string, any, string] {
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
       if (responseObject.error) {
@@ -198,7 +194,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
       `Your response got cut off, because you only have limited response space. ` +
-      `Continue writing exactly from where you left off until the very end, ` +
+      `Continue responding exactly from where you left off until the very end, ` +
       `marked by ${agentSetting.endTag}. ` +
       'Avoid repeat yourself and avoid starting over. ' +
       `Start your response at the next token after: "${prefillTokens}"`;
@@ -359,7 +355,6 @@ export class ModelHandlerOpenAI extends ModelHandler {
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
-    autoConfirmation = false,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI API compatible models',
@@ -401,9 +396,6 @@ export class ModelHandlerOpenAI extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    // this.logger.info(
-    //   'Determining if should continue for OpenAI model via OpenAI API',
-    // );
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
   }
 }

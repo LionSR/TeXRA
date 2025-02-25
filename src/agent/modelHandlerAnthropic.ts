@@ -13,10 +13,6 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
-import {
-  CONFIRMATION_PROMPT_PATTERNS,
-  wrapConfirmationPrompts,
-} from '../utils/confirmationUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -27,6 +23,9 @@ import {
   ResponseUsageFactory,
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
+import { AgentStateRound } from './AgentState';
+
+const K_SLICE = 200;
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -170,12 +169,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
     });
   }
 
-  /** Processes Anthropic API response, handling errors, confirmations, and formatting while returning [response, usage, stopReason]. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-    autoConfirmation = false,
-  ): [string, any, string] {
+  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (responseObject.error) {
       const errorMsg = `API error: ${responseObject.error}`;
       this.logger.error(errorMsg);
@@ -215,40 +210,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse = responseObject.content[0].text.trim();
     }
 
-    if (this.capabilities.likesToAskForConfirmation && autoConfirmation) {
-      newResponse = wrapConfirmationPrompts(newResponse);
-
-      // Check for confirmation patterns
-      if (
-        CONFIRMATION_PROMPT_PATTERNS.some((pattern) =>
-          newResponse.toLowerCase().includes(pattern.toLowerCase()),
-        )
-      ) {
-        stopReason = 'ask_for_confirmation';
-      }
-
-      // Apply formatting
-      newResponse = applyReplacements(
-        newResponse,
-        getReplacementsByCategory('autoConfirmation')!,
-      );
-      newResponse = filterTagsFromText(newResponse, 'monologue');
-
-      // Handle output tags if present
-      if (newResponse.includes('<output>')) {
-        this.logger.warn(
-          'Output tag detected - extracting latex code from <output> tags',
-        );
-        const extractedResponse = extractTextFromTag(newResponse, 'output');
-        if (extractedResponse !== newResponse) {
-          this.logger.warn('Extracted content from <output> tags');
-          newResponse = extractedResponse;
-        } else {
-          this.logger.warn('No <output> tags found in response');
-        }
-      }
-    }
-
     // Add end tag if needed
     if (stopReason === 'stop_sequence' && !newResponse.includes(endTag)) {
       newResponse += `\n${endTag}`;
@@ -257,91 +218,36 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Adds continuation message for handling multi-turn conversations, managing token limits and output formatting. */
+  /** Adds continuation message when response is truncated. */
   addContinueMessage(
     messages: any[],
-    stateRound: any,
+    stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Skip if model doesn't need confirmation
-    if (
-      !this.capabilities.likesToAskForConfirmation ||
-      !agentConfig.toolConfig.autoConfirmation
-    ) {
+    // Skip if model supports assistant prefill
+    if (this.capabilities.supportsAssistantPrefill) {
+      this.logger.debug(
+        'Skipping continuation - assistant prefill is supported',
+      );
       return;
     }
 
-    // Create continuation message based on round count
-    const outputTokens = stateRound.APIUsage?.output_tokens ?? 0;
-
+    // Create continuation message with last K tokens
+    const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
-      stateRound.continuationCount <= 1
-        ? 'Proceed. ' +
-          'If no previous revised output of the document is provided, ' +
-          'please start from the very beginning of the document and work through the full document systematically. ' +
-          'Note that you have an effectively infinite token response limit ' +
-          'because the system that you are part of handles continuations automatically. Therefore, just output the complete document. ' +
-          `The total number of tokens you output in the last turn is ${outputTokens}, ` +
-          'but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. ' +
-          'Respond the latex code of the next section in the <output> ... </output> tags.'
-        : 'Proceed to write fully the next part/section (not just a subsection, which is not enough). ' +
-          'Continue writing exactly from where you left off until the whole document has been systematically revised. ' +
-          'Aim for double the length of output as previous turns. ' +
-          'Remember to stay professional and write latex code all the time. ' +
-          'Note that you have an effectively infinite token response limit ' +
-          'because the system that you are part of handles continuations automatically. Therefore, just output the complete document. ' +
-          `The total number of tokens you output in the last turn is ${outputTokens}, ` +
-          'but the maximal token limit is 8192. Therefore, you are encouraged to maximize the output length in the next turn. ' +
-          'Respond the latex code of the next section in the <output> ... </output> tags.';
+      `Your response got cut off, because you only have limited response space. ` +
+      `Continue responding exactly from where you left off until the very end, ` +
+      `marked by ${agentSetting.endTag}. ` +
+      'Avoid repeat yourself and avoid starting over. ' +
+      `Start your response at the next token after: "${prefillTokens}"`;
 
-    // Handle document tag if present
-    const documentTagStart = `<${agentSetting.documentTag}>`;
-    const firstLines = toolState.lastResponse.split('\n').slice(0, 10);
-    for (const line of firstLines) {
-      if (line.trim().startsWith(documentTagStart)) {
-        this.logger.warn(
-          `Removing document tag prefix ${documentTagStart} from response`,
-        );
-        toolState.lastResponse = toolState.lastResponse
-          .replace(line, '')
-          .trim();
-        break;
-      }
-    }
-
-    // Filter monologue tags
-    toolState.lastResponse = filterTagsFromText(
-      toolState.lastResponse,
-      'monologue',
+    // Add continuation message
+    this.logger.info(
+      `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
-
-    // Update messages
-    this.logger.info('Adding User message');
-    this.logger.debug(userMessageContinuation);
-
-    if (messages.at(-1).role === 'user') {
-      if (messages.at(-2).role === 'assistant') {
-        this.logger.warn(
-          'Appending new response to the previous assistant message',
-        );
-        if (Array.isArray(messages.at(-2).content)) {
-          messages.at(-2).content.push({
-            type: 'text',
-            text: '\n' + toolState.lastResponse.trim(),
-          });
-        } else if (typeof messages.at(-2).content === 'string') {
-          messages.at(-2).content += '\n' + toolState.lastResponse.trim();
-        }
-      }
-      messages.at(-1).content = userMessageContinuation.trim();
-    } else if (messages.at(-1).role === 'assistant') {
-      messages.push({
-        role: 'user',
-        content: userMessageContinuation.trim(),
-      });
-    }
+    messages.push({ role: 'user', content: userMessageContinuation });
   }
 
   /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */
@@ -393,18 +299,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
       getAllReplacementsRegex(),
     ).trim();
     await writeFile(outputFile, fileContent);
-
-    if (
-      this.capabilities.likesToAskForConfirmation &&
-      agentConfig.toolConfig.autoConfirmation
-    ) {
-      fileContent = filterTagsFromText(fileContent, 'monologue');
-      fileContent = applyReplacements(
-        fileContent,
-        getReplacementsByCategory('autoConfirmation')!,
-      );
-    }
-    fileContent = fileContent.trim();
 
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
@@ -500,7 +394,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
-    autoConfirmation = false,
   ): void {
     if (messages.at(-1).role === 'assistant') {
       const lastMessage = messages.at(-1);
@@ -552,9 +445,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    // this.logger.debug(
-    //   'Determining if should continue for Anthropic model via Anthropic API',
-    // );
     return (
       stopReason !== 'max_tokens' &&
       stopReason !== 'stop_sequence' &&

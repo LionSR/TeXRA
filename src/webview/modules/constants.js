@@ -16,7 +16,6 @@ export const CHECK_BOXES_TOOL_USE = [
   'attachTeXCount',
   'usePrefillFromInput',
   'printInputPrompt',
-  'autoConfirmation',
   'reflect',
 ];
 

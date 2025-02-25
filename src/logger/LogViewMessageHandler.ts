@@ -109,7 +109,6 @@ export class LogViewMessageHandler {
         attachTeXCount: taskState.attachTeXCount,
         usePrefillFromInput: taskState.usePrefillFromInput,
         printInputPrompt: taskState.printInputPrompt,
-        autoConfirmation: taskState.autoConfirmation,
         reflect: taskState.reflect,
       },
     };
