@@ -255,8 +255,6 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // Special cases
     '{\\today}\\n\\n[Previous':
       '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
-    // Special cases for monologue handling
-    '</monologue><monologue>': '</monologue>\\n<monologue>', // Add newline between monologues
     // empty xml document tag
     '<document name="">': '<document name="unknown">',
   },
@@ -456,24 +454,6 @@ const INLINE_MATH_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
-const AUTO_CONFIRM_REPLACEMENTS: ReplacementCategory = {
-  name: 'autoConfirmation',
-  description: 'Fixes for auto confirmation writing with regex patterns',
-  isRegex: true,
-  flags: 'gms',
-  patterns: {
-    // Match the entire confirmation message block and reformat
-    '<latex_code>\\s*<monologue>\\[Due to length limits,[^\\n]*\\n(.*?)</monologue>':
-      '<monologue>[Due to length limits,$1</monologue>\\n<latex_code>',
-    // Handle case where latex_document tag precedes the monologue
-    '<latex_code>\\s*<monologue>\\[I apologize, but I notice this is a very long document,[^\\n]*\\n(.*?)</monologue>':
-      '<monologue>[I apologize, but I notice this is a very long document$1</monologue><latex_code>',
-    // Handle truncated request messages
-    '<latex_code>\\s*(<monologue>\\[Previous request was truncated due to length,[^\\n]*\\n(.*?)</monologue>)':
-      '$1',
-  },
-};
-
 /**
  * Get all non-regex replacements combined into a single category.
  */
@@ -521,7 +501,6 @@ export function getReplacementsByCategory(
     latex_xml: LATEX_XML_REPLACEMENTS,
     scratchpad_xml: SCRATCHPAD_XML_REPLACEMENTS,
     style: STYLE_REPLACEMENTS,
-    autoConfirmation: AUTO_CONFIRM_REPLACEMENTS,
     inlineMath: INLINE_MATH_REPLACEMENTS,
     personal_style: PERSONAL_STYLE_REPLACEMENTS,
     latex_spacing: LATEX_SPACING_REPLACEMENTS,

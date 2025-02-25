@@ -145,7 +145,6 @@ export class WebviewMessageHandler {
         reflect: message.reflect,
         attachTeXCount: message.attachTeXCount,
         usePrefillFromInput: message.usePrefillFromInput,
-        autoConfirmation: message.autoConfirmation,
         printInputPrompt: message.printInputPrompt,
       };
 

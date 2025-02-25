@@ -19,7 +19,6 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsNativePdf: false,
   supportsAssistantPrefill: false,
   supportsPredictiveOutput: false,
-  likesToAskForConfirmation: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -42,7 +41,6 @@ export interface ModelCapabilities {
   supportsNativePdf: boolean;
   supportsAssistantPrefill: boolean;
   supportsPredictiveOutput: boolean;
-  likesToAskForConfirmation: boolean;
 }
 
 /** Complete configuration for a language model instance. */
