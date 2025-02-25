@@ -52,16 +52,6 @@ body {
   height: 24px;
 }
 
-.compact-selections {
-  display: flex;
-  gap: var(--spacing-small);
-  margin-bottom: var(--spacing-large);
-  background-color: var(--dropdown-background);
-  border: 1px solid var(--dropdown-border);
-  border-radius: 4px;
-  padding: var(--spacing-medium);
-}
-
 .select-group {
   display: flex;
   align-items: center;
@@ -270,10 +260,10 @@ body {
 
 #instructionInput {
   width: 100%;
-  min-height: 150px;
+  min-height: 200px;
   max-height: 400px;
   padding: 8px;
-  padding-bottom: 40px;
+  padding-bottom: 50px;
   border: 1px solid var(--input-border);
   border-radius: 4px;
   font-family: var(--font-family);
@@ -308,7 +298,7 @@ body {
   bottom: 16px;
   right: 16px;
   padding: 3px 10px;
-  font-size: calc(var(--font-size) * 1);
+  font-size: var(--font-size);
   background-color: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
   border: none;
@@ -445,7 +435,7 @@ body {
   border: 1px solid var(--dropdown-border);
   border-radius: var(--border-radius);
   box-shadow: var(--vscode-widget-shadow);
-  min-width: 200px;
+  min-width: 150px;
   display: none;
   font-size: calc(var(--font-size) * 0.9);
   padding: 4px;
@@ -453,6 +443,7 @@ body {
 }
 
 .auto-extract-options-content {
+  font-size: calc(var(--font-size) * 0.9);
   background: var(--background-color);
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
@@ -460,6 +451,7 @@ body {
 }
 
 .auto-extract-options label {
+  font-size: calc(var(--font-size) * 0.8);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -625,6 +617,7 @@ body {
 }
 
 .auto-extract-options-content {
+  font-size: calc(var(--vscode-font-size) * 0.9);
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-input-border);
   border-radius: var(--border-radius);
@@ -847,4 +840,33 @@ body {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
   vertical-align: text-bottom;
+}
+
+/* Model Selection Footer styles */
+.model-selection-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  gap: var(--spacing-small);
+  z-index: 10;
+}
+
+.model-selection-footer .select-group {
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+}
+
+.model-selection-footer .select-group select {
+  height: 24px;
+  font-size: calc(var(--font-size) * 0.9);
+  padding: 2px 4px;
+}
+
+.model-selection-footer .codicon {
+  margin-right: var(--spacing-small);
+  font-size: var(--font-size);
+  color: var(--icon-color);
+  opacity: 0.8;
 }

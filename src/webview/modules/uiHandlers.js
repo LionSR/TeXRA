@@ -19,6 +19,8 @@ import {
   uncapitalize,
 } from './utils.js';
 
+import { CHECK_BOXES_AUTO_EXTRACT } from './utils.js';
+
 export function setupUIHandlers() {
   // Make all multiple file selections sortable
   MULTIPLE_SELECTIONS.forEach((id) => {
@@ -38,13 +40,11 @@ export function setupUIHandlers() {
     const isVisible = autoExtractOptions.style.display === 'block';
 
     // Check if any auto-extract checkbox is checked
-    const hasChecked = [
-      'autoExtractFigure',
-      'autoExtractTikzFigure',
-      'autoExtractTikzFigureReflect',
-    ].some((id) => safeGetElementChecked(id));
+    const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
+      safeGetElementChecked(id),
+    );
 
-    const indicator = hasChecked ? '●' : '○';
+    const indicator = hasAutoExtractChecked ? '●' : '○';
     const direction = isVisible ? 'up' : 'down';
 
     autoExtractToggle.innerHTML = `Auto Extract ${indicator}<i class="codicon codicon-chevron-${direction}"></i>`;
@@ -59,11 +59,7 @@ export function setupUIHandlers() {
   });
 
   // Add checkbox change listeners for auto-extract options
-  [
-    'autoExtractFigure',
-    'autoExtractTikzFigure',
-    'autoExtractTikzFigureReflect',
-  ].forEach((id) => {
+  CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
     addEventListenerSafely(id, 'change', function () {
       updateAutoToggleState();
       handleCheckboxChange.call(this);
@@ -85,15 +81,14 @@ export function setupUIHandlers() {
 
   addEventListenerSafely('agent', 'change', function () {
     const selectedAgent = this.value;
-    if (selectedAgent.startsWith('correct')) {
-      const reflect = safeGetElementById('reflect');
-      if (reflect) reflect.value = 'False';
-      // Is this necessary?
-    } else {
-      vscode.postMessage({ command: 'requestFigureFile' });
-      const reflect = safeGetElementById('reflect');
-      if (reflect) reflect.value = 'True';
+    // Set reflect checkbox based on agent type
+    const reflectCheckbox = safeGetElementById('reflect');
+    if (reflectCheckbox) {
+      reflectCheckbox.checked = !selectedAgent.startsWith('correct');
     }
+
+    vscode.postMessage({ command: 'requestFigureFile' });
+
     saveState();
   });
 
@@ -183,7 +178,6 @@ export function setupUIHandlers() {
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');
-    const reflect = safeGetElementValue('reflect');
 
     // Get single files
     const inputFile = safeGetElementValue('inputFile');
@@ -222,6 +216,7 @@ export function setupUIHandlers() {
 
     const instruction = safeGetElementValue('instructionInput');
 
+    // auto extract options
     const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
     const autoExtractTikzFigure = safeGetElementChecked(
       'autoExtractTikzFigure',
@@ -229,6 +224,9 @@ export function setupUIHandlers() {
     const autoExtractTikzFigureReflect = safeGetElementChecked(
       'autoExtractTikzFigureReflect',
     );
+
+    // tool use options
+    const reflect = safeGetElementChecked('reflect');
     const attachTeXCount = safeGetElementChecked('attachTeXCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
     const autoConfirmation = safeGetElementChecked('autoConfirmation');
@@ -239,7 +237,6 @@ export function setupUIHandlers() {
       // parameters
       agent: agent,
       model: model,
-      reflect: reflect,
       // files
       inputFile: inputFile,
       inputFiles: inputFiles,
@@ -251,14 +248,17 @@ export function setupUIHandlers() {
       figureFiles: figureFiles,
       // instruction
       instruction: instruction,
-      // options
+      // auto extract options
       autoExtractFigure: autoExtractFigure,
       autoExtractTikzFigure: autoExtractTikzFigure,
-      autoExtractTikzFigureReflect: autoExtractTikzFigureReflect,
+      autoExtractTikzFigureReflect: autoExtractTikzFigureReflect, // TODO: one day we use autoExtractTikzFigure to control this too
+      // tool use options
+      reflect: reflect,
       attachTeXCount: attachTeXCount,
       usePrefillFromInput: usePrefillFromInput,
       autoConfirmation: autoConfirmation,
       printInputPrompt: printInputPrompt,
+
       // output
       outputFiles: outputFiles,
       outputNameOverride: outputNameOverride,

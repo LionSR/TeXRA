@@ -137,9 +137,12 @@ export class WebviewMessageHandler {
   private async handleExecute(message: any) {
     if (message.inputFile || message.outputNameOverride) {
       const toolConfig: ToolConfig = {
+        // Auto extract settings
         autoExtractFigure: message.autoExtractFigure,
         autoExtractTikzFigure: message.autoExtractTikzFigure,
         autoExtractTikzFigureReflect: message.autoExtractTikzFigureReflect,
+        // Tool use settings
+        reflect: message.reflect,
         attachTeXCount: message.attachTeXCount,
         usePrefillFromInput: message.usePrefillFromInput,
         autoConfirmation: message.autoConfirmation,
@@ -149,7 +152,6 @@ export class WebviewMessageHandler {
       const agentConfig: AgentConfig = {
         agent: message.agent,
         model: message.model,
-        reflect: message.reflect === 'True',
         instruction: message.instruction,
         inputFile: message.inputFile,
         inputFiles: getFilesIfNotEmpty(message.inputFiles),
