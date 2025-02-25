@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import { fileExistsAbsolute } from './absoluteFileUtils';
 
 const CHANNEL = 'Utils';
 logger.initialize(CHANNEL);
@@ -125,10 +126,7 @@ export async function moveFile(
     const destUri = vscode.Uri.file(fullDestPath);
 
     // Check if source exists
-    const sourceExists = await vscode.workspace.fs.stat(sourceUri).then(
-      () => true,
-      () => false,
-    );
+    const sourceExists = await fileExistsAbsolute(fullSourcePath);
     if (!sourceExists) {
       logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
       return;
@@ -162,10 +160,7 @@ export async function copyFile(
     const destUri = vscode.Uri.file(fullDestPath);
 
     // Check if source exists
-    const sourceExists = await vscode.workspace.fs.stat(sourceUri).then(
-      () => true,
-      () => false,
-    );
+    const sourceExists = await fileExistsAbsolute(fullSourcePath);
     if (!sourceExists) {
       logger.warn(CHANNEL, `Source file doesn't exist: ${source}`);
       return;
@@ -206,10 +201,7 @@ export async function findFileInBuild(
       try {
         const dirUri = vscode.Uri.file(searchDir);
 
-        const exists = await vscode.workspace.fs.stat(dirUri).then(
-          () => true,
-          () => false,
-        );
+        const exists = await fileExistsAbsolute(searchDir);
         if (!exists) {
           logger.debug(CHANNEL, `Directory doesn't exist: ${searchDir}`);
           continue;
@@ -306,18 +298,12 @@ export async function readDirectory(
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, filePath);
-    const uri = vscode.Uri.file(fullPath);
-    await vscode.workspace.fs.stat(uri);
-    return true;
-  } catch {
-    return false;
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
   }
+  const fullPath = path.join(workspacePath, filePath);
+  return await fileExistsAbsolute(fullPath);
 }
 
 export function readFileBytesSync(filePath: string): Buffer {
