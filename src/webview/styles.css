@@ -1,35 +1,30 @@
-:root {
-  /* Colors */
-  --background-color: var(--vscode-sideBar-background);
-  --text-color: var(--vscode-sideBar-foreground);
-  --button-background: var(--vscode-button-background);
-  --button-foreground: var(--vscode-button-foreground);
-  --button-hover-background: var(--vscode-button-hoverBackground);
-  --input-background: var(--vscode-input-background);
-  --input-foreground: var(--vscode-input-foreground);
-  --input-border: var(--vscode-input-border);
-  --dropdown-background: var(--vscode-dropdown-background);
-  --dropdown-foreground: var(--vscode-dropdown-foreground);
-  --dropdown-border: var(--vscode-dropdown-border);
-  --icon-button-background: rgba(var(--button-background), 0.3);
-  --icon-button-hover-background: rgba(var(--button-hover-background), 0.5);
-  --icon-button-foreground: var(--vscode-editor-foreground);
-  --icon-color: var(--vscode-textLink-foreground);
+/**
+ * WebView specific styles
+ * For common styles, see ../common/styles/common.css
+ */
 
-  /* Typography */
-  --font-size: var(--vscode-font-size);
-  --font-family: var(--vscode-font-family);
-  --font-weight: var(--vscode-font-weight);
+/* WebView-specific customizations for buttons and UI elements */
 
-  /* Spacing */
-  --spacing-tiny: 2px;
-  --spacing-small: 5px;
-  --spacing-medium: 10px;
-  --spacing-large: 15px;
+/* Specific styles for the main WebView interface */
 
-  /* Border radius */
-  --border-radius: 3px;
+/* Common codicon styling */
+.codicon {
+  font-family: codicon;
+  font-size: var(--font-size);
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  top: 0;
 }
+
+/* Action button styling */
+
+/* Icon button styling */
+/* Common styles end */
+
+/* WebView specific styles */
 
 body {
   background-color: var(--background-color);
@@ -66,7 +61,6 @@ body {
   border: 1px solid var(--dropdown-border);
   border-radius: 4px;
   padding: var(--spacing-medium);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-bottom: var(--spacing-large);
 }
 
@@ -85,7 +79,6 @@ body {
   border: 1px solid var(--dropdown-border);
   border-radius: 4px;
   padding: var(--spacing-medium);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .select-group {
@@ -120,7 +113,6 @@ body {
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .file-select {
@@ -196,77 +188,9 @@ body {
   margin-left: auto;
 }
 
-.icon-button {
-  width: 24px;
-  height: 24px;
-  padding: 2px;
-  font-size: calc(var(--font-size) * 0.8);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 0.5px solid var(--input-border);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background-color 0.2s,
-    transform 0.1s;
-}
+/* Icon button styles from common.css */
 
-.icon-button:hover {
-  background-color: var(--icon-button-hover-background);
-  transform: translateY(-1px);
-}
-
-.icon-button .codicon {
-  margin: 0;
-  font-size: calc(var(--font-size) * 0.9);
-  color: var(--icon-color);
-  opacity: 0.8;
-  position: relative;
-  top: 0;
-}
-
-.icon-button:hover .codicon {
-  opacity: 1;
-}
-
-/* Text buttons (like latexdiff) */
-.action-button {
-  padding: 2px 6px;
-  margin-right: var(--spacing-small);
-  font-size: calc(var(--font-size) * 0.9);
-  background-color: var(--icon-button-background);
-  color: var(--icon-button-foreground);
-  border: 0.5px solid var(--input-border);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-tiny);
-  transition:
-    background-color 0.2s,
-    transform 0.1s;
-  height: 24px;
-}
-
-.action-button:hover {
-  background-color: var(--icon-button-hover-background);
-  transform: translateY(-1px);
-}
-
-.action-button .codicon {
-  font-size: calc(var(--font-size) * 0.9);
-  color: var(--icon-color);
-  opacity: 0.8;
-  margin-right: 2px;
-}
-
-.action-button:hover .codicon {
-  opacity: 1;
-}
+/* Action button styles from common.css */
 
 .button-group {
   margin-bottom: var(--spacing-small);
@@ -329,7 +253,6 @@ body {
   font-size: var(--font-size);
   max-height: 120px;
   overflow-y: auto;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .multiple-files-list div {
@@ -356,7 +279,6 @@ body {
   border: 1px solid var(--dropdown-border);
   border-radius: 4px;
   padding: var(--spacing-medium);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .instruction-box label {
@@ -415,15 +337,11 @@ body {
   align-items: center;
   gap: 4px;
   z-index: 10;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition:
-    background-color 0.2s,
-    transform 0.1s;
+  transition: background-color 0.2s;
 }
 
 #executeButton:hover {
   background-color: #005999;
-  transform: translateY(-1px);
 }
 
 #executeButton .codicon {
@@ -528,14 +446,7 @@ body {
   height: 24px;
 }
 
-.codicon {
-  font-family: codicon;
-  font-size: var(--font-size);
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-flex;
-  align-items: center;
-}
+/* Codicon styles from common.css */
 
 /* Update the execute-row styles */
 .execute-row {
