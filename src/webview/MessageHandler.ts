@@ -9,7 +9,7 @@ import { workspace } from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, getRelativePath } from '../utils/fileUtils';
+import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
 import {
   listInputFiles,

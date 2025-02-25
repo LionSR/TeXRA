@@ -9,7 +9,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from './commonUtils';
-import { getWorkspacePath } from '../utils/fileUtils';
+import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'FrontendUtils';
 logger.initialize(CHANNEL);

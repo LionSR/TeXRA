@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getRelativePath } from '../utils/fileUtils';
+import { getRelativePath } from '../utils/workspaceFileUtils';
 
 // Local imports - latex utils
 import { runLatexIndent } from '../latex/latexindent';

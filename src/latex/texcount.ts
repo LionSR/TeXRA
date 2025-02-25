@@ -2,7 +2,7 @@
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { fileExists, readFile } from '../utils/fileUtils';
+import { fileExists, readFile } from '../utils/workspaceFileUtils';
 import { executeCommand } from '../utils/execUtils';
 import { checkToolInstalled } from './texTools';
 

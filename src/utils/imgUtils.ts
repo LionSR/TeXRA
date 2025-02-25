@@ -13,7 +13,11 @@ import { fromPath } from 'pdf2pic';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath, readFileBytesSync, fileExists } from './fileUtils';
+import {
+  getWorkspacePath,
+  readFileBytesSync,
+  fileExists,
+} from './workspaceFileUtils';
 
 const execAsync = promisify(exec);
 

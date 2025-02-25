@@ -123,7 +123,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._activeStream = Array.from(this._logStreams.keys())[0] || '';
     }
 
-    // Load task states
+    // Load taskStates
     const savedTaskStates = this.context.workspaceState.get<{
       [key: string]: Record<string, any>;
     }>(this._taskStateKey);
@@ -153,7 +153,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._activeStream,
     );
 
-    // Save task states
+    // Save taskStates
     const taskStatesObj = Object.fromEntries(this._taskStates.entries());
     this.context.workspaceState.update(this._taskStateKey, taskStatesObj);
   }
@@ -403,40 +403,40 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   }
 
   public setTaskState(streamId: string, taskState: TaskState): void {
-    this.logger.debug(`Setting task state for stream: ${streamId}`);
+    this.logger.debug(`Setting taskState for stream: ${streamId}`);
     this.logger.debug(`Task state: ${JSON.stringify(taskState)}`);
     this._taskStates.set(streamId, taskState);
     this.saveTaskStates();
     this.logger.debug(
-      `Current task states: ${JSON.stringify(Array.from(this._taskStates.entries()))}`,
+      `Current taskStates: ${JSON.stringify(Array.from(this._taskStates.entries()))}`,
     );
   }
 
   public getTaskState(streamId: string): TaskState | undefined {
-    this.logger.debug(`Getting task state for stream: ${streamId}`);
+    this.logger.debug(`Getting taskState for stream: ${streamId}`);
     const taskState = this._taskStates.get(streamId);
     if (!taskState) {
-      this.logger.warn(`No task state found for stream: ${streamId}`);
+      this.logger.warn(`No taskState found for stream: ${streamId}`);
     } else {
-      this.logger.debug(`Found task state: ${JSON.stringify(taskState)}`);
+      this.logger.debug(`Found taskState: ${JSON.stringify(taskState)}`);
     }
     return taskState;
   }
 
   private loadTaskStates(): void {
-    this.logger.debug('Loading task states from workspace state');
+    this.logger.debug('Loading taskStates from workspace state');
     const savedTaskStates =
       this.context.workspaceState.get<[string, TaskState][]>(
         this._taskStateKey,
       ) || [];
-    this.logger.debug(`Loaded task states: ${JSON.stringify(savedTaskStates)}`);
+    this.logger.debug(`Loaded taskStates: ${JSON.stringify(savedTaskStates)}`);
     this._taskStates = new Map(savedTaskStates);
   }
 
   private saveTaskStates(): void {
-    this.logger.debug('Saving task states to workspace state');
+    this.logger.debug('Saving taskStates to workspace state');
     const taskStatesArray = Array.from(this._taskStates.entries());
-    this.logger.debug(`Saving task states: ${JSON.stringify(taskStatesArray)}`);
+    this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesArray)}`);
     this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
   }
 }

@@ -8,7 +8,8 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from '../utils/fileUtils';
+import { getWorkspacePath } from '../utils/workspaceFileUtils';
+import { fileExists } from '../utils/workspaceFileUtils';
 
 // Local imports - latex utils
 import {
@@ -87,19 +88,13 @@ async function handleLatexdiff(
       path.join(workspacePath, path.dirname(fileToUse), diffFileName),
     );
 
-    // Verify the file exists
-    try {
-      await vscode.workspace.fs.stat(fullPath);
-    } catch (err) {
-      if (
-        err instanceof vscode.FileSystemError &&
-        err.code === 'FileNotFound'
-      ) {
-        throw new Error(
-          `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
-        );
-      }
-      throw err;
+    // Verify the file exists using fileExists utility
+    const filePathRelative = path.join(path.dirname(fileToUse), diffFileName);
+    if (!(await fileExists(filePathRelative))) {
+      vscode.window.showErrorMessage(
+        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+      );
+      return;
     }
 
     const doc = await vscode.window.showTextDocument(fullPath);
@@ -151,21 +146,13 @@ async function handleLatexdiffvc(
       path.join(workspacePath, path.dirname(fileToUse), diffFileName),
     );
 
-    // do we have to use fs.stat? cannot we use something like fileExists?
-
-    // Verify the file exists
-    try {
-      await vscode.workspace.fs.stat(fullPath);
-    } catch (err) {
-      if (
-        err instanceof vscode.FileSystemError &&
-        err.code === 'FileNotFound'
-      ) {
-        throw new Error(
-          `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
-        );
-      }
-      throw err;
+    // Verify the file exists using fileExists utility
+    const filePathRelative = path.join(path.dirname(fileToUse), diffFileName);
+    if (!(await fileExists(filePathRelative))) {
+      vscode.window.showErrorMessage(
+        `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
+      );
+      return;
     }
 
     const doc = await vscode.window.showTextDocument(fullPath);

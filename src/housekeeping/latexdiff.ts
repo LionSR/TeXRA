@@ -14,7 +14,7 @@ import {
   findFileInBuild,
   createDirectory,
   fileExists,
-} from '../utils/fileUtils';
+} from '../utils/workspaceFileUtils';
 
 // Local imports - housekeeping
 import { TEMP_EXTENSIONS } from './constants';
