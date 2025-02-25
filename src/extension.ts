@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 // Local imports - core
 import * as logger from './logger/logUtils';
 import { initializeSecrets } from './utils/secretUtils';
+import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 
 // Local imports - components
 import { LogViewProvider } from './logger/LogViewProvider';
@@ -53,10 +54,10 @@ async function copyDefaultAgents(context: vscode.ExtensionContext) {
       // In the future new versions should update prompt?
 
       // Only copy if target doesn't exist
-      try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(targetPath));
+      const targetExists = await fileExistsAbsolute(targetPath);
+      if (targetExists) {
         console.log(`File already exists at target: ${file}`);
-      } catch {
+      } else {
         // File doesn't exist, copy it
         console.log(`Copying file: ${file}`);
         const content = await fs.promises.readFile(sourcePath);

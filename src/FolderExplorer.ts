@@ -10,6 +10,7 @@ import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
 } from './utils/pathUtils';
+import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
@@ -133,7 +134,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         const newPath = path.join(path.dirname(oldPath), newName);
 
         // For new items, create them
-        if (!(await this.fileExistsAbsolute(oldPath))) {
+        if (!(await fileExistsAbsolute(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             // Create new file
             await vscode.workspace.fs.writeFile(
@@ -162,15 +163,6 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     this.editingItem = undefined;
     item.editing = false;
     this.refresh();
-  }
-
-  private async fileExistsAbsolute(filePath: string): Promise<boolean> {
-    try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   public async setupFileSystemWatcher() {
