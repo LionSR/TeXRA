@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { readFile, writeFile } from './fileUtils';
+import { readFile, writeFile } from './workspaceFileUtils';
 import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'Utils';

@@ -13,7 +13,7 @@ import {
   fileExists,
   writeFile,
   createDirectory,
-} from '../utils/fileUtils';
+} from '../utils/workspaceFileUtils';
 import { renderPrompt } from '../utils/promptUtils';
 
 // Local imports - latex utils

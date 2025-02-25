@@ -6,7 +6,7 @@ import { promisify } from 'util';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getWorkspacePath } from './fileUtils';
+import { getWorkspacePath } from './workspaceFileUtils';
 
 const execAsync = promisify(cp.exec);
 

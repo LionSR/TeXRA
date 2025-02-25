@@ -133,7 +133,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         const newPath = path.join(path.dirname(oldPath), newName);
 
         // For new items, create them
-        if (!(await this.fileExists(oldPath))) {
+        if (!(await this.fileExistsAbsolute(oldPath))) {
           if (item.collapsibleState === vscode.TreeItemCollapsibleState.None) {
             // Create new file
             await vscode.workspace.fs.writeFile(
@@ -164,7 +164,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     this.refresh();
   }
 
-  private async fileExists(filePath: string): Promise<boolean> {
+  private async fileExistsAbsolute(filePath: string): Promise<boolean> {
     try {
       await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
       return true;
