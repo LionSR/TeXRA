@@ -580,7 +580,7 @@ export class OutputHandler {
     this.logger.info(
       `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
     );
-    this.logger.warn(`Total cost          : ${cost.toFixed(3)} USD`);
+    this.logger.info(`Total cost          : ${cost.toFixed(3)} USD`);
     this.logger.info('=======================');
   }
 }
