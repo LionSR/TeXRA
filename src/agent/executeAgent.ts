@@ -200,13 +200,10 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       // Auto extract settings
       autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
       autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
-      autoExtractTikzFigureReflect:
-        config.toolConfig?.autoExtractTikzFigureReflect || false,
-      // Tool use settings
-      reflect: config.toolConfig?.reflect || false,
       attachTeXCount: config.toolConfig?.attachTeXCount || false,
       usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
       printInputPrompt: config.toolConfig?.printInputPrompt || false,
+      reflect: config.toolConfig?.reflect || false,
       outputNameOverrideVisible: !!config.outputNameOverride,
     });
     logger.debug(`Task state stored for stream: ${fullStreamId}`);

@@ -35,6 +35,8 @@ export const TEMP_EXTENSIONS = [
 export const MODELS = [
   'opus',
   'sonnet',
+  'sonnet*T',
+  'sonnet*',
   'sonnet+',
   'sonnet++',
   'haiku+',
@@ -55,6 +57,8 @@ export const MODELS = [
   'qvq-72b',
   'DSV3',
   'DSR1',
+  'grok2',
+  'grok3',
 ];
 
 export const HISTORY_DIR = 'History';

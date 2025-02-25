@@ -105,7 +105,6 @@ export class LogViewMessageHandler {
       toolConfig: {
         autoExtractFigure: taskState.autoExtractFigure,
         autoExtractTikzFigure: taskState.autoExtractTikzFigure,
-        autoExtractTikzFigureReflect: taskState.autoExtractTikzFigureReflect,
         attachTeXCount: taskState.attachTeXCount,
         usePrefillFromInput: taskState.usePrefillFromInput,
         printInputPrompt: taskState.printInputPrompt,

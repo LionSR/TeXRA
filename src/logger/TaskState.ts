@@ -31,7 +31,6 @@ export interface TaskState {
   // Auto extract settings
   autoExtractFigure: boolean;
   autoExtractTikzFigure: boolean;
-  autoExtractTikzFigureReflect: boolean;
 
   // Tool use settings
   reflect: boolean;
@@ -74,7 +73,6 @@ export function fromObject(obj: Record<string, any>): TaskState {
     // Auto extract settings
     autoExtractFigure: obj.autoExtractFigure || false,
     autoExtractTikzFigure: obj.autoExtractTikzFigure || false,
-    autoExtractTikzFigureReflect: obj.autoExtractTikzFigureReflect || false,
 
     // Tool use settings
     reflect: obj.reflect || false,

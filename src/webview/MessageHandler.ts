@@ -140,7 +140,6 @@ export class WebviewMessageHandler {
         // Auto extract settings
         autoExtractFigure: message.autoExtractFigure,
         autoExtractTikzFigure: message.autoExtractTikzFigure,
-        autoExtractTikzFigureReflect: message.autoExtractTikzFigureReflect,
         // Tool use settings
         reflect: message.reflect,
         attachTeXCount: message.attachTeXCount,

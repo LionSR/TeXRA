@@ -5,7 +5,7 @@ import { ToolConfig } from './ToolConfig';
  * Default configuration for task execution and tool usage
  */
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
-  model: 'sonnet+',
+  model: 'sonnet*',
   agent: 'correct',
   instruction: '',
   inputFile: '',
