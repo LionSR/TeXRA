@@ -222,6 +222,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
+    let endTurn = false;
+
     if (
       !(await fileExists(outputFile)) ||
       (await readFile(outputFile)).length <= 15
@@ -243,7 +245,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       this.logger.debug(
         `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
       );
-      return [false, messages];
+      return [endTurn, messages];
     }
 
     let fileContent = await readFile(outputFile);
@@ -264,7 +266,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
       } else {
         messages.at(-1).content = fileContent;
       }
-      return [true, messages];
+      endTurn = true;
+      return [endTurn, messages];
     }
 
     this.logger.info(
@@ -286,7 +289,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
       agentConfig,
     );
 
-    return [false, messages];
+    endTurn = false;
+    return [endTurn, messages];
   }
 
   /** Computes cost based on token usage and model pricing. */
