@@ -62,12 +62,30 @@ body {
 .latrexdiffs-section {
   margin-top: auto;
   padding-top: var(--spacing-large);
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing-large);
+}
+
+/* Ensure all button sizes are consistent */
+.latrexdiffs-section .icon-button,
+.file-select-actions .icon-button {
+  width: 24px;
+  height: 24px;
 }
 
 .compact-selections {
   display: flex;
   gap: var(--spacing-small);
   margin-bottom: var(--spacing-large);
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .select-group {
@@ -81,6 +99,7 @@ body {
   font-size: var(--font-size);
   color: var(--text-color);
   opacity: 0.8;
+  vertical-align: text-bottom;
 }
 
 .select-group select {
@@ -91,6 +110,7 @@ body {
   border-radius: var(--border-radius);
   background-color: var(--input-background);
   color: var(--input-foreground);
+  cursor: pointer;
 }
 
 .file-selection-group {
@@ -100,10 +120,11 @@ body {
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .file-select {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 /* Make optional sections more compact */
@@ -129,11 +150,14 @@ body {
   align-items: center;
   margin-bottom: var(--spacing-small);
   flex-wrap: nowrap;
+  line-height: 1.5;
 }
 
 .file-select-header label {
   font-weight: bold;
   margin-right: var(--spacing-small);
+  display: flex;
+  align-items: center;
 }
 
 .file-select-label-group {
@@ -185,10 +209,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
 }
 
 .icon-button:hover {
   background-color: var(--icon-button-hover-background);
+  transform: translateY(-1px);
 }
 
 .icon-button .codicon {
@@ -196,6 +224,8 @@ body {
   font-size: calc(var(--font-size) * 0.9);
   color: var(--icon-color);
   opacity: 0.8;
+  position: relative;
+  top: 0;
 }
 
 .icon-button:hover .codicon {
@@ -216,16 +246,22 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-tiny);
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+  height: 24px;
 }
 
 .action-button:hover {
   background-color: var(--icon-button-hover-background);
+  transform: translateY(-1px);
 }
 
 .action-button .codicon {
   font-size: calc(var(--font-size) * 0.9);
   color: var(--icon-color);
   opacity: 0.8;
+  margin-right: 2px;
 }
 
 .action-button:hover .codicon {
@@ -257,6 +293,7 @@ body {
   background-color: var(--dropdown-background);
   color: var(--dropdown-foreground);
   font-size: var(--font-size);
+  cursor: pointer;
 }
 
 .multiple-files-container {
@@ -290,8 +327,9 @@ body {
   border-radius: var(--border-radius);
   padding: var(--spacing-small);
   font-size: var(--font-size);
-  max-height: 100px;
+  max-height: 120px;
   overflow-y: auto;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .multiple-files-list div {
@@ -314,6 +352,11 @@ body {
 .instruction-box {
   margin-bottom: var(--spacing-small);
   position: relative;
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .instruction-box label {
@@ -338,6 +381,7 @@ body {
   color: var(--input-foreground);
   box-sizing: border-box;
   transition: height 0.1s ease-out;
+  margin-top: 8px;
 }
 
 .checkbox-group {
@@ -360,7 +404,7 @@ body {
   position: absolute;
   bottom: 8px;
   right: 8px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   font-size: calc(var(--font-size) * 1);
   background-color: #007acc;
   color: white;
@@ -369,18 +413,25 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
 }
 
 #executeButton:hover {
   background-color: #005999;
+  transform: translateY(-1px);
 }
 
 #executeButton .codicon {
   margin-right: var(--spacing-small);
   font-size: var(--font-size);
   color: white;
+  position: relative;
+  top: 0;
 }
 
 .section {
@@ -394,6 +445,14 @@ body {
   margin-bottom: var(--spacing-small);
   padding-bottom: 4px;
   border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  line-height: 1.5;
+}
+
+.section-header .codicon {
+  margin-right: var(--spacing-small);
+  vertical-align: text-bottom;
 }
 
 .button-group {
@@ -428,6 +487,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-small);
+  line-height: 1.5;
 }
 
 .instruction-header-left {
@@ -445,6 +505,8 @@ body {
 .instruction-header label {
   font-size: var(--font-size);
   font-weight: bold;
+  display: flex;
+  align-items: center;
 }
 
 .instruction-header label .codicon {
@@ -469,7 +531,10 @@ body {
 .codicon {
   font-family: codicon;
   font-size: var(--font-size);
-  line-height: var(--font-size);
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Update the execute-row styles */
@@ -632,6 +697,8 @@ body {
   margin-left: 1px;
   margin-right: 0;
   color: var(--vscode-foreground);
+  position: relative;
+  top: 0;
 }
 
 /* Dropdown positioning containers */
@@ -807,6 +874,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-small);
+  line-height: 1.5;
 }
 
 .instruction-header-left {
@@ -886,4 +954,5 @@ body {
 .instruction-header label .codicon {
   margin-right: var(--spacing-small);
   color: var(--icon-color);
+  vertical-align: text-bottom;
 }

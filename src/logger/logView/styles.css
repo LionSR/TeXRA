@@ -142,7 +142,7 @@ body {
 
 .tab-delete {
   display: none;
-  padding: 2px 4px;
+  padding: 2px;
   border: none;
   background: none;
   color: var(--vscode-foreground);
@@ -150,6 +150,11 @@ body {
   cursor: pointer;
   margin-right: 4px;
   font-size: 11px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-container:hover .tab-delete {
@@ -176,10 +181,13 @@ body {
 .codicon {
   font-family: codicon;
   font-size: var(--font-size);
-  line-height: 14px;
+  line-height: 1;
   margin-right: 4px;
   color: var(--vscode-foreground);
   opacity: 0.8;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
 }
 
 .codicon-trash:before {
@@ -382,19 +390,23 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 4px;
-  border: none;
+  padding: 2px 6px;
+  border: 0.5px solid var(--input-border);
   border-radius: var(--border-radius);
   background-color: var(--icon-button-background);
   color: var(--icon-button-foreground);
   cursor: pointer;
   font-size: calc(var(--font-size) * 0.9);
-  transition: background-color 0.2s;
-  gap: var(--spacing-small);
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+  gap: var(--spacing-tiny);
+  height: 24px;
 }
 
 .action-button:hover {
   background-color: var(--icon-button-hover-background);
+  transform: translateY(-1px);
 }
 
 .action-button:disabled {
@@ -405,6 +417,9 @@ body {
 .action-button .codicon {
   font-size: calc(var(--font-size) * 0.9);
   color: var(--icon-button-foreground);
+  margin-right: 2px;
+  position: relative;
+  top: 0;
 }
 
 /* Button-specific styles */
@@ -430,6 +445,8 @@ body {
   color: var(--vscode-foreground);
   opacity: 0.7;
   margin-right: 0;
+  position: relative;
+  top: 0;
 }
 
 .tab-delete:hover .codicon {
