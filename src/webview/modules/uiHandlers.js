@@ -437,11 +437,18 @@ export function setupUIHandlers() {
     onEnd: saveState,
   });
 
-  addEventListenerSafely(
-    'toggleOutputNameOverride',
-    'click',
-    toggleOutputNameOverride,
-  );
+  // Output Filename toggle only works when inside Multiple Outputs container
+  addEventListenerSafely('toggleOutputNameOverride', 'click', function () {
+    const multipleOutputFilesContainer = safeGetElementById(
+      'multipleOutputFilesContainer',
+    );
+    if (
+      multipleOutputFilesContainer &&
+      multipleOutputFilesContainer.style.display === 'block'
+    ) {
+      toggleOutputNameOverride();
+    }
+  });
 
   addEventListenerSafely('addOpenedFilesButton', 'click', function () {
     vscode.postMessage({
