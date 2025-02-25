@@ -356,20 +356,24 @@
         "properties": {
           "coauthor.merge.defaultModel": {
             "type": "string",
-            "default": "sonnet+",
+            "default": "sonnet*",
             "enum": [
-              "opus",
+              "sonnet*",
               "sonnet+",
-              "gpt4t",
-              "gpt4o",
-              "gpt4o-"
+              "gemini2fT",
+              "gemini2f",
+              "gemini2p",
+              "o3-mini",
+              "gpt4o"
             ],
             "enumDescriptions": [
-              "Claude 3 Opus",
-              "Claude 3 Sonnet+",
-              "GPT-4 Turbo",
-              "GPT-4O",
-              "GPT-4O Mini"
+              "Claude Sonnet 3.7",
+              "Claude Sonnet 3.5",
+              "Gemini 2 Flash Thinking",
+              "Gemini 2 Flash",
+              "Gemini 2 Pro",
+              "OpenAI O3 Mini",
+              "OpenAI GPT-4O"
             ],
             "description": "Default model to use for merge operations",
             "order": 1

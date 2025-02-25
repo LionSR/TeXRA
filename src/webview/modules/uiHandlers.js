@@ -224,9 +224,6 @@ export function setupUIHandlers() {
     const autoExtractTikzFigure = safeGetElementChecked(
       'autoExtractTikzFigure',
     );
-    const autoExtractTikzFigureReflect = safeGetElementChecked(
-      'autoExtractTikzFigureReflect',
-    );
 
     // tool use options
     const reflect = safeGetElementChecked('reflect');
@@ -253,7 +250,6 @@ export function setupUIHandlers() {
       // auto extract options
       autoExtractFigure: autoExtractFigure,
       autoExtractTikzFigure: autoExtractTikzFigure,
-      autoExtractTikzFigureReflect: autoExtractTikzFigureReflect, // TODO: one day we use autoExtractTikzFigure to control this too
       // tool use options
       reflect: reflect,
       attachTeXCount: attachTeXCount,
