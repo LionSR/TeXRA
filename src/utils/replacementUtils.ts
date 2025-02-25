@@ -149,6 +149,8 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\overbrace{': '\\overbrace',
     '\\\\underbrace{': '\\underbrace',
     '\\e^{': 'e^{',
+    '\\\\label{': '\\label{',
+    '\\\nlabel{': '\\label{',
 
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',

@@ -30,7 +30,7 @@ async function handleMerge(
     return;
   }
 
-  const model = getConfig('merge.defaultModel', 'sonnet+');
+  const model = getConfig('merge.defaultModel', 'sonnet*');
   const fileToUse = baseFile || inputFile;
 
   try {

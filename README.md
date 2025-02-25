@@ -102,7 +102,7 @@ After installing these dependencies, ensure they are accessible from the command
 7. Click "Execute" to run the AI-assisted agent
 8. Review the output in the newly created file
 
-Although many models are supported, we recommend using Anthropic sonnet+/opus or O1-series model for the best experience.
+Although many models are supported, we recommend using Anthropic sonnet\*/opus or O1/O3-series or Gemini 2 Flash/Thinking model for the best experience.
 
 ## Available AI Agents
 

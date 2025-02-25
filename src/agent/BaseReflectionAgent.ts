@@ -434,8 +434,6 @@ export abstract class BaseReflectionAgent {
       AUTO_EXTRACT_FIGURE: this.agentConfig.toolConfig.autoExtractFigure,
       AUTO_EXTRACT_TIKZ_FIGURE:
         this.agentConfig.toolConfig.autoExtractTikzFigure,
-      AUTO_EXTRACT_TIKZ_FIGURE_REFLECT:
-        this.agentConfig.toolConfig.autoExtractTikzFigureReflect,
       INCLUDE_TEX_COUNT: this.agentConfig.toolConfig.attachTeXCount,
       USE_PREFILL_FROM_INPUT: this.agentConfig.toolConfig.usePrefillFromInput,
       PRINT_INPUT_PROMPT: this.agentConfig.toolConfig.printInputPrompt,
@@ -1000,7 +998,7 @@ export abstract class BaseReflectionAgent {
 
     if (
       this.modelHandler.capabilities.supportsVision &&
-      this.agentConfig.toolConfig.autoExtractTikzFigureReflect
+      this.agentConfig.toolConfig.autoExtractTikzFigure
     ) {
       for (const outputFile of outputFiles) {
         this.logger.debug(`Extracting TikZ figures from ${outputFile}`);
