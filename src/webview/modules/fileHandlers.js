@@ -1,7 +1,7 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
+import { MULTIPLE_SELECTIONS } from './constants.js';
 import {
-  MULTIPLE_SELECTIONS,
   addEventListenerSafely,
   safeGetElementById,
   safeSetElementValue,

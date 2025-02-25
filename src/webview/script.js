@@ -3,7 +3,10 @@ import { restoreState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
 
-import { CHECK_BOXES_TOOL_USE } from './modules/utils.js';
+import {
+  CHECK_BOXES_TOOL_USE,
+  CHECK_BOXES_AUTO_EXTRACT,
+} from './modules/constants.js';
 
 // Add this function to handle textarea auto-resize
 function autoResizeTextarea(textarea) {
