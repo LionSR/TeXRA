@@ -5,7 +5,6 @@ export interface ToolConfig {
   autoExtractTikzFigure: boolean;
   autoExtractTikzFigureReflect: boolean;
   attachTeXCount: boolean;
-  autoConfirmation: boolean;
   printInputPrompt: boolean;
   reflect: boolean;
 }

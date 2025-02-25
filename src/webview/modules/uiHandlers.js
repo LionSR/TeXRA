@@ -232,7 +232,6 @@ export function setupUIHandlers() {
     const reflect = safeGetElementChecked('reflect');
     const attachTeXCount = safeGetElementChecked('attachTeXCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
-    const autoConfirmation = safeGetElementChecked('autoConfirmation');
     const printInputPrompt = safeGetElementChecked('printInputPrompt');
 
     vscode.postMessage({
@@ -259,7 +258,6 @@ export function setupUIHandlers() {
       reflect: reflect,
       attachTeXCount: attachTeXCount,
       usePrefillFromInput: usePrefillFromInput,
-      autoConfirmation: autoConfirmation,
       printInputPrompt: printInputPrompt,
 
       // output
