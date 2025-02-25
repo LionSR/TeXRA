@@ -53,7 +53,6 @@ export abstract class ModelHandler {
         usePrefillFromInput: false,
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
-        autoExtractTikzFigureReflect: false,
         reflect: false,
         attachTeXCount: false,
         printInputPrompt: false,
