@@ -9,7 +9,6 @@ export const MULTIPLE_SELECTIONS = [
 export const CHECK_BOXES_AUTO_EXTRACT = [
   'autoExtractFigure',
   'autoExtractTikzFigure',
-  'autoExtractTikzFigureReflect',
 ];
 
 export const CHECK_BOXES_TOOL_USE = [
