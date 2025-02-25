@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.18.20",
+  "version": "0.18.21",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -598,7 +598,7 @@
         {
           "id": "coauthor",
           "title": "CoAuthor",
-          "icon": "resources/scholarly-duck.svg"
+          "icon": "resources/quantum-deer.svg"
         }
       ],
       "panel": [
@@ -738,7 +738,7 @@
   },
   "license": "MIT",
   "author": "Sirui LU",
-  "icon": "resources/scholarly-duck.png",
+  "icon": "resources/quantum-deer.png",
   "keywords": [
     "latex",
     "academic",
