@@ -14,6 +14,7 @@ import {
   fileExists,
   getWorkspacePath,
 } from '../utils/workspaceFileUtils';
+import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 import { executeCommand } from '../utils/execUtils';
 
@@ -37,10 +38,9 @@ export async function runIndentTeX(): Promise<void> {
   }
 
   if (config) {
-    // Check if config file exists - use fs.access directly since this is an absolute path
-    try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(config));
-    } catch (err) {
+    // Check if config file exists using fileExistsAbsolute
+    const configExists = await fileExistsAbsolute(config);
+    if (!configExists) {
       logger.error(
         CHANNEL,
         `Error: Latexindent config file not found at ${config}`,
