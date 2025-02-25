@@ -55,6 +55,7 @@ export abstract class ModelHandler {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
         autoExtractTikzFigureReflect: false,
+        reflect: false,
         attachTeXCount: false,
         autoConfirmation: false,
         printInputPrompt: false,

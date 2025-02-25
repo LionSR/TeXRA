@@ -81,18 +81,27 @@ export class LogViewMessageHandler {
     const agentConfig = {
       agent: taskState.agent,
       model: taskState.model,
-      reflect: taskState.reflect === 'True',
       instruction: taskState.instruction,
       inputFile: taskState.inputFile,
       referenceFile: taskState.referenceFile || undefined,
       auxiliaryFile: taskState.auxiliaryFile || undefined,
       figureFile: taskState.figureFile || undefined,
       outputNameOverride: taskState.outputNameOverride || undefined,
-      inputFiles: taskState.multipleInputFiles,
-      referenceFiles: taskState.multipleReferenceFiles,
-      auxiliaryFiles: taskState.multipleAuxiliaryFiles,
-      figureFiles: taskState.multipleFigureFiles,
-      outputFiles: taskState.multipleOutputFiles,
+      inputFiles: taskState.multipleInputFilesVisible
+        ? taskState.multipleInputFiles
+        : [],
+      referenceFiles: taskState.multipleReferenceFilesVisible
+        ? taskState.multipleReferenceFiles
+        : [],
+      auxiliaryFiles: taskState.multipleAuxiliaryFilesVisible
+        ? taskState.multipleAuxiliaryFiles
+        : [],
+      figureFiles: taskState.multipleFigureFilesVisible
+        ? taskState.multipleFigureFiles
+        : [],
+      outputFiles: taskState.multipleOutputFilesVisible
+        ? taskState.multipleOutputFiles
+        : [],
       toolConfig: {
         autoExtractFigure: taskState.autoExtractFigure,
         autoExtractTikzFigure: taskState.autoExtractTikzFigure,
@@ -101,6 +110,7 @@ export class LogViewMessageHandler {
         usePrefillFromInput: taskState.usePrefillFromInput,
         printInputPrompt: taskState.printInputPrompt,
         autoConfirmation: taskState.autoConfirmation,
+        reflect: taskState.reflect,
       },
     };
 
