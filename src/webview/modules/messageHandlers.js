@@ -12,7 +12,7 @@ import {
   safeGetElementById,
 } from './utils.js';
 import { restoreState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS } from './utils.js';
+import { MULTIPLE_SELECTIONS } from './constants.js';
 import { capitalize, uncapitalize } from './utils.js';
 
 export function setupMessageHandlers() {

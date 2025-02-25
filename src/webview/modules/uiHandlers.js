@@ -1,6 +1,11 @@
 import { vscode } from './vscodeApi.js';
 import { saveState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS, CHECK_BOXES, ELEMENTS_TO_SAVE } from './utils.js';
+import {
+  MULTIPLE_SELECTIONS,
+  CHECK_BOXES,
+  ELEMENTS_TO_SAVE,
+  CHECK_BOXES_AUTO_EXTRACT,
+} from './constants.js';
 import {
   updateEditedFileSelect,
   getSelectedFiles,
@@ -18,8 +23,6 @@ import {
   capitalize,
   uncapitalize,
 } from './utils.js';
-
-import { CHECK_BOXES_AUTO_EXTRACT } from './utils.js';
 
 export function setupUIHandlers() {
   // Make all multiple file selections sortable
