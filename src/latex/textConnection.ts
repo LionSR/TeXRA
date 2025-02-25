@@ -97,7 +97,7 @@ function processMajorityChoice(choices: string[]): ConnectionResult {
 async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
   try {
     return await getSecretApiKey(provider as ApiProvider);
-  } catch (error) {
+  } catch (err) {
     throw new Error(
       `${provider.toUpperCase()} API key not found. Please set it using the "Set API Key" command.`,
     );
