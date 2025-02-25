@@ -62,7 +62,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (
       this.config.fullName === 'claude-3-7-sonnet-20250219' &&
-      this.capabilities.supportsExtendedThinking
+      this.capabilities.supportsReasoning
     ) {
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit
@@ -193,7 +193,26 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Extract base response
     let stopReason = responseObject.stop_reason;
-    let newResponse = responseObject.content[0].text.trim();
+    let newResponse = '';
+
+    // Check if we're using Claude 3.7 Sonnet with thinking enabled
+    const isThinkingEnabled =
+      this.config.fullName === 'claude-3-7-sonnet-20250219' &&
+      this.capabilities.supportsReasoning;
+
+    if (isThinkingEnabled && Array.isArray(responseObject.content)) {
+      // Handle thinking blocks in Claude 3.7 Sonnet responses
+      for (const block of responseObject.content) {
+        if (block.type === 'text') {
+          newResponse += block.text.trim();
+        }
+        // We don't include thinking blocks (type: thinking or redacted_thinking) in the response text
+        // They need to be preserved in the message object for the next turn though
+      }
+    } else if (responseObject.content && responseObject.content.length > 0) {
+      // Handle regular text responses
+      newResponse = responseObject.content[0].text.trim();
+    }
 
     if (this.capabilities.likesToAskForConfirmation && autoConfirmation) {
       newResponse = wrapConfirmationPrompts(newResponse);
@@ -333,7 +352,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    // For sonnet 3.7 with thinking enabled prefill do not work.
+    // Check if we're using Claude 3.7 Sonnet with thinking enabled
+    const isThinkingEnabled = this.capabilities.supportsReasoning;
+
+    let endTurn = false;
 
     if (
       !(await fileExists(outputFile)) ||
@@ -359,7 +381,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
 
       messages.push({ role: 'assistant', content: prefill });
-      return [false, messages];
+      return [endTurn, messages];
     }
 
     // Get prefill from existing and non-trivial file
@@ -399,7 +421,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
         delete messages.at(-1).content[messages.at(-1).content.length - 1]
           .cache_control;
       }
-      return [true, messages];
+      endTurn = true;
+      return [endTurn, messages];
     }
 
     this.logger.warn(
@@ -418,7 +441,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.debug(`Using existing content as prefill: ${outputFile}`);
 
     messages.push({ role: 'assistant', content });
-    return [false, messages];
+    endTurn = false;
+    return [endTurn, messages];
   }
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
