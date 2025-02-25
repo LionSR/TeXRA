@@ -169,7 +169,7 @@ body {
 
 .button-group label {
   display: block;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   margin-bottom: var(--spacing-small);
 }
 
@@ -299,8 +299,8 @@ body {
   right: 16px;
   padding: 3px 10px;
   font-size: var(--font-size);
-  background-color: var(--vscode-button-background);
-  color: var(--vscode-button-foreground);
+  background-color: var(--button-background);
+  color: var(--button-foreground);
   border: none;
   border-radius: var(--border-radius);
   cursor: pointer;
@@ -318,7 +318,7 @@ body {
 #executeButton .codicon {
   margin-right: var(--spacing-small);
   font-size: var(--font-size);
-  color: var(--vscode-button-foreground);
+  color: var(--button-foreground);
   position: relative;
   top: 0;
 }
@@ -506,7 +506,7 @@ body {
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 .vscode-input:focus {
@@ -548,6 +548,11 @@ body {
   display: none;
 }
 
+#toggleAutoExtract,
+#toggleToolUse {
+  pointer-events: auto;
+}
+
 .auto-toggle {
   cursor: pointer;
   user-select: none;
@@ -555,18 +560,34 @@ body {
   display: flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  padding: 4px 6px;
-  font-size: var(--font-size);
+  padding: 2px 6px;
+  font-size: calc(var(--font-size) * 0.9);
   border-radius: var(--border-radius);
   background: var(--vscode-button-secondaryBackground);
   border: 1px solid var(--vscode-button-border);
   transition: background-color 0.2s;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
-#toggleAutoExtract,
-#toggleToolUse {
-  pointer-events: auto;
+/* Dropdown positioning containers */
+.dropdown-container {
+  position: relative;
+}
+
+.dropdown-right .dropdown-options {
+  right: 0;
+  left: auto;
+}
+
+.dropdown-left .dropdown-options {
+  left: 0;
+  right: auto;
+}
+
+/* Unified dropdown toggle button styling */
+
+.auto-toggle:hover {
+  background: var(--vscode-list-hoverBackground);
 }
 
 .auto-toggle i {
@@ -577,7 +598,7 @@ body {
 }
 
 .auto-toggle .codicon {
-  font-size: 12px;
+  font-size: calc(var(--font-size) * 0.9);
   margin-left: 1px;
   margin-right: 0;
   color: var(--vscode-foreground);
@@ -585,22 +606,8 @@ body {
   top: 0;
 }
 
-/* Dropdown positioning containers */
-.dropdown-container {
-  position: relative;
-}
-
-.dropdown-right .auto-extract-options {
-  right: 0;
-  left: auto;
-}
-
-.dropdown-left .auto-extract-options {
-  left: 0;
-  right: auto;
-}
-
-.auto-extract-options {
+/* Unified dropdown options container */
+.dropdown-options {
   position: absolute;
   top: 100%;
   z-index: 100;
@@ -611,20 +618,22 @@ body {
   box-shadow: var(--vscode-widget-shadow);
   min-width: 200px;
   display: none;
-  font-size: calc(var(--vscode-font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.9);
   padding: 4px;
   white-space: nowrap;
 }
 
-.auto-extract-options-content {
-  font-size: calc(var(--vscode-font-size) * 0.9);
+/* Unified dropdown options content */
+.dropdown-options-content {
+  font-size: calc(var(--font-size) * 0.9);
   background: var(--vscode-menu-background);
   border: 1px solid var(--vscode-input-border);
   border-radius: var(--border-radius);
   box-shadow: inset 0 0 0 1px var(--vscode-menu-border);
 }
 
-.auto-extract-options label {
+/* Unified dropdown option labels */
+.dropdown-options label {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -635,15 +644,15 @@ body {
   font-weight: normal;
 }
 
-.auto-extract-options label:hover {
+.dropdown-options label:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
-.auto-extract-options input[type='checkbox'] {
+.dropdown-options input[type='checkbox'] {
   margin: 0;
 }
 
-.auto-extract-options i {
+.dropdown-options i {
   width: 16px;
   text-align: center;
   color: var(--icon-color);
@@ -660,7 +669,7 @@ body {
 .optional-label {
   color: var(--vscode-foreground);
   font-weight: normal;
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
   white-space: nowrap;
   min-width: 160px;
 }
@@ -679,7 +688,7 @@ body {
   background-color: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
+  font-size: var(--font-size);
 }
 
 .vscode-input:focus {
@@ -722,36 +731,9 @@ body {
   display: none;
 }
 
-.auto-toggle {
-  cursor: pointer;
-  user-select: none;
-  color: var(--vscode-foreground);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-tiny);
-  padding: 4px 6px;
-  font-size: var(--font-size);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-button-border);
-  border-radius: var(--border-radius);
-  transition: background-color 0.2s;
-  pointer-events: auto;
-}
-
 #toggleAutoExtract,
 #toggleToolUse {
   pointer-events: auto;
-}
-
-.auto-toggle i {
-  font-size: 0.8em;
-  color: var(--vscode-foreground);
-  margin-left: 1px;
-  pointer-events: none;
-}
-
-.auto-toggle:hover {
-  background: var(--vscode-list-hoverBackground);
 }
 
 .instruction-header {
@@ -778,16 +760,12 @@ body {
   position: relative;
 }
 
-.dropdown-left .auto-extract-options {
+.dropdown-left .dropdown-options {
   left: 0;
   right: auto;
 }
 
 /* Update auto-toggle style to match the header */
-.auto-toggle {
-  padding: 2px 6px;
-  font-size: calc(var(--font-size) * 0.9);
-}
 
 /* Hide multiple file operation buttons when containers are not toggled */
 .file-select:has(#multipleInputFilesContainer[style*='none'])
