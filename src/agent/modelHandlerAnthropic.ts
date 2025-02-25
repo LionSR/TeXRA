@@ -49,14 +49,31 @@ export class ModelHandlerAnthropic extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
   ): Promise<any> {
-    return client.beta.messages.create({
+    // Prepare options for the API call
+    const options: any = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
       temperature,
       stop_sequences: endTag ? [endTag] : undefined,
       system: systemPrompt,
-    });
+    };
+
+    // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
+    if (
+      this.config.fullName === 'claude-3-7-sonnet-20250219' &&
+      this.capabilities.supportsExtendedThinking
+    ) {
+      options.betas = ['output-128k-2025-02-19'];
+      // Update max tokens to use the higher limit
+      options.max_tokens = 128000;
+      options.thinking = {
+        type: 'enabled',
+        budget_tokens: 32000,
+      };
+    }
+
+    return client.beta.messages.create(options);
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional images. */
@@ -316,6 +333,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
+    // For sonnet 3.7 with thinking enabled prefill do not work.
+
     if (
       !(await fileExists(outputFile)) ||
       (await readFile(outputFile)).length <= 15
