@@ -45,7 +45,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3-7-sonnet-20250219-v1:0',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 64000, // Using extended output with beta header
+    maxOutputTokens: 21333, // Using extended output with beta header
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
