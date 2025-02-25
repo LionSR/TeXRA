@@ -365,18 +365,18 @@ body {
 /* Button-specific styles */
 .stop-button {
   margin-right: var(--spacing-tiny);
-}
-
-.stop-icon {
-  color: #ff3333;
-  font-size: calc(var(--font-size) * 1.2);
+  color: var(--vscode-testing-iconFailed, #f14c4c);
 }
 
 .pack-button,
 .clean-button,
-.run-button,
 .clear-button {
   margin-left: var(--spacing-tiny);
+}
+
+.run-button {
+  margin-left: var(--spacing-tiny);
+  color: var(--vscode-testing-runAction, #2ea043);
 }
 
 /* Tab delete icon */
