@@ -24,9 +24,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'sonnet*T': {
     name: 'sonnet*T',
     fullName: 'claude-3-7-sonnet-20250219',
-    openrouterFullName: 'anthropic/claude-3-7-sonnet-20250219-v1:0',
+    openrouterFullName: 'anthropic/claude-3.7-sonnet',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 128000, // Using extended output with beta header
+    maxOutputTokens: 21333, // Using extended output with beta header
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
@@ -42,7 +42,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'sonnet*': {
     name: 'sonnet*',
     fullName: 'claude-3-7-sonnet-20250219',
-    openrouterFullName: 'anthropic/claude-3-7-sonnet-20250219-v1:0',
+    openrouterFullName: 'anthropic/claude-3.7-sonnet',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 21333, // Using extended output with beta header
     contextWindow: 200000,
@@ -70,6 +70,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
+      supportsTokenCounting: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -87,6 +88,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
       supportsNativePdf: true,
+      supportsTokenCounting: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -103,6 +105,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
+      supportsTokenCounting: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -135,6 +138,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
       supportsVision: true,
+      supportsTokenCounting: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -151,6 +155,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
+      supportsTokenCounting: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
