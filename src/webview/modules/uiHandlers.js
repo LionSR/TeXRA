@@ -449,9 +449,14 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely('addOpenedFilesButton', 'click', function () {
-    vscode.postMessage({
-      command: 'addOpenedFiles',
+  // Replace the single addOpenedFilesButton handler with type-specific handlers
+  ['Input', 'Reference', 'Auxiliary'].forEach((type) => {
+    const buttonId = `addOpened${type}FilesButton`;
+    addEventListenerSafely(buttonId, 'click', function () {
+      vscode.postMessage({
+        command: 'addOpenedFiles',
+        fileType: uncapitalize(type),
+      });
     });
   });
 
