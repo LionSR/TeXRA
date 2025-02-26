@@ -338,6 +338,12 @@ export abstract class ModelHandler {
     return [endTurn, shouldStop];
   }
 
+  public containCutOffMessage(content: any[]): boolean {
+    return content.some((c: { type: string; text: string }) =>
+      c.text?.includes('Your response got cut off'),
+    );
+  }
+
   /** Creates and configures a client instance for the specific model provider. */
   abstract getClient(): Promise<any>;
 
@@ -381,13 +387,15 @@ export abstract class ModelHandler {
   abstract createImageContent(imageContents: any[]): any[];
 
   /**
-   * Processes model response, handling errors and formatting.
-   * @returns Tuple of [formatted response text, usage statistics, stop reason]
+   * Extracts response text, usage statistics, thinking block, and stop reason from API response.
+   * @param responseObject Raw API response
+   * @param endTag End tag to append if needed
+   * @returns Tuple of [response text, usage data, thinking block, stop reason]
    */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, string];
+  ): [string, any, any, string];
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations.

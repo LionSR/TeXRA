@@ -25,12 +25,16 @@ export function getWorkspacePath(): string | undefined {
   return workspaceFolders[0].uri.fsPath;
 }
 
-export async function readFile(filePath: string): Promise<string> {
+export function getFullPathFromWorkspace(filePath: string): string {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
     throw new Error('No workspace path found');
   }
-  const fullPath = path.join(workspacePath, filePath);
+  return path.join(workspacePath, filePath);
+}
+
+export async function readFile(filePath: string): Promise<string> {
+  const fullPath = getFullPathFromWorkspace(filePath);
   const uri = vscode.Uri.file(fullPath);
   const content = await vscode.workspace.fs.readFile(uri);
   return Buffer.from(content).toString('utf-8');
@@ -40,11 +44,7 @@ export async function writeFile(
   filePath: string,
   content: string,
 ): Promise<void> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    throw new Error('No workspace path found');
-  }
-  const fullPath = path.join(workspacePath, filePath);
+  const fullPath = getFullPathFromWorkspace(filePath);
   const uri = vscode.Uri.file(fullPath);
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf-8'));
 }
@@ -54,11 +54,7 @@ export async function appendFile(
   content: string,
 ): Promise<void> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = getFullPathFromWorkspace(filePath);
     const uri = vscode.Uri.file(fullPath);
 
     // Read existing content
@@ -85,11 +81,7 @@ export async function appendFile(
 
 export async function deleteFile(filePath: string): Promise<void> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = getFullPathFromWorkspace(filePath);
     const uri = vscode.Uri.file(fullPath);
     await vscode.workspace.fs.delete(uri, { useTrash: false });
     logger.debug(CHANNEL, `Deleted: ${filePath}`);
@@ -115,12 +107,8 @@ export async function moveFile(
 ): Promise<void> {
   logger.debug(CHANNEL, `Moving file from ${source} to ${destination}`);
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullSourcePath = path.join(workspacePath, source);
-    const fullDestPath = path.join(workspacePath, destination);
+    const fullSourcePath = getFullPathFromWorkspace(source);
+    const fullDestPath = getFullPathFromWorkspace(destination);
 
     const sourceUri = vscode.Uri.file(fullSourcePath);
     const destUri = vscode.Uri.file(fullDestPath);
@@ -149,12 +137,8 @@ export async function copyFile(
 ): Promise<void> {
   logger.debug(CHANNEL, `Copying file from ${source} to ${destination}`);
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullSourcePath = path.join(workspacePath, source);
-    const fullDestPath = path.join(workspacePath, destination);
+    const fullSourcePath = getFullPathFromWorkspace(source);
+    const fullDestPath = getFullPathFromWorkspace(destination);
 
     const sourceUri = vscode.Uri.file(fullSourcePath);
     const destUri = vscode.Uri.file(fullDestPath);
@@ -186,6 +170,7 @@ export async function findFileInBuild(
   ext?: string,
 ): Promise<string | null> {
   try {
+    // Only search in inputDir and inputDir/build, not build/build
     const workspacePath = getWorkspacePath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
@@ -251,11 +236,7 @@ export async function findFileInBuild(
 
 export async function createDirectory(relativePath: string): Promise<void> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, relativePath);
+    const fullPath = getFullPathFromWorkspace(relativePath);
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(fullPath));
     logger.debug(CHANNEL, `Created directory: ${relativePath}`);
   } catch (err) {
@@ -281,11 +262,7 @@ export async function readDirectory(
   dirPath: string,
 ): Promise<[string, vscode.FileType][]> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, dirPath);
+    const fullPath = getFullPathFromWorkspace(dirPath);
     const dirUri = vscode.Uri.file(fullPath);
     return await vscode.workspace.fs.readDirectory(dirUri);
   } catch (err) {
@@ -298,21 +275,19 @@ export async function readDirectory(
 }
 
 export async function fileExists(filePath: string): Promise<boolean> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    throw new Error('No workspace path found');
-  }
-  const fullPath = path.join(workspacePath, filePath);
+  const fullPath = getFullPathFromWorkspace(filePath);
   return await fileExistsAbsolute(fullPath);
+}
+
+export async function fileExistsAndNonTrivial(
+  filePath: string,
+): Promise<boolean> {
+  return (await fileExists(filePath)) && (await readFile(filePath)).length > 15;
 }
 
 export function readFileBytesSync(filePath: string): Buffer {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = getFullPathFromWorkspace(filePath);
     return fs.readFileSync(fullPath);
   } catch (err) {
     logger.error(
