@@ -15,6 +15,9 @@ export interface IToolState {
   /** Paths to figure files */
   figureFiles: string[];
 
+  /** Complete thinking/reasoning block from models that support it (e.g., Claude 3.7) */
+  thinkingBlock: any;
+
   updateLastResponse(response: string): void;
   updateAccumulatedOutput(output: string): void;
   addFigureFiles(files: string[]): void;
@@ -27,6 +30,7 @@ export class ToolState implements IToolState {
   lastResponse: string;
   accumulatedOutput: string;
   figureFiles: string[];
+  thinkingBlock: any;
 
   private constructor() {
     this.texcountStats = null;
@@ -34,6 +38,7 @@ export class ToolState implements IToolState {
     this.lastResponse = '';
     this.accumulatedOutput = '';
     this.figureFiles = [];
+    this.thinkingBlock = null;
   }
 
   /** Creates a new ToolState instance with initialized values. */

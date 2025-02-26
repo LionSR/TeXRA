@@ -45,6 +45,7 @@ import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
+import { messageToSkeleton } from './messageUtils';
 
 const K_SLICE = 200;
 const SEPARATOR =
@@ -111,6 +112,7 @@ export abstract class BaseReflectionAgent {
     this.userVars = {};
 
     // Check scratchpad usage
+    // this is not so neat
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
@@ -481,7 +483,7 @@ export abstract class BaseReflectionAgent {
       this.logger.info(`Response time: ${responseTime.toFixed(2)}s`);
 
       // Extract and validate response
-      const [newResponse, responseUsage, stopReason] =
+      const [newResponse, responseUsage, thinkingBlock, stopReason] =
         this.modelHandler.extractResponse(
           responseObject,
           this.agentSetting.endTag,
@@ -489,6 +491,24 @@ export abstract class BaseReflectionAgent {
 
       this.logger.debug(`Stop reason: ${stopReason}`);
       this.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
+
+      // Log thinking block if available
+      if (thinkingBlock) {
+        this.logger.debug(`Thinking block type: ${thinkingBlock.type}`);
+        if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
+          // Log first 200 chars of thinking content if available
+          this.logger.debug(
+            `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
+          );
+        } else if (
+          thinkingBlock.type === 'redacted_thinking' &&
+          thinkingBlock.data
+        ) {
+          this.logger.debug(`Redacted thinking data available (encoded)`);
+        }
+        // Store complete thinking block in tool state
+        toolState.thinkingBlock = thinkingBlock;
+      }
 
       // Compute statistics and update states
       const APIUsage = this.modelHandler.computeResponseUsage(
@@ -506,10 +526,17 @@ export abstract class BaseReflectionAgent {
         newResponse,
       );
       if (repetitionResult.massiveRepetitionDetected) {
-        this.logger.error(`The new response is: ${newResponse}`);
+        // this needs not to be output in full, but only the new response
+        this.logger.error(
+          `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
+        );
         this.logger.error(
           `Massive repetition detected - skipping this response`,
         );
+
+        // Debug information - print message skeleton to help diagnose the problem
+        this.logger.error(`Message structure when repetition detected:`);
+        this.logger.error(JSON.stringify(messageToSkeleton(messages), null, 2));
         break;
       }
 

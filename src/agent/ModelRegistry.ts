@@ -16,6 +16,11 @@ import {
   ReasoningEffort,
 } from './ModelConfig';
 
+// reansoning effort:
+// For Anthropic models, maybe a good value:
+// 1. The reasoning token allocation is capped at 32,000 tokens maximum and 1024 tokens minimum.
+// 2. effort_ratio is 0.8 for high effort, 0.5 for medium effort, and 0.2 for low effort.
+
 /**
  * Available model configurations indexed by short name.
  * Each configuration includes complete model settings and capabilities.
@@ -25,7 +30,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'sonnet*T': {
     name: 'sonnet*T',
     fullName: 'claude-3-7-sonnet-20250219',
-    openrouterFullName: 'anthropic/claude-3.7-sonnet',
+    openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
     provider: ModelProvider.ANTHROPIC,
     maxOutputTokens: 21333, // Using extended output with beta header
     contextWindow: 200000,
