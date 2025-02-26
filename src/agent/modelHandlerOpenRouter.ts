@@ -84,12 +84,22 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         if (Array.isArray(lastMessage.content)) {
           lastMessage.content.at(-1).text = bestConnector + newResponse;
         } else if (typeof lastMessage.content === 'string') {
-          lastMessage.content = toolState.accumulatedOutput;
+          lastMessage.content = [
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ];
         }
       } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
         messages.push({
           role: 'assistant',
-          content: toolState.accumulatedOutput,
+          content: [
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ],
         });
       }
     }
