@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: false
----
-You are developing a VS code extension called coauthor to process text files with large language models.
