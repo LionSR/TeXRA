@@ -87,6 +87,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
+      // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
     return client.beta.messages.create(options);
@@ -122,14 +123,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   public removeCacheControl(content: any[]) {
-    // With the updated Anthropic prompt caching, we only need to add cache_control
-    // to the new message - Anthropic will automatically check for cache hits
-    // at previous positions
+    // With the updated Anthropic prompt caching, we should ensure we never exceed
+    // Anthropic's limit of 4 cache_control blocks across the entire conversation
 
-    // First clear any existing cache control points to stay under the 4 breakpoint limit
-
+    // Complete removal approach - remove all cache_control properties
+    // This ensures we don't accumulate too many cache points over time
     if (Array.isArray(content) && content.length > 0) {
-      for (let i = 0; i < content.length - 1; i++) {
+      for (let i = 0; i < content.length; i++) {
         if (typeof content[i] === 'object' && content[i]?.cache_control) {
           delete content[i].cache_control;
         }
@@ -161,14 +161,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
     };
     content.push(message);
 
-    // Since Anthropic now automatically checks for cache hits at previous positions,
-    // we only need to remove cache_control from previous message to avoid
-    // exceeding the 4 cache breakpoint limit
-    if (
-      this.capabilities.supportsPromptCaching &&
-      Array.isArray(messages.at(-1)?.content)
-    ) {
-      this.removeCacheControl(messages.at(-1).content);
+    // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
+    // Remove cache_control from ALL previous message contents
+    if (this.capabilities.supportsPromptCaching) {
+      for (const msg of messages) {
+        this.removeCacheControl(msg.content);
+      }
     }
 
     messages.push({ role: 'user', content });
@@ -226,7 +224,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     if (
       this.capabilities.supportsReasoning &&
-      Array.isArray(responseObject.content)
+      Array.isArray(responseObject.content) &&
+      responseObject.content.length > 0
     ) {
       // Handle thinking blocks in Claude 3.7 Sonnet responses
       for (const block of responseObject.content) {
@@ -284,7 +283,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
     messages.push({
       role: 'user',
-      content: userMessageContinuation,
+      content: [{ type: 'text', text: userMessageContinuation }],
       // cache_control: { type: 'ephemeral' },
       // if we keep removing this userContinuation message, then the cache_control will be removed too!
     });
@@ -320,18 +319,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
         } else if (agentSetting.outputExt === 'xml') {
           await writeFile(outputFile, prefill + '\n');
         }
-        messages.push({ role: 'assistant', content: prefill });
+        messages.push({
+          role: 'assistant',
+          content: [{ type: 'text', text: prefill }],
+        });
       } else {
         // For thinking-enabled models that don't support assistant prefill,
         // add prefill as part of the user message like OpenAI handler
 
         const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
-        if (Array.isArray(messages.at(-1).content)) {
-          messages.at(-1).content.push({
-            type: 'text',
-            text: PseudoPrefillMsgContentString,
-          });
-        }
+        messages.at(-1).content.push({
+          type: 'text',
+          text: PseudoPrefillMsgContentString,
+        });
         this.logger.debug(
           `Added pseudo prefill message to messages:\n${PseudoPrefillMsgContentString}`,
         );
@@ -348,13 +348,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ).trim();
     await writeFile(outputFile, fileContent);
 
+    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
-      if (Array.isArray(messages.at(-1).content)) {
-        messages.at(-1).content[messages.at(-1).content.length - 1].text =
-          fileContent;
+      // this is suspicious, because the two conflicts!!! we should check
+      if (Array.isArray(lastMessage.content)) {
+        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
       } else {
-        messages.at(-1).content = fileContent;
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: fileContent,
+          },
+        ];
       }
 
       this.removeCacheControl(messages.at(-1).content);
@@ -448,9 +454,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
     if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Last message is a request message rather than a ask to continue after cut off',
-      );
       messages.push({
         role: 'assistant',
         content: [{ type: 'text', text: toolState.accumulatedOutput }],
@@ -459,6 +462,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // Handle normal Anthropic models
       const lastMessage = messages.at(-1);
       if (lastMessage.role === 'assistant') {
+        // why does the following two differ?
         if (Array.isArray(lastMessage.content)) {
           const newMessage = {
             type: 'text',
@@ -466,26 +470,29 @@ export class ModelHandlerAnthropic extends ModelHandler {
           };
           lastMessage.content.push(newMessage);
         } else {
-          lastMessage.content = toolState.accumulatedOutput;
+          lastMessage.content = [
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ];
         }
 
         if (this.capabilities.supportsPromptCaching) {
+          // First remove all cache_control from all previous messages to stay under the limit
+          for (let i = 0; i < messages.length - 1; i++) {
+            const msg = messages[i];
+            this.removeCacheControl(msg.content);
+          }
+
+          // Then ensure the current message has at most one cache_control
           if (Array.isArray(lastMessage.content)) {
+            // Remove all existing cache_control
             this.removeCacheControl(lastMessage.content);
 
-            // Add cache_control to the new message
             lastMessage.content.at(-1).cache_control = {
               type: 'ephemeral',
             };
-          } else {
-            // Initialize content list with single message
-            lastMessage.content = [
-              {
-                type: 'text',
-                text: toolState.accumulatedOutput,
-                cache_control: { type: 'ephemeral' },
-              },
-            ];
           }
         }
       }
@@ -505,6 +512,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     let secondLastMessageType = secondLastMessage.content.at(0).type;
 
     if (this.containCutOffMessage(lastMessage.content)) {
+      this.logger.debug(
+        'Last message is a user message asking to continue after cut off',
+      );
       // The last message is a user message
       // The second last message must be an assistant message
       if (secondLastMessage.role === 'assistant') {
@@ -522,17 +532,38 @@ export class ModelHandlerAnthropic extends ModelHandler {
               secondLastMessage.content.at(0).text,
           );
         }
+
         if (Array.isArray(secondLastMessage.content)) {
-          secondLastMessage.content.push({
-            type: 'text',
-            text: bestConnector + newResponse,
-            ...(this.capabilities.supportsPromptCaching
-              ? { cache_control: { type: 'ephemeral' } }
-              : {}),
-          });
+          // Remove all cache_control from previous messages first
+          if (this.capabilities.supportsPromptCaching) {
+            for (let i = 0; i < messages.length - 1; i++) {
+              const msg = messages[i];
+              if (Array.isArray(msg.content)) {
+                this.removeCacheControl(msg.content);
+              }
+            }
+            this.removeCacheControl(secondLastMessage.content);
+
+            // Add new message with cache_control
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+              cache_control: { type: 'ephemeral' },
+            });
+          } else {
+            secondLastMessage.content.push({
+              type: 'text',
+              text: bestConnector + newResponse,
+            });
+          }
         } else {
           this.logger.error('Second last message content is not a list');
-          secondLastMessage.content = toolState.accumulatedOutput;
+          secondLastMessage.content = [
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ];
         }
         // Remove the user continuation prompt
         messages.pop();
