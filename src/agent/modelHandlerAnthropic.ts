@@ -60,6 +60,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
+      delete options.temperature;
+
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit
       options.max_tokens = this.config.maxOutputTokens;
@@ -69,6 +71,17 @@ export class ModelHandlerAnthropic extends ModelHandler {
           budget_tokens: 32000,
         };
       }
+    }
+
+    if (this.capabilities.supportsTokenCounting) {
+      const responseTokenCount = await client.beta.messages.countTokens({
+        model: this.config.fullName,
+        system: systemPrompt,
+        messages: messages,
+      });
+      this.logger.debug(
+        `Token count of message: ${responseTokenCount.input_tokens}`,
+      );
     }
 
     return client.beta.messages.create(options);
@@ -259,9 +272,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
-    // Check if we're using Claude 3.7 Sonnet with thinking enabled
-    const isThinkingEnabled = this.capabilities.supportsReasoning;
-
     let endTurn = false;
 
     if (
