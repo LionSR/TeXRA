@@ -17,6 +17,7 @@ import { registerXmlCommands } from './commands/xmlCommands';
 import { registerYamlCommands } from './commands/yamlCommands';
 import { registerAgentCommands } from './commands/agentCommands';
 import { registerApiKeyCommands } from './commands/apiKeyCommands';
+import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 
 import * as logger from './logger/logUtils';
 
@@ -45,13 +46,19 @@ export function registerCommands(context: vscode.ExtensionContext) {
     yaml: registerYamlCommands(context),
     agent: registerAgentCommands(context),
     apiKey: registerApiKeyCommands(context),
+    stateRestore: registerStateRestoreCommand(context),
   };
 
   // Register webview provider
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'coauthor.chatView',
+      'coauthor.mainView',
       new CoAuthorViewProvider(context),
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true,
+        },
+      },
     ),
   );
 
@@ -72,3 +79,4 @@ export { testCommands } from './commands/testCommands';
 export { xmlCommands } from './commands/xmlCommands';
 export { yamlCommands } from './commands/yamlCommands';
 export { apiKeyCommands } from './commands/apiKeyCommands';
+export { stateRestoreCommand } from './commands/stateRestoreCommand';
