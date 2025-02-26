@@ -9,14 +9,12 @@ import { ToolConfig } from './ToolConfig';
  */
 export const DEFAULT_CONTEXT_WINDOW = 128000;
 
-
 export enum ReasoningEffort {
   HIGH = 'high',
   MEDIUM = 'medium',
   LOW = 'low',
   NONE = 'none',
 }
-
 
 /** Base model capabilities configuration with all features disabled by default. */
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
