@@ -97,7 +97,7 @@ export function checkRepetitionDifflib(
         CHANNEL,
         `Longest matching substring (preview): ${longestMatch.slice(0, 400)}`,
       );
-      logger.debug(CHANNEL, 'Massive repetition detected - stopping process.');
+      logger.error(CHANNEL, 'Massive repetition detected - stopping process.');
     }
 
     return {

@@ -39,6 +39,12 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       extra_headers: { 'X-Title': 'CoA' },
     };
 
+    if (this.config.capabilities.supportsReasoning) {
+      kwargs.reasoning = {
+        effort: this.config.capabilities.reasoningEffort,
+      };
+    }
+
     if (endTag) {
       kwargs.stop = [endTag];
     }

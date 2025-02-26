@@ -5,7 +5,12 @@
 import OpenAI from 'openai';
 
 // Local imports - utilities
-import { readFile, fileExists, writeFile } from '../utils/workspaceFileUtils';
+import {
+  readFile,
+  fileExists,
+  writeFile,
+  fileExistsAndNonTrivial,
+} from '../utils/workspaceFileUtils';
 import {
   applyReplacements,
   getReplacementsByCategory,
@@ -88,9 +93,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         // e.g., O1 mini and O1 preview models do not support system prompt
         messages.push({
           role: 'user',
-          content: [
-            { type: 'text', text: systemPrompt },
-          ],
+          content: [{ type: 'text', text: systemPrompt }],
         });
       }
     }
@@ -161,7 +164,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(responseObject: any, endTag: string): [string, any, string] {
+  extractResponse(
+    responseObject: any,
+    endTag: string,
+  ): [string, any, any, string] {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
       if (responseObject.error) {
@@ -178,13 +184,22 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
     let newResponse = choice.message.content.trim();
+    // OpenAI doesn't have thinking blocks like Anthropic, so we return null
+    // However deepseek/openrouter models might have thinking blocks
+    let thinkingBlock = null;
+    if (choice.message.reasoning_content) {
+      thinkingBlock = {
+        type: 'thinking',
+        thinking: choice.message.reasoning_content,
+      };
+    }
 
     // Add end tag if response was stopped and tag isn't present
     if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, stopReason];
+    return [newResponse, responseObject.usage, thinkingBlock, stopReason];
   }
 
   /** Adds continuation message when response is truncated. */
@@ -237,10 +252,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
-    if (
-      !(await fileExists(outputFile)) ||
-      (await readFile(outputFile)).length <= 15
-    ) {
+    if (!(await fileExistsAndNonTrivial(outputFile))) {
       if (
         agentConfig.toolConfig.usePrefillFromInput &&
         toolState.firstKCharsFromInput
@@ -261,6 +273,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       return [endTurn, messages];
     }
 
+    // Get prefill from existing and non-trivial file
     let fileContent = await readFile(outputFile);
     fileContent = applyReplacements(fileContent, getAllReplacements()).trim();
     fileContent = applyReplacements(
@@ -383,19 +396,22 @@ export class ModelHandlerOpenAI extends ModelHandler {
       messages.at(-1)?.role === 'system'
     ) {
       this.logger.debug('Last message is a user message');
-      if (messages.at(-1)?.content.includes('Your response got cut off')) {
-        // the second last message is an assistant message must be a assistant message
-        if (messages.at(-2).role === 'assistant') {
-          if (Array.isArray(messages.at(-2)?.content)) {
-            messages.at(-2).content.push({
+      const lastMessage = messages.at(-1);
+      const secondLastMessage = messages.at(-2);
+      if (this.containCutOffMessage(lastMessage.content)) {
+        // The last message is a user message
+        // The second last message must be an assistant message
+        if (secondLastMessage.role === 'assistant') {
+          if (Array.isArray(secondLastMessage.content)) {
+            secondLastMessage.content.push({
               type: 'text',
               text: bestConnector + newResponse,
             });
           } else {
             this.logger.error('Second last message content is not a list');
-            messages.at(-2).content = toolState.accumulatedOutput;
+            secondLastMessage.content = toolState.accumulatedOutput;
           }
-          // Remove continuation prompt
+          // Remove user continuation prompt
           messages.pop();
         }
       } else {
