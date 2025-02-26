@@ -41,6 +41,9 @@ export class LogViewMessageHandler {
       case 'runAgain':
         await this.handleRunAgain(message.stream);
         break;
+      case 'restoreState':
+        await this.handleRestoreState(message.stream);
+        break;
       default:
         logger.warn(CHANNEL, `Unknown command: ${message.command}`);
     }
@@ -135,5 +138,22 @@ export class LogViewMessageHandler {
       multipleOutputFiles: taskState.multipleOutputFiles,
       multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
     });
+  }
+
+  private async handleRestoreState(stream: string) {
+    logger.debug(
+      CHANNEL,
+      `Attempting to restore state from stream with ID: ${stream}`,
+    );
+    const taskState = this.provider.getTaskState(stream);
+    if (!taskState) {
+      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
+      return;
+    }
+    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
+    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+
+    // Execute the restore state command with the task configuration
+    await vscode.commands.executeCommand('coauthor.restoreState', taskState);
   }
 }

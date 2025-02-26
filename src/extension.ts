@@ -92,16 +92,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize secrets storage
   initializeSecrets(context);
 
-  // Create and register the view providers
+  // Create the log view provider
   const logViewProvider = new LogViewProvider(context);
-  const mainViewProvider = new CoAuthorViewProvider(context);
   logger.setLogViewProvider(logViewProvider);
 
   // Copy default agents
   copyDefaultAgents(context);
 
-  // Register commands
-  registerCommands(context);
+  // Register commands first - this will create and store the CoAuthorViewProvider
+  const registeredCommands = registerCommands(context);
 
   // Register the folder explorer with context
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -113,15 +112,7 @@ export function activate(context: vscode.ExtensionContext) {
       'coauthor.logView',
       logViewProvider,
     ),
-    vscode.window.registerWebviewViewProvider(
-      'coauthor.mainView',
-      mainViewProvider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true,
-        },
-      },
-    ),
+    // Removed duplicate mainViewProvider registration since it's handled in commands.ts
     vscode.window.registerTreeDataProvider(
       'coauthor.folderExplorer',
       folderExplorer,

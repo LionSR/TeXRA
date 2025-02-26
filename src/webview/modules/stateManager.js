@@ -172,5 +172,8 @@ export function saveState() {
     state[id] = getSelectedFiles(elementDiv);
   });
 
+  // Log the state being saved for debugging
+  console.log('Saving state:', state);
+
   vscode.setState(state);
 }
