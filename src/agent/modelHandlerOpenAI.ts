@@ -13,7 +13,6 @@ import {
 } from '../utils/workspaceFileUtils';
 import {
   applyReplacements,
-  getReplacementsByCategory,
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
@@ -88,7 +87,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     if (systemPrompt) {
       if (this.config.capabilities.supportsSystemPrompt) {
         // note that for openai native o1 full or above reasoning models, they have been renamed to "developer" but "system" still works
-        messages.push({ role: 'system', content: systemPrompt });
+        messages.push({
+          role: 'system',
+          content: [{ type: 'text', text: systemPrompt }],
+        });
       } else {
         // e.g., O1 mini and O1 preview models do not support system prompt
         messages.push({
@@ -282,15 +284,29 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ).trim();
     await writeFile(outputFile, fileContent);
 
-    messages.push({ role: 'assistant', content: fileContent });
+    messages.push({
+      role: 'assistant',
+      content: [
+        {
+          type: 'text',
+          text: fileContent,
+        },
+      ],
+    });
 
+    const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.info('End tag detected - skipping continuation');
-      if (Array.isArray(messages.at(-1).content)) {
-        messages.at(-1).content[messages.at(-1).content.length - 1].text =
-          fileContent;
+      if (Array.isArray(lastMessage.content)) {
+        // this is suspicious, because the two conflicts!!!
+        lastMessage.content[lastMessage.content.length - 1].text = fileContent;
       } else {
-        messages.at(-1).content = fileContent;
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: fileContent,
+          },
+        ];
       }
       endTurn = true;
       return [endTurn, messages];
@@ -399,9 +415,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
       const lastMessage = messages.at(-1);
       const secondLastMessage = messages.at(-2);
       if (this.containCutOffMessage(lastMessage.content)) {
-        // The last message is a user message
-        // The second last message must be an assistant message
+        // Then the last message is a user message
+        // SO the second last message must be an assistant message
         if (secondLastMessage.role === 'assistant') {
+          // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
+          // but why do the following two differ?
           if (Array.isArray(secondLastMessage.content)) {
             secondLastMessage.content.push({
               type: 'text',
@@ -409,7 +427,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
             });
           } else {
             this.logger.error('Second last message content is not a list');
-            secondLastMessage.content = toolState.accumulatedOutput;
+            secondLastMessage.content = [
+              {
+                type: 'text',
+                text: toolState.accumulatedOutput,
+              },
+            ];
           }
           // Remove user continuation prompt
           messages.pop();
