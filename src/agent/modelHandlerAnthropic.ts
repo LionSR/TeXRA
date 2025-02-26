@@ -517,66 +517,74 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     let lastMessage = messages.at(-1);
     let secondLastMessage = messages.at(-2);
-    let secondLastMessageType = secondLastMessage.content.at(0).type;
 
+    // Fix for continuation issues
     if (this.containCutOffMessage(lastMessage.content)) {
       this.logger.debug(
         'Last message is a user message asking to continue after cut off',
       );
+
       // The last message is a user message
       // The second last message must be an assistant message
       if (secondLastMessage.role === 'assistant') {
-        if (
-          secondLastMessageType === 'thinking' ||
-          secondLastMessageType === 'redacted_thinking'
-        ) {
-          // great, we already have the thinking block in the second last message
-          this.logger.debug('Second last message has a thinking block');
+        // Preserve any thinking blocks that might exist in the content array
+        const thinkingBlocks = secondLastMessage.content.filter(
+          (item: any) =>
+            item.type === 'thinking' || item.type === 'redacted_thinking',
+        );
+
+        // Find text blocks in the content array
+        const textBlocks = secondLastMessage.content.filter(
+          (item: any) => item.type === 'text',
+        );
+
+        // Create a new content array starting with any thinking blocks
+        const newContent = [...thinkingBlocks];
+
+        // If there are existing text blocks, update the last one with new content
+        // Otherwise create a new text block
+        if (textBlocks.length > 0) {
+          // Use accumulated output to ensure we have the complete context
+          const updatedText = {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          };
+          newContent.push(updatedText);
         } else {
-          // how to append to the first element of the content array?
-          secondLastMessage.content.at(0).text += bestConnector + newResponse;
-          this.logger.debug(
-            'Second last message content: ' +
-              secondLastMessage.content.at(0).text,
-          );
+          newContent.push({
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          });
         }
 
-        if (Array.isArray(secondLastMessage.content)) {
-          // Remove all cache_control from previous messages first
-          if (this.capabilities.supportsPromptCaching) {
-            for (let i = 0; i < messages.length - 1; i++) {
-              const msg = messages[i];
-              if (Array.isArray(msg.content)) {
-                this.removeCacheControl(msg.content);
-              }
+        // Update the second last message with the new content array
+        secondLastMessage.content = newContent;
+
+        // Remove cache_control from previous messages if needed
+        if (this.capabilities.supportsPromptCaching) {
+          for (let i = 0; i < messages.length - 1; i++) {
+            const msg = messages[i];
+            if (Array.isArray(msg.content)) {
+              this.removeCacheControl(msg.content);
             }
-            this.removeCacheControl(secondLastMessage.content);
-
-            // Add new message with cache_control
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-              cache_control: { type: 'ephemeral' },
-            });
-          } else {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            });
           }
-        } else {
-          this.logger.error('Second last message content is not a list');
-          secondLastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
         }
-        // Remove the user continuation prompt
+
+        // Remove the user continuation prompt to keep the conversation clean
         messages.pop();
+
+        this.logger.debug(
+          `Updated second last message with accumulated output (${toolState.accumulatedOutput.length} chars)`,
+        );
       }
       return;
+    } else {
+      // This is a regular response, not a continuation
+      this.logger.debug('Adding new assistant message with accumulated output');
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+      });
     }
   }
 
