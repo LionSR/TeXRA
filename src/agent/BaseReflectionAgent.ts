@@ -1071,7 +1071,7 @@ export abstract class BaseReflectionAgent {
   public interrupt(): void {
     this.isInterrupted = true;
     this.logger.info(
-      'Agent execution interrupted by user. Note that already sent response might still return outputs but no more messages will be sent.',
+      'Agent execution interrupted by user. Note that already sent response might still return outputs but no more request messages will be sent.',
     );
   }
 
