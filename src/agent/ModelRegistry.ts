@@ -13,6 +13,7 @@ import {
   ModelProvider,
   ModelCapabilities,
   DEFAULT_MODEL_CAPABILITIES,
+  ReasoningEffort,
 } from './ModelConfig';
 
 /**
@@ -175,7 +176,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsVision: false,
       supportsReasoning: true,
-      reasoning_effort: 'high',
+      reasoningEffort: ReasoningEffort.HIGH,
       supportsIntermDevMsgs: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
