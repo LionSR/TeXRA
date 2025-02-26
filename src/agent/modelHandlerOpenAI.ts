@@ -58,7 +58,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Handle O1 models
     if (this.isOReasoningModelFull) {
-      kwargs.reasoning_effort = this.config.capabilities.reasoning_effort;
+      kwargs.reasoningEffort = this.config.capabilities.reasoningEffort;
     }
 
     try {
