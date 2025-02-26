@@ -259,6 +259,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
     // empty xml document tag
     '<document name="">': '<document name="unknown">',
+    // for Gemini:
+    '<?xml version="1.0" encoding="UTF-8"?>': '',
   },
 };
 
