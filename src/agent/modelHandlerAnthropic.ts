@@ -348,6 +348,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ).trim();
     await writeFile(outputFile, fileContent);
 
+    // Update the toolState with the actual file content
+    toolState.updateAccumulatedOutput(fileContent);
+    toolState.updateLastResponse(fileContent);
+
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
       this.logger.debug('End tag detected - skipping continuation');
@@ -372,32 +376,36 @@ export class ModelHandlerAnthropic extends ModelHandler {
     this.logger.warn(
       'Output file exists but no end tag found - continuing from file',
     );
-    toolState.updateAccumulatedOutput(fileContent);
 
     // For thinking-enabled models that don't support assistant prefill,
     // add continuation as part of the user message
-    if (this.capabilities.supportsAssistantPrefill) {
-      const content = [
-        {
-          type: 'text',
-          text: fileContent,
-          ...(this.capabilities.supportsPromptCaching
-            ? { cache_control: { type: 'ephemeral' } }
-            : {}),
-        },
-      ];
 
-      this.logger.debug(`Using existing content as prefill: ${outputFile}`);
-      messages.push({ role: 'assistant', content });
-    } else {
+    const content = [
+      {
+        type: 'text',
+        text: fileContent,
+        ...(this.capabilities.supportsPromptCaching
+          ? { cache_control: { type: 'ephemeral' } }
+          : {}),
+      },
+    ];
+    this.logger.debug(`Using existing content as prefill: ${outputFile}`);
+    messages.push({ role: 'assistant', content });
+
+    if (!this.capabilities.supportsAssistantPrefill) {
+      // For models that don't support assistant prefill, we need to:
+      // add a continuation message in addition
       const state = AgentStateRound.initialize(0);
-      toolState.lastResponse = toolState.accumulatedOutput;
       this.addContinueMessage(
         messages,
         state,
         toolState,
         agentSetting,
         agentConfig,
+      );
+
+      this.logger.debug(
+        `Added existing content as assistant message and continuation prompt`,
       );
     }
 
