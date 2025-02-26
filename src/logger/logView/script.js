@@ -37,62 +37,59 @@ function updateStreamTabs(streams, activeStream) {
 function updateStatus(status) {
   const statusIndicator = document.getElementById('statusIndicator');
   const stopButton = document.getElementById('stopStreamBtn');
+  const runAgainBtn = document.getElementById('runAgainBtn');
   const packButton = document.getElementById('packStreamBtn');
   const cleanButton = document.getElementById('cleanStreamBtn');
-  const runAgainButton = document.getElementById('runAgainBtn');
-  if (
-    !statusIndicator ||
-    !stopButton ||
-    !packButton ||
-    !cleanButton ||
-    !runAgainButton
-  )
-    return;
+  const eraseButton = document.getElementById('eraseStreamBtn');
+  const restoreButton = document.getElementById('restoreStateBtn');
 
-  // Remove all existing status classes
-  statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
+  // First disable all action buttons (we'll enable them based on status)
+  stopButton.disabled = true;
+  runAgainBtn.disabled = true;
+  packButton.disabled = true;
+  cleanButton.disabled = true;
+  restoreButton.disabled = true;
 
-  // Add the new status class
+  // Default status is empty - ready for input
+  statusIndicator.className = 'status-indicator';
+  statusIndicator.dataset.status = 'Ready';
+
   if (status) {
-    statusIndicator.classList.add(status);
-    // Set tooltip text
-    const tooltipText =
-      {
-        running: 'Task is running',
-        error: 'Task failed with error',
-        stopped: 'Task completed or interrupted',
-        ready: 'Ready',
-      }[status] || 'Ready';
-    statusIndicator.setAttribute('data-status', tooltipText);
+    // Remove the old status classes
+    statusIndicator.classList.remove('running', 'error', 'stopped', 'ready');
 
-    // Update button states and tooltips
-    const isRunning = status === 'running';
-    const isReady = status === 'ready';
-    const isTaskActive = isRunning || isReady;
-
-    // Stop button
-    stopButton.disabled = !isRunning;
-    stopButton.title = isRunning
-      ? 'Request task interruption (note: current API call will complete)'
-      : 'No running task to stop';
-
-    // Run Again button
-    runAgainButton.disabled = isTaskActive;
-    runAgainButton.title = isTaskActive
-      ? 'Cannot run task while another task is active'
-      : 'Run this task again';
-
-    // Pack button
-    packButton.disabled = isTaskActive;
-    packButton.title = isTaskActive
-      ? 'Cannot pack while task is active'
-      : 'Pack the output for this agent';
-
-    // Clean button
-    cleanButton.disabled = isTaskActive;
-    cleanButton.title = isTaskActive
-      ? 'Cannot clean while task is active'
-      : 'Clean the output for this agent';
+    // Configure UI based on status
+    switch (status) {
+      case 'running':
+        statusIndicator.classList.add('running');
+        statusIndicator.dataset.status = 'Running';
+        stopButton.disabled = false;
+        break;
+      case 'error':
+        statusIndicator.classList.add('error');
+        statusIndicator.dataset.status = 'Error';
+        runAgainBtn.disabled = false;
+        packButton.disabled = false;
+        cleanButton.disabled = false;
+        restoreButton.disabled = false;
+        break;
+      case 'stopped':
+        statusIndicator.classList.add('stopped');
+        statusIndicator.dataset.status = 'Stopped';
+        runAgainBtn.disabled = false;
+        packButton.disabled = false;
+        cleanButton.disabled = false;
+        restoreButton.disabled = false;
+        break;
+      case 'ready':
+        statusIndicator.classList.add('ready');
+        statusIndicator.dataset.status = 'Ready';
+        break;
+      default:
+        statusIndicator.classList.add('stopped');
+        statusIndicator.dataset.status = status || 'Ready';
+        break;
+    }
 
     // Store status for current stream
     if (currentStream && status !== 'ready') {
@@ -122,6 +119,20 @@ function setupEventListeners() {
     }
   });
 
+  // Run again button click handler
+  document.getElementById('runAgainBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'runAgain', stream: currentStream });
+    }
+  });
+
+  // Restore state button click handler
+  document.getElementById('restoreStateBtn').addEventListener('click', () => {
+    if (currentStream) {
+      vscode.postMessage({ command: 'restoreState', stream: currentStream });
+    }
+  });
+
   // Pack button click handler
   document.getElementById('packStreamBtn').addEventListener('click', () => {
     if (currentStream) {
@@ -146,17 +157,6 @@ function setupEventListeners() {
   // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
     vscode.postMessage({ command: 'deleteAll' });
-  });
-
-  // Run Again button
-  const runAgainBtn = document.getElementById('runAgainBtn');
-  runAgainBtn.addEventListener('click', () => {
-    if (currentStream) {
-      vscode.postMessage({
-        command: 'runAgain',
-        stream: currentStream,
-      });
-    }
   });
 
   // Initialize split view
