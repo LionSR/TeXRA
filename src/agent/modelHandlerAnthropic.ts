@@ -310,9 +310,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
         toolState.updateAccumulatedOutput(toolState.firstKCharsFromInput);
       }
 
-      this.logger.debug(`Adding prefill message:\n${prefill}`);
-
       if (this.capabilities.supportsAssistantPrefill) {
+        this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
           toolState.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
