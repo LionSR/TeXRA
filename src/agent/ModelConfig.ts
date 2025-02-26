@@ -20,6 +20,8 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsAssistantPrefill: false,
   supportsPredictiveOutput: false,
   supportsTokenCounting: false,
+  supportsSystemPrompt: true,
+  supportsIntermDevMsgs: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -43,6 +45,8 @@ export interface ModelCapabilities {
   supportsAssistantPrefill: boolean;
   supportsPredictiveOutput: boolean;
   supportsTokenCounting: boolean;
+  supportsSystemPrompt: boolean;
+  supportsIntermDevMsgs: boolean;
 }
 
 /** Complete configuration for a language model instance. */

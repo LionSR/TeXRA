@@ -509,13 +509,17 @@
                 ></i>
                 Edited File</label
               >
-              <button id="mergeButton" class="action-button" title="Merge">
+              <button
+                id="mergeButton"
+                class="action-button"
+                title="Create a new verion of the base file by merging the edits suggested by the edited file"
+              >
                 <i class="codicon codicon-merge"></i>Merge
               </button>
               <button
                 id="latexdiffButton"
                 class="action-button"
-                title="LaTeXDiff the edited file with the base file"
+                title="LaTeXdiff the selected edited file with the selected base file"
               >
                 <i class="codicon codicon-diff-single"></i>latexdiff
               </button>
@@ -554,7 +558,7 @@
               <button
                 id="latexdiffvcButton"
                 class="action-button"
-                title="LaTeXDiff with another git commit"
+                title="LaTeXdiff the selected base file with another git commit"
               >
                 <i class="codicon codicon-diff-single"></i>latexdiff-vc
               </button>

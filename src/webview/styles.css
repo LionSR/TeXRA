@@ -838,7 +838,7 @@ body {
 
 .model-selection-footer .select-group select {
   height: 24px;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: var(--font-size);
   padding: 2px 4px;
 }
 
