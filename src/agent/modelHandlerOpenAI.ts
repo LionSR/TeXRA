@@ -80,37 +80,48 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const messages: any[] = [];
 
     // Handle system prompt differently for O1 models
-    if (this.isO1miniOrPreview) {
-      // O1 mini and preview models do not support system prompt
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'text', text: systemPrompt },
-          { type: 'text', text: userPrefix },
-        ],
-      });
-    } else {
-      if (systemPrompt) {
-        // note that for openai native o1 models, they have been renamed to "developer" but "system" still works
+    if (systemPrompt) {
+      if (this.config.capabilities.supportsSystemPrompt) {
+        // note that for openai native o1 full or above reasoning models, they have been renamed to "developer" but "system" still works
         messages.push({ role: 'system', content: systemPrompt });
+      } else {
+        // e.g., O1 mini and O1 preview models do not support system prompt
+        messages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: systemPrompt },
+          ],
+        });
       }
-
-      // Create content list with user prefix
-      const content: any[] = [{ type: 'text', text: userPrefix }];
-
-      // Add images if provided
-      if (figureFiles) {
-        content.push(...(await this.createImageMessage(figureFiles)));
-      }
-
-      messages.push({ role: 'user', content });
-
-      // Add user request
-      messages.push({
-        role: this.isOReasoningModelFull ? 'system' : 'user',
-        content: [{ type: 'text', text: userRequest }],
-      });
     }
+
+    // Create content list with user prefix
+    const content: any[] = [{ type: 'text', text: userPrefix }];
+
+    // Add images if provided
+    if (figureFiles && this.config.capabilities.supportsVision) {
+      content.push(...(await this.createImageMessage(figureFiles)));
+    }
+
+    const lastRole = messages.at(-1).role;
+    if (messages.length > 0) {
+      if (lastRole === 'system') {
+        messages.push({ role: 'user', content });
+      } else if (lastRole === 'user') {
+        messages.at(-1).content.push(...content);
+      }
+    } else {
+      messages.push({ role: 'user', content });
+    }
+
+    // Add user request
+    const role = this.config.capabilities.supportsIntermDevMsgs
+      ? 'system'
+      : 'user';
+    messages.push({
+      role,
+      content: [{ type: 'text', text: userRequest }],
+    });
 
     return messages;
   }
@@ -127,7 +138,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
       content.push(...this.createImageContent(figureFiles));
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.isOReasoningModelFull ? 'system' : 'user';
+    const role = this.config.capabilities.supportsIntermDevMsgs
+      ? 'system'
+      : 'user';
     messages.push({ role, content });
     return messages;
   }
@@ -203,8 +216,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
     this.logger.info(
       `Adding continuation message to conversation. Continuation message:\n ${userMessageContinuation}`,
     );
+
+    const role = this.config.capabilities.supportsIntermDevMsgs
+      ? 'system'
+      : 'user';
     messages.push({
-      role: 'user',
+      role,
       content: [{ type: 'text', text: userMessageContinuation }],
     });
   }
@@ -233,7 +250,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         prefill = `<${agentSetting.documentTag}>${toolState.firstKCharsFromInput}`;
       }
 
-      const PseudoPrefillMsgContentString = `Start your response with:\n${prefill}`;
+      const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       messages.at(-1).content.push({
         type: 'text',
         text: PseudoPrefillMsgContentString,
@@ -360,8 +377,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
       'Updating message content for OpenAI API compatible models',
     );
 
-    // for OpenAI models (or models that do not support assistant prefill) the last message is always a user message
-    if (messages.at(-1)?.role === 'user') {
+    // for OpenAI models (or models that do not support assistant prefill) the last message is always a user/system message
+    if (
+      messages.at(-1)?.role === 'user' ||
+      messages.at(-1)?.role === 'system'
+    ) {
       this.logger.debug('Last message is a user message');
       if (messages.at(-1)?.content.includes('Your response got cut off')) {
         // the second last message is an assistant message must be a assistant message

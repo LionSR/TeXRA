@@ -80,7 +80,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         } else if (typeof lastMessage.content === 'string') {
           lastMessage.content = toolState.accumulatedOutput;
         }
-      } else if (lastMessage.role === 'user') {
+      } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
         messages.push({
           role: 'assistant',
           content: toolState.accumulatedOutput,
