@@ -32,7 +32,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 21333, // Using extended output with beta header
+    maxOutputTokens: 8192, // Using extended output with beta header; if >21333, then we need streaming
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
