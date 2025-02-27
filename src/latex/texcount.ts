@@ -64,7 +64,7 @@ export async function getTeXCount(
 
     for (const filePath of paths) {
       if (!(await fileExists(filePath))) {
-        logger.warn(channel, `Warning: File ${filePath} does not exist.`);
+        logger.warn(channel, `File ${filePath} does not exist.`);
         continue;
       }
 
