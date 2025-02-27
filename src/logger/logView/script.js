@@ -59,8 +59,20 @@ function processScratchpadContent(message) {
         );
 
         try {
+          // Pre-process LaTeX references to protect them from markdown parsing
+          content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+
           // Process content as markdown
-          const parsedMarkdown = marked.parse(content);
+          let parsedMarkdown = marked.parse(content);
+
+          // Post-process to restore and style LaTeX references
+          parsedMarkdown = parsedMarkdown.replace(
+            /@@LATEX-REF:([^@]+)@@/g,
+            '<code class="latex-ref">\\ref{$1}</code>',
+          );
+
+          // Fix spacing issues that might occur with consecutive paragraph elements
+          parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
 
           // Create enhanced scratchpad element with better formatting
           return message.replace(
