@@ -105,3 +105,18 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     }
   }
 }
+
+export class ModelHandlerDeepseekViaOpenRouter extends ModelHandlerOpenRouter {
+  /** Returns OpenAI client configured with OpenRouter settings for Deepseek models. */
+  async getClient(): Promise<OpenAI> {
+    const apiKey = await this.getApiKey();
+    const baseURL = this.getBaseUrl();
+    this.logger.debug(
+      `Using OpenRouter API key for Deepseek model. Base URL: ${baseURL}`,
+    );
+    return new OpenAI({
+      apiKey,
+      baseURL,
+    });
+  }
+}
