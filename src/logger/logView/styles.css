@@ -425,3 +425,184 @@ body {
   background-color: var(--vscode-panel-border);
   display: none; /* Start hidden, only show on advanced view option */
 }
+
+/* Scratchpad styles */
+.scratchpad-content {
+  margin: 8px 8px 16px 32px;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: var(--vscode-textCodeBlock-background, #1e1e1e);
+  border-left: 4px solid var(--vscode-activityBarBadge-background, #007acc);
+  font-family: var(--vscode-editor-font-family);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  position: relative;
+}
+
+.scratchpad-content:before {
+  content: '💭';
+  position: absolute;
+  top: 8px;
+  left: -24px;
+  font-size: 14px;
+}
+
+/* Style markdown elements in scratchpad */
+.scratchpad-content h1,
+.scratchpad-content h2,
+.scratchpad-content h3,
+.scratchpad-content h4 {
+  color: var(--vscode-textLink-foreground, #3794ff);
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.scratchpad-content h1 {
+  font-size: 1.4em;
+  border-bottom: 1px solid var(--vscode-panel-border, #555);
+  padding-bottom: 4px;
+}
+
+.scratchpad-content h2 {
+  font-size: 1.3em;
+}
+
+.scratchpad-content h3 {
+  font-size: 1.2em;
+}
+
+.scratchpad-content h4 {
+  font-size: 1.1em;
+}
+
+.scratchpad-content p {
+  margin: 8px 0;
+}
+
+.scratchpad-content ul,
+.scratchpad-content ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.scratchpad-content li {
+  margin: 4px 0;
+}
+
+.scratchpad-content code {
+  background-color: var(--vscode-textPreformat-background, #0a0a0a);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+}
+
+.scratchpad-content pre {
+  background-color: var(--vscode-textPreformat-background, #0a0a0a);
+  padding: 8px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.scratchpad-content pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.scratchpad-content a {
+  color: var(--vscode-textLink-activeForeground, #3794ff);
+  text-decoration: none;
+}
+
+.scratchpad-content a:hover {
+  text-decoration: underline;
+}
+
+.scratchpad-content blockquote {
+  border-left: 3px solid var(--vscode-activityBarBadge-background, #007acc);
+  margin: 8px 0;
+  padding-left: 16px;
+  color: var(--vscode-descriptionForeground, #cccccc);
+  font-style: italic;
+}
+
+.scratchpad-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.scratchpad-content table th,
+.scratchpad-content table td {
+  border: 1px solid var(--vscode-panel-border, #555);
+  padding: 6px 10px;
+}
+
+.scratchpad-content table th {
+  background-color: var(--vscode-editor-lineHighlightBackground, #2a2d2e);
+  text-align: left;
+}
+
+.scratchpad-content img {
+  max-width: 100%;
+}
+
+/* Styling for different sections in scratchpad */
+.scratchpad-content strong {
+  color: var(--vscode-editor-foreground, #d4d4d4);
+  font-weight: 600;
+}
+
+.scratchpad-content em {
+  font-style: italic;
+}
+
+.scratchpad-content hr {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border, #555);
+  margin: 16px 0;
+}
+
+/* Special styling for reflection sections */
+.scratchpad-content em strong,
+.scratchpad-content strong em {
+  color: var(--vscode-editorInfo-foreground, #75beff);
+}
+
+/* Special styling for scratchpad log entries */
+.scratchpad-log {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  background-color: var(--vscode-editor-background);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.scratchpad-log .timestamp,
+.scratchpad-log .level-info {
+  opacity: 0.7;
+}
+
+/* Make the 'Scratchpad content:' text subtle */
+.scratchpad-log .message-info {
+  font-weight: bold;
+  color: var(--vscode-textLink-foreground, #3794ff);
+}
+
+/* Additional enhancements for scratchpad content */
+.scratchpad-content p:first-child {
+  margin-top: 0;
+}
+
+.scratchpad-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Special handling for reflection patterns */
+.scratchpad-content p:has(strong:first-child) {
+  border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground, #75beff);
+  padding-left: 8px;
+}
