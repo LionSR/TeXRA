@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.19.21",
+  "version": "0.20.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -49,13 +49,14 @@
               "type": "string"
             },
             "default": [
-              "sonnet*T",
-              "sonnet*",
-              "sonnet+",
+              "sonnet37T",
+              "sonnet37",
+              "sonnet35",
               "opus",
               "o3-",
               "o1",
               "o1-",
+              "gpt45",
               "gpt4o",
               "gpt4ol",
               "gemini2p",
@@ -356,10 +357,10 @@
         "properties": {
           "coauthor.merge.defaultModel": {
             "type": "string",
-            "default": "sonnet*",
+            "default": "sonnet37",
             "enum": [
-              "sonnet*",
-              "sonnet+",
+              "sonnet37",
+              "sonnet35",
               "gemini2fT",
               "gemini2f",
               "gemini2p",
@@ -435,13 +436,13 @@
         "command": "coauthor.cleanOutput",
         "title": "Clean All LLM Output Files",
         "category": "CoAuthor",
-        "icon": "$(clear-all)"
+        "icon": "$(trash)"
       },
       {
         "command": "coauthor.cleanBuild",
         "title": "Clean All Build Files",
         "category": "CoAuthor",
-        "icon": "$(trash)"
+        "icon": "$(clear-all)"
       },
       {
         "command": "coauthor.indentTeX",
