@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.20.1",
+  "version": "0.20.2",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -77,6 +77,12 @@
             "type": "boolean",
             "default": false,
             "description": "Whether to use OpenRouter for API calls when possible",
+            "scope": "resource"
+          },
+          "coauthor.model.useStreaming": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming API responses when supported by the model. This will be more robust for long responses.",
             "scope": "resource"
           }
         }
