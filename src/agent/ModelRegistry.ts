@@ -27,7 +27,7 @@ import {
  */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Anthropic Claude Models =====
-  'sonnet37T': {
+  sonnet37T: {
     name: 'sonnet37T',
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
@@ -46,7 +46,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet37': {
+  sonnet37: {
     name: 'sonnet37',
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet',
@@ -82,7 +82,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet36': {
+  sonnet36: {
     name: 'sonnet36',
     fullName: 'claude-3-5-sonnet-20241022',
     openrouterFullName: 'anthropic/claude-3.5-sonnet:beta',
@@ -100,7 +100,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet35': {
+  sonnet35: {
     name: 'sonnet35',
     fullName: 'claude-3-5-sonnet-20240620',
     openrouterFullName: 'anthropic/claude-3.5-sonnet-20240620:beta',
@@ -132,7 +132,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'haiku35': {
+  haiku35: {
     name: 'haiku35',
     fullName: 'claude-3-5-haiku-20241022',
     openrouterFullName: 'anthropic/claude-3.5-haiku:beta',
@@ -244,7 +244,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenAI Models =====
-  'gpt45': {
+  gpt45: {
     name: 'gpt45',
     fullName: 'gpt-4.5-preview',
     openrouterFullName: 'openai/gpt-4.5-preview',
@@ -377,7 +377,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'gemini15p': {
+  gemini15p: {
     name: 'gemini15p',
     fullName: 'gemini-1.5-pro-latest',
     openrouterFullName: 'google/gemini-1.5-pro',
@@ -393,7 +393,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'gemini15f': {
+  gemini15f: {
     name: 'gemini15f',
     fullName: 'gemini-1.5-fresh-latest',
     openrouterFullName: 'google/gemini-1.5-fresh',
@@ -440,7 +440,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenRouter Models =====
-  'llama31': {
+  llama31: {
     name: 'llama31',
     fullName: 'meta-llama/llama-3.1-405b-instruct',
     openrouterFullName: 'meta-llama/llama-3.1-405b-instruct',
