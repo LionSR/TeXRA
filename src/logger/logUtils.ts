@@ -102,9 +102,16 @@ class VSCodeTransport extends Transport {
     // Escape HTML tags in message for LogView
     const escapedMessage = escapeHtml(message);
 
+    // Check if this is a scratchpad message
+    const isScratchpad =
+      level === 'info' && message.includes('Scratchpad content:');
+
+    // Add a data attribute for scratchpad messages to help with styling and processing
+    const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
+
     // Colored format for LogView using CSS classes, but with shorter timestamp display
     const coloredFormattedMessage =
-      `<div class="log-line" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji} [${timeDisplay}]</span> ` +
       `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
       `<span class="message-${level}">${escapedMessage}</span>` +

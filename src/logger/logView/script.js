@@ -15,6 +15,15 @@ if (previousState.groupToggleStates) {
 }
 
 import Split from 'split.js';
+import { marked } from 'marked';
+
+// Configure marked options
+marked.setOptions({
+  gfm: true, // Enable GitHub Flavored Markdown
+  breaks: true, // Convert line breaks to <br>
+  headerIds: false, // Don't add id attributes to headers
+  mangle: false, // Don't mangle email addresses
+});
 
 // Helper function to extract timestamp from HTML message
 function getMessageTimestamp(message) {
@@ -31,9 +40,51 @@ function getMessageTimestamp(message) {
   return match ? match[1] : ''; // Extract timestamp or empty string
 }
 
+// Helper function to identify and enhance scratchpad messages
+function processScratchpadContent(message) {
+  // Check if this message has the scratchpad data attribute
+  if (message.includes('data-is-scratchpad="true"')) {
+    // Extract the actual scratchpad content
+    const scratchpadMatch = message.match(
+      /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
+    );
+    if (scratchpadMatch && scratchpadMatch[1]) {
+      let content = scratchpadMatch[1];
+
+      // Extract content after the "Scratchpad content:" prefix
+      const contentStartIndex = content.indexOf('Scratchpad content:');
+      if (contentStartIndex !== -1) {
+        content = content.substring(
+          contentStartIndex + 'Scratchpad content:'.length,
+        );
+
+        try {
+          // Process content as markdown
+          const parsedMarkdown = marked.parse(content);
+
+          // Create enhanced scratchpad element with better formatting
+          return message.replace(
+            /<span class="message-info">Scratchpad content:.*?<\/span>/s,
+            `<span class="message-info">Scratchpad content:</span>
+             <div class="scratchpad-content">${parsedMarkdown}</div>`,
+          );
+        } catch (e) {
+          console.error('Error parsing markdown:', e);
+          // Fallback to original content
+          return message;
+        }
+      }
+    }
+  }
+  return message;
+}
+
 function formatLogEntry(logMessage) {
-  // The message is already formatted HTML from the server
-  return logMessage.message;
+  // Process message for special formats like scratchpad
+  const processedMessage = processScratchpadContent(logMessage.message);
+
+  // Return the processed message
+  return processedMessage;
 }
 
 function updateStreamTabs(streams, activeStream) {
