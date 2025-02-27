@@ -124,6 +124,7 @@ export class MergeAgent extends DirectAgent {
    * @param outputFile Path to the output file
    * @param endTurn Whether this is the end of the current turn
    * @param currRound Current round number (defaults to 0)
+   * @param processGroupId Optional processing group ID for logging
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
@@ -132,17 +133,22 @@ export class MergeAgent extends DirectAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,
+    processGroupId?: string,
   ): Promise<string[]> {
     if (endTurn) {
-      this.logger.debug(`Processing merge output for round ${currRound}`);
+      this.logger.debug(
+        `Processing merge output for round ${currRound}`,
+        processGroupId,
+      );
       const files = await super.handleOutput(
         stateRound,
         stateGlobal,
         outputFile,
         endTurn,
         currRound,
+        processGroupId,
       );
-      this.logger.info(`Merge output file: ${outputFile}`);
+      this.logger.info(`Merge output file: ${outputFile}`, processGroupId);
       return files;
     }
     return [];

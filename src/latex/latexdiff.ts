@@ -38,7 +38,7 @@ export async function ensureLatexdiffVcInstalled(
 
 async function processDiffFile(
   diffFileName: string,
-  channel: string = CHANNEL,
+  channelOrGroupId: string = CHANNEL,
 ): Promise<void> {
   try {
     const content = await readFile(diffFileName);
@@ -95,16 +95,17 @@ async function processDiffFile(
     // logger.debug(channel, `Line breaks added to ${diffFileName}`);
   } catch (err) {
     logger.error(
-      channel,
-      `Error processing diff file: ${err instanceof Error ? err.message : String(err)}`,
+      channelOrGroupId,
+      `Error processing diff file: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
     );
-    throw err;
   }
 }
 
 async function processTikzPictureEndings(
   filePath: string,
-  channel: string = CHANNEL,
+  channelOrGroupId: string = CHANNEL,
 ): Promise<void> {
   const content = await readFile(filePath);
 
@@ -132,22 +133,27 @@ export async function runLatexdiff(
   editedFile: string,
   suffix: string = '_diff',
   runIndent: boolean = true,
-  channel: string = CHANNEL,
+  channelOrGroupId: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if (!inputFile) {
-      logger.warn(channel, 'Input file is empty or undefined');
+      logger.warn(channelOrGroupId, 'Input file is empty or undefined');
       return undefined;
     }
 
     // Check if both files exist
     if (!(await fileExists(inputFile)) || !(await fileExists(editedFile))) {
       logger.warn(
-        channel,
+        channelOrGroupId,
         `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`,
       );
       return undefined;
     }
+
+    logger.info(
+      channelOrGroupId,
+      `Running latexdiff for ${inputFile} and ${editedFile}`,
+    );
 
     if (runIndent) {
       const indentResults = [];
@@ -155,7 +161,7 @@ export async function runLatexdiff(
       if (!(await runLatexIndent(editedFile))) indentResults.push(editedFile);
       if (indentResults.length > 0) {
         logger.warn(
-          channel,
+          channelOrGroupId,
           `Failed to indent files:\n${indentResults.join('\n')}\nProceeding with latexdiff anyway.`,
         );
       }
@@ -169,6 +175,7 @@ export async function runLatexdiff(
       { file: inputFile, content: inputContent },
       { file: editedFile, content: editedContent },
     ];
+
     const invalidFiles = [];
     for (const { file, content } of documentChecks) {
       if (
@@ -180,7 +187,7 @@ export async function runLatexdiff(
     }
     if (invalidFiles.length > 0) {
       logger.warn(
-        channel,
+        channelOrGroupId,
         `Files missing document environment: ${invalidFiles.join(', ')}\nSkipping latexdiff.`,
       );
       return undefined;
@@ -237,7 +244,7 @@ export async function runLatexdiff(
       `"${editedFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel });
+    const result = await executeCommand(command, { channel: channelOrGroupId });
     if (!result.success || !result.stdout) {
       throw new Error('Failed to run latexdiff');
     }
@@ -245,14 +252,14 @@ export async function runLatexdiff(
     // Write the output to the diff file
     await writeFile(outputPath, result.stdout);
 
-    await processDiffFile(outputPath, channel);
-    await processTikzPictureEndings(outputPath, channel);
+    await processDiffFile(outputPath, channelOrGroupId);
+    await processTikzPictureEndings(outputPath, channelOrGroupId);
 
-    logger.info(channel, 'LaTeXdiff completed successfully');
+    logger.info(channelOrGroupId, 'LaTeXdiff completed successfully');
     return diffFileName;
   } catch (err) {
     logger.error(
-      channel,
+      channelOrGroupId,
       `Error running LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
@@ -348,21 +355,27 @@ export async function runLatexdiffForRound(
   baseFile: string,
   outputFile: string,
   round: number,
-  channel: string = CHANNEL,
+  channelOrGroupId: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
-      return await runLatexdiff(baseFile, outputFile, '_diff', false, channel);
+      return await runLatexdiff(
+        baseFile,
+        outputFile,
+        '_diff',
+        false,
+        channelOrGroupId,
+      );
     } else {
       logger.warn(
-        channel,
+        channelOrGroupId,
         `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`,
       );
       return undefined;
     }
   } catch (err) {
     logger.error(
-      channel,
+      channelOrGroupId,
       `Error in runLatexdiffForRound: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
@@ -372,7 +385,7 @@ export async function runLatexdiffForRound(
 export async function runLatexdiffBetweenRounds(
   outputFile1: string,
   outputFile2: string,
-  channel: string = CHANNEL,
+  channelOrGroupId: string = CHANNEL,
 ): Promise<string | undefined> {
   try {
     if ((await fileExists(outputFile1)) && (await fileExists(outputFile2))) {
@@ -380,7 +393,10 @@ export async function runLatexdiffBetweenRounds(
       const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
 
       if (!firstRoundMatch || !secondRoundMatch) {
-        logger.warn(channel, 'Could not extract round numbers from file names');
+        logger.warn(
+          channelOrGroupId,
+          'Could not extract round numbers from file names',
+        );
         return undefined;
       }
 
@@ -393,18 +409,18 @@ export async function runLatexdiffBetweenRounds(
         outputFile2,
         diffSuffix,
         false,
-        channel,
+        channelOrGroupId,
       );
     } else {
       logger.warn(
-        channel,
+        channelOrGroupId,
         `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`,
       );
       return undefined;
     }
   } catch (err) {
     logger.error(
-      channel,
+      channelOrGroupId,
       `Error in runLatexdiffBetweenRounds: ${err instanceof Error ? err.message : String(err)}`,
     );
     return undefined;
