@@ -2,7 +2,11 @@
 // (none needed)
 
 // Third-party imports
-import OpenAI from 'openai';
+import OpenAI, {
+  RateLimitError,
+  NotFoundError,
+  PermissionDeniedError,
+} from 'openai';
 
 // Local imports - utilities
 import {
@@ -16,6 +20,7 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -24,6 +29,7 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
+import { stream } from 'winston';
 
 const K_SLICE = 200;
 
@@ -47,6 +53,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
   ): Promise<any> {
+    // Get streaming config
+    const useStreaming = getConfig<boolean>('model.useStreaming', false);
+
     const kwargs: any = {
       model: this.config.fullName,
       messages,
@@ -65,12 +74,32 @@ export class ModelHandlerOpenAI extends ModelHandler {
       kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
     }
 
-    try {
-      const response = await client.chat.completions.create(kwargs);
+    if (useStreaming) {
+      let response: any;
+      try {
+        const stream = client.beta.chat.completions.stream(kwargs);
+        response = await stream.finalMessage();
+
+        // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+      } catch (err) {
+        if (
+          err instanceof NotFoundError ||
+          err instanceof RateLimitError ||
+          PermissionDeniedError
+        ) {
+          throw err;
+        }
+        this.logger.error(`Error in createResponse(streaming): ${err}`);
+      }
       return response;
-    } catch (err) {
-      this.logger.error(`Error in createResponse: ${err}`);
-      throw err;
+    } else {
+      try {
+        const response = await client.chat.completions.create(kwargs);
+        return response;
+      } catch (err) {
+        this.logger.error(`Error in createResponse: ${err}`);
+        throw err;
+      }
     }
   }
 
