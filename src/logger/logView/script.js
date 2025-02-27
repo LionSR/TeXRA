@@ -16,6 +16,21 @@ if (previousState.groupToggleStates) {
 
 import Split from 'split.js';
 
+// Helper function to extract timestamp from HTML message
+function getMessageTimestamp(message) {
+  // First try to extract the full timestamp from data-full-timestamp attribute
+  const div = document.createElement('div');
+  div.innerHTML = message;
+  const logLine = div.querySelector('.log-line');
+  if (logLine && logLine.dataset.fullTimestamp) {
+    return logLine.dataset.fullTimestamp; // Return the full precise timestamp
+  }
+
+  // Fallback: extract from the message content using regex
+  const match = message.match(/\[(.*?)\]/);
+  return match ? match[1] : ''; // Extract timestamp or empty string
+}
+
 function formatLogEntry(logMessage) {
   // The message is already formatted HTML from the server
   return logMessage.message;
@@ -113,9 +128,6 @@ function updateStatus(status) {
 function addLogGroup(group) {
   logGroups.set(group.id, group);
 
-  // If this is a new group being added to the active view, we need to update the UI
-  const logContent = document.getElementById('logContent');
-
   // Create the header element programmatically instead of using innerHTML
   const headerTemplate = document.createElement('template');
   headerTemplate.innerHTML = createGroupHeader(group);
@@ -139,12 +151,112 @@ function addLogGroup(group) {
     groupContainer.style.display = 'block'; // Default to visible if no saved state
   }
 
-  // Add to DOM
-  logContent.appendChild(headerElement);
-  logContent.appendChild(groupContainer);
+  // Determine where to add this group based on parentGroupId
+  if (group.parentGroupId) {
+    // This is a child group - add it to its parent's content container
+    const parentContentElement = document.getElementById(
+      `group-content-${group.parentGroupId}`,
+    );
+
+    if (parentContentElement) {
+      // Find the correct chronological position to insert the group
+      const startTime = new Date(group.startTime);
+      let insertPosition = null;
+
+      // Get all existing child elements in the parent container
+      const childElements = Array.from(parentContentElement.children);
+
+      // Find the right position based on timestamp
+      for (let i = 0; i < childElements.length; i++) {
+        const child = childElements[i];
+
+        // Check if it's a log message
+        if (child.classList.contains('log-line')) {
+          // Extract full timestamp from data attribute if available
+          const msgFullTimestamp = child.dataset.fullTimestamp;
+          let msgTime;
+
+          if (msgFullTimestamp) {
+            msgTime = new Date(msgFullTimestamp);
+          } else {
+            // Fallback to extracting time from content
+            const msgTimestamp = getMessageTimestamp(child.outerHTML);
+            // Use a dummy date for time-only comparison
+            msgTime = msgTimestamp.includes('-')
+              ? new Date(msgTimestamp)
+              : new Date(`2000-01-01 ${msgTimestamp}`);
+          }
+
+          if (startTime < msgTime) {
+            insertPosition = child;
+            break;
+          }
+        }
+        // Check if it's another group header
+        else if (child.classList.contains('log-group-header')) {
+          // Get the full timestamp from the group data
+          const otherGroupId = child.id.replace('group-header-', '');
+          const otherGroup = logGroups.get(otherGroupId);
+
+          if (otherGroup && otherGroup.startTime) {
+            const otherTime = new Date(otherGroup.startTime);
+
+            if (startTime < otherTime) {
+              insertPosition = child;
+              break;
+            }
+          } else {
+            // Fallback to extracting time from the element
+            const timeElem = child.querySelector('.group-start-time');
+            if (timeElem) {
+              const timeText = timeElem.textContent.replace('Started: ', '');
+              // Use a dummy date for time-only comparison
+              const otherTime = new Date(`2000-01-01 ${timeText}`);
+
+              if (startTime < otherTime) {
+                insertPosition = child;
+                break;
+              }
+            }
+          }
+
+          // Skip the content container of this group
+          if (i + 1 < childElements.length) {
+            const nextElem = childElements[i + 1];
+            if (nextElem.classList.contains('log-group-content')) {
+              i++; // Skip next element
+            }
+          }
+        }
+      }
+
+      // Insert at the determined position or append at the end
+      if (insertPosition) {
+        parentContentElement.insertBefore(headerElement, insertPosition);
+        parentContentElement.insertBefore(groupContainer, insertPosition);
+      } else {
+        // Add to end of parent container
+        parentContentElement.appendChild(headerElement);
+        parentContentElement.appendChild(groupContainer);
+      }
+    } else {
+      // Fallback if parent not found - add to main container
+      const logContent = document.getElementById('logContent');
+      logContent.appendChild(headerElement);
+      logContent.appendChild(groupContainer);
+    }
+  } else {
+    // This is a top-level group - add to main container
+    const logContent = document.getElementById('logContent');
+    logContent.appendChild(headerElement);
+    logContent.appendChild(groupContainer);
+  }
 
   // Add click handler to the header for toggling - now done directly on the DOM element
-  headerElement.addEventListener('click', () => {
+  headerElement.addEventListener('click', (event) => {
+    // Stop event propagation to prevent parent toggles from also firing
+    event.stopPropagation();
+
     const content = document.getElementById(`group-content-${group.id}`);
     if (!content) return;
 
@@ -265,7 +377,98 @@ function appendLogToGroup(logMessage) {
     if (groupContent) {
       const messageElement = document.createElement('div');
       messageElement.innerHTML = formatLogEntry(logMessage);
-      groupContent.appendChild(messageElement.firstElementChild);
+      const logLineElement = messageElement.firstElementChild;
+
+      // Extract timestamp from the message for chronological ordering
+      const msgTimestamp = getMessageTimestamp(logMessage.message);
+      const msgDate = msgTimestamp.includes('-')
+        ? new Date(msgTimestamp)
+        : null;
+
+      // Find where to insert this message chronologically
+      let insertPosition = null;
+
+      // Get all child elements (both messages and child group containers)
+      const childElements = Array.from(groupContent.children);
+
+      // Find the right position based on timestamp
+      for (let i = 0; i < childElements.length; i++) {
+        const child = childElements[i];
+
+        // If this is a group header, get its start time
+        if (child.classList.contains('log-group-header')) {
+          const startTimeElem = child.querySelector('.group-start-time');
+          if (startTimeElem) {
+            // Get full ISO timestamp from the group data
+            const groupId = child.id.replace('group-header-', '');
+            const group = logGroups.get(groupId);
+            if (group && group.startTime) {
+              const childDate = new Date(group.startTime);
+
+              // Compare using full date objects if available
+              if (msgDate && childDate) {
+                if (msgDate < childDate) {
+                  insertPosition = child;
+                  break;
+                }
+              } else {
+                // Fallback to simple time string comparison
+                const timeText = startTimeElem.textContent;
+                const childTimestamp = timeText.replace('Started: ', '');
+                if (msgTimestamp < childTimestamp) {
+                  insertPosition = child;
+                  break;
+                }
+              }
+            }
+          }
+          // Skip the corresponding content container of this child group
+          if (
+            i + 1 < childElements.length &&
+            childElements[i + 1].classList.contains('log-group-content')
+          ) {
+            i++; // Skip the next element (content container)
+          }
+        }
+        // If this is a log message, extract its timestamp
+        else if (child.classList.contains('log-line')) {
+          // Try to get the full timestamp from data attribute
+          const childFullTimestamp = child.dataset.fullTimestamp;
+
+          if (childFullTimestamp && msgTimestamp) {
+            // Compare using full timestamps
+            const childDate = new Date(childFullTimestamp);
+
+            if (msgDate && childDate) {
+              if (msgDate < childDate) {
+                insertPosition = child;
+                break;
+              }
+            } else {
+              // Fallback to string comparison
+              const childTimestamp = getMessageTimestamp(child.outerHTML);
+              if (msgTimestamp < childTimestamp) {
+                insertPosition = child;
+                break;
+              }
+            }
+          } else {
+            // Fallback to original behavior
+            const childTimestamp = getMessageTimestamp(child.outerHTML);
+            if (msgTimestamp < childTimestamp) {
+              insertPosition = child;
+              break;
+            }
+          }
+        }
+      }
+
+      // Insert the message at the right position or append to the end
+      if (insertPosition) {
+        groupContent.insertBefore(logLineElement, insertPosition);
+      } else {
+        groupContent.appendChild(logLineElement);
+      }
       return true;
     }
   }
@@ -362,9 +565,21 @@ window.addEventListener('message', (event) => {
         logGroups.clear();
         // Keep the toggle states intact - we don't clear groupToggleStates
 
-        // First create all the groups
+        // Process groups in parent-child order AND chronologically
         if (message.groups && message.groups.length > 0) {
-          message.groups.forEach((group) => {
+          // First identify parent groups and child groups
+          const parentGroups = message.groups.filter((g) => !g.parentGroupId);
+          const childGroups = message.groups.filter((g) => g.parentGroupId);
+
+          // Sort parent groups by timestamp
+          parentGroups.sort((a, b) => {
+            const timeA = new Date(a.startTime);
+            const timeB = new Date(b.startTime);
+            return timeA - timeB;
+          });
+
+          // Add parent groups first
+          parentGroups.forEach((group) => {
             // Store group data
             logGroups.set(group.id, group);
 
@@ -396,7 +611,10 @@ window.addEventListener('message', (event) => {
             logContent.appendChild(groupContainer);
 
             // Add click handler for toggling
-            headerElement.addEventListener('click', () => {
+            headerElement.addEventListener('click', (event) => {
+              // Stop event propagation to prevent parent toggles from also firing
+              event.stopPropagation();
+
               if (groupContainer.style.display === 'none') {
                 groupContainer.style.display = 'block';
                 headerElement.querySelector('.group-toggle i').className =
@@ -413,20 +631,42 @@ window.addEventListener('message', (event) => {
               saveState();
             });
           });
+
+          // Sort child groups by timestamp
+          childGroups.sort((a, b) => {
+            const timeA = new Date(a.startTime);
+            const timeB = new Date(b.startTime);
+            return timeA - timeB;
+          });
+
+          // Then add child groups (after parents are in place)
+          childGroups.forEach((group) => {
+            addLogGroup(group); // Reuse the addLogGroup function which now handles parent-child relationships
+          });
         }
 
-        // Now add messages to their groups
-        message.messages.forEach((msg) => {
+        // Now add messages to their groups - sort them by timestamp first
+        // This ensures we process messages in chronological order
+        const sortedMessages = [...message.messages].sort((a, b) => {
+          const timestampA = getMessageTimestamp(a.message);
+          const timestampB = getMessageTimestamp(b.message);
+
+          // Try to use Date objects for more accurate comparison
+          const dateA = timestampA.includes('-') ? new Date(timestampA) : null;
+          const dateB = timestampB.includes('-') ? new Date(timestampB) : null;
+
+          if (dateA && dateB) {
+            return dateA - dateB;
+          }
+
+          // Fallback to string comparison
+          return timestampA.localeCompare(timestampB);
+        });
+
+        sortedMessages.forEach((msg) => {
           if (msg.groupId) {
-            // Append to group if it exists
-            const groupContent = document.getElementById(
-              `group-content-${msg.groupId}`,
-            );
-            if (groupContent) {
-              const messageElement = document.createElement('div');
-              messageElement.innerHTML = formatLogEntry(msg);
-              groupContent.appendChild(messageElement.firstElementChild);
-            } else {
+            // Try to append to a group first
+            if (!appendLogToGroup(msg)) {
               // If group doesn't exist, append to main content
               const messageElement = document.createElement('div');
               messageElement.innerHTML = formatLogEntry(msg);

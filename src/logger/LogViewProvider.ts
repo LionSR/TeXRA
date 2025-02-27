@@ -20,6 +20,7 @@ interface LogGroup {
   startTime: string;
   endTime?: string;
   status: 'running' | 'error' | 'stopped' | 'ready';
+  parentGroupId?: string;
 }
 
 // Channels that should only be written to VSCode output channel
@@ -368,6 +369,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     startTime: string,
     status: 'running' | 'error' | 'stopped' | 'ready',
     endTime?: string,
+    parentGroupId?: string,
   ) {
     // Skip if this stream should only be written to output channel
     if (OUTPUT_CHANNEL_ONLY.has(stream)) {
@@ -386,6 +388,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       startTime,
       endTime,
       status,
+      parentGroupId,
     });
 
     this._saveState();
@@ -400,6 +403,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
           startTime,
           endTime,
           status,
+          parentGroupId,
         },
       });
     }
