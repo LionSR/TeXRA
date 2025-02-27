@@ -28,6 +28,7 @@ import {
 } from './ResponseUsage';
 import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
+import { messageToSkeleton } from './messageUtils';
 
 const K_SLICE = 200;
 
@@ -559,19 +560,31 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
         // Update the second last message with the new content array
         secondLastMessage.content = newContent;
+        if (thinkingBlocks.length === 0) {
+          const thinkingBlock = toolState.thinkingBlock;
+          if (thinkingBlock) {
+            secondLastMessage.content = [thinkingBlock, ...newContent];
+          }
+        }
 
         // Remove cache_control from previous messages if needed
         if (this.capabilities.supportsPromptCaching) {
           for (let i = 0; i < messages.length - 1; i++) {
             const msg = messages[i];
-            if (Array.isArray(msg.content)) {
-              this.removeCacheControl(msg.content);
-            }
+            this.removeCacheControl(msg.content);
           }
         }
 
         // Remove the user continuation prompt to keep the conversation clean
-        messages.pop();
+        if (messages.at(-1)?.role === 'user') {
+          messages.pop();
+        }
+
+        this.logger.debug(
+          `Updated second last message with thinking block: ${JSON.stringify(
+            messageToSkeleton(messages),
+          )}`,
+        );
 
         this.logger.debug(
           `Updated second last message with accumulated output (${toolState.accumulatedOutput.length} chars)`,
@@ -580,11 +593,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
       return;
     } else {
       // This is a regular response, not a continuation
-      this.logger.debug('Adding new assistant message with accumulated output');
-      messages.push({
+      this.logger.debug(
+        'Last message is a request message rather than a ask to continue after cut off',
+      );
+      const message = {
         role: 'assistant',
         content: [{ type: 'text', text: toolState.accumulatedOutput }],
-      });
+      };
+      if (toolState.thinkingBlock) {
+        message.content = [toolState.thinkingBlock, ...message.content];
+      }
+
+      messages.push(message);
     }
   }
 
