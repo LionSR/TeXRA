@@ -17,6 +17,8 @@ import {
   runLatexdiffvc,
   ensureLatexdiffInstalled,
   ensureLatexdiffVcInstalled,
+  LaTeXdiffResult,
+  LaTeXdiffMultipleResult,
 } from '../latex/latexdiff';
 
 // Local imports - housekeeping
@@ -65,16 +67,11 @@ async function handleLatexdiff(
       return;
     }
 
-    // Get the diff filename from runLatexdiff
-    const diffFileName = await runLatexdiff(
-      fileToUse,
-      editedFile,
-      '_diff',
-      false,
-      CHANNEL,
-    );
-    if (!diffFileName) {
-      throw new Error('Failed to generate diff file');
+    // Get the result from runLatexdiff
+    const result = await runLatexdiff(fileToUse, editedFile, '_diff', false);
+
+    if (!result.success || !result.diffFileName) {
+      throw new Error(result.message || 'Failed to generate diff file');
     }
 
     // Open the diff file and build it
@@ -85,11 +82,14 @@ async function handleLatexdiff(
 
     // Use the returned diff filename to construct the full path
     const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
     );
 
     // Verify the file exists using fileExists utility
-    const filePathRelative = path.join(path.dirname(fileToUse), diffFileName);
+    const filePathRelative = path.join(
+      path.dirname(fileToUse),
+      result.diffFileName,
+    );
     if (!(await fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
         `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
@@ -130,10 +130,11 @@ async function handleLatexdiffvc(
       return;
     }
 
-    // Get the diff filename from runLatexdiffvc
-    const diffFileName = await runLatexdiffvc(fileToUse, commitHash, CHANNEL);
-    if (!diffFileName) {
-      throw new Error('Failed to generate diff file');
+    // Get the result from runLatexdiffvc
+    const result = await runLatexdiffvc(fileToUse, commitHash);
+
+    if (!result.success || !result.diffFileName) {
+      throw new Error(result.message || 'Failed to generate diff file');
     }
 
     const workspacePath = getWorkspacePath();
@@ -143,11 +144,14 @@ async function handleLatexdiffvc(
 
     // Use the returned diff filename to construct the full path
     const fullPath = vscode.Uri.file(
-      path.join(workspacePath, path.dirname(fileToUse), diffFileName),
+      path.join(workspacePath, path.dirname(fileToUse), result.diffFileName),
     );
 
     // Verify the file exists using fileExists utility
-    const filePathRelative = path.join(path.dirname(fileToUse), diffFileName);
+    const filePathRelative = path.join(
+      path.dirname(fileToUse),
+      result.diffFileName,
+    );
     if (!(await fileExists(filePathRelative))) {
       vscode.window.showErrorMessage(
         `Diff file could not be found. Expected path: ${fullPath.fsPath}`,
