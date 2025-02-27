@@ -67,6 +67,7 @@ export class OutputHandler {
   public baseFiles: string[];
   protected logger: AgentLogger;
   protected channel: string;
+  protected processGroupId?: string;
 
   constructor(
     agentSetting: AgentSetting,
