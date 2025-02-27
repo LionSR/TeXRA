@@ -11,6 +11,16 @@ import { getConfig } from '../frontend-utils/commonUtils';
 interface ColoredLogMessage {
   message: string;
   level: 'error' | 'warn' | 'info' | 'debug';
+  groupId?: string;
+}
+
+interface LogGroup {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'error' | 'stopped' | 'ready';
+  parentGroupId?: string;
 }
 
 // Channels that should only be written to VSCode output channel
@@ -28,6 +38,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'LogViewProvider',
   'executeAgent',
   'ImgUtils',
+  'stateRestoreCommand',
 ]);
 
 // Channels that should not be persisted in workspace storage
@@ -37,9 +48,11 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private static _instance: LogViewProvider | undefined;
   private _view?: vscode.WebviewView;
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
+  private _logGroups: Map<string, Map<string, LogGroup>> = new Map(); // streamId -> groupId -> LogGroup
   private readonly _contentProvider: LogViewContentProvider;
   private readonly _messageHandler: LogViewMessageHandler;
   private readonly _storageKey = 'coauthor.logStreams';
+  private readonly _groupsStorageKey = 'coauthor.logGroups';
   private readonly _taskStateKey = 'coauthor.taskStates';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
@@ -98,6 +111,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       : this._storageKey;
   }
 
+  private _getGroupsWorkspaceKey(): string {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    return workspaceFolder
+      ? `${this._groupsStorageKey}.${workspaceFolder.uri.fsPath}`
+      : this._groupsStorageKey;
+  }
+
   private _loadState() {
     const savedState = this.context.workspaceState.get<{
       [key: string]: ColoredLogMessage[];
@@ -111,6 +131,23 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       );
     } else {
       this._logStreams.clear();
+    }
+
+    // Load groups
+    const savedGroups = this.context.workspaceState.get<{
+      [key: string]: { [groupId: string]: LogGroup };
+    }>(this._getGroupsWorkspaceKey());
+    if (savedGroups) {
+      this._logGroups = new Map(
+        Object.entries(savedGroups)
+          .filter(([channel]) => !NON_PERSISTENT_CHANNELS.has(channel))
+          .map(([streamId, groups]) => [
+            streamId,
+            new Map(Object.entries(groups)),
+          ]),
+      );
+    } else {
+      this._logGroups.clear();
     }
 
     // Load active stream
@@ -146,6 +183,19 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     );
     const stateObj = Object.fromEntries(persistentStreams);
     this.context.workspaceState.update(this._getWorkspaceKey(), stateObj);
+
+    // Save groups
+    const persistentGroups = Array.from(this._logGroups.entries())
+      .filter(([channel]) => !NON_PERSISTENT_CHANNELS.has(channel))
+      .map(([streamId, groups]) => [
+        streamId,
+        Object.fromEntries(groups.entries()),
+      ]);
+    const groupsObj = Object.fromEntries(persistentGroups);
+    this.context.workspaceState.update(
+      this._getGroupsWorkspaceKey(),
+      groupsObj,
+    );
 
     // Save active stream
     this.context.workspaceState.update(
@@ -264,6 +314,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     stream: string,
     message: string,
     level: 'error' | 'warn' | 'info' | 'debug' = 'info',
+    groupId?: string,
   ) {
     // Skip if this stream should only be written to output channel
     if (OUTPUT_CHANNEL_ONLY.has(stream)) {
@@ -290,6 +341,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     const logMessage: ColoredLogMessage = {
       message,
       level,
+      groupId,
     };
 
     const messages = this._logStreams.get(stream)!;
@@ -306,6 +358,88 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
         command: 'appendLog',
         stream: stream,
         logMessage,
+      });
+    }
+  }
+
+  public addLogGroup(
+    stream: string,
+    groupId: string,
+    groupName: string,
+    startTime: string,
+    status: 'running' | 'error' | 'stopped' | 'ready',
+    endTime?: string,
+    parentGroupId?: string,
+  ) {
+    // Skip if this stream should only be written to output channel
+    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+      return;
+    }
+
+    // Create stream groups mapping if it doesn't exist
+    if (!this._logGroups.has(stream)) {
+      this._logGroups.set(stream, new Map());
+    }
+
+    const streamGroups = this._logGroups.get(stream)!;
+    streamGroups.set(groupId, {
+      id: groupId,
+      name: groupName,
+      startTime,
+      endTime,
+      status,
+      parentGroupId,
+    });
+
+    this._saveState();
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: 'addLogGroup',
+        stream,
+        group: {
+          id: groupId,
+          name: groupName,
+          startTime,
+          endTime,
+          status,
+          parentGroupId,
+        },
+      });
+    }
+  }
+
+  public updateLogGroup(
+    stream: string,
+    groupId: string,
+    status: 'running' | 'error' | 'stopped' | 'ready',
+    endTime?: string,
+  ) {
+    // Skip if this stream should only be written to output channel
+    if (OUTPUT_CHANNEL_ONLY.has(stream)) {
+      return;
+    }
+
+    const streamGroups = this._logGroups.get(stream);
+    if (!streamGroups) return;
+
+    const group = streamGroups.get(groupId);
+    if (!group) return;
+
+    group.status = status;
+    if (endTime) {
+      group.endTime = endTime;
+    }
+
+    this._saveState();
+
+    if (this._view && stream === this._activeStream) {
+      this._view.webview.postMessage({
+        command: 'updateLogGroup',
+        stream,
+        groupId,
+        status,
+        endTime,
       });
     }
   }
@@ -327,10 +461,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       ? messages
       : messages.filter((msg) => msg.level !== 'debug');
 
+    // Get groups for this stream
+    const groups = this._logGroups.get(stream) || new Map();
+
     this._view.webview.postMessage({
       command: 'updateLogs',
       stream: stream,
       messages: displayMessages,
+      groups: Array.from(groups.values()),
     });
 
     // Send current status for the stream
@@ -345,9 +483,14 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     return this._logStreams;
   }
 
+  public getLogGroups(): Map<string, Map<string, LogGroup>> {
+    return this._logGroups;
+  }
+
   public eraseStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._logStreams.get(stream)!.length = 0;
+      this._logGroups.delete(stream);
       this._saveState();
       this.updateLogContent(stream);
     }
@@ -355,6 +498,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   public deleteAllStreams() {
     this._logStreams.clear();
+    this._logGroups.clear();
     this._taskStates.clear();
     this._saveState();
     if (this._view) {
@@ -366,6 +510,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   public deleteStream(stream: string) {
     if (this._logStreams.has(stream)) {
       this._logStreams.delete(stream);
+      this._logGroups.delete(stream);
       this._taskStates.delete(stream);
       this._saveState();
       this._updateWebview();

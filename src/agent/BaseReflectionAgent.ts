@@ -48,8 +48,6 @@ import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 
 const K_SLICE = 200;
-const SEPARATOR =
-  '\n------------------------------------------------------------\n';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -73,6 +71,8 @@ export abstract class BaseReflectionAgent {
   protected outputHandler: OutputHandler;
   /** Cached user variables to avoid recomputation */
   protected userVars: Record<string, any>;
+  /** Group ID for the main run group, used as parent for subgroups */
+  protected runGroupId?: string;
   private isInterrupted: boolean = false;
 
   // Static map to track running agents by their stream ID
@@ -166,14 +166,34 @@ export abstract class BaseReflectionAgent {
    * Must be called after constructor before using the agent.
    */
   public async init(): Promise<void> {
-    this.logger.info(SEPARATOR);
-    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
-    this.logger.debug(
-      `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
-    );
+    // Create an initialization group for better log organization
+    const initGroupId = this.logger.startGroup(`Initialization`);
 
-    this.userVars = await this.getUserVars();
+    try {
+      // Log configuration details in the initialization group
+      this.logger.debug(
+        `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `AgentSetting: ${JSON.stringify(this.agentSetting)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
+        initGroupId,
+      );
+
+      // Initialize user variables
+      this.userVars = await this.getUserVars();
+
+      // End the initialization group with success status
+      this.logger.endGroup(initGroupId, 'stopped');
+    } catch (error) {
+      // End the group with error status if initialization fails
+      this.logger.endGroup(initGroupId, 'error');
+      throw error;
+    }
   }
 
   /**
@@ -449,6 +469,7 @@ export abstract class BaseReflectionAgent {
    * @param stateGlobal Global conversation state
    * @param toolState Tool-specific state
    * @param outputFile Current output file path
+   * @param roundGroupId Optional parent round group ID
    * @returns Updated states and completion flag
    */
   private async processResponseCycle(
@@ -457,182 +478,229 @@ export abstract class BaseReflectionAgent {
     stateGlobal: AgentStateGlobal,
     toolState: ToolState,
     outputFile: string,
+    roundGroupId?: string,
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
-    let endTurn = false;
-    while (!endTurn) {
-      // Check for interruption before each cycle
-      if (await this.checkInterruption()) {
-        break;
-      }
+    // Create a response cycle group as a child of the round group if provided
+    const responseCycleGroupId = roundGroupId
+      ? this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
+      : undefined;
 
-      const exists = await fileExists(outputFile);
-      const startTime = Date.now();
-      const systemPrompt = await renderPrompt(
-        this.agentPrompt.systemPrompt,
-        this.userVars,
-      );
-      const responseObject = await this.modelHandler.createResponse(
-        this.client,
-        messages,
-        this.agentSetting.temperature || 0.0,
-        systemPrompt,
-        this.agentSetting.endTag,
-      );
-      const responseTime = (Date.now() - startTime) / 1000;
-      stateRound.updateResponseTime(responseTime);
-      this.logger.info(`Response time: ${responseTime.toFixed(2)}s`);
+    try {
+      let endTurn = false;
+      while (!endTurn) {
+        // Check for interruption before each cycle
+        if (await this.checkInterruption()) {
+          break;
+        }
 
-      // Extract and validate response
-      const [newResponse, responseUsage, thinkingBlock, stopReason] =
-        this.modelHandler.extractResponse(
-          responseObject,
+        const exists = await fileExists(outputFile);
+        const startTime = Date.now();
+        const systemPrompt = await renderPrompt(
+          this.agentPrompt.systemPrompt,
+          this.userVars,
+        );
+        const responseObject = await this.modelHandler.createResponse(
+          this.client,
+          messages,
+          this.agentSetting.temperature || 0.0,
+          systemPrompt,
           this.agentSetting.endTag,
         );
+        const responseTime = (Date.now() - startTime) / 1000;
+        stateRound.updateResponseTime(responseTime);
+        this.logger.info(
+          `Response time: ${responseTime.toFixed(2)}s`,
+          responseCycleGroupId,
+        );
 
-      this.logger.debug(`Stop reason: ${stopReason}`);
-      this.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
-
-      // Log thinking block if available
-      if (thinkingBlock) {
-        this.logger.debug(`Thinking block type: ${thinkingBlock.type}`);
-        if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
-          // Log first 200 chars of thinking content if available
-          this.logger.debug(
-            `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
+        // Extract and validate response
+        const [newResponse, responseUsage, thinkingBlock, stopReason] =
+          this.modelHandler.extractResponse(
+            responseObject,
+            this.agentSetting.endTag,
           );
-        } else if (
-          thinkingBlock.type === 'redacted_thinking' &&
-          thinkingBlock.data
-        ) {
-          this.logger.debug(`Redacted thinking data available (encoded)`);
-        }
-        // Store complete thinking block in tool state
-        toolState.thinkingBlock = thinkingBlock;
-      }
 
-      // Compute statistics and update states
-      const APIUsage = this.modelHandler.computeResponseUsage(
-        responseUsage,
-        responseTime,
-      );
-
-      stateRound.updateTokenCounts(APIUsage);
-      stateGlobal.updateFromCurrRound(stateRound);
-      // this.logger.debug(`stateRound: ${JSON.stringify(stateRound)}`);
-
-      // Early exit for repetition
-      const repetitionResult = checkForMassiveRepetition(
-        toolState.lastResponse,
-        newResponse,
-      );
-      if (repetitionResult.massiveRepetitionDetected) {
-        // this needs not to be output in full, but only the new response
-        this.logger.error(
-          `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
-        );
-        this.logger.error(
-          `Massive repetition detected - skipping this response`,
-        );
-
-        // Debug information - print message skeleton to help diagnose the problem
-        this.logger.error(`Message structure when repetition detected:`);
-        this.logger.error(JSON.stringify(messageToSkeleton(messages), null, 2));
-        break;
-      }
-
-      // Chain response processing operations
-      let processedResponse = newResponse;
-      processedResponse = applyReplacements(
-        processedResponse,
-        getAllReplacements(),
-      ).trim();
-      processedResponse = applyReplacements(
-        processedResponse,
-        getAllReplacementsRegex(),
-      ).trim();
-
-      toolState.updateLastResponse(processedResponse);
-
-      // Process response connection with proper slicing
-      const result = await bestConnectionMethod(
-        toolState.lastResponse.slice(-K_SLICE),
-        processedResponse.slice(0, K_SLICE),
-      );
-      const bestConnector = result.connector;
-
-      // Update state and file atomically
-      toolState.updateAccumulatedOutput(
-        toolState.accumulatedOutput + bestConnector + processedResponse,
-      );
-
-      // Write or append to output file
-      if (!exists) {
-        this.logger.info(`Creating new file: ${outputFile}`);
-        await writeFile(outputFile, processedResponse);
-      } else {
-        this.logger.info(`Appending to existing file: ${outputFile}`);
-        await appendFile(outputFile, bestConnector + processedResponse);
-      }
-
-      // Log response boundaries
-      this.logger.debug(`Response preview:`);
-      this.logger.debug(
-        `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-      );
-      this.logger.debug(
-        `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-      );
-
-      // Update message content
-      this.modelHandler.updateMessageContent(
-        messages,
-        bestConnector,
-        processedResponse,
-        toolState,
-      );
-
-      // Check stop conditions
-      const [shouldEndTurn, shouldStop] = this.modelHandler.checkStopConditions(
-        stopReason,
-        processedResponse,
-        stateRound,
-        stateGlobal,
-        this.agentSetting,
-      );
-      endTurn = shouldEndTurn;
-      if (shouldStop) {
-        break;
-      }
-
-      // Handle continuation
-      stateRound.incrementContinuation();
-      this.logger.info(
-        `Starting continuation #${stateRound.continuationCount}`,
-      );
-
-      // Check if model should continue generating
-      if (
-        this.modelHandler.shouldContinue(
-          stopReason,
-          processedResponse,
-          this.agentSetting,
-        )
-      ) {
+        this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
-          `Should continue - adding continuation message to conversation`,
+          `Token usage: ${JSON.stringify(responseUsage)}`,
+          responseCycleGroupId,
         );
-        this.modelHandler.addContinueMessage(
-          messages,
-          stateRound,
-          toolState,
-          this.agentSetting,
-          this.agentConfig,
-        );
-        continue;
-      }
-    }
 
-    return [stateRound, stateGlobal, toolState, endTurn];
+        // Log thinking block if available
+        if (thinkingBlock) {
+          this.logger.debug(
+            `Thinking block type: ${thinkingBlock.type}`,
+            responseCycleGroupId,
+          );
+          if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
+            // Log first 200 chars of thinking content if available
+            this.logger.debug(
+              `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
+              responseCycleGroupId,
+            );
+          } else if (
+            thinkingBlock.type === 'redacted_thinking' &&
+            thinkingBlock.data
+          ) {
+            this.logger.debug(
+              `Redacted thinking data available (encoded)`,
+              responseCycleGroupId,
+            );
+          }
+          // Store complete thinking block in tool state
+          toolState.thinkingBlock = thinkingBlock;
+        }
+
+        // Compute statistics and update states
+        const APIUsage = this.modelHandler.computeResponseUsage(
+          responseUsage,
+          responseTime,
+        );
+
+        stateRound.updateTokenCounts(APIUsage);
+        stateGlobal.updateFromCurrRound(stateRound);
+
+        // Early exit for repetition
+        const repetitionResult = checkForMassiveRepetition(
+          toolState.lastResponse,
+          newResponse,
+        );
+        if (repetitionResult.massiveRepetitionDetected) {
+          this.logger.error(
+            `The new response is (first 1000 chars): ${newResponse.substring(0, 1000)}`,
+            responseCycleGroupId,
+          );
+          this.logger.error(
+            `Massive repetition detected - skipping this response`,
+            responseCycleGroupId,
+          );
+
+          // Debug information - print message skeleton to help diagnose the problem
+          this.logger.error(
+            `Message structure when repetition detected:`,
+            responseCycleGroupId,
+          );
+          this.logger.error(
+            JSON.stringify(messageToSkeleton(messages), null, 2),
+            responseCycleGroupId,
+          );
+          break;
+        }
+
+        // Chain response processing operations
+        let processedResponse = newResponse;
+        processedResponse = applyReplacements(
+          processedResponse,
+          getAllReplacements(),
+        ).trim();
+        processedResponse = applyReplacements(
+          processedResponse,
+          getAllReplacementsRegex(),
+        ).trim();
+
+        toolState.updateLastResponse(processedResponse);
+
+        // Process response connection with proper slicing
+        const result = await bestConnectionMethod(
+          toolState.lastResponse.slice(-K_SLICE),
+          processedResponse.slice(0, K_SLICE),
+        );
+        const bestConnector = result.connector;
+
+        // Update state and file atomically
+        toolState.updateAccumulatedOutput(
+          toolState.accumulatedOutput + bestConnector + processedResponse,
+        );
+
+        // Write or append to output file
+        if (!exists) {
+          this.logger.info(
+            `Creating new file: ${outputFile}`,
+            responseCycleGroupId,
+          );
+          await writeFile(outputFile, processedResponse);
+        } else {
+          this.logger.info(
+            `Appending to existing file: ${outputFile}`,
+            responseCycleGroupId,
+          );
+          await appendFile(outputFile, bestConnector + processedResponse);
+        }
+
+        // Log response boundaries
+        this.logger.debug(`Response preview:`, responseCycleGroupId);
+        this.logger.debug(
+          `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
+          responseCycleGroupId,
+        );
+        this.logger.debug(
+          `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
+          responseCycleGroupId,
+        );
+
+        // Update message content
+        this.modelHandler.updateMessageContent(
+          messages,
+          bestConnector,
+          processedResponse,
+          toolState,
+        );
+
+        // Check stop conditions
+        const [shouldEndTurn, shouldStop] =
+          this.modelHandler.checkStopConditions(
+            stopReason,
+            processedResponse,
+            stateRound,
+            stateGlobal,
+            this.agentSetting,
+          );
+        endTurn = shouldEndTurn;
+        if (shouldStop) {
+          break;
+        }
+
+        // Handle continuation
+        stateRound.incrementContinuation();
+        this.logger.info(
+          `Starting continuation #${stateRound.continuationCount}`,
+          responseCycleGroupId,
+        );
+
+        // Check if model should continue generating
+        if (
+          this.modelHandler.shouldContinue(
+            stopReason,
+            processedResponse,
+            this.agentSetting,
+          )
+        ) {
+          this.logger.debug(
+            `Should continue - adding continuation message to conversation`,
+            responseCycleGroupId,
+          );
+          this.modelHandler.addContinueMessage(
+            messages,
+            stateRound,
+            toolState,
+            this.agentSetting,
+            this.agentConfig,
+          );
+          continue;
+        }
+      }
+
+      if (responseCycleGroupId) {
+        this.logger.endGroup(responseCycleGroupId, 'stopped');
+      }
+
+      return [stateRound, stateGlobal, toolState, endTurn];
+    } catch (error) {
+      if (responseCycleGroupId) {
+        this.logger.endGroup(responseCycleGroupId, 'error');
+      }
+      throw error;
+    }
   }
 
   /**
@@ -655,21 +723,33 @@ export abstract class BaseReflectionAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number,
+    roundGroupId?: string,
   ): Promise<void> {
-    this.logger.debug(`State global: ${JSON.stringify(stateGlobal)}`);
+    try {
+      // Instead of creating a new group, use the round group directly
+      this.logger.debug(
+        `State global: ${JSON.stringify(stateGlobal)}`,
+        roundGroupId,
+      );
 
-    await this.handleOutput(
-      stateRound,
-      stateGlobal,
-      outputFile,
-      endTurn,
-      currRound,
-    );
-    const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-    this.logger.info(
-      `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-    );
-    this.logger.info(`Completed round ${currRound}`);
+      await this.handleOutput(
+        stateRound,
+        stateGlobal,
+        outputFile,
+        endTurn,
+        currRound,
+        roundGroupId, // Pass the roundGroupId directly
+      );
+
+      const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
+      this.logger.info(
+        `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+        roundGroupId,
+      );
+      this.logger.info(`Completed round ${currRound}`, roundGroupId);
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
@@ -682,9 +762,10 @@ export abstract class BaseReflectionAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,
+    processGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.outputHandler.printStatistics(stateGlobal);
+    this.outputHandler.printStatistics(stateGlobal, processGroupId);
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
@@ -703,161 +784,189 @@ export abstract class BaseReflectionAgent {
     ];
     const toolState = ToolState.initialize();
 
-    // Handle tex count if enabled
-    if (this.agentConfig.toolConfig.attachTeXCount) {
-      toolState.texcountStats = await getTeXCountStats(inputFiles);
-    }
+    // Initialize state and messages
+    const currRound = 0;
+    const stateGlobal = AgentStateGlobal.initialize();
 
-    // Handle prefill from input if enabled
-    if (this.agentConfig.toolConfig.usePrefillFromInput) {
-      toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-        this.agentConfig.inputFile,
-        K_SLICE,
-      );
-    }
+    // Create a dedicated group for Round 0, as a child of the main run group
+    const round0GroupId = this.logger.startGroup(
+      `Round ${currRound}: Initial Generation`,
+      undefined,
+      this.runGroupId, // Use the runGroupId from the class as the parent
+    );
 
-    // Handle figure extraction for vision-capable models
-    if (this.modelHandler.capabilities.supportsVision) {
-      if (
-        this.agentConfig.figureFile &&
-        !toolState.figureFiles.includes(this.agentConfig.figureFile)
-      ) {
-        toolState.addFigureFiles([this.agentConfig.figureFile]);
-      }
-      if (this.agentConfig.figureFiles) {
-        toolState.addFigureFiles(this.agentConfig.figureFiles);
+    this.logger.info(`Processing round ${currRound}`, round0GroupId);
+
+    try {
+      // Handle tex count if enabled
+      if (this.agentConfig.toolConfig.attachTeXCount) {
+        toolState.texcountStats = await getTeXCountStats(inputFiles);
       }
 
-      if (this.agentConfig.toolConfig.autoExtractFigure) {
-        const extractedFigures = await extractFigurePathsFromLatex(
+      // Handle prefill from input if enabled
+      if (this.agentConfig.toolConfig.usePrefillFromInput) {
+        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
           this.agentConfig.inputFile,
+          K_SLICE,
         );
-        if (extractedFigures) {
-          this.logger.info(
-            `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
-          );
-          toolState.addFigureFiles(extractedFigures);
-        }
       }
 
-      if (this.agentConfig.toolConfig.autoExtractTikzFigure) {
-        for (const inputFile of inputFiles) {
-          const extractedTikzFigures =
-            await extractAndCompileTikzPicturesWithLabels(inputFile);
-          if (extractedTikzFigures) {
-            toolState.addFigureFiles(extractedTikzFigures);
+      // Handle figure extraction for vision-capable models
+      if (this.modelHandler.capabilities.supportsVision) {
+        if (
+          this.agentConfig.figureFile &&
+          !toolState.figureFiles.includes(this.agentConfig.figureFile)
+        ) {
+          toolState.addFigureFiles([this.agentConfig.figureFile]);
+        }
+        if (this.agentConfig.figureFiles) {
+          toolState.addFigureFiles(this.agentConfig.figureFiles);
+        }
+
+        if (this.agentConfig.toolConfig.autoExtractFigure) {
+          const extractedFigures = await extractFigurePathsFromLatex(
+            this.agentConfig.inputFile,
+          );
+          if (extractedFigures) {
+            this.logger.info(
+              `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
+              round0GroupId,
+            );
+            toolState.addFigureFiles(extractedFigures);
+          }
+        }
+
+        if (this.agentConfig.toolConfig.autoExtractTikzFigure) {
+          for (const inputFile of inputFiles) {
+            const extractedTikzFigures =
+              await extractAndCompileTikzPicturesWithLabels(inputFile);
+            if (extractedTikzFigures) {
+              toolState.addFigureFiles(extractedTikzFigures);
+            }
           }
         }
       }
-    }
 
-    // Initialize state and messages
-    const currRound = 0;
-    this.logger.info(SEPARATOR);
-    this.logger.info(`Processing round ${currRound}`);
-    const stateGlobal = AgentStateGlobal.initialize();
+      const messages: any[] = [];
 
-    const messages: any[] = [];
+      // Set up initial prompts
+      const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+        renderPrompt(this.agentPrompt.systemPrompt, this.userVars),
+        renderPrompt(this.agentPrompt.userRequest, this.userVars),
+        renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+      ]);
 
-    // Set up initial prompts
-    const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      renderPrompt(this.agentPrompt.systemPrompt, this.userVars),
-      renderPrompt(this.agentPrompt.userRequest, this.userVars),
-      renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-    ]);
+      let prefixWithStats = userPrefix;
+      if (toolState.texcountStats) {
+        prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
+      }
 
-    // logger.debug(CHANNEL, `User prefix: ${userPrefix}`);
-    // logger.debug(CHANNEL, `User request: ${userRequest}`);
-    // logger.debug(CHANNEL, `System prompt: ${systemPrompt}`);
+      // Write prompt to file if requested
+      if (this.agentConfig.toolConfig.printInputPrompt) {
+        await writePromptToXml(
+          systemPrompt,
+          prefixWithStats,
+          userRequest,
+          this.agentConfig.inputFile,
+          this.agentConfig.agent,
+        );
+      }
 
-    let prefixWithStats = userPrefix;
-    if (toolState.texcountStats) {
-      prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
-    }
-
-    // Write prompt to file if requested
-    if (this.agentConfig.toolConfig.printInputPrompt) {
-      await writePromptToXml(
-        systemPrompt,
+      // Initialize messages with prompts
+      const initialMessages = await this.modelHandler.initializeMessages(
         prefixWithStats,
         userRequest,
-        this.agentConfig.inputFile,
-        this.agentConfig.agent,
+        toolState.figureFiles,
+        systemPrompt,
       );
-    }
+      messages.push(...initialMessages);
 
-    // Initialize messages with prompts
-    const initialMessages = await this.modelHandler.initializeMessages(
-      prefixWithStats,
-      userRequest,
-      toolState.figureFiles,
-      systemPrompt,
-    );
-    messages.push(...initialMessages);
+      // Handle prefill
+      const prefill = this.getPrefillForRound(currRound);
+      toolState.updateAccumulatedOutput(prefill);
 
-    // Handle prefill
-    const prefill = this.getPrefillForRound(currRound);
-    toolState.updateAccumulatedOutput(prefill);
+      // Initialize output and handle prefill
+      const [endTurn, updatedMessages] =
+        await this.modelHandler.initializeOutputAndPrefill(
+          this.agentConfig,
+          this.agentSetting,
+          messages,
+          toolState,
+          this.outputFile[0],
+          prefill,
+        );
 
-    // Initialize output and handle prefill
-    const [endTurn, updatedMessages] =
-      await this.modelHandler.initializeOutputAndPrefill(
-        this.agentConfig,
-        this.agentSetting,
-        messages,
-        toolState,
-        this.outputFile[0],
-        prefill,
-      );
+      const stateRound = AgentStateRound.initialize(currRound);
+      let finalEndTurn = endTurn;
 
-    const stateRound = AgentStateRound.initialize(currRound);
-    let finalEndTurn = endTurn;
+      if (!endTurn) {
+        const [
+          updatedStateRound,
+          updatedStateGlobal,
+          updatedToolState,
+          newEndTurn,
+        ] = await this.processResponseCycle(
+          updatedMessages,
+          stateRound,
+          stateGlobal,
+          toolState,
+          this.outputFile[0],
+          round0GroupId, // Pass the round group ID to processResponseCycle
+        );
+        finalEndTurn = newEndTurn;
 
-    if (!endTurn) {
-      const [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedToolState,
-        newEndTurn,
-      ] = await this.processResponseCycle(
-        updatedMessages,
+        // Handle output and logging
+        await this.handleRoundCompletion(
+          updatedStateRound,
+          updatedStateGlobal,
+          this.outputFile[0],
+          finalEndTurn,
+          currRound,
+          round0GroupId, // Pass the round group ID
+        );
+
+        this.logger.debug(
+          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
+          round0GroupId,
+        );
+
+        // End the round group
+        this.logger.endGroup(round0GroupId, 'stopped');
+
+        return [
+          updatedStateRound,
+          updatedStateGlobal,
+          updatedMessages,
+          finalEndTurn,
+          updatedToolState,
+        ];
+      }
+
+      // Handle output and logging for early termination
+      await this.handleRoundCompletion(
         stateRound,
         stateGlobal,
-        toolState,
-        this.outputFile[0],
-      );
-      finalEndTurn = newEndTurn;
-
-      // Handle output and logging
-      await this.handleRoundCompletion(
-        updatedStateRound,
-        updatedStateGlobal,
         this.outputFile[0],
         finalEndTurn,
         currRound,
+        round0GroupId, // Pass the round group ID
       );
 
-      this.logger.debug(`stateGlobal: ${JSON.stringify(updatedStateGlobal)}`);
+      // End the round group
+      this.logger.endGroup(round0GroupId, 'stopped');
 
       return [
-        updatedStateRound,
-        updatedStateGlobal,
+        stateRound,
+        stateGlobal,
         updatedMessages,
         finalEndTurn,
-        updatedToolState,
+        toolState,
       ];
+    } catch (error) {
+      // End the round group with error status in case of exceptions
+      this.logger.endGroup(round0GroupId, 'error');
+      throw error;
     }
-
-    // Handle output and logging for early termination
-    await this.handleRoundCompletion(
-      stateRound,
-      stateGlobal,
-      this.outputFile[0],
-      finalEndTurn,
-      currRound,
-    );
-
-    return [stateRound, stateGlobal, updatedMessages, finalEndTurn, toolState];
   }
 
   /**
@@ -870,129 +979,151 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
     currRound: number = 1,
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
-    // Handle output file processing
-    if (this.agentConfig.outputFiles) {
-      await this._handleToolStateForOutput(
-        this.agentConfig.outputFiles,
-        currRound,
-        toolState,
-      );
-    } else {
-      // Handle single output file
-      const outputFiles = this.outputHandler.outputFiles[0];
-      if (outputFiles && outputFiles.length > 0) {
+    // Create a dedicated group for Round 1 reflection, as a child of the main run group
+    const round1GroupId = this.logger.startGroup(
+      `Round ${currRound}: Reflection`,
+      undefined,
+      this.runGroupId,
+    );
+
+    this.logger.info(`Processing round ${currRound}`, round1GroupId);
+
+    try {
+      // Handle output file processing
+      if (this.agentConfig.outputFiles) {
         await this._handleToolStateForOutput(
-          [outputFiles[0]],
+          this.agentConfig.outputFiles,
           currRound,
           toolState,
         );
+      } else {
+        // Handle single output file
+        const outputFiles = this.outputHandler.outputFiles[0];
+        if (outputFiles && outputFiles.length > 0) {
+          await this._handleToolStateForOutput(
+            [outputFiles[0]],
+            currRound,
+            toolState,
+          );
+        }
       }
-    }
 
-    if (this.agentConfig.toolConfig.usePrefillFromInput) {
-      toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
-        this.agentConfig.inputFile,
-        K_SLICE,
+      if (this.agentConfig.toolConfig.usePrefillFromInput) {
+        toolState.firstKCharsFromInput = await getFirstKCharsFromDocument(
+          this.agentConfig.inputFile,
+          K_SLICE,
+        );
+      }
+
+      // Initialize reflection round
+      const stateRound = AgentStateRound.initialize(currRound);
+
+      // Prepare reflection message
+      const userRequestReflect = await renderPrompt(
+        this.agentPrompt.userReflect,
+        this.userVars,
       );
-    }
+      let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
+      if (toolState.texcountStats) {
+        userMessage = `${toolState.texcountStats}${userMessage}`;
+      }
 
-    // Initialize reflection round
-    this.logger.info(SEPARATOR);
-    this.logger.info(`Processing round ${currRound}`);
-    const stateRound = AgentStateRound.initialize(currRound);
+      // Only proceed if there's actual content
+      if (!userMessage.trim()) {
+        this.logger.endGroup(round1GroupId, 'stopped');
+        return [stateRound, stateGlobal, messages, true];
+      }
 
-    // Prepare reflection message
-    const userRequestReflect = await renderPrompt(
-      this.agentPrompt.userReflect,
-      this.userVars,
-    );
-    let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
-    if (toolState.texcountStats) {
-      userMessage = `${toolState.texcountStats}${userMessage}`;
-    }
+      const reflectionMessages =
+        await this.modelHandler.createReflectionMessages(
+          messages,
+          userMessage,
+          toolState.figureFiles,
+        );
 
-    // Only proceed if there's actual content
-    if (!userMessage.trim()) {
-      return [stateRound, stateGlobal, messages, true];
-    }
+      // Handle prefill for reflection round
+      const prefill = this.getPrefillForRound(currRound);
+      toolState.updateAccumulatedOutput(prefill);
 
-    const reflectionMessages = await this.modelHandler.createReflectionMessages(
-      messages,
-      userMessage,
-      toolState.figureFiles,
-    );
+      const [endTurn, updatedMessages] =
+        await this.modelHandler.initializeOutputAndPrefill(
+          this.agentConfig,
+          this.agentSetting,
+          reflectionMessages,
+          toolState,
+          this.outputFile[1],
+          prefill,
+        );
 
-    // Handle prefill for reflection round
-    const prefill = this.getPrefillForRound(currRound);
-    toolState.updateAccumulatedOutput(prefill);
+      if (!endTurn) {
+        const [
+          updatedStateRound,
+          updatedStateGlobal,
+          updatedToolState,
+          newEndTurn,
+        ] = await this.processResponseCycle(
+          updatedMessages,
+          stateRound,
+          stateGlobal,
+          toolState,
+          this.outputFile[1],
+          round1GroupId,
+        );
 
-    const [endTurn, updatedMessages] =
-      await this.modelHandler.initializeOutputAndPrefill(
-        this.agentConfig,
-        this.agentSetting,
-        reflectionMessages,
-        toolState,
-        this.outputFile[1],
-        prefill,
-      );
+        // Handle output and logging
+        await this.handleRoundCompletion(
+          updatedStateRound,
+          updatedStateGlobal,
+          this.outputFile[1],
+          newEndTurn,
+          currRound,
+          round1GroupId,
+        );
 
-    if (!endTurn) {
-      const [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedToolState,
-        newEndTurn,
-      ] = await this.processResponseCycle(
-        updatedMessages,
+        this.logger.endGroup(round1GroupId, 'stopped');
+        return [
+          updatedStateRound,
+          updatedStateGlobal,
+          updatedMessages,
+          newEndTurn,
+        ];
+      }
+
+      // Handle output and logging for early termination
+      await this.handleRoundCompletion(
         stateRound,
         stateGlobal,
-        toolState,
         this.outputFile[1],
-      );
-
-      // Handle output and logging
-      await this.handleRoundCompletion(
-        updatedStateRound,
-        updatedStateGlobal,
-        this.outputFile[1],
-        newEndTurn,
+        endTurn,
         currRound,
+        round1GroupId,
       );
 
-      return [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedMessages,
-        newEndTurn,
-      ];
+      this.logger.endGroup(round1GroupId, 'stopped');
+      return [stateRound, stateGlobal, updatedMessages, endTurn];
+    } catch (error) {
+      // End the round group with error status in case of exceptions
+      this.logger.endGroup(round1GroupId, 'error');
+      throw error;
     }
-
-    // Handle output and logging for early termination
-    await this.handleRoundCompletion(
-      stateRound,
-      stateGlobal,
-      this.outputFile[1],
-      endTurn,
-      currRound,
-    );
-
-    return [stateRound, stateGlobal, updatedMessages, endTurn];
   }
 
   /**
-   * Executes complete agent conversation cycle.
-   * Manages initial processing and optional reflection rounds.
+   * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
+    // Create a dedicated run group for this agent execution
+    this.runGroupId = this.logger.startGroup(
+      `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
+    );
+
     try {
       // Initialize client before starting
       await this.initializeClient();
 
-      this.logger.info(SEPARATOR);
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
-      this.logger.info(`Round 0 completed\n`);
-      this.logger.info(SEPARATOR);
+      this.logger.info(`Round 0 completed\n`, this.runGroupId);
 
       // Check for interruption before reflection
       if (
@@ -1002,9 +1133,17 @@ export abstract class BaseReflectionAgent {
       ) {
         const toolStateReflection = ToolState.initialize();
         await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.info(`Round 1 completed\n`);
-        this.logger.info(SEPARATOR);
+        this.logger.info(`Round 1 completed\n`, this.runGroupId);
       }
+
+      // End the run group with success status
+      this.logger.endGroup(this.runGroupId, 'stopped');
+    } catch (error) {
+      // End the run group with error status
+      if (this.runGroupId) {
+        this.logger.endGroup(this.runGroupId, 'error');
+      }
+      throw error;
     } finally {
       // Always clean up, whether execution completed or was interrupted
       this.cleanup();
@@ -1039,25 +1178,28 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Processes output files with figure extraction and validation.
-   * @param outputFile Current output file path
-   * @param currRound Current round number
+   * Processes output files and runs latexdiff operations.
    */
   protected async processOutputFiles(
     outputFile: string,
     currRound: number,
   ): Promise<void> {
-    // logger.debug(CHANNEL, `processOutputFiles called with outputFile: ${outputFile}, currRound: ${currRound}`);
-    // logger.debug(CHANNEL, `this.agentConfig.outputFiles type: ${typeof this.agentConfig.outputFiles}`);
-    // logger.debug(CHANNEL, `this.agentConfig.outputFiles value: ${JSON.stringify(this.agentConfig.outputFiles)}`);
+    // Get the active group ID for proper nesting
+    const activeGroupId = this.logger.getActiveGroupId();
 
     if (
       Array.isArray(this.agentConfig.outputFiles) &&
       this.agentConfig.outputFiles.length > 0
     ) {
       // Multiple output files case
-      this.logger.debug(`Processing multiple outputs for ${outputFile}`);
-      this.logger.debug(`Output files: ${this.agentConfig.outputFiles}`);
+      this.logger.debug(
+        `Processing multiple outputs for ${outputFile}`,
+        activeGroupId,
+      );
+      this.logger.debug(
+        `Output files: ${this.agentConfig.outputFiles}`,
+        activeGroupId,
+      );
 
       // if the agentType is CoT, we need to process the output files
       // Then I realize that in fact it does not make sense to have multiple output files
@@ -1068,7 +1210,10 @@ export abstract class BaseReflectionAgent {
       const processedFiles =
         await this.outputHandler.processMultipleXmlOutputs(outputFile);
       if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(processedFiles);
+        await this.outputHandler.handleMultipleOutputs(
+          processedFiles,
+          activeGroupId,
+        );
         this.outputHandler.outputFiles[currRound] = processedFiles;
         await this.outputHandler.replaceInputCommands(
           this.baseFiles,
@@ -1077,19 +1222,26 @@ export abstract class BaseReflectionAgent {
       }
     } else {
       // Single output file case
-      this.logger.debug(`Processing single output for ${outputFile}`);
+      this.logger.debug(
+        `Processing single output for ${outputFile}`,
+        activeGroupId,
+      );
       let processedFile = outputFile;
       if (this.agentSetting.agentType === 'CoT') {
         processedFile =
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
       if (processedFile) {
-        await this.outputHandler.handleSingleOutput(processedFile);
+        await this.outputHandler.handleSingleOutput(
+          processedFile,
+          activeGroupId,
+        );
         this.outputHandler.outputFiles[currRound] = [processedFile];
       }
     }
 
-    await this.outputHandler.handleLatexdiff(currRound);
+    // Pass the active group ID to maintain proper nesting in the log hierarchy
+    await this.outputHandler.handleLatexdiff(currRound, activeGroupId);
   }
 
   /**

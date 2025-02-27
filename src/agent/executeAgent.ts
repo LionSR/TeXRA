@@ -147,81 +147,156 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
       throw new Error(errorMsg);
     }
 
-    // Initializes user variables
-    await agent.init();
-
-    logger.debug(`Creating stream with ID: ${fullStreamId}`);
-    logger.debug(
-      `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
+    // Create a main task group for the entire execution
+    const mainTaskGroupId = logger.startGroup(
+      `Task: ${agentName}@${config.model}`,
     );
-    logger.debug(
-      `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}`,
-    );
-
-    // Switch to this stream and set its status to running
-    logViewProvider.setActiveStream(fullStreamId);
-    logViewProvider.updateStreamStatus(fullStreamId, 'running');
-
-    // Store taskState
-    logger.debug(`Storing taskState for stream: ${fullStreamId}`);
-    logger.debug(`Config for taskState: ${JSON.stringify(config)}`);
-
-    // TODO:this is really mess, we should either use a unified data structure for TaskState and AgentConfig, or define a function that converts AgentConfig to TaskState for it. We have this mess in @TaskState.ts and @LogViewMessageHandler.ts too.
-    logViewProvider.setTaskState(fullStreamId, {
-      // Parameters
-      agent: config.agent,
-      model: config.model,
-      instruction: config.instruction || '',
-      // Input/Output configuration
-      inputFile: config.inputFile || '',
-      referenceFile: config.referenceFile || '',
-      auxiliaryFile: config.auxiliaryFile || '',
-      figureFile: config.figureFile || '',
-      outputNameOverride: config.outputNameOverride || '',
-      // Multiple file selections
-      multipleInputFiles: config.inputFiles || [],
-      multipleReferenceFiles: config.referenceFiles || [],
-      multipleAuxiliaryFiles: config.auxiliaryFiles || [],
-      multipleFigureFiles: config.figureFiles || [],
-      multipleOutputFiles: config.outputFiles || [],
-      // Multiple file selection visibility
-      multipleInputFilesVisible:
-        Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
-      multipleReferenceFilesVisible:
-        Array.isArray(config.referenceFiles) &&
-        config.referenceFiles.length > 0,
-      multipleAuxiliaryFilesVisible:
-        Array.isArray(config.auxiliaryFiles) &&
-        config.auxiliaryFiles.length > 0,
-      multipleFigureFilesVisible:
-        Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
-      multipleOutputFilesVisible:
-        Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
-      // Auto extract settings
-      autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
-      autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
-      attachTeXCount: config.toolConfig?.attachTeXCount || false,
-      usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
-      printInputPrompt: config.toolConfig?.printInputPrompt || false,
-      reflect: config.toolConfig?.reflect || false,
-      outputNameOverrideVisible: !!config.outputNameOverride,
-    });
-    logger.debug(`Task state stored for stream: ${fullStreamId}`);
 
     try {
-      // Run the agent
-      await agent.run();
-      // Update status to stopped on successful completion
-      logViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+      // Create a log group for execution details as a sub-group
+      const taskDetailsGroupId = logger.startGroup(
+        `Task Details`,
+        undefined,
+        mainTaskGroupId,
+      );
+
+      logger.info(
+        `Starting task execution for ${fullStreamId}`,
+        taskDetailsGroupId,
+      );
+      logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
+
+      try {
+        // Initializes user variables
+        await agent.init();
+
+        logger.debug(
+          `Creating stream with ID: ${fullStreamId}`,
+          taskDetailsGroupId,
+        );
+        logger.debug(
+          `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
+          taskDetailsGroupId,
+        );
+        logger.debug(
+          `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}`,
+          taskDetailsGroupId,
+        );
+
+        // Switch to this stream and set its status to running
+        logViewProvider.setActiveStream(fullStreamId);
+        logViewProvider.updateStreamStatus(fullStreamId, 'running');
+
+        // Store taskState
+        logger.debug(
+          `Storing taskState for stream: ${fullStreamId}`,
+          taskDetailsGroupId,
+        );
+        logger.debug(
+          `Config for taskState: ${JSON.stringify(config)}`,
+          taskDetailsGroupId,
+        );
+
+        // End the task details group
+        logger.endGroup(taskDetailsGroupId, 'stopped');
+
+        // TODO:this is really mess, we should either use a unified data structure for TaskState and AgentConfig, or define a function that converts AgentConfig to TaskState for it. We have this mess in @TaskState.ts and @LogViewMessageHandler.ts too.
+        logViewProvider.setTaskState(fullStreamId, {
+          // Parameters
+          agent: config.agent,
+          model: config.model,
+          instruction: config.instruction || '',
+          // Input/Output configuration
+          inputFile: config.inputFile || '',
+          referenceFile: config.referenceFile || '',
+          auxiliaryFile: config.auxiliaryFile || '',
+          figureFile: config.figureFile || '',
+          outputNameOverride: config.outputNameOverride || '',
+          // Multiple file selections
+          multipleInputFiles: config.inputFiles || [],
+          multipleReferenceFiles: config.referenceFiles || [],
+          multipleAuxiliaryFiles: config.auxiliaryFiles || [],
+          multipleFigureFiles: config.figureFiles || [],
+          multipleOutputFiles: config.outputFiles || [],
+          // Multiple file selection visibility
+          multipleInputFilesVisible:
+            Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
+          multipleReferenceFilesVisible:
+            Array.isArray(config.referenceFiles) &&
+            config.referenceFiles.length > 0,
+          multipleAuxiliaryFilesVisible:
+            Array.isArray(config.auxiliaryFiles) &&
+            config.auxiliaryFiles.length > 0,
+          multipleFigureFilesVisible:
+            Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
+          multipleOutputFilesVisible:
+            Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
+          // Auto extract settings
+          autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
+          autoExtractTikzFigure:
+            config.toolConfig?.autoExtractTikzFigure || false,
+          attachTeXCount: config.toolConfig?.attachTeXCount || false,
+          usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
+          printInputPrompt: config.toolConfig?.printInputPrompt || false,
+          reflect: config.toolConfig?.reflect || false,
+          outputNameOverrideVisible: !!config.outputNameOverride,
+        });
+        logger.debug(
+          `Task state stored for stream: ${fullStreamId}`,
+          mainTaskGroupId,
+        );
+
+        try {
+          // Run the agent
+          logger.info(
+            `Executing ${agentName} with model ${config.model}`,
+            mainTaskGroupId,
+          );
+          await agent.run();
+          // Mark the task as completed successfully
+          logger.info(`Task completed successfully`, mainTaskGroupId);
+          logger.endGroup(mainTaskGroupId, 'stopped');
+          // Update status to stopped on successful completion
+          logViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+        } catch (err) {
+          // Mark the task as failed
+          logger.error(
+            `Task failed: ${err instanceof Error ? err.message : String(err)}`,
+            mainTaskGroupId,
+          );
+          logger.endGroup(mainTaskGroupId, 'error');
+          // Update status to error if agent run fails
+          logViewProvider.updateStreamStatus(fullStreamId, 'error');
+          throw err;
+        }
+      } catch (err) {
+        // End the details group if it's still active
+        if (taskDetailsGroupId) {
+          logger.endGroup(taskDetailsGroupId, 'error');
+        }
+
+        // End the main group with error status if any initialization error occurs
+        logger.error(
+          `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
+          mainTaskGroupId,
+        );
+        logger.endGroup(mainTaskGroupId, 'error');
+        throw err;
+      }
     } catch (err) {
-      // Update status to error if agent run fails
-      logViewProvider.updateStreamStatus(fullStreamId, 'error');
+      // Ensure the main group is ended even if there was an error in nested groups
+      if (mainTaskGroupId) {
+        logger.endGroup(mainTaskGroupId, 'error');
+      }
       throw err;
     }
   } catch (err) {
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
-    logger.error(errorMsg);
+    // Create a temporary error group if no active group exists
+    const errorGroupId = logger.startGroup(`Error: ${agentName}`);
+    logger.error(errorMsg, errorGroupId);
+    logger.endGroup(errorGroupId, 'error');
     throw new Error(errorMsg);
   }
 }
