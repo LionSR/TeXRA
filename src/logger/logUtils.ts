@@ -77,6 +77,13 @@ class VSCodeTransport extends Transport {
 
     const emoji = emojis[level as keyof typeof emojis];
 
+    // Extract parts of the timestamp for display formatting
+    // Full format is: YYYY-MM-DD HH:mm:ss.SSS
+    const timeDisplay = timestamp.split(' ')[1]; // Just show the time part in the UI
+    // do not show milliseconds and the date
+    // const timeDisplay = timestamp.split(' ')[1].split('.')[0];
+    // this do not work because the sorting still depends on it.
+
     // Plain format for output channel - no escaping needed
     const formattedMessage = `${emoji} [${timestamp}] ${level.toUpperCase().padEnd(8)} ${message}`;
 
@@ -95,10 +102,10 @@ class VSCodeTransport extends Transport {
     // Escape HTML tags in message for LogView
     const escapedMessage = escapeHtml(message);
 
-    // Colored format for LogView using CSS classes
+    // Colored format for LogView using CSS classes, but with shorter timestamp display
     const coloredFormattedMessage =
-      `<div class="log-line" ${groupId ? `data-group-id="${groupId}"` : ''}>` +
-      `<span class="timestamp">${emoji} [${timestamp}]</span> ` +
+      `<div class="log-line" ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
+      `<span class="timestamp" title="${timestamp}">${emoji} [${timeDisplay}]</span> ` +
       `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> ` +
       `<span class="message-${level}">${escapedMessage}</span>` +
       `</div>`;
@@ -178,6 +185,8 @@ class VSCodeTransport extends Transport {
         groupName,
         timeString,
         'running',
+        undefined, // No end time for a new group
+        parentGroupId, // Pass the parent group ID
       );
     }
 
@@ -272,7 +281,7 @@ function createLoggerForChannel(channel: string): winston.Logger {
     level: 'debug',
     format: combine(
       timestamp({
-        format: 'YYYY-MM-DD HH:mm:ss',
+        format: 'YYYY-MM-DD HH:mm:ss.SSS', // Add milliseconds for better precision
       }),
     ),
     transports: [transport],
