@@ -725,24 +725,31 @@ export abstract class BaseReflectionAgent {
     currRound: number,
     roundGroupId?: string,
   ): Promise<void> {
-    this.logger.debug(
-      `State global: ${JSON.stringify(stateGlobal)}`,
-      roundGroupId,
-    );
+    try {
+      // Instead of creating a new group, use the round group directly
+      this.logger.debug(
+        `State global: ${JSON.stringify(stateGlobal)}`,
+        roundGroupId,
+      );
 
-    await this.handleOutput(
-      stateRound,
-      stateGlobal,
-      outputFile,
-      endTurn,
-      currRound,
-    );
-    const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
-    this.logger.info(
-      `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
-      roundGroupId,
-    );
-    this.logger.info(`Completed round ${currRound}`, roundGroupId);
+      await this.handleOutput(
+        stateRound,
+        stateGlobal,
+        outputFile,
+        endTurn,
+        currRound,
+        roundGroupId, // Pass the roundGroupId directly
+      );
+
+      const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
+      this.logger.info(
+        `Processed ${inputInfo}. The round ${currRound} output was saved as ${outputFile}`,
+        roundGroupId,
+      );
+      this.logger.info(`Completed round ${currRound}`, roundGroupId);
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
@@ -755,9 +762,10 @@ export abstract class BaseReflectionAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,
+    processGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.outputHandler.printStatistics(stateGlobal);
+    this.outputHandler.printStatistics(stateGlobal, processGroupId);
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
@@ -1170,25 +1178,28 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Processes output files with figure extraction and validation.
-   * @param outputFile Current output file path
-   * @param currRound Current round number
+   * Processes output files and runs latexdiff operations.
    */
   protected async processOutputFiles(
     outputFile: string,
     currRound: number,
   ): Promise<void> {
-    // logger.debug(CHANNEL, `processOutputFiles called with outputFile: ${outputFile}, currRound: ${currRound}`);
-    // logger.debug(CHANNEL, `this.agentConfig.outputFiles type: ${typeof this.agentConfig.outputFiles}`);
-    // logger.debug(CHANNEL, `this.agentConfig.outputFiles value: ${JSON.stringify(this.agentConfig.outputFiles)}`);
+    // Get the active group ID for proper nesting
+    const activeGroupId = this.logger.getActiveGroupId();
 
     if (
       Array.isArray(this.agentConfig.outputFiles) &&
       this.agentConfig.outputFiles.length > 0
     ) {
       // Multiple output files case
-      this.logger.debug(`Processing multiple outputs for ${outputFile}`);
-      this.logger.debug(`Output files: ${this.agentConfig.outputFiles}`);
+      this.logger.debug(
+        `Processing multiple outputs for ${outputFile}`,
+        activeGroupId,
+      );
+      this.logger.debug(
+        `Output files: ${this.agentConfig.outputFiles}`,
+        activeGroupId,
+      );
 
       // if the agentType is CoT, we need to process the output files
       // Then I realize that in fact it does not make sense to have multiple output files
@@ -1199,7 +1210,10 @@ export abstract class BaseReflectionAgent {
       const processedFiles =
         await this.outputHandler.processMultipleXmlOutputs(outputFile);
       if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(processedFiles);
+        await this.outputHandler.handleMultipleOutputs(
+          processedFiles,
+          activeGroupId,
+        );
         this.outputHandler.outputFiles[currRound] = processedFiles;
         await this.outputHandler.replaceInputCommands(
           this.baseFiles,
@@ -1208,19 +1222,26 @@ export abstract class BaseReflectionAgent {
       }
     } else {
       // Single output file case
-      this.logger.debug(`Processing single output for ${outputFile}`);
+      this.logger.debug(
+        `Processing single output for ${outputFile}`,
+        activeGroupId,
+      );
       let processedFile = outputFile;
       if (this.agentSetting.agentType === 'CoT') {
         processedFile =
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
       if (processedFile) {
-        await this.outputHandler.handleSingleOutput(processedFile);
+        await this.outputHandler.handleSingleOutput(
+          processedFile,
+          activeGroupId,
+        );
         this.outputHandler.outputFiles[currRound] = [processedFile];
       }
     }
 
-    await this.outputHandler.handleLatexdiff(currRound);
+    // Pass the active group ID to maintain proper nesting in the log hierarchy
+    await this.outputHandler.handleLatexdiff(currRound, activeGroupId);
   }
 
   /**
