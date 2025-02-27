@@ -457,7 +457,7 @@ export class OutputHandler {
         return;
       }
 
-      // Log debugging information within the group first
+      // Log debugging information within the group
       this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
       this.logger.debug(
         `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
@@ -466,43 +466,82 @@ export class OutputHandler {
 
       // Generate diffs between base files and current round only if it's a rewrite task
       if (this.agentSetting.isRewrite) {
-        // For direct calls, use our handleSingleOutput method with the group ID
+        // For each base file and output file, generate a diff
         for (let i = 0; i < this.baseFiles.length; i++) {
           const baseFile = this.baseFiles[i];
           const outputFile = this.outputFiles[currRound][i];
           if (baseFile && outputFile) {
-            // Call handleSingleOutput with the group ID to ensure logs appear in correct order
-            await runLatexdiffForRound(
+            // Log in our own group
+            this.logger.info(
+              `Running latexdiff for round ${currRound} between ${baseFile} and ${outputFile}`,
+              diffProcessGroupId,
+            );
+
+            // Call latexdiff without passing the group ID
+            const result = await runLatexdiffForRound(
               baseFile,
               outputFile,
               currRound,
-              diffProcessGroupId,
             );
+
+            // Log the result in our own group
+            if (result.success) {
+              this.logger.info(
+                `Successfully generated diff file: ${result.diffFileName}`,
+                diffProcessGroupId,
+              );
+            } else {
+              this.logger.warn(
+                `Failed to generate diff: ${result.message}`,
+                diffProcessGroupId,
+              );
+            }
           }
         }
       }
 
-      // Always generate diffs between consecutive rounds, regardless of isRewrite setting
-      for (let r = 1; r <= currRound; r++) {
-        for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
-          const outputFile1 = this.outputFiles[r - 1][i];
-          const outputFile2 = this.outputFiles[r][i];
-          await runLatexdiffBetweenRounds(
-            outputFile1,
-            outputFile2,
-            diffProcessGroupId, // Pass the group ID to ensure logs appear in correct order
-          );
+      // Generate diffs between consecutive rounds if applicable
+      if (currRound > 0) {
+        for (let i = 0; i < this.outputFiles[currRound].length; i++) {
+          const prevRound = currRound - 1;
+          const prevOutputFile = this.outputFiles[prevRound]?.[i];
+          const currOutputFile = this.outputFiles[currRound][i];
+
+          if (prevOutputFile && currOutputFile) {
+            this.logger.info(
+              `Running latexdiff between rounds ${prevRound} and ${currRound}`,
+              diffProcessGroupId,
+            );
+
+            // Call latexdiff without passing the group ID
+            const result = await runLatexdiffBetweenRounds(
+              prevOutputFile,
+              currOutputFile,
+            );
+
+            // Log the result in our own group
+            if (result.success) {
+              this.logger.info(
+                `Successfully generated diff between rounds: ${result.diffFileName}`,
+                diffProcessGroupId,
+              );
+            } else {
+              this.logger.warn(
+                `Failed to generate diff between rounds: ${result.message}`,
+                diffProcessGroupId,
+              );
+            }
+          }
         }
       }
 
       this.endProcessing('stopped', diffProcessGroupId);
-    } catch (error) {
+    } catch (err) {
       this.logger.error(
-        `Error in handleLatexdiff: ${error}`,
+        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
         diffProcessGroupId,
       );
       this.endProcessing('error', diffProcessGroupId);
-      throw error;
     }
   }
 
