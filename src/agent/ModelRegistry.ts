@@ -470,6 +470,40 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     name: 'DSV3',
     fullName: 'deepseek/deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat',
+    provider: ModelProvider.OTHERS,
+    maxOutputTokens: 66000,
+    contextWindow: 131000,
+    inputPrice: 0.14,
+    outputPrice: 0.28,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      // supportsAssistantPrefill: true,
+      // supportsAutoPromptCaching: true,
+      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
+    } satisfies ModelCapabilities,
+    openRouterOnly: true,
+  },
+  DSR1: {
+    name: 'DSR1',
+    fullName: 'deepseek/deepseek-R1',
+    openrouterFullName: 'deepseek/deepseek-R1',
+    provider: ModelProvider.OTHERS,
+    maxOutputTokens: 64000,
+    contextWindow: 164000,
+    inputPrice: 8,
+    outputPrice: 8,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      // supportsAutoPromptCaching: true,
+      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
+      supportsReasoning: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: true,
+  },
+  DSV3o: {
+    name: 'DSV3o',
+    fullName: 'deepseek/deepseek-chat',
+    openrouterFullName: 'deepseek/deepseek-chat',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 8192,
     contextWindow: 64000,
@@ -483,8 +517,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  DSR1: {
-    name: 'DSR1',
+  DSR1o: {
+    name: 'DSR1o',
     fullName: 'deepseek/deepseek-R1',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.DEEPSEEK,
