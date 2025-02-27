@@ -81,6 +81,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
         response = await stream.finalMessage();
 
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+        // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
         if (
           err instanceof NotFoundError ||
