@@ -27,8 +27,8 @@ import {
  */
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   // ===== Anthropic Claude Models =====
-  'sonnet*T': {
-    name: 'sonnet*T',
+  'sonnet37T': {
+    name: 'sonnet37T',
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
     provider: ModelProvider.ANTHROPIC,
@@ -46,8 +46,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet*': {
-    name: 'sonnet*',
+  'sonnet37': {
+    name: 'sonnet37',
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet',
     provider: ModelProvider.ANTHROPIC,
@@ -82,8 +82,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet++': {
-    name: 'sonnet++',
+  'sonnet36': {
+    name: 'sonnet36',
     fullName: 'claude-3-5-sonnet-20241022',
     openrouterFullName: 'anthropic/claude-3.5-sonnet:beta',
     provider: ModelProvider.ANTHROPIC,
@@ -100,8 +100,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'sonnet+': {
-    name: 'sonnet+',
+  'sonnet35': {
+    name: 'sonnet35',
     fullName: 'claude-3-5-sonnet-20240620',
     openrouterFullName: 'anthropic/claude-3.5-sonnet-20240620:beta',
     provider: ModelProvider.ANTHROPIC,
@@ -132,8 +132,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'haiku+': {
-    name: 'haiku+',
+  'haiku35': {
+    name: 'haiku35',
     fullName: 'claude-3-5-haiku-20241022',
     openrouterFullName: 'anthropic/claude-3.5-haiku:beta',
     provider: ModelProvider.ANTHROPIC,
@@ -244,6 +244,23 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenAI Models =====
+  'gpt45': {
+    name: 'gpt45',
+    fullName: 'gpt-4.5-preview',
+    openrouterFullName: 'openai/gpt-4.5-preview',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 16384,
+    contextWindow: 128000,
+    inputPrice: 75.0,
+    outputPrice: 150.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      supportsPredictiveOutput: false,
+      supportsIntermDevMsgs: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   gpt4o: {
     name: 'gpt4o',
     fullName: 'gpt-4o-2024-08-06',
@@ -360,8 +377,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'gemini1p+': {
-    name: 'gemini1p+',
+  'gemini15p': {
+    name: 'gemini15p',
     fullName: 'gemini-1.5-pro-latest',
     openrouterFullName: 'google/gemini-1.5-pro',
     provider: ModelProvider.GOOGLE,
@@ -376,8 +393,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'gemini1f+': {
-    name: 'gemini1f+',
+  'gemini15f': {
+    name: 'gemini15f',
     fullName: 'gemini-1.5-fresh-latest',
     openrouterFullName: 'google/gemini-1.5-fresh',
     provider: ModelProvider.GOOGLE,
@@ -423,8 +440,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenRouter Models =====
-  'llama3+': {
-    name: 'llama3+',
+  'llama31': {
+    name: 'llama31',
     fullName: 'meta-llama/llama-3.1-405b-instruct',
     openrouterFullName: 'meta-llama/llama-3.1-405b-instruct',
     provider: ModelProvider.OTHERS,
@@ -453,33 +470,31 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     name: 'DSV3',
     fullName: 'deepseek/deepseek-chat',
     openrouterFullName: 'deepseek/deepseek-chat',
-    provider: ModelProvider.OTHERS,
-    maxOutputTokens: 66000,
-    contextWindow: 131000,
-    inputPrice: 0.14,
-    outputPrice: 0.28,
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 8192,
+    contextWindow: 64000,
+    inputPrice: 0.27,
+    outputPrice: 1.1,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      // supportsAssistantPrefill: true,
-      // supportsAutoPromptCaching: true,
+      supportsAssistantPrefill: true,
+      supportsAutoPromptCaching: true,
       // I think both are supported via the official deepseek API, but not exposed in the openrouter API
     } satisfies ModelCapabilities,
-    openRouterOnly: true,
+    openRouterOnly: false,
   },
   DSR1: {
     name: 'DSR1',
     fullName: 'deepseek/deepseek-R1',
     openrouterFullName: 'deepseek/deepseek-R1',
-    provider: ModelProvider.OTHERS,
-    maxOutputTokens: 64000,
-    contextWindow: 164000,
-    inputPrice: 8,
-    outputPrice: 8,
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 8192,
+    contextWindow: 64000,
+    inputPrice: 0.55,
+    outputPrice: 2.19,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      // supportsAssistantPrefill: true,
-      // supportsAutoPromptCaching: true,
-      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
+      supportsAutoPromptCaching: true,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
     openRouterOnly: true,
