@@ -166,14 +166,36 @@ export abstract class BaseReflectionAgent {
    * Must be called after constructor before using the agent.
    */
   public async init(): Promise<void> {
-    this.logger.info(SEPARATOR);
-    this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}\n`);
-    this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}\n`);
-    this.logger.debug(
-      `ModelConfig: ${JSON.stringify(this.modelHandler.config)}\n`,
-    );
+    // Create an initialization group for better log organization
+    const initGroupId = this.logger.startGroup(`Initialization`);
 
-    this.userVars = await this.getUserVars();
+    try {
+      this.logger.info(SEPARATOR, initGroupId);
+
+      // Log configuration details in the initialization group
+      this.logger.debug(
+        `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `AgentSetting: ${JSON.stringify(this.agentSetting)}`,
+        initGroupId,
+      );
+      this.logger.debug(
+        `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
+        initGroupId,
+      );
+
+      // Initialize user variables
+      this.userVars = await this.getUserVars();
+
+      // End the initialization group with success status
+      this.logger.endGroup(initGroupId, 'stopped');
+    } catch (error) {
+      // End the group with error status if initialization fails
+      this.logger.endGroup(initGroupId, 'error');
+      throw error;
+    }
   }
 
   /**
@@ -980,19 +1002,23 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Executes complete agent conversation cycle.
-   * Manages initial processing and optional reflection rounds.
+   * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
+    // Create a dedicated run group for this agent execution
+    const runGroupId = this.logger.startGroup(
+      `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
+    );
+
     try {
       // Initialize client before starting
       await this.initializeClient();
 
-      this.logger.info(SEPARATOR);
+      this.logger.info(SEPARATOR, runGroupId);
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
-      this.logger.info(`Round 0 completed\n`);
-      this.logger.info(SEPARATOR);
+      this.logger.info(`Round 0 completed\n`, runGroupId);
+      this.logger.info(SEPARATOR, runGroupId);
 
       // Check for interruption before reflection
       if (
@@ -1002,9 +1028,16 @@ export abstract class BaseReflectionAgent {
       ) {
         const toolStateReflection = ToolState.initialize();
         await this.reflect(stateGlobal, messages, toolStateReflection);
-        this.logger.info(`Round 1 completed\n`);
-        this.logger.info(SEPARATOR);
+        this.logger.info(`Round 1 completed\n`, runGroupId);
+        this.logger.info(SEPARATOR, runGroupId);
       }
+
+      // End the run group with success status
+      this.logger.endGroup(runGroupId, 'stopped');
+    } catch (error) {
+      // End the run group with error status
+      this.logger.endGroup(runGroupId, 'error');
+      throw error;
     } finally {
       // Always clean up, whether execution completed or was interrupted
       this.cleanup();

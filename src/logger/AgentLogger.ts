@@ -13,19 +13,55 @@ export class AgentLogger {
     this.channelId = channelId;
   }
 
-  debug(message: string): void {
-    logger.debug(this.channelId, message);
+  debug(message: string, groupId?: string): void {
+    logger.debug(this.channelId, message, groupId);
   }
 
-  info(message: string): void {
-    logger.info(this.channelId, message);
+  info(message: string, groupId?: string): void {
+    logger.info(this.channelId, message, groupId);
   }
 
-  warn(message: string): void {
-    logger.warn(this.channelId, message);
+  warn(message: string, groupId?: string): void {
+    logger.warn(this.channelId, message, groupId);
   }
 
-  error(message: string): void {
-    logger.error(this.channelId, message);
+  error(message: string, groupId?: string): void {
+    logger.error(this.channelId, message, groupId);
+  }
+
+  /**
+   * Start a new log group and make it active for this logger.
+   * @param groupName Name of the group to display
+   * @param id Optional custom ID for the group
+   * @param parentGroupId Optional parent group ID for nested groups
+   * @returns The group ID
+   */
+  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
+    return logger.startGroup(this.channelId, groupName, id, parentGroupId);
+  }
+
+  /**
+   * End the specified log group.
+   * @param groupId ID of the group to end
+   * @param status Status to set for the group ('error' or 'stopped')
+   */
+  endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
+    logger.endGroup(this.channelId, groupId, status);
+  }
+
+  /**
+   * Get the ID of the active log group for this logger.
+   * @returns The active group ID, or undefined if no active group
+   */
+  getActiveGroupId(): string | undefined {
+    return logger.getActiveGroupId(this.channelId);
+  }
+
+  /**
+   * Set the active group ID for this logger.
+   * @param groupId The group ID to set as active, or undefined to clear
+   */
+  setActiveGroupId(groupId: string | undefined): void {
+    logger.setActiveGroupId(this.channelId, groupId);
   }
 }
