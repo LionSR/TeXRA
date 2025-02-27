@@ -44,6 +44,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   async getClient(): Promise<Anthropic> {
     const apiKey = await this.getApiKey();
     this.logger.debug('Using Anthropic API.');
+    // there is a time out parameter that be be set; default is 10 minutes
     return new Anthropic({ apiKey });
   }
 
