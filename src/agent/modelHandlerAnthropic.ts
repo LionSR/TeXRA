@@ -29,6 +29,8 @@ import {
 import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
+import { stream } from 'winston';
 
 const K_SLICE = 200;
 
@@ -53,6 +55,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     systemPrompt?: string,
     endTag?: string,
   ): Promise<any> {
+    // Get streaming config
+    const useStreaming = getConfig<boolean>('model.useStreaming', false);
+
     // Prepare options for the API call
     const options: any = {
       model: this.config.fullName,
@@ -68,13 +73,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
       delete options.temperature;
 
       options.betas = ['output-128k-2025-02-19'];
-      // Update max tokens to use the higher limit
-      options.max_tokens = this.config.maxOutputTokens;
+      // Update max tokens to use the higher limit when streaming
+      options.max_tokens = useStreaming ? 128000 : this.config.maxOutputTokens;
       if (this.capabilities.supportsReasoning) {
         options.thinking = {
           type: 'enabled',
-          // budget_tokens: 32000,
-          budget_tokens: 4096,
+          // Set higher budget_tokens for streaming
+          budget_tokens: useStreaming ? 32000 : 4096,
         };
       }
     }
@@ -91,7 +96,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
-    return client.beta.messages.create(options);
+    let response;
+
+    if (useStreaming) {
+
+      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+      const stream = await client.beta.messages.stream(options);
+      const response = await stream.finalMessage();
+      return response;
+    } else {
+      response = await client.beta.messages.create(options);
+    }
+
+    return response;
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional images. */
