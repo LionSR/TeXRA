@@ -270,6 +270,9 @@ export class OutputHandler {
         .replace(/\\subsection\{([^}]+)\}/g, '### $1')
         .replace(/\\begin\{itemize\}/g, '')
         .replace(/\\end\{itemize\}/g, '')
+        // Also handle enumerate environments like itemize
+        .replace(/\\begin\{enumerate\}/g, '')
+        .replace(/\\end\{enumerate\}/g, '')
         .replace(/\\item\s+/g, '- ')
         .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
         .replace(/\\textit\{([^}]+)\}/g, '*$1*')
