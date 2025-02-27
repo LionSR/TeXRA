@@ -428,23 +428,25 @@ body {
 
 /* Scratchpad styles */
 .scratchpad-content {
-  margin: 8px 8px 16px 32px;
-  padding: 12px;
-  border-radius: 6px;
+  margin: 1px 3px 5px 8px;
+  padding: 2px 3px;
+  border-radius: 4px;
   background-color: var(--vscode-textCodeBlock-background, #1e1e1e);
-  border-left: 4px solid var(--vscode-activityBarBadge-background, #007acc);
+  border-left: 3px solid var(--vscode-activityBarBadge-background, #007acc);
   font-family: var(--vscode-editor-font-family);
-  line-height: 1.5;
+  line-height: 1.15;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   position: relative;
+  font-size: 13px;
+  color: var(--vscode-editor-foreground, #d4d4d4);
 }
 
 .scratchpad-content:before {
   content: '💭';
   position: absolute;
-  top: 8px;
-  left: -24px;
+  top: 4px;
+  left: -20px;
   font-size: 14px;
 }
 
@@ -454,57 +456,57 @@ body {
 .scratchpad-content h3,
 .scratchpad-content h4 {
   color: var(--vscode-textLink-foreground, #3794ff);
-  margin-top: 16px;
-  margin-bottom: 8px;
+  margin-top: 1px;
+  margin-bottom: 1px;
   font-weight: 600;
+  line-height: 1.15;
 }
 
 .scratchpad-content h1 {
-  font-size: 1.4em;
+  font-size: 1.3em;
   border-bottom: 1px solid var(--vscode-panel-border, #555);
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 
 .scratchpad-content h2 {
-  font-size: 1.3em;
-}
-
-.scratchpad-content h3 {
   font-size: 1.2em;
 }
 
-.scratchpad-content h4 {
+.scratchpad-content h3 {
   font-size: 1.1em;
 }
 
+.scratchpad-content h4 {
+  font-size: 1.05em;
+}
+
 .scratchpad-content p {
-  margin: 8px 0;
+  margin: 0;
 }
 
 .scratchpad-content ul,
 .scratchpad-content ol {
-  padding-left: 24px;
-  margin: 8px 0;
+  padding-left: 4px;
+  margin: 0;
 }
 
 .scratchpad-content li {
-  margin: 4px 0;
+  margin: 0;
+  line-height: 1.15;
 }
 
 .scratchpad-content code {
   background-color: var(--vscode-textPreformat-background, #0a0a0a);
-  padding: 2px 4px;
+  padding: 1px 2px;
   border-radius: 3px;
   font-family: var(--vscode-editor-font-family);
   font-size: 0.9em;
 }
 
 .scratchpad-content pre {
-  background-color: var(--vscode-textPreformat-background, #0a0a0a);
-  padding: 8px 12px;
-  border-radius: 4px;
-  overflow-x: auto;
-  margin: 8px 0;
+  padding: 2px 3px;
+  margin: 1px 0;
+  border-left: 2px solid var(--vscode-activityBarBadge-background, #007acc);
 }
 
 .scratchpad-content pre code {
@@ -575,9 +577,9 @@ body {
 /* Special styling for scratchpad log entries */
 .scratchpad-log {
   margin-top: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 4px; /* Reduced spacing after log header */
   background-color: var(--vscode-editor-background);
-  border-radius: 6px;
+  border-radius: 6px 6px 0 0; /* Rounded corners only on top */
   overflow: hidden;
 }
 
