@@ -48,8 +48,6 @@ import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 
 const K_SLICE = 200;
-const SEPARATOR =
-  '\n------------------------------------------------------------\n';
 
 /**
  * Abstract base class for agents that support multi-turn reflection and refinement.
@@ -172,8 +170,6 @@ export abstract class BaseReflectionAgent {
     const initGroupId = this.logger.startGroup(`Initialization`);
 
     try {
-      this.logger.info(SEPARATOR, initGroupId);
-
       // Log configuration details in the initialization group
       this.logger.debug(
         `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
@@ -791,7 +787,6 @@ export abstract class BaseReflectionAgent {
       this.runGroupId, // Use the runGroupId from the class as the parent
     );
 
-    this.logger.info(SEPARATOR, round0GroupId);
     this.logger.info(`Processing round ${currRound}`, round0GroupId);
 
     try {
@@ -983,7 +978,6 @@ export abstract class BaseReflectionAgent {
       this.runGroupId,
     );
 
-    this.logger.info(SEPARATOR, round1GroupId);
     this.logger.info(`Processing round ${currRound}`, round1GroupId);
 
     try {
@@ -1119,11 +1113,9 @@ export abstract class BaseReflectionAgent {
       // Initialize client before starting
       await this.initializeClient();
 
-      this.logger.info(SEPARATOR, this.runGroupId);
       const [stateRound, stateGlobal, messages, endTurn, toolState] =
         await this.process();
       this.logger.info(`Round 0 completed\n`, this.runGroupId);
-      this.logger.info(SEPARATOR, this.runGroupId);
 
       // Check for interruption before reflection
       if (
@@ -1134,7 +1126,6 @@ export abstract class BaseReflectionAgent {
         const toolStateReflection = ToolState.initialize();
         await this.reflect(stateGlobal, messages, toolStateReflection);
         this.logger.info(`Round 1 completed\n`, this.runGroupId);
-        this.logger.info(SEPARATOR, this.runGroupId);
       }
 
       // End the run group with success status
