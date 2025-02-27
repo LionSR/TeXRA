@@ -40,39 +40,72 @@ export class CoTAgent extends BaseReflectionAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,
+    processGroupId?: string,
   ): Promise<string[]> {
     try {
+      // Start a dedicated processing group if none provided
+      const cotProcessGroupId =
+        processGroupId ||
+        this.outputHandler.startProcessing(
+          `ProcessXmlOutput`,
+          this.logger.getActiveGroupId(),
+        );
+
       // Initialize output files array if needed
       this.outputHandler.outputFiles[currRound] =
         this.outputHandler.outputFiles[currRound] || [];
 
       if (endTurn) {
-        this.logger.debug(`Processing output for round ${currRound}`);
+        this.logger.debug(
+          `Processing output for round ${currRound}`,
+          cotProcessGroupId,
+        );
 
         // Process XML structure first
         await this.outputHandler.ensureCorrectXmlStructure(
           outputFile,
           this.agentSetting.documentTag,
         );
-        this.logger.debug(`XML structure processed for round ${currRound}`);
+        this.logger.debug(
+          `XML structure processed for round ${currRound}`,
+          cotProcessGroupId,
+        );
 
         // Then process output files
         await this.processOutputFiles(outputFile, currRound);
-        this.logger.info(`Output files processed for round ${currRound}`);
+        this.logger.info(
+          `Output files processed for round ${currRound}`,
+          cotProcessGroupId,
+        );
       }
 
-      // Finally handle logging in base class
+      // Finally handle logging in base class (but pass our group ID)
       const result = await super.handleOutput(
         stateRound,
         stateGlobal,
         outputFile,
         endTurn,
         currRound,
+        cotProcessGroupId,
       );
+
+      // Only end the processing group if we created it
+      if (!processGroupId) {
+        this.outputHandler.endProcessing('stopped');
+      }
 
       return result;
     } catch (err) {
-      this.logger.error(`Error in handleOutput for round ${currRound}: ${err}`);
+      this.logger.error(
+        `Error in handleOutput for round ${currRound}: ${err}`,
+        processGroupId,
+      );
+
+      // Only end the processing group if we created it
+      if (!processGroupId) {
+        this.outputHandler.endProcessing('error');
+      }
+
       throw err; // Re-throw to maintain error propagation
     }
   }
