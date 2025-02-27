@@ -429,12 +429,12 @@ body {
 /* Scratchpad styles */
 .scratchpad-content {
   margin: 1px 3px 5px 8px;
-  padding: 2px 3px;
+  padding: 8px 12px;
   border-radius: 4px;
   background-color: var(--vscode-textCodeBlock-background, #1e1e1e);
   border-left: 3px solid var(--vscode-activityBarBadge-background, #007acc);
   font-family: var(--vscode-editor-font-family);
-  line-height: 1.15;
+  line-height: 1.25;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   position: relative;
@@ -445,7 +445,7 @@ body {
 .scratchpad-content:before {
   content: '💭';
   position: absolute;
-  top: 4px;
+  top: 8px;
   left: -20px;
   font-size: 14px;
 }
@@ -456,20 +456,35 @@ body {
 .scratchpad-content h3,
 .scratchpad-content h4 {
   color: var(--vscode-textLink-foreground, #3794ff);
-  margin-top: 1px;
-  margin-bottom: 1px;
+  margin-top: 10px;
+  margin-bottom: 5px;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.25;
+}
+
+.scratchpad-content h1:first-child,
+.scratchpad-content h2:first-child,
+.scratchpad-content h3:first-child,
+.scratchpad-content h4:first-child {
+  margin-top: 0;
 }
 
 .scratchpad-content h1 {
   font-size: 1.3em;
   border-bottom: 1px solid var(--vscode-panel-border, #555);
-  padding-bottom: 2px;
+  padding-bottom: 4px;
 }
 
 .scratchpad-content h2 {
   font-size: 1.2em;
+  padding-left: 8px;
+  margin-top: 12px;
+  margin-bottom: 5px;
+  border-left: 3px solid var(--vscode-activityBarBadge-background, #007acc);
+  border-bottom: 1px solid rgba(85, 85, 85, 0.3);
+  padding-bottom: 2px;
+  border-radius: 3px 0 0 3px;
+  color: var(--vscode-textLink-foreground, #3794ff);
 }
 
 .scratchpad-content h3 {
@@ -481,37 +496,58 @@ body {
 }
 
 .scratchpad-content p {
-  margin: 0;
+  margin: 0 0 0.5em 0;
+}
+
+.scratchpad-content p:last-child {
+  margin-bottom: 0;
 }
 
 .scratchpad-content ul,
 .scratchpad-content ol {
-  padding-left: 4px;
-  margin: 0;
+  padding-left: 16px;
+  margin: 0.25em 0 0.5em 0;
 }
 
 .scratchpad-content li {
-  margin: 0;
-  line-height: 1.15;
+  margin: 0 0 0.2em 0;
+  line-height: 1.25;
 }
 
 .scratchpad-content code {
   background-color: var(--vscode-textPreformat-background, #0a0a0a);
-  padding: 1px 2px;
+  padding: 1px 4px;
   border-radius: 3px;
   font-family: var(--vscode-editor-font-family);
   font-size: 0.9em;
 }
 
 .scratchpad-content pre {
-  padding: 2px 3px;
-  margin: 1px 0;
+  padding: 8px 10px;
+  margin: 0.5em 0;
+  border-radius: 3px;
+  background-color: var(--vscode-textPreformat-background, #0a0a0a);
   border-left: 2px solid var(--vscode-activityBarBadge-background, #007acc);
+  overflow-x: auto;
 }
 
 .scratchpad-content pre code {
   background-color: transparent;
   padding: 0;
+  display: block;
+  line-height: 1.4;
+}
+
+/* Style for LaTeX references */
+.scratchpad-content .latex-ref {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+}
+
+/* Add custom styling for special latex markup */
+.scratchpad-content .latex-inline {
+  font-style: italic;
+  color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
 }
 
 .scratchpad-content a {
@@ -607,4 +643,14 @@ body {
 .scratchpad-content p:has(strong:first-child) {
   border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground, #75beff);
   padding-left: 8px;
+}
+
+/* Paragraph spacing */
+.scratchpad-content h2 + p {
+  margin-top: 0.3em;
+}
+
+/* Reduce spacing between paragraphs */
+.scratchpad-content p + p {
+  margin-top: 0.3em;
 }
