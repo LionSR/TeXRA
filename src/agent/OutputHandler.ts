@@ -261,7 +261,22 @@ export class OutputHandler {
   ): void {
     const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
     if (scratchpadContent) {
-      this.logger.info(`Scratchpad content:\n${scratchpadContent.trim()}`);
+      // Format the content for improved rendering
+      let formattedContent = scratchpadContent.trim();
+
+      // Replace LaTeX notation with markdown-friendly equivalents
+      formattedContent = formattedContent
+        .replace(/\\section\{([^}]+)\}/g, '## $1')
+        .replace(/\\subsection\{([^}]+)\}/g, '### $1')
+        .replace(/\\begin\{itemize\}/g, '')
+        .replace(/\\end\{itemize\}/g, '')
+        .replace(/\\item\s+/g, '- ')
+        .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
+        .replace(/\\textit\{([^}]+)\}/g, '*$1*')
+        .replace(/\\emph\{([^}]+)\}/g, '*$1*');
+
+      // Log the formatted content
+      this.logger.info(`Scratchpad content:\n${formattedContent}`);
     }
   }
 
