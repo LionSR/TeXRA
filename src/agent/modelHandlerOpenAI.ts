@@ -186,6 +186,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
     let newResponse = choice.message.content.trim();
+
     // OpenAI doesn't have thinking blocks like Anthropic, so we return null
     // However deepseek/openrouter models might have thinking blocks
     let thinkingBlock = null;

@@ -14,7 +14,7 @@ import {
   countPdfPages,
   processPdfInput,
 } from '../utils/imgUtils';
-
+import { extractTextFromTag } from '../utils/xmlUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
 import {
   getApiKey as getSecretApiKey,
