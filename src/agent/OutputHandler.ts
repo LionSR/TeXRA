@@ -254,42 +254,6 @@ export class OutputHandler {
     return processedOutputFiles;
   }
 
-  /** Extracts and logs scratchpad content from output. */
-  private extractAndLogScratchpad(
-    outputContent: string,
-    thinkingTag: string = 'scratchpad',
-  ): void {
-    const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
-    if (scratchpadContent) {
-      // Format the content for improved rendering
-      let formattedContent = scratchpadContent.trim();
-
-      // Replace LaTeX notation with markdown-friendly equivalents
-      formattedContent = formattedContent
-        .replace(/\\section\{([^}]+)\}/g, '## $1')
-        .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-        .replace(/\\begin\{itemize\}/g, '')
-        .replace(/\\end\{itemize\}/g, '')
-        // Also handle enumerate environments like itemize
-        .replace(/\\begin\{enumerate\}/g, '')
-        .replace(/\\end\{enumerate\}/g, '')
-        .replace(/\\item\s+/g, '- ')
-        .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-        .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-        .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-        // Convert XML tags to markdown headings - general approach
-        .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
-        // Convert opening tags without closing tags to markdown headings
-        .replace(/<(\w+)>/g, '## $1\n\n')
-        .replace(/<\/\w+>/g, '')
-        // Escape LaTeX references but preserve the content
-        .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
-
-      // Log the formatted content
-      this.logger.info(`Scratchpad content:\n${formattedContent}`);
-    }
-  }
-
   /**
    * Splits XML output into separate files for document and scratchpad content.
    * Handles CDATA wrapping and XML parsing.
@@ -304,9 +268,9 @@ export class OutputHandler {
 
     let outputContent = await readFile(outputFile);
 
-    if (this.agentSetting.agentType === 'CoT') {
-      this.extractAndLogScratchpad(outputContent, thinkingTag);
-    }
+    // if (this.agentSetting.agentType === 'CoT') {
+    //   this.extractAndLogScratchpad(outputContent, thinkingTag);
+    // }
 
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
@@ -348,9 +312,9 @@ export class OutputHandler {
   ): Promise<string[]> {
     let outputContent = await readFile(outputFile);
 
-    if (this.agentSetting.agentType === 'CoT') {
-      this.extractAndLogScratchpad(outputContent, thinkingTag);
-    }
+    // if (this.agentSetting.agentType === 'CoT') {
+    //   this.extractAndLogScratchpad(outputContent, thinkingTag);
+    // }
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
