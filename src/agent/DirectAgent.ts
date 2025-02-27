@@ -36,22 +36,32 @@ export class DirectAgent extends BaseReflectionAgent {
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,
+    processGroupId?: string,
   ): Promise<string[]> {
-    // Initialize output files array if needed
-    this.outputHandler.outputFiles[currRound] =
-      this.outputHandler.outputFiles[currRound] || [];
+    try {
+      // Initialize output files array if needed
+      this.outputHandler.outputFiles[currRound] =
+        this.outputHandler.outputFiles[currRound] || [];
 
-    if (endTurn) {
-      await this.processOutputFiles(outputFile, currRound);
+      if (endTurn) {
+        await this.processOutputFiles(outputFile, currRound);
+      }
+
+      // Let base class handle logging (passing along the processGroupId)
+      return await super.handleOutput(
+        stateRound,
+        stateGlobal,
+        outputFile,
+        endTurn,
+        currRound,
+        processGroupId,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error in DirectAgent.handleOutput: ${error}`,
+        processGroupId,
+      );
+      throw error;
     }
-
-    // Let base class handle logging
-    return await super.handleOutput(
-      stateRound,
-      stateGlobal,
-      outputFile,
-      endTurn,
-      currRound,
-    );
   }
 }

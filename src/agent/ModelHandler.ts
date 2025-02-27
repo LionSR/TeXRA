@@ -454,4 +454,30 @@ export abstract class ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean;
+
+  /**
+   * Creates a log group for model operations with the given name.
+   * @param name Name of the operation group
+   * @param parentGroupId Optional parent group ID
+   * @returns The group ID
+   */
+  protected createOperationGroup(name: string, parentGroupId?: string): string {
+    return this.logger.startGroup(
+      `Model Operation: ${name}`,
+      undefined,
+      parentGroupId,
+    );
+  }
+
+  /**
+   * Ends a model operation log group with the given status.
+   * @param groupId ID of the group to end
+   * @param status Status of the operation ('error' or 'stopped')
+   */
+  protected endOperationGroup(
+    groupId: string,
+    status: 'error' | 'stopped' = 'stopped',
+  ): void {
+    this.logger.endGroup(groupId, status);
+  }
 }
