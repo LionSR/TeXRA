@@ -42,6 +42,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
     this.logger.debug('Using OpenAI API.');
+
+    // there is a time out parameter that be be set; default is 10 minutes
     return new OpenAI({ apiKey, baseURL });
   }
 
@@ -209,6 +211,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
+      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
       throw new Error(errorMsg);
     }
 
