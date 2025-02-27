@@ -264,8 +264,8 @@ export async function runLatexdiff(
     // Write the output to the diff file
     await writeFile(outputPath, result.stdout);
 
-    await processDiffFile(outputPath, channel);
-    await processTikzPictureEndings(outputPath, channel);
+    await processDiffFile(outputPath);
+    await processTikzPictureEndings(outputPath);
 
     logger.info(channel, 'LaTeXdiff completed successfully');
     return {
@@ -325,8 +325,8 @@ export async function runLatexdiffvc(
       throw new Error('Failed to run latexdiff-vc');
     }
 
-    await processDiffFile(outputPath, channel);
-    await processTikzPictureEndings(outputPath, channel);
+    await processDiffFile(outputPath);
+    await processTikzPictureEndings(outputPath);
 
     logger.info(channel, 'LaTeXdiff VC completed successfully');
     return {
@@ -365,7 +365,7 @@ export async function runLatexdiffvcMultiple(
 
   for (const inputFile of inputFiles) {
     try {
-      const result = await runLatexdiffvc(inputFile, commitHash, channel);
+      const result = await runLatexdiffvc(inputFile, commitHash);
       if (result.success) {
         results.success.push(inputFile);
       } else {
@@ -405,7 +405,7 @@ export async function runLatexdiffForRound(
 ): Promise<LaTeXdiffResult> {
   try {
     if ((await fileExists(baseFile)) && (await fileExists(outputFile))) {
-      return await runLatexdiff(baseFile, outputFile, '_diff', false, channel);
+      return await runLatexdiff(baseFile, outputFile, '_diff', false);
     } else {
       const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseFile} or ${outputFile}`;
       logger.warn(channel, message);
@@ -438,13 +438,7 @@ export async function runLatexdiffBetweenRounds(
       const secondRound = secondRoundMatch[1];
       const diffSuffix = `_diffr${secondRound}r${firstRound}`;
 
-      return await runLatexdiff(
-        outputFile1,
-        outputFile2,
-        diffSuffix,
-        false,
-        channel,
-      );
+      return await runLatexdiff(outputFile1, outputFile2, diffSuffix, false);
     } else {
       const message = `Could not generate latexdiff between rounds. Files not found: ${outputFile1} or ${outputFile2}`;
       logger.warn(channel, message);
@@ -489,7 +483,6 @@ export async function runLatexdiffMultiple(
           editedFiles[i],
           '_diff',
           false,
-          channel,
         );
 
         if (result.success) {

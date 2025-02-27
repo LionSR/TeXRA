@@ -25,6 +25,7 @@ import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
   ensureLatexdiffInstalled,
+  LaTeXdiffResult
 } from '../latex/latexdiff';
 import { runLatexIndent } from '../latex/latexindent';
 
@@ -151,6 +152,30 @@ export class OutputHandler {
     return content;
   }
 
+  /**
+   * Helper method to log latexdiff results with appropriate level
+   * @param result The result of a latexdiff operation
+   * @param operation Description of the operation being performed
+   * @param groupId The group ID for logging context
+   */
+  private logLatexdiffResult(
+    result: LaTeXdiffResult, 
+    operation: string = 'latexdiff', 
+    groupId?: string
+  ): void {
+    if (result.success) {
+      this.logger.info(
+        `Successfully generated ${operation} file: ${result.diffFileName}`,
+        groupId
+      );
+    } else {
+      this.logger.warn(
+        `Failed to generate ${operation}: ${result.message}`,
+        groupId
+      );
+    }
+  }
+
   /** Handles output file processing and validation for agent responses. */
   public async handleSingleOutput(
     outputFile: string,
@@ -172,14 +197,16 @@ export class OutputHandler {
         return;
       }
 
-      // Use the provided groupId instead of the channel
-      await runLatexdiff(
+      // Run latexdiff and capture result
+      const result = await runLatexdiff(
         this.agentConfig.inputFile,
         outputFile,
         '_diff',
-        false,
-        groupId || this.channel,
+        false
       );
+      
+      // Log the result using helper method
+      this.logLatexdiffResult(result, 'diff', groupId);
     }
   }
 
@@ -216,13 +243,15 @@ export class OutputHandler {
         // TODO: Implement log update
         // await updateLogOutputFiles(this.logId, outputFile);
         if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          await runLatexdiff(
+          const result = await runLatexdiff(
             inputFile,
             outputFile,
             '_diff',
-            false,
-            groupId || this.channel,
+            false
           );
+          
+          // Log the result using helper method
+          this.logLatexdiffResult(result, 'diff', groupId);
         }
       }
     }
@@ -473,18 +502,8 @@ export class OutputHandler {
               currRound,
             );
 
-            // Log the result in our own group
-            if (result.success) {
-              this.logger.info(
-                `Successfully generated diff file: ${result.diffFileName}`,
-                diffProcessGroupId,
-              );
-            } else {
-              this.logger.warn(
-                `Failed to generate diff: ${result.message}`,
-                diffProcessGroupId,
-              );
-            }
+            // Log the result using helper method
+            this.logLatexdiffResult(result, 'round diff', diffProcessGroupId);
           }
         }
       }
@@ -508,18 +527,8 @@ export class OutputHandler {
               currOutputFile,
             );
 
-            // Log the result in our own group
-            if (result.success) {
-              this.logger.info(
-                `Successfully generated diff between rounds: ${result.diffFileName}`,
-                diffProcessGroupId,
-              );
-            } else {
-              this.logger.warn(
-                `Failed to generate diff between rounds: ${result.message}`,
-                diffProcessGroupId,
-              );
-            }
+            // Log the result using helper method
+            this.logLatexdiffResult(result, 'between-rounds diff', diffProcessGroupId);
           }
         }
       }
