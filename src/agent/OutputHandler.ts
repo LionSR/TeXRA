@@ -276,7 +276,14 @@ export class OutputHandler {
         .replace(/\\item\s+/g, '- ')
         .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
         .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-        .replace(/\\emph\{([^}]+)\}/g, '*$1*');
+        .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+        // Convert XML tags to markdown headings - general approach
+        .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
+        // Convert opening tags without closing tags to markdown headings
+        .replace(/<(\w+)>/g, '## $1\n\n')
+        .replace(/<\/\w+>/g, '')
+        // Escape LaTeX references but preserve the content
+        .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
 
       // Log the formatted content
       this.logger.info(`Scratchpad content:\n${formattedContent}`);
