@@ -31,7 +31,7 @@ import { runLatexIndent } from '../latex/latexindent';
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting } from './AgentDataclass';
-import { AgentStateGlobal } from './AgentState';
+import { AgentStateGlobal, AgentStateRound } from './AgentState';
 
 /** Generates output filename incorporating model and round information. */
 export function getOutputFileName(
@@ -65,6 +65,7 @@ export class OutputHandler {
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public baseFiles: string[];
+  public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
 
@@ -84,6 +85,39 @@ export class OutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+  }
+
+  /**
+   * Starts a processing group for output handling.
+   * Creates a log group at the same level as ResponseCycle.
+   * @param processName Name of the processing operation
+   * @param roundGroupId Parent round group ID
+   * @returns The created process group ID
+   */
+  startProcessing(processName: string, roundGroupId?: string): string {
+    // Create a log group as a child of the round group if provided
+    const groupName = `OutputHandler: ${processName}`;
+    const groupId = this.logger.startGroup(groupName, undefined, roundGroupId);
+    // Comment out this line as it creates confusing log order
+    // this.logger.info(`Starting ${processName}`, groupId);
+    return groupId;
+  }
+
+  /**
+   * Ends the current processing group.
+   * @param status Status of the processing (error or stopped)
+   */
+  endProcessing(
+    status: 'error' | 'stopped' = 'stopped',
+    groupId?: string,
+  ): void {
+    if (groupId) {
+      this.logger.endGroup(groupId, status);
+    } else if (this.processGroupId) {
+      // this.logger.info(`Completed output processing`, this.processGroupId);
+      this.logger.endGroup(this.processGroupId, status);
+      this.processGroupId = undefined;
+    }
   }
 
   /** Runs latexindent on a file if it has .tex extension */
@@ -118,7 +152,10 @@ export class OutputHandler {
   }
 
   /** Handles output file processing and validation for agent responses. */
-  public async handleSingleOutput(outputFile: string): Promise<void> {
+  public async handleSingleOutput(
+    outputFile: string,
+    groupId?: string,
+  ): Promise<void> {
     await this.indentLatexFile(outputFile);
 
     if (
@@ -130,29 +167,32 @@ export class OutputHandler {
       if (!(await ensureLatexdiffInstalled())) {
         this.logger.warn(
           'Skipping latexdiff operation - latexdiff not installed',
+          groupId,
         );
         return;
       }
 
-      this.logger.info(
-        `Running latexdiff for ${this.agentConfig.inputFile} and ${outputFile}`,
-      );
+      // Use the provided groupId instead of the channel
       await runLatexdiff(
         this.agentConfig.inputFile,
         outputFile,
         '_diff',
         false,
-        this.channel,
+        groupId || this.channel,
       );
     }
   }
 
   /** Runs latexdiff on multiple output files. */
-  public async handleMultipleOutputs(outputFiles: string[]): Promise<void> {
+  public async handleMultipleOutputs(
+    outputFiles: string[],
+    groupId?: string,
+  ): Promise<void> {
     await this.indentLatexFiles(outputFiles);
 
     this.logger.debug(
       `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
+      groupId,
     );
     if (
       this.agentSetting.isRewrite &&
@@ -165,13 +205,11 @@ export class OutputHandler {
       if (!(await ensureLatexdiffInstalled())) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
+          groupId,
         );
         return;
       }
 
-      this.logger.info(
-        `Running latexdiff for ${this.agentConfig.outputFiles} and ${outputFiles}`,
-      );
       for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
         const inputFile = this.agentConfig.outputFiles[i];
         const outputFile = outputFiles[i];
@@ -183,7 +221,7 @@ export class OutputHandler {
             outputFile,
             '_diff',
             false,
-            this.channel,
+            groupId || this.channel,
           );
         }
       }
@@ -223,7 +261,32 @@ export class OutputHandler {
   ): void {
     const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
     if (scratchpadContent) {
-      this.logger.info(`Scratchpad content:\n${scratchpadContent.trim()}`);
+      // Format the content for improved rendering
+      let formattedContent = scratchpadContent.trim();
+
+      // Replace LaTeX notation with markdown-friendly equivalents
+      formattedContent = formattedContent
+        .replace(/\\section\{([^}]+)\}/g, '## $1')
+        .replace(/\\subsection\{([^}]+)\}/g, '### $1')
+        .replace(/\\begin\{itemize\}/g, '')
+        .replace(/\\end\{itemize\}/g, '')
+        // Also handle enumerate environments like itemize
+        .replace(/\\begin\{enumerate\}/g, '')
+        .replace(/\\end\{enumerate\}/g, '')
+        .replace(/\\item\s+/g, '- ')
+        .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
+        .replace(/\\textit\{([^}]+)\}/g, '*$1*')
+        .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+        // Convert XML tags to markdown headings - general approach
+        .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
+        // Convert opening tags without closing tags to markdown headings
+        .replace(/<(\w+)>/g, '## $1\n\n')
+        .replace(/<\/\w+>/g, '')
+        // Escape LaTeX references but preserve the content
+        .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
+
+      // Log the formatted content
+      this.logger.info(`Scratchpad content:\n${formattedContent}`);
     }
   }
 
@@ -401,44 +464,109 @@ export class OutputHandler {
    * Runs latexdiff comparisons for current round.
    * Generates diffs between base files and current round, and between consecutive rounds.
    */
-  public async handleLatexdiff(currRound: number): Promise<void> {
-    // Check if latexdiff is installed before proceeding
-    if (!(await ensureLatexdiffInstalled())) {
-      this.logger.warn(
-        'Skipping latexdiff operations - latexdiff not installed',
-      );
-      return;
-    }
+  public async handleLatexdiff(
+    currRound: number,
+    parentGroupId?: string,
+  ): Promise<void> {
+    // Create a dedicated log group for latexdiff operations FIRST
+    const diffProcessGroupId = this.startProcessing(`LatexDiff`, parentGroupId);
 
-    this.logger.info(
-      `Running latexdiff for ${this.agentConfig.agent} round ${currRound}`,
-    );
-    this.logger.debug(`Base files: ${this.baseFiles}`);
-    this.logger.debug(
-      `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
-    );
-
-    // Generate diffs between base files and current round only if it's a rewrite task
-    if (this.agentSetting.isRewrite) {
-      for (let i = 0; i < this.baseFiles.length; i++) {
-        const baseFile = this.baseFiles[i];
-        const outputFile = this.outputFiles[currRound][i];
-        await runLatexdiffForRound(
-          baseFile,
-          outputFile,
-          currRound,
-          this.channel,
+    try {
+      // Check if latexdiff is installed before proceeding
+      if (!(await ensureLatexdiffInstalled())) {
+        this.logger.warn(
+          'Skipping latexdiff operations - latexdiff not installed',
+          diffProcessGroupId,
         );
+        this.endProcessing('stopped', diffProcessGroupId);
+        return;
       }
-    }
 
-    // Always generate diffs between consecutive rounds, regardless of isRewrite setting
-    for (let r = 1; r <= currRound; r++) {
-      for (let i = 0; i < this.outputFiles[r - 1].length; i++) {
-        const outputFile1 = this.outputFiles[r - 1][i];
-        const outputFile2 = this.outputFiles[r][i];
-        await runLatexdiffBetweenRounds(outputFile1, outputFile2, this.channel);
+      // Log debugging information within the group
+      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
+      this.logger.debug(
+        `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
+        diffProcessGroupId,
+      );
+
+      // Generate diffs between base files and current round only if it's a rewrite task
+      if (this.agentSetting.isRewrite) {
+        // For each base file and output file, generate a diff
+        for (let i = 0; i < this.baseFiles.length; i++) {
+          const baseFile = this.baseFiles[i];
+          const outputFile = this.outputFiles[currRound][i];
+          if (baseFile && outputFile) {
+            // Log in our own group
+            this.logger.info(
+              `Running latexdiff for round ${currRound} between ${baseFile} and ${outputFile}`,
+              diffProcessGroupId,
+            );
+
+            // Call latexdiff without passing the group ID
+            const result = await runLatexdiffForRound(
+              baseFile,
+              outputFile,
+              currRound,
+            );
+
+            // Log the result in our own group
+            if (result.success) {
+              this.logger.info(
+                `Successfully generated diff file: ${result.diffFileName}`,
+                diffProcessGroupId,
+              );
+            } else {
+              this.logger.warn(
+                `Failed to generate diff: ${result.message}`,
+                diffProcessGroupId,
+              );
+            }
+          }
+        }
       }
+
+      // Generate diffs between consecutive rounds if applicable
+      if (currRound > 0) {
+        for (let i = 0; i < this.outputFiles[currRound].length; i++) {
+          const prevRound = currRound - 1;
+          const prevOutputFile = this.outputFiles[prevRound]?.[i];
+          const currOutputFile = this.outputFiles[currRound][i];
+
+          if (prevOutputFile && currOutputFile) {
+            this.logger.info(
+              `Running latexdiff between rounds ${prevRound} and ${currRound}`,
+              diffProcessGroupId,
+            );
+
+            // Call latexdiff without passing the group ID
+            const result = await runLatexdiffBetweenRounds(
+              prevOutputFile,
+              currOutputFile,
+            );
+
+            // Log the result in our own group
+            if (result.success) {
+              this.logger.info(
+                `Successfully generated diff between rounds: ${result.diffFileName}`,
+                diffProcessGroupId,
+              );
+            } else {
+              this.logger.warn(
+                `Failed to generate diff between rounds: ${result.message}`,
+                diffProcessGroupId,
+              );
+            }
+          }
+        }
+      }
+
+      this.endProcessing('stopped', diffProcessGroupId);
+    } catch (err) {
+      this.logger.error(
+        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
+        diffProcessGroupId,
+      );
+      this.endProcessing('error', diffProcessGroupId);
     }
   }
 
@@ -477,95 +605,144 @@ export class OutputHandler {
   }
 
   /** Prints statistics about token usage and costs */
-  public printStatistics(stateGlobal: AgentStateGlobal): void {
-    this.logger.info('=== Task Statistics ===');
-    this.logger.info(`Total input tokens  : ${stateGlobal.totalInputTokens}`);
-    this.logger.info(`Total output tokens : ${stateGlobal.totalOutputTokens}`);
+  public printStatistics(
+    stateGlobal: AgentStateGlobal,
+    parentGroupId?: string,
+  ): void {
+    // Create a dedicated log group for statistics
+    const statsGroupId = this.startProcessing('Statistics', parentGroupId);
 
-    // Calculate caching statistics if model supports either type of caching
-    if (
-      this.modelHandler.capabilities.supportsPromptCaching ||
-      this.modelHandler.capabilities.supportsAutoPromptCaching
-    ) {
+    try {
+      this.logger.info('=== Task Statistics ===', statsGroupId);
+
+      // Token usage statistics
       this.logger.info(
-        `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
+        `Total input tokens  : ${stateGlobal.totalInputTokens}`,
+        statsGroupId,
+      );
+      this.logger.info(
+        `Total output tokens : ${stateGlobal.totalOutputTokens}`,
+        statsGroupId,
       );
 
-      // Only show cache creation for Anthropic models (which use explicit caching)
-      if (this.modelHandler.capabilities.supportsPromptCaching) {
+      // Calculate caching statistics if model supports either type of caching
+      if (
+        this.modelHandler.capabilities.supportsPromptCaching ||
+        this.modelHandler.capabilities.supportsAutoPromptCaching
+      ) {
         this.logger.info(
-          `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
+          `Total input tokens (cache read): ${stateGlobal.totalCacheReadInputTokens}`,
+          statsGroupId,
+        );
+
+        // Only show cache creation for Anthropic models (which use explicit caching)
+        if (this.modelHandler.capabilities.supportsPromptCaching) {
+          this.logger.info(
+            `Total input tokens (cache create): ${stateGlobal.totalCacheCreationInputTokens}`,
+            statsGroupId,
+          );
+        }
+
+        // Calculate percentage cached
+        let totalCacheableTokens: number;
+        if (this.modelHandler.capabilities.supportsPromptCaching) {
+          // For Anthropic: include both read and creation tokens
+          totalCacheableTokens =
+            stateGlobal.totalCacheCreationInputTokens +
+            stateGlobal.totalCacheReadInputTokens;
+        } else {
+          // For OpenAI auto-caching: only use input tokens as base
+          totalCacheableTokens = stateGlobal.totalInputTokens;
+        }
+
+        const percentageCached =
+          totalCacheableTokens > 0
+            ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) *
+              100
+            : 0;
+        this.logger.info(
+          `Percentage cached: ${percentageCached.toFixed(2)}%`,
+          statsGroupId,
         );
       }
 
-      // Calculate percentage cached
-      let totalCacheableTokens: number;
-      if (this.modelHandler.capabilities.supportsPromptCaching) {
-        // For Anthropic: include both read and creation tokens
-        totalCacheableTokens =
-          stateGlobal.totalCacheCreationInputTokens +
-          stateGlobal.totalCacheReadInputTokens;
-      } else {
-        // For OpenAI auto-caching: only use input tokens as base
-        totalCacheableTokens = stateGlobal.totalInputTokens;
+      // Print reasoning tokens if model supports it
+      if (this.modelHandler.capabilities.supportsReasoning) {
+        this.logger.info(
+          `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
+          statsGroupId,
+        );
       }
 
-      const percentageCached =
-        totalCacheableTokens > 0
-          ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) * 100
-          : 0;
-      this.logger.info(`Percentage cached: ${percentageCached.toFixed(2)}%`);
-    }
-
-    // Print reasoning tokens if model supports it
-    if (this.modelHandler.capabilities.supportsReasoning) {
-      this.logger.info(
-        `Total reasoning tokens: ${stateGlobal.totalReasoningTokens}`,
-      );
-    }
-
-    // Calculate cost using model handler's price computation
-    let responseUsage;
-    if (this.modelHandler.isOpenai) {
-      if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
-        responseUsage = {
-          prompt_tokens: stateGlobal.totalInputTokens,
-          completion_tokens: stateGlobal.totalOutputTokens,
-          prompt_tokens_details: {
-            cached_tokens: stateGlobal.totalCacheReadInputTokens,
-          },
-          completion_tokens_details: {
+      // Format token usage reporting by model provider
+      let responseUsage: any = {};
+      if (this.modelHandler.isOpenai) {
+        if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
+          responseUsage = {
+            prompt_tokens: stateGlobal.totalInputTokens,
+            completion_tokens: stateGlobal.totalOutputTokens,
+            prompt_tokens_details: {
+              cached_tokens: stateGlobal.totalCacheReadInputTokens,
+            },
+            completion_tokens_details: {
+              reasoning_tokens: stateGlobal.totalReasoningTokens,
+            },
+          };
+        } else {
+          responseUsage = {
+            prompt_tokens: stateGlobal.totalInputTokens,
+            completion_tokens: stateGlobal.totalOutputTokens,
             reasoning_tokens: stateGlobal.totalReasoningTokens,
-          },
-        };
-      } else {
+            cached_tokens: stateGlobal.totalCacheReadInputTokens,
+          };
+        }
+      } else if (this.modelHandler.isAnthropic) {
         responseUsage = {
-          prompt_tokens: stateGlobal.totalInputTokens,
-          completion_tokens: stateGlobal.totalOutputTokens,
-          reasoning_tokens: stateGlobal.totalReasoningTokens,
-          cached_tokens: stateGlobal.totalCacheReadInputTokens,
+          input_tokens: stateGlobal.totalInputTokens,
+          output_tokens: stateGlobal.totalOutputTokens,
+          cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
+          cache_creation_input_tokens:
+            stateGlobal.totalCacheCreationInputTokens,
+        };
+      } else if (this.modelHandler.isGoogle) {
+        responseUsage = {
+          promptTokens: stateGlobal.totalInputTokens,
+          completionTokens: stateGlobal.totalOutputTokens,
         };
       }
-    } else if (this.modelHandler.isAnthropic) {
-      responseUsage = {
-        input_tokens: stateGlobal.totalInputTokens,
-        output_tokens: stateGlobal.totalOutputTokens,
-        cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
-        cache_creation_input_tokens: stateGlobal.totalCacheCreationInputTokens,
-      };
-    } else if (this.modelHandler.isGoogle) {
-      responseUsage = {
-        promptTokens: stateGlobal.totalInputTokens,
-        completionTokens: stateGlobal.totalOutputTokens,
-      };
+
+      const cost = this.modelHandler.computePrice(responseUsage);
+
+      this.logger.info(
+        `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
+        statsGroupId,
+      );
+      this.logger.info(
+        `Total cost          : ${cost.toFixed(3)} USD`,
+        statsGroupId,
+      );
+      this.logger.info('=======================', statsGroupId);
+
+      // End the statistics group
+      this.endProcessing('stopped', statsGroupId);
+    } catch (error) {
+      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+      this.endProcessing('error', statsGroupId);
     }
+  }
 
-    const cost = this.modelHandler.computePrice(responseUsage);
+  /** Processes output files for current round. */
+  protected async handleOutput(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    outputFile: string,
+    endTurn: boolean,
+    currRound: number = 0,
+    roundGroupId?: string,
+  ): Promise<string[]> {
+    // Print statistics at the end of each round
+    this.printStatistics(stateGlobal, roundGroupId);
 
-    this.logger.info(
-      `Total response time : ${stateGlobal.totalResponseTime.toFixed(1)} seconds`,
-    );
-    this.logger.info(`Total cost          : ${cost.toFixed(3)} USD`);
-    this.logger.info('=======================');
+    return this.outputFiles[currRound] || [];
   }
 }
