@@ -25,7 +25,7 @@ import {
   runLatexdiffForRound,
   runLatexdiffBetweenRounds,
   ensureLatexdiffInstalled,
-  LaTeXdiffResult
+  LaTeXdiffResult,
 } from '../latex/latexdiff';
 import { runLatexIndent } from '../latex/latexindent';
 
@@ -159,19 +159,19 @@ export class OutputHandler {
    * @param groupId The group ID for logging context
    */
   private logLatexdiffResult(
-    result: LaTeXdiffResult, 
-    operation: string = 'latexdiff', 
-    groupId?: string
+    result: LaTeXdiffResult,
+    operation: string = 'latexdiff',
+    groupId?: string,
   ): void {
     if (result.success) {
       this.logger.info(
         `Successfully generated ${operation} file: ${result.diffFileName}`,
-        groupId
+        groupId,
       );
     } else {
       this.logger.warn(
         `Failed to generate ${operation}: ${result.message}`,
-        groupId
+        groupId,
       );
     }
   }
@@ -202,9 +202,9 @@ export class OutputHandler {
         this.agentConfig.inputFile,
         outputFile,
         '_diff',
-        false
+        false,
       );
-      
+
       // Log the result using helper method
       this.logLatexdiffResult(result, 'diff', groupId);
     }
@@ -247,9 +247,9 @@ export class OutputHandler {
             inputFile,
             outputFile,
             '_diff',
-            false
+            false,
           );
-          
+
           // Log the result using helper method
           this.logLatexdiffResult(result, 'diff', groupId);
         }
@@ -528,7 +528,11 @@ export class OutputHandler {
             );
 
             // Log the result using helper method
-            this.logLatexdiffResult(result, 'between-rounds diff', diffProcessGroupId);
+            this.logLatexdiffResult(
+              result,
+              'between-rounds diff',
+              diffProcessGroupId,
+            );
           }
         }
       }
