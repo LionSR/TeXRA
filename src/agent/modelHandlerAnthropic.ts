@@ -57,7 +57,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    const useStreaming = getConfig<boolean>('model.useStreaming', false);
+    let useStreaming = getConfig<boolean>('model.useStreaming', false);
 
     // Prepare options for the API call
     const options: any = {
@@ -71,11 +71,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
+      // useStreaming = true; should consider to be true by default
       delete options.temperature;
 
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit when streaming
-      options.max_tokens = useStreaming ? 128000 : this.config.maxOutputTokens;
+      options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       if (this.capabilities.supportsReasoning) {
         options.thinking = {
           type: 'enabled',
