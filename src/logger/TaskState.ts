@@ -33,7 +33,7 @@ export interface TaskState {
   autoExtractFigure: boolean;
   autoExtractTikzFigure: boolean;
 
-  // Tool use settings
+  // Tool config settings
   reflect: boolean;
   attachTeXCount: boolean;
   usePrefillFromInput: boolean;
