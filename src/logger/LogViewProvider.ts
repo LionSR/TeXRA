@@ -7,6 +7,19 @@ import { LogViewMessageHandler } from './LogViewMessageHandler';
 import { TaskState, fromObject } from './TaskState';
 import { AgentLogger } from './AgentLogger';
 import { getConfig } from '../frontend-utils/commonUtils';
+// @ts-ignore - Import JavaScript module
+import { STATUS, COMMANDS } from './logView/modules/constants.js';
+
+// Type aliases for status values
+type StatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED
+  | typeof STATUS.READY;
+type StreamStatusType =
+  | typeof STATUS.RUNNING
+  | typeof STATUS.ERROR
+  | typeof STATUS.STOPPED;
 
 interface ColoredLogMessage {
   message: string;
@@ -19,7 +32,7 @@ interface LogGroup {
   name: string;
   startTime: string;
   endTime?: string;
-  status: 'running' | 'error' | 'stopped' | 'ready';
+  status: StatusType;
   parentGroupId?: string;
 }
 
@@ -58,8 +71,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
-  private _streamStatus: Map<string, 'running' | 'error' | 'stopped'> =
-    new Map();
+  private _streamStatus: Map<string, StreamStatusType> = new Map();
   private _activeStream: string = '';
   private readonly _activeStreamKey = 'coauthor.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
@@ -286,7 +298,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
 
     this._view.webview.postMessage({
-      command: 'updateStreams',
+      command: COMMANDS.UPDATE_STREAMS,
       streams,
       currentStream: this._activeStream,
     });
@@ -297,15 +309,15 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       const status = this._streamStatus.get(this._activeStream);
       if (status) {
         this._view.webview.postMessage({
-          command: 'updateStatus',
+          command: COMMANDS.UPDATE_STATUS,
           status: status,
         });
       }
     } else {
       // If no active stream, show ready state
       this._view.webview.postMessage({
-        command: 'updateStatus',
-        status: 'ready',
+        command: COMMANDS.UPDATE_STATUS,
+        status: STATUS.READY,
       });
     }
   }
@@ -334,7 +346,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       this._logStreams.set(stream, []);
       // Set initial status to running for new streams
       if (!this._streamStatus.has(stream)) {
-        this.updateStreamStatus(stream, 'running');
+        this.updateStreamStatus(stream, STATUS.RUNNING);
       }
     }
 
@@ -367,7 +379,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     groupId: string,
     groupName: string,
     startTime: string,
-    status: 'running' | 'error' | 'stopped' | 'ready',
+    status: StatusType,
     endTime?: string,
     parentGroupId?: string,
   ) {
@@ -395,7 +407,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
     if (this._view && stream === this._activeStream) {
       this._view.webview.postMessage({
-        command: 'addLogGroup',
+        command: COMMANDS.ADD_LOG_GROUP,
         stream,
         group: {
           id: groupId,
@@ -412,7 +424,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   public updateLogGroup(
     stream: string,
     groupId: string,
-    status: 'running' | 'error' | 'stopped' | 'ready',
+    status: StatusType,
     endTime?: string,
   ) {
     // Skip if this stream should only be written to output channel
@@ -435,7 +447,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
     if (this._view && stream === this._activeStream) {
       this._view.webview.postMessage({
-        command: 'updateLogGroup',
+        command: COMMANDS.UPDATE_LOG_GROUP,
         stream,
         groupId,
         status,
@@ -465,16 +477,16 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     const groups = this._logGroups.get(stream) || new Map();
 
     this._view.webview.postMessage({
-      command: 'updateLogs',
+      command: COMMANDS.UPDATE_LOGS,
       stream: stream,
       messages: displayMessages,
       groups: Array.from(groups.values()),
     });
 
     // Send current status for the stream
-    const status = this._streamStatus.get(stream) || 'stopped';
+    const status = this._streamStatus.get(stream) || STATUS.STOPPED;
     this._view.webview.postMessage({
-      command: 'updateStatus',
+      command: COMMANDS.UPDATE_STATUS,
       status: status,
     });
   }
@@ -502,7 +514,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._taskStates.clear();
     this._saveState();
     if (this._view) {
-      this._view.webview.postMessage({ command: 'clearLogs' });
+      this._view.webview.postMessage({ command: COMMANDS.CLEAR_LOGS });
       this._updateWebview();
     }
   }
@@ -517,10 +529,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  public updateStreamStatus(
-    stream: string,
-    status: 'running' | 'error' | 'stopped',
-  ) {
+  public updateStreamStatus(stream: string, status: StreamStatusType) {
     if (!this._logStreams.has(stream)) {
       return;
     }
@@ -528,15 +537,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     this._streamStatus.set(stream, status);
     if (this._view && stream === this._activeStream) {
       this._view.webview.postMessage({
-        command: 'updateStatus',
+        command: COMMANDS.UPDATE_STATUS,
         status: status,
       });
     }
   }
 
-  public getStreamStatus(
-    stream: string,
-  ): 'running' | 'error' | 'stopped' | undefined {
+  public getStreamStatus(stream: string): StreamStatusType | undefined {
     return this._streamStatus.get(stream);
   }
 
