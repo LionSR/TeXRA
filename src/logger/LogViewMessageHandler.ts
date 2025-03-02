@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from './logUtils';
 import { LogViewProvider } from './LogViewProvider';
+// @ts-ignore - Import JavaScript module
+import { COMMANDS } from './logView/modules/constants.js';
 
 const CHANNEL = 'MessageHandler';
 
@@ -17,31 +19,31 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Received message: ${message.command}`);
 
     switch (message.command) {
-      case 'switchStream':
+      case COMMANDS.SWITCH_STREAM:
         this.provider.setActiveStream(message.stream);
         break;
-      case 'eraseStream':
+      case COMMANDS.ERASE_STREAM:
         this.provider.eraseStream(message.stream);
         break;
-      case 'deleteStream':
+      case COMMANDS.DELETE_STREAM:
         this.provider.deleteStream(message.stream);
         break;
-      case 'deleteAll':
+      case COMMANDS.DELETE_ALL:
         this.provider.deleteAllStreams();
         break;
-      case 'stopStream':
+      case COMMANDS.STOP_STREAM:
         vscode.commands.executeCommand('coauthor.stopAgent', message.stream);
         break;
-      case 'packStream':
+      case COMMANDS.PACK_STREAM:
         await this.handlePackStream(message.stream);
         break;
-      case 'cleanStream':
+      case COMMANDS.CLEAN_STREAM:
         await this.handleCleanStream(message.stream);
         break;
-      case 'runAgain':
+      case COMMANDS.RUN_AGAIN:
         await this.handleRunAgain(message.stream);
         break;
-      case 'restoreState':
+      case COMMANDS.RESTORE_STATE:
         await this.handleRestoreState(message.stream);
         break;
       default:

@@ -425,6 +425,34 @@ export function appendLogToGroup(logMessage) {
 }
 
 /**
+ * Apply saved toggle states to any groups already in the DOM
+ */
+export function applyGroupToggleStates() {
+  const logGroups = getLogGroups();
+  for (const [groupId, _] of logGroups) {
+    const isCollapsed = getGroupToggleState(groupId);
+    const headerElem = document.getElementById(`group-header-${groupId}`);
+    const contentElem = document.getElementById(`group-content-${groupId}`);
+
+    if (headerElem && contentElem && isCollapsed !== undefined) {
+      if (isCollapsed) {
+        contentElem.style.display = 'none';
+        const toggleIcon = headerElem.querySelector('.group-toggle i');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-right';
+        }
+      } else {
+        contentElem.style.display = 'block';
+        const toggleIcon = headerElem.querySelector('.group-toggle i');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-down';
+        }
+      }
+    }
+  }
+}
+
+/**
  * Sets up all event listeners for the UI
  */
 export function setupEventListeners() {
@@ -519,32 +547,4 @@ export function setupEventListeners() {
     gutterSize: 5,
     cursor: 'col-resize',
   });
-}
-
-/**
- * Apply saved toggle states to any groups already in the DOM
- */
-export function applyGroupToggleStates() {
-  const logGroups = getLogGroups();
-  for (const [groupId, _] of logGroups) {
-    const isCollapsed = getGroupToggleState(groupId);
-    const headerElem = document.getElementById(`group-header-${groupId}`);
-    const contentElem = document.getElementById(`group-content-${groupId}`);
-
-    if (headerElem && contentElem && isCollapsed !== undefined) {
-      if (isCollapsed) {
-        contentElem.style.display = 'none';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-right';
-        }
-      } else {
-        contentElem.style.display = 'block';
-        const toggleIcon = headerElem.querySelector('.group-toggle i');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-down';
-        }
-      }
-    }
-  }
 }
