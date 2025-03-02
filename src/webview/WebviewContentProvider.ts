@@ -22,7 +22,7 @@ export class WebviewContentProvider {
         vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview', path);
 
       const htmlPath = getWebviewPath('index.html');
-      const cssPath = getWebviewPath('styles.css');
+      const cssPath = getWebviewPath('styles/index.css');
       const commonCssPath = vscode.Uri.joinPath(
         this.context.extensionUri,
         'src',
