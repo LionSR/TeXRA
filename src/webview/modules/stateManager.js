@@ -83,17 +83,17 @@ export function restoreState() {
       autoExtractOptions.style.display = 'none';
     }
 
-    // Initialize tool use toggle state
-    const toggleToolUse = safeGetElementById('toggleToolUse');
-    const toolUseOptions = safeGetElementById('toolUseOptions');
-    const hasToolUseChecked = CHECK_BOXES_TOOL_USE.some((id) =>
+    // Initialize tool config toggle state
+    const toggleToolConfig = safeGetElementById('toggleToolConfig');
+    const toolConfigOptions = safeGetElementById('toolConfigOptions');
+    const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
       safeGetElementChecked(id),
     );
-    const toolUseIndicator = hasToolUseChecked ? '●' : '○';
+    const toolConfigIndicator = hasToolConfigChecked ? '●' : '○';
 
-    if (toggleToolUse && toolUseOptions) {
-      toggleToolUse.innerHTML = `Tool Use ${toolUseIndicator}<i class="codicon codicon-chevron-down"></i>`;
-      toolUseOptions.style.display = 'none';
+    if (toggleToolConfig && toolConfigOptions) {
+      toggleToolConfig.innerHTML = `Tool Config ${toolConfigIndicator}<i class="codicon codicon-chevron-down"></i>`;
+      toolConfigOptions.style.display = 'none';
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
