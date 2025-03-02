@@ -297,10 +297,6 @@ export class OutputHandler {
 
     let outputContent = await readFile(outputFile);
 
-    // if (this.agentSetting.agentType === 'CoT') {
-    //   this.extractAndLogScratchpad(outputContent, thinkingTag);
-    // }
-
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = addCdataToTags(outputContent, tagsToWrap);
 
@@ -340,10 +336,6 @@ export class OutputHandler {
     thinkingTag: string = 'scratchpad',
   ): Promise<string[]> {
     let outputContent = await readFile(outputFile);
-
-    // if (this.agentSetting.agentType === 'CoT') {
-    //   this.extractAndLogScratchpad(outputContent, thinkingTag);
-    // }
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = addCdataToTagsMultiple(outputContent, tagsToWrap);
