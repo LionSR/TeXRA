@@ -35,7 +35,7 @@ body {
   min-height: 0;
 }
 
-.latrexdiffs-section {
+.latexdiffs-section {
   margin-top: auto;
   padding-top: var(--spacing-large);
   background-color: var(--dropdown-background);
@@ -46,7 +46,7 @@ body {
 }
 
 /* Ensure all button sizes are consistent */
-.latrexdiffs-section .icon-button,
+.latexdiffs-section .icon-button,
 .file-select-actions .icon-button {
   width: 24px;
   height: 24px;

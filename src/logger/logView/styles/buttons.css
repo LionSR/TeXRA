@@ -1,0 +1,38 @@
+/**
+ * Button styles for LogView
+ * Extensions of common.css button styles
+ */
+
+/* Button-specific styles */
+.stop-button {
+  margin-right: var(--spacing-tiny);
+  color: var(--vscode-testing-iconFailed, #f14c4c);
+}
+
+.pack-button,
+.clean-button,
+.clear-button {
+  margin-left: var(--spacing-tiny);
+}
+
+.run-button {
+  margin-left: var(--spacing-tiny);
+  color: var(--vscode-testing-runAction, #2ea043);
+}
+
+/* Header actions container */
+.header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* X icon for clear buttons */
+.x-icon {
+  font-family: codicon;
+  font-size: var(--font-size);
+}
+
+/* Codicon override for trash icon */
+.codicon-trash:before {
+  content: '\eb9f';
+}
