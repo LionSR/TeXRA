@@ -165,6 +165,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalResponseTime += stateRound.responseTime;
   }
 
+  // are the following two methods needed?
   /** Converts global state to a serializable object for persistence. */
   toObject(): Record<string, any> {
     return {
