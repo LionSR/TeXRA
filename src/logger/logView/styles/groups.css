@@ -57,16 +57,7 @@
   margin-right: 8px;
 }
 
-/* Add animation for running indicator */
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
+/* Use the spin animation defined in base.css */
 .spin {
   animation: spin 2s linear infinite;
 }
