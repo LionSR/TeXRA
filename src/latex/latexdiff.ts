@@ -200,7 +200,7 @@ export async function runLatexdiff(
       }
     }
     if (invalidFiles.length > 0) {
-      const message = `Files missing document environment: ${invalidFiles.join(', ')}\nSkipping latexdiff.`;
+      const message = `Files missing document environment: ${invalidFiles.join(', ')}. Skipping latexdiff.`;
       logger.warn(channel, message);
       return { success: false, message };
     }
