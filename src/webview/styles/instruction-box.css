@@ -1,0 +1,118 @@
+/**
+ * Instruction Box styles for Webview
+ * Instruction textarea and related components
+ */
+
+.instruction-box {
+  margin-bottom: var(--spacing-small);
+  position: relative;
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+}
+
+.instruction-box label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--font-size);
+}
+
+#instructionInput {
+  width: 100%;
+  min-height: 200px;
+  max-height: 400px;
+  padding: 8px;
+  padding-bottom: 50px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  resize: none;
+  overflow-y: auto;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  box-sizing: border-box;
+  transition: height 0.1s ease-out;
+  margin-top: 8px;
+}
+
+.instruction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-small);
+  line-height: 1.5;
+}
+
+.instruction-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.instruction-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.instruction-header label {
+  font-size: var(--font-size);
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+}
+
+.instruction-header label .codicon {
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
+
+#executeButton {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  padding: 3px 10px;
+  font-size: var(--font-size);
+  background-color: var(--button-background);
+  color: var(--button-foreground);
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+  transition: background-color 0.2s;
+}
+
+#executeButton:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+#executeButton .codicon {
+  margin-right: var(--spacing-small);
+  font-size: var(--font-size);
+  color: var(--button-foreground);
+  position: relative;
+  top: 0;
+}
+
+/* Checkbox group within instruction box */
+.checkbox-group {
+  display: flex;
+  gap: 1px;
+  flex-direction: column;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size);
+}
+
+.checkbox-group input[type='checkbox'] {
+  margin-right: var(--spacing-small);
+}
