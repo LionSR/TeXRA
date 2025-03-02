@@ -1,4 +1,3 @@
-import { vscode } from './modules/vscodeApi.js';
 import { initializeState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import {
