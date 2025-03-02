@@ -24,6 +24,9 @@ vsc-extension-quickstart.md
 !src/webview/modules/*.js
 !src/common/styles/*.css
 
+!src/logger/logView/modules/*.js
+!src/logger/logView/*.css
+
 !src/logger/logView/*.js
 !src/logger/logView/*.html
 !src/logger/logView/*.css

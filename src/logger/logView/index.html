@@ -88,7 +88,13 @@
       {
         "imports": {
           "split.js": "${splitJsUri}",
-          "marked": "https://esm.sh/marked@9.1.5"
+          "marked": "https://esm.sh/marked@9.1.5",
+          "./modules/vscodeApi.js": "${vscodeApiUri}",
+          "./modules/stateManager.js": "${stateManagerUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "./modules/domHandlers.js": "${domHandlersUri}",
+          "./modules/constants.js": "${constantsUri}",
+          "./modules/logFormatters.js": "${logFormattersUri}"
         }
       }
     </script>
@@ -130,7 +136,7 @@
               disabled
               title="Restore this configuration to the main view"
             >
-              <i class="codicon codicon-replay"></i>
+              <i class="codicon codicon-reply"></i>
             </button>
             <button
               class="action-button pack-button"
