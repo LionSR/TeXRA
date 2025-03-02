@@ -6,6 +6,7 @@ import * as logger from './logUtils';
 import { LogViewProvider } from './LogViewProvider';
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './logView/modules/constants.js';
+import { taskStateToAgentConfig } from '../utils/configConversion';
 
 const CHANNEL = 'MessageHandler';
 
@@ -82,40 +83,8 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Convert taskState to agentConfig
-    const agentConfig = {
-      agent: taskState.agent,
-      model: taskState.model,
-      instruction: taskState.instruction,
-      inputFile: taskState.inputFile,
-      referenceFile: taskState.referenceFile || undefined,
-      auxiliaryFile: taskState.auxiliaryFile || undefined,
-      figureFile: taskState.figureFile || undefined,
-      outputNameOverride: taskState.outputNameOverride || undefined,
-      inputFiles: taskState.multipleInputFilesVisible
-        ? taskState.multipleInputFiles
-        : [],
-      referenceFiles: taskState.multipleReferenceFilesVisible
-        ? taskState.multipleReferenceFiles
-        : [],
-      auxiliaryFiles: taskState.multipleAuxiliaryFilesVisible
-        ? taskState.multipleAuxiliaryFiles
-        : [],
-      figureFiles: taskState.multipleFigureFilesVisible
-        ? taskState.multipleFigureFiles
-        : [],
-      outputFiles: taskState.multipleOutputFilesVisible
-        ? taskState.multipleOutputFiles
-        : [],
-      toolConfig: {
-        autoExtractFigure: taskState.autoExtractFigure,
-        autoExtractTikzFigure: taskState.autoExtractTikzFigure,
-        attachTeXCount: taskState.attachTeXCount,
-        usePrefillFromInput: taskState.usePrefillFromInput,
-        printInputPrompt: taskState.printInputPrompt,
-        reflect: taskState.reflect,
-      },
-    };
+    // Convert TaskState to AgentConfig using utility function
+    const agentConfig = taskStateToAgentConfig(taskState);
 
     // Execute the agent with the restored config
     await vscode.commands.executeCommand('coauthor.execute', agentConfig);
