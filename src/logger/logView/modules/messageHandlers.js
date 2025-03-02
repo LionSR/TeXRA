@@ -122,10 +122,11 @@ export function setupMessageHandlers() {
 
         // Get all group IDs from this stream to clear toggle states
         const groupIds = [];
-        for (const groupId of document
-          .querySelectorAll('.log-group-header')
-          .map((el) => el.id.replace('group-header-', ''))) {
-          groupIds.push(groupId);
+        const headerElements = Array.from(
+          document.querySelectorAll('.log-group-header'),
+        );
+        for (const el of headerElements) {
+          groupIds.push(el.id.replace('group-header-', ''));
         }
 
         // Clear the log groups for this stream
@@ -178,10 +179,11 @@ export function setupMessageHandlers() {
           // for any groups that were in that stream
           if (message.stream === getCurrentStream()) {
             const groupIds = [];
-            for (const groupId of document
-              .querySelectorAll('.log-group-header')
-              .map((el) => el.id.replace('group-header-', ''))) {
-              groupIds.push(groupId);
+            const headerElements = Array.from(
+              document.querySelectorAll('.log-group-header'),
+            );
+            for (const el of headerElements) {
+              groupIds.push(el.id.replace('group-header-', ''));
             }
 
             // Clear toggle states for these groups
