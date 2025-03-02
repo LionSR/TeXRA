@@ -1,0 +1,33 @@
+/**
+ * Footer styles for Webview
+ * Model selection footer and related components
+ */
+
+/* Model Selection Footer styles */
+.model-selection-footer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  gap: var(--spacing-small);
+  z-index: 10;
+}
+
+.model-selection-footer .select-group {
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+}
+
+.model-selection-footer .select-group select {
+  height: 24px;
+  font-size: var(--font-size);
+  padding: 2px 4px;
+}
+
+.model-selection-footer .codicon {
+  margin-right: var(--spacing-small);
+  font-size: var(--font-size);
+  color: var(--icon-color);
+  opacity: 0.8;
+}
