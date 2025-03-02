@@ -13,7 +13,6 @@ import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 // Local imports - components
 import { LogViewProvider } from './logger/LogViewProvider';
 import { FolderExplorer } from './FolderExplorer';
-import { CoAuthorViewProvider } from './ViewProvider';
 import { registerCommands } from './commands';
 
 async function copyDefaultAgents(context: vscode.ExtensionContext) {
