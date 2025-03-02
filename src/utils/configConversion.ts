@@ -51,7 +51,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
     autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
 
-    // Tool use settings
+    // Tool config settings
     attachTeXCount: config.toolConfig?.attachTeXCount || false,
     usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
     printInputPrompt: config.toolConfig?.printInputPrompt || false,
@@ -105,7 +105,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       obj.toolConfig?.autoExtractTikzFigure ||
       false,
 
-    // Tool use settings
+    // Tool config settings
     attachTeXCount:
       obj.attachTeXCount || obj.toolConfig?.attachTeXCount || false,
     usePrefillFromInput:
