@@ -42,6 +42,14 @@ export class LogViewContentProvider {
         'split.es.js',
       );
 
+      // Module paths
+      const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
+      const stateManagerPath = getWebviewPath('modules/stateManager.js');
+      const messageHandlersPath = getWebviewPath('modules/messageHandlers.js');
+      const domHandlersPath = getWebviewPath('modules/domHandlers.js');
+      const constantsPath = getWebviewPath('modules/constants.js');
+      const logFormattersPath = getWebviewPath('modules/logFormatters.js');
+
       const codiconPath = vscode.Uri.joinPath(
         this.context.extensionUri,
         'node_modules',
@@ -67,6 +75,14 @@ export class LogViewContentProvider {
       const codiconUri = webview.asWebviewUri(codiconPath);
       const codiconsFontUri = webview.asWebviewUri(codiconsFontPath);
 
+      // Module URIs
+      const vscodeApiUri = webview.asWebviewUri(vscodeApiPath);
+      const stateManagerUri = webview.asWebviewUri(stateManagerPath);
+      const messageHandlersUri = webview.asWebviewUri(messageHandlersPath);
+      const domHandlersUri = webview.asWebviewUri(domHandlersPath);
+      const constantsUri = webview.asWebviewUri(constantsPath);
+      const logFormattersUri = webview.asWebviewUri(logFormattersPath);
+
       // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for LogView');
       return htmlContent
@@ -76,6 +92,12 @@ export class LogViewContentProvider {
         .replace('${splitJsUri}', splitJsUri.toString())
         .replace('${codiconUri}', codiconUri.toString())
         .replace('${codiconsFontUri}', codiconsFontUri.toString())
+        .replace('${vscodeApiUri}', vscodeApiUri.toString())
+        .replace('${stateManagerUri}', stateManagerUri.toString())
+        .replace('${messageHandlersUri}', messageHandlersUri.toString())
+        .replace('${domHandlersUri}', domHandlersUri.toString())
+        .replace('${constantsUri}', constantsUri.toString())
+        .replace('${logFormattersUri}', logFormattersUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace(/\${cspSource}/g, webview.cspSource);
     } catch (err) {
