@@ -521,9 +521,24 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
 
   public deleteStream(stream: string) {
     if (this._logStreams.has(stream)) {
+      const streams = Array.from(this._logStreams.keys());
+
+      // Case: This is the last stream - erase it first
+      if (streams.length === 1) {
+        this.eraseStream(stream);
+      }
+
+      // Remove the stream from collections
       this._logStreams.delete(stream);
       this._logGroups.delete(stream);
       this._taskStates.delete(stream);
+
+      // If the deleted stream was the active one, switch to another stream if available
+      if (stream === this._activeStream) {
+        const remainingStreams = Array.from(this._logStreams.keys());
+        this._activeStream = remainingStreams[0] || '';
+      }
+
       this._saveState();
       this._updateWebview();
     }
