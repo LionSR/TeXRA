@@ -11,6 +11,7 @@ import {
   getBuiltInAgentsDirectory,
   getCustomAgentsDirectory,
 } from '../utils/pathUtils';
+import { agentConfigToTaskState } from '../utils/configConversion';
 
 // Local imports - agent components
 import { AgentConfig, createAgentConfig } from './AgentConfig';
@@ -200,47 +201,11 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
         // End the task details group
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
-        // TODO:this is really mess, we should either use a unified data structure for TaskState and AgentConfig, or define a function that converts AgentConfig to TaskState for it. We have this mess in @TaskState.ts and @LogViewMessageHandler.ts too.
-        logViewProvider.setTaskState(fullStreamId, {
-          // Parameters
-          agent: config.agent,
-          model: config.model,
-          instruction: config.instruction || '',
-          // Input/Output configuration
-          inputFile: config.inputFile || '',
-          referenceFile: config.referenceFile || '',
-          auxiliaryFile: config.auxiliaryFile || '',
-          figureFile: config.figureFile || '',
-          outputNameOverride: config.outputNameOverride || '',
-          // Multiple file selections
-          multipleInputFiles: config.inputFiles || [],
-          multipleReferenceFiles: config.referenceFiles || [],
-          multipleAuxiliaryFiles: config.auxiliaryFiles || [],
-          multipleFigureFiles: config.figureFiles || [],
-          multipleOutputFiles: config.outputFiles || [],
-          // Multiple file selection visibility
-          multipleInputFilesVisible:
-            Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
-          multipleReferenceFilesVisible:
-            Array.isArray(config.referenceFiles) &&
-            config.referenceFiles.length > 0,
-          multipleAuxiliaryFilesVisible:
-            Array.isArray(config.auxiliaryFiles) &&
-            config.auxiliaryFiles.length > 0,
-          multipleFigureFilesVisible:
-            Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
-          multipleOutputFilesVisible:
-            Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
-          // Auto extract settings
-          autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
-          autoExtractTikzFigure:
-            config.toolConfig?.autoExtractTikzFigure || false,
-          attachTeXCount: config.toolConfig?.attachTeXCount || false,
-          usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
-          printInputPrompt: config.toolConfig?.printInputPrompt || false,
-          reflect: config.toolConfig?.reflect || false,
-          outputNameOverrideVisible: !!config.outputNameOverride,
-        });
+        // Convert AgentConfig to TaskState using utility function
+        logViewProvider.setTaskState(
+          fullStreamId,
+          agentConfigToTaskState(config),
+        );
         logger.debug(
           `Task state stored for stream: ${fullStreamId}`,
           mainTaskGroupId,
