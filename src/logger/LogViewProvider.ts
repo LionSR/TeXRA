@@ -569,16 +569,6 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     return taskState;
   }
 
-  private loadTaskStates(): void {
-    this.logger.debug('Loading taskStates from workspace state');
-    const savedTaskStates =
-      this.context.workspaceState.get<[string, TaskState][]>(
-        this._taskStateKey,
-      ) || [];
-    this.logger.debug(`Loaded taskStates: ${JSON.stringify(savedTaskStates)}`);
-    this._taskStates = new Map(savedTaskStates);
-  }
-
   private saveTaskStates(): void {
     this.logger.debug('Saving taskStates to workspace state');
     const taskStatesArray = Array.from(this._taskStates.entries());
