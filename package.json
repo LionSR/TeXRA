@@ -10,7 +10,8 @@
   "categories": [
     "Programming Languages",
     "Linters",
-    "Formatters"
+    "Formatters",
+    "AI"
   ],
   "activationEvents": [
     "onView:coauthor",
@@ -760,25 +761,22 @@
   },
   "homepage": "https://github.com/LionSR/coauthor#readme",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.37.0",
+    "@anthropic-ai/sdk": "^0.39.0",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
-    "better-sqlite3": "^11.7.0",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
-    "fast-xml-parser": "^4.5.1",
+    "fast-xml-parser": "^4.5.3",
     "glob": "^10.4.5",
-    "jest-worker": "^29.7.0",
-    "jimp": "^1.6.0",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
-    "openai": "^4.85.4",
+    "openai": "^4.86.1",
     "pdf-lib": "^1.17.1",
-    "pdf2pic": "^3.1.3",
+    "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
     "terser-webpack-plugin": "^5.3.10",
     "winston": "^3.17.0",
-    "yaml": "^2.6.1"
+    "yaml": "^2.7.0"
   }
 }
