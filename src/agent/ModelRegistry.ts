@@ -335,7 +335,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gemini-2.0-pro-exp-02-05',
     openrouterFullName: 'google/gemini-2.0-pro-exp-02-05:free',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 200000,
+    maxOutputTokens: 8192,
     contextWindow: 2097152,
     inputPrice: 1.25,
     outputPrice: 5.0,
@@ -366,7 +366,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gemini-2.0-flash-001',
     openrouterFullName: 'google/gemini-2.0-flash-001',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 200000,
+    maxOutputTokens: 8192,
     contextWindow: 1048576,
     inputPrice: 0.1,
     outputPrice: 0.4,
@@ -382,7 +382,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gemini-1.5-pro-latest',
     openrouterFullName: 'google/gemini-1.5-pro',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 200000,
+    maxOutputTokens: 8192,
     contextWindow: 1048576,
     inputPrice: 1.25,
     outputPrice: 5.0,
@@ -398,7 +398,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gemini-1.5-fresh-latest',
     openrouterFullName: 'google/gemini-1.5-fresh',
     provider: ModelProvider.GOOGLE,
-    maxOutputTokens: 100000,
+    maxOutputTokens: 8192,
     contextWindow: 1048576,
     inputPrice: 0.075,
     outputPrice: 0.3,
@@ -477,10 +477,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.28,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      // supportsAssistantPrefill: true,
-      // supportsAutoPromptCaching: true,
-      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
     } satisfies ModelCapabilities,
+    // wait until the official deepseek API fix the content box issue in the messages
     openRouterOnly: true,
   },
   DSR1: {
@@ -488,14 +486,12 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'deepseek/deepseek-R1',
     openrouterFullName: 'deepseek/deepseek-R1',
     provider: ModelProvider.OTHERS,
-    maxOutputTokens: 64000,
+    maxOutputTokens: 164000,
     contextWindow: 164000,
-    inputPrice: 8,
-    outputPrice: 8,
+    inputPrice: 4,
+    outputPrice: 4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
-      // supportsAutoPromptCaching: true,
-      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
       supportsReasoning: true,
     } satisfies ModelCapabilities,
     openRouterOnly: true,
@@ -513,7 +509,6 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAssistantPrefill: true,
       supportsAutoPromptCaching: true,
-      // I think both are supported via the official deepseek API, but not exposed in the openrouter API
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
@@ -531,6 +526,6 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
     } satisfies ModelCapabilities,
-    openRouterOnly: true,
+    openRouterOnly: false,
   },
 };
