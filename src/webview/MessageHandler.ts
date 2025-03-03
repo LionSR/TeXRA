@@ -19,6 +19,7 @@ import {
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
+import { polishTextWithAI } from '../utils/textEnhancementUtils';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/ToolConfig';
@@ -109,6 +110,8 @@ export class WebviewMessageHandler {
         return this.handleGetCurrentFile(message, webviewView);
       case 'addOpenedFiles':
         return this.handleAddOpenedFiles(message.fileType, webviewView);
+      case 'polishInstructionText':
+        return this.handlePolishInstructionText(message, webviewView);
     }
   }
 
@@ -585,6 +588,75 @@ export class WebviewMessageHandler {
         `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
       );
       return null;
+    }
+  }
+
+  private async handlePolishInstructionText(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    try {
+      // Show progress notification with incremental updates
+      vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Polishing your instruction text',
+          cancellable: false,
+        },
+        async (progress) => {
+          try {
+            // Initial progress update
+            progress.report({ message: 'Preparing text...' });
+
+            // Short delay to show first progress step
+            await new Promise((resolve) => setTimeout(resolve, 300));
+
+            // Update progress
+            progress.report({
+              message: 'Sending to AI for polishing...',
+              increment: 30,
+            });
+
+            // Call the utility function to polish the text
+            const result = await polishTextWithAI(message.text);
+
+            // Final progress update
+            progress.report({ message: 'Applying changes...', increment: 60 });
+
+            // Short delay to show final progress step
+            await new Promise((resolve) => setTimeout(resolve, 300));
+
+            if (result.success) {
+              // Send the polished text back to the webview
+              webviewView.webview.postMessage({
+                command: 'instructionTextPolished',
+                text: result.text,
+              });
+            } else {
+              // Show error message
+              vscode.window.showErrorMessage(
+                result.error || 'Error polishing text',
+              );
+            }
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Error polishing text: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+            logger.error(
+              CHANNEL,
+              `Error in handlePolishInstructionText: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        },
+      );
+    } catch (error) {
+      vscode.window.showErrorMessage(
+        `Error setting up text polishing: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      logger.error(
+        CHANNEL,
+        `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

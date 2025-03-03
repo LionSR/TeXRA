@@ -178,6 +178,16 @@ export function setupUIHandlers() {
     }
   });
 
+  addEventListenerSafely('magicPolishButton', 'click', function () {
+    const instructionInput = safeGetElementById('instructionInput');
+    if (instructionInput && instructionInput.value.trim()) {
+      vscode.postMessage({
+        command: 'polishInstructionText',
+        text: instructionInput.value,
+      });
+    }
+  });
+
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');
