@@ -4,6 +4,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from './logUtils';
 import { LogViewProvider } from './LogViewProvider';
+// @ts-ignore - Import JavaScript module
+import { COMMANDS } from './logView/modules/constants.js';
+import { taskStateToAgentConfig } from '../utils/configConversion';
 
 const CHANNEL = 'MessageHandler';
 
@@ -17,31 +20,31 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Received message: ${message.command}`);
 
     switch (message.command) {
-      case 'switchStream':
+      case COMMANDS.SWITCH_STREAM:
         this.provider.setActiveStream(message.stream);
         break;
-      case 'eraseStream':
+      case COMMANDS.ERASE_STREAM:
         this.provider.eraseStream(message.stream);
         break;
-      case 'deleteStream':
+      case COMMANDS.DELETE_STREAM:
         this.provider.deleteStream(message.stream);
         break;
-      case 'deleteAll':
+      case COMMANDS.DELETE_ALL:
         this.provider.deleteAllStreams();
         break;
-      case 'stopStream':
+      case COMMANDS.STOP_STREAM:
         vscode.commands.executeCommand('coauthor.stopAgent', message.stream);
         break;
-      case 'packStream':
+      case COMMANDS.PACK_STREAM:
         await this.handlePackStream(message.stream);
         break;
-      case 'cleanStream':
+      case COMMANDS.CLEAN_STREAM:
         await this.handleCleanStream(message.stream);
         break;
-      case 'runAgain':
+      case COMMANDS.RUN_AGAIN:
         await this.handleRunAgain(message.stream);
         break;
-      case 'restoreState':
+      case COMMANDS.RESTORE_STATE:
         await this.handleRestoreState(message.stream);
         break;
       default:
@@ -80,40 +83,8 @@ export class LogViewMessageHandler {
     logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
-    // Convert taskState to agentConfig
-    const agentConfig = {
-      agent: taskState.agent,
-      model: taskState.model,
-      instruction: taskState.instruction,
-      inputFile: taskState.inputFile,
-      referenceFile: taskState.referenceFile || undefined,
-      auxiliaryFile: taskState.auxiliaryFile || undefined,
-      figureFile: taskState.figureFile || undefined,
-      outputNameOverride: taskState.outputNameOverride || undefined,
-      inputFiles: taskState.multipleInputFilesVisible
-        ? taskState.multipleInputFiles
-        : [],
-      referenceFiles: taskState.multipleReferenceFilesVisible
-        ? taskState.multipleReferenceFiles
-        : [],
-      auxiliaryFiles: taskState.multipleAuxiliaryFilesVisible
-        ? taskState.multipleAuxiliaryFiles
-        : [],
-      figureFiles: taskState.multipleFigureFilesVisible
-        ? taskState.multipleFigureFiles
-        : [],
-      outputFiles: taskState.multipleOutputFilesVisible
-        ? taskState.multipleOutputFiles
-        : [],
-      toolConfig: {
-        autoExtractFigure: taskState.autoExtractFigure,
-        autoExtractTikzFigure: taskState.autoExtractTikzFigure,
-        attachTeXCount: taskState.attachTeXCount,
-        usePrefillFromInput: taskState.usePrefillFromInput,
-        printInputPrompt: taskState.printInputPrompt,
-        reflect: taskState.reflect,
-      },
-    };
+    // Convert TaskState to AgentConfig using utility function
+    const agentConfig = taskStateToAgentConfig(taskState);
 
     // Execute the agent with the restored config
     await vscode.commands.executeCommand('coauthor.execute', agentConfig);

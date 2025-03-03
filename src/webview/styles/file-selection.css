@@ -1,0 +1,177 @@
+/**
+ * File Selection styles for Webview
+ * File inputs, selectors, and related components
+ */
+
+.file-select {
+  margin-bottom: 12px;
+}
+
+/* Make optional sections more compact */
+.file-select:has(.optional-label) {
+  margin-bottom: 2px;
+}
+
+.file-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-small);
+  flex-wrap: nowrap;
+  line-height: 1.5;
+}
+
+.file-select-header label {
+  font-weight: bold;
+  margin-right: var(--spacing-small);
+  display: flex;
+  align-items: center;
+}
+
+.file-select-label-group {
+  display: flex;
+  align-items: center;
+  gap: 0px;
+  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  position: relative;
+}
+
+.file-select-label-group .vscode-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+}
+
+.file-select-label-group label {
+  margin-right: var(--spacing-small);
+}
+
+.file-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  margin-left: auto;
+  position: relative;
+}
+
+.file-select label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--font-size);
+}
+
+.file-select select {
+  width: 100%;
+  padding: 4px 8px;
+  height: 28px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+  background-color: var(--dropdown-background);
+  color: var(--dropdown-foreground);
+  font-size: var(--font-size);
+  cursor: pointer;
+}
+
+.optional-label {
+  color: var(--text-color);
+  font-weight: normal;
+  font-size: var(--font-size);
+  white-space: nowrap;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  opacity: 0.7;
+}
+
+.toggle-icon {
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  position: relative;
+  padding: 0 2px;
+  color: var(--text-color);
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  height: 24px;
+}
+
+.multiple-files-content .vscode-input {
+  margin: 0;
+  width: 100%;
+  height: 24px;
+  padding: 2px 6px;
+  box-sizing: border-box;
+}
+
+/* When toggled (input is visible), make the label more prominent */
+.file-select-label-group:has(.vscode-input[style*='inline-block'])
+  .optional-label,
+.file-select-label-group:has(.vscode-input[style*='inline-block']) .toggle-icon,
+.file-select:has(.multiple-files-container[style*='block']) .optional-label,
+.file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
+  color: var(--vscode-foreground);
+  opacity: 1;
+}
+
+/* Add this specific selector for Multiple Output Files section */
+.file-select:has(#multipleOutputFilesContainer[style*='none'])
+  #emptyMultipleOutputFilesButton,
+.file-select:has(#multipleOutputFilesContainer[style*='none'])
+  #selectMultipleOutputFilesButton {
+  display: none;
+}
+
+/* Hide multiple file operation buttons when containers are not toggled */
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #emptyMultipleInputFilesButton,
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #selectMultipleInputFilesButton,
+.file-select:has(#multipleInputFilesContainer[style*='none'])
+  #addOpenedInputFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #emptyMultipleReferenceFilesButton,
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #selectMultipleReferenceFilesButton,
+.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+  #addOpenedReferenceFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #emptyMultipleAuxiliaryFilesButton,
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #selectMultipleAuxiliaryFilesButton,
+.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+  #addOpenedAuxiliaryFilesButton {
+  display: none;
+}
+
+.file-select:has(#multipleFigureFilesContainer[style*='none'])
+  #emptyMultipleFigureFilesButton,
+.file-select:has(#multipleFigureFilesContainer[style*='none'])
+  #selectMultipleFigureFilesButton {
+  display: none;
+}
+
+/* Update icon styles */
+.file-select-header label .codicon {
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
+  vertical-align: text-bottom;
+}

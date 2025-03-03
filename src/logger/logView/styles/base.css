@@ -1,0 +1,87 @@
+/**
+ * Base styles for LogView
+ * Core layout and structure
+ */
+
+body {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  height: 100vh;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.main-container {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Split.js styles */
+.gutter {
+  background-color: var(--vscode-panel-border);
+  position: relative;
+}
+
+.gutter:hover {
+  background-color: var(--vscode-focusBorder);
+}
+
+.gutter-horizontal {
+  cursor: col-resize;
+  width: 1px;
+}
+
+.gutter-horizontal::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+}
+
+/* Animations */
+/* Animation for status indicator */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+}
+
+/* Animation for running indicator */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* LogView specific disabled state */
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
