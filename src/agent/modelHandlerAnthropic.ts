@@ -31,7 +31,6 @@ import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { stream } from 'winston';
 
 const K_SLICE = 200;
 
@@ -70,6 +69,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
       system: systemPrompt,
     };
 
+    // Enable thinking for any models that support reasoning
+    if (this.capabilities.supportsReasoning) {
+      // This ensures thinking is explicitly enabled for all models that support it
+      this.logger.debug('Enabling thinking for model with reasoning support');
+      options.thinking = {
+        type: 'enabled',
+        budget_tokens: useStreaming ? 32768 : 4096,
+      };
+    }
+
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       // useStreaming = true; should consider to be true by default
@@ -78,13 +87,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
-      if (this.capabilities.supportsReasoning) {
-        options.thinking = {
-          type: 'enabled',
-          // Set higher budget_tokens for streaming
-          budget_tokens: useStreaming ? 32000 : 4096,
-        };
-      }
+      // The thinking configuration is now handled above for all reasoning models
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -278,6 +281,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
         if (block.type === 'thinking' || block.type === 'redacted_thinking') {
           // Store the entire thinking block object
           thinkingBlock = block;
+
+          // Log the thinking block for debugging
+          this.logger.debug(
+            `Found thinking block in response, type: ${block.type}`,
+          );
         }
         // We don't include thinking blocks (type: thinking or redacted_thinking) in the response text
         // They need to be preserved in the message object for the next turn though
@@ -525,6 +533,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
           };
           lastMessage.content.push(newMessage);
         } else {
+          // there is a risk that accumlatedOuput has not been updated yet
           lastMessage.content = [
             {
               type: 'text',
@@ -594,7 +603,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
           // Use accumulated output to ensure we have the complete context
           const updatedText = {
             type: 'text',
-            text: toolState.accumulatedOutput,
+            text: bestConnector + newResponse,
           };
           newContent.push(updatedText);
         } else {
@@ -625,16 +634,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
         if (messages.at(-1)?.role === 'user') {
           messages.pop();
         }
-
-        this.logger.debug(
-          `Updated second last message with thinking block: ${JSON.stringify(
-            messageToSkeleton(messages),
-          )}`,
-        );
-
-        this.logger.debug(
-          `Updated second last message with accumulated output (${toolState.accumulatedOutput.length} chars)`,
-        );
       }
       return;
     } else {
@@ -660,10 +659,31 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return (
-      stopReason !== 'max_tokens' &&
-      stopReason !== 'stop_sequence' &&
-      !hasEndTag(agentSetting, newResponse)
+    // DEBUG: Log the stop reason to help diagnose continuation issues
+    this.logger.debug(
+      `Checking if should continue - stop reason: "${stopReason}"`,
     );
+
+    // We should continue if:
+    // 1. We hit the max tokens limit (stopReason === 'max_tokens')
+    // 2. AND we don't have an end tag (meaning the response is incomplete)
+    if (stopReason === 'max_tokens' && !hasEndTag(agentSetting, newResponse)) {
+      this.logger.debug(
+        'Should continue - adding continuation message to conversation',
+      );
+      return true;
+    }
+    if (stopReason === 'stop_sequence') {
+      if (!hasEndTag(agentSetting, newResponse)) {
+        this.logger.debug(
+          'Should continue - adding continuation message to conversation',
+        );
+        return true;
+      } else {
+        this.logger.debug('Should not continue - no end tag found');
+        return false;
+      }
+    }
+    return false;
   }
 }
