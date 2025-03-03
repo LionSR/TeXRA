@@ -12,7 +12,7 @@ import { fileExists } from '../utils/workspaceFileUtils';
 import {
   getBase64EncodedImage,
   countPdfPages,
-  processPdfInput,
+  processPdf2Png,
 } from '../utils/imgUtils';
 import { extractTextFromTag } from '../utils/xmlUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
@@ -202,7 +202,7 @@ export abstract class ModelHandler {
 
     const mediaType = mediaTypes[ext];
     if (ext === '.pdf' && mediaType === 'image/png') {
-      const pdfResult = await processPdfInput(figureFile);
+      const pdfResult = await processPdf2Png(figureFile);
       if (pdfResult === null) {
         throw new Error(`Failed to process PDF file: ${figureFile}`);
       }
