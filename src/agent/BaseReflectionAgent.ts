@@ -522,6 +522,7 @@ export abstract class BaseReflectionAgent {
           );
 
         this.extractAndLogThinking(newResponse);
+        // this has a potential bug if <scratchpad> is included in the prefill
 
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
@@ -541,6 +542,7 @@ export abstract class BaseReflectionAgent {
               `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
               responseCycleGroupId,
             );
+            // this should be more than a preview; do like scratchpad;
           } else if (
             thinkingBlock.type === 'redacted_thinking' &&
             thinkingBlock.data
