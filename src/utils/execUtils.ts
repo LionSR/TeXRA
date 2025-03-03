@@ -44,6 +44,7 @@ export async function executeCommand(
     encoding?: BufferEncoding;
     channel?: string;
     truncate?: boolean;
+    env?: Record<string, string>;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -61,6 +62,7 @@ export async function executeCommand(
     const { stdout, stderr } = await execAsync(finalCommand, {
       cwd: workspacePath,
       encoding: options.encoding || 'utf8',
+      env: options.env ? { ...process.env, ...options.env } : process.env,
     });
 
     const shouldTruncate = options.truncate ?? false;

@@ -302,3 +302,57 @@ allows for a more efficient workflow, especially when working with documents. To
 3. Drag the CoAuthor view from the primary sidebar to the newly opened secondary sidebar on the right.
 
 This configuration keeps your document in focus while providing easy access to CoAuthor's features.`npm run watch
+
+## LaTeX Configuration
+
+### TikZ Figure Extraction and Compilation
+
+CoAuthor provides specialized tools for extracting and compiling TikZ figures from your LaTeX documents. The following settings help you customize this process:
+
+#### TikZ Input Directory
+
+You can configure a directory for additional input files needed when compiling extracted TikZ figures:
+
+1. Open VSCode settings (File > Preferences > Settings)
+2. Search for "coauthor.latex.tikzInputDirectory"
+3. Set the absolute path to your TikZ-related input directory
+
+This setting will pass the directory to the TEXINPUTS environment variable specifically when compiling standalone TikZ figures, using the format `.:yourTikzInputDir:$TEXINPUTS`. This ensures the LaTeX compiler can find any custom packages, styles, or macros needed for your TikZ figures.
+
+#### Workspace Path in TEXINPUTS
+
+By default, CoAuthor includes your workspace root directory in the TEXINPUTS environment variable when compiling TikZ figures. This helps LaTeX find package files and custom styles that might be located anywhere in your project.
+
+To change this behavior:
+
+1. Open VSCode settings (File > Preferences > Settings)
+2. Search for "coauthor.latex.includeWorkspaceInTexinputs"
+3. Uncheck the box to disable including the workspace path
+
+#### TikZ Template
+
+You can customize the template used for generating standalone TikZ documents during the extraction and compilation process:
+
+1. Open VSCode settings (File > Preferences > Settings)
+2. Search for "coauthor.latex.tikzTemplate"
+3. Modify the template to include any additional packages or settings needed for your TikZ figures
+
+Example:
+
+```latex
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{mathtools}
+\usepackage{amsmath}
+\usetikzlibrary{positioning}
+\usetikzlibrary{patterns}
+\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}
+\usetikzlibrary{shapes, arrows}
+
+\begin{document}
+{{ tikzpicture }}
+\end{document}
+```
+
+Note: The `{{ tikzpicture }}` placeholder is required and will be replaced with the extracted TikZ content during the compilation process.

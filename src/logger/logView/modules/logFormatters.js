@@ -50,7 +50,7 @@ export function processScratchpadContent(message) {
           let parsedMarkdown = marked.parse(content);
 
           // Log the generated HTML for debugging
-          console.log('Generated markdown HTML:', parsedMarkdown);
+          // console.log('Generated markdown HTML:', parsedMarkdown);
 
           // Post-process to restore and style LaTeX references
           parsedMarkdown = parsedMarkdown.replace(
