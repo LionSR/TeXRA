@@ -167,16 +167,6 @@ export abstract class ModelHandler {
     return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
   }
 
-  get isO1miniOrPreview(): boolean {
-    const nameLowerCased = this.config.name.toLowerCase();
-    return (
-      nameLowerCased.includes('o1-') ||
-      nameLowerCased.includes('o1preview') ||
-      nameLowerCased.includes('o1-mini') ||
-      nameLowerCased.includes('o1-preview')
-    );
-  }
-
   get isOReasoningModel(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');

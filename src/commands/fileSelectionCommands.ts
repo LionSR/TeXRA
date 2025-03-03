@@ -19,6 +19,22 @@ import { listInputFiles } from '../frontend-utils/fileListingUtils';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
+/**
+ * Gets the default URI to use for file selection dialogs
+ * @param currentFile The current file path (relative to workspace)
+ * @returns The default URI to use, or null if no workspace is open
+ */
+function getDefaultUri(currentFile: string): vscode.Uri | null {
+  const workspacePath = getWorkspacePath();
+  if (!workspacePath) {
+    return null;
+  }
+
+  return currentFile
+    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFile)))
+    : vscode.Uri.file(workspacePath);
+}
+
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ) {
@@ -67,15 +83,11 @@ export function registerFileSelectionCommands(
 async function selectInputFile(
   currentInputFile: string,
 ): Promise<string | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
+  const defaultUri = getDefaultUri(currentInputFile);
+  if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
-
-  const defaultUri = currentInputFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
-    : vscode.Uri.file(workspacePath);
 
   const fileUri = await vscode.window.showOpenDialog({
     canSelectMany: false,
@@ -102,15 +114,11 @@ async function selectInputFile(
 async function selectMultipleInputFiles(
   currentInputFile: string,
 ): Promise<string[] | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
+  const defaultUri = getDefaultUri(currentInputFile);
+  if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
-
-  const defaultUri = currentInputFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentInputFile)))
-    : vscode.Uri.file(workspacePath);
 
   const includedInputDirectories = getConfig<string[]>(
     'files.included.inputDirectories',
@@ -163,17 +171,11 @@ async function selectMultipleInputFiles(
 async function selectMultipleReferenceFiles(
   currentReferenceFile: string,
 ): Promise<string[] | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
+  const defaultUri = getDefaultUri(currentReferenceFile);
+  if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
-
-  const defaultUri = currentReferenceFile
-    ? vscode.Uri.file(
-        path.dirname(path.join(workspacePath, currentReferenceFile)),
-      )
-    : vscode.Uri.file(workspacePath);
 
   const includedReferenceExtensions = getConfig<string[]>(
     'files.included.referenceExtensions',
@@ -207,17 +209,11 @@ async function selectMultipleReferenceFiles(
 async function selectMultipleAuxiliaryFiles(
   currentAuxiliaryFile: string,
 ): Promise<string[] | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
+  const defaultUri = getDefaultUri(currentAuxiliaryFile);
+  if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
-
-  const defaultUri = currentAuxiliaryFile
-    ? vscode.Uri.file(
-        path.dirname(path.join(workspacePath, currentAuxiliaryFile)),
-      )
-    : vscode.Uri.file(workspacePath);
 
   const includedAuxiliaryExtensions = getConfig<string[]>(
     'files.included.auxiliaryExtensions',
@@ -248,15 +244,11 @@ async function selectMultipleAuxiliaryFiles(
 async function selectMultipleFigureFiles(
   currentFigureFile: string,
 ): Promise<string[] | null> {
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
+  const defaultUri = getDefaultUri(currentFigureFile);
+  if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
-
-  const defaultUri = currentFigureFile
-    ? vscode.Uri.file(path.dirname(path.join(workspacePath, currentFigureFile)))
-    : vscode.Uri.file(workspacePath);
 
   const includedFigureDirectories = getConfig<string[]>(
     'files.included.figureDirectories',
