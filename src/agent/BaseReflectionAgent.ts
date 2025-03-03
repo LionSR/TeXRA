@@ -41,7 +41,7 @@ import { extractTextFromTag, extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { AgentSetting, AgentPrompt, AgentType } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
@@ -1230,7 +1230,7 @@ export abstract class BaseReflectionAgent {
         activeGroupId,
       );
       let processedFile = outputFile;
-      if (this.agentSetting.agentType === 'CoT') {
+      if (this.agentSetting.agentType === AgentType.CoT) {
         processedFile =
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
