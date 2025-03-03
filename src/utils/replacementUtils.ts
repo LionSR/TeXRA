@@ -160,6 +160,13 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\n\\\nend{figure}': '\n\\end{figure}',
     '\n\\\nend{tikzpicture}': '\n\\end{tikzpicture}',
     '\n\\\nend{document}': '\n\\end{document}',
+    //
+    '\\right\n)': '\\right)',
+    '\\right\n]': '\\right]',
+    '\\right\n}': '\\right}',
+    '\\left\n(': '\\left(',
+    '\\left\n[': '\\left[',
+    '\\left\n{': '\\left{',
 
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
