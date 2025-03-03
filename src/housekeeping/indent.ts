@@ -12,7 +12,6 @@ import {
   deleteFile,
   readDirectory,
   fileExists,
-  getWorkspacePath,
 } from '../utils/workspaceFileUtils';
 import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
@@ -29,13 +28,6 @@ export async function runIndentTeX(): Promise<void> {
 
   const config = getConfig<string>('latex.latexindentConfig', '');
   logger.debug(CHANNEL, `LaTeX indent config: ${config}`);
-
-  const workspacePath = getWorkspacePath();
-  if (!workspacePath) {
-    logger.error(CHANNEL, 'No workspace path found');
-    vscode.window.showErrorMessage('No workspace path found');
-    return;
-  }
 
   if (config) {
     // Check if config file exists using fileExistsAbsolute
