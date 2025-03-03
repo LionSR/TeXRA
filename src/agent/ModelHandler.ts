@@ -244,22 +244,24 @@ export abstract class ModelHandler {
             `Adding ${imgData.length} pages to the image contents`,
           );
           for (let i = 0; i < imgData.length; i++) {
-            imageContents.push({
+            const imageEntry = {
               file_name: `${path.basename(figureFile)}_page_${i + 1}`,
               data: imgData[i],
               media_type: mediaType,
-            });
+            };
+            imageContents.push(imageEntry);
             addedFigures.push(`${figureFile}_page_${i + 1}`);
           }
         } else {
           this.logger.debug(
             `Adding single page to the image contents: ${figureFile}`,
           );
-          imageContents.push({
+          const imageEntry = {
             file_name: path.basename(figureFile),
             data: imgData,
             media_type: mediaType,
-          });
+          };
+          imageContents.push(imageEntry);
           addedFigures.push(figureFile);
         }
       } catch (err) {
@@ -368,7 +370,7 @@ export abstract class ModelHandler {
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
-  ): any[];
+  ): Promise<any[]>;
 
   /**
    * Formats image content into provider-specific message format.
