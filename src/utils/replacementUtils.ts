@@ -152,6 +152,15 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\label{': '\\label{',
     '\\\nlabel{': '\\label{',
 
+    // latex ending separators
+    '\n\\\nend{align}': '\n\\end{align}',
+    '\n\\\nend{equation}': '\n\\end{equation}',
+    '\n\\\nend{itemize}': '\n\\end{itemize}',
+    '\n\\\nend{enumerate}': '\n\\end{enumerate}',
+    '\n\\\nend{figure}': '\n\\end{figure}',
+    '\n\\\nend{tikzpicture}': '\n\\end{tikzpicture}',
+    '\n\\\nend{document}': '\n\\end{document}',
+
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
     '\\frac12': '\\ha',
