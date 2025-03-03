@@ -21,6 +21,7 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
+import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -316,6 +317,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
       fileContent,
       getAllReplacementsRegex(),
     ).trim();
+
+    // Extract and log any existing scratchpad content
+    extractAndLogScratchpad(fileContent, this.logger);
+
+    // Write file content to output file
     await writeFile(outputFile, fileContent);
 
     messages.push({

@@ -1,0 +1,103 @@
+/**
+ * Log Group styles for LogView
+ * Styling for grouped log entries and hierarchy
+ */
+
+/* Log Group Styles */
+.log-group-header {
+  padding: 4px 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  background-color: var(--vscode-editor-background);
+  border-left: 4px solid var(--vscode-activityBarBadge-background);
+}
+
+.log-group-header.running {
+  border-left-color: var(--vscode-statusBarItem-warningBackground);
+}
+
+.log-group-header.error {
+  border-left-color: var(--vscode-errorForeground);
+}
+
+.log-group-header.stopped {
+  border-left-color: var(--vscode-testing-iconPassed);
+}
+
+.log-group-content {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
+}
+
+.group-toggle {
+  margin-right: 8px;
+}
+
+.group-status-icon {
+  margin-right: 8px;
+}
+
+.group-title {
+  font-weight: bold;
+  flex-grow: 1;
+}
+
+.group-time {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-left: 12px;
+}
+
+.group-start-time,
+.group-end-time {
+  margin-right: 8px;
+}
+
+/* Use the spin animation defined in base.css */
+.spin {
+  animation: spin 2s linear infinite;
+}
+
+/* Make sure log lines in groups are associated */
+.log-line[data-group-id] {
+  border-left: 2px solid transparent;
+}
+
+/* Log group hierarchy styles */
+
+/* Child group headers have a different style to show hierarchy */
+.log-group-content .log-group-header {
+  border-left-width: 2px; /* Thinner border for child groups */
+  margin-left: 8px; /* Small indent for child group headers */
+}
+
+/* Indent child group content */
+.log-group-content .log-group-content {
+  margin-left: 16px; /* Indent nested content */
+}
+
+/* Log lines within a group */
+.log-group-content > .log-line {
+  margin-left: 8px; /* Small indent for log lines */
+}
+
+/* Log lines within a nested group */
+.log-group-content .log-group-content .log-line {
+  margin-left: 4px; /* Less indent needed since parent container is already indented */
+}
+
+/* Visual indicator for nested structure */
+.log-group-content .log-group-header::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background-color: var(--vscode-panel-border);
+  display: none; /* Start hidden, only show on advanced view option */
+}

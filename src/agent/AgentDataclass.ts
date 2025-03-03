@@ -1,6 +1,12 @@
+/** Enum defining possible agent types */
+export enum AgentType {
+  CoT = 'CoT',
+  Direct = 'direct',
+}
+
 /** Base configuration for agent behavior with default values. */
 export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
-  agentType: 'CoT',
+  agentType: AgentType.CoT,
   documentTag: 'document',
   temperature: 0.0,
   prefills: [],
@@ -24,7 +30,7 @@ export const DEFAULT_AGENT_PROMPTS: AgentPrompt = {
 /** Configuration interface defining agent behavior and generation parameters. */
 export interface AgentSetting {
   /** Core settings */
-  agentType: 'CoT' | 'direct';
+  agentType: AgentType;
   documentTag: string;
   temperature: number | null;
   isRewrite: boolean;
@@ -46,9 +52,12 @@ export interface AgentSetting {
  * @throws Error if agentType is invalid, temperature is out of range, or documentTag is empty
  */
 export function validateAgentSetting(settings: AgentSetting): void {
-  if (settings.agentType !== 'CoT' && settings.agentType !== 'direct') {
+  if (
+    settings.agentType !== AgentType.CoT &&
+    settings.agentType !== AgentType.Direct
+  ) {
     throw new Error(
-      `Invalid agentType: ${settings.agentType}. Must be 'CoT' or 'direct'`,
+      `Invalid agentType: ${settings.agentType}. Must be '${AgentType.CoT}' or '${AgentType.Direct}'`,
     );
   }
 
@@ -79,7 +88,7 @@ export function hasEndTag(
     settings.documentTag && `</${settings.documentTag}>`,
   ];
 
-  if (settings.agentType === 'CoT') {
+  if (settings.agentType === AgentType.CoT) {
     endTagLists.push('\\end{document}');
   }
   return endTagLists.some((tag) => tag && fileContent.includes(tag));

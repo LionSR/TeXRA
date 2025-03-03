@@ -97,16 +97,11 @@ function handleStateRestoration(state) {
           const fileItem = document.createElement('div');
           fileItem.className = 'file-item';
           fileItem.dataset.path = file;
-          fileItem.innerHTML = `
-            <span class="file-path">${file}</span>
-            <button class="remove-file" title="Remove">
-              <i class="codicon codicon-close"></i>
-            </button>
-          `;
+          fileItem.innerHTML = `${file} <span class="remove-button">-</span>`;
           multipleFiles.appendChild(fileItem);
 
           // Add event listeners for the remove button
-          const removeButton = fileItem.querySelector('.remove-file');
+          const removeButton = fileItem.querySelector('.remove-button');
           if (removeButton) {
             removeButton.addEventListener('click', (e) => {
               e.stopPropagation();

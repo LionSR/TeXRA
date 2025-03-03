@@ -11,84 +11,19 @@
     <link rel="stylesheet" href="${styleUri}" />
     <link rel="stylesheet" href="${codiconUri}" />
     <style>
-      /* Log Group Styles */
-      .log-group-header {
-        padding: 4px 8px;
-        margin: 4px 0;
-        border-radius: 4px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        background-color: var(--vscode-editor-background);
-        border-left: 4px solid var(--vscode-activityBarBadge-background);
-      }
-
-      .log-group-header.running {
-        border-left-color: var(--vscode-statusBarItem-warningBackground);
-      }
-
-      .log-group-header.error {
-        border-left-color: var(--vscode-errorForeground);
-      }
-
-      .log-group-header.stopped {
-        border-left-color: var(--vscode-testing-iconPassed);
-      }
-
-      .log-group-content {
-        margin-left: 20px;
-        padding-left: 12px;
-        border-left: 1px solid var(--vscode-editorGroupHeader-tabsBorder);
-      }
-
-      .group-toggle {
-        margin-right: 8px;
-      }
-
-      .group-status-icon {
-        margin-right: 8px;
-      }
-
-      .group-title {
-        font-weight: bold;
-        flex-grow: 1;
-      }
-
-      .group-time {
-        font-size: 12px;
-        opacity: 0.7;
-        margin-left: 12px;
-      }
-
-      .group-start-time,
-      .group-end-time {
-        margin-right: 8px;
-      }
-
-      /* Add animation for running indicator */
-      @keyframes spin {
-        from {
-          transform: rotate(0deg);
-        }
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      .spin {
-        animation: spin 2s linear infinite;
-      }
-
-      /* Make sure log lines in groups are associated */
-      .log-line[data-group-id] {
-        border-left: 2px solid transparent;
-      }
+      /* Removed duplicate log group styles - these are already defined in groups.css */
     </style>
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
           "split.js": "${splitJsUri}",
-          "marked": "https://esm.sh/marked@9.1.5"
+          "marked": "https://esm.sh/marked@9.1.5",
+          "./modules/vscodeApi.js": "${vscodeApiUri}",
+          "./modules/stateManager.js": "${stateManagerUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "./modules/domHandlers.js": "${domHandlersUri}",
+          "./modules/constants.js": "${constantsUri}",
+          "./modules/logFormatters.js": "${logFormattersUri}"
         }
       }
     </script>
@@ -130,7 +65,7 @@
               disabled
               title="Restore this configuration to the main view"
             >
-              <i class="codicon codicon-replay"></i>
+              <i class="codicon codicon-reply"></i>
             </button>
             <button
               class="action-button pack-button"
