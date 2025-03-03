@@ -220,6 +220,17 @@ export function setupMessageHandlers() {
           updateEditedFileSelect(restoredBaseFileDiv.value);
         }
         break;
+      case 'instructionTextPolished':
+        const instructionInput = safeGetElementById('instructionInput');
+        if (instructionInput && message.text) {
+          instructionInput.value = message.text;
+          vscode.postMessage({
+            command: 'showInformationMessage',
+            text: 'Instruction text has been polished!',
+          });
+          saveState();
+        }
+        break;
       // File selection
       case 'setInputFile':
       case 'setReferenceFile':
