@@ -165,51 +165,88 @@ export function extractContentFromTagMultiple(
 }
 
 /**
+ * Formats and logs special content (scratchpad or thinking) with standardized formatting
+ *
+ * @param content The raw content to format
+ * @param logger The logger instance to use
+ * @param contentType The type of content (e.g., 'Scratchpad', 'Thinking')
+ * @param groupId Optional group ID for logging
+ */
+export function formatAndLogContent(
+  content: string,
+  logger: AgentLogger,
+  contentType: string = 'Scratchpad',
+  groupId?: string,
+): void {
+  if (!content) return;
+
+  // Log original content for debugging
+  console.log(
+    `Original ${contentType.toLowerCase()} content before formatting:`,
+    content,
+  );
+
+  // Format the content for improved rendering
+  let formattedContent = content.trim();
+
+  // Replace LaTeX notation with markdown-friendly equivalents
+  formattedContent = formattedContent
+    .replace(/\\section\{([^}]+)\}/g, '## $1')
+    .replace(/\\subsection\{([^}]+)\}/g, '### $1')
+    .replace(/\\begin\{itemize\}/g, '')
+    .replace(/\\end\{itemize\}/g, '')
+    // Also handle enumerate environments like itemize
+    .replace(/\\begin\{enumerate\}/g, '')
+    .replace(/\\end\{enumerate\}/g, '')
+    .replace(/\\item\s+/g, '- ')
+    .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
+    .replace(/\\textit\{([^}]+)\}/g, '*$1*')
+    .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+    // Convert XML tags to markdown headings - general approach
+    .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
+    // Convert opening tags without closing tags to markdown headings
+    .replace(/<(\w+)>/g, '## $1\n\n')
+    .replace(/<\/\w+>/g, '')
+    // Escape LaTeX references but preserve the content
+    .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
+
+  // Log the formatted content
+  logger.info(`${contentType} content:\n${formattedContent}`, groupId);
+}
+
+/**
  * Extracts scratchpad content from the given output and logs it after formatting.
  * Converts LaTeX and XML notation to more readable markdown format.
  *
  * @param outputContent The content to extract scratchpad from
  * @param logger The logger instance to use for logging the formatted content
  * @param thinkingTag The XML tag name used for the scratchpad content
+ * @param groupId Optional group ID for logging
  */
 export function extractAndLogThinking(
   outputContent: string,
   logger: AgentLogger,
   thinkingTag: string = 'scratchpad',
+  groupId?: string,
 ): void {
-  const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
-  if (scratchpadContent) {
-    // Log original content for debugging
-    console.log(
-      'Original scratchpad content before formatting:',
-      scratchpadContent,
-    );
-
-    // Format the content for improved rendering
-    let formattedContent = scratchpadContent.trim();
-
-    // Replace LaTeX notation with markdown-friendly equivalents
-    formattedContent = formattedContent
-      .replace(/\\section\{([^}]+)\}/g, '## $1')
-      .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-      .replace(/\\begin\{itemize\}/g, '')
-      .replace(/\\end\{itemize\}/g, '')
-      // Also handle enumerate environments like itemize
-      .replace(/\\begin\{enumerate\}/g, '')
-      .replace(/\\end\{enumerate\}/g, '')
-      .replace(/\\item\s+/g, '- ')
-      .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-      .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-      .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-      // Convert XML tags to markdown headings - general approach
-      .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
-      // Convert opening tags without closing tags to markdown headings
-      .replace(/<(\w+)>/g, '## $1\n\n')
-      .replace(/<\/\w+>/g, '')
-      // Escape LaTeX references but preserve the content
-      .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
-
-    // Log the formatted content
-    logger.info(`Scratchpad content:\n${formattedContent}`);
+  const extractedContent = extractTextFromTag(outputContent, thinkingTag);
+  if (extractedContent) {
+    formatAndLogContent(extractedContent, logger, 'Scratchpad', groupId);
   }
+}
+
+/**
+ * Formats and logs model thinking content.
+ * Uses the same formatting logic as the scratchpad content.
+ *
+ * @param thinkingContent The thinking content to format and log
+ * @param logger The logger instance to use for logging
+ * @param groupId Optional group ID for logging
+ */
+export function formatAndLogThinking(
+  thinkingContent: string,
+  logger: AgentLogger,
+  groupId?: string,
+): void {
+  formatAndLogContent(thinkingContent, logger, 'Thinking', groupId);
 }
