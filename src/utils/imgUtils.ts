@@ -14,9 +14,9 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import {
-  getWorkspacePath,
   readFileBytesSync,
   fileExists,
+  getFullPathFromWorkspace,
 } from './workspaceFileUtils';
 
 const execAsync = promisify(exec);
@@ -103,12 +103,6 @@ export async function getBase64EncodedImage(
  */
 export async function countPdfPages(pdfPath: string): Promise<number> {
   try {
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      logger.error(CHANNEL, 'No workspace path found');
-      return 1;
-    }
-
     // Check if file exists
     if (!(await fileExists(pdfPath))) {
       logger.error(CHANNEL, `PDF file not found: ${pdfPath}`);
@@ -169,17 +163,12 @@ export async function singlePagePdf2Png(
       );
     }
 
-    const workspacePath = getWorkspacePath();
-    if (!workspacePath) {
-      throw new Error('No workspace path found');
-    }
-
     // Verify file exists
     if (!(await fileExists(pdfPath))) {
       throw new Error(`PDF file not found: ${pdfPath}`);
     }
 
-    const fullPath = path.join(workspacePath, pdfPath);
+    const fullPath = getFullPathFromWorkspace(pdfPath);
     logger.debug(CHANNEL, `Full path to PDF: ${fullPath}`);
 
     // Ensure the temporary directory exists

@@ -172,13 +172,19 @@ export function extractContentFromTagMultiple(
  * @param logger The logger instance to use for logging the formatted content
  * @param thinkingTag The XML tag name used for the scratchpad content
  */
-export function extractAndLogScratchpad(
+export function extractAndLogThinking(
   outputContent: string,
   logger: AgentLogger,
   thinkingTag: string = 'scratchpad',
 ): void {
   const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
   if (scratchpadContent) {
+    // Log original content for debugging
+    console.log(
+      'Original scratchpad content before formatting:',
+      scratchpadContent,
+    );
+
     // Format the content for improved rendering
     let formattedContent = scratchpadContent.trim();
 
