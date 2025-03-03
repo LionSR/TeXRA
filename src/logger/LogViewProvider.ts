@@ -330,9 +330,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     groupId?: string,
   ) {
     // If message contains scratchpad content, log it for debugging
-    if (message.includes('data-is-scratchpad="true"')) {
-      console.log('Scratchpad message before rendering:', message);
-    }
+    // if (message.includes('data-is-scratchpad="true"')) {
+    //   console.log('Scratchpad message before rendering:', message);
+    // }
 
     // Skip if this stream should only be written to output channel
     if (OUTPUT_CHANNEL_ONLY.has(stream)) {

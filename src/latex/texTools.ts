@@ -13,6 +13,8 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { executeCommand } from '../utils/execUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
+import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -125,6 +127,57 @@ export async function compileLatex2Pdf(
 ): Promise<boolean> {
   try {
     const outputDirectory = path.dirname(latexFile);
+
+    // Get TikZ input directory from configuration
+    const tikzInputDirectory = getConfig<string>(
+      'latex.tikzInputDirectory',
+      '',
+    );
+
+    // Check if workspace path should be included
+    const includeWorkspace = getConfig<boolean>(
+      'latex.includeWorkspaceInTexinputs',
+      true,
+    );
+
+    // Create environment variables with TEXINPUTS if TikZ input directory is configured
+    const env: Record<string, string> = {};
+
+    // Start with the current directory
+    let texInputs = '.:';
+
+    // Add the workspace path if configured to do so
+    if (includeWorkspace) {
+      const workspacePath = getWorkspacePath();
+      if (workspacePath) {
+        texInputs += `${workspacePath}:`;
+        logger.debug(
+          channel,
+          `Including workspace path in TEXINPUTS: ${workspacePath}`,
+        );
+      }
+    }
+
+    // Add TikZ input directory if configured
+    if (tikzInputDirectory && tikzInputDirectory.trim() !== '') {
+      texInputs += `${tikzInputDirectory}:`;
+      logger.debug(
+        channel,
+        `Including TikZ input directory in TEXINPUTS: ${tikzInputDirectory}`,
+      );
+    }
+
+    // Append the existing TEXINPUTS if any
+    if (process.env.TEXINPUTS) {
+      texInputs += process.env.TEXINPUTS;
+    }
+
+    // Only set TEXINPUTS if we have something to set
+    if (texInputs !== '.:') {
+      env.TEXINPUTS = texInputs;
+      logger.debug(channel, `Setting TEXINPUTS to: ${texInputs}`);
+    }
+
     const command = [
       'pdflatex',
       '-interaction=nonstopmode',
@@ -132,7 +185,7 @@ export async function compileLatex2Pdf(
       `"${latexFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel });
+    const result = await executeCommand(command, { channel, env });
     if (result.success) {
       logger.info(channel, `Successfully compiled ${latexFile}`);
       return true;
