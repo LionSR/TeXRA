@@ -165,15 +165,20 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Adds user message with reflection content to existing messages. */
-  createReflectionMessages(
+  async createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
-  ): any[] {
+  ): Promise<any[]> {
     const content: any[] = [];
 
-    if (figureFiles) {
-      content.push(...this.createImageContent(figureFiles));
+    if (figureFiles && figureFiles.length > 0) {
+      try {
+        const imageContent = await this.createImageMessage(figureFiles);
+        content.push(...imageContent);
+      } catch (err) {
+        this.logger.error(`Error processing image files: ${err}`);
+      }
     }
     content.push({ type: 'text', text: userMessage });
     const role = this.config.capabilities.supportsIntermDevMsgs
