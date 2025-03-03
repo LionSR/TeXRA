@@ -179,6 +179,12 @@ export function extractAndLogScratchpad(
 ): void {
   const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
   if (scratchpadContent) {
+    // Log original content for debugging
+    console.log(
+      'Original scratchpad content before formatting:',
+      scratchpadContent,
+    );
+
     // Format the content for improved rendering
     let formattedContent = scratchpadContent.trim();
 
