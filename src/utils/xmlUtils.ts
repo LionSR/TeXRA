@@ -172,7 +172,7 @@ export function extractContentFromTagMultiple(
  * @param logger The logger instance to use for logging the formatted content
  * @param thinkingTag The XML tag name used for the scratchpad content
  */
-export function extractAndLogScratchpad(
+export function extractAndLogThinking(
   outputContent: string,
   logger: AgentLogger,
   thinkingTag: string = 'scratchpad',
