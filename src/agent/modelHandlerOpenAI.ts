@@ -30,7 +30,6 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
-import { stream } from 'winston';
 
 const K_SLICE = 200;
 
@@ -224,7 +223,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Extract base response
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
-    let newResponse = choice.message.content.trim();
+    let newResponse = '';
+    if (choice.message.content) {
+      newResponse = choice.message.content.trim();
+    } else {
+      newResponse = '';
+      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error('content is empty');
+    }
 
     // OpenAI doesn't have thinking blocks like Anthropic, so we return null
     // However deepseek/openrouter models might have thinking blocks
