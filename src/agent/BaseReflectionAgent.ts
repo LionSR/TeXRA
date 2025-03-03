@@ -37,7 +37,7 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { extractTextFromTag, extractAndLogThinking } from '../utils/xmlUtils';
+import { extractAndLogThinking, formatAndLogThinking } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -537,12 +537,18 @@ export abstract class BaseReflectionAgent {
             responseCycleGroupId,
           );
           if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
-            // Log first 200 chars of thinking content if available
+            // Log preview of thinking content
             this.logger.debug(
               `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
               responseCycleGroupId,
             );
-            // this should be more than a preview; do like scratchpad;
+
+            // Format and log the full thinking content
+            formatAndLogThinking(
+              thinkingBlock.thinking,
+              this.logger,
+              responseCycleGroupId,
+            );
           } else if (
             thinkingBlock.type === 'redacted_thinking' &&
             thinkingBlock.data
