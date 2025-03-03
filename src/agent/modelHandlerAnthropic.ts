@@ -17,7 +17,7 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
-import { extractAndLogScratchpad } from '../utils/xmlUtils';
+import { extractAndLogThinking } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -369,7 +369,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ).trim();
 
     // Extract and log any existing scratchpad content
-    extractAndLogScratchpad(fileContent, this.logger);
+    extractAndLogThinking(fileContent, this.logger);
 
     await writeFile(outputFile, fileContent);
 
