@@ -99,6 +99,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
+      if (responseTokenCount.input_tokens > this.config.contextWindow) {
+        this.logger.error(
+          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
+        );
+        throw new Error(
+          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
+        );
+      }
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
