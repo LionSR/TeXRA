@@ -49,6 +49,9 @@ export function processScratchpadContent(message) {
           // Process content as markdown
           let parsedMarkdown = marked.parse(content);
 
+          // Log the generated HTML for debugging
+          console.log('Generated markdown HTML:', parsedMarkdown);
+
           // Post-process to restore and style LaTeX references
           parsedMarkdown = parsedMarkdown.replace(
             /@@LATEX-REF:([^@]+)@@/g,
@@ -57,6 +60,12 @@ export function processScratchpadContent(message) {
 
           // Fix spacing issues that might occur with consecutive paragraph elements
           parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
+
+          // Remove extra whitespace and newlines between HTML tags
+          parsedMarkdown = parsedMarkdown.replace(/>\s+</g, '><');
+
+          // Remove extra whitespace at start and end of content
+          parsedMarkdown = parsedMarkdown.trim();
 
           // Create enhanced scratchpad element with better formatting
           return message.replace(

@@ -37,7 +37,7 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { extractTextFromTag, extractAndLogScratchpad } from '../utils/xmlUtils';
+import { extractTextFromTag, extractAndLogThinking } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -521,7 +521,7 @@ export abstract class BaseReflectionAgent {
             this.agentSetting.endTag,
           );
 
-        this.extractAndLogScratchpad(newResponse);
+        this.extractAndLogThinking(newResponse);
 
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
@@ -1286,10 +1286,10 @@ export abstract class BaseReflectionAgent {
   }
 
   /** Extracts and logs scratchpad content from output. */
-  protected extractAndLogScratchpad(
+  protected extractAndLogThinking(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
   ): void {
-    extractAndLogScratchpad(outputContent, this.logger, thinkingTag);
+    extractAndLogThinking(outputContent, this.logger, thinkingTag);
   }
 }
