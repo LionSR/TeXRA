@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.21.2",
+  "version": "0.21.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -332,6 +332,26 @@
             "description": "Path to latexindent configuration file",
             "editPresentation": "singlelineText",
             "order": 1
+          },
+          "coauthor.latex.tikzInputDirectory": {
+            "type": "string",
+            "default": "",
+            "description": "Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.",
+            "editPresentation": "singlelineText",
+            "order": 2
+          },
+          "coauthor.latex.tikzTemplate": {
+            "type": "string",
+            "default": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}",
+            "description": "Template used for generating standalone documents when extracting and compiling TikZ figures",
+            "editPresentation": "multilineText",
+            "order": 3
+          },
+          "coauthor.latex.includeWorkspaceInTexinputs": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
+            "order": 4
           }
         }
       },

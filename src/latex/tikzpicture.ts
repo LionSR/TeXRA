@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as nunjucks from 'nunjucks';
+import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -15,6 +16,7 @@ import {
   createDirectory,
 } from '../utils/workspaceFileUtils';
 import { renderPrompt } from '../utils/promptUtils';
+import { getConfig } from '../frontend-utils/commonUtils';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
@@ -25,9 +27,14 @@ logger.initialize(CHANNEL);
 // Configure nunjucks
 nunjucks.configure({ autoescape: false });
 
-// Add the TikZ template
-// maybe in the future move to a separate file explorer.path
-const TIKZ_TEMPLATE = `
+/**
+ * Get the TikZ template from configuration or use default
+ * @returns The TikZ template string
+ */
+function getTikzTemplate(): string {
+  return getConfig<string>(
+    'latex.tikzTemplate',
+    `
 \\documentclass[tikz,border=10pt]{standalone}
 \\usepackage{tikz}
 \\usepackage{pgfplots}
@@ -39,7 +46,9 @@ const TIKZ_TEMPLATE = `
 \\begin{document}
 {{ tikzpicture }}
 \\end{document}
-`;
+`,
+  );
+}
 
 /**
  * Extract TikZ pictures with their labels from a LaTeX file
@@ -105,7 +114,7 @@ export async function createStandaloneLatexWithLabels(
 ): Promise<string> {
   try {
     // Use renderPrompt instead of nunjucks directly
-    const standaloneContent = await renderPrompt(TIKZ_TEMPLATE, {
+    const standaloneContent = await renderPrompt(getTikzTemplate(), {
       tikzpicture: tikzpictures,
     });
 
