@@ -2,8 +2,6 @@
 .vscode-test/**
 out/**
 node_modules/**
-!node_modules/@vscode/codicons/dist/**
-!node_modules/split.js/**
 src/**
 .gitignore
 .yarnrc
@@ -16,13 +14,20 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 .DS_Store
 
+!node_modules/@vscode/codicons/dist/**
+!node_modules/split.js/**
+
 !resources/**
 !src/webview/*.js
 !src/webview/*.ts
 !src/webview/*.html
 !src/webview/*.css
+!src/webview/styles/*.css
 !src/webview/modules/*.js
 !src/common/styles/*.css
+
+!src/logger/logView/modules/*.js
+!src/logger/logView/styles/*.css
 
 !src/logger/logView/*.js
 !src/logger/logView/*.html

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+import { objectToTaskState } from '../utils/configConversion';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
@@ -33,28 +34,19 @@ async function restoreState(config: any) {
     // Use the specific view ID instead of the extension to avoid sidebar switching issues
     await vscode.commands.executeCommand('coauthor.mainView.focus');
 
-    // Create a complete state object for the main webview
+    // Create a complete state object from the task state using utility function
+    const taskState = objectToTaskState(config);
     const stateToRestore = {
-      agent: config.agent,
-      model: config.model,
-      instruction: config.instruction,
-      inputFile: config.inputFile,
-      referenceFile: config.referenceFile,
-      auxiliaryFile: config.auxiliaryFile,
-      figureFile: config.figureFile,
-      outputNameOverride: config.outputNameOverride,
-      inputFiles: config.inputFiles || [],
-      referenceFiles: config.referenceFiles || [],
-      auxiliaryFiles: config.auxiliaryFiles || [],
-      figureFiles: config.figureFiles || [],
-      outputFiles: config.outputFiles || [],
-      toolConfig: config.toolConfig || {},
-      // Add visibility flags for proper toggling
-      multipleInputFilesVisible: config.multipleInputFilesVisible,
-      multipleReferenceFilesVisible: config.multipleReferenceFilesVisible,
-      multipleAuxiliaryFilesVisible: config.multipleAuxiliaryFilesVisible,
-      multipleFigureFilesVisible: config.multipleFigureFilesVisible,
-      multipleOutputFilesVisible: config.multipleOutputFilesVisible,
+      ...taskState,
+      // Ensure we keep toolConfig as a proper object for the UI
+      toolConfig: {
+        autoExtractFigure: taskState.autoExtractFigure,
+        autoExtractTikzFigure: taskState.autoExtractTikzFigure,
+        attachTeXCount: taskState.attachTeXCount,
+        usePrefillFromInput: taskState.usePrefillFromInput,
+        printInputPrompt: taskState.printInputPrompt,
+        reflect: taskState.reflect,
+      },
     };
 
     // Try to get the webview directly using our safe command

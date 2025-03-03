@@ -225,7 +225,7 @@ export function setupUIHandlers() {
       'autoExtractTikzFigure',
     );
 
-    // tool use options
+    // tool config options
     const reflect = safeGetElementChecked('reflect');
     const attachTeXCount = safeGetElementChecked('attachTeXCount');
     const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
@@ -250,7 +250,7 @@ export function setupUIHandlers() {
       // auto extract options
       autoExtractFigure: autoExtractFigure,
       autoExtractTikzFigure: autoExtractTikzFigure,
-      // tool use options
+      // tool config options
       reflect: reflect,
       attachTeXCount: attachTeXCount,
       usePrefillFromInput: usePrefillFromInput,

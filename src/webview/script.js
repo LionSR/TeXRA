@@ -89,33 +89,33 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Tool Use dropdown toggle
-  const toggleToolUse = document.getElementById('toggleToolUse');
-  const toolUseOptions = document.getElementById('toolUseOptions');
+  // Tool Config dropdown toggle
+  const toggleToolConfig = document.getElementById('toggleToolConfig');
+  const toolConfigOptions = document.getElementById('toolConfigOptions');
 
-  if (toggleToolUse && toolUseOptions) {
+  if (toggleToolConfig && toolConfigOptions) {
     // Initial state
-    updateToolUseToggleState();
+    updateToolConfigToggleState();
 
-    toggleToolUse.addEventListener('click', (e) => {
+    toggleToolConfig.addEventListener('click', (e) => {
       e.stopPropagation();
-      toolUseOptions.style.display =
-        toolUseOptions.style.display === 'none' ? 'block' : 'none';
+      toolConfigOptions.style.display =
+        toolConfigOptions.style.display === 'none' ? 'block' : 'none';
     });
   }
 
   // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
-    const toolUseOptions = document.getElementById('toolUseOptions');
+    const toolConfigOptions = document.getElementById('toolConfigOptions');
     const autoExtractOptions = document.getElementById('autoExtractOptions');
-    const toggleToolUse = document.getElementById('toggleToolUse');
+    const toggleToolConfig = document.getElementById('toggleToolConfig');
     const toggleAutoExtract = document.getElementById('toggleAutoExtract');
 
     if (
-      !toggleToolUse?.contains(e.target) &&
-      !toolUseOptions?.contains(e.target)
+      !toggleToolConfig?.contains(e.target) &&
+      !toolConfigOptions?.contains(e.target)
     ) {
-      toolUseOptions.style.display = 'none';
+      toolConfigOptions.style.display = 'none';
     }
     if (
       !toggleAutoExtract?.contains(e.target) &&
@@ -126,23 +126,23 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Update checkbox states in toggle button
-  function updateToolUseToggleState() {
-    const toggleToolUse = document.getElementById('toggleToolUse');
+  function updateToolConfigToggleState() {
+    const toggleToolConfig = document.getElementById('toggleToolConfig');
 
     const checkedCount = CHECK_BOXES_TOOL_USE.filter(
       (id) => document.getElementById(id)?.checked,
     ).length;
 
-    if (toggleToolUse) {
-      toggleToolUse.innerHTML = `Tool Use ${checkedCount > 0 ? '●' : '○'}<i class="codicon codicon-chevron-down"></i>`;
+    if (toggleToolConfig) {
+      toggleToolConfig.innerHTML = `Tool Config ${checkedCount > 0 ? '●' : '○'}<i class="codicon codicon-chevron-down"></i>`;
     }
   }
 
-  // Add change listeners to all tool use checkboxes
+  // Add change listeners to all tool config checkboxes
   CHECK_BOXES_TOOL_USE.forEach((id) => {
     const checkbox = document.getElementById(id);
     if (checkbox) {
-      checkbox.addEventListener('change', updateToolUseToggleState);
+      checkbox.addEventListener('change', updateToolConfigToggleState);
     }
   });
 });
