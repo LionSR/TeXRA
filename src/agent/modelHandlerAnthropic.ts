@@ -159,17 +159,22 @@ export class ModelHandlerAnthropic extends ModelHandler {
   }
 
   /** Creates a reflection message array for Anthropic models, managing cache control and image content. */
-  createReflectionMessages(
+  async createReflectionMessages(
     messages: any[],
     userMessage: string,
     figureFiles?: string[],
-  ): any[] {
+  ): Promise<any[]> {
     // Create content list
     const content: any[] = [];
 
     // Add images if provided
-    if (figureFiles) {
-      content.push(...this.createImageContent(figureFiles));
+    if (figureFiles && figureFiles.length > 0) {
+      try {
+        const imageContent = await this.createImageMessage(figureFiles);
+        content.push(...imageContent);
+      } catch (err) {
+        this.logger.error(`Error processing image files: ${err}`);
+      }
     }
 
     // Add message with optional caching
@@ -196,7 +201,24 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createImageContent(imageContents: any[]): any[] {
+    this.logger.debug(
+      `Creating image content for ${imageContents.length} images`,
+    );
     return imageContents.flatMap((image) => {
+      // Log minimal debug info, focused on media_type
+      // this.logger.debug(
+      //   `Image content: ${JSON.stringify({
+      //     media_type: image.media_type || 'MISSING',
+      //   })}`,
+      // );
+
+      // Always ensure media_type exists
+      if (!image.media_type) {
+        // Default to image/png since PDFs from TikZ are converted to PNG
+        image.media_type = 'image/png';
+        this.logger.debug(`Applied default media_type: image/png`);
+      }
+
       const isPdf =
         this.capabilities.supportsNativePdf &&
         image.media_type === 'application/pdf';
