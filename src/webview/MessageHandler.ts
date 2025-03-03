@@ -529,11 +529,7 @@ export class WebviewMessageHandler {
 
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
-      .filter(
-        (doc) =>
-          doc.uri.scheme === 'file' &&
-          (doc.languageId === 'latex' || doc.fileName.endsWith('.tex')),
-      )
+      .filter((doc) => doc.uri.scheme === 'file')
       .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
