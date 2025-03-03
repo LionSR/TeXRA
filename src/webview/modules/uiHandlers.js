@@ -181,9 +181,90 @@ export function setupUIHandlers() {
   addEventListenerSafely('magicPolishButton', 'click', function () {
     const instructionInput = safeGetElementById('instructionInput');
     if (instructionInput && instructionInput.value.trim()) {
+      // Get agent and model information
+      const agent = safeGetElementValue('agent');
+      const model = safeGetElementValue('model');
+
+      // Get single files
+      const inputFile = safeGetElementValue('inputFile');
+      const referenceFile = safeGetElementValue('referenceFile');
+      const auxiliaryFile = safeGetElementValue('auxiliaryFile');
+      const figureFile = safeGetElementValue('figureFile');
+
+      // Check if multiple files containers are visible and get the files
+      const isMultipleInputFilesActive =
+        safeGetElementById('multipleInputFilesContainer')?.style.display ===
+        'block';
+      const isMultipleReferenceFilesActive =
+        safeGetElementById('multipleReferenceFilesContainer')?.style.display ===
+        'block';
+      const isMultipleAuxiliaryFilesActive =
+        safeGetElementById('multipleAuxiliaryFilesContainer')?.style.display ===
+        'block';
+      const isMultipleFigureFilesActive =
+        safeGetElementById('multipleFigureFilesContainer')?.style.display ===
+        'block';
+      const isMultipleOutputFilesActive =
+        safeGetElementById('multipleOutputFilesContainer')?.style.display ===
+        'block';
+
+      // Get multiple files if containers are visible
+      const inputFiles = isMultipleInputFilesActive
+        ? getSelectedFiles(safeGetElementById('multipleInputFiles')).filter(
+            (file) => file !== inputFile,
+          )
+        : [];
+      const referenceFiles = isMultipleReferenceFilesActive
+        ? getSelectedFiles(safeGetElementById('multipleReferenceFiles')).filter(
+            (file) => file !== referenceFile,
+          )
+        : [];
+      const auxiliaryFiles = isMultipleAuxiliaryFilesActive
+        ? getSelectedFiles(safeGetElementById('multipleAuxiliaryFiles')).filter(
+            (file) => file !== auxiliaryFile,
+          )
+        : [];
+      const figureFiles = isMultipleFigureFilesActive
+        ? getSelectedFiles(safeGetElementById('multipleFigureFiles')).filter(
+            (file) => file !== figureFile,
+          )
+        : [];
+      const outputFiles = isMultipleOutputFilesActive
+        ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
+        : [];
+
+      // Get output name override if visible
+      const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
+      const outputNameOverride =
+        outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
+          ? outputNameOverrideDiv.value.trim()
+          : null;
+
       vscode.postMessage({
         command: 'polishInstructionText',
         text: instructionInput.value,
+        // Context information
+        agent: agent,
+        model: model,
+        // Single files
+        inputFile: inputFile,
+        referenceFile: referenceFile,
+        auxiliaryFile: auxiliaryFile,
+        figureFile: figureFile,
+        // Toggle status
+        multipleInputFilesActive: isMultipleInputFilesActive,
+        multipleReferenceFilesActive: isMultipleReferenceFilesActive,
+        multipleAuxiliaryFilesActive: isMultipleAuxiliaryFilesActive,
+        multipleFigureFilesActive: isMultipleFigureFilesActive,
+        multipleOutputFilesActive: isMultipleOutputFilesActive,
+        // Multiple files
+        inputFiles: inputFiles,
+        referenceFiles: referenceFiles,
+        auxiliaryFiles: auxiliaryFiles,
+        figureFiles: figureFiles,
+        outputFiles: outputFiles,
+        // Output override
+        outputNameOverride: outputNameOverride,
       });
     }
   });

@@ -19,7 +19,7 @@ import {
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
-import { polishTextWithAI } from '../utils/textEnhancementUtils';
+import { polishTextWithAI, FileContext } from '../utils/textEnhancementUtils';
 
 // Local imports - agent
 import { ToolConfig } from '../agent/ToolConfig';
@@ -596,6 +596,74 @@ export class WebviewMessageHandler {
     webviewView: vscode.WebviewView,
   ) {
     try {
+      // Initialize file context with agent information
+      const fileContext: FileContext = {
+        agent: message.agent || undefined,
+      };
+
+      // Helper to check if a string value is valid and not empty/none
+      const isValidFile = (file?: string): boolean =>
+        !!file && file !== 'None' && file !== '';
+
+      // Helper to add a single file to context if valid
+      const addSingleFileIfValid = (
+        contextKey: keyof FileContext,
+        messageKey: string,
+      ) => {
+        if (isValidFile(message[messageKey])) {
+          (fileContext as any)[contextKey] = message[messageKey];
+        }
+      };
+
+      // Helper to add multiple files to context if valid and toggle is active
+      const addMultipleFilesIfValid = (
+        contextKey: keyof FileContext,
+        messageKey: string,
+        toggleKey: string,
+      ) => {
+        if (
+          message[toggleKey] &&
+          message[messageKey] &&
+          Array.isArray(message[messageKey]) &&
+          message[messageKey].length > 0
+        ) {
+          (fileContext as any)[contextKey] = message[messageKey];
+        }
+      };
+
+      // Add single files
+      addSingleFileIfValid('inputFile', 'inputFile');
+      addSingleFileIfValid('referenceFile', 'referenceFile');
+      addSingleFileIfValid('auxiliaryFile', 'auxiliaryFile');
+      addSingleFileIfValid('figureFile', 'figureFile');
+
+      // Add multiple files if their toggle is active
+      addMultipleFilesIfValid(
+        'inputFiles',
+        'inputFiles',
+        'multipleInputFilesActive',
+      );
+      addMultipleFilesIfValid(
+        'referenceFiles',
+        'referenceFiles',
+        'multipleReferenceFilesActive',
+      );
+      addMultipleFilesIfValid(
+        'auxiliaryFiles',
+        'auxiliaryFiles',
+        'multipleAuxiliaryFilesActive',
+      );
+      addMultipleFilesIfValid(
+        'figureFiles',
+        'figureFiles',
+        'multipleFigureFilesActive',
+      );
+      addMultipleFilesIfValid(
+        'outputFiles',
+        'outputFiles',
+        'multipleOutputFilesActive',
+      );
+
       // Show progress notification with incremental updates
       vscode.window.withProgress(
         {
@@ -606,7 +674,7 @@ export class WebviewMessageHandler {
         async (progress) => {
           try {
             // Initial progress update
-            progress.report({ message: 'Preparing text...' });
+            progress.report({ message: 'Preparing text and context...' });
 
             // Short delay to show first progress step
             await new Promise((resolve) => setTimeout(resolve, 300));
@@ -617,8 +685,8 @@ export class WebviewMessageHandler {
               increment: 30,
             });
 
-            // Call the utility function to polish the text
-            const result = await polishTextWithAI(message.text);
+            // Call the utility function to polish the text with file context
+            const result = await polishTextWithAI(message.text, fileContext);
 
             // Final progress update
             progress.report({ message: 'Applying changes...', increment: 60 });
