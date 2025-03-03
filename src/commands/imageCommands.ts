@@ -9,7 +9,7 @@ import { getRelativePath } from '../utils/workspaceFileUtils';
 import {
   countPdfPages,
   getBase64EncodedImage,
-  processPdfInput,
+  processPdf2Png,
   singlePagePdf2Png,
 } from '../utils/imgUtils';
 
@@ -160,7 +160,7 @@ async function handleConvertPdfToImages(): Promise<
       },
     });
 
-    const result = await processPdfInput(
+    const result = await processPdf2Png(
       selectedFile,
       maxPages ? parseInt(maxPages) : undefined,
       parseInt(quality),
