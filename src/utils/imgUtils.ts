@@ -278,7 +278,7 @@ export async function multiPagePdf2Png(
  * @param maxSize Maximum size of the output images
  * @returns Promise<string | string[] | null> Base64 encoded PNG image(s) or null if error
  */
-export async function processPdfInput(
+export async function processPdf2Png(
   pdfPath: string,
   maxPages?: number,
   quality?: number,
