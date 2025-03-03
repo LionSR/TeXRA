@@ -1,0 +1,89 @@
+/**
+ * Container styles for Webview
+ * Boxes, panels, and content containers
+ */
+
+/* File selection group */
+.file-selection-group {
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+  overflow: hidden;
+}
+
+/* LaTeX diffs section */
+.latexdiffs-section {
+  margin-top: auto;
+  padding-top: var(--spacing-large);
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  padding: var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+}
+
+/* Ensure all button sizes are consistent */
+.latexdiffs-section .icon-button,
+.file-select-actions .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+/* Container for multiple files */
+.multiple-files-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: var(--spacing-small);
+  padding: 0;
+}
+
+.multiple-files-content {
+  width: 100%;
+  padding: 0;
+}
+
+.multiple-files-header {
+  margin-bottom: var(--spacing-small);
+}
+
+.multiple-files-list {
+  background-color: var(--dropdown-background);
+  border: 1px solid var(--dropdown-border);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small);
+  font-size: var(--font-size);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.multiple-files-list div {
+  padding: 2px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.output-filename-override {
+  border-top: 1px solid var(--dropdown-border);
+  padding-top: 8px;
+}
+
+.remove-button {
+  color: #ff4444;
+  cursor: pointer;
+}
+
+/* Execute container */
+.execute-column {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: var(--spacing-medium);
+}
+
+.execute-row {
+  display: none;
+}

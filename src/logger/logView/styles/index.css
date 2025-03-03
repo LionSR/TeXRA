@@ -1,0 +1,14 @@
+/**
+ * LogView CSS main file
+ * Imports all modular CSS files
+ */
+
+/* Import base styles */
+@import './base.css';
+
+/* Import component styles */
+@import './tabs.css';
+@import './buttons.css';
+@import './logs.css';
+@import './groups.css';
+@import './scratchpad.css';

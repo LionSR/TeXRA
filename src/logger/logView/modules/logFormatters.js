@@ -1,0 +1,176 @@
+import { marked } from 'marked';
+import { getLogGroup, setLogGroup } from './stateManager.js';
+import { STATUS } from './constants.js';
+
+// Configure marked options
+marked.setOptions({
+  gfm: true, // Enable GitHub Flavored Markdown
+  breaks: true, // Convert line breaks to <br>
+  headerIds: false, // Don't add id attributes to headers
+  mangle: false, // Don't mangle email addresses
+});
+
+/**
+ * Format a log entry
+ * @param {Object} logMessage - The log message to format
+ * @returns {string} Formatted HTML for the log message
+ */
+export function formatLogEntry(logMessage) {
+  // Process message for special formats like scratchpad
+  return processScratchpadContent(logMessage.message);
+}
+
+/**
+ * Process scratchpad content with Markdown formatting
+ * @param {string} message - The message containing scratchpad content
+ * @returns {string} Processed message with formatted scratchpad content
+ */
+export function processScratchpadContent(message) {
+  // Check if this message has the scratchpad data attribute
+  if (message.includes('data-is-scratchpad="true"')) {
+    // Extract the actual scratchpad content
+    const scratchpadMatch = message.match(
+      /<span class="message-info">(Scratchpad content:.*?)<\/span>/s,
+    );
+    if (scratchpadMatch && scratchpadMatch[1]) {
+      let content = scratchpadMatch[1];
+
+      // Extract content after the "Scratchpad content:" prefix
+      const contentStartIndex = content.indexOf('Scratchpad content:');
+      if (contentStartIndex !== -1) {
+        content = content.substring(
+          contentStartIndex + 'Scratchpad content:'.length,
+        );
+
+        try {
+          // Pre-process LaTeX references to protect them from markdown parsing
+          content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+
+          // Process content as markdown
+          let parsedMarkdown = marked.parse(content);
+
+          // Post-process to restore and style LaTeX references
+          parsedMarkdown = parsedMarkdown.replace(
+            /@@LATEX-REF:([^@]+)@@/g,
+            '<code class="latex-ref">\\ref{$1}</code>',
+          );
+
+          // Fix spacing issues that might occur with consecutive paragraph elements
+          parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
+
+          // Create enhanced scratchpad element with better formatting
+          return message.replace(
+            /<span class="message-info">Scratchpad content:.*?<\/span>/s,
+            `<span class="message-info">Scratchpad content:</span>
+             <div class="scratchpad-content">${parsedMarkdown}</div>`,
+          );
+        } catch (e) {
+          console.error('Error parsing markdown:', e);
+          // Fallback to original content
+          return message;
+        }
+      }
+    }
+  }
+  return message;
+}
+
+/**
+ * Extract timestamp from HTML message
+ * @param {string} message - HTML message containing timestamp
+ * @returns {string} Extracted timestamp
+ */
+export function getMessageTimestamp(message) {
+  // First try to extract the full timestamp from data-full-timestamp attribute
+  const div = document.createElement('div');
+  div.innerHTML = message;
+  const logLine = div.querySelector('.log-line');
+  if (logLine && logLine.dataset.fullTimestamp) {
+    return logLine.dataset.fullTimestamp; // Return the full precise timestamp
+  }
+
+  // Fallback: extract from the message content using regex
+  const match = message.match(/\[(.*?)\]/);
+  return match ? match[1] : ''; // Extract timestamp or empty string
+}
+
+/**
+ * Create a group header HTML
+ * @param {Object} group - Log group data
+ * @returns {string} HTML for group header
+ */
+export function createGroupHeader(group) {
+  const startDate = new Date(group.startTime);
+  const formattedStartTime = formatTime(startDate);
+
+  let endTimeDisplay = '';
+  if (group.endTime) {
+    const endDate = new Date(group.endTime);
+    endTimeDisplay = `<span class="group-end-time">Ended: ${formatTime(endDate)}</span>`;
+  }
+
+  // Add indicator based on status
+  const statusIcon = getStatusIcon(group.status);
+
+  return `
+    <div id="group-header-${group.id}" class="log-group-header ${group.status}">
+      <span class="group-toggle"><i class="codicon codicon-chevron-down"></i></span>
+      <span class="group-status-icon">${statusIcon}</span>
+      <span class="group-title">${group.name}</span>
+      <span class="group-time">
+        <span class="group-start-time">Started: ${formattedStartTime}</span>
+        ${endTimeDisplay}
+      </span>
+    </div>
+  `;
+}
+
+/**
+ * Get HTML for status icon based on status
+ * @param {string} status - Status string
+ * @returns {string} HTML for status icon
+ */
+export function getStatusIcon(status) {
+  switch (status) {
+    case STATUS.RUNNING:
+      return '<i class="codicon codicon-sync spin"></i>';
+    case STATUS.ERROR:
+      return '<i class="codicon codicon-error"></i>';
+    case STATUS.STOPPED:
+      return '<i class="codicon codicon-check"></i>';
+    default:
+      return '<i class="codicon codicon-circle-outline"></i>';
+  }
+}
+
+/**
+ * Format a date object to time string
+ * @param {Date} date - Date object to format
+ * @returns {string} Formatted time string
+ */
+export function formatTime(date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
+/**
+ * Update log group with new status or end time
+ * @param {string} groupId - ID of the group to update
+ * @param {string} status - New status
+ * @param {string} endTime - End time (optional)
+ */
+export function updateLogGroup(groupId, status, endTime) {
+  const group = getLogGroup(groupId);
+  if (!group) return;
+
+  group.status = status;
+  if (endTime) {
+    group.endTime = endTime;
+  }
+
+  setLogGroup(groupId, group);
+}

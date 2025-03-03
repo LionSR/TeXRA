@@ -37,16 +37,16 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
+import { extractTextFromTag, extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
-import { AgentSetting, AgentPrompt } from './AgentDataclass';
+import { AgentSetting, AgentPrompt, AgentType } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
 import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
-import { extractTextFromTag } from '../utils/xmlUtils';
 
 const K_SLICE = 200;
 
@@ -1230,7 +1230,7 @@ export abstract class BaseReflectionAgent {
         activeGroupId,
       );
       let processedFile = outputFile;
-      if (this.agentSetting.agentType === 'CoT') {
+      if (this.agentSetting.agentType === AgentType.CoT) {
         processedFile =
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
@@ -1290,34 +1290,6 @@ export abstract class BaseReflectionAgent {
     outputContent: string,
     thinkingTag: string = 'scratchpad',
   ): void {
-    const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
-    if (scratchpadContent) {
-      // Format the content for improved rendering
-      let formattedContent = scratchpadContent.trim();
-
-      // Replace LaTeX notation with markdown-friendly equivalents
-      formattedContent = formattedContent
-        .replace(/\\section\{([^}]+)\}/g, '## $1')
-        .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-        .replace(/\\begin\{itemize\}/g, '')
-        .replace(/\\end\{itemize\}/g, '')
-        // Also handle enumerate environments like itemize
-        .replace(/\\begin\{enumerate\}/g, '')
-        .replace(/\\end\{enumerate\}/g, '')
-        .replace(/\\item\s+/g, '- ')
-        .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-        .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-        .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-        // Convert XML tags to markdown headings - general approach
-        .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
-        // Convert opening tags without closing tags to markdown headings
-        .replace(/<(\w+)>/g, '## $1\n\n')
-        .replace(/<\/\w+>/g, '')
-        // Escape LaTeX references but preserve the content
-        .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
-
-      // Log the formatted content
-      this.logger.info(`Scratchpad content:\n${formattedContent}`);
-    }
+    extractAndLogScratchpad(outputContent, this.logger, thinkingTag);
   }
 }

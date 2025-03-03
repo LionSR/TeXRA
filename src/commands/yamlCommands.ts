@@ -9,6 +9,7 @@ import * as yaml from 'yaml';
 import { loadYaml, loadAgentSettingAndPrompts } from '../agent/agentLoad';
 import * as logger from '../logger/logUtils';
 import { getAgentPath } from '../agent/executeAgent';
+import { AgentType } from '../agent/AgentDataclass';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
@@ -29,7 +30,7 @@ export async function handleTestAgentLoading(
     // Test basic YAML loading
     const testYaml = {
       settings: {
-        agentType: 'direct',
+        agentType: AgentType.Direct,
         documentTag: 'test_doc',
         temperature: 0.7,
         prefills: ['test prefill'],
