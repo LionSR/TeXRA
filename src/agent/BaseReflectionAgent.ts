@@ -1294,8 +1294,6 @@ export abstract class BaseReflectionAgent {
         this.outputHandler.outputFiles[currRound] = [processedFile];
       }
     }
-
-    // Note: latexdiff operations are now handled separately in handleOutput
   }
 
   /**
