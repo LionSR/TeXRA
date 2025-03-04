@@ -645,12 +645,21 @@ export abstract class BaseReflectionAgent {
 
         // Update message content
         // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
-        this.modelHandler.updateMessageContent(
-          messages,
-          bestConnector,
-          processedResponse,
-          toolState,
-        );
+        if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+          this.modelHandler.updateMessageContentWithPrefill(
+            messages,
+            bestConnector,
+            processedResponse,
+            toolState,
+          );
+        } else {
+          this.modelHandler.updateMessageContentWithoutPrefill(
+            messages,
+            bestConnector,
+            processedResponse,
+            toolState,
+          );
+        }
 
         // Check stop conditions
         const [shouldEndTurn, shouldStop] =
@@ -686,14 +695,25 @@ export abstract class BaseReflectionAgent {
             `Should continue - adding continuation message to conversation`,
             responseCycleGroupId,
           );
-          this.modelHandler.addContinueMessage(
-            messages,
-            stateRound,
-            toolState,
-            this.agentSetting,
-            this.agentConfig,
-          );
-          continue;
+          if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+            this.modelHandler.addContinueMessageWithPrefill(
+              messages,
+              stateRound,
+              toolState,
+              this.agentSetting,
+              this.agentConfig,
+            );
+            continue;
+          } else {
+            this.modelHandler.addContinueMessageWithoutPrefill(
+              messages,
+              stateRound,
+              toolState,
+              this.agentSetting,
+              this.agentConfig,
+            );
+            continue;
+          }
         }
       }
 
