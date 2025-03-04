@@ -505,13 +505,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    messages.push({
-      role: 'assistant',
-      content: [{ type: 'text', text: toolState.accumulatedOutput }],
-    });
-    // i thought accumulatedOutput would have been updated already??
-
-    // Handle normal Anthropic models with prefill
     const lastMessage = messages.at(-1);
     if (lastMessage.role === 'assistant') {
       // why does the following two differ?
