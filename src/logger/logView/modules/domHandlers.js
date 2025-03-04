@@ -323,6 +323,28 @@ export function updateLogGroupUI(groupId, status, endTime) {
         }
       }
     }
+
+    // Automatically collapse the group if it finished normally (status is "stopped")
+    if (status === 'stopped') {
+      // Get the content element
+      const content = document.getElementById(`group-content-${groupId}`);
+      if (content) {
+        // Collapse the content
+        content.style.display = 'none';
+
+        // Update the toggle icon
+        const toggleIcon = header.querySelector('.group-toggle i');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-right';
+        }
+
+        // Update the group toggle state
+        setGroupToggleState(groupId, true); // Set to collapsed
+
+        // Save the updated state
+        saveState();
+      }
+    }
   }
 }
 
