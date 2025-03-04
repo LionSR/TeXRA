@@ -198,7 +198,7 @@ export class OutputHandler {
    * 2. Between-rounds diffs: Comparing previous round to current round (when applicable)
    *
    */
-  public async handleLatexdiff(
+  public async handleLatexdiffofOutput(
     currRound: number,
     parentGroupId?: string,
   ): Promise<void> {
