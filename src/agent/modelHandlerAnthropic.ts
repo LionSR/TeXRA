@@ -76,7 +76,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       options.thinking = {
         type: 'enabled',
         // budget_tokens: useStreaming ? 32768 : 4096,
-        budget_tokens: useStreaming ? 32768 : 256,
+        budget_tokens: useStreaming ? 32768 : 1024,
       };
     }
 
@@ -217,13 +217,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
       `Creating image content for ${imageContents.length} images`,
     );
     return imageContents.flatMap((image) => {
-      // Log minimal debug info, focused on media_type
-      // this.logger.debug(
-      //   `Image content: ${JSON.stringify({
-      //     media_type: image.media_type || 'MISSING',
-      //   })}`,
-      // );
-
       // Always ensure media_type exists
       if (!image.media_type) {
         // Default to image/png since PDFs from TikZ are converted to PNG
@@ -693,16 +686,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // 1. We hit the max tokens limit (stopReason === 'max_tokens')
     // 2. AND we don't have an end tag (meaning the response is incomplete)
     if (stopReason === 'max_tokens' && !hasEndTag(agentSetting, newResponse)) {
-      this.logger.debug(
-        'Should continue - adding continuation message to conversation',
-      );
       return true;
     }
     if (stopReason === 'stop_sequence') {
       if (!hasEndTag(agentSetting, newResponse)) {
-        this.logger.debug(
-          'Should continue - adding continuation message to conversation',
-        );
         return true;
       } else {
         this.logger.debug('Should not continue - no end tag found');
