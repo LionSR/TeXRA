@@ -745,4 +745,18 @@ export class OutputHandler {
       this.endProcessing('error', statsGroupId);
     }
   }
+  /** Processes output files for current round. */
+  protected async handleOutput(
+    stateRound: AgentStateRound,
+    stateGlobal: AgentStateGlobal,
+    outputFile: string,
+    endTurn: boolean,
+    currRound: number = 0,
+    roundGroupId?: string,
+  ): Promise<string[]> {
+    // Print statistics at the end of each round
+    await this.printStatistics(stateGlobal, roundGroupId);
+
+    return this.outputFiles[currRound] || [];
+  }
 }

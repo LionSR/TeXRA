@@ -539,8 +539,18 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
   }
 
-  /** Processes thinking blocks from API response. OpenAI models do not support thinking blocks. */
-  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+  /**
+   * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
+   * @param responseObject The response object from the OpenAI API
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with thinking blocks
+   * @returns Always returns null as OpenAI doesn't support thinking blocks
+   */
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
     return null;
   }
 }

@@ -596,46 +596,45 @@ export class ModelHandlerAnthropic extends ModelHandler {
           (item: any) => item.type === 'text',
         );
 
-        // Create a new content array starting with any thinking blocks
-        // const newContent = [...thinkingBlocks];
-        let newContent = [];
-        // this should only be set once?
+        // Create a new content array for the updated message
+        let newContent: any[] = [];
 
-        // If there are existing text blocks, update the last one with new content
+        // Anthropic models should include thinking blocks first in the content array
+        // Add all thinking blocks from toolState if we have them
+        if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+          // Add all stored thinking blocks from toolState first
+          this.logger.debug(
+            `Adding ${toolState.thinkingBlocks.length} thinking blocks to message content`,
+          );
+          newContent.push(...toolState.thinkingBlocks);
+        } else if (thinkingBlocks.length > 0) {
+          // If no thinking blocks in toolState but we found them in the message, use those
+          this.logger.debug(
+            `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
+          );
+          newContent.push(...thinkingBlocks);
+          // Store them in toolState for future use
+          toolState.thinkingBlocks = thinkingBlocks;
+          toolState.thinkingAdded = true;
+        }
+
+        // Add the updated text content
+        // If there are existing text blocks, update with new content
         // Otherwise create a new text block
         if (textBlocks.length > 0) {
-          // Use accumulated output to ensure we have the complete context
-          const updatedText = {
+          newContent.push({
             type: 'text',
             text: bestConnector + newResponse,
-          };
-          newContent.push(updatedText);
+          });
         } else {
-          this.logger.error('Second last message content is not a list');
           newContent.push({
             type: 'text',
             text: toolState.accumulatedOutput,
           });
         }
 
-        // Anthropic models support attaching back thinking blocks
-        if (thinkingBlocks.length > 0) {
-          if (!toolState.thinkingAdded) {
-            this.logger.debug('(non-redacted) Thinking block found');
-            if (toolState.thinkingBlock && toolState.thinkingAdded) {
-              newContent = [toolState.thinkingBlock, ...newContent];
-              this.logger.debug('Using the first thinking block');
-            } else {
-              this.logger.debug('No existing thinking block found');
-              toolState.thinkingBlock = thinkingBlocks[0];
-              toolState.thinkingAdded = true;
-            }
-          }
-        }
-
-        // Update the second last message with the new content array
-        // secondLastMessage.content = newContent;
-        secondLastMessage.content.push(...newContent);
+        // Replace the content of the second last message with our new content array
+        secondLastMessage.content = newContent;
 
         // Remove cache_control from previous messages if needed
         if (this.capabilities.supportsPromptCaching) {
@@ -652,19 +651,29 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
       return;
     } else {
-      // This is a regular response, not a continuation
-      this.logger.debug(
-        'Last message is a request message rather than a ask to continue after cut off',
-      );
-      const message = {
+      this.logger.debug('Handling non-continuation response');
+      // Create a new assistant message with the response
+      const assistantMessage: { role: string; content: any[] } = {
         role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+        content: [],
       };
-      if (toolState.thinkingBlock) {
-        message.content = [toolState.thinkingBlock, ...message.content];
+
+      // Include all thinking blocks from toolState if available
+      if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+        this.logger.debug(
+          `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
+        );
+        assistantMessage.content.push(...toolState.thinkingBlocks);
       }
 
-      messages.push(message);
+      // Add the text content
+      assistantMessage.content.push({
+        type: 'text',
+        text: newResponse,
+      });
+
+      messages.push(assistantMessage);
+      this.logger.debug('Added a new assistant message');
     }
   }
 
@@ -704,55 +713,64 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /**
    * Process thinking blocks for Anthropic models
+   * @param responseObject The response object from Anthropic API
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with the thinking blocks
    * @returns The extracted thinking content (or null if none)
-   * there is a subtlety! Anthropic model would return a object rather than a string for the thinking block, but we should save them in the toolState as an object
-   * we need to handle this properly in the updateMessageContent function
+   * This preserves the full thinking objects including signature which is required
+   * when sending back to the Anthropic API for continuing a conversation
    */
-  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
     if (!responseObject) return null;
 
-    // Extract thinking block from the response
-    let thinkingBlock = null;
+    // Extract all thinking blocks from the response
+    const thinkingBlocks = [];
+    let regularThinkingContent = null;
+
     try {
       if (responseObject.content && Array.isArray(responseObject.content)) {
+        // Collect all thinking and redacted_thinking blocks
         for (const item of responseObject.content) {
           if (item.type === 'thinking' && item.thinking) {
-            thinkingBlock = item;
-            break;
+            thinkingBlocks.push(item);
+            // Save the first regular thinking content for returning
+            if (regularThinkingContent === null) {
+              regularThinkingContent = item.thinking;
+            }
           } else if (item.type === 'redacted_thinking' && item.data) {
-            thinkingBlock = item;
-            break;
+            thinkingBlocks.push(item);
           }
         }
       }
     } catch (e) {
-      this.logger.error(`Error extracting thinking block: ${e}`, groupId);
+      this.logger.error(`Error extracting thinking blocks: ${e}`, groupId);
       return null;
     }
 
-    if (!thinkingBlock) return null;
+    if (thinkingBlocks.length === 0) return null;
 
-    this.logger.debug(`Thinking block type: ${thinkingBlock.type}`, groupId);
+    this.logger.debug(
+      `Found ${thinkingBlocks.length} thinking blocks`,
+      groupId,
+    );
 
-    if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
-      // Log preview of thinking content
-      // this.logger.debug(
-      //   `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
-      //   groupId,
-      // );
-
-      // Return the thinking content
-      return thinkingBlock.thinking;
-    } else if (
-      thinkingBlock.type === 'redacted_thinking' &&
-      thinkingBlock.data
-    ) {
-      this.logger.debug(`Redacted thinking data available (encoded)`, groupId);
-      // For redacted thinking, we don't have accessible content
-      // but we should save it somewhere to be able to access it later
-      return null;
+    // If toolState is provided, update it with all thinking blocks
+    if (toolState && !toolState.thinkingAdded) {
+      // Store all thinking blocks for future reference
+      toolState.thinkingBlocks = thinkingBlocks;
+      // thinkingBlock is now a getter that returns thinkingBlocks[0]
+      toolState.thinkingAdded = true;
+      this.logger.debug(
+        `Added ${thinkingBlocks.length} thinking blocks to toolState`,
+        groupId,
+      );
     }
 
-    return null;
+    // Return content of the first regular thinking block for logging
+    return regularThinkingContent;
   }
 }
