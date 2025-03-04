@@ -146,6 +146,8 @@ export abstract class BaseReflectionAgent {
    */
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
+    // wait for 50 mili seconds
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   /**
@@ -171,7 +173,7 @@ export abstract class BaseReflectionAgent {
    */
   public async init(): Promise<void> {
     // Create an initialization group for better log organization
-    const initGroupId = this.logger.startGroup(`Initialization`);
+    const initGroupId = await this.logger.startGroup(`Initialization`);
 
     try {
       // Log configuration details in the initialization group
@@ -486,7 +488,7 @@ export abstract class BaseReflectionAgent {
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
     // Create a response cycle group as a child of the round group if provided
     const responseCycleGroupId = roundGroupId
-      ? this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
+      ? await this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
       : undefined;
 
     try {
@@ -792,7 +794,7 @@ export abstract class BaseReflectionAgent {
     processGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.outputHandler.printStatistics(stateGlobal, processGroupId);
+    await this.outputHandler.printStatistics(stateGlobal, processGroupId);
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
@@ -815,14 +817,14 @@ export abstract class BaseReflectionAgent {
     const currRound = 0;
     const stateGlobal = AgentStateGlobal.initialize();
 
+    this.logger.info(`Processing round ${currRound}`);
+
     // Create a dedicated group for Round 0, as a child of the main run group
-    const round0GroupId = this.logger.startGroup(
+    const round0GroupId = await this.logger.startGroup(
       `Round ${currRound}: Initial Generation`,
       undefined,
       this.runGroupId, // Use the runGroupId from the class as the parent
     );
-
-    this.logger.info(`Processing round ${currRound}`, round0GroupId);
 
     try {
       // Handle tex count if enabled
@@ -1006,14 +1008,14 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
     currRound: number = 1,
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
+    this.logger.info(`Processing round ${currRound}`);
+
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
-    const round1GroupId = this.logger.startGroup(
+    const round1GroupId = await this.logger.startGroup(
       `Round ${currRound}: Reflection`,
       undefined,
       this.runGroupId,
     );
-
-    this.logger.info(`Processing round ${currRound}`, round1GroupId);
 
     try {
       // Handle output file processing
@@ -1140,7 +1142,7 @@ export abstract class BaseReflectionAgent {
    */
   public async run(): Promise<void> {
     // Create a dedicated run group for this agent execution
-    this.runGroupId = this.logger.startGroup(
+    this.runGroupId = await this.logger.startGroup(
       `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
     );
 

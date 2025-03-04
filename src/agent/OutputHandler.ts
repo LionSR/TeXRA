@@ -96,10 +96,17 @@ export class OutputHandler {
    * @param roundGroupId Parent round group ID
    * @returns The created process group ID
    */
-  startProcessing(processName: string, roundGroupId?: string): string {
+  async startProcessing(
+    processName: string,
+    roundGroupId?: string,
+  ): Promise<string> {
     // Create a log group as a child of the round group if provided
     const groupName = `OutputHandler: ${processName}`;
-    const groupId = this.logger.startGroup(groupName, undefined, roundGroupId);
+    const groupId = await this.logger.startGroup(
+      groupName,
+      undefined,
+      roundGroupId,
+    );
     // Comment out this line as it creates confusing log order
     // this.logger.info(`Starting ${processName}`, groupId);
     return groupId;
@@ -207,6 +214,7 @@ export class OutputHandler {
       );
 
       // Log the result using helper method
+      // this should go into handleLatexdiff groupId, ie., diffProcessGroupId
       this.logLatexdiffResult(result, 'diff', groupId);
     }
   }
@@ -252,6 +260,7 @@ export class OutputHandler {
           );
 
           // Log the result using helper method
+          // this should go into handleLatexdiff groupId. ie., diffProcessGroupId
           this.logLatexdiffResult(result, 'diff', groupId);
         }
       }
@@ -561,7 +570,10 @@ export class OutputHandler {
     parentGroupId?: string,
   ): Promise<void> {
     // Create a dedicated log group for latexdiff operations FIRST
-    const diffProcessGroupId = this.startProcessing(`LatexDiff`, parentGroupId);
+    const diffProcessGroupId = await this.startProcessing(
+      `LatexDiff`,
+      parentGroupId,
+    );
 
     try {
       // Check if latexdiff is installed before proceeding
@@ -681,12 +693,15 @@ export class OutputHandler {
   }
 
   /** Prints statistics about token usage and costs */
-  public printStatistics(
+  public async printStatistics(
     stateGlobal: AgentStateGlobal,
     parentGroupId?: string,
-  ): void {
+  ): Promise<void> {
     // Create a dedicated log group for statistics
-    const statsGroupId = this.startProcessing('Statistics', parentGroupId);
+    const statsGroupId = await this.startProcessing(
+      'Statistics',
+      parentGroupId,
+    );
 
     try {
       this.logger.info('=== Task Statistics ===', statsGroupId);
@@ -817,7 +832,7 @@ export class OutputHandler {
     roundGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.printStatistics(stateGlobal, roundGroupId);
+    await this.printStatistics(stateGlobal, roundGroupId);
 
     return this.outputFiles[currRound] || [];
   }
