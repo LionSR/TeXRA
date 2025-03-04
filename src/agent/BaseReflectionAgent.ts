@@ -51,6 +51,9 @@ import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 
+// System imports - common utilities
+import { getConfig } from '../frontend-utils/commonUtils';
+
 const K_SLICE = 200;
 
 /**
@@ -505,6 +508,29 @@ export abstract class BaseReflectionAgent {
           this.agentPrompt.systemPrompt,
           this.userVars,
         );
+
+        // Save message object to file for debugging if enabled in settings
+        const shouldSaveMessageObjects = getConfig(
+          'debug.saveMessageObjects',
+          false,
+        );
+        if (shouldSaveMessageObjects) {
+          const outputFileBaseName = outputFile.replace('.xml', '');
+          const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+          try {
+            await writeFile(debugFilePath, JSON.stringify(messages, null, 2));
+            this.logger.info(
+              `Saved message object to ${debugFilePath}`,
+              responseCycleGroupId,
+            );
+          } catch (error) {
+            this.logger.error(
+              `Failed to save message object: ${error}`,
+              responseCycleGroupId,
+            );
+          }
+        }
+
         const responseObject = await this.modelHandler.createResponse(
           this.client,
           messages,
