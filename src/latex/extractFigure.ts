@@ -75,10 +75,16 @@ export async function extractFigurePathsFromLatex(
 
     // logger.debug(CHANNEL, `Graphicspaths: ${graphicspaths.join(', ')}`);
 
-    // Find all matches in the content for both patterns
+    // Pre-process content to remove commented lines
+    const processedLines = content
+      .split('\n')
+      .filter((line) => !/^\s*%/.test(line)) // Remove lines that start with whitespace + %
+      .join('\n');
+
+    // Find all matches in the processed content for both patterns
     for (const pattern of figurePatterns) {
       let match;
-      while ((match = pattern.exec(content)) !== null) {
+      while ((match = pattern.exec(processedLines)) !== null) {
         const figPath = match[1];
         for (const basePath of graphicspaths) {
           const normPath = path.normalize(path.join(basePath, figPath));
