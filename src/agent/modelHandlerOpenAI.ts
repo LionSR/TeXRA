@@ -238,22 +238,26 @@ export class ModelHandlerOpenAI extends ModelHandler {
     return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Adds continuation message when response is truncated. */
-  addContinueMessage(
+  /** Manages continuation with prefill support (typically no-op for models with prefill). */
+  addContinueMessageWithPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Skip if model supports assistant prefill
-    if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Skipping continuation - assistant prefill is supported',
-      );
-      return;
-    }
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+    // No-op for models that support prefill
+  }
 
+  /** Manages continuation for models without prefill support by adding a continuation prompt. */
+  addContinueMessageWithoutPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
@@ -362,7 +366,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
     const state = AgentStateRound.initialize(0);
     toolState.lastResponse = toolState.accumulatedOutput;
-    this.addContinueMessage(
+    this.addContinueMessageWithoutPrefill(
       messages,
       state,
       toolState,
@@ -434,68 +438,90 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
   }
 
-  /** Updates message content with new response or continuation. */
-  updateMessageContent(
+  /** Updates message content for models with prefill support. */
+  updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
   ): void {
     this.logger.debug(
-      'Updating message content for OpenAI API compatible models',
+      'Updating message content for OpenAI models with prefill support',
     );
 
-    // for OpenAI models (or models that do not support assistant prefill) the last message is always a user/system message
+    let lastMessage = messages.at(-1);
 
+    if (lastMessage.role === 'assistant') {
+      lastMessage.content = [
+        { type: 'text', text: toolState.accumulatedOutput },
+      ];
+    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+      // Add a new assistant message
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: bestConnector + newResponse }],
+      });
+    }
+  }
+
+  /** Updates message content for models without prefill support. */
+  updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    this.logger.debug(
+      'Updating message content for OpenAI models without prefill support',
+    );
+
+    // For OpenAI models without prefill, the last message is always a user/system message
     let lastMessage = messages.at(-1);
     let secondLastMessage = messages.at(-2);
 
-    if (this.capabilities.supportsAssistantPrefill) {
-      if (lastMessage.role === 'assistant') {
-        lastMessage.content = [
-          { type: 'text', text: toolState.accumulatedOutput },
-        ];
-      }
+    if (lastMessage.role !== 'user' && lastMessage.role !== 'system') {
+      this.logger.error(
+        'Last message is not a user or system message - unexpected format',
+      );
+      return;
     }
 
-    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
-      this.logger.debug('Last message is a user message');
+    this.logger.debug('Last message is a user/system message');
 
-      if (this.containCutOffMessage(lastMessage.content)) {
-        this.logger.debug(
-          'Last message is a user message asking to continue after cut off',
-        );
-        // Then the last message is a user message
-        // So the second last message must be an assistant message
-        if (secondLastMessage.role === 'assistant') {
-          // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
-          // but why do the following two differ?
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
+    if (this.containCutOffMessage(lastMessage.content)) {
+      this.logger.debug(
+        'Last message is a user message asking to continue after cut off',
+      );
+      // Then the last message is a user message
+      // So the second last message must be an assistant message
+      if (secondLastMessage.role === 'assistant') {
+        // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
+        // but why do the following two differ?
+        if (Array.isArray(secondLastMessage.content)) {
+          secondLastMessage.content.push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+        } else {
+          this.logger.error('Second last message content is not a list');
+          secondLastMessage.content = [
+            {
               type: 'text',
-              text: bestConnector + newResponse,
-            });
-          } else {
-            this.logger.error('Second last message content is not a list');
-            secondLastMessage.content = [
-              {
-                type: 'text',
-                text: toolState.accumulatedOutput,
-              },
-            ];
-          }
-          // Remove user continuation prompt
-          messages.pop();
+              text: toolState.accumulatedOutput,
+            },
+          ];
         }
-      } else {
-        this.logger.debug(
-          'Last message is a request message rather than a ask to continue after cut off',
-        );
-        messages.push({
-          role: 'assistant',
-          content: [{ type: 'text', text: toolState.accumulatedOutput }],
-        });
+        // Remove user continuation prompt
+        messages.pop();
       }
+    } else {
+      this.logger.debug(
+        'Last message is a request message rather than a ask to continue after cut off',
+      );
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+      });
     }
   }
 
