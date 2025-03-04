@@ -487,6 +487,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
         { type: 'text', text: toolState.accumulatedOutput },
       ];
     } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+      this.logger.debug(
+        ' Last message is a user or system message - adding a new assistant message',
+      );
       // Add a new assistant message
       messages.push({
         role: 'assistant',

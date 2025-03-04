@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.21.19",
+  "version": "0.21.20",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -453,6 +453,12 @@
             "type": "boolean",
             "default": false,
             "description": "Whether to show verbose debug messages in the logger view",
+            "scope": "resource"
+          },
+          "coauthor.debug.saveMessageObjects": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save message JSON objects to files before API calls for debugging purposes",
             "scope": "resource"
           }
         }
