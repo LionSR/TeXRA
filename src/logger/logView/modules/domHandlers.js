@@ -4,9 +4,11 @@ import {
   setStreamStatus,
   getGroupToggleState,
   setGroupToggleState,
+  setLogGroup,
   getLogGroup,
   getLogGroups,
   getStreamStatus,
+  clearAllGroupToggleStates,
 } from './stateManager.js';
 import {
   createGroupHeader,
@@ -124,6 +126,7 @@ export function updateStatus(status) {
  * @param {Object} group - Group data
  */
 export function addLogGroup(group) {
+  setLogGroup(group.id, group);
   // Create the header element programmatically instead of using innerHTML
   const headerTemplate = document.createElement('template');
   headerTemplate.innerHTML = createGroupHeader(group);
@@ -267,6 +270,9 @@ export function addLogGroup(group) {
         'codicon codicon-chevron-right';
       setGroupToggleState(group.id, true); // Collapsed
     }
+
+    // Save the updated state
+    saveState();
   });
 }
 
@@ -277,6 +283,14 @@ export function addLogGroup(group) {
  * @param {string} endTime - End time (optional)
  */
 export function updateLogGroupUI(groupId, status, endTime) {
+  const group = getLogGroup(groupId);
+  if (!group) return;
+
+  group.status = status;
+  if (endTime) {
+    group.endTime = endTime;
+  }
+
   // Update the header in the UI if it exists
   const header = document.getElementById(`group-header-${groupId}`);
   if (header) {
@@ -537,6 +551,7 @@ export function setupEventListeners() {
 
   // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
+    clearAllGroupToggleStates();
     vscode.postMessage({ command: COMMANDS.DELETE_ALL });
   });
 

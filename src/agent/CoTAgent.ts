@@ -46,10 +46,10 @@ export class CoTAgent extends BaseReflectionAgent {
       // Start a dedicated processing group if none provided
       const cotProcessGroupId =
         processGroupId ||
-        this.outputHandler.startProcessing(
+        (await this.outputHandler.startProcessing(
           `ProcessXmlOutput`,
           this.logger.getActiveGroupId(),
-        );
+        ));
 
       // Initialize output files array if needed
       this.outputHandler.outputFiles[currRound] =

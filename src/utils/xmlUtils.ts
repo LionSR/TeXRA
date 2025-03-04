@@ -251,6 +251,8 @@ export function formatAndLogContent(
     // Escape LaTeX references but preserve the content
     .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
 
+  // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
+
   // Log the formatted content
   logger.info(`${contentType} content:\n${formattedContent}`, groupId);
 }
