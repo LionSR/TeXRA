@@ -17,6 +17,7 @@ import {
   formatLogEntry,
   formatTime,
   getStatusIcon,
+  formatDuration,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES } from './constants.js';
 
@@ -303,24 +304,25 @@ export function updateLogGroupUI(groupId, status, endTime) {
       statusIconElem.innerHTML = getStatusIcon(status);
     }
 
-    // Update the timestamp display
-    const endTimeElem = header.querySelector('.group-end-time');
+    // Update or add the duration display when the group finishes
+    const timeContainer = header.querySelector('.group-time');
+
     if (endTime) {
-      if (endTimeElem) {
-        const date = new Date(endTime);
-        endTimeElem.textContent = `Ended: ${formatTime(date)}`;
-        endTimeElem.style.display = 'inline';
-      } else {
-        // If endTimeElem doesn't exist, create it
-        const timeContainer = header.querySelector('.group-time');
-        if (timeContainer) {
-          const date = new Date(endTime);
-          const endTimeSpan = document.createElement('span');
-          endTimeSpan.className = 'group-end-time';
-          endTimeSpan.textContent = `Ended: ${formatTime(date)}`;
-          endTimeSpan.style.display = 'inline';
-          timeContainer.appendChild(endTimeSpan);
-        }
+      const endDate = new Date(endTime);
+      const startDate = new Date(group.startTime);
+      const durationMs = endDate - startDate;
+
+      // Update or create duration element
+      const durationElem = header.querySelector('.group-duration');
+      if (durationElem) {
+        durationElem.textContent = `${formatDuration(durationMs)}`;
+        durationElem.style.display = 'inline';
+      } else if (timeContainer) {
+        const durationSpan = document.createElement('span');
+        durationSpan.className = 'group-duration';
+        durationSpan.textContent = `${formatDuration(durationMs)}`;
+        durationSpan.style.display = 'inline';
+        timeContainer.appendChild(durationSpan);
       }
     }
 
