@@ -486,8 +486,11 @@ export abstract class ModelHandler {
    * @param parentGroupId Optional parent group ID
    * @returns The group ID
    */
-  protected createOperationGroup(name: string, parentGroupId?: string): string {
-    return this.logger.startGroup(
+  protected async createOperationGroup(
+    name: string,
+    parentGroupId?: string,
+  ): Promise<string> {
+    return await this.logger.startGroup(
       `Model Operation: ${name}`,
       undefined,
       parentGroupId,
