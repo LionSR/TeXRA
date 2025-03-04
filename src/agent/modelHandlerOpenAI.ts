@@ -212,10 +212,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
       if (responseObject.error) {
-        const errorMsg = `API error: ${responseObject.error}`;
+        const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
       }
+
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
       this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
