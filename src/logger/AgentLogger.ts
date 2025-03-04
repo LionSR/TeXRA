@@ -36,7 +36,13 @@ export class AgentLogger {
    * @param parentGroupId Optional parent group ID for nested groups
    * @returns The group ID
    */
-  startGroup(groupName: string, id?: string, parentGroupId?: string): string {
+  async startGroup(
+    groupName: string,
+    id?: string,
+    parentGroupId?: string,
+  ): Promise<string> {
+    // wait for 50 mili seconds
+    await new Promise((resolve) => setTimeout(resolve, 50));
     return logger.startGroup(this.channelId, groupName, id, parentGroupId);
   }
 
