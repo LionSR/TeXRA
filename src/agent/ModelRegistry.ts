@@ -32,7 +32,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet:thinking',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024, // Using extended output with beta header; if >21333, then we need streaming
+    maxOutputTokens: 4096, // Using extended output with beta header; if >21333, then we need streaming
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
@@ -51,7 +51,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'claude-3-7-sonnet-20250219',
     openrouterFullName: 'anthropic/claude-3.7-sonnet',
     provider: ModelProvider.ANTHROPIC,
-    maxOutputTokens: 1024, // Using extended output with beta header
+    maxOutputTokens: 4096, // Using extended output with beta header; if >21333, then we need streaming
     contextWindow: 200000,
     inputPrice: 3.0,
     outputPrice: 15.0,
@@ -268,7 +268,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     fullName: 'gpt-4o-2024-08-06',
     openrouterFullName: 'openai/gpt-4o-2024-08-06',
     provider: ModelProvider.OPENAI,
-    maxOutputTokens: 1024, // maximal is 16384
+    maxOutputTokens: 4096, // maximal is 16384
     contextWindow: 128000,
     inputPrice: 2.5,
     outputPrice: 10.0,
