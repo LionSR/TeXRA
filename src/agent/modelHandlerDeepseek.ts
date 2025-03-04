@@ -6,6 +6,7 @@ import OpenAI from 'openai';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ToolState } from './ToolState';
 
 /**
  * Handler for Deepseek models using OpenAI-compatible API.
@@ -21,9 +22,16 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
 
   /**
    * Process thinking blocks for Deepseek models
+   * @param responseObject The raw response object from the model
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
-  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
     if (!responseObject) return null;
 
     // Extract reasoning content from Deepseek response
@@ -45,6 +53,22 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
           'Found reasoning_content in choices[0].message.reasoning_content',
           groupId,
         );
+
+        // If toolState is provided and we have reasoning content,
+        // store it in the toolState for future use (similar to Anthropic thinking blocks)
+        if (toolState && !toolState.thinkingAdded) {
+          // Create a thinking block in the same format as Anthropic for consistency
+          const thinkingBlock = {
+            type: 'thinking',
+            thinking: reasoningContent,
+          };
+
+          toolState.thinkingBlocks = [thinkingBlock];
+          toolState.thinkingAdded = true;
+          this.logger.debug('Added reasoning content to toolState', groupId);
+        }
+        // For deepseek mode thinking content should not be attached back to the message as a content item.
+        // Nevertheless one can include one in a bare way...
       }
     }
     if (!reasoningContent) return null;
