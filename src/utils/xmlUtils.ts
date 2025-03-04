@@ -63,7 +63,46 @@ export function extractTextFromTag(
 ): string {
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
   const match = inputContent.match(regex);
-  return match ? match[1] : '';
+  // Extract the content
+  let content = match ? match[1] : '';
+  // Remove CDATA sections if present
+  content = content.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+  return content;
+}
+
+/**
+ * Extract multiple document elements from an XML container tag
+ * Used as a fallback for extracting documents when XML parsing fails
+ */
+export function extractMultipleTextFromTag(
+  inputContent: string,
+  containerTag: string,
+): Array<{ content: string; name: string }> {
+  const documents: Array<{ content: string; name: string }> = [];
+
+  // First extract the container content
+  const containerRegex = new RegExp(
+    `<${containerTag}>(.*?)<\/${containerTag}>`,
+    's',
+  );
+  const containerMatch = inputContent.match(containerRegex);
+
+  if (containerMatch && containerMatch[1]) {
+    const containerContent = containerMatch[1];
+    // Then extract individual documents from the container
+    const documentRegex = /<document.*?name="(.*?)".*?>(.*?)<\/document>/gs;
+
+    let documentMatch;
+    while ((documentMatch = documentRegex.exec(containerContent)) !== null) {
+      const name = documentMatch[1] || 'unnamed';
+      // Extract content and remove CDATA sections if present
+      let content = documentMatch[2] || '';
+      content = content.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+      documents.push({ name, content });
+    }
+  }
+
+  return documents;
 }
 
 /**
@@ -82,8 +121,9 @@ export function filterTagsFromText(
 
 /**
  * Extract content from XML document element for single document case
+ * We should have a fall back to regex if this fails
  */
-export function extractContentFromTag(
+export function extractContentFromXMLbyTag(
   root: Record<string, any>,
   documentTag: string,
 ): string | null {
@@ -115,8 +155,9 @@ export function extractContentFromTag(
 
 /**
  * Extract content from XML document element for multiple document case
+ * we should have a fall back to regex if this fails
  */
-export function extractContentFromTagMultiple(
+export function extractContentFromXMLbyTagMultiple(
   root: Record<string, any>,
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
