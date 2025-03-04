@@ -72,8 +72,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       kwargs.temperature = temperature;
     }
 
-    // Handle O1 models
-    if (this.isOReasoningModelFull) {
+    if (this.config.capabilities.supportsReasoningEffort) {
       kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
     }
 

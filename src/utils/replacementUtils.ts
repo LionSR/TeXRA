@@ -286,6 +286,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</revised_statement}': '</revised_statement>',
     '</scope}': '\\end{scope}',
     '</latex_document}': '</latex_document>',
+    // comments
+    '% 1ST_UPDATED_LATEX_DOCUMENT HERE\n': '',
+    '% 2ND_UPDATED_LATEX_DOCUMENT HERE\n': '',
   },
 };
 
