@@ -78,6 +78,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     if (useStreaming) {
       let response: any;
+      kwargs.stream_options = { include_usage: true };
       try {
         const stream = client.beta.chat.completions.stream(kwargs);
         response = await stream.finalMessage();
