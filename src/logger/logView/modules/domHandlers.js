@@ -9,6 +9,7 @@ import {
   getLogGroups,
   getStreamStatus,
   clearAllGroupToggleStates,
+  saveState,
 } from './stateManager.js';
 import {
   createGroupHeader,
