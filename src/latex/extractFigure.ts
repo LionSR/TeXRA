@@ -95,6 +95,7 @@ export async function extractFigurePathsFromLatex(
 
           for (const ext of extensions) {
             const pathToCheck = normPath + ext;
+            // TODO: here it can be tricky if the file is in a subdirectory and then all the basePath of graphicspath need to be relative to that
             const relPath = path.relative(latexDir, pathToCheck);
             if (await fileExists(relPath)) {
               figurePaths.push(relPath);
