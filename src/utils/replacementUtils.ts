@@ -289,6 +289,14 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // comments
     '% 1ST_UPDATED_LATEX_DOCUMENT HERE\n': '',
     '% 2ND_UPDATED_LATEX_DOCUMENT HERE\n': '',
+    //
+    '\\begin{<latex_document>\nalign': '\\begin{align',
+    '\\begin{<latex_document>\nequation': '\\begin{equation',
+    '\\begin{<latex_document>\nitemize': '\\begin{itemize',
+    '\\begin{<latex_document>\nenumerate': '\\begin{enumerate}',
+    '\\begin{<latex_document>\nfigure': '\\begin{figure}',
+    '\\begin{<latex_document>\ntikzpicture': '\\begin{tikzpicture}',
+    '\\\n<latex_document>': '\\',
   },
 };
 

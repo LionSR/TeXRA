@@ -75,7 +75,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.debug('Enabling thinking for model with reasoning support');
       options.thinking = {
         type: 'enabled',
-        budget_tokens: useStreaming ? 32768 : 4096,
+        // budget_tokens: useStreaming ? 32768 : 4096,
+        budget_tokens: useStreaming ? 32768 : 256,
       };
     }
 
