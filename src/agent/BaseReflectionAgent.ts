@@ -805,7 +805,10 @@ export abstract class BaseReflectionAgent {
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn) {
       // Pass the process group ID to maintain proper nesting in the log hierarchy
-      await this.outputHandler.handleLatexdiff(currRound, processGroupId);
+      await this.outputHandler.handleLatexdiffofOutput(
+        currRound,
+        processGroupId,
+      );
     }
 
     return this.outputHandler.outputFiles[currRound] || [];
