@@ -378,15 +378,15 @@ export abstract class ModelHandler {
   abstract createImageContent(imageContents: any[]): any[];
 
   /**
-   * Extracts response text, usage statistics, thinking block, and stop reason from API response.
-   * @param responseObject Raw API response
-   * @param endTag End tag to append if needed
-   * @returns Tuple of [response text, usage data, thinking block, stop reason]
+   * Extracts the response text and metadata from the model's response object
+   * @param responseObject The raw response object from the model
+   * @param endTag The end tag to append if needed
+   * @returns A tuple containing [responseText, usageInfo, stopReason]
    */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, any, string];
+  ): [string, any, string];
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations.
@@ -445,6 +445,17 @@ export abstract class ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean;
+
+  /**
+   * Extracts thinking content from model responses
+   * @param responseObject The raw response object from the model
+   * @param groupId Optional group ID for logging
+   * @returns The extracted thinking content string or null if no thinking content is available
+   */
+  abstract processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+  ): string | null;
 
   /**
    * Creates a log group for model operations with the given name.
