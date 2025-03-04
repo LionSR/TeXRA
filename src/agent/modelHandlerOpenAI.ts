@@ -82,6 +82,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
         const stream = client.beta.chat.completions.stream(kwargs);
         response = await stream.finalMessage();
 
+        // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
+
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
@@ -212,10 +214,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
 
-      // Add fallback for Gemini API format which sometimes returns content directly in responseObject
+      // Add fallback for streaming which returns content directly in responseObject
       if (responseObject.role && responseObject.content) {
         this.logger.info(
-          'Using direct response format (Gemini API style) as fallback',
+          'Using direct response format (streaming style) as fallback',
         );
         const newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume 'stop'
