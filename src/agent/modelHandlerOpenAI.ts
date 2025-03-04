@@ -221,7 +221,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
         );
         const newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume 'stop'
-        const stopReason = 'stop';
+        // const stopReason = 'stop';
+        let stopReason = 'length';
+        if (responseObject.finish_reason) {
+          stopReason = responseObject.finish_reason;
+        }
 
         // For usage, we'll use empty values since they're not provided
         const usage = responseObject.usage || {
