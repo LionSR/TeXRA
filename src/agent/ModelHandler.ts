@@ -389,10 +389,22 @@ export abstract class ModelHandler {
   ): [string, any, string];
 
   /**
-   * Manages continuation for truncated responses in multi-turn conversations.
+   * Manages continuation for truncated responses in multi-turn conversations with prefill support.
    * Updates messages array and tool state for next turn.
    */
-  abstract addContinueMessage(
+  abstract addContinueMessageWithPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void;
+
+  /**
+   * Manages continuation for truncated responses in multi-turn conversations without prefill support.
+   * Updates messages array and tool state for next turn.
+   */
+  abstract addContinueMessageWithoutPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
@@ -426,10 +438,21 @@ export abstract class ModelHandler {
   abstract computeResponseUsage(responseUsage: any, responseTime: number): any;
 
   /**
-   * Updates conversation message content with new responses.
+   * Updates model message content with response for models with prefill support.
    * Handles cache control and content formatting.
    */
-  abstract updateMessageContent(
+  abstract updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void;
+
+  /**
+   * Updates model message content with response for models without prefill support.
+   * Handles cache control and content formatting.
+   */
+  abstract updateMessageContentWithoutPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
