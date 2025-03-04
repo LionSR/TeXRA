@@ -106,39 +106,47 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     });
   }
 
-  /** Updates message content with support for Anthropic's assistant prefill. */
-  updateMessageContent(
+  updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
   ): void {
     const lastMessage = messages.at(-1);
-
-    if (this.capabilities.supportsAssistantPrefill) {
-      // although OpenAI models do not support assistant prefill, some models (such as Anthropic/Deepseek perhaps?) via OpenRouter might do
-      if (lastMessage.role === 'assistant') {
-        if (Array.isArray(lastMessage.content)) {
-          lastMessage.content.at(-1).text = bestConnector + newResponse;
-        } else if (typeof lastMessage.content === 'string') {
-          lastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
-        }
-      } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
-        messages.push({
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ],
-        });
+    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/Deepseek perhaps?) via OpenRouter might do
+    if (lastMessage.role === 'assistant') {
+      if (Array.isArray(lastMessage.content)) {
+        // is this correct? it looks like we should attach previous response too.
+        lastMessage.content.at(-1).text = bestConnector + newResponse;
+      } else if (typeof lastMessage.content === 'string') {
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
       }
+    }
+  }
+
+  /** Updates message content for models with prefill support. */
+  updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    let lastMessage = messages.at(-1);
+    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ],
+      });
     }
   }
 }
