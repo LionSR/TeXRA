@@ -54,7 +54,11 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   }
 
   // Implementation for processing thinking blocks in OpenRouter responses
-  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
     if (!responseObject) return null;
 
     // According to OpenRouter docs, reasoning is available at choices[0].message.reasoning

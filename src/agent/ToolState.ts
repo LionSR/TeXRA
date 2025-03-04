@@ -15,8 +15,8 @@ export interface IToolState {
   /** Paths to figure files */
   figureFiles: string[];
 
-  /** Complete thinking/reasoning block from models that support it (e.g., Claude 3.7) */
-  thinkingBlock: any;
+  /** Collection of all thinking blocks from the response (used for Anthropic models) */
+  thinkingBlocks: any[];
 
   /** Whether the thinking block has been added to the accumulated output */
   thinkingAdded: boolean;
@@ -33,8 +33,16 @@ export class ToolState implements IToolState {
   lastResponse: string;
   accumulatedOutput: string;
   figureFiles: string[];
-  thinkingBlock: any;
+  thinkingBlocks: any[];
   thinkingAdded: boolean;
+
+  /**
+   * Returns the first thinking block from thinkingBlocks array
+   * @returns The first thinking block or null if none exists
+   */
+  get thinkingBlock(): any {
+    return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
+  }
 
   private constructor() {
     this.texcountStats = null;
@@ -42,7 +50,7 @@ export class ToolState implements IToolState {
     this.lastResponse = '';
     this.accumulatedOutput = '';
     this.figureFiles = [];
-    this.thinkingBlock = null;
+    this.thinkingBlocks = [];
     this.thinkingAdded = false;
   }
 

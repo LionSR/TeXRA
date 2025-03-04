@@ -473,11 +473,13 @@ export abstract class ModelHandler {
    * Extracts thinking content from model responses
    * @param responseObject The raw response object from the model
    * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
     responseObject: any,
     groupId?: string,
+    toolState?: ToolState,
   ): string | null;
 
   /**
