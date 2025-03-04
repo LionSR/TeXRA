@@ -211,6 +211,25 @@ export class ModelHandlerOpenAI extends ModelHandler {
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
+
+      // Add fallback for Gemini API format which sometimes returns content directly in responseObject
+      if (responseObject.role && responseObject.content) {
+        this.logger.info(
+          'Using direct response format (Gemini API style) as fallback',
+        );
+        const newResponse = responseObject.content.trim();
+        // Since we don't have a stop reason in this format, assume 'stop'
+        const stopReason = 'stop';
+
+        // For usage, we'll use empty values since they're not provided
+        const usage = responseObject.usage || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+        };
+
+        return [newResponse, usage, stopReason];
+      }
+
       if (responseObject.error) {
         const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
         this.logger.error(errorMsg);
