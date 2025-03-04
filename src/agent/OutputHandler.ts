@@ -12,9 +12,10 @@ import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
-  extractContentFromTag,
+  extractContentFromXMLbyTag,
   extractTextFromTag,
-  extractContentFromTagMultiple,
+  extractContentFromXMLbyTagMultiple,
+  extractMultipleTextFromTag,
 } from '../utils/xmlUtils';
 import {
   applyReplacements,
@@ -284,6 +285,67 @@ export class OutputHandler {
   }
 
   /**
+   * Fallback extraction for single document case using regex when XML parsing fails
+   * @private
+   */
+  private extractDocumentbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): string | null {
+    try {
+      const fallbackContent = extractTextFromTag(outputContent, documentTag);
+      if (fallbackContent) {
+        this.logger.info(
+          `Successfully extracted ${documentTag} using fallback method`,
+        );
+        return fallbackContent;
+      }
+      this.logger.error(
+        `No ${documentTag} found in output file using fallback method`,
+      );
+      return null;
+    } catch (fallbackErr) {
+      this.logger.error(
+        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Fallback extraction for multiple documents case using regex when XML parsing fails
+   * @private
+   */
+  private extractMultipleDocumentsbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): Array<{ content: string; name: string }> | null {
+    try {
+      const fallbackDocuments = extractMultipleTextFromTag(
+        outputContent,
+        documentTag,
+      );
+
+      if (fallbackDocuments.length > 0) {
+        this.logger.info(
+          `Successfully extracted ${fallbackDocuments.length} documents using fallback method`,
+        );
+        return fallbackDocuments;
+      }
+
+      this.logger.error(
+        `No documents found in output file using fallback method`,
+      );
+      return null;
+    } catch (fallbackErr) {
+      this.logger.error(
+        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Splits XML output into separate files for document and scratchpad content.
    * Handles CDATA wrapping and XML parsing.
    */
@@ -310,18 +372,39 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const latexDocument = extractContentFromTag(root, documentTag);
+      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
         return texFile;
       } else {
-        this.logger.error(`No ${documentTag} found in output file`);
+        this.logger.warn(
+          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        );
+        // Try fallback extraction using regex method
+        const fallbackContent = this.extractDocumentbyRegex(
+          outputContent,
+          documentTag,
+        );
+        if (fallbackContent) {
+          await writeFile(texFile, fallbackContent);
+          return texFile;
+        }
         return texFile;
       }
     } catch (err) {
-      this.logger.error(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
+      // Try fallback extraction if XML parsing fails
+      const fallbackContent = this.extractDocumentbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackContent) {
+        await writeFile(texFile, fallbackContent);
+        return texFile;
+      }
+      // Re-throw the original error if fallback also failed
       throw err;
     }
   }
@@ -350,17 +433,41 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const documents = extractContentFromTagMultiple(root, documentTag);
+      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
       } else {
-        this.logger.error(`No ${documentTag} found in output file`);
+        this.logger.warn(
+          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        );
+        // Try fallback extraction using regex for the document container
+        const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+          outputContent,
+          documentTag,
+        );
+        if (fallbackDocuments) {
+          return this.processMultipleLatexDocuments(
+            fallbackDocuments,
+            outputFile,
+          );
+        }
         return [];
       }
     } catch (err) {
-      this.logger.error(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
+      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocuments) {
+        return this.processMultipleLatexDocuments(
+          fallbackDocuments,
+          outputFile,
+        );
+      }
+      // Re-throw the original error if fallback also failed
       throw err;
     }
   }

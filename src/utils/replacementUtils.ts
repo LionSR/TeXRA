@@ -235,7 +235,6 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
     '</enumerate>': '\\end{enumerate}',
-    '</enumerate}': '\\end{enumerate}',
 
     '\\begin{latex_document}': '<latex_document>',
     '\\end{latex_document}': '</latex_document>',
@@ -277,6 +276,16 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '<document name="">': '<document name="unknown">',
     // for Gemini:
     '<?xml version="1.0" encoding="UTF-8"?>': '',
+    // for Gemini:
+    '</equation}': '\\end{equation}',
+    '</align}': '\\end{align}',
+    '</figure}': '\\end{figure}',
+    '</tikzpicture}': '\\end{tikzpicture}',
+    '</itemize}': '\\end{itemize}',
+    '</enumerate}': '\\end{enumerate}',
+    '</revised_statement}': '</revised_statement>',
+    '</scope}': '\\end{scope}',
+    '</latex_document}': '</latex_document>',
   },
 };
 
