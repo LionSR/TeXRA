@@ -223,7 +223,7 @@ export function formatAndLogContent(
  * @param thinkingTag The XML tag name used for the scratchpad content
  * @param groupId Optional group ID for logging
  */
-export function extractAndLogThinking(
+export function extractAndLogScratchpad(
   outputContent: string,
   logger: AgentLogger,
   thinkingTag: string = 'scratchpad',

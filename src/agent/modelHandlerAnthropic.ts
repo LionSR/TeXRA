@@ -2,7 +2,7 @@
 // (none needed)
 
 // Third-party imports
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 
 // Local imports - utilities
 import {
@@ -17,7 +17,7 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
-import { extractAndLogThinking } from '../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -250,11 +250,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
     });
   }
 
-  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, thinkingBlock, stopReason]. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, any, string] {
+  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (responseObject.error) {
       const errorMsg = `API error: ${responseObject.error}`;
       this.logger.error(errorMsg);
@@ -274,29 +271,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Extract base response
     let stopReason = responseObject.stop_reason;
     let newResponse = '';
-    let thinkingBlock = null;
 
     if (
       this.capabilities.supportsReasoning &&
       Array.isArray(responseObject.content) &&
       responseObject.content.length > 0
     ) {
-      // Handle thinking blocks in Claude 3.7 Sonnet responses
+      // Handle text blocks in Claude 3.7 Sonnet responses
       for (const block of responseObject.content) {
         if (block.type === 'text') {
           newResponse += block.text.trim();
         }
-        if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-          // Store the entire thinking block object
-          thinkingBlock = block;
-
-          // Log the thinking block for debugging
-          this.logger.debug(
-            `Found thinking block in response, type: ${block.type}`,
-          );
-        }
-        // We don't include thinking blocks (type: thinking or redacted_thinking) in the response text
-        // They need to be preserved in the message object for the next turn though
+        // We don't include thinking blocks in the response text
       }
     } else if (responseObject.content && responseObject.content.length > 0) {
       // Handle regular text responses
@@ -308,7 +294,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, thinkingBlock, stopReason];
+    return [newResponse, responseObject.usage, stopReason];
   }
 
   /** Adds continuation message when response is truncated. */
@@ -407,7 +393,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ).trim();
 
     // Extract and log any existing scratchpad content
-    extractAndLogThinking(fileContent, this.logger);
+    extractAndLogScratchpad(fileContent, this.logger);
 
     await writeFile(outputFile, fileContent);
 
@@ -529,8 +515,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
         role: 'assistant',
         content: [{ type: 'text', text: toolState.accumulatedOutput }],
       });
+      // i thought accumulatedOutput would have been updated already??
 
-      // Handle normal Anthropic models
+      // Handle normal Anthropic models with prefill
       const lastMessage = messages.at(-1);
       if (lastMessage.role === 'assistant') {
         // why does the following two differ?
@@ -541,7 +528,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
           };
           lastMessage.content.push(newMessage);
         } else {
-          // there is a risk that accumlatedOuput has not been updated yet
           lastMessage.content = [
             {
               type: 'text',
@@ -573,14 +559,15 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
-    if (messages.at(-1)?.role !== 'user') {
+
+    let lastMessage = messages.at(-1);
+    let secondLastMessage = messages.at(-2);
+
+    if (lastMessage.role !== 'user') {
       this.logger.error('Last message is not a user message');
       return;
     }
     this.logger.debug('Last message is a user message');
-
-    let lastMessage = messages.at(-1);
-    let secondLastMessage = messages.at(-2);
 
     // Fix for continuation issues
     if (this.containCutOffMessage(lastMessage.content)) {
@@ -590,6 +577,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
       // The last message is a user message
       // The second last message must be an assistant message
+
+      // here it can be tricky because it can be that the model response has not started yet...
       if (secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
         const thinkingBlocks = secondLastMessage.content.filter(
@@ -603,7 +592,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
         );
 
         // Create a new content array starting with any thinking blocks
-        const newContent = [...thinkingBlocks];
+        // const newContent = [...thinkingBlocks];
+        let newContent = [];
+        // this should only be set once?
 
         // If there are existing text blocks, update the last one with new content
         // Otherwise create a new text block
@@ -615,20 +606,31 @@ export class ModelHandlerAnthropic extends ModelHandler {
           };
           newContent.push(updatedText);
         } else {
+          this.logger.error('Second last message content is not a list');
           newContent.push({
             type: 'text',
             text: toolState.accumulatedOutput,
           });
         }
 
-        // Update the second last message with the new content array
-        secondLastMessage.content = newContent;
-        if (thinkingBlocks.length === 0) {
-          const thinkingBlock = toolState.thinkingBlock;
-          if (thinkingBlock) {
-            secondLastMessage.content = [thinkingBlock, ...newContent];
+        // Anthropic models support attaching back thinking blocks
+        if (thinkingBlocks.length > 0) {
+          if (!toolState.thinkingAdded) {
+            this.logger.debug('(non-redacted) Thinking block found');
+            if (toolState.thinkingBlock && toolState.thinkingAdded) {
+              newContent = [toolState.thinkingBlock, ...newContent];
+              this.logger.debug('Using the first thinking block');
+            } else {
+              this.logger.debug('No existing thinking block found');
+              toolState.thinkingBlock = thinkingBlocks[0];
+              toolState.thinkingAdded = true;
+            }
           }
         }
+
+        // Update the second last message with the new content array
+        // secondLastMessage.content = newContent;
+        secondLastMessage.content.push(...newContent);
 
         // Remove cache_control from previous messages if needed
         if (this.capabilities.supportsPromptCaching) {
@@ -693,5 +695,58 @@ export class ModelHandlerAnthropic extends ModelHandler {
       }
     }
     return false;
+  }
+
+  /**
+   * Process thinking blocks for Anthropic models
+   * @returns The extracted thinking content (or null if none)
+   * there is a subtlety! Anthropic model would return a object rather than a string for the thinking block, but we should save them in the toolState as an object
+   * we need to handle this properly in the updateMessageContent function
+   */
+  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+    if (!responseObject) return null;
+
+    // Extract thinking block from the response
+    let thinkingBlock = null;
+    try {
+      if (responseObject.content && Array.isArray(responseObject.content)) {
+        for (const item of responseObject.content) {
+          if (item.type === 'thinking' && item.thinking) {
+            thinkingBlock = item;
+            break;
+          } else if (item.type === 'redacted_thinking' && item.data) {
+            thinkingBlock = item;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error(`Error extracting thinking block: ${e}`, groupId);
+      return null;
+    }
+
+    if (!thinkingBlock) return null;
+
+    this.logger.debug(`Thinking block type: ${thinkingBlock.type}`, groupId);
+
+    if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
+      // Log preview of thinking content
+      this.logger.debug(
+        `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
+        groupId,
+      );
+
+      // Return the thinking content
+      return thinkingBlock.thinking;
+    } else if (
+      thinkingBlock.type === 'redacted_thinking' &&
+      thinkingBlock.data
+    ) {
+      this.logger.debug(`Redacted thinking data available (encoded)`, groupId);
+      // For redacted thinking, we don't have accessible content
+      return null;
+    }
+
+    return null;
   }
 }

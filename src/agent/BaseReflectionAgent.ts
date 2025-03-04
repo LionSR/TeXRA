@@ -37,7 +37,10 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { extractAndLogThinking, formatAndLogThinking } from '../utils/xmlUtils';
+import {
+  extractAndLogScratchpad,
+  formatAndLogThinking,
+} from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -515,13 +518,14 @@ export abstract class BaseReflectionAgent {
         );
 
         // Extract and validate response
-        const [newResponse, responseUsage, thinkingBlock, stopReason] =
+        const [newResponse, responseUsage, stopReason] =
           this.modelHandler.extractResponse(
             responseObject,
             this.agentSetting.endTag,
           );
 
-        this.extractAndLogThinking(newResponse);
+        // Extract thinking from XML tags in the response text
+        this.extractAndLogScratchpad(newResponse);
         // this has a potential bug if <scratchpad> is included in the prefill
 
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
@@ -530,36 +534,26 @@ export abstract class BaseReflectionAgent {
           responseCycleGroupId,
         );
 
-        // Log thinking block if available
-        if (thinkingBlock) {
-          this.logger.debug(
-            `Thinking block type: ${thinkingBlock.type}`,
+        // Process thinking block directly from the response object
+        const thinkingContent = this.modelHandler.processThinkingBlock(
+          responseObject,
+          responseCycleGroupId,
+        );
+
+        // If thinking content was extracted, format and log it
+        if (thinkingContent) {
+          formatAndLogThinking(
+            thinkingContent,
+            this.logger,
             responseCycleGroupId,
           );
-          if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
-            // Log preview of thinking content
-            this.logger.debug(
-              `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
-              responseCycleGroupId,
-            );
 
-            // Format and log the full thinking content
-            formatAndLogThinking(
-              thinkingBlock.thinking,
-              this.logger,
-              responseCycleGroupId,
-            );
-          } else if (
-            thinkingBlock.type === 'redacted_thinking' &&
-            thinkingBlock.data
-          ) {
-            this.logger.debug(
-              `Redacted thinking data available (encoded)`,
-              responseCycleGroupId,
-            );
-          }
-          // Store complete thinking block in tool state
-          toolState.thinkingBlock = thinkingBlock;
+          // Store thinking block for future reference
+          toolState.thinkingBlock = {
+            type: 'thinking',
+            thinking: thinkingContent,
+          };
+          toolState.thinkingAdded = false;
         }
 
         // Compute statistics and update states
@@ -650,6 +644,7 @@ export abstract class BaseReflectionAgent {
         );
 
         // Update message content
+        // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
         this.modelHandler.updateMessageContent(
           messages,
           bestConnector,
@@ -679,6 +674,7 @@ export abstract class BaseReflectionAgent {
         );
 
         // Check if model should continue generating
+        // why is this not included in the checkStopConditions function?
         if (
           this.modelHandler.shouldContinue(
             stopReason,
@@ -1294,10 +1290,11 @@ export abstract class BaseReflectionAgent {
   }
 
   /** Extracts and logs scratchpad content from output. */
-  protected extractAndLogThinking(
+  protected extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
+    groupId?: string,
   ): void {
-    extractAndLogThinking(outputContent, this.logger, thinkingTag);
+    extractAndLogScratchpad(outputContent, this.logger, thinkingTag, groupId);
   }
 }
