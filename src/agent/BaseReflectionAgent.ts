@@ -536,10 +536,13 @@ export abstract class BaseReflectionAgent {
           responseCycleGroupId,
         );
 
-        // Process thinking block directly from the response object
+        // Extract thinking blocks directly from the response object
+        // This updates toolState with all thinking/redacted_thinking blocks
+        // and returns content of the first thinking block for logging (if any)
         const thinkingContent = this.modelHandler.processThinkingBlock(
           responseObject,
           responseCycleGroupId,
+          toolState,
         );
 
         // If thinking content was extracted, format and log it
@@ -550,12 +553,8 @@ export abstract class BaseReflectionAgent {
             responseCycleGroupId,
           );
 
-          // Store thinking block for future reference
-          toolState.thinkingBlock = {
-            type: 'thinking',
-            thinking: thinkingContent,
-          };
-          toolState.thinkingAdded = false;
+          // Note: The complete thinking blocks (including signatures) have already been
+          // stored in toolState.thinkingBlocks by the processThinkingBlock method
         }
 
         // Compute statistics and update states
@@ -785,7 +784,7 @@ export abstract class BaseReflectionAgent {
    * Processes output files for current round.
    * This method orchestrates the overall output processing flow with clear separation of concerns:
    * 1. Statistics handling via printStatistics
-   * 2. LaTeX diff operations via handleLatexdiff (only when endTurn is true)
+   * 2. LaTeX diff operations via handleLatexdiffofOutput (only when endTurn is true)
    *
    * The actual file processing is handled separately in processOutputFiles.
    *
@@ -1225,7 +1224,7 @@ export abstract class BaseReflectionAgent {
    * Processes output files from XML or direct input.
    * This method focuses solely on extracting and processing output files.
    * It does NOT perform any latexdiff operations - those are handled separately
-   * in the handleOutput method via handleLatexdiff.
+   * in the handleOutput method via handleLatexdiffofOutput.
    *
    * @param outputFile Path to the output file to process
    * @param currRound Current round number
