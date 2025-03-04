@@ -297,22 +297,26 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Adds continuation message when response is truncated. */
-  addContinueMessage(
+  /** Manages continuation with prefill support (typically no-op for models with prefill). */
+  addContinueMessageWithPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Skip if model supports assistant prefill
-    if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Skipping continuation - assistant prefill is supported',
-      );
-      return;
-    }
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+    // No-op for models that support prefill
+  }
 
+  /** Manages continuation for models without prefill support by adding a continuation prompt. */
+  addContinueMessageWithoutPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
@@ -445,7 +449,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
       const state = AgentStateRound.initialize(0);
-      this.addContinueMessage(
+      this.addContinueMessageWithoutPrefill(
         messages,
         state,
         toolState,
@@ -501,8 +505,59 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
   }
 
-  /** Updates message content with new responses while managing cache control and content formatting. */
-  updateMessageContent(
+  updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', text: toolState.accumulatedOutput }],
+    });
+    // i thought accumulatedOutput would have been updated already??
+
+    // Handle normal Anthropic models with prefill
+    const lastMessage = messages.at(-1);
+    if (lastMessage.role === 'assistant') {
+      // why does the following two differ?
+      if (Array.isArray(lastMessage.content)) {
+        const newMessage = {
+          type: 'text',
+          text: bestConnector + newResponse,
+        };
+        lastMessage.content.push(newMessage);
+      } else {
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
+      }
+
+      if (this.capabilities.supportsPromptCaching) {
+        // First remove all cache_control from all previous messages to stay under the limit
+        for (let i = 0; i < messages.length - 1; i++) {
+          const msg = messages[i];
+          this.removeCacheControl(msg.content);
+        }
+
+        // Then ensure the current message has at most one cache_control
+        if (Array.isArray(lastMessage.content)) {
+          // Remove all existing cache_control
+          this.removeCacheControl(lastMessage.content);
+
+          lastMessage.content.at(-1).cache_control = {
+            type: 'ephemeral',
+          };
+        }
+      }
+    }
+    return;
+  }
+
+  updateMessageContentWithoutPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
@@ -510,56 +565,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
-    if (this.capabilities.supportsAssistantPrefill) {
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
-      });
-      // i thought accumulatedOutput would have been updated already??
-
-      // Handle normal Anthropic models with prefill
-      const lastMessage = messages.at(-1);
-      if (lastMessage.role === 'assistant') {
-        // why does the following two differ?
-        if (Array.isArray(lastMessage.content)) {
-          const newMessage = {
-            type: 'text',
-            text: bestConnector + newResponse,
-          };
-          lastMessage.content.push(newMessage);
-        } else {
-          lastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
-        }
-
-        if (this.capabilities.supportsPromptCaching) {
-          // First remove all cache_control from all previous messages to stay under the limit
-          for (let i = 0; i < messages.length - 1; i++) {
-            const msg = messages[i];
-            this.removeCacheControl(msg.content);
-          }
-
-          // Then ensure the current message has at most one cache_control
-          if (Array.isArray(lastMessage.content)) {
-            // Remove all existing cache_control
-            this.removeCacheControl(lastMessage.content);
-
-            lastMessage.content.at(-1).cache_control = {
-              type: 'ephemeral',
-            };
-          }
-        }
-      }
-      return;
-    }
-
-    // For thinking-enabled anthropic models that don't support assistant prefill,
-    // handle like OpenAI models where the last message is always a user message
-
     let lastMessage = messages.at(-1);
     let secondLastMessage = messages.at(-2);
 
