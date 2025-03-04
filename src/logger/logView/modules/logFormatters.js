@@ -146,10 +146,11 @@ export function createGroupHeader(group) {
   const startDate = new Date(group.startTime);
   const formattedStartTime = formatTime(startDate);
 
-  let endTimeDisplay = '';
+  let durationDisplay = '';
   if (group.endTime) {
     const endDate = new Date(group.endTime);
-    endTimeDisplay = `<span class="group-end-time">Ended: ${formatTime(endDate)}</span>`;
+    const durationMs = endDate - startDate;
+    durationDisplay = `<span class="group-duration">${formatDuration(durationMs)}</span>`;
   }
 
   // Add indicator based on status
@@ -162,7 +163,7 @@ export function createGroupHeader(group) {
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
-        ${endTimeDisplay}
+        ${durationDisplay}
       </span>
     </div>
   `;
@@ -198,6 +199,32 @@ export function formatTime(date) {
     second: '2-digit',
     hour12: false,
   });
+}
+
+/**
+ * Format duration in milliseconds to a readable string
+ * @param {number} durationMs - Duration in milliseconds
+ * @returns {string} Formatted duration string
+ */
+export function formatDuration(durationMs) {
+  // Handle edge cases
+  if (durationMs < 0) return '0s';
+
+  // For very short durations, show milliseconds
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+
+  const seconds = Math.floor(durationMs / 1000) % 60;
+  const minutes = Math.floor(durationMs / (1000 * 60));
+
+  if (minutes === 0) {
+    return `${seconds}sec`;
+  } else if (seconds === 0) {
+    return `${minutes}min`;
+  } else {
+    return `${minutes}min, ${seconds}sec`;
+  }
 }
 
 /**
