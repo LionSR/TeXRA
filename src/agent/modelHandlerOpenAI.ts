@@ -21,7 +21,7 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { extractAndLogThinking } from '../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -30,6 +30,7 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
+import { AgentLogger } from '../logger/AgentLogger';
 
 const K_SLICE = 200;
 
@@ -203,10 +204,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, any, string] {
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
       if (responseObject.error) {
@@ -232,22 +230,12 @@ export class ModelHandlerOpenAI extends ModelHandler {
       this.logger.error('content is empty');
     }
 
-    // OpenAI doesn't have thinking blocks like Anthropic, so we return null
-    // However deepseek/openrouter models might have thinking blocks
-    let thinkingBlock = null;
-    if (choice.message.reasoning_content) {
-      thinkingBlock = {
-        type: 'thinking',
-        thinking: choice.message.reasoning_content,
-      };
-    }
-
     // Add end tag if response was stopped and tag isn't present
     if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, thinkingBlock, stopReason];
+    return [newResponse, responseObject.usage, stopReason];
   }
 
   /** Adds continuation message when response is truncated. */
@@ -330,7 +318,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ).trim();
 
     // Extract and log any existing scratchpad content
-    extractAndLogThinking(fileContent, this.logger);
+    extractAndLogScratchpad(fileContent, this.logger);
 
     // Write file content to output file
     await writeFile(outputFile, fileContent);
@@ -458,16 +446,27 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
 
     // for OpenAI models (or models that do not support assistant prefill) the last message is always a user/system message
-    if (
-      messages.at(-1)?.role === 'user' ||
-      messages.at(-1)?.role === 'system'
-    ) {
+
+    let lastMessage = messages.at(-1);
+    let secondLastMessage = messages.at(-2);
+
+    if (this.capabilities.supportsAssistantPrefill) {
+      if (lastMessage.role === 'assistant') {
+        lastMessage.content = [
+          { type: 'text', text: toolState.accumulatedOutput },
+        ];
+      }
+    }
+
+    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
       this.logger.debug('Last message is a user message');
-      const lastMessage = messages.at(-1);
-      const secondLastMessage = messages.at(-2);
+
       if (this.containCutOffMessage(lastMessage.content)) {
+        this.logger.debug(
+          'Last message is a user message asking to continue after cut off',
+        );
         // Then the last message is a user message
-        // SO the second last message must be an assistant message
+        // So the second last message must be an assistant message
         if (secondLastMessage.role === 'assistant') {
           // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
           // but why do the following two differ?
@@ -507,5 +506,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     agentSetting: AgentSetting,
   ): boolean {
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
+  }
+
+  /** Processes thinking blocks from API response. OpenAI models do not support thinking blocks. */
+  processThinkingBlock(responseObject: any, groupId?: string): string | null {
+    return null;
   }
 }
