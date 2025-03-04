@@ -783,6 +783,12 @@ export abstract class BaseReflectionAgent {
 
   /**
    * Processes output files for current round.
+   * This method orchestrates the overall output processing flow with clear separation of concerns:
+   * 1. Statistics handling via printStatistics
+   * 2. LaTeX diff operations via handleLatexdiff (only when endTurn is true)
+   *
+   * The actual file processing is handled separately in processOutputFiles.
+   *
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
@@ -795,6 +801,12 @@ export abstract class BaseReflectionAgent {
   ): Promise<string[]> {
     // Print statistics at the end of each round
     await this.outputHandler.printStatistics(stateGlobal, processGroupId);
+
+    // If this is the end of a turn, handle latexdiff operations as a separate step
+    if (endTurn) {
+      // Pass the process group ID to maintain proper nesting in the log hierarchy
+      await this.outputHandler.handleLatexdiff(currRound, processGroupId);
+    }
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
@@ -1207,14 +1219,22 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Processes output files and runs latexdiff operations.
+   * Processes output files from XML or direct input.
+   * This method focuses solely on extracting and processing output files.
+   * It does NOT perform any latexdiff operations - those are handled separately
+   * in the handleOutput method via handleLatexdiff.
+   *
+   * @param outputFile Path to the output file to process
+   * @param currRound Current round number
+   * @param processGroupId Optional process group ID for logging
    */
   protected async processOutputFiles(
     outputFile: string,
     currRound: number,
+    processGroupId?: string,
   ): Promise<void> {
-    // Get the active group ID for proper nesting
-    const activeGroupId = this.logger.getActiveGroupId();
+    // Use provided process group ID or get the active group ID for proper nesting
+    const activeGroupId = processGroupId || this.logger.getActiveGroupId();
 
     if (
       Array.isArray(this.agentConfig.outputFiles) &&
@@ -1239,10 +1259,13 @@ export abstract class BaseReflectionAgent {
       const processedFiles =
         await this.outputHandler.processMultipleXmlOutputs(outputFile);
       if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(
-          processedFiles,
+        // Process output files - indent LaTeX files directly
+        await this.outputHandler.indentLatexFiles(processedFiles);
+        this.logger.debug(
+          `Indented multiple output files: ${processedFiles}`,
           activeGroupId,
         );
+
         this.outputHandler.outputFiles[currRound] = processedFiles;
         await this.outputHandler.replaceInputCommands(
           this.baseFiles,
@@ -1261,16 +1284,18 @@ export abstract class BaseReflectionAgent {
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
       if (processedFile) {
-        await this.outputHandler.handleSingleOutput(
-          processedFile,
+        // Process output file - indent LaTeX file directly
+        await this.outputHandler.indentLatexFile(processedFile);
+        this.logger.debug(
+          `Indented single output file: ${processedFile}`,
           activeGroupId,
         );
+
         this.outputHandler.outputFiles[currRound] = [processedFile];
       }
     }
 
-    // Pass the active group ID to maintain proper nesting in the log hierarchy
-    await this.outputHandler.handleLatexdiff(currRound, activeGroupId);
+    // Note: latexdiff operations are now handled separately in handleOutput
   }
 
   /**
