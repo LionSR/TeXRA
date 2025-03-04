@@ -141,12 +141,18 @@ export function addLogGroup(group) {
 
   // Check if we have a saved collapsed state for this group
   const isCollapsed = getGroupToggleState(group.id);
-  if (isCollapsed === true) {
+  // Collapse if explicitly set to collapsed in the saved state OR if the group status is 'stopped'
+  if (isCollapsed === true || group.status === 'stopped') {
     groupContainer.style.display = 'none';
     // Update the toggle icon to reflect collapsed state
     const toggleIcon = headerElement.querySelector('.group-toggle i');
     if (toggleIcon) {
       toggleIcon.className = 'codicon codicon-chevron-right';
+    }
+
+    // If it's not already saved as collapsed but status is 'stopped', update the toggle state
+    if (isCollapsed !== true && group.status === 'stopped') {
+      setGroupToggleState(group.id, true);
     }
   } else {
     groupContainer.style.display = 'block'; // Default to visible if no saved state
