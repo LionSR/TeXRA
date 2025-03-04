@@ -253,7 +253,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
   /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (responseObject.error) {
-      const errorMsg = `API error: ${responseObject.error}`;
+      const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
