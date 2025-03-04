@@ -172,6 +172,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): Promise<any[]> {
     const content: any[] = [];
 
+    // const role = this.config.capabilities.supportsIntermDevMsgs
+    // ? 'system'
+    // : 'user';
+    // technically we can use system for the reflection messages, but it does not support images...
+    // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
+    const role = 'user';
+
     if (figureFiles && figureFiles.length > 0) {
       try {
         const imageContent = await this.createImageMessage(figureFiles);
@@ -181,9 +188,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.config.capabilities.supportsIntermDevMsgs
-      ? 'system'
-      : 'user';
+
     messages.push({ role, content });
     return messages;
   }

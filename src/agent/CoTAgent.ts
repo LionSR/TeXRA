@@ -42,14 +42,19 @@ export class CoTAgent extends BaseReflectionAgent {
     currRound: number = 0,
     processGroupId?: string,
   ): Promise<string[]> {
+    // Declare the process group ID at the function scope level
+    // Initialize with processGroupId if provided, otherwise it will be set in the try block
+    let outputProcessGroupId: string = processGroupId || '';
+
     try {
-      // Start a dedicated processing group if none provided
-      const cotProcessGroupId =
-        processGroupId ||
-        (await this.outputHandler.startProcessing(
-          `ProcessXmlOutput`,
+      // Start a main output processing group if none provided
+      if (!processGroupId) {
+        outputProcessGroupId = await this.logger.startGroup(
+          `OutputProcessing-Round${currRound}`,
+          undefined,
           this.logger.getActiveGroupId(),
-        ));
+        );
+      }
 
       // Initialize output files array if needed
       this.outputHandler.outputFiles[currRound] =
@@ -58,7 +63,13 @@ export class CoTAgent extends BaseReflectionAgent {
       if (endTurn) {
         this.logger.debug(
           `Processing output for round ${currRound}`,
-          cotProcessGroupId,
+          outputProcessGroupId,
+        );
+
+        // Create a dedicated XML processing subgroup
+        const xmlProcessGroupId = await this.outputHandler.startProcessing(
+          `XMLProcessing`,
+          outputProcessGroupId,
         );
 
         // Process XML structure first
@@ -68,30 +79,48 @@ export class CoTAgent extends BaseReflectionAgent {
         );
         this.logger.debug(
           `XML structure processed for round ${currRound}`,
-          cotProcessGroupId,
+          xmlProcessGroupId,
         );
 
-        // Then process output files
-        await this.processOutputFiles(outputFile, currRound);
+        // End XML processing subgroup
+        this.outputHandler.endProcessing('stopped', xmlProcessGroupId);
+
+        // Create a dedicated File Processing subgroup
+        const fileProcessGroupId = await this.outputHandler.startProcessing(
+          `FileProcessing`,
+          outputProcessGroupId,
+        );
+
+        // Then process output files using the parent class method but with our group ID
+        await super.processOutputFiles(
+          outputFile,
+          currRound,
+          fileProcessGroupId,
+        );
         this.logger.info(
           `Output files processed for round ${currRound}`,
-          cotProcessGroupId,
+          fileProcessGroupId,
         );
+
+        // End File Processing subgroup
+        this.outputHandler.endProcessing('stopped', fileProcessGroupId);
+
+        // Note: latexdiff processing is now handled in the parent class's handleOutput method
       }
 
-      // Finally handle logging in base class (but pass our group ID)
+      // Finally handle statistics in base class (but pass our group ID)
       const result = await super.handleOutput(
         stateRound,
         stateGlobal,
         outputFile,
         endTurn,
         currRound,
-        cotProcessGroupId,
+        outputProcessGroupId, // The statistics will be a subgroup of our output processing group
       );
 
       // Only end the processing group if we created it
       if (!processGroupId) {
-        this.outputHandler.endProcessing('stopped');
+        this.logger.endGroup(outputProcessGroupId, 'stopped');
       }
 
       return result;
@@ -101,9 +130,9 @@ export class CoTAgent extends BaseReflectionAgent {
         processGroupId,
       );
 
-      // Only end the processing group if we created it
-      if (!processGroupId) {
-        this.outputHandler.endProcessing('error');
+      // Only end the processing group if we created it and we have a valid outputProcessGroupId
+      if (!processGroupId && outputProcessGroupId) {
+        this.logger.endGroup(outputProcessGroupId, 'error');
       }
 
       throw err; // Re-throw to maintain error propagation

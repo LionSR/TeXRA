@@ -223,6 +223,8 @@ class VSCodeTransport extends Transport {
       const parentGroupId = group.parentGroupId;
       this.activeGroupId = parentGroupId;
     }
+
+    // when a group has been ended we should collapse it to make it readable.
   }
 
   // Get the active group ID
