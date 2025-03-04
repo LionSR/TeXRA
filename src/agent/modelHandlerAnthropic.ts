@@ -736,10 +736,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
     if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
       // Log preview of thinking content
-      this.logger.debug(
-        `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
-        groupId,
-      );
+      // this.logger.debug(
+      //   `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
+      //   groupId,
+      // );
 
       // Return the thinking content
       return thinkingBlock.thinking;
@@ -749,6 +749,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ) {
       this.logger.debug(`Redacted thinking data available (encoded)`, groupId);
       // For redacted thinking, we don't have accessible content
+      // but we should save it somewhere to be able to access it later
       return null;
     }
 
