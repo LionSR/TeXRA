@@ -190,6 +190,142 @@ export class OutputHandler {
   }
 
   /**
+   * Creates a mapping between two sets of files based on name similarity
+   * @param sourceFiles Source files array
+   * @param targetFiles Target files array
+   * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
+   * @param roundAware If true, ignores round numbers in filenames for matching
+   * @returns Map of source files to their best matching target files
+   * @private
+   */
+  private createFileMapping(
+    sourceFiles: string[],
+    targetFiles: string[],
+    matchStrategy: 'basename' | 'contains' = 'basename',
+    roundAware: boolean = false,
+  ): Map<string, string> {
+    const fileMapping = new Map<string, string>();
+
+    if (!sourceFiles?.length || !targetFiles?.length) {
+      return fileMapping;
+    }
+
+    for (const targetFile of targetFiles) {
+      if (!targetFile) continue;
+
+      const targetBaseName = path.basename(targetFile);
+
+      // Find the best matching source file for this target file
+      let bestMatch: string | null = null;
+      let bestMatchScore = 0;
+
+      for (const sourceFile of sourceFiles) {
+        if (!sourceFile) continue;
+
+        const sourceBaseName = path.basename(sourceFile);
+
+        // Extract the main filename without extension for comparison
+        const sourceName = path.parse(sourceBaseName).name;
+        const targetName = path.parse(targetBaseName).name;
+
+        // Handle round-aware matching if needed
+        const sourceNameNormalized = roundAware
+          ? sourceName.split('_r')[0]
+          : sourceName;
+        const targetNameNormalized = roundAware
+          ? targetName.split('_r')[0]
+          : targetName;
+
+        let isMatch = false;
+        let matchScore = 0;
+
+        if (matchStrategy === 'basename') {
+          // For exact basename matching
+          isMatch = sourceNameNormalized === targetNameNormalized;
+          matchScore = isMatch ? sourceNameNormalized.length : 0;
+        } else if (matchStrategy === 'contains') {
+          // For substring matching
+          isMatch = targetBaseName.includes(sourceName);
+          matchScore = isMatch ? sourceName.length : 0;
+        }
+
+        if (isMatch && matchScore > bestMatchScore) {
+          bestMatchScore = matchScore;
+          bestMatch = sourceFile;
+        }
+      }
+
+      // If we found a match, add it to our map
+      if (bestMatch) {
+        fileMapping.set(bestMatch, targetFile);
+      }
+    }
+
+    return fileMapping;
+  }
+
+  /** Updates \input commands in output files to reference new file paths. */
+  public async replaceInputCommands(
+    baseFiles: string[],
+    outputFiles: string[],
+  ): Promise<void> {
+    if (!baseFiles?.length || !outputFiles?.length) {
+      this.logger.debug('No files to process for input command replacement');
+      return;
+    }
+
+    // Create a mapping between base files and output files
+    const baseToOutputMap = this.createFileMapping(
+      baseFiles,
+      outputFiles,
+      'contains',
+    );
+
+    if (baseToOutputMap.size === 0) {
+      this.logger.debug('No valid file mappings for input command replacement');
+      return;
+    }
+
+    this.logger.debug(
+      `File mappings for input replacement: ${Array.from(
+        baseToOutputMap.entries(),
+      )
+        .map(
+          ([base, output]) =>
+            `${path.basename(base)} -> ${path.basename(output)}`,
+        )
+        .join(', ')}`,
+    );
+
+    // Create a map for basename lookups
+    const baseToOutput = new Map<string, string>();
+    for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
+      baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
+    }
+
+    for (const outputFile of outputFiles) {
+      if (!outputFile) continue;
+
+      try {
+        const content = await readFile(outputFile);
+        // Replace \input commands with references to the new file paths
+        const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
+          baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
+        );
+
+        if (newContent !== content) {
+          await writeFile(outputFile, newContent);
+          this.logger.debug(`Updated input commands in ${outputFile}`);
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+  }
+
+  /**
    * Runs all latexdiff comparisons for the current round.
    * This is the ONLY place where latexdiff operations should be performed.
    *
@@ -219,18 +355,9 @@ export class OutputHandler {
         return;
       }
 
-      // Log debugging information within the group
-      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
-      this.logger.debug(
-        `Round ${currRound} output files: ${this.outputFiles[currRound] || []}`,
-        diffProcessGroupId,
-      );
-
-      // Check if output files exist for the current round
-      if (
-        !this.outputFiles[currRound] ||
-        this.outputFiles[currRound].length === 0
-      ) {
+      // Ensure we have output files for the current round
+      const outputFiles = this.outputFiles[currRound] || [];
+      if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
           diffProcessGroupId,
@@ -239,6 +366,32 @@ export class OutputHandler {
         return;
       }
 
+      // Log debugging information within the group
+      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
+      this.logger.debug(
+        `Round ${currRound} output files: ${outputFiles}`,
+        diffProcessGroupId,
+      );
+
+      // Create a mapping between base files and output files
+      const baseToOutputMap = this.createFileMapping(
+        this.baseFiles,
+        outputFiles,
+        'contains',
+      );
+
+      this.logger.debug(
+        `Matched base files to output files: ${Array.from(
+          baseToOutputMap.entries(),
+        )
+          .map(
+            ([base, output]) =>
+              `${path.basename(base)} -> ${path.basename(output)}`,
+          )
+          .join(', ')}`,
+        diffProcessGroupId,
+      );
+
       // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
       if (this.agentSetting.isRewrite) {
         this.logger.info(
@@ -246,20 +399,16 @@ export class OutputHandler {
           diffProcessGroupId,
         );
 
-        // Generate diffs between base files and current round
-        for (let i = 0; i < this.baseFiles.length; i++) {
-          const baseFile = this.baseFiles[i];
-          const outputFile = this.outputFiles[currRound]?.[i];
-          if (baseFile && outputFile) {
-            // Call latexdiff specialized for rounds
-            const result = await runLatexdiffForRound(
-              baseFile,
-              outputFile,
-              currRound,
-            );
+        // Generate diffs based on our matched file pairs
+        for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
+          // Call latexdiff specialized for rounds
+          const result = await runLatexdiffForRound(
+            baseFile,
+            outputFile,
+            currRound,
+          );
 
-            this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
-          }
+          this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
         }
       }
 
@@ -270,24 +419,44 @@ export class OutputHandler {
           diffProcessGroupId,
         );
 
-        for (let i = 0; i < this.outputFiles[currRound].length; i++) {
-          const prevRound = currRound - 1;
-          const prevOutputFile = this.outputFiles[prevRound]?.[i];
-          const currOutputFile = this.outputFiles[currRound][i];
+        const prevOutputFiles = this.outputFiles[currRound - 1] || [];
 
-          if (prevOutputFile && currOutputFile) {
-            // Call latexdiff specialized for between-rounds
-            const result = await runLatexdiffBetweenRounds(
-              prevOutputFile,
-              currOutputFile,
-            );
+        // Create a mapping between previous round files and current round files
+        const prevToCurrentMap = this.createFileMapping(
+          prevOutputFiles,
+          outputFiles,
+          'basename',
+          true, // Enable round-aware matching
+        );
 
-            this.logLatexdiffResult(
-              result,
-              'between-rounds-diff',
-              diffProcessGroupId,
-            );
-          }
+        this.logger.debug(
+          `Matched previous round files to current round files: ${Array.from(
+            prevToCurrentMap.entries(),
+          )
+            .map(
+              ([prev, curr]) =>
+                `${path.basename(prev)} -> ${path.basename(curr)}`,
+            )
+            .join(', ')}`,
+          diffProcessGroupId,
+        );
+
+        // Generate diffs based on our matched file pairs between rounds
+        for (const [
+          prevOutputFile,
+          currOutputFile,
+        ] of prevToCurrentMap.entries()) {
+          // Call latexdiff specialized for between-rounds
+          const result = await runLatexdiffBetweenRounds(
+            prevOutputFile,
+            currOutputFile,
+          );
+
+          this.logLatexdiffResult(
+            result,
+            'between-rounds-diff',
+            diffProcessGroupId,
+          );
         }
       }
 
@@ -593,63 +762,6 @@ export class OutputHandler {
       }
     }
     await writeFile(filePath, content);
-  }
-
-  /** Updates \input commands in output files to reference new file paths. */
-  public async replaceInputCommands(
-    baseFiles: string[],
-    outputFiles: string[],
-  ): Promise<void> {
-    if (!baseFiles?.length || !outputFiles?.length) {
-      this.logger.debug('No files to process for input command replacement');
-      return;
-    }
-
-    // Create a map of base filenames to output filenames, handling arrays of different lengths
-    const baseToOutput = new Map();
-    const minLength = Math.min(baseFiles.length, outputFiles.length);
-    if (minLength < baseFiles.length) {
-      this.logger.warn(
-        `Base files length (${baseFiles.length}) is greater than output files length (${outputFiles.length}), some files will not be processed`,
-      );
-    }
-
-    for (let i = 0; i < minLength; i++) {
-      const baseFile = baseFiles[i];
-      const outputFile = outputFiles[i];
-
-      if (baseFile && outputFile) {
-        baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
-      }
-    }
-
-    if (baseToOutput.size === 0) {
-      this.logger.debug('No valid file mappings for input command replacement');
-      return;
-    }
-
-    for (const outputFile of outputFiles) {
-      if (!outputFile) continue;
-
-      try {
-        const content = await readFile(outputFile);
-        // if both the main file and the file is in a sudirectory, such as newVersions/main.tex and newVersions/theta_minustheta_mapping.tex
-        // then the input command \\input{theta_minustheta_mapping.tex} would also work, but will not be caught by this? I am not sure.
-        // Also it looks like "_" is not being caught by this, why? above worked for newCoolingAppB for example.
-        const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
-          baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
-        );
-
-        if (newContent !== content) {
-          await writeFile(outputFile, newContent);
-          this.logger.debug(`Updated input commands in ${outputFile}`);
-        }
-      } catch (err) {
-        this.logger.warn(
-          `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
   }
 
   /** Prints statistics about token usage and costs */
