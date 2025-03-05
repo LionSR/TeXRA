@@ -57,7 +57,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    const useStreaming = getConfig<boolean>('model.useStreaming', false);
+    let useStreaming = getConfig<boolean>('model.useStreaming', false);
 
     const kwargs: any = {
       model: this.config.fullName,
@@ -71,9 +71,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
       kwargs.temperature = temperature;
     }
-
-    if (this.config.capabilities.supportsReasoningEffort) {
-      kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
+    if (this.config.capabilities.supportsReasoning) {
+      useStreaming =
+        useStreaming ||
+        getConfig<boolean>('model.useStreamingOpenAIReasoning', false);
+      if (this.config.capabilities.supportsReasoningEffort) {
+        kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
+      }
     }
 
     if (useStreaming) {

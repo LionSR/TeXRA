@@ -75,9 +75,11 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.debug('Enabling thinking for model with reasoning support');
       options.thinking = {
         type: 'enabled',
-        // budget_tokens: useStreaming ? 32768 : 4096,
-        budget_tokens: useStreaming ? 32768 : 1024,
+        budget_tokens: useStreaming ? 32768 : 4096,
       };
+      useStreaming =
+        useStreaming ||
+        getConfig<boolean>('model.useStreamingAnthropicReasoning', false);
     }
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
@@ -566,7 +568,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Fix for continuation issues
     if (this.containCutOffMessage(lastMessage.content)) {
       this.logger.debug(
-        'Last message is a user message asking to continue after cut off',
+        'Last message is a user message asking to continue after cutoff',
       );
 
       // The last message is a user message
@@ -584,52 +586,55 @@ export class ModelHandlerAnthropic extends ModelHandler {
           (item: any) => item.type === 'text',
         );
 
-        // Create a new content array for the updated message
-        let newThinkingContent: any[] = [];
-
         // Anthropic models should include thinking blocks first in the content array
         // Add all thinking blocks from toolState if we have them
-        if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
-          // Add all stored thinking blocks from toolState first
-          this.logger.debug(
-            `Adding ${toolState.thinkingBlocks.length} thinking blocks to message content`,
-          );
-          newThinkingContent.push(...toolState.thinkingBlocks);
-        } else if (thinkingBlocks.length > 0) {
-          // If no thinking blocks in toolState but we found them in the message, use those
+        if (thinkingBlocks.length > 0) {
+          // if we have thinking blocks, then we use them
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          newThinkingContent.push(...thinkingBlocks);
-          // Store them in toolState for future use
-          toolState.thinkingBlocks = thinkingBlocks;
-          toolState.thinkingAdded = true;
-        }
-
-        // Add the updated text content
-        // If there are existing text blocks, update with new content
-        // Otherwise create a new text block
-
-        let newContent: any[] = [];
-
-        if (textBlocks.length > 0) {
-          newContent = [...newThinkingContent, ...textBlocks];
-          newThinkingContent.push({
+          secondLastMessage.content.push({
             type: 'text',
             text: bestConnector + newResponse,
           });
         } else {
-          newContent = [
-            ...newThinkingContent,
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
-        }
+          secondLastMessage.content.push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+          // Add the updated text content
+          // If there are existing text blocks, update with new content
+          // Otherwise create a new text block with the new returned thinking block if it is not after cut off
+          // we should not add the new thinking block if it is after cut off
+          // but we still need to add at least somewhere...
 
-        // Replace the content of the second last message with our new content array
-        secondLastMessage.content = newContent;
+          // let newThinkingContent: any[] = [];
+
+          // if (toolState.thinkingAdded && toolState.thinkingBlocks.length > 0) {
+          //   // if we have thinking blocks, then we use them
+          //   this.logger.debug(
+          //     `Using ${toolState.thinkingBlocks.length} existing thinking blocks from previous message`,
+          //   );
+          //   newThinkingContent = [...toolState.thinkingBlocks];
+          // }
+
+          // let newContent: any[] = [];
+
+          // if (textBlocks.length > 0) {
+          //   newContent = [...newThinkingContent, ...textBlocks];
+          // } else {
+          //   newContent = [
+          //     ...newThinkingContent,
+          //     {
+          //       type: 'text',
+          //       text: toolState.accumulatedOutput,
+          //     },
+          //   ];
+          // }
+
+          // Replace the content of the second last message with our new content array
+          // secondLastMessage.content = newContent;
+        }
 
         // Remove cache_control from previous messages if needed
         if (this.capabilities.supportsPromptCaching) {
@@ -648,7 +653,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
           );
         }
       }
-      return;
     } else {
       this.logger.debug(
         'Last message is a request message rather than a ask to continue after cut off',
@@ -756,13 +760,20 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // If toolState is provided, update it with all thinking blocks
     if (toolState && !toolState.thinkingAdded) {
       // Store all thinking blocks for future reference
-      toolState.thinkingBlocks = thinkingBlocks;
-      // thinkingBlock is now a getter that returns thinkingBlocks[0]
-      toolState.thinkingAdded = true;
-      this.logger.debug(
-        `Added ${thinkingBlocks.length} thinking blocks to toolState`,
-        groupId,
-      );
+      if (!this.containCutOffMessage(regularThinkingContent)) {
+        toolState.thinkingBlocks = thinkingBlocks;
+        // thinkingBlock is now a getter that returns thinkingBlocks[0]
+        toolState.thinkingAdded = true;
+        this.logger.debug(
+          `Added ${thinkingBlocks.length} thinking blocks to toolState`,
+          groupId,
+        );
+      } else {
+        this.logger.debug(
+          `Skipping adding thinking blocks to toolState because of cut off message`,
+          groupId,
+        );
+      }
     }
 
     // Return content of the first regular thinking block for logging

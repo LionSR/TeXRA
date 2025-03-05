@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.21.21",
+  "version": "0.21.22",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -84,6 +84,18 @@
             "type": "boolean",
             "default": false,
             "description": "Enable streaming API responses when supported by the model. This will be more robust for long responses.",
+            "scope": "resource"
+          },
+          "coauthor.model.useStreamingAnthropicReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming API responses when supported by the Anthropic model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
+            "scope": "resource"
+          },
+          "coauthor.model.useStreamingOpenAIReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
             "scope": "resource"
           }
         }

@@ -329,7 +329,10 @@ export abstract class ModelHandler {
     return [endTurn, shouldStop];
   }
 
-  public containCutOffMessage(content: any[]): boolean {
+  public containCutOffMessage(content: any[] | string): boolean {
+    if (typeof content === 'string') {
+      return content.includes('Your response got cut off');
+    }
     return content.some((c: { type: string; text: string }) =>
       c.text?.includes('Your response got cut off'),
     );
