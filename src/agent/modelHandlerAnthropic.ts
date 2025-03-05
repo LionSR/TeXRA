@@ -505,9 +505,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    const lastMessage = messages.at(-1);
+    let lastMessage = messages.at(-1);
+
     if (lastMessage.role === 'assistant') {
-      // why does the following two differ?
       if (Array.isArray(lastMessage.content)) {
         const newMessage = {
           type: 'text',
@@ -556,7 +556,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     let secondLastMessage = messages.at(-2);
 
     if (lastMessage.role !== 'user') {
-      this.logger.error('Last message is not a user message');
+      this.logger.error(
+        'Last message is not a user message - unexpected format',
+      );
       return;
     }
     this.logger.debug('Last message is a user message');
@@ -568,9 +570,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
       );
 
       // The last message is a user message
-      // The second last message must be an assistant message
+      // So the second last message must be an assistant message
 
-      // here it can be tricky because it can be that the model response has not started yet...
       if (secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
         const thinkingBlocks = secondLastMessage.content.filter(
@@ -584,7 +585,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         );
 
         // Create a new content array for the updated message
-        let newContent: any[] = [];
+        let newThinkingContent: any[] = [];
 
         // Anthropic models should include thinking blocks first in the content array
         // Add all thinking blocks from toolState if we have them
@@ -593,13 +594,13 @@ export class ModelHandlerAnthropic extends ModelHandler {
           this.logger.debug(
             `Adding ${toolState.thinkingBlocks.length} thinking blocks to message content`,
           );
-          newContent.push(...toolState.thinkingBlocks);
+          newThinkingContent.push(...toolState.thinkingBlocks);
         } else if (thinkingBlocks.length > 0) {
           // If no thinking blocks in toolState but we found them in the message, use those
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          newContent.push(...thinkingBlocks);
+          newThinkingContent.push(...thinkingBlocks);
           // Store them in toolState for future use
           toolState.thinkingBlocks = thinkingBlocks;
           toolState.thinkingAdded = true;
@@ -608,16 +609,23 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // Add the updated text content
         // If there are existing text blocks, update with new content
         // Otherwise create a new text block
+
+        let newContent: any[] = [];
+
         if (textBlocks.length > 0) {
-          newContent.push({
+          newContent = [...newThinkingContent, ...textBlocks];
+          newThinkingContent.push({
             type: 'text',
             text: bestConnector + newResponse,
           });
         } else {
-          newContent.push({
-            type: 'text',
-            text: toolState.accumulatedOutput,
-          });
+          newContent = [
+            ...newThinkingContent,
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ];
         }
 
         // Replace the content of the second last message with our new content array
@@ -634,13 +642,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // Remove the user continuation prompt to keep the conversation clean
         if (messages.at(-1)?.role === 'user') {
           messages.pop();
+        } else {
+          this.logger.error(
+            'Last message is not a user message - unexpected format',
+          );
         }
       }
       return;
     } else {
-      this.logger.debug('Handling non-continuation response');
+      this.logger.debug(
+        'Last message is a request message rather than a ask to continue after cut off',
+      );
       // Create a new assistant message with the response
-      const assistantMessage: { role: string; content: any[] } = {
+      let assistantMessage: { role: string; content: any[] } = {
         role: 'assistant',
         content: [],
       };
@@ -656,7 +670,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // Add the text content
       assistantMessage.content.push({
         type: 'text',
-        text: newResponse,
+        text: toolState.accumulatedOutput,
       });
 
       messages.push(assistantMessage);
