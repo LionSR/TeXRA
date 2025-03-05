@@ -63,16 +63,16 @@ export function extractTextFromTag(
 ): string {
   // This will find all matches of the tag
   const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
-  
+
   // Variables to track the last match
   let lastContent = '';
   let match;
-  
+
   // Find all matches and keep the last one
   while ((match = regex.exec(inputContent)) !== null) {
     lastContent = match[1];
   }
-  
+
   // Remove CDATA sections if present
   lastContent = lastContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
   return lastContent;
@@ -87,10 +87,12 @@ export function extractMultipleTextFromTag(
   containerTag?: string,
 ): Array<{ content: string; name: string }> {
   // Define function to extract documents from any content string
-  const extractDocuments = (content: string): Array<{ content: string; name: string }> => {
+  const extractDocuments = (
+    content: string,
+  ): Array<{ content: string; name: string }> => {
     const results: Array<{ content: string; name: string }> = [];
     const documentRegex = /<document.*?name="(.*?)".*?>(.*?)<\/document>/gs;
-    
+
     let documentMatch;
     while ((documentMatch = documentRegex.exec(content)) !== null) {
       const name = documentMatch[1] || 'unnamed';
@@ -99,15 +101,18 @@ export function extractMultipleTextFromTag(
       docContent = docContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
       results.push({ name, content: docContent });
     }
-    
+
     return results;
   };
 
   // If containerTag is provided, try to extract content from within that container
   if (containerTag) {
-    const containerRegex = new RegExp(`<${containerTag}>(.*?)<\/${containerTag}>`, 's');
+    const containerRegex = new RegExp(
+      `<${containerTag}>(.*?)<\/${containerTag}>`,
+      's',
+    );
     const containerMatch = inputContent.match(containerRegex);
-    
+
     if (containerMatch && containerMatch[1]) {
       const documents = extractDocuments(containerMatch[1]);
       if (documents.length > 0) {
@@ -116,7 +121,7 @@ export function extractMultipleTextFromTag(
       // If no documents found in container, will fall through to the fallback
     }
   }
-  
+
   // Fallback: extract documents directly from the input content
   return extractDocuments(inputContent);
 }
