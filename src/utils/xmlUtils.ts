@@ -61,9 +61,69 @@ export function extractTextFromTag(
   inputContent: string,
   documentTag: string,
 ): string {
-  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 's');
-  const match = inputContent.match(regex);
-  return match ? match[1] : '';
+  // This will find all matches of the tag
+  const regex = new RegExp(`<${documentTag}>(.*?)<\/${documentTag}>`, 'gs');
+
+  // Variables to track the last match
+  let lastContent = '';
+  let match;
+
+  // Find all matches and keep the last one
+  while ((match = regex.exec(inputContent)) !== null) {
+    lastContent = match[1];
+  }
+
+  // Remove CDATA sections if present
+  lastContent = lastContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+  return lastContent;
+}
+
+/**
+ * Extract multiple document elements from an XML container tag
+ * Used as a fallback for extracting documents when XML parsing fails
+ */
+export function extractMultipleTextFromTag(
+  inputContent: string,
+  containerTag?: string,
+): Array<{ content: string; name: string }> {
+  // Define function to extract documents from any content string
+  const extractDocuments = (
+    content: string,
+  ): Array<{ content: string; name: string }> => {
+    const results: Array<{ content: string; name: string }> = [];
+    const documentRegex = /<document.*?name="(.*?)".*?>(.*?)<\/document>/gs;
+
+    let documentMatch;
+    while ((documentMatch = documentRegex.exec(content)) !== null) {
+      const name = documentMatch[1] || 'unnamed';
+      // Extract content and remove CDATA sections if present
+      let docContent = documentMatch[2] || '';
+      docContent = docContent.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1');
+      results.push({ name, content: docContent });
+    }
+
+    return results;
+  };
+
+  // If containerTag is provided, try to extract content from within that container
+  if (containerTag) {
+    const containerRegex = new RegExp(
+      `<${containerTag}>(.*?)<\/${containerTag}>`,
+      's',
+    );
+    const containerMatch = inputContent.match(containerRegex);
+
+    if (containerMatch && containerMatch[1]) {
+      const documents = extractDocuments(containerMatch[1]);
+      if (documents.length > 0) {
+        return documents;
+      }
+      // If no documents found in container, will fall through to the fallback
+    }
+  }
+
+  // Fallback: extract documents directly from the input content
+  return extractDocuments(inputContent);
 }
 
 /**
@@ -82,8 +142,9 @@ export function filterTagsFromText(
 
 /**
  * Extract content from XML document element for single document case
+ * We should have a fall back to regex if this fails
  */
-export function extractContentFromTag(
+export function extractContentFromXMLbyTag(
   root: Record<string, any>,
   documentTag: string,
 ): string | null {
@@ -115,8 +176,9 @@ export function extractContentFromTag(
 
 /**
  * Extract content from XML document element for multiple document case
+ * we should have a fall back to regex if this fails
  */
-export function extractContentFromTagMultiple(
+export function extractContentFromXMLbyTagMultiple(
   root: Record<string, any>,
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
@@ -165,51 +227,90 @@ export function extractContentFromTagMultiple(
 }
 
 /**
+ * Formats and logs special content (scratchpad or thinking) with standardized formatting
+ *
+ * @param content The raw content to format
+ * @param logger The logger instance to use
+ * @param contentType The type of content (e.g., 'Scratchpad', 'Thinking')
+ * @param groupId Optional group ID for logging
+ */
+export function formatAndLogContent(
+  content: string,
+  logger: AgentLogger,
+  contentType: string = 'Scratchpad',
+  groupId?: string,
+): void {
+  if (!content) return;
+
+  // Log original content for debugging
+  console.log(
+    `Original ${contentType.toLowerCase()} content before formatting:`,
+    content,
+  );
+
+  // Format the content for improved rendering
+  let formattedContent = content.trim();
+
+  // Replace LaTeX notation with markdown-friendly equivalents
+  formattedContent = formattedContent
+    .replace(/\\section\{([^}]+)\}/g, '## $1')
+    .replace(/\\subsection\{([^}]+)\}/g, '### $1')
+    .replace(/\\begin\{itemize\}/g, '')
+    .replace(/\\end\{itemize\}/g, '')
+    // Also handle enumerate environments like itemize
+    .replace(/\\begin\{enumerate\}/g, '')
+    .replace(/\\end\{enumerate\}/g, '')
+    .replace(/\\item\s+/g, '- ')
+    .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
+    .replace(/\\textit\{([^}]+)\}/g, '*$1*')
+    .replace(/\\emph\{([^}]+)\}/g, '*$1*')
+    // Convert XML tags to markdown headings - general approach
+    .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
+    // Convert opening tags without closing tags to markdown headings
+    .replace(/<(\w+)>/g, '## $1\n\n')
+    .replace(/<\/\w+>/g, '')
+    // Escape LaTeX references but preserve the content
+    .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
+
+  // \\item/enumerate: fot this is tricky because it also takes a line that should be get rid of
+
+  // Log the formatted content
+  logger.info(`${contentType} content:\n${formattedContent}`, groupId);
+}
+
+/**
  * Extracts scratchpad content from the given output and logs it after formatting.
  * Converts LaTeX and XML notation to more readable markdown format.
  *
  * @param outputContent The content to extract scratchpad from
  * @param logger The logger instance to use for logging the formatted content
  * @param thinkingTag The XML tag name used for the scratchpad content
+ * @param groupId Optional group ID for logging
  */
-export function extractAndLogThinking(
+export function extractAndLogScratchpad(
   outputContent: string,
   logger: AgentLogger,
   thinkingTag: string = 'scratchpad',
+  groupId?: string,
 ): void {
-  const scratchpadContent = extractTextFromTag(outputContent, thinkingTag);
-  if (scratchpadContent) {
-    // Log original content for debugging
-    console.log(
-      'Original scratchpad content before formatting:',
-      scratchpadContent,
-    );
-
-    // Format the content for improved rendering
-    let formattedContent = scratchpadContent.trim();
-
-    // Replace LaTeX notation with markdown-friendly equivalents
-    formattedContent = formattedContent
-      .replace(/\\section\{([^}]+)\}/g, '## $1')
-      .replace(/\\subsection\{([^}]+)\}/g, '### $1')
-      .replace(/\\begin\{itemize\}/g, '')
-      .replace(/\\end\{itemize\}/g, '')
-      // Also handle enumerate environments like itemize
-      .replace(/\\begin\{enumerate\}/g, '')
-      .replace(/\\end\{enumerate\}/g, '')
-      .replace(/\\item\s+/g, '- ')
-      .replace(/\\textbf\{([^}]+)\}/g, '**$1**')
-      .replace(/\\textit\{([^}]+)\}/g, '*$1*')
-      .replace(/\\emph\{([^}]+)\}/g, '*$1*')
-      // Convert XML tags to markdown headings - general approach
-      .replace(/<(\w+)>\s*([^<]*?)\s*<\/\1>/g, '## $1\n\n$2')
-      // Convert opening tags without closing tags to markdown headings
-      .replace(/<(\w+)>/g, '## $1\n\n')
-      .replace(/<\/\w+>/g, '')
-      // Escape LaTeX references but preserve the content
-      .replace(/\\ref\{([^}]+)\}/g, '\\\\ref{$1}');
-
-    // Log the formatted content
-    logger.info(`Scratchpad content:\n${formattedContent}`);
+  const extractedContent = extractTextFromTag(outputContent, thinkingTag);
+  if (extractedContent) {
+    formatAndLogContent(extractedContent, logger, 'Scratchpad', groupId);
   }
+}
+
+/**
+ * Formats and logs model thinking content.
+ * Uses the same formatting logic as the scratchpad content.
+ *
+ * @param thinkingContent The thinking content to format and log
+ * @param logger The logger instance to use for logging
+ * @param groupId Optional group ID for logging
+ */
+export function formatAndLogThinking(
+  thinkingContent: string,
+  logger: AgentLogger,
+  groupId?: string,
+): void {
+  formatAndLogContent(thinkingContent, logger, 'Thinking', groupId);
 }

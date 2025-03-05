@@ -42,46 +42,80 @@ export function processScratchpadContent(message) {
           contentStartIndex + 'Scratchpad content:'.length,
         );
 
-        try {
-          // Pre-process LaTeX references to protect them from markdown parsing
-          content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
-
-          // Process content as markdown
-          let parsedMarkdown = marked.parse(content);
-
-          // Log the generated HTML for debugging
-          // console.log('Generated markdown HTML:', parsedMarkdown);
-
-          // Post-process to restore and style LaTeX references
-          parsedMarkdown = parsedMarkdown.replace(
-            /@@LATEX-REF:([^@]+)@@/g,
-            '<code class="latex-ref">\\ref{$1}</code>',
-          );
-
-          // Fix spacing issues that might occur with consecutive paragraph elements
-          parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
-
-          // Remove extra whitespace and newlines between HTML tags
-          parsedMarkdown = parsedMarkdown.replace(/>\s+</g, '><');
-
-          // Remove extra whitespace at start and end of content
-          parsedMarkdown = parsedMarkdown.trim();
-
-          // Create enhanced scratchpad element with better formatting
-          return message.replace(
-            /<span class="message-info">Scratchpad content:.*?<\/span>/s,
-            `<span class="message-info">Scratchpad content:</span>
-             <div class="scratchpad-content">${parsedMarkdown}</div>`,
-          );
-        } catch (e) {
-          console.error('Error parsing markdown:', e);
-          // Fallback to original content
-          return message;
-        }
+        return formatSpecialContent(message, content, 'Scratchpad content:');
       }
     }
   }
+
+  // Check for thinking content
+  if (message.includes('Thinking content:')) {
+    // Extract the actual thinking content
+    const thinkingMatch = message.match(
+      /<span class="message-info">(Thinking content:.*?)<\/span>/s,
+    );
+    if (thinkingMatch && thinkingMatch[1]) {
+      let content = thinkingMatch[1];
+
+      // Extract content after the "Thinking content:" prefix
+      const contentStartIndex = content.indexOf('Thinking content:');
+      if (contentStartIndex !== -1) {
+        content = content.substring(
+          contentStartIndex + 'Thinking content:'.length,
+        );
+
+        return formatSpecialContent(message, content, 'Thinking content:');
+      }
+    }
+  }
+
   return message;
+}
+
+/**
+ * Format special content like scratchpad or thinking with Markdown
+ * @param {string} message - The original message
+ * @param {string} content - The content to format
+ * @param {string} contentType - The type label (e.g., "Scratchpad content:" or "Thinking content:")
+ * @returns {string} Formatted message
+ */
+function formatSpecialContent(message, content, contentType) {
+  try {
+    // Pre-process LaTeX references to protect them from markdown parsing
+    content = content.replace(/\\\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
+
+    // Process content as markdown
+    let parsedMarkdown = marked.parse(content);
+
+    // Post-process to restore and style LaTeX references
+    parsedMarkdown = parsedMarkdown.replace(
+      /@@LATEX-REF:([^@]+)@@/g,
+      '<code class="latex-ref">\\ref{$1}</code>',
+    );
+
+    // Fix spacing issues that might occur with consecutive paragraph elements
+    parsedMarkdown = parsedMarkdown.replace(/<\/p>\s*<p>/g, '</p><p>');
+
+    // Remove extra whitespace and newlines between HTML tags
+    parsedMarkdown = parsedMarkdown.replace(/>\s+</g, '><');
+
+    // Remove extra whitespace at start and end of content
+    parsedMarkdown = parsedMarkdown.trim();
+
+    // Create enhanced content element with better formatting
+    const cssClass = contentType
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(':', '');
+    return message.replace(
+      new RegExp(`<span class="message-info">${contentType}.*?<\/span>`, 's'),
+      `<span class="message-info">${contentType}</span>
+       <div class="special-content ${cssClass}">${parsedMarkdown}</div>`,
+    );
+  } catch (e) {
+    console.error('Error parsing markdown:', e);
+    // Fallback to original content
+    return message;
+  }
 }
 
 /**
@@ -112,10 +146,11 @@ export function createGroupHeader(group) {
   const startDate = new Date(group.startTime);
   const formattedStartTime = formatTime(startDate);
 
-  let endTimeDisplay = '';
+  let durationDisplay = '';
   if (group.endTime) {
     const endDate = new Date(group.endTime);
-    endTimeDisplay = `<span class="group-end-time">Ended: ${formatTime(endDate)}</span>`;
+    const durationMs = endDate - startDate;
+    durationDisplay = `<span class="group-duration">${formatDuration(durationMs)}</span>`;
   }
 
   // Add indicator based on status
@@ -128,7 +163,7 @@ export function createGroupHeader(group) {
       <span class="group-title">${group.name}</span>
       <span class="group-time">
         <span class="group-start-time">Started: ${formattedStartTime}</span>
-        ${endTimeDisplay}
+        ${durationDisplay}
       </span>
     </div>
   `;
@@ -164,6 +199,32 @@ export function formatTime(date) {
     second: '2-digit',
     hour12: false,
   });
+}
+
+/**
+ * Format duration in milliseconds to a readable string
+ * @param {number} durationMs - Duration in milliseconds
+ * @returns {string} Formatted duration string
+ */
+export function formatDuration(durationMs) {
+  // Handle edge cases
+  if (durationMs < 0) return '0s';
+
+  // For very short durations, show milliseconds
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+
+  const seconds = Math.floor(durationMs / 1000) % 60;
+  const minutes = Math.floor(durationMs / (1000 * 60));
+
+  if (minutes === 0) {
+    return `${seconds}sec`;
+  } else if (seconds === 0) {
+    return `${minutes}min`;
+  } else {
+    return `${minutes}min, ${seconds}sec`;
+  }
 }
 
 /**

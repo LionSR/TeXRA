@@ -235,7 +235,6 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end\n': '\\end{document}\n',
     '</figure>\n': '\\end{figure}\n',
     '</enumerate>': '\\end{enumerate}',
-    '</enumerate}': '\\end{enumerate}',
 
     '\\begin{latex_document}': '<latex_document>',
     '\\end{latex_document}': '</latex_document>',
@@ -277,6 +276,30 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '<document name="">': '<document name="unknown">',
     // for Gemini:
     '<?xml version="1.0" encoding="UTF-8"?>': '',
+    // for Gemini:
+    '</equation}': '\\end{equation}',
+    '</align}': '\\end{align}',
+    '</figure}': '\\end{figure}',
+    '</tikzpicture}': '\\end{tikzpicture}',
+    '</itemize}': '\\end{itemize}',
+    '</enumerate}': '\\end{enumerate}',
+    '</revised_statement}': '</revised_statement>',
+    '</scope}': '\\end{scope}',
+    '</latex_document}': '</latex_document>',
+    // comments
+    '% 1ST_UPDATED_LATEX_DOCUMENT HERE\n': '',
+    '% 2ND_UPDATED_LATEX_DOCUMENT HERE\n': '',
+    //
+    '\\begin{<latex_document>\nalign': '\\begin{align',
+    '\\begin{<latex_document>\nequation': '\\begin{equation',
+    '\\begin{<latex_document>\nitemize': '\\begin{itemize',
+    '\\begin{<latex_document>\nenumerate': '\\begin{enumerate}',
+    '\\begin{<latex_document>\nfigure': '\\begin{figure}',
+    '\\begin{<latex_document>\ntikzpicture': '\\begin{tikzpicture}',
+    '\\\n<latex_document>': '\\',
+
+    '<xml:documents>': '<latex_documents>',
+    '</xml:documents>': '</latex_documents>',
   },
 };
 

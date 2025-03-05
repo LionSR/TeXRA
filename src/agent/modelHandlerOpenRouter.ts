@@ -43,6 +43,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       kwargs.reasoning = {
         effort: this.config.capabilities.reasoningEffort,
       };
+      kwargs.include_reasoning = true;
     }
 
     if (endTag) {
@@ -50,6 +51,45 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
 
     return client.chat.completions.create(kwargs);
+  }
+
+  // Implementation for processing thinking blocks in OpenRouter responses
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
+    if (!responseObject) return null;
+
+    // According to OpenRouter docs, reasoning is available at choices[0].message.reasoning
+    if (
+      responseObject.choices &&
+      responseObject.choices.length > 0 &&
+      responseObject.choices[0].message &&
+      responseObject.choices[0].message.reasoning
+    ) {
+      const reasoning = responseObject.choices[0].message.reasoning;
+      this.logger.debug(`OpenRouter reasoning found`, groupId);
+
+      // Log preview of reasoning content
+      if (typeof reasoning === 'string') {
+        this.logger.debug(
+          `Reasoning preview: ${reasoning.substring(0, 200)}...`,
+          groupId,
+        );
+        return reasoning;
+      } else {
+        // If reasoning is an object, convert to string
+        const reasoningStr = JSON.stringify(reasoning);
+        this.logger.debug(
+          `Reasoning preview: ${reasoningStr.substring(0, 200)}...`,
+          groupId,
+        );
+        return reasoningStr;
+      }
+    }
+
+    return null;
   }
 }
 
@@ -70,38 +110,47 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     });
   }
 
-  /** Updates message content with support for Anthropic's assistant prefill. */
-  updateMessageContent(
+  updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
   ): void {
     const lastMessage = messages.at(-1);
-    if (this.capabilities.supportsAssistantPrefill) {
-      // although OpenAI models do not support assistant prefill, some models (such as Anthropic) via OpenRouter might do
-      if (lastMessage.role === 'assistant') {
-        if (Array.isArray(lastMessage.content)) {
-          lastMessage.content.at(-1).text = bestConnector + newResponse;
-        } else if (typeof lastMessage.content === 'string') {
-          lastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
-        }
-      } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
-        messages.push({
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ],
-        });
+    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/Deepseek perhaps?) via OpenRouter might do
+    if (lastMessage.role === 'assistant') {
+      if (Array.isArray(lastMessage.content)) {
+        // is this correct? it looks like we should attach previous response too.
+        lastMessage.content.at(-1).text = bestConnector + newResponse;
+      } else if (typeof lastMessage.content === 'string') {
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
       }
+    }
+  }
+
+  /** Updates message content for models with prefill support. */
+  updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    let lastMessage = messages.at(-1);
+    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+      messages.push({
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ],
+      });
     }
   }
 }

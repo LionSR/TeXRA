@@ -21,7 +21,7 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { extractAndLogThinking } from '../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -30,7 +30,7 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
-import { stream } from 'winston';
+import { AgentLogger } from '../logger/AgentLogger';
 
 const K_SLICE = 200;
 
@@ -57,7 +57,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    const useStreaming = getConfig<boolean>('model.useStreaming', false);
+    let useStreaming = getConfig<boolean>('model.useStreaming', false);
 
     const kwargs: any = {
       model: this.config.fullName,
@@ -71,17 +71,23 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
       kwargs.temperature = temperature;
     }
-
-    // Handle O1 models
-    if (this.isOReasoningModelFull) {
-      kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
+    if (this.config.capabilities.supportsReasoning) {
+      useStreaming =
+        useStreaming ||
+        getConfig<boolean>('model.useStreamingOpenAIReasoning', false);
+      if (this.config.capabilities.supportsReasoningEffort) {
+        kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
+      }
     }
 
     if (useStreaming) {
       let response: any;
+      kwargs.stream_options = { include_usage: true };
       try {
         const stream = client.beta.chat.completions.stream(kwargs);
         response = await stream.finalMessage();
+
+        // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
 
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
@@ -172,6 +178,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): Promise<any[]> {
     const content: any[] = [];
 
+    // const role = this.config.capabilities.supportsIntermDevMsgs
+    // ? 'system'
+    // : 'user';
+    // technically we can use system for the reflection messages, but it does not support images...
+    // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
+    const role = 'user';
+
     if (figureFiles && figureFiles.length > 0) {
       try {
         const imageContent = await this.createImageMessage(figureFiles);
@@ -181,9 +194,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
     }
     content.push({ type: 'text', text: userMessage });
-    const role = this.config.capabilities.supportsIntermDevMsgs
-      ? 'system'
-      : 'user';
+
     messages.push({ role, content });
     return messages;
   }
@@ -204,17 +215,38 @@ export class ModelHandlerOpenAI extends ModelHandler {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, any, string] {
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (!responseObject.choices?.length) {
       this.logger.debug(`Response object: ${JSON.stringify(responseObject)}`);
+
+      // Add fallback for streaming which returns content directly in responseObject
+      if (responseObject.role && responseObject.content) {
+        this.logger.info(
+          'Using direct response format (streaming style) as fallback',
+        );
+        const newResponse = responseObject.content.trim();
+        // Since we don't have a stop reason in this format, assume 'stop'
+        // const stopReason = 'stop';
+        let stopReason = 'length';
+        if (responseObject.finish_reason) {
+          stopReason = responseObject.finish_reason;
+        }
+
+        // For usage, we'll use empty values since they're not provided
+        const usage = responseObject.usage || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+        };
+
+        return [newResponse, usage, stopReason];
+      }
+
       if (responseObject.error) {
-        const errorMsg = `API error: ${responseObject.error}`;
+        const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
         this.logger.error(errorMsg);
         throw new Error(errorMsg);
       }
+
       const errorMsg = 'Invalid response from API: missing choices';
       this.logger.error(errorMsg);
       this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
@@ -224,16 +256,13 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Extract base response
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
-    let newResponse = choice.message.content.trim();
-
-    // OpenAI doesn't have thinking blocks like Anthropic, so we return null
-    // However deepseek/openrouter models might have thinking blocks
-    let thinkingBlock = null;
-    if (choice.message.reasoning_content) {
-      thinkingBlock = {
-        type: 'thinking',
-        thinking: choice.message.reasoning_content,
-      };
+    let newResponse = '';
+    if (choice.message.content) {
+      newResponse = choice.message.content.trim();
+    } else {
+      newResponse = '';
+      this.logger.error(`Response object: ${JSON.stringify(responseObject)}`);
+      this.logger.error('content is empty');
     }
 
     // Add end tag if response was stopped and tag isn't present
@@ -241,25 +270,29 @@ export class ModelHandlerOpenAI extends ModelHandler {
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, thinkingBlock, stopReason];
+    return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Adds continuation message when response is truncated. */
-  addContinueMessage(
+  /** Manages continuation with prefill support (typically no-op for models with prefill). */
+  addContinueMessageWithPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Skip if model supports assistant prefill
-    if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Skipping continuation - assistant prefill is supported',
-      );
-      return;
-    }
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+    // No-op for models that support prefill
+  }
 
+  /** Manages continuation for models without prefill support by adding a continuation prompt. */
+  addContinueMessageWithoutPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
@@ -324,7 +357,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     ).trim();
 
     // Extract and log any existing scratchpad content
-    extractAndLogThinking(fileContent, this.logger);
+    extractAndLogScratchpad(fileContent, this.logger);
 
     // Write file content to output file
     await writeFile(outputFile, fileContent);
@@ -368,7 +401,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
     const state = AgentStateRound.initialize(0);
     toolState.lastResponse = toolState.accumulatedOutput;
-    this.addContinueMessage(
+    this.addContinueMessageWithoutPrefill(
       messages,
       state,
       toolState,
@@ -440,57 +473,110 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
   }
 
-  /** Updates message content with new response or continuation. */
-  updateMessageContent(
+  /** Updates message content for models with prefill support. */
+  updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: ToolState,
   ): void {
     this.logger.debug(
-      'Updating message content for OpenAI API compatible models',
+      'Updating message content for OpenAI models with prefill support',
     );
 
-    // for OpenAI models (or models that do not support assistant prefill) the last message is always a user/system message
-    if (
-      messages.at(-1)?.role === 'user' ||
-      messages.at(-1)?.role === 'system'
-    ) {
-      this.logger.debug('Last message is a user message');
-      const lastMessage = messages.at(-1);
-      const secondLastMessage = messages.at(-2);
-      if (this.containCutOffMessage(lastMessage.content)) {
-        // Then the last message is a user message
-        // SO the second last message must be an assistant message
-        if (secondLastMessage.role === 'assistant') {
-          // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
-          // but why do the following two differ?
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            });
-          } else {
-            this.logger.error('Second last message content is not a list');
-            secondLastMessage.content = [
-              {
-                type: 'text',
-                text: toolState.accumulatedOutput,
-              },
-            ];
-          }
-          // Remove user continuation prompt
-          messages.pop();
-        }
+    let lastMessage = messages.at(-1);
+
+    if (lastMessage.role === 'assistant') {
+      if (Array.isArray(lastMessage.content)) {
+        const newMessage = {
+          type: 'text',
+          text: bestConnector + newResponse,
+        };
+        lastMessage.content.push(newMessage);
       } else {
-        this.logger.debug(
-          'Last message is a request message rather than a ask to continue after cut off',
-        );
-        messages.push({
-          role: 'assistant',
-          content: [{ type: 'text', text: toolState.accumulatedOutput }],
-        });
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
       }
+    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+      this.logger.debug(
+        ' Last message is a user or system message - unexpected format',
+      );
+      // Add a new assistant message
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: bestConnector + newResponse }],
+      });
+    }
+  }
+
+  /** Updates message content for models without prefill support. */
+  updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    this.logger.debug(
+      'Updating message content for OpenAI models without prefill support',
+    );
+
+    // For OpenAI models without prefill, the last message is always a user/system message
+    let lastMessage = messages.at(-1);
+    let secondLastMessage = messages.at(-2);
+
+    if (lastMessage.role !== 'user' && lastMessage.role !== 'system') {
+      this.logger.error(
+        'Last message is not a user or system message - unexpected format',
+      );
+      return;
+    }
+    this.logger.debug('Last message is a user/system message');
+
+    if (this.containCutOffMessage(lastMessage.content)) {
+      this.logger.debug(
+        'Last message is a user message asking to continue after cut off',
+      );
+      // Then the last message is a user message
+      // So the second last message must be an assistant message
+      if (secondLastMessage.role === 'assistant') {
+        // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
+        // but why do the following two differ?
+        if (Array.isArray(secondLastMessage.content)) {
+          secondLastMessage.content.push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+        } else {
+          this.logger.error('Second last message content is not a list');
+          secondLastMessage.content = [
+            {
+              type: 'text',
+              text: toolState.accumulatedOutput,
+            },
+          ];
+        }
+
+        // Remove the user continuation prompt to keep the conversation clean
+        if (messages.at(-1)?.role === 'user') {
+          messages.pop();
+        } else {
+          this.logger.error(
+            'Last message is not a user message - unexpected format',
+          );
+        }
+      }
+    } else {
+      this.logger.debug(
+        'Last message is a request message rather than a ask to continue after cut off',
+      );
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+      });
     }
   }
 
@@ -501,5 +587,20 @@ export class ModelHandlerOpenAI extends ModelHandler {
     agentSetting: AgentSetting,
   ): boolean {
     return stopReason === 'length' && !hasEndTag(agentSetting, newResponse);
+  }
+
+  /**
+   * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
+   * @param responseObject The response object from the OpenAI API
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with thinking blocks
+   * @returns Always returns null as OpenAI doesn't support thinking blocks
+   */
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
+    return null;
   }
 }
