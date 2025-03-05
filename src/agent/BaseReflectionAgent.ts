@@ -37,7 +37,10 @@ import {
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
 import { checkForMassiveRepetition } from '../utils/repetitionUtils';
-import { extractTextFromTag, extractAndLogThinking } from '../utils/xmlUtils';
+import {
+  extractAndLogScratchpad,
+  formatAndLogThinking,
+} from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -47,6 +50,9 @@ import { ToolState } from './ToolState';
 import { ModelHandler } from './ModelHandler';
 import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
+
+// System imports - common utilities
+import { getConfig } from '../frontend-utils/commonUtils';
 
 const K_SLICE = 200;
 
@@ -143,6 +149,8 @@ export abstract class BaseReflectionAgent {
    */
   protected async initializeClient(): Promise<void> {
     this.client = await this.modelHandler.getClient();
+    // wait for 50 mili seconds
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 
   /**
@@ -168,7 +176,7 @@ export abstract class BaseReflectionAgent {
    */
   public async init(): Promise<void> {
     // Create an initialization group for better log organization
-    const initGroupId = this.logger.startGroup(`Initialization`);
+    const initGroupId = await this.logger.startGroup(`Initialization`);
 
     try {
       // Log configuration details in the initialization group
@@ -483,7 +491,7 @@ export abstract class BaseReflectionAgent {
   ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
     // Create a response cycle group as a child of the round group if provided
     const responseCycleGroupId = roundGroupId
-      ? this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
+      ? await this.logger.startGroup(`Response Cycle`, undefined, roundGroupId)
       : undefined;
 
     try {
@@ -500,6 +508,29 @@ export abstract class BaseReflectionAgent {
           this.agentPrompt.systemPrompt,
           this.userVars,
         );
+
+        // Save message object to file for debugging if enabled in settings
+        const shouldSaveMessageObjects = getConfig(
+          'debug.saveMessageObjects',
+          false,
+        );
+        if (shouldSaveMessageObjects) {
+          const outputFileBaseName = outputFile.replace('.xml', '');
+          const debugFilePath = `${outputFileBaseName}_cont${stateRound.continuationCount}.json`;
+          try {
+            await writeFile(debugFilePath, JSON.stringify(messages, null, 2));
+            this.logger.info(
+              `Saved message object to ${debugFilePath}`,
+              responseCycleGroupId,
+            );
+          } catch (error) {
+            this.logger.error(
+              `Failed to save message object: ${error}`,
+              responseCycleGroupId,
+            );
+          }
+        }
+
         const responseObject = await this.modelHandler.createResponse(
           this.client,
           messages,
@@ -515,13 +546,15 @@ export abstract class BaseReflectionAgent {
         );
 
         // Extract and validate response
-        const [newResponse, responseUsage, thinkingBlock, stopReason] =
+        const [newResponse, responseUsage, stopReason] =
           this.modelHandler.extractResponse(
             responseObject,
             this.agentSetting.endTag,
           );
 
-        this.extractAndLogThinking(newResponse);
+        // Extract thinking from XML tags in the response text
+        this.extractAndLogScratchpad(newResponse);
+        // this has a potential bug if <scratchpad> is included in the prefill
 
         this.logger.debug(`Stop reason: ${stopReason}`, responseCycleGroupId);
         this.logger.debug(
@@ -529,29 +562,25 @@ export abstract class BaseReflectionAgent {
           responseCycleGroupId,
         );
 
-        // Log thinking block if available
-        if (thinkingBlock) {
-          this.logger.debug(
-            `Thinking block type: ${thinkingBlock.type}`,
+        // Extract thinking blocks directly from the response object
+        // This updates toolState with all thinking/redacted_thinking blocks
+        // and returns content of the first thinking block for logging (if any)
+        const thinkingContent = this.modelHandler.processThinkingBlock(
+          responseObject,
+          responseCycleGroupId,
+          toolState,
+        );
+
+        // If thinking content was extracted, format and log it
+        if (thinkingContent) {
+          formatAndLogThinking(
+            thinkingContent,
+            this.logger,
             responseCycleGroupId,
           );
-          if (thinkingBlock.type === 'thinking' && thinkingBlock.thinking) {
-            // Log first 200 chars of thinking content if available
-            this.logger.debug(
-              `Thinking content preview: ${thinkingBlock.thinking.substring(0, 200)}...`,
-              responseCycleGroupId,
-            );
-          } else if (
-            thinkingBlock.type === 'redacted_thinking' &&
-            thinkingBlock.data
-          ) {
-            this.logger.debug(
-              `Redacted thinking data available (encoded)`,
-              responseCycleGroupId,
-            );
-          }
-          // Store complete thinking block in tool state
-          toolState.thinkingBlock = thinkingBlock;
+
+          // Note: The complete thinking blocks (including signatures) have already been
+          // stored in toolState.thinkingBlocks by the processThinkingBlock method
         }
 
         // Compute statistics and update states
@@ -642,12 +671,22 @@ export abstract class BaseReflectionAgent {
         );
 
         // Update message content
-        this.modelHandler.updateMessageContent(
-          messages,
-          bestConnector,
-          processedResponse,
-          toolState,
-        );
+        // maybe we should separate this into the case of with or without support for assistant prefill since they have different logic...
+        if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+          this.modelHandler.updateMessageContentWithPrefill(
+            messages,
+            bestConnector,
+            processedResponse,
+            toolState,
+          );
+        } else {
+          this.modelHandler.updateMessageContentWithoutPrefill(
+            messages,
+            bestConnector,
+            processedResponse,
+            toolState,
+          );
+        }
 
         // Check stop conditions
         const [shouldEndTurn, shouldStop] =
@@ -671,6 +710,7 @@ export abstract class BaseReflectionAgent {
         );
 
         // Check if model should continue generating
+        // why is this not included in the checkStopConditions function?
         if (
           this.modelHandler.shouldContinue(
             stopReason,
@@ -682,14 +722,25 @@ export abstract class BaseReflectionAgent {
             `Should continue - adding continuation message to conversation`,
             responseCycleGroupId,
           );
-          this.modelHandler.addContinueMessage(
-            messages,
-            stateRound,
-            toolState,
-            this.agentSetting,
-            this.agentConfig,
-          );
-          continue;
+          if (this.modelHandler.capabilities.supportsAssistantPrefill) {
+            this.modelHandler.addContinueMessageWithPrefill(
+              messages,
+              stateRound,
+              toolState,
+              this.agentSetting,
+              this.agentConfig,
+            );
+            continue;
+          } else {
+            this.modelHandler.addContinueMessageWithoutPrefill(
+              messages,
+              stateRound,
+              toolState,
+              this.agentSetting,
+              this.agentConfig,
+            );
+            continue;
+          }
         }
       }
 
@@ -757,6 +808,12 @@ export abstract class BaseReflectionAgent {
 
   /**
    * Processes output files for current round.
+   * This method orchestrates the overall output processing flow with clear separation of concerns:
+   * 1. Statistics handling via printStatistics
+   * 2. LaTeX diff operations via handleLatexdiffofOutput (only when endTurn is true)
+   *
+   * The actual file processing is handled separately in processOutputFiles.
+   *
    * @returns Array of processed output file paths
    */
   protected async handleOutput(
@@ -768,7 +825,16 @@ export abstract class BaseReflectionAgent {
     processGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.outputHandler.printStatistics(stateGlobal, processGroupId);
+    await this.outputHandler.printStatistics(stateGlobal, processGroupId);
+
+    // If this is the end of a turn, handle latexdiff operations as a separate step
+    if (endTurn) {
+      // Pass the process group ID to maintain proper nesting in the log hierarchy
+      await this.outputHandler.handleLatexdiffofOutput(
+        currRound,
+        processGroupId,
+      );
+    }
 
     return this.outputHandler.outputFiles[currRound] || [];
   }
@@ -791,14 +857,14 @@ export abstract class BaseReflectionAgent {
     const currRound = 0;
     const stateGlobal = AgentStateGlobal.initialize();
 
+    this.logger.info(`Processing round ${currRound}`);
+
     // Create a dedicated group for Round 0, as a child of the main run group
-    const round0GroupId = this.logger.startGroup(
+    const round0GroupId = await this.logger.startGroup(
       `Round ${currRound}: Initial Generation`,
       undefined,
       this.runGroupId, // Use the runGroupId from the class as the parent
     );
-
-    this.logger.info(`Processing round ${currRound}`, round0GroupId);
 
     try {
       // Handle tex count if enabled
@@ -982,14 +1048,14 @@ export abstract class BaseReflectionAgent {
     toolState: ToolState,
     currRound: number = 1,
   ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean]> {
+    this.logger.info(`Processing round ${currRound}`);
+
     // Create a dedicated group for Round 1 reflection, as a child of the main run group
-    const round1GroupId = this.logger.startGroup(
+    const round1GroupId = await this.logger.startGroup(
       `Round ${currRound}: Reflection`,
       undefined,
       this.runGroupId,
     );
-
-    this.logger.info(`Processing round ${currRound}`, round1GroupId);
 
     try {
       // Handle output file processing
@@ -1116,7 +1182,7 @@ export abstract class BaseReflectionAgent {
    */
   public async run(): Promise<void> {
     // Create a dedicated run group for this agent execution
-    this.runGroupId = this.logger.startGroup(
+    this.runGroupId = await this.logger.startGroup(
       `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
     );
 
@@ -1181,14 +1247,22 @@ export abstract class BaseReflectionAgent {
   }
 
   /**
-   * Processes output files and runs latexdiff operations.
+   * Processes output files from XML or direct input.
+   * This method focuses solely on extracting and processing output files.
+   * It does NOT perform any latexdiff operations - those are handled separately
+   * in the handleOutput method via handleLatexdiffofOutput.
+   *
+   * @param outputFile Path to the output file to process
+   * @param currRound Current round number
+   * @param processGroupId Optional process group ID for logging
    */
   protected async processOutputFiles(
     outputFile: string,
     currRound: number,
+    processGroupId?: string,
   ): Promise<void> {
-    // Get the active group ID for proper nesting
-    const activeGroupId = this.logger.getActiveGroupId();
+    // Use provided process group ID or get the active group ID for proper nesting
+    const activeGroupId = processGroupId || this.logger.getActiveGroupId();
 
     if (
       Array.isArray(this.agentConfig.outputFiles) &&
@@ -1213,10 +1287,13 @@ export abstract class BaseReflectionAgent {
       const processedFiles =
         await this.outputHandler.processMultipleXmlOutputs(outputFile);
       if (processedFiles.length > 0) {
-        await this.outputHandler.handleMultipleOutputs(
-          processedFiles,
+        // Process output files - indent LaTeX files directly
+        await this.outputHandler.indentLatexFiles(processedFiles);
+        this.logger.debug(
+          `Indented multiple output files: ${processedFiles}`,
           activeGroupId,
         );
+
         this.outputHandler.outputFiles[currRound] = processedFiles;
         await this.outputHandler.replaceInputCommands(
           this.baseFiles,
@@ -1235,16 +1312,16 @@ export abstract class BaseReflectionAgent {
           await this.outputHandler.processSingleXmlOutput(outputFile);
       }
       if (processedFile) {
-        await this.outputHandler.handleSingleOutput(
-          processedFile,
+        // Process output file - indent LaTeX file directly
+        await this.outputHandler.indentLatexFile(processedFile);
+        this.logger.debug(
+          `Indented single output file: ${processedFile}`,
           activeGroupId,
         );
+
         this.outputHandler.outputFiles[currRound] = [processedFile];
       }
     }
-
-    // Pass the active group ID to maintain proper nesting in the log hierarchy
-    await this.outputHandler.handleLatexdiff(currRound, activeGroupId);
   }
 
   /**
@@ -1286,10 +1363,11 @@ export abstract class BaseReflectionAgent {
   }
 
   /** Extracts and logs scratchpad content from output. */
-  protected extractAndLogThinking(
+  protected extractAndLogScratchpad(
     outputContent: string,
     thinkingTag: string = 'scratchpad',
+    groupId?: string,
   ): void {
-    extractAndLogThinking(outputContent, this.logger, thinkingTag);
+    extractAndLogScratchpad(outputContent, this.logger, thinkingTag, groupId);
   }
 }

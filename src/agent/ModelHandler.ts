@@ -329,7 +329,10 @@ export abstract class ModelHandler {
     return [endTurn, shouldStop];
   }
 
-  public containCutOffMessage(content: any[]): boolean {
+  public containCutOffMessage(content: any[] | string): boolean {
+    if (typeof content === 'string') {
+      return content.includes('Your response got cut off');
+    }
     return content.some((c: { type: string; text: string }) =>
       c.text?.includes('Your response got cut off'),
     );
@@ -378,21 +381,33 @@ export abstract class ModelHandler {
   abstract createImageContent(imageContents: any[]): any[];
 
   /**
-   * Extracts response text, usage statistics, thinking block, and stop reason from API response.
-   * @param responseObject Raw API response
-   * @param endTag End tag to append if needed
-   * @returns Tuple of [response text, usage data, thinking block, stop reason]
+   * Extracts the response text and metadata from the model's response object
+   * @param responseObject The raw response object from the model
+   * @param endTag The end tag to append if needed
+   * @returns A tuple containing [responseText, usageInfo, stopReason]
    */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, any, string];
+  ): [string, any, string];
 
   /**
-   * Manages continuation for truncated responses in multi-turn conversations.
+   * Manages continuation for truncated responses in multi-turn conversations with prefill support.
    * Updates messages array and tool state for next turn.
    */
-  abstract addContinueMessage(
+  abstract addContinueMessageWithPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void;
+
+  /**
+   * Manages continuation for truncated responses in multi-turn conversations without prefill support.
+   * Updates messages array and tool state for next turn.
+   */
+  abstract addContinueMessageWithoutPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
@@ -426,10 +441,21 @@ export abstract class ModelHandler {
   abstract computeResponseUsage(responseUsage: any, responseTime: number): any;
 
   /**
-   * Updates conversation message content with new responses.
+   * Updates model message content with response for models with prefill support.
    * Handles cache control and content formatting.
    */
-  abstract updateMessageContent(
+  abstract updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void;
+
+  /**
+   * Updates model message content with response for models without prefill support.
+   * Handles cache control and content formatting.
+   */
+  abstract updateMessageContentWithoutPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
@@ -447,13 +473,29 @@ export abstract class ModelHandler {
   ): boolean;
 
   /**
+   * Extracts thinking content from model responses
+   * @param responseObject The raw response object from the model
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with the thinking block
+   * @returns The extracted thinking content string or null if no thinking content is available
+   */
+  abstract processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null;
+
+  /**
    * Creates a log group for model operations with the given name.
    * @param name Name of the operation group
    * @param parentGroupId Optional parent group ID
    * @returns The group ID
    */
-  protected createOperationGroup(name: string, parentGroupId?: string): string {
-    return this.logger.startGroup(
+  protected async createOperationGroup(
+    name: string,
+    parentGroupId?: string,
+  ): Promise<string> {
+    return await this.logger.startGroup(
       `Model Operation: ${name}`,
       undefined,
       parentGroupId,
