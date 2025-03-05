@@ -297,6 +297,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\begin{<latex_document>\nfigure': '\\begin{figure}',
     '\\begin{<latex_document>\ntikzpicture': '\\begin{tikzpicture}',
     '\\\n<latex_document>': '\\',
+
+    '<xml:documents>': '<latex_documents>',
+    '</xml:documents>': '</latex_documents>',
   },
 };
 
