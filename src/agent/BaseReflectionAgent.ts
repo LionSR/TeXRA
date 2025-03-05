@@ -792,7 +792,7 @@ export abstract class BaseReflectionAgent {
         outputFile,
         endTurn,
         currRound,
-        roundGroupId, // Pass the roundGroupId directly
+        roundGroupId,
       );
 
       const inputInfo = `inputFile ${this.agentConfig.inputFile} and/or inputFiles ${this.agentConfig.inputFiles}`;
@@ -828,7 +828,11 @@ export abstract class BaseReflectionAgent {
     await this.outputHandler.printStatistics(stateGlobal, processGroupId);
 
     // If this is the end of a turn, handle latexdiff operations as a separate step
-    if (endTurn) {
+    if (
+      endTurn &&
+      this.outputHandler.outputFiles[currRound] &&
+      this.outputHandler.outputFiles[currRound].length > 0
+    ) {
       // Pass the process group ID to maintain proper nesting in the log hierarchy
       await this.outputHandler.handleLatexdiffofOutput(
         currRound,
@@ -1284,21 +1288,41 @@ export abstract class BaseReflectionAgent {
       // use XML and use XML splitting to get the output files.
       // Which would be different than the single output file case below.
 
-      const processedFiles =
-        await this.outputHandler.processMultipleXmlOutputs(outputFile);
-      if (processedFiles.length > 0) {
-        // Process output files - indent LaTeX files directly
-        await this.outputHandler.indentLatexFiles(processedFiles);
-        this.logger.debug(
-          `Indented multiple output files: ${processedFiles}`,
+      try {
+        const processedFiles =
+          await this.outputHandler.processMultipleXmlOutputs(outputFile);
+
+        if (processedFiles && processedFiles.length > 0) {
+          // Process output files - indent LaTeX files directly
+          await this.outputHandler.indentLatexFiles(processedFiles);
+          this.logger.debug(
+            `Indented multiple output files: ${processedFiles.join(',')}`,
+            activeGroupId,
+          );
+
+          this.outputHandler.outputFiles[currRound] = processedFiles;
+
+          // Only attempt to replace input commands if we have valid base files
+          if (this.baseFiles && this.baseFiles.length > 0) {
+            await this.outputHandler.replaceInputCommands(
+              this.baseFiles,
+              processedFiles,
+            );
+          }
+        } else {
+          this.logger.warn(
+            `No processed files were generated from ${outputFile}`,
+            activeGroupId,
+          );
+          this.outputHandler.outputFiles[currRound] = [];
+        }
+      } catch (err) {
+        this.logger.error(
+          `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
         );
-
-        this.outputHandler.outputFiles[currRound] = processedFiles;
-        await this.outputHandler.replaceInputCommands(
-          this.baseFiles,
-          processedFiles,
-        );
+        // Ensure we have an empty array at minimum to prevent undefined errors
+        this.outputHandler.outputFiles[currRound] = [];
       }
     } else {
       // Single output file case
@@ -1306,20 +1330,36 @@ export abstract class BaseReflectionAgent {
         `Processing single output for ${outputFile}`,
         activeGroupId,
       );
-      let processedFile = outputFile;
-      if (this.agentSetting.agentType === AgentType.CoT) {
-        processedFile =
-          await this.outputHandler.processSingleXmlOutput(outputFile);
-      }
-      if (processedFile) {
-        // Process output file - indent LaTeX file directly
-        await this.outputHandler.indentLatexFile(processedFile);
-        this.logger.debug(
-          `Indented single output file: ${processedFile}`,
+
+      try {
+        let processedFile = outputFile;
+        if (this.agentSetting.agentType === AgentType.CoT) {
+          processedFile =
+            await this.outputHandler.processSingleXmlOutput(outputFile);
+        }
+
+        if (processedFile) {
+          // Process output file - indent LaTeX file directly
+          await this.outputHandler.indentLatexFile(processedFile);
+          this.logger.debug(
+            `Indented single output file: ${processedFile}`,
+            activeGroupId,
+          );
+
+          this.outputHandler.outputFiles[currRound] = [processedFile];
+        } else {
+          this.logger.warn(
+            `No processed file was generated from ${outputFile}`,
+            activeGroupId,
+          );
+          this.outputHandler.outputFiles[currRound] = [];
+        }
+      } catch (err) {
+        this.logger.error(
+          `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
           activeGroupId,
         );
-
-        this.outputHandler.outputFiles[currRound] = [processedFile];
+        this.outputHandler.outputFiles[currRound] = [];
       }
     }
   }
