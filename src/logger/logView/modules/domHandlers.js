@@ -66,6 +66,7 @@ export function updateStatus(status) {
   const cleanButton = document.getElementById('cleanStreamBtn');
   const eraseButton = document.getElementById('eraseStreamBtn');
   const restoreButton = document.getElementById('restoreStateBtn');
+  const diffButton = document.getElementById('diffStreamBtn');
 
   // First disable all action buttons (we'll enable them based on status)
   stopButton.disabled = true;
@@ -73,6 +74,7 @@ export function updateStatus(status) {
   packButton.disabled = true;
   cleanButton.disabled = true;
   restoreButton.disabled = true;
+  diffButton.disabled = true;
 
   // Default status is empty - ready for input
   statusIndicator.className = 'status-indicator';
@@ -96,6 +98,7 @@ export function updateStatus(status) {
         packButton.disabled = false;
         cleanButton.disabled = false;
         restoreButton.disabled = false;
+        diffButton.disabled = false;
         break;
       case STATUS.STOPPED:
         statusIndicator.classList.add('stopped');
@@ -104,6 +107,7 @@ export function updateStatus(status) {
         packButton.disabled = false;
         cleanButton.disabled = false;
         restoreButton.disabled = false;
+        diffButton.disabled = false;
         break;
       case STATUS.READY:
         statusIndicator.classList.add('ready');
@@ -542,6 +546,17 @@ export function setupEventListeners() {
     if (currentStream) {
       vscode.postMessage({
         command: COMMANDS.RESTORE_STATE,
+        stream: currentStream,
+      });
+    }
+  });
+
+  // Diff button click handler
+  document.getElementById('diffStreamBtn').addEventListener('click', () => {
+    const currentStream = getCurrentStream();
+    if (currentStream) {
+      vscode.postMessage({
+        command: COMMANDS.DIFF_STREAM,
         stream: currentStream,
       });
     }
