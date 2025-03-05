@@ -225,6 +225,9 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     // Clean up old view if it exists
     this._cleanupView();
 
+    // Set all running streams to stopped since they've lost contact
+    this._resetRunningStreamStatuses();
+
     this._view = webviewView;
 
     webviewView.webview.options = {
@@ -602,5 +605,49 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     const taskStatesArray = Array.from(this._taskStates.entries());
     this.logger.debug(`Saving taskStates: ${JSON.stringify(taskStatesArray)}`);
     this.context.workspaceState.update(this._taskStateKey, taskStatesArray);
+  }
+
+  private _resetRunningStreamStatuses() {
+    // Set all currently running streams to error since they will lose contact when webview reloads
+    for (const [streamId, status] of this._streamStatus.entries()) {
+      let streamStatusChanged = false;
+      
+      if (status === STATUS.RUNNING) {
+        // Change running streams to ERROR (not stopped or ready)
+        this._streamStatus.set(streamId, STATUS.ERROR);
+        streamStatusChanged = true;
+        
+        // Also log to the general logger for debugging
+        this.logger.debug(`Stream ${streamId} set to ERROR due to webview reload`);
+      }
+      // Leave streams in ERROR, STOPPED, or READY status unchanged
+      
+      // Now update any running log groups within this stream
+      // TODO: This did not quite work i think. 
+      const streamGroups = this._logGroups.get(streamId);
+      if (streamGroups) {
+        for (const [groupId, group] of streamGroups.entries()) {
+          if (group.status === STATUS.RUNNING) {
+            // Get the current time for the end time
+            const endTime = new Date().toISOString();
+            
+            // Update the group properly using the updateLogGroup method
+            this.updateLogGroup(streamId, groupId, STATUS.ERROR, endTime);
+            
+            this.logger.debug(`Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`);
+            streamStatusChanged = true;
+          }
+        }
+      }
+      
+      // Log to the specific stream only if something changed
+      if (streamStatusChanged) {
+        this.addLogMessage(
+          streamId,
+          `Stream or task status changed to ERROR due to webview reload. Previous tasks may have been interrupted.`,
+          'error'
+        );
+      }
+    }
   }
 }
