@@ -2,7 +2,7 @@
 // (none needed)
 
 // Third-party imports
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 
 // Local imports - utilities
 import {
@@ -17,7 +17,7 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
-import { extractAndLogThinking } from '../utils/xmlUtils';
+import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
 import { AgentConfig } from './AgentConfig';
@@ -31,7 +31,6 @@ import { ToolState } from './ToolState';
 import { AgentStateRound } from './AgentState';
 import { messageToSkeleton } from './messageUtils';
 import { getConfig } from '../frontend-utils/commonUtils';
-import { stream } from 'winston';
 
 const K_SLICE = 200;
 
@@ -70,6 +69,19 @@ export class ModelHandlerAnthropic extends ModelHandler {
       system: systemPrompt,
     };
 
+    // Enable thinking for any models that support reasoning
+    if (this.capabilities.supportsReasoning) {
+      // This ensures thinking is explicitly enabled for all models that support it
+      this.logger.debug('Enabling thinking for model with reasoning support');
+      options.thinking = {
+        type: 'enabled',
+        budget_tokens: useStreaming ? 32768 : 4096,
+      };
+      useStreaming =
+        useStreaming ||
+        getConfig<boolean>('model.useStreamingAnthropicReasoning', false);
+    }
+
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
     if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
       // useStreaming = true; should consider to be true by default
@@ -78,13 +90,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       options.betas = ['output-128k-2025-02-19'];
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
-      if (this.capabilities.supportsReasoning) {
-        options.thinking = {
-          type: 'enabled',
-          // Set higher budget_tokens for streaming
-          budget_tokens: useStreaming ? 32000 : 4096,
-        };
-      }
+      // The thinking configuration is now handled above for all reasoning models
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -96,6 +102,14 @@ export class ModelHandlerAnthropic extends ModelHandler {
       this.logger.debug(
         `Token count of message: ${responseTokenCount.input_tokens}`,
       );
+      if (responseTokenCount.input_tokens > this.config.contextWindow) {
+        this.logger.error(
+          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
+        );
+        throw new Error(
+          `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
+        );
+      }
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 
@@ -205,13 +219,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
       `Creating image content for ${imageContents.length} images`,
     );
     return imageContents.flatMap((image) => {
-      // Log minimal debug info, focused on media_type
-      // this.logger.debug(
-      //   `Image content: ${JSON.stringify({
-      //     media_type: image.media_type || 'MISSING',
-      //   })}`,
-      // );
-
       // Always ensure media_type exists
       if (!image.media_type) {
         // Default to image/png since PDFs from TikZ are converted to PNG
@@ -239,13 +246,10 @@ export class ModelHandlerAnthropic extends ModelHandler {
     });
   }
 
-  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, thinkingBlock, stopReason]. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, any, string] {
+  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
+  extractResponse(responseObject: any, endTag: string): [string, any, string] {
     if (responseObject.error) {
-      const errorMsg = `API error: ${responseObject.error}`;
+      const errorMsg = `API error: ${JSON.stringify(responseObject.error)}`;
       this.logger.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -263,24 +267,18 @@ export class ModelHandlerAnthropic extends ModelHandler {
     // Extract base response
     let stopReason = responseObject.stop_reason;
     let newResponse = '';
-    let thinkingBlock = null;
 
     if (
       this.capabilities.supportsReasoning &&
       Array.isArray(responseObject.content) &&
       responseObject.content.length > 0
     ) {
-      // Handle thinking blocks in Claude 3.7 Sonnet responses
+      // Handle text blocks in Claude 3.7 Sonnet responses
       for (const block of responseObject.content) {
         if (block.type === 'text') {
           newResponse += block.text.trim();
         }
-        if (block.type === 'thinking' || block.type === 'redacted_thinking') {
-          // Store the entire thinking block object
-          thinkingBlock = block;
-        }
-        // We don't include thinking blocks (type: thinking or redacted_thinking) in the response text
-        // They need to be preserved in the message object for the next turn though
+        // We don't include thinking blocks in the response text
       }
     } else if (responseObject.content && responseObject.content.length > 0) {
       // Handle regular text responses
@@ -292,25 +290,29 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, thinkingBlock, stopReason];
+    return [newResponse, responseObject.usage, stopReason];
   }
 
-  /** Adds continuation message when response is truncated. */
-  addContinueMessage(
+  /** Manages continuation with prefill support (typically no-op for models with prefill). */
+  addContinueMessageWithPrefill(
     messages: any[],
     stateRound: AgentStateRound,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Skip if model supports assistant prefill
-    if (this.capabilities.supportsAssistantPrefill) {
-      this.logger.debug(
-        'Skipping continuation - assistant prefill is supported',
-      );
-      return;
-    }
+    this.logger.debug('Skipping continuation - assistant prefill is supported');
+    // No-op for models that support prefill
+  }
 
+  /** Manages continuation for models without prefill support by adding a continuation prompt. */
+  addContinueMessageWithoutPrefill(
+    messages: any[],
+    stateRound: AgentStateRound,
+    toolState: ToolState,
+    agentSetting: AgentSetting,
+    agentConfig: AgentConfig,
+  ): void {
     // Create continuation message with last K tokens
     const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
     const userMessageContinuation =
@@ -391,7 +393,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     ).trim();
 
     // Extract and log any existing scratchpad content
-    extractAndLogThinking(fileContent, this.logger);
+    extractAndLogScratchpad(fileContent, this.logger);
 
     await writeFile(outputFile, fileContent);
 
@@ -443,7 +445,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
       const state = AgentStateRound.initialize(0);
-      this.addContinueMessage(
+      this.addContinueMessageWithoutPrefill(
         messages,
         state,
         toolState,
@@ -499,8 +501,52 @@ export class ModelHandlerAnthropic extends ModelHandler {
     );
   }
 
-  /** Updates message content with new responses while managing cache control and content formatting. */
-  updateMessageContent(
+  updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: ToolState,
+  ): void {
+    let lastMessage = messages.at(-1);
+
+    if (lastMessage.role === 'assistant') {
+      if (Array.isArray(lastMessage.content)) {
+        const newMessage = {
+          type: 'text',
+          text: bestConnector + newResponse,
+        };
+        lastMessage.content.push(newMessage);
+      } else {
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
+      }
+
+      if (this.capabilities.supportsPromptCaching) {
+        // First remove all cache_control from all previous messages to stay under the limit
+        for (let i = 0; i < messages.length - 1; i++) {
+          const msg = messages[i];
+          this.removeCacheControl(msg.content);
+        }
+
+        // Then ensure the current message has at most one cache_control
+        if (Array.isArray(lastMessage.content)) {
+          // Remove all existing cache_control
+          this.removeCacheControl(lastMessage.content);
+
+          lastMessage.content.at(-1).cache_control = {
+            type: 'ephemeral',
+          };
+        }
+      }
+    }
+    return;
+  }
+
+  updateMessageContentWithoutPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
@@ -508,71 +554,26 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
-    if (this.capabilities.supportsAssistantPrefill) {
-      messages.push({
-        role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
-      });
+    let lastMessage = messages.at(-1);
+    let secondLastMessage = messages.at(-2);
 
-      // Handle normal Anthropic models
-      const lastMessage = messages.at(-1);
-      if (lastMessage.role === 'assistant') {
-        // why does the following two differ?
-        if (Array.isArray(lastMessage.content)) {
-          const newMessage = {
-            type: 'text',
-            text: bestConnector + newResponse,
-          };
-          lastMessage.content.push(newMessage);
-        } else {
-          lastMessage.content = [
-            {
-              type: 'text',
-              text: toolState.accumulatedOutput,
-            },
-          ];
-        }
-
-        if (this.capabilities.supportsPromptCaching) {
-          // First remove all cache_control from all previous messages to stay under the limit
-          for (let i = 0; i < messages.length - 1; i++) {
-            const msg = messages[i];
-            this.removeCacheControl(msg.content);
-          }
-
-          // Then ensure the current message has at most one cache_control
-          if (Array.isArray(lastMessage.content)) {
-            // Remove all existing cache_control
-            this.removeCacheControl(lastMessage.content);
-
-            lastMessage.content.at(-1).cache_control = {
-              type: 'ephemeral',
-            };
-          }
-        }
-      }
-      return;
-    }
-
-    // For thinking-enabled anthropic models that don't support assistant prefill,
-    // handle like OpenAI models where the last message is always a user message
-    if (messages.at(-1)?.role !== 'user') {
-      this.logger.error('Last message is not a user message');
+    if (lastMessage.role !== 'user') {
+      this.logger.error(
+        'Last message is not a user message - unexpected format',
+      );
       return;
     }
     this.logger.debug('Last message is a user message');
 
-    let lastMessage = messages.at(-1);
-    let secondLastMessage = messages.at(-2);
-
     // Fix for continuation issues
     if (this.containCutOffMessage(lastMessage.content)) {
       this.logger.debug(
-        'Last message is a user message asking to continue after cut off',
+        'Last message is a user message asking to continue after cutoff',
       );
 
       // The last message is a user message
-      // The second last message must be an assistant message
+      // So the second last message must be an assistant message
+
       if (secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
         const thinkingBlocks = secondLastMessage.content.filter(
@@ -585,32 +586,54 @@ export class ModelHandlerAnthropic extends ModelHandler {
           (item: any) => item.type === 'text',
         );
 
-        // Create a new content array starting with any thinking blocks
-        const newContent = [...thinkingBlocks];
-
-        // If there are existing text blocks, update the last one with new content
-        // Otherwise create a new text block
-        if (textBlocks.length > 0) {
-          // Use accumulated output to ensure we have the complete context
-          const updatedText = {
+        // Anthropic models should include thinking blocks first in the content array
+        // Add all thinking blocks from toolState if we have them
+        if (thinkingBlocks.length > 0) {
+          // if we have thinking blocks, then we use them
+          this.logger.debug(
+            `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
+          );
+          secondLastMessage.content.push({
             type: 'text',
-            text: toolState.accumulatedOutput,
-          };
-          newContent.push(updatedText);
-        } else {
-          newContent.push({
-            type: 'text',
-            text: toolState.accumulatedOutput,
+            text: bestConnector + newResponse,
           });
-        }
+        } else {
+          secondLastMessage.content.push({
+            type: 'text',
+            text: bestConnector + newResponse,
+          });
+          // Add the updated text content
+          // If there are existing text blocks, update with new content
+          // Otherwise create a new text block with the new returned thinking block if it is not after cut off
+          // we should not add the new thinking block if it is after cut off
+          // but we still need to add at least somewhere...
 
-        // Update the second last message with the new content array
-        secondLastMessage.content = newContent;
-        if (thinkingBlocks.length === 0) {
-          const thinkingBlock = toolState.thinkingBlock;
-          if (thinkingBlock) {
-            secondLastMessage.content = [thinkingBlock, ...newContent];
-          }
+          // let newThinkingContent: any[] = [];
+
+          // if (toolState.thinkingAdded && toolState.thinkingBlocks.length > 0) {
+          //   // if we have thinking blocks, then we use them
+          //   this.logger.debug(
+          //     `Using ${toolState.thinkingBlocks.length} existing thinking blocks from previous message`,
+          //   );
+          //   newThinkingContent = [...toolState.thinkingBlocks];
+          // }
+
+          // let newContent: any[] = [];
+
+          // if (textBlocks.length > 0) {
+          //   newContent = [...newThinkingContent, ...textBlocks];
+          // } else {
+          //   newContent = [
+          //     ...newThinkingContent,
+          //     {
+          //       type: 'text',
+          //       text: toolState.accumulatedOutput,
+          //     },
+          //   ];
+          // }
+
+          // Replace the content of the second last message with our new content array
+          // secondLastMessage.content = newContent;
         }
 
         // Remove cache_control from previous messages if needed
@@ -624,33 +647,38 @@ export class ModelHandlerAnthropic extends ModelHandler {
         // Remove the user continuation prompt to keep the conversation clean
         if (messages.at(-1)?.role === 'user') {
           messages.pop();
+        } else {
+          this.logger.error(
+            'Last message is not a user message - unexpected format',
+          );
         }
-
-        this.logger.debug(
-          `Updated second last message with thinking block: ${JSON.stringify(
-            messageToSkeleton(messages),
-          )}`,
-        );
-
-        this.logger.debug(
-          `Updated second last message with accumulated output (${toolState.accumulatedOutput.length} chars)`,
-        );
       }
-      return;
     } else {
-      // This is a regular response, not a continuation
       this.logger.debug(
         'Last message is a request message rather than a ask to continue after cut off',
       );
-      const message = {
+      // Create a new assistant message with the response
+      let assistantMessage: { role: string; content: any[] } = {
         role: 'assistant',
-        content: [{ type: 'text', text: toolState.accumulatedOutput }],
+        content: [],
       };
-      if (toolState.thinkingBlock) {
-        message.content = [toolState.thinkingBlock, ...message.content];
+
+      // Include all thinking blocks from toolState if available
+      if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+        this.logger.debug(
+          `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
+        );
+        assistantMessage.content.push(...toolState.thinkingBlocks);
       }
 
-      messages.push(message);
+      // Add the text content
+      assistantMessage.content.push({
+        type: 'text',
+        text: toolState.accumulatedOutput,
+      });
+
+      messages.push(assistantMessage);
+      this.logger.debug('Added a new assistant message');
     }
   }
 
@@ -660,10 +688,95 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     agentSetting: AgentSetting,
   ): boolean {
-    return (
-      stopReason !== 'max_tokens' &&
-      stopReason !== 'stop_sequence' &&
-      !hasEndTag(agentSetting, newResponse)
+    // DEBUG: Log the stop reason to help diagnose continuation issues
+    this.logger.debug(
+      `Checking if should continue - stop reason: "${stopReason}"`,
     );
+
+    // We should continue if:
+    // 1. We hit the max tokens limit (stopReason === 'max_tokens')
+    // 2. AND we don't have an end tag (meaning the response is incomplete)
+    if (stopReason === 'max_tokens' && !hasEndTag(agentSetting, newResponse)) {
+      return true;
+    }
+    if (stopReason === 'stop_sequence') {
+      if (!hasEndTag(agentSetting, newResponse)) {
+        return true;
+      } else {
+        this.logger.debug('Should not continue - no end tag found');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Process thinking blocks for Anthropic models
+   * @param responseObject The response object from Anthropic API
+   * @param groupId Optional group ID for logging
+   * @param toolState Optional toolState to update with the thinking blocks
+   * @returns The extracted thinking content (or null if none)
+   * This preserves the full thinking objects including signature which is required
+   * when sending back to the Anthropic API for continuing a conversation
+   */
+  processThinkingBlock(
+    responseObject: any,
+    groupId?: string,
+    toolState?: ToolState,
+  ): string | null {
+    if (!responseObject) return null;
+
+    // Extract all thinking blocks from the response
+    const thinkingBlocks = [];
+    let regularThinkingContent = null;
+
+    try {
+      if (responseObject.content && Array.isArray(responseObject.content)) {
+        // Collect all thinking and redacted_thinking blocks
+        for (const item of responseObject.content) {
+          if (item.type === 'thinking' && item.thinking) {
+            thinkingBlocks.push(item);
+            // Save the first regular thinking content for returning
+            if (regularThinkingContent === null) {
+              regularThinkingContent = item.thinking;
+            }
+          } else if (item.type === 'redacted_thinking' && item.data) {
+            thinkingBlocks.push(item);
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.error(`Error extracting thinking blocks: ${e}`, groupId);
+      return null;
+    }
+
+    if (thinkingBlocks.length === 0) return null;
+
+    this.logger.debug(
+      `Found ${thinkingBlocks.length} thinking blocks`,
+      groupId,
+    );
+
+    // If toolState is provided, update it with all thinking blocks
+    if (toolState && !toolState.thinkingAdded) {
+      // Store all thinking blocks for future reference
+      if (!this.containCutOffMessage(regularThinkingContent)) {
+        toolState.thinkingBlocks = thinkingBlocks;
+        // thinkingBlock is now a getter that returns thinkingBlocks[0]
+        toolState.thinkingAdded = true;
+        this.logger.debug(
+          `Added ${thinkingBlocks.length} thinking blocks to toolState`,
+          groupId,
+        );
+      } else {
+        this.logger.debug(
+          `Skipping adding thinking blocks to toolState because of cut off message`,
+          groupId,
+        );
+      }
+    }
+
+    // Return content of the first regular thinking block for logging
+    return regularThinkingContent;
   }
 }

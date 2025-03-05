@@ -149,13 +149,13 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     }
 
     // Create a main task group for the entire execution
-    const mainTaskGroupId = logger.startGroup(
+    const mainTaskGroupId = await logger.startGroup(
       `Task: ${agentName}@${config.model}`,
     );
 
     try {
       // Create a log group for execution details as a sub-group
-      const taskDetailsGroupId = logger.startGroup(
+      const taskDetailsGroupId = await logger.startGroup(
         `Task Details`,
         undefined,
         mainTaskGroupId,
@@ -259,7 +259,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
     vscode.window.showErrorMessage(errorMsg);
     // Create a temporary error group if no active group exists
-    const errorGroupId = logger.startGroup(`Error: ${agentName}`);
+    const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
     logger.error(errorMsg, errorGroupId);
     logger.endGroup(errorGroupId, 'error');
     throw new Error(errorMsg);
