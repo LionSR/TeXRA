@@ -17,8 +17,8 @@ import {
   runLatexdiffvc,
   ensureLatexdiffInstalled,
   ensureLatexdiffVcInstalled,
-  LaTeXdiffResult,
-  LaTeXdiffMultipleResult,
+  runLatexdiffForRound,
+  runLatexdiffBetweenRounds,
 } from '../latex/latexdiff';
 
 // Local imports - housekeeping
@@ -28,6 +28,9 @@ import {
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '../housekeeping';
+
+// Import agent utilities
+import { getAgentFirstNameChunk } from '../housekeeping/utils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -51,6 +54,10 @@ export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'coauthor.cleanLatexdiffvcMultiple',
       handleCleanLatexdiffvcMultiple,
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.runLatexdiff',
+      handleRunLatexdiff,
     ),
   );
 }
@@ -270,6 +277,275 @@ async function handleCleanLatexdiffvcMultiple(
   }
 }
 
+/**
+ * Handles the runLatexdiff command triggered from the log view.
+ * Performs both round diffs and between-round diffs on existing tex files.
+ */
+async function handleRunLatexdiff(config: any) {
+  try {
+    logger.debug(
+      CHANNEL,
+      `Command called with config: ${JSON.stringify(config)}`,
+    );
+
+    // Check if latexdiff is installed
+    if (!(await ensureLatexdiffInstalled())) {
+      return;
+    }
+
+    // Extract configuration parameters
+    const { agent, model, inputFile, multipleOutputFiles } = config;
+
+    if (!agent || !model || !inputFile) {
+      vscode.window.showErrorMessage(
+        'Missing required configuration parameters',
+      );
+      return;
+    }
+
+    // Get the agent name chunk for filename matching
+    const agentNameChunk = getAgentFirstNameChunk(agent);
+    logger.debug(CHANNEL, `Using agent name chunk: ${agentNameChunk}`);
+
+    // Get workspace path
+    const workspacePath = getWorkspacePath();
+    if (!workspacePath) {
+      throw new Error('No workspace path found');
+    }
+
+    // Create a progress indicator
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Running LaTeX diffs',
+        cancellable: false,
+      },
+      async (progress) => {
+        progress.report({ increment: 0, message: 'Finding output files...' });
+
+        // Determine the input files (could be multiple)
+        let inputFiles: string[] = [];
+
+        if (multipleOutputFiles && Array.isArray(multipleOutputFiles)) {
+          // If we have specified multiple output files, use those as base for comparison
+          inputFiles = multipleOutputFiles;
+        } else {
+          // Otherwise, use the single input file
+          inputFiles = [inputFile];
+        }
+
+        logger.debug(CHANNEL, `Input files: ${inputFiles.join(', ')}`);
+
+        // Track file mappings between input files and their corresponding round outputs
+        const inputToOutputsMap = new Map<string, Map<number, string>>();
+
+        // Process each input file separately with its own directory
+        for (const inputFile of inputFiles) {
+          const outputDirPath = path.dirname(inputFile);
+          const baseInputName = path.basename(
+            inputFile,
+            path.extname(inputFile),
+          );
+
+          // Find potential output files in this input file's directory
+          const outputDir = await vscode.workspace.fs.readDirectory(
+            vscode.Uri.file(path.join(workspacePath, outputDirPath)),
+          );
+
+          const roundOutputsMap = new Map<number, string>();
+
+          // Regex pattern for matching output files
+          // Pattern: [baseInputName]_[agentNameChunk]_r[round]_[model].tex
+          const outputFilePattern = new RegExp(
+            `${baseInputName}_${agentNameChunk}_r(\\d+)_${model.replace(/\./g, '')}`,
+          );
+
+          for (const [fileName, fileType] of outputDir) {
+            if (
+              fileType === vscode.FileType.File &&
+              fileName.endsWith('.tex')
+            ) {
+              // Skip files that are already diff files (contain "_diff" in name)
+              if (fileName.includes('_diff')) {
+                continue;
+              }
+
+              const match = fileName.match(outputFilePattern);
+
+              if (match) {
+                const round = parseInt(match[1], 10);
+                roundOutputsMap.set(round, path.join(outputDirPath, fileName));
+              }
+            }
+          }
+
+          if (roundOutputsMap.size > 0) {
+            inputToOutputsMap.set(inputFile, roundOutputsMap);
+            logger.debug(
+              CHANNEL,
+              `Found ${roundOutputsMap.size} matching outputs for ${inputFile}`,
+            );
+          } else {
+            logger.debug(CHANNEL, `No matching outputs found for ${inputFile}`);
+          }
+        }
+
+        if (inputToOutputsMap.size === 0) {
+          vscode.window.showInformationMessage(
+            'No matching output files found for this configuration',
+          );
+          return;
+        }
+
+        logger.debug(
+          CHANNEL,
+          `Found matches for ${inputToOutputsMap.size} input files`,
+        );
+
+        // Count total operations for progress reporting
+        let totalOperations = 0;
+        let completedOperations = 0;
+
+        // Count operations for better progress reporting
+        for (const [input, roundOutputs] of inputToOutputsMap.entries()) {
+          // 1. Count round-based diffs (original vs output)
+          totalOperations += roundOutputs.size;
+
+          // 2. Count between-rounds diffs
+          const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
+          if (rounds.length > 1) {
+            totalOperations += rounds.length - 1;
+          }
+        }
+
+        if (totalOperations === 0) {
+          vscode.window.showInformationMessage('No files to diff were found');
+          return;
+        }
+
+        logger.debug(
+          CHANNEL,
+          `Total diff operations to perform: ${totalOperations}`,
+        );
+
+        // Perform all diff operations
+        const results: Array<{
+          success: boolean;
+          message?: string;
+          diffFile?: string;
+        }> = [];
+
+        // Process each input file and its outputs
+        for (const [inputFile, roundOutputs] of inputToOutputsMap.entries()) {
+          progress.report({
+            increment: 0,
+            message: `Running diffs for ${path.basename(inputFile)}...`,
+          });
+
+          // Sort rounds to ensure we process them in order
+          const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
+
+          // 1. First perform round-based diffs
+          for (const round of rounds) {
+            const outputFile = roundOutputs.get(round)!;
+
+            logger.debug(
+              CHANNEL,
+              `Running round diff for ${path.basename(inputFile)} -> ${path.basename(outputFile)} (Round ${round})`,
+            );
+
+            // Use the specialized function for round-based diffs
+            const result = await runLatexdiffForRound(
+              inputFile,
+              outputFile,
+              round,
+              CHANNEL,
+            );
+
+            results.push({
+              success: result.success,
+              message: result.message,
+              diffFile: result.diffFileName,
+            });
+
+            completedOperations++;
+            progress.report({
+              increment: (completedOperations / totalOperations) * 100,
+              message: `Completed ${completedOperations} of ${totalOperations} operations`,
+            });
+          }
+
+          // 2. Perform between-rounds diffs if there are multiple rounds
+          if (rounds.length > 1) {
+            for (let i = 0; i < rounds.length - 1; i++) {
+              const currentRound = rounds[i];
+              const nextRound = rounds[i + 1];
+
+              const currentFile = roundOutputs.get(currentRound)!;
+              const nextFile = roundOutputs.get(nextRound)!;
+
+              logger.debug(
+                CHANNEL,
+                `Running between-rounds diff: ${path.basename(currentFile)} -> ${path.basename(nextFile)}`,
+              );
+
+              // Use the specialized function for between-rounds diffs
+              const result = await runLatexdiffBetweenRounds(
+                currentFile,
+                nextFile,
+                CHANNEL,
+              );
+
+              results.push({
+                success: result.success,
+                message: result.message,
+                diffFile: result.diffFileName,
+              });
+
+              completedOperations++;
+              progress.report({
+                increment: (completedOperations / totalOperations) * 100,
+                message: `Completed ${completedOperations} of ${totalOperations} operations`,
+              });
+            }
+          }
+        }
+
+        // Summarize results
+        const successCount = results.filter((r) => r.success).length;
+
+        if (successCount === 0) {
+          vscode.window.showErrorMessage('All LaTeX diff operations failed');
+        } else if (successCount < totalOperations) {
+          vscode.window.showWarningMessage(
+            `${successCount} of ${totalOperations} LaTeX diff operations completed successfully`,
+          );
+        } else {
+          vscode.window.showInformationMessage(
+            'All LaTeX diffs completed successfully',
+          );
+        }
+
+        // Log detailed results
+        for (const result of results) {
+          if (result.success && result.diffFile) {
+            logger.info(
+              CHANNEL,
+              `Successfully generated diff: ${result.diffFile}`,
+            );
+          } else {
+            logger.warn(CHANNEL, `Failed to generate diff: ${result.message}`);
+          }
+        }
+      },
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `Error running LaTeX diffs: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export const latexdiffCommands = {
   handleLatexdiff,
   handleLatexdiffvc,
@@ -277,4 +553,5 @@ export const latexdiffCommands = {
   handlePackLatexdiffvcMultiple,
   handleCleanLatexdiffvc,
   handleCleanLatexdiffvcMultiple,
+  handleRunLatexdiff,
 };

@@ -22,6 +22,7 @@ export const COMMANDS = {
   STOP_STREAM: 'stopStream',
   RUN_AGAIN: 'runAgain',
   RESTORE_STATE: 'restoreState',
+  DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   CLEAN_STREAM: 'cleanStream',
   ERASE_STREAM: 'eraseStream',

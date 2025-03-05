@@ -35,6 +35,9 @@ export class LogViewMessageHandler {
       case COMMANDS.STOP_STREAM:
         vscode.commands.executeCommand('coauthor.stopAgent', message.stream);
         break;
+      case COMMANDS.DIFF_STREAM:
+        await this.handleDiffStream(message.stream);
+        break;
       case COMMANDS.PACK_STREAM:
         await this.handlePackStream(message.stream);
         break;
@@ -126,5 +129,29 @@ export class LogViewMessageHandler {
 
     // Execute the restore state command with the task configuration
     await vscode.commands.executeCommand('coauthor.restoreState', taskState);
+  }
+
+  private async handleDiffStream(stream: string) {
+    logger.debug(
+      CHANNEL,
+      `Attempting to run latexdiff for stream with ID: ${stream}`,
+    );
+    const taskState = this.provider.getTaskState(stream);
+    if (!taskState) {
+      logger.warn(CHANNEL, `No taskState found for stream: ${stream}`);
+      return;
+    }
+    logger.debug(CHANNEL, `Found taskState for stream: ${stream}`);
+    logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
+
+    // Execute the latexdiff command with the task configuration
+    await vscode.commands.executeCommand('coauthor.runLatexdiff', {
+      agent: taskState.agent,
+      model: taskState.model,
+      inputFile: taskState.inputFile,
+      outputNameOverride: taskState.outputNameOverride,
+      multipleOutputFiles: taskState.multipleOutputFiles,
+      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+    });
   }
 }
