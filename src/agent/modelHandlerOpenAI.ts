@@ -483,12 +483,23 @@ export class ModelHandlerOpenAI extends ModelHandler {
     let lastMessage = messages.at(-1);
 
     if (lastMessage.role === 'assistant') {
-      lastMessage.content = [
-        { type: 'text', text: toolState.accumulatedOutput },
-      ];
+      if (Array.isArray(lastMessage.content)) {
+        const newMessage = {
+          type: 'text',
+          text: bestConnector + newResponse,
+        };
+        lastMessage.content.push(newMessage);
+      } else {
+        lastMessage.content = [
+          {
+            type: 'text',
+            text: toolState.accumulatedOutput,
+          },
+        ];
+      }
     } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
       this.logger.debug(
-        ' Last message is a user or system message - adding a new assistant message',
+        ' Last message is a user or system message - unexpected format',
       );
       // Add a new assistant message
       messages.push({
@@ -519,7 +530,6 @@ export class ModelHandlerOpenAI extends ModelHandler {
       );
       return;
     }
-
     this.logger.debug('Last message is a user/system message');
 
     if (this.containCutOffMessage(lastMessage.content)) {
@@ -545,8 +555,15 @@ export class ModelHandlerOpenAI extends ModelHandler {
             },
           ];
         }
-        // Remove user continuation prompt
-        messages.pop();
+
+        // Remove the user continuation prompt to keep the conversation clean
+        if (messages.at(-1)?.role === 'user') {
+          messages.pop();
+        } else {
+          this.logger.error(
+            'Last message is not a user message - unexpected format',
+          );
+        }
       }
     } else {
       this.logger.debug(
