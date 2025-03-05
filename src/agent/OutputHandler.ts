@@ -222,9 +222,22 @@ export class OutputHandler {
       // Log debugging information within the group
       this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
       this.logger.debug(
-        `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
+        `Round ${currRound} output files: ${this.outputFiles[currRound] || []}`,
         diffProcessGroupId,
       );
+
+      // Check if output files exist for the current round
+      if (
+        !this.outputFiles[currRound] ||
+        this.outputFiles[currRound].length === 0
+      ) {
+        this.logger.warn(
+          `No output files found for round ${currRound}, skipping latexdiff operations`,
+          diffProcessGroupId,
+        );
+        this.endProcessing('stopped', diffProcessGroupId);
+        return;
+      }
 
       // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
       if (this.agentSetting.isRewrite) {
@@ -257,7 +270,7 @@ export class OutputHandler {
           diffProcessGroupId,
         );
 
-        for (let i = 0; i < this.outputFiles[currRound]?.length || 0; i++) {
+        for (let i = 0; i < this.outputFiles[currRound].length; i++) {
           const prevRound = currRound - 1;
           const prevOutputFile = this.outputFiles[prevRound]?.[i];
           const currOutputFile = this.outputFiles[currRound][i];
@@ -592,26 +605,49 @@ export class OutputHandler {
       return;
     }
 
-    const baseToOutput = new Map(
-      baseFiles.map((bf, i) => [
-        path.basename(bf),
-        path.basename(outputFiles[i]),
-      ]),
-    );
+    // Create a map of base filenames to output filenames, handling arrays of different lengths
+    const baseToOutput = new Map();
+    const minLength = Math.min(baseFiles.length, outputFiles.length);
+    if (minLength < baseFiles.length) {
+      this.logger.warn(
+        `Base files length (${baseFiles.length}) is greater than output files length (${outputFiles.length}), some files will not be processed`,
+      );
+    }
+
+    for (let i = 0; i < minLength; i++) {
+      const baseFile = baseFiles[i];
+      const outputFile = outputFiles[i];
+
+      if (baseFile && outputFile) {
+        baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
+      }
+    }
+
+    if (baseToOutput.size === 0) {
+      this.logger.debug('No valid file mappings for input command replacement');
+      return;
+    }
 
     for (const outputFile of outputFiles) {
       if (!outputFile) continue;
-      const content = await readFile(outputFile);
-      // if both the main file and the file is in a sudirectory, such as newVersions/main.tex and newVersions/theta_minustheta_mapping.tex
-      // then the input command \\input{theta_minustheta_mapping.tex} would also work, but will not be caught by this? I am not sure.
-      // Also it looks like "_" is not being caught by this, why? above worked for newCoolingAppB for example.
-      const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
-        baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
-      );
 
-      if (newContent !== content) {
-        await writeFile(outputFile, newContent);
-        this.logger.debug(`Updated input commands in ${outputFile}`);
+      try {
+        const content = await readFile(outputFile);
+        // if both the main file and the file is in a sudirectory, such as newVersions/main.tex and newVersions/theta_minustheta_mapping.tex
+        // then the input command \\input{theta_minustheta_mapping.tex} would also work, but will not be caught by this? I am not sure.
+        // Also it looks like "_" is not being caught by this, why? above worked for newCoolingAppB for example.
+        const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
+          baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
+        );
+
+        if (newContent !== content) {
+          await writeFile(outputFile, newContent);
+          this.logger.debug(`Updated input commands in ${outputFile}`);
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
   }
