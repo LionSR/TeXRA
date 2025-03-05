@@ -12,9 +12,10 @@ import { readFile, writeFile, fileExists } from '../utils/workspaceFileUtils';
 import {
   addCdataToTags,
   addCdataToTagsMultiple,
-  extractContentFromTag,
+  extractContentFromXMLbyTag,
   extractTextFromTag,
-  extractContentFromTagMultiple,
+  extractContentFromXMLbyTagMultiple,
+  extractMultipleTextFromTag,
 } from '../utils/xmlUtils';
 import {
   applyReplacements,
@@ -95,10 +96,17 @@ export class OutputHandler {
    * @param roundGroupId Parent round group ID
    * @returns The created process group ID
    */
-  startProcessing(processName: string, roundGroupId?: string): string {
+  async startProcessing(
+    processName: string,
+    roundGroupId?: string,
+  ): Promise<string> {
     // Create a log group as a child of the round group if provided
     const groupName = `OutputHandler: ${processName}`;
-    const groupId = this.logger.startGroup(groupName, undefined, roundGroupId);
+    const groupId = await this.logger.startGroup(
+      groupName,
+      undefined,
+      roundGroupId,
+    );
     // Comment out this line as it creates confusing log order
     // this.logger.info(`Starting ${processName}`, groupId);
     return groupId;
@@ -121,16 +129,21 @@ export class OutputHandler {
     }
   }
 
-  /** Runs latexindent on a file if it has .tex extension */
-  private async indentLatexFile(filePath: string): Promise<void> {
-    if (filePath.endsWith('.tex')) {
-      this.logger.debug(`Running latexindent on ${filePath}`);
-      await runLatexIndent(filePath);
+  /**
+   * Indents a LaTeX file for better readability
+   */
+  public async indentLatexFile(filePath: string): Promise<void> {
+    if (!filePath.includes('.tex')) {
+      return;
     }
+    this.logger.debug(`Running latexindent on ${filePath}`);
+    await runLatexIndent(filePath);
   }
 
-  /** Runs latexindent on multiple files */
-  private async indentLatexFiles(filePaths: string[]): Promise<void> {
+  /**
+   * Indents multiple LaTeX files for better readability
+   */
+  public async indentLatexFiles(filePaths: string[]): Promise<void> {
     for (const filePath of filePaths) {
       await this.indentLatexFile(filePath);
     }
@@ -176,84 +189,102 @@ export class OutputHandler {
     }
   }
 
-  /** Handles output file processing and validation for agent responses. */
-  public async handleSingleOutput(
-    outputFile: string,
-    groupId?: string,
+  /**
+   * Runs all latexdiff comparisons for the current round.
+   * This is the ONLY place where latexdiff operations should be performed.
+   *
+   * Generates two types of diffs:
+   * 1. Round diffs: Between original input and current output (when in rewrite mode)
+   * 2. Between-rounds diffs: Comparing previous round to current round (when applicable)
+   *
+   */
+  public async handleLatexdiffofOutput(
+    currRound: number,
+    parentGroupId?: string,
   ): Promise<void> {
-    await this.indentLatexFile(outputFile);
-
-    if (
-      this.agentSetting.isRewrite &&
-      this.agentConfig.inputFile.includes('.tex') &&
-      outputFile.includes('.tex')
-    ) {
-      // Check if latexdiff is installed before proceeding
-      if (!(await ensureLatexdiffInstalled())) {
-        this.logger.warn(
-          'Skipping latexdiff operation - latexdiff not installed',
-          groupId,
-        );
-        return;
-      }
-
-      // Run latexdiff and capture result
-      const result = await runLatexdiff(
-        this.agentConfig.inputFile,
-        outputFile,
-        '_diff',
-        false,
-      );
-
-      // Log the result using helper method
-      this.logLatexdiffResult(result, 'diff', groupId);
-    }
-  }
-
-  /** Runs latexdiff on multiple output files. */
-  public async handleMultipleOutputs(
-    outputFiles: string[],
-    groupId?: string,
-  ): Promise<void> {
-    await this.indentLatexFiles(outputFiles);
-
-    this.logger.debug(
-      `Handling multiple outputs: tasked outputFiles: ${this.agentConfig.outputFiles}; actual outputFiles: ${outputFiles}`,
-      groupId,
+    // Create a dedicated log group for latexdiff operations FIRST
+    const diffProcessGroupId = await this.startProcessing(
+      `LatexDiff`,
+      parentGroupId,
     );
-    if (
-      this.agentSetting.isRewrite &&
-      Array.isArray(this.agentConfig.outputFiles) &&
-      this.agentConfig.outputFiles.length > 0 &&
-      Array.isArray(outputFiles) &&
-      outputFiles.length > 0
-    ) {
+
+    try {
       // Check if latexdiff is installed before proceeding
       if (!(await ensureLatexdiffInstalled())) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
-          groupId,
+          diffProcessGroupId,
         );
+        this.endProcessing('stopped', diffProcessGroupId);
         return;
       }
 
-      for (let i = 0; i < this.agentConfig.outputFiles.length; i++) {
-        const inputFile = this.agentConfig.outputFiles[i];
-        const outputFile = outputFiles[i];
-        // TODO: Implement log update
-        // await updateLogOutputFiles(this.logId, outputFile);
-        if (inputFile.includes('.tex') && outputFile.includes('.tex')) {
-          const result = await runLatexdiff(
-            inputFile,
-            outputFile,
-            '_diff',
-            false,
-          );
+      // Log debugging information within the group
+      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
+      this.logger.debug(
+        `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
+        diffProcessGroupId,
+      );
 
-          // Log the result using helper method
-          this.logLatexdiffResult(result, 'diff', groupId);
+      // 1. ROUND DIFFS: Comparing original input to current output (only in rewrite mode)
+      if (this.agentSetting.isRewrite) {
+        this.logger.info(
+          `Running round-based latexdiff operations`,
+          diffProcessGroupId,
+        );
+
+        // Generate diffs between base files and current round
+        for (let i = 0; i < this.baseFiles.length; i++) {
+          const baseFile = this.baseFiles[i];
+          const outputFile = this.outputFiles[currRound]?.[i];
+          if (baseFile && outputFile) {
+            // Call latexdiff specialized for rounds
+            const result = await runLatexdiffForRound(
+              baseFile,
+              outputFile,
+              currRound,
+            );
+
+            this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
+          }
         }
       }
+
+      // 2. SEQUENTIAL ROUND DIFFS: Comparing previous round to current round
+      if (currRound > 0) {
+        this.logger.info(
+          `Running between-rounds latexdiff operations`,
+          diffProcessGroupId,
+        );
+
+        for (let i = 0; i < this.outputFiles[currRound]?.length || 0; i++) {
+          const prevRound = currRound - 1;
+          const prevOutputFile = this.outputFiles[prevRound]?.[i];
+          const currOutputFile = this.outputFiles[currRound][i];
+
+          if (prevOutputFile && currOutputFile) {
+            // Call latexdiff specialized for between-rounds
+            const result = await runLatexdiffBetweenRounds(
+              prevOutputFile,
+              currOutputFile,
+            );
+
+            this.logLatexdiffResult(
+              result,
+              'between-rounds-diff',
+              diffProcessGroupId,
+            );
+          }
+        }
+      }
+
+      this.endProcessing('stopped', diffProcessGroupId);
+    } catch (err) {
+      this.logger.error(
+        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
+        diffProcessGroupId,
+      );
+      this.endProcessing('error', diffProcessGroupId);
     }
   }
 
@@ -284,6 +315,67 @@ export class OutputHandler {
   }
 
   /**
+   * Fallback extraction for single document case using regex when XML parsing fails
+   * @private
+   */
+  private extractDocumentbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): string | null {
+    try {
+      const fallbackContent = extractTextFromTag(outputContent, documentTag);
+      if (fallbackContent) {
+        this.logger.info(
+          `Successfully extracted ${documentTag} using fallback method`,
+        );
+        return fallbackContent;
+      }
+      this.logger.error(
+        `No ${documentTag} found in output file using fallback method`,
+      );
+      return null;
+    } catch (fallbackErr) {
+      this.logger.error(
+        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Fallback extraction for multiple documents case using regex when XML parsing fails
+   * @private
+   */
+  private extractMultipleDocumentsbyRegex(
+    outputContent: string,
+    documentTag: string,
+  ): Array<{ content: string; name: string }> | null {
+    try {
+      const fallbackDocuments = extractMultipleTextFromTag(
+        outputContent,
+        documentTag,
+      );
+
+      if (fallbackDocuments.length > 0) {
+        this.logger.info(
+          `Successfully extracted ${fallbackDocuments.length} documents using fallback method`,
+        );
+        return fallbackDocuments;
+      }
+
+      this.logger.error(
+        `No documents found in output file using fallback method`,
+      );
+      return null;
+    } catch (fallbackErr) {
+      this.logger.error(
+        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Splits XML output into separate files for document and scratchpad content.
    * Handles CDATA wrapping and XML parsing.
    */
@@ -310,18 +402,39 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const latexDocument = extractContentFromTag(root, documentTag);
+      const latexDocument = extractContentFromXMLbyTag(root, documentTag);
       if (latexDocument) {
         await writeFile(texFile, latexDocument);
         return texFile;
       } else {
-        this.logger.error(`No ${documentTag} found in output file`);
+        this.logger.warn(
+          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        );
+        // Try fallback extraction using regex method
+        const fallbackContent = this.extractDocumentbyRegex(
+          outputContent,
+          documentTag,
+        );
+        if (fallbackContent) {
+          await writeFile(texFile, fallbackContent);
+          return texFile;
+        }
         return texFile;
       }
     } catch (err) {
-      this.logger.error(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
+      // Try fallback extraction if XML parsing fails
+      const fallbackContent = this.extractDocumentbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackContent) {
+        await writeFile(texFile, fallbackContent);
+        return texFile;
+      }
+      // Re-throw the original error if fallback also failed
       throw err;
     }
   }
@@ -350,17 +463,41 @@ export class OutputHandler {
       });
       const root = parser.parse(outputContent);
 
-      const documents = extractContentFromTagMultiple(root, documentTag);
+      const documents = extractContentFromXMLbyTagMultiple(root, documentTag);
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputFile);
       } else {
-        this.logger.error(`No ${documentTag} found in output file`);
+        this.logger.warn(
+          `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
+        );
+        // Try fallback extraction using regex for the document container
+        const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+          outputContent,
+          documentTag,
+        );
+        if (fallbackDocuments) {
+          return this.processMultipleLatexDocuments(
+            fallbackDocuments,
+            outputFile,
+          );
+        }
         return [];
       }
     } catch (err) {
-      this.logger.error(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}`,
+      this.logger.warn(
+        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
       );
+      const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
+        outputContent,
+        documentTag,
+      );
+      if (fallbackDocuments) {
+        return this.processMultipleLatexDocuments(
+          fallbackDocuments,
+          outputFile,
+        );
+      }
+      // Re-throw the original error if fallback also failed
       throw err;
     }
   }
@@ -445,100 +582,6 @@ export class OutputHandler {
     await writeFile(filePath, content);
   }
 
-  /**
-   * Runs latexdiff comparisons for current round.
-   * Generates diffs between base files and current round, and between consecutive rounds.
-   */
-  public async handleLatexdiff(
-    currRound: number,
-    parentGroupId?: string,
-  ): Promise<void> {
-    // Create a dedicated log group for latexdiff operations FIRST
-    const diffProcessGroupId = this.startProcessing(`LatexDiff`, parentGroupId);
-
-    try {
-      // Check if latexdiff is installed before proceeding
-      if (!(await ensureLatexdiffInstalled())) {
-        this.logger.warn(
-          'Skipping latexdiff operations - latexdiff not installed',
-          diffProcessGroupId,
-        );
-        this.endProcessing('stopped', diffProcessGroupId);
-        return;
-      }
-
-      // Log debugging information within the group
-      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
-      this.logger.debug(
-        `Round ${currRound} output files: ${this.outputFiles[currRound]}`,
-        diffProcessGroupId,
-      );
-
-      // Generate diffs between base files and current round only if it's a rewrite task
-      if (this.agentSetting.isRewrite) {
-        // For each base file and output file, generate a diff
-        for (let i = 0; i < this.baseFiles.length; i++) {
-          const baseFile = this.baseFiles[i];
-          const outputFile = this.outputFiles[currRound][i];
-          if (baseFile && outputFile) {
-            // Log in our own group
-            this.logger.info(
-              `Running latexdiff for round ${currRound} between ${baseFile} and ${outputFile}`,
-              diffProcessGroupId,
-            );
-
-            // Call latexdiff without passing the group ID
-            const result = await runLatexdiffForRound(
-              baseFile,
-              outputFile,
-              currRound,
-            );
-
-            // Log the result using helper method
-            this.logLatexdiffResult(result, 'round diff', diffProcessGroupId);
-          }
-        }
-      }
-
-      // Generate diffs between consecutive rounds if applicable
-      if (currRound > 0) {
-        for (let i = 0; i < this.outputFiles[currRound].length; i++) {
-          const prevRound = currRound - 1;
-          const prevOutputFile = this.outputFiles[prevRound]?.[i];
-          const currOutputFile = this.outputFiles[currRound][i];
-
-          if (prevOutputFile && currOutputFile) {
-            this.logger.info(
-              `Running latexdiff between rounds ${prevRound} and ${currRound}`,
-              diffProcessGroupId,
-            );
-
-            // Call latexdiff without passing the group ID
-            const result = await runLatexdiffBetweenRounds(
-              prevOutputFile,
-              currOutputFile,
-            );
-
-            // Log the result using helper method
-            this.logLatexdiffResult(
-              result,
-              'between-rounds diff',
-              diffProcessGroupId,
-            );
-          }
-        }
-      }
-
-      this.endProcessing('stopped', diffProcessGroupId);
-    } catch (err) {
-      this.logger.error(
-        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
-        diffProcessGroupId,
-      );
-      this.endProcessing('error', diffProcessGroupId);
-    }
-  }
-
   /** Updates \input commands in output files to reference new file paths. */
   public async replaceInputCommands(
     baseFiles: string[],
@@ -574,12 +617,15 @@ export class OutputHandler {
   }
 
   /** Prints statistics about token usage and costs */
-  public printStatistics(
+  public async printStatistics(
     stateGlobal: AgentStateGlobal,
     parentGroupId?: string,
-  ): void {
+  ): Promise<void> {
     // Create a dedicated log group for statistics
-    const statsGroupId = this.startProcessing('Statistics', parentGroupId);
+    const statsGroupId = await this.startProcessing(
+      'Statistics',
+      parentGroupId,
+    );
 
     try {
       this.logger.info('=== Task Statistics ===', statsGroupId);
@@ -699,7 +745,6 @@ export class OutputHandler {
       this.endProcessing('error', statsGroupId);
     }
   }
-
   /** Processes output files for current round. */
   protected async handleOutput(
     stateRound: AgentStateRound,
@@ -710,7 +755,7 @@ export class OutputHandler {
     roundGroupId?: string,
   ): Promise<string[]> {
     // Print statistics at the end of each round
-    this.printStatistics(stateGlobal, roundGroupId);
+    await this.printStatistics(stateGlobal, roundGroupId);
 
     return this.outputFiles[currRound] || [];
   }

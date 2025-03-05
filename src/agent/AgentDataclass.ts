@@ -11,7 +11,7 @@ export const DEFAULT_AGENT_SETTINGS: AgentSetting = {
   temperature: 0.0,
   prefills: [],
   outputExt: 'txt',
-  endTag: '\\end{document}',
+  endTag: '</latex_document>',
   requiredFiles: {},
   requiredFilesInternal: {},
   defaultOutputFiles: [],
@@ -88,9 +88,10 @@ export function hasEndTag(
     settings.documentTag && `</${settings.documentTag}>`,
   ];
 
-  if (settings.agentType === AgentType.CoT) {
-    endTagLists.push('\\end{document}');
-  }
+  // if (settings.agentType === AgentType.CoT){
+  //   endTagLists.push('\\end{document}');
+  // }
+  // this is not correct for multiple documents
   return endTagLists.some((tag) => tag && fileContent.includes(tag));
 }
 
