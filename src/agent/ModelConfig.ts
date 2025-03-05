@@ -29,6 +29,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsTokenCounting: false,
   supportsSystemPrompt: true,
   supportsIntermDevMsgs: false,
+  supportsReasoningEffort: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -54,6 +55,7 @@ export interface ModelCapabilities {
   supportsTokenCounting: boolean;
   supportsSystemPrompt: boolean;
   supportsIntermDevMsgs: boolean;
+  supportsReasoningEffort: boolean;
 }
 
 /** Complete configuration for a language model instance. */

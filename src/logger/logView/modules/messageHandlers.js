@@ -1,9 +1,7 @@
-import { vscode } from './vscodeApi.js';
 import {
   getCurrentStream,
   setCurrentStream,
   clearLogGroups,
-  setLogGroup,
   clearGroupToggleStates,
   deleteStreamStatus,
   clearAllGroupToggleStates,

@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.21.3",
+  "version": "0.22.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -84,6 +84,18 @@
             "type": "boolean",
             "default": false,
             "description": "Enable streaming API responses when supported by the model. This will be more robust for long responses.",
+            "scope": "resource"
+          },
+          "coauthor.model.useStreamingAnthropicReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming API responses when supported by the Anthropic model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
+            "scope": "resource"
+          },
+          "coauthor.model.useStreamingOpenAIReasoning": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
             "scope": "resource"
           }
         }
@@ -453,6 +465,12 @@
             "type": "boolean",
             "default": false,
             "description": "Whether to show verbose debug messages in the logger view",
+            "scope": "resource"
+          },
+          "coauthor.debug.saveMessageObjects": {
+            "type": "boolean",
+            "default": false,
+            "description": "Save message JSON objects to files before API calls for debugging purposes",
             "scope": "resource"
           }
         }

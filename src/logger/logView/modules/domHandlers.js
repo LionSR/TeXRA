@@ -4,9 +4,12 @@ import {
   setStreamStatus,
   getGroupToggleState,
   setGroupToggleState,
+  setLogGroup,
   getLogGroup,
   getLogGroups,
   getStreamStatus,
+  clearAllGroupToggleStates,
+  saveState,
 } from './stateManager.js';
 import {
   createGroupHeader,
@@ -14,6 +17,7 @@ import {
   formatLogEntry,
   formatTime,
   getStatusIcon,
+  formatDuration,
 } from './logFormatters.js';
 import { STATUS, COMMANDS, SPLIT_SIZES } from './constants.js';
 
@@ -124,6 +128,7 @@ export function updateStatus(status) {
  * @param {Object} group - Group data
  */
 export function addLogGroup(group) {
+  setLogGroup(group.id, group);
   // Create the header element programmatically instead of using innerHTML
   const headerTemplate = document.createElement('template');
   headerTemplate.innerHTML = createGroupHeader(group);
@@ -136,12 +141,18 @@ export function addLogGroup(group) {
 
   // Check if we have a saved collapsed state for this group
   const isCollapsed = getGroupToggleState(group.id);
-  if (isCollapsed === true) {
+  // Collapse if explicitly set to collapsed in the saved state OR if the group status is 'stopped'
+  if (isCollapsed === true || group.status === 'stopped') {
     groupContainer.style.display = 'none';
     // Update the toggle icon to reflect collapsed state
     const toggleIcon = headerElement.querySelector('.group-toggle i');
     if (toggleIcon) {
       toggleIcon.className = 'codicon codicon-chevron-right';
+    }
+
+    // If it's not already saved as collapsed but status is 'stopped', update the toggle state
+    if (isCollapsed !== true && group.status === 'stopped') {
+      setGroupToggleState(group.id, true);
     }
   } else {
     groupContainer.style.display = 'block'; // Default to visible if no saved state
@@ -267,6 +278,9 @@ export function addLogGroup(group) {
         'codicon codicon-chevron-right';
       setGroupToggleState(group.id, true); // Collapsed
     }
+
+    // Save the updated state
+    saveState();
   });
 }
 
@@ -277,6 +291,14 @@ export function addLogGroup(group) {
  * @param {string} endTime - End time (optional)
  */
 export function updateLogGroupUI(groupId, status, endTime) {
+  const group = getLogGroup(groupId);
+  if (!group) return;
+
+  group.status = status;
+  if (endTime) {
+    group.endTime = endTime;
+  }
+
   // Update the header in the UI if it exists
   const header = document.getElementById(`group-header-${groupId}`);
   if (header) {
@@ -288,24 +310,47 @@ export function updateLogGroupUI(groupId, status, endTime) {
       statusIconElem.innerHTML = getStatusIcon(status);
     }
 
-    // Update the timestamp display
-    const endTimeElem = header.querySelector('.group-end-time');
+    // Update or add the duration display when the group finishes
+    const timeContainer = header.querySelector('.group-time');
+
     if (endTime) {
-      if (endTimeElem) {
-        const date = new Date(endTime);
-        endTimeElem.textContent = `Ended: ${formatTime(date)}`;
-        endTimeElem.style.display = 'inline';
-      } else {
-        // If endTimeElem doesn't exist, create it
-        const timeContainer = header.querySelector('.group-time');
-        if (timeContainer) {
-          const date = new Date(endTime);
-          const endTimeSpan = document.createElement('span');
-          endTimeSpan.className = 'group-end-time';
-          endTimeSpan.textContent = `Ended: ${formatTime(date)}`;
-          endTimeSpan.style.display = 'inline';
-          timeContainer.appendChild(endTimeSpan);
+      const endDate = new Date(endTime);
+      const startDate = new Date(group.startTime);
+      const durationMs = endDate - startDate;
+
+      // Update or create duration element
+      const durationElem = header.querySelector('.group-duration');
+      if (durationElem) {
+        durationElem.textContent = `${formatDuration(durationMs)}`;
+        durationElem.style.display = 'inline';
+      } else if (timeContainer) {
+        const durationSpan = document.createElement('span');
+        durationSpan.className = 'group-duration';
+        durationSpan.textContent = `${formatDuration(durationMs)}`;
+        durationSpan.style.display = 'inline';
+        timeContainer.appendChild(durationSpan);
+      }
+    }
+
+    // Automatically collapse the group if it finished normally (status is "stopped")
+    if (status === 'stopped') {
+      // Get the content element
+      const content = document.getElementById(`group-content-${groupId}`);
+      if (content) {
+        // Collapse the content
+        content.style.display = 'none';
+
+        // Update the toggle icon
+        const toggleIcon = header.querySelector('.group-toggle i');
+        if (toggleIcon) {
+          toggleIcon.className = 'codicon codicon-chevron-right';
         }
+
+        // Update the group toggle state
+        setGroupToggleState(groupId, true); // Set to collapsed
+
+        // Save the updated state
+        saveState();
       }
     }
   }
@@ -537,6 +582,7 @@ export function setupEventListeners() {
 
   // Delete all button click handler
   document.getElementById('deleteAllBtn').addEventListener('click', () => {
+    clearAllGroupToggleStates();
     vscode.postMessage({ command: COMMANDS.DELETE_ALL });
   });
 
