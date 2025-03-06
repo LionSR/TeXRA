@@ -1,0 +1,24 @@
+{
+  "name": "coauthor-docs",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "docs:build": "vitepress build .",
+    "docs:serve": "vitepress serve .",
+    "docs:deploy": "gh-pages -d .vitepress/dist"
+  },
+  "keywords": [
+    "coauthor",
+    "documentation",
+    "academic-writing",
+    "vscode-extension",
+    "ai"
+  ],
+  "author": "CoAuthor Team",
+  "license": "MIT",
+  "description": "Documentation for CoAuthor - AI-powered academic writing assistant",
+  "devDependencies": {
+    "vitepress": "^1.6.3"
+  },
+  "type": "module"
+}
