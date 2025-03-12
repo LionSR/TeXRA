@@ -229,10 +229,7 @@ For project-specific configurations, use workspace settings:
 ```json
 // .vscode/settings.json
 {
-  "coauthor.files.included.inputDirectories": [
-    "src",
-    "chapters"
-  ],
+  "coauthor.files.included.inputDirectories": ["src", "chapters"],
   "coauthor.latex.tikzInputDirectory": "${workspaceFolder}/styles"
 }
 ```

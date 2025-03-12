@@ -12,6 +12,7 @@ Multiple output processing allows you to:
 4. Handle complex document structures split across files
 
 This approach is particularly valuable for:
+
 - Books with multiple chapters
 - Theses with separate chapter files
 - Paper collections with shared formatting
@@ -245,6 +246,7 @@ For very large documents:
 **Problem**: Inconsistent styling across outputs
 
 **Solutions**:
+
 - Use more specific instructions about consistency
 - Enable the "Reflect" option
 - Process files sequentially in a logical order
@@ -253,6 +255,7 @@ For very large documents:
 **Problem**: Missing cross-references between files
 
 **Solutions**:
+
 - Include all related files as input or auxiliary files
 - Specify the importance of maintaining cross-references
 - Use the `merge` agent for final integration
@@ -260,6 +263,7 @@ For very large documents:
 **Problem**: Performance issues with many files
 
 **Solutions**:
+
 - Process smaller batches of files
 - Use lighter models for initial processing
 - Consider sequential processing with different agents
