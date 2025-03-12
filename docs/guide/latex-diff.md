@@ -43,6 +43,7 @@ The "Current" button allows you to quickly select the currently open file for ei
 Click the "latexdiff" button with the <i class="codicon codicon-diff-single"></i> icon.
 
 CoAuthor will:
+
 1. Run the latexdiff tool on your selected files
 2. Generate a new LaTeX document with highlighted changes
 3. Open the diff document for review
@@ -50,6 +51,7 @@ CoAuthor will:
 ### Step 3: Review Changes
 
 The generated diff document will highlight:
+
 - **Additions**: Usually in blue or underlined
 - **Deletions**: Usually in red or struck through
 - **Changes**: Shown as deletions followed by additions
@@ -76,6 +78,7 @@ Click the "latexdiff-vc" button to compare your file with its version at the sel
 ### Step 3: Manage Diff Outputs
 
 After generating a Git-based diff, you can:
+
 - **Pack**: Archive the diff files using the "Pack" button
 - **Clean**: Remove the diff files using the "Clean" button
 
@@ -91,6 +94,7 @@ By default, latexdiff uses the following markup:
 - **Deletions**: `\DIFdel{Deleted text}`
 
 These commands are defined in the preamble of the generated document and typically render as:
+
 - Additions: <span style="color: blue; text-decoration: underline;">Blue underlined text</span>
 - Deletions: <span style="color: red; text-decoration: line-through;">Red struck-through text</span>
 
@@ -168,6 +172,7 @@ CoAuthor's LaTeX diff functionality builds on several key technologies:
 [latexdiff](https://ctan.org/pkg/latexdiff) is a Perl script that compares LaTeX files and generates a marked-up LaTeX document highlighting differences.
 
 CoAuthor:
+
 1. Calls latexdiff with appropriate options
 2. Processes the output for consistency
 3. Applies additional formatting as needed
@@ -177,6 +182,7 @@ CoAuthor:
 [latexdiff-vc](https://ctan.org/pkg/latexdiff) (version control) extends latexdiff to work with version control systems like Git.
 
 CoAuthor:
+
 1. Retrieves file versions from Git history
 2. Passes them to latexdiff
 3. Manages the output files
@@ -184,6 +190,7 @@ CoAuthor:
 ### Merge Process
 
 The intelligent merge process:
+
 1. Analyzes both documents semantically
 2. Identifies substantive changes
 3. Creates a new document combining the best elements
@@ -196,6 +203,7 @@ The intelligent merge process:
 **Problem**: Missing or incomplete highlights
 
 **Solutions**:
+
 - Ensure both documents are valid LaTeX
 - Check for complex structures that might confuse latexdiff
 - Try comparing smaller sections of the document
@@ -203,6 +211,7 @@ The intelligent merge process:
 **Problem**: Diff document doesn't compile
 
 **Solutions**:
+
 - Look for conflicting markup in preamble
 - Check for unclosed environments or commands
 - Remove complex custom commands that might interfere with diff markup
@@ -210,6 +219,7 @@ The intelligent merge process:
 **Problem**: Changes not properly aligned
 
 **Solutions**:
+
 - Ensure similar document structure between versions
 - Try different latexdiff algorithms (implemented via the merge agent)
 - Break down large changes into smaller, more manageable edits
@@ -219,6 +229,7 @@ The intelligent merge process:
 **Problem**: No commits shown in dropdown
 
 **Solutions**:
+
 - Verify the document is in a Git repository
 - Refresh the commit list using the refresh icon
 - Check Git installation and configuration
@@ -226,6 +237,7 @@ The intelligent merge process:
 **Problem**: Error when comparing with commit
 
 **Solutions**:
+
 - Ensure the file existed in the selected commit
 - Check for file path changes or renames
 - Verify Git access permissions

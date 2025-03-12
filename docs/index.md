@@ -19,15 +19,15 @@ features:
   - icon: 📝
     title: Advanced AI Agents
     details: Specialized AI agents for correcting, polishing, drawing, and transforming academic content with intelligent reflection capabilities.
-  
+
   - icon: 🧩
     title: Seamless LaTeX Integration
     details: Work directly with LaTeX documents, extract and compile TikZ figures, generate diffs, and merge changes intelligently.
-  
+
   - icon: 🔧
     title: Powerful Tool Integration
     details: Leverage external tools for document statistics, formatting, and visualization to enhance the AI's capabilities.
-  
+
   - icon: 🖼️
     title: Multi-modal Support
     details: Process text, images, and PDFs in a unified interface designed specifically for academic research workflows.
@@ -93,7 +93,7 @@ CoAuthor is specially designed to understand the unique requirements of academic
 ## Quotes from Users
 
 > "CoAuthor has transformed my paper writing process. What used to take weeks now takes days."
-> 
+>
 > — Professor in Computer Science
 
 > "I'm continually amazed by how well it adapts my dense research papers into clear lecture notes."

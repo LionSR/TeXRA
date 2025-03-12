@@ -46,6 +46,7 @@ The Base File is typically your "main" or "canonical" version, while the Edited 
 Click the "Merge" button with the <i class="codicon codicon-merge"></i> icon.
 
 CoAuthor will:
+
 1. Analyze both documents
 2. Identify meaningful changes
 3. Create a new document combining the best elements of both
@@ -73,6 +74,7 @@ You can guide the merge process through specific instructions:
 5. Execute the agent
 
 **Example instruction:**
+
 ```
 Merge the edited file into the base document with these priorities:
 1. Retain all mathematical notation exactly as in the base file
@@ -113,6 +115,7 @@ When documents contain contradictory changes:
 3. Use the reflection capability to review initial merge results
 
 **Example instruction for conflict resolution:**
+
 ```
 Identify and highlight conflicting sections between the base and edited documents.
 For mathematical expressions, maintain the base file versions but note contradictions.

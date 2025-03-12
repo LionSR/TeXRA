@@ -9,6 +9,7 @@ The reference section contains comprehensive technical details about CoAuthor's 
 ### Agent Reference
 
 Detailed documentation on each built-in agent, including:
+
 - Exact capabilities and limitations
 - Parameter settings
 - Input/output specifications
@@ -19,6 +20,7 @@ Detailed documentation on each built-in agent, including:
 ### Model Reference
 
 Technical specifications for all supported AI models:
+
 - Context window sizes
 - Token limits
 - Pricing information
@@ -30,6 +32,7 @@ Technical specifications for all supported AI models:
 ### Settings Reference
 
 Complete documentation of all CoAuthor configuration options:
+
 - Configuration JSON schema
 - Default values
 - Value constraints
@@ -41,6 +44,7 @@ Complete documentation of all CoAuthor configuration options:
 ## Troubleshooting
 
 Find solutions to common problems and issues:
+
 - Installation problems
 - API connectivity issues
 - Document processing errors
@@ -52,6 +56,7 @@ Find solutions to common problems and issues:
 ## Best Practices
 
 Recommended approaches for effective use of CoAuthor:
+
 - Optimal workflows
 - Performance optimization
 - Quality assurance
@@ -63,6 +68,7 @@ Recommended approaches for effective use of CoAuthor:
 ## Glossary
 
 Definitions of technical terms used throughout the documentation:
+
 - AI terminology
 - LaTeX concepts
 - CoAuthor-specific vocabulary
@@ -77,6 +83,7 @@ The API reference is primarily intended for extension developers and those who w
 :::
 
 Documentation of CoAuthor's internal APIs:
+
 - Command API
 - Extension API
 - Model handler APIs
@@ -87,6 +94,7 @@ Documentation of CoAuthor's internal APIs:
 ### Version History
 
 Review changes and updates in each release:
+
 - Feature additions
 - Bug fixes
 - Breaking changes
@@ -95,6 +103,7 @@ Review changes and updates in each release:
 ### Community Contributions
 
 Examples and templates shared by the community:
+
 - Custom agents
 - Specialized workflows
 - Integration examples
@@ -103,6 +112,7 @@ Examples and templates shared by the community:
 ### Integration Examples
 
 How to integrate CoAuthor with other tools:
+
 - LaTeX Workshop configuration
 - Git integration
 - Bibliography managers
@@ -111,6 +121,7 @@ How to integrate CoAuthor with other tools:
 ### Limitations and Known Issues
 
 Documentation of current limitations and known issues:
+
 - Model-specific constraints
 - Platform limitations
 - Work-in-progress features
