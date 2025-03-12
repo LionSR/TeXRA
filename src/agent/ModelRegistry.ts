@@ -205,6 +205,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsIntermDevMsgs: true,
       supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.HIGH,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
