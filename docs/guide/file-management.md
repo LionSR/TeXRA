@@ -69,6 +69,7 @@ For projects requiring multiple files, enable the multiple file selection mode:
 5. Reorder files by dragging and dropping
 
 Multiple file selection is particularly useful for:
+
 - Processing multiple chapters of a book
 - Working with documents split across multiple files
 - Batch processing similar documents
@@ -125,6 +126,7 @@ Access these options through the "Auto Extract" dropdown:
 2. **TikZ Figures**: Automatically extract and compile TikZ figures
 
 When enabled, CoAuthor will:
+
 1. Scan your LaTeX documents for figure references
 2. Extract the referenced images
 3. Add them to the figure files list
@@ -150,12 +152,14 @@ original_filename_agent_r0_model.extension
 ```
 
 For example:
+
 - Input: `paper.tex`
 - Agent: `polish`
 - Model: `sonnet37`
 - Output: `paper_polish_r0_sonnet37.tex`
 
 When reflection is enabled, you may also see:
+
 - Round 1: `paper_polish_r1_sonnet37.tex`
 
 ### Custom Output Names
@@ -232,6 +236,7 @@ This directs LaTeX compilation output to a separate directory.
 For working across multiple computers:
 
 1. Use cloud storage (e.g., Dropbox) to sync key folders:
+
    - **Log**: Contains thinking logs and processing information
    - **Diffs**: Stores difference files from LaTeX diff operations
    - **History**: Tracks different versions of your documents

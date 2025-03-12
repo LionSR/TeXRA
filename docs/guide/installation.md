@@ -29,17 +29,20 @@ CoAuthor is designed to work on all major operating systems with the following m
 If you need to customize the extension or want to work with the latest development version:
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/LionSR/coauthor.git
    cd coauthor
    ```
 
 2. Install Node.js dependencies:
+
    ```bash
    npm install
    ```
 
 3. Install development tools:
+
    ```bash
    npm install -g yo generator-code
    npm install -g vsce
@@ -47,6 +50,7 @@ If you need to customize the extension or want to work with the latest developme
    ```
 
 4. Build the extension:
+
    ```bash
    npm run build
    ```
@@ -66,18 +70,21 @@ A LaTeX distribution is required for CoAuthor to properly process LaTeX document
 #### Windows
 
 Install either:
+
 - **MiKTeX**: Download and install from [miktex.org](https://miktex.org/download)
 - **TeX Live**: Download and install from [tug.org/texlive/windows.html](https://tug.org/texlive/windows.html)
 
 #### macOS
 
 Install MacTeX:
+
 - Download from [tug.org/mactex/mactex-download.html](https://www.tug.org/mactex/mactex-download.html)
 - Or use Homebrew: `brew install --cask mactex`
 
 #### Linux (Ubuntu/Debian)
 
 Install TeX Live:
+
 ```bash
 sudo apt-get update
 sudo apt-get install texlive-full
@@ -90,14 +97,17 @@ Perl is required for LaTeX tools and document processing.
 :::
 
 #### Windows
+
 - Included with MiKTeX or TeX Live
 - Verify installation by running `perl --version` in Command Prompt
 
 #### macOS
+
 - Pre-installed
 - Verify with `perl --version` in Terminal
 
 #### Linux
+
 ```bash
 sudo apt-get install perl
 ```
@@ -111,15 +121,18 @@ GraphicsMagick is the recommended option for better performance.
 #### GraphicsMagick
 
 **Windows**:
+
 - Download from [GraphicsMagick website](http://www.graphicsmagick.org/download.html)
 - Add installation directory to PATH
 
 **macOS**:
+
 ```bash
 brew install graphicsmagick
 ```
 
 **Linux**:
+
 ```bash
 sudo apt-get install graphicsmagick
 ```
@@ -127,15 +140,18 @@ sudo apt-get install graphicsmagick
 #### ImageMagick (Alternative)
 
 **Windows**:
+
 - Download from [ImageMagick website](https://imagemagick.org/script/download.php)
 - Follow the [detailed installation guide](https://github.com/yakovmeister/pdf2image/blob/HEAD/docs/gm-installation.md)
 
 **macOS**:
+
 ```bash
 brew install imagemagick
 ```
 
 **Linux**:
+
 ```bash
 sudo apt-get install imagemagick
 ```
@@ -147,15 +163,18 @@ Ghostscript is required by GraphicsMagick/ImageMagick for PDF processing.
 :::
 
 #### Windows
+
 - Download from [Ghostscript website](https://ghostscript.com/releases/gsdnld.html)
 - For compatibility issues, you might need to install version 9.52 from [this link](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs952)
 
 #### macOS
+
 ```bash
 brew install ghostscript
 ```
 
 #### Linux
+
 ```bash
 sudo apt-get install ghostscript
 ```
@@ -173,9 +192,10 @@ CoAuthor requires API keys to access language models. Here's how to set them up:
 ![API Key Setup](/images/api-key-setup.png)
 
 ::: info Getting API Keys
+
 - **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
 - **Anthropic API Key**: Available from [Anthropic Console](https://console.anthropic.com/)
-:::
+  :::
 
 ## Verifying Installation
 
@@ -196,6 +216,7 @@ If any component is missing, CoAuthor will typically show an error message indic
 For optimal use with CoAuthor:
 
 1. Move CoAuthor to the secondary sidebar:
+
    - Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
    - Run "View: Toggle Secondary Side Bar Visibility" (or use Alt+Cmd+B on macOS)
    - Drag the CoAuthor view from the primary sidebar to the secondary sidebar
@@ -221,6 +242,7 @@ For optimal use with CoAuthor:
 If you work across multiple computers:
 
 1. Use cloud storage (e.g., Dropbox) to sync key folders:
+
    - **Log**: Contains thinking logs and processing information
    - **Diffs**: Stores difference files from LaTeX diff operations
    - **History**: Tracks different versions of your documents
@@ -236,16 +258,19 @@ If you work across multiple computers:
 ### Common Installation Issues
 
 1. **Extension Not Loading**:
+
    - Check VS Code's minimum version requirement (1.96.2+)
    - Look for errors in the Output panel (select "CoAuthor" in the dropdown)
    - Try reinstalling the extension
 
 2. **LaTeX Processing Errors**:
+
    - Verify LaTeX is in your system PATH
    - Run `pdflatex --version` in terminal to confirm installation
    - Check if required LaTeX packages are installed
 
 3. **Image Processing Errors**:
+
    - Confirm GraphicsMagick/ImageMagick is properly installed
    - Verify Ghostscript is installed and accessible
    - Check PATH environment variables

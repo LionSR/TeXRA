@@ -11,11 +11,13 @@ The `correct` agent focuses on fixing errors without changing the style or conte
 **Purpose:** Fix typos, grammatical errors, and LaTeX syntax issues.
 
 **Best for:**
+
 - Final proofreading before submission
 - Fixing errors in collaborative documents
 - Ensuring consistent formatting and notation
 
 **Example instruction:**
+
 ```
 Fix grammatical errors, typos, and LaTeX syntax issues throughout the document.
 Ensure consistent notation for mathematical symbols and equations.
@@ -23,6 +25,7 @@ Don't change the technical content or writing style.
 ```
 
 **Sample output:**
+
 ```diff
 - The experment was conducted over a perid of three monthes.
 + The experiment was conducted over a period of three months.
@@ -41,11 +44,13 @@ The `polish` agent enhances the writing style and clarity of your document while
 **Purpose:** Improve readability, flow, and overall writing quality.
 
 **Best for:**
+
 - Enhancing draft manuscripts
 - Making technical content more accessible
 - Improving the flow between sections
 
 **Example instruction:**
+
 ```
 Improve the clarity and readability of this document. Make the language more concise
 and enhance the flow between paragraphs. Maintain all technical content and equations.
@@ -53,6 +58,7 @@ Focus especially on the introduction and discussion sections.
 ```
 
 **Sample output:**
+
 ```diff
 - In this paper we will show a new method for analyzing the data. The method is based on
 - statistical analysis. It can be used for different types of experiments.
@@ -72,11 +78,13 @@ The `draw` agent creates or enhances TikZ figures based on textual descriptions 
 **Purpose:** Generate visual representations of concepts, systems, or data.
 
 **Best for:**
+
 - Creating diagrams, flowcharts, or schematics
 - Improving existing figures
 - Converting descriptions into visualizations
 
 **Example instruction:**
+
 ```
 Create a TikZ figure illustrating a neural network with an input layer (3 nodes),
 two hidden layers (5 nodes each), and an output layer (2 nodes).
@@ -84,6 +92,7 @@ Use appropriate colors and add labels for each layer.
 ```
 
 **Sample output:**
+
 ```latex
 \begin{tikzpicture}[shorten >=1pt, ->, draw=black!50, node distance=\layersep]
     \tikzstyle{neuron}=[circle, fill=gray!25, minimum size=17pt, inner sep=0pt]
@@ -91,49 +100,49 @@ Use appropriate colors and add labels for each layer.
     \tikzstyle{hidden neuron}=[neuron, fill=blue!50];
     \tikzstyle{output neuron}=[neuron, fill=red!50];
     \tikzstyle{annot} = [text width=4em, text centered]
-    
+
     % Define layer separation
     \def\layersep{2.5cm}
-    
+
     % Input layer
     \foreach \i in {1,...,3} {
         \node[input neuron] (I-\i) at (0,-\i) {};
     }
-    
+
     % Hidden layer 1
     \foreach \i in {1,...,5} {
         \node[hidden neuron] (H1-\i) at (\layersep,-\i*0.8+0.8) {};
     }
-    
+
     % Hidden layer 2
     \foreach \i in {1,...,5} {
         \node[hidden neuron] (H2-\i) at (2*\layersep,-\i*0.8+0.8) {};
     }
-    
+
     % Output layer
     \foreach \i in {1,...,2} {
         \node[output neuron] (O-\i) at (3*\layersep,-\i*1.5+0.75) {};
     }
-    
+
     % Connect the layers
     \foreach \i in {1,...,3} {
         \foreach \j in {1,...,5} {
             \draw (I-\i) -- (H1-\j);
         }
     }
-    
+
     \foreach \i in {1,...,5} {
         \foreach \j in {1,...,5} {
             \draw (H1-\i) -- (H2-\j);
         }
     }
-    
+
     \foreach \i in {1,...,5} {
         \foreach \j in {1,...,2} {
             \draw (H2-\i) -- (O-\j);
         }
     }
-    
+
     % Layer labels
     \node[annot, above of=I-1, node distance=1cm] (il) {Input layer};
     \node[annot, above of=H1-1, node distance=1cm] (hl1) {Hidden layer 1};
@@ -151,11 +160,13 @@ The `paper2note` agent transforms research papers into comprehensive lecture not
 **Purpose:** Convert academic papers to educational materials.
 
 **Best for:**
+
 - Creating teaching materials from research papers
 - Converting dense research into student-friendly content
 - Developing study guides for complex topics
 
 **Example instruction:**
+
 ```
 Transform this research paper into lecture notes suitable for a graduate-level course.
 Add explanatory text for complex concepts, include discussion questions, and highlight
@@ -169,11 +180,13 @@ The `paper2slide` agent converts research papers into LaTeX beamer presentations
 **Purpose:** Create presentation slides from academic content.
 
 **Best for:**
+
 - Preparing conference presentations
 - Converting papers for teaching purposes
 - Creating seminar materials
 
 **Example instruction:**
+
 ```
 Convert this paper into a beamer presentation with approximately 15-20 slides.
 Include a title slide, outline, introduction, methodology, results, and conclusion.
@@ -187,11 +200,13 @@ The `paper2poster` agent transforms papers into academic conference posters.
 **Purpose:** Create well-structured academic posters.
 
 **Best for:**
+
 - Conference poster preparation
 - Visual research summaries
 - Academic showcases
 
 **Example instruction:**
+
 ```
 Convert this paper into an academic poster using the baposter template.
 Include sections for Introduction, Methodology, Results, and Conclusions.
@@ -207,11 +222,13 @@ The `merge` agent intelligently combines changes from multiple documents.
 **Purpose:** Integrate edits from different versions or authors.
 
 **Best for:**
+
 - Collaborative writing projects
 - Incorporating reviewer suggestions
 - Combining different drafts
 
 **Example instruction:**
+
 ```
 Merge changes from the edited file into the original document. Prioritize substantive
 improvements in clarity while maintaining the original's technical precision.
@@ -225,11 +242,13 @@ The `txt2tex` agent converts plain text to properly formatted LaTeX.
 **Purpose:** Transform unformatted text into LaTeX documents.
 
 **Best for:**
+
 - Converting notes to LaTeX
 - Transforming plain text drafts
 - Formatting text from other sources
 
 **Example instruction:**
+
 ```
 Convert this plain text into a properly formatted LaTeX document. Use appropriate
 sectioning commands, format equations, and create proper citations. Use the article

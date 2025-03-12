@@ -18,17 +18,20 @@ Anthropic's Claude models excel at following detailed instructions, understandin
 ### Claude 3.7 Sonnet (sonnet37)
 
 **Key Features:**
+
 - Excellent context understanding up to 200K tokens
 - Strong academic writing capabilities
 - Good at following complex instructions
 - Fast response times for medium-complexity tasks
 
 **Best For:**
+
 - Day-to-day academic writing assistance
 - Handling medium to complex documents
 - Tasks requiring strong reasoning ability
 
 **Example Use:**
+
 ```
 Agent: polish
 Model: sonnet37
@@ -38,17 +41,20 @@ Instruction: Improve the clarity of my methodology section while preserving all 
 ### Claude 3.7 Sonnet with Thinking (sonnet37T)
 
 **Key Features:**
+
 - Same capabilities as sonnet37
 - Enhanced reasoning through explicit thinking
 - Shows work for complex problems
 - Better for multi-step reasoning tasks
 
 **Best For:**
+
 - Complex editing tasks
 - Mathematical reasoning
 - Detailed analysis
 
 **Example Use:**
+
 ```
 Agent: correct
 Model: sonnet37T
@@ -58,17 +64,20 @@ Instruction: Find and fix errors in my mathematical derivations, focusing on dim
 ### Claude 3 Opus (opus)
 
 **Key Features:**
+
 - Highest quality output among Anthropic models
 - Excellent nuanced understanding
 - Strongest reasoning capabilities
 - Higher cost than other Claude models
 
 **Best For:**
+
 - Critical documents needing highest quality
 - Complex transformations between formats
 - Sophisticated editing tasks
 
 **Example Use:**
+
 ```
 Agent: paper2note
 Model: opus
@@ -78,16 +87,19 @@ Instruction: Transform this complex research paper into comprehensive lecture no
 ### Claude 3.5 Sonnet (sonnet35)
 
 **Key Features:**
+
 - Good balance of quality and performance
 - Lower cost than Claude 3.7 models
 - 200K token context window
 
 **Best For:**
+
 - Everyday academic writing tasks
 - Draft improvement
 - Standard corrections
 
 **Example Use:**
+
 ```
 Agent: correct
 Model: sonnet35
@@ -101,17 +113,20 @@ OpenAI models provide strong reasoning capabilities and are particularly effecti
 ### OpenAI O1 (o1)
 
 **Key Features:**
+
 - Advanced reasoning capabilities
 - High-quality mathematical understanding
 - Built-in thinking process
 - Higher cost than GPT-4 models
 
 **Best For:**
+
 - Complex technical content
 - Creative figure creation
 - Mathematical derivations
 
 **Example Use:**
+
 ```
 Agent: draw
 Model: o1
@@ -121,17 +136,20 @@ Instruction: Create a detailed TikZ figure of a 3D neural network architecture w
 ### OpenAI O1 Mini (o1-)
 
 **Key Features:**
+
 - Scaled-down version of O1
 - Good reasoning at lower cost
 - Faster responses
 - Limited system prompt support
 
 **Best For:**
+
 - Simpler reasoning tasks
 - Budget-conscious projects
 - Basic figure creation
 
 **Example Use:**
+
 ```
 Agent: txt2tex
 Model: o1-
@@ -141,17 +159,20 @@ Instruction: Convert this plain text draft into properly formatted LaTeX with ap
 ### GPT-4o (gpt4o)
 
 **Key Features:**
+
 - Strong multimodal capabilities
 - Good performance for most tasks
 - More affordable than O1 models
 - Vision capabilities for image understanding
 
 **Best For:**
+
 - General-purpose academic writing
 - Image-based reasoning
 - Visual explanation tasks
 
 **Example Use:**
+
 ```
 Agent: polish
 Model: gpt4o
@@ -161,16 +182,19 @@ Instruction: Improve the introduction and discussion sections of my paper, focus
 ### GPT-4o Mini (gpt4o-)
 
 **Key Features:**
+
 - Cost-effective version of GPT-4o
 - Good balance of quality and affordability
 - Fast performance
 
 **Best For:**
+
 - Routine editing tasks
 - Draft improvement
 - Quick corrections
 
 **Example Use:**
+
 ```
 Agent: correct
 Model: gpt4o-
@@ -184,17 +208,20 @@ Google's Gemini models offer strong performance with competitive pricing and exc
 ### Gemini 2.0 Pro (gemini2p)
 
 **Key Features:**
+
 - Strong reasoning abilities
 - Excellent image understanding
 - Large context window
 - Competitive pricing
 
 **Best For:**
+
 - General academic writing tasks
 - Image-based reasoning
 - Large document processing
 
 **Example Use:**
+
 ```
 Agent: polish
 Model: gemini2p
@@ -204,17 +231,20 @@ Instruction: Enhance the clarity of this literature review while maintaining all
 ### Gemini 2.0 Flash Thinking (gemini2fT)
 
 **Key Features:**
+
 - Shows reasoning process explicitly
 - Fast performance
 - Cost-effective
 - Good for step-by-step tasks
 
 **Best For:**
+
 - Tasks requiring visible reasoning
 - Budget-conscious projects
 - Teaching materials
 
 **Example Use:**
+
 ```
 Agent: paper2slide
 Model: gemini2fT
@@ -224,17 +254,20 @@ Instruction: Convert this paper into presentation slides, showing step-by-step d
 ### Gemini 2.0 Flash (gemini2f)
 
 **Key Features:**
+
 - Fastest Gemini model
 - Most cost-effective option
 - Good for simple tasks
 - Native PDF support
 
 **Best For:**
+
 - Simple corrections
 - Routine formatting
 - PDF-based tasks
 
 **Example Use:**
+
 ```
 Agent: correct
 Model: gemini2f
@@ -248,11 +281,13 @@ CoAuthor supports additional models through OpenRouter integration, allowing acc
 ### Llama 3.1 (llama31)
 
 **Key Features:**
+
 - Open source performance
 - Large context window
 - Competitive performance with Claude/GPT
 
 **Example Use:**
+
 ```
 Agent: polish
 Model: llama31
@@ -262,11 +297,13 @@ Instruction: Improve the clarity of this document while maintaining the existing
 ### DeepSeek-V3 (DSV3)
 
 **Key Features:**
+
 - Strong technical performance
 - Cost-effective
 - Good for programming tasks
 
 **Example Use:**
+
 ```
 Agent: draw
 Model: DSV3
@@ -286,6 +323,7 @@ When selecting a model, consider these factors:
 ### 2. Response Speed
 
 From fastest to slowest:
+
 1. `gemini2f`, `haiku35`
 2. `gpt4o-`, `sonnet35`
 3. `gpt4o`, `sonnet37`
@@ -294,6 +332,7 @@ From fastest to slowest:
 ### 3. Cost Considerations
 
 From lowest to highest cost per token:
+
 1. `gemini2f`, `gpt4o-`, `haiku35`
 2. `gemini2p`, `sonnet35`
 3. `gpt4o`, `sonnet37`
@@ -367,15 +406,15 @@ For long responses or reasoning-heavy models, you can enable streaming to see in
 
 ## Recommended Model-Agent Pairings
 
-| Task | Recommended Model | Alternative |
-|------|-------------------|-------------|
-| Basic corrections | `gemini2f` | `gpt4o-` |
-| Polishing writing | `sonnet37` | `gpt4o` |
-| Creating figures | `o1` | `sonnet37T` |
-| Paper to notes | `opus` | `sonnet37` |
-| Paper to slides | `sonnet37` | `gemini2p` |
-| Merging documents | `sonnet37` | `gpt4o` |
-| Mathematical content | `o1` | `sonnet37T` |
+| Task                 | Recommended Model | Alternative |
+| -------------------- | ----------------- | ----------- |
+| Basic corrections    | `gemini2f`        | `gpt4o-`    |
+| Polishing writing    | `sonnet37`        | `gpt4o`     |
+| Creating figures     | `o1`              | `sonnet37T` |
+| Paper to notes       | `opus`            | `sonnet37`  |
+| Paper to slides      | `sonnet37`        | `gemini2p`  |
+| Merging documents    | `sonnet37`        | `gpt4o`     |
+| Mathematical content | `o1`              | `sonnet37T` |
 
 ## Next Steps
 
