@@ -60,7 +60,7 @@ For complex documents with multiple input files, use the "Multiple" dropdown to 
 In the instruction text area, provide specific guidance for the AI. For example:
 
 ```
-Improve the clarity and flow of this document. Focus on making the technical 
+Improve the clarity and flow of this document. Focus on making the technical
 explanations more accessible. Fix any grammatical issues or awkward phrasing.
 Ensure consistent terminology throughout.
 ```

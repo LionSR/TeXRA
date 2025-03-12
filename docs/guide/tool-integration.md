@@ -22,12 +22,14 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Compare LaTeX documents and visualize changes with color-coding.
 
 **How it's used**:
+
 - Compares original and modified documents
 - Highlights additions, deletions, and modifications
 - Generates a visual diff document
 - Aids in reviewing changes between versions
 
 **Integration in CoAuthor**:
+
 - Accessible directly from the LaTeXdiffs section
 - Automated diff generation after processing documents
 - Support for comparing with git commits via latexdiff-vc
@@ -40,15 +42,18 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Format LaTeX code with consistent indentation and structure.
 
 **How it's used**:
+
 - Applies consistent indentation to LaTeX files
 - Structures environments, commands, and sections
 - Makes code more readable and maintainable
 - Standardizes document formatting
 
 **Integration in CoAuthor**:
+
 - Available via the "Indent TeX" command
 - Automated indentation of generated documents
 - Configurable through settings:
+
 ```json
 "coauthor.latex.latexindentConfig": "/path/to/config"
 ```
@@ -58,12 +63,14 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Analyze document statistics including word count, heading count, and math elements.
 
 **How it's used**:
+
 - Counts words in text, headers, and captions
 - Tracks mathematical formulas and equations
 - Provides detailed document statistics
 - Helps assess document complexity and length
 
 **Integration in CoAuthor**:
+
 - Available via the "Count Words in Current TeX File" command
 - Optional integration in prompts via "Attach TeX Count" option
 - Helps AI understand document structure and complexity
@@ -75,12 +82,14 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Process images and convert between formats.
 
 **How it's used**:
+
 - Converts PDFs to images for visualization
 - Processes image formats for compatibility
 - Resizes and adjusts images as needed
 - Creates viewable previews of figures
 
 **Integration in CoAuthor**:
+
 - Automatic processing of figures for AI vision
 - Creation of viewable previews from PDFs
 - Support for image extraction and manipulation
@@ -90,12 +99,14 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Process PDF documents and convert between formats.
 
 **How it's used**:
+
 - Renders PDFs for image extraction
 - Processes complex document formats
 - Enables multi-page document handling
 - Supports high-quality image extraction
 
 **Integration in CoAuthor**:
+
 - Used with GraphicsMagick/ImageMagick for PDF processing
 - Ensures high-quality figure extraction
 - Supports TikZ figure compilation
@@ -105,12 +116,14 @@ CoAuthor integrates several key tools specifically designed for academic writing
 **Purpose**: Access version history and manage document changes.
 
 **How it's used**:
+
 - Retrieves commit history for comparison
 - Enables latexdiff-vc for version comparison
 - Tracks document evolution over time
 - Supports collaborative workflows
 
 **Integration in CoAuthor**:
+
 - Commit listing in the LaTeXdiffs section
 - Support for comparing against previous versions
 - Integration with latexdiff-vc for visual diffs
@@ -163,12 +176,14 @@ Behind the scenes, CoAuthor orchestrates a series of tool operations:
 ### Document Analysis Workflow
 
 1. **Input Processing**:
+
    - TeX files are parsed to extract structure
    - texcount analyzes document statistics
    - Figures are extracted and processed
    - TikZ code is compiled into viewable images
 
 2. **AI Processing**:
+
    - Tool outputs are incorporated into prompts
    - The AI leverages this structured information
    - Responses reference tool-provided data
@@ -187,6 +202,7 @@ To get the most from CoAuthor's tool integration:
 ### For Document Statistics
 
 Enable "Attach TeX Count" when:
+
 - Working with complex documents
 - Needing to preserve document structure
 - Making targeted changes to specific sections
@@ -195,6 +211,7 @@ Enable "Attach TeX Count" when:
 ### For Figure Processing
 
 Enable auto-extraction options when:
+
 - Working with documents containing figures
 - Creating or modifying TikZ diagrams
 - Needing the AI to understand visual elements
@@ -203,6 +220,7 @@ Enable auto-extraction options when:
 ### For Version Comparison
 
 Use LaTeX diff features when:
+
 - Tracking changes between versions
 - Reviewing AI-generated modifications
 - Comparing against previous work
@@ -211,6 +229,7 @@ Use LaTeX diff features when:
 ### For Document Formatting
 
 Use latexindent features when:
+
 - Standardizing document formatting
 - Preparing for collaboration
 - Improving code readability
@@ -223,11 +242,13 @@ Use latexindent features when:
 For advanced workflows, you can chain multiple tools:
 
 1. **Extract and Improve Figures**:
+
    - Extract TikZ figures with auto-extraction
    - Use the `draw` agent to enhance them
    - Reintegrate improved figures into your document
 
 2. **Analyze and Enhance Structure**:
+
    - Use texcount to analyze document composition
    - Apply targeted improvements with specific agents
    - Verify changes with latexdiff
