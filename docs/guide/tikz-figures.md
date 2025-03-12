@@ -32,6 +32,7 @@ To create a new TikZ figure:
 4. Execute the agent
 
 **Example instruction:**
+
 ```
 Create a TikZ figure showing a flowchart of the machine learning pipeline
 described in Section 2. Include the following steps: data collection,
@@ -49,6 +50,7 @@ To enhance an existing figure:
 4. Execute the agent
 
 **Example instruction:**
+
 ```
 Enhance the existing TikZ figure to add color coding for different components.
 Use blue for input components, green for processing steps, and red for output.
@@ -153,6 +155,7 @@ To leverage existing figures as references:
 3. Ask the agent to adopt similar styles or approaches
 
 **Example instruction:**
+
 ```
 Create a TikZ diagram of a neural network architecture similar to the one in
 the reference file, but add an attention mechanism between the encoder and decoder.

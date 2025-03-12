@@ -11,16 +11,19 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Check VS Code compatibility**:
+
    - Ensure you're running VS Code version 1.96.2 or newer
    - Update VS Code if needed
 
 2. **Verify installation**:
+
    - Go to Extensions view (Ctrl+Shift+X)
    - Search for "CoAuthor"
    - If not installed or disabled, install or enable it
    - Try reinstalling from the VSIX file
 
 3. **Check error logs**:
+
    - Open Output panel (Ctrl+Shift+U)
    - Select "CoAuthor" from the dropdown menu
    - Look for specific error messages
@@ -37,6 +40,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 1. **Verify dependencies**:
    Run these commands in your terminal to check installations:
+
    ```bash
    pdflatex --version
    perl --version
@@ -45,10 +49,12 @@ This guide helps you diagnose and resolve common issues you might encounter when
    ```
 
 2. **Check PATH environment**:
+
    - Ensure installation directories are in your system PATH
    - Restart your terminal and VS Code after updating PATH
 
 3. **Manual installation**:
+
    - Follow the detailed installation steps in the [Installation Guide](/guide/installation)
    - Use the recommended installation methods for your OS
 
@@ -65,15 +71,18 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Verify API keys**:
+
    - Open CoAuthor in VS Code
    - Click "Set API Key" option
    - Re-enter your API keys carefully
 
 2. **Check API key validity**:
+
    - Verify your API keys are active in the provider dashboards
    - Check for any billing issues or usage limits
 
 3. **Network issues**:
+
    - Ensure your network allows connections to API endpoints
    - Check if you need to configure proxy settings
 
@@ -88,10 +97,12 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **OpenRouter configuration**:
+
    - Verify your OpenRouter API key is correctly set
    - Check that `coauthor.model.useOpenRouter` is set to `true`
 
 2. **Model availability**:
+
    - Ensure the requested model is available via OpenRouter
    - Check the OpenRouter dashboard for model status
 
@@ -108,15 +119,18 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Verify LaTeX installation**:
+
    - Ensure your LaTeX distribution is properly installed
    - Check if required packages are installed
    - Run `tlmgr list --only-installed` (TeX Live) or check MiKTeX Package Manager
 
 2. **Document validation**:
+
    - Verify the document compiles correctly outside of CoAuthor
    - Fix any LaTeX errors in the original document
 
 3. **Package dependencies**:
+
    - Some LaTeX packages might be missing
    - Install required packages using your LaTeX package manager
 
@@ -131,17 +145,22 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **TikZ package installation**:
+
    - Verify TikZ and PGF packages are installed
    - Check for other required TikZ libraries
 
 2. **Template configuration**:
+
    - Customize the TikZ template in settings to include necessary packages:
+
    ```json
    "coauthor.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n..."
    ```
 
 3. **Path configuration**:
+
    - Set the correct TikZ input directory:
+
    ```json
    "coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs"
    ```
@@ -157,14 +176,17 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **GraphicsMagick/ImageMagick**:
+
    - Verify installation with `gm version` or `convert -version`
    - Reinstall if necessary
 
 2. **Ghostscript**:
+
    - Check installation with `gs --version`
    - Ensure compatible version (9.52 recommended for Windows)
 
 3. **Permission issues**:
+
    - Ensure write permissions in output directories
    - Check temporary directory permissions
 
@@ -181,18 +203,22 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Check API quotas and limits**:
+
    - Verify you haven't exceeded usage limits
    - Check billing status for your API account
 
 2. **Response timeout**:
+
    - For large documents, the model might timeout
    - Try breaking down the task into smaller chunks
    - Enable streaming for long responses:
+
    ```json
    "coauthor.model.useStreaming": true
    ```
 
 3. **Context length**:
+
    - Documents might exceed the model's context window
    - Use models with larger context windows for big documents
    - Split large documents into smaller parts
@@ -209,15 +235,18 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Improve instructions**:
+
    - Be more specific in your instructions
    - Provide clear examples of desired outputs
    - Specify what should and shouldn't be changed
 
 2. **Enable reflection**:
+
    - Turn on the "Reflect" option to allow the model to review its work
    - This often improves output quality significantly
 
 3. **Use better models**:
+
    - Upgrade to more capable models for complex tasks
    - Try Claude 3 Opus or GPT-4o for highest quality
    - Match the model to your specific task
@@ -235,17 +264,21 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Workspace configuration**:
+
    - Ensure you're working within a VS Code workspace
    - Open a folder rather than individual files
 
 2. **File path issues**:
+
    - Avoid very long file paths or special characters
    - Use relative paths within the workspace
 
 3. **File list not updating**:
+
    - Click the refresh icon next to the file type
    - Restart VS Code if file lists remain outdated
    - Check file extension settings to ensure your files are included:
+
    ```json
    "coauthor.files.included.inputExtensions": [".txt", ".tex", ".md"]
    ```
@@ -264,15 +297,18 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Check file paths**:
+
    - Verify where CoAuthor is saving output files
    - Look in the same directory as the input file
    - Check the StreamBoard log for file paths
 
 2. **Permission issues**:
+
    - Ensure you have write permissions in the output directory
    - Try running VS Code with administrator/sudo privileges
 
 3. **Naming conflicts**:
+
    - Check if output files exist but with unexpected names
    - Look for files with pattern: `original_filename_agent_r0_model.extension`
 
@@ -287,18 +323,22 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **Incomplete generation**:
+
    - Check if the AI reached the token limit
    - Enable streaming for more reliable completion:
+
    ```json
    "coauthor.model.useStreaming": true
    ```
 
 2. **XML parsing issues**:
+
    - CoAuthor uses XML to structure its output
    - Malformed XML can cause corruption
    - Check the raw output file for XML structure problems
 
 3. **Encoding problems**:
+
    - Ensure consistent text encoding (UTF-8 recommended)
    - Check for special characters that might cause issues
 
@@ -322,7 +362,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Large documents take longer to process
    - Break down large documents into smaller chunks
    - Use only essential context files
-4. **Network issues**:
+3. **Network issues**:
    - Check your internet connection speed
    - API requests might be delayed by network issues
 
@@ -335,13 +375,16 @@ This guide helps you diagnose and resolve common issues you might encounter when
 **Solutions**:
 
 1. **LaTeX compatibility**:
+
    - Ensure both documents use compatible LaTeX commands
    - Some complex LaTeX constructs might cause diff issues
    - Simplify documents if necessary
 
 2. **latexdiff installation**:
+
    - Verify latexdiff is installed: `latexdiff --version`
    - Install or update if needed:
+
    ```bash
    # Perl installation
    cpan Algorithm::Diff
@@ -349,6 +392,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    ```
 
 3. **File encoding**:
+
    - Ensure consistent encoding across files (UTF-8 recommended)
    - Check for special characters that might cause issues
 
@@ -365,7 +409,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 1. **LaTeX style conflicts**:
    - Custom document classes might conflict with diff markup
    - Try simplifying the preamble for diff documents
-3. **Complex changes**:
+2. **Complex changes**:
    - Very large or complex changes might not display well
    - Break down the diff into smaller sections
    - Consider using the intelligent merge feature instead
@@ -381,7 +425,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 1. **Extension conflicts**:
    - Disable other LaTeX extensions temporarily
    - Enable one by one to identify conflicts
-3. **Version incompatibility**:
+2. **Version incompatibility**:
    - Update VS Code to the latest version
    - Ensure CoAuthor is up to date
    - Check the minimum VS Code version requirement
@@ -406,15 +450,18 @@ This guide helps you diagnose and resolve common issues you might encounter when
 The StreamBoard is your main debugging tool:
 
 1. **Access StreamBoard**:
+
    - Look for "CoAuthor StreamBoard" in the panel at the bottom of VS Code
    - If not visible, open it via the Command Palette: "CoAuthor: Show StreamBoard"
 
 2. **Interpreting logs**:
+
    - Green entries: Information and successful operations
    - Yellow entries: Warnings that might affect performance
    - Red entries: Errors that need attention
 
 3. **Finding specific information**:
+
    - Use the search function to find relevant messages
    - Look for task IDs to track specific operations
    - Expand nested entries to see detailed information
@@ -428,10 +475,12 @@ The StreamBoard is your main debugging tool:
 If you can't resolve an issue using this guide:
 
 1. **Check GitHub issues**:
+
    - Search existing issues on the [CoAuthor repository](https://github.com/LionSR/coauthor/issues)
    - Look for similar problems and solutions
 
 2. **Report new issues**:
+
    - Provide detailed information about your environment
    - Include steps to reproduce the problem
    - Attach relevant log excerpts from StreamBoard

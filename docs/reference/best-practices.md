@@ -33,6 +33,7 @@ Help the AI understand the purpose and audience:
 For complex tasks, structure your instructions:
 
 ✅ "Please improve this document as follows:
+
 1. Fix grammatical errors and typos throughout
 2. Make the introduction more engaging while preserving all key points
 3. Ensure consistent terminology for technical concepts
@@ -58,11 +59,13 @@ Choosing the right model for each task improves quality and efficiency:
 ### Consider Response Quality vs. Speed
 
 When quality is critical (e.g., final revisions), use top-tier models:
+
 - `opus` for highest quality text processing
 - `o1` for complex reasoning tasks
 - `sonnet37` for balanced performance
 
 When speed matters more (e.g., early drafts), use faster models:
+
 - `gemini2f` for quick corrections
 - `haiku35` for rapid iterations
 - `gpt4o-` for fast feedback
@@ -70,6 +73,7 @@ When speed matters more (e.g., early drafts), use faster models:
 ### Leverage Special Capabilities
 
 Use models with specialized capabilities when needed:
+
 - **Thinking-enabled models** (`sonnet37T`, `o1`, `gemini2fT`) for complex reasoning tasks
 - **Vision-capable models** (`gpt4o`, `gemini2p`) for image understanding
 - **Large context models** (`gemini2p`, `sonnet37`) for processing extensive documents

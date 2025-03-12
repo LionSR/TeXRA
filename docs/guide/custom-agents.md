@@ -68,13 +68,13 @@ inherits: polish
 
 # Agent settings
 settings:
-  agentType: CoT  # Can be CoT or direct
+  agentType: CoT # Can be CoT or direct
   documentTag: document
   temperature: 0.0
   prefills:
     - "<document>\n"
   outputExt: tex
-  endTag: "</document>"
+  endTag: '</document>'
   isRewrite: true
 
 # Agent prompts
@@ -82,13 +82,13 @@ prompts:
   systemPrompt: |
     You are an expert academic writing assistant specialized in [your specific domain].
     Your task is to [describe the agent's primary purpose].
-    
+
   userPrefix: |
     I need your help with [specific task]. Please [specific instructions].
-    
+
   userRequest: |
     Please process the following document according to the instructions.
-    
+
   userReflect: |
     Now review your work and make any necessary improvements. Focus on [specific aspects].
 ```
@@ -99,24 +99,24 @@ Modify the settings section to match your agent's requirements:
 
 ```yaml
 settings:
-  agentType: CoT  # CoT for complex tasks, direct for simpler ones
-  documentTag: document  # XML tag for output wrapping
-  temperature: 0.1  # Higher for more creative tasks, lower for precision
+  agentType: CoT # CoT for complex tasks, direct for simpler ones
+  documentTag: document # XML tag for output wrapping
+  temperature: 0.1 # Higher for more creative tasks, lower for precision
   prefills:
-    - "<document>\n"  # Initial text in the output
-  outputExt: tex  # Output file extension
-  endTag: "</document>"  # Signal for task completion
-  isRewrite: true  # Whether the agent rewrites content (vs. appending)
-  
+    - "<document>\n" # Initial text in the output
+  outputExt: tex # Output file extension
+  endTag: '</document>' # Signal for task completion
+  isRewrite: true # Whether the agent rewrites content (vs. appending)
+
   # Optional: specify required files
   requiredFiles:
     TEMPLATE: path/to/template.tex
-  
+
   # Optional: specify file patterns to look for
   filePatternsContain:
-    - pattern: "bibliography"
+    - pattern: 'bibliography'
       varName: BIBLIOGRAPHY
-      categories: ["auxiliaryFile", "auxiliaryFiles"]
+      categories: ['auxiliaryFile', 'auxiliaryFiles']
 ```
 
 ### Step 5: Craft Effective Prompts
@@ -133,22 +133,22 @@ prompts:
     3. Highlights gaps in the current literature
     4. Maintains formal academic language and proper citation style
     5. Follows a logical structure with clear progression
-    
+
     When writing the literature review:
     - Use topic sentences to introduce each paragraph's main idea
     - Provide smooth transitions between sections
     - Group related works together rather than simply listing them chronologically
     - Compare and contrast different approaches
     - Maintain consistent terminology throughout
-    
+
   userPrefix: |
     I need help creating a literature review based on the following papers. Please organize the literature into coherent themes,
     highlight connections between different works, and identify research gaps. Maintain proper academic style and citation format.
-    
+
   userRequest: |
     Please process the provided papers and create a comprehensive literature review section.
     The research area is: {{INSTRUCTION}}
-    
+
   userReflect: |
     Now review your literature review and improve it. Focus on:
     1. The logical structure and flow between paragraphs
@@ -174,8 +174,8 @@ One powerful feature of CoAuthor's agent system is inheritance, which allows you
 inherits: polish
 
 settings:
-  temperature: 0.2  # Override specific settings
-  
+  temperature: 0.2 # Override specific settings
+
 prompts:
   userRequest: |
     # Override specific prompts
@@ -183,6 +183,7 @@ prompts:
 ```
 
 When using inheritance:
+
 - Only specify the settings and prompts you want to override
 - Other settings and prompts will be inherited from the parent
 - You can chain inheritance (a child agent can inherit from another child)
@@ -194,8 +195,8 @@ When using inheritance:
 inherits: polish
 
 settings:
-  temperature: 0.0  # Physics requires precision
-  
+  temperature: 0.0 # Physics requires precision
+
 prompts:
   systemPrompt: |
     You are an expert academic editor specializing in physics papers. 
@@ -206,7 +207,7 @@ prompts:
     3. Clarity in describing experimental setups and theoretical frameworks
     4. Proper formatting of equations and references to them
     5. Clear explanation of physical concepts for the intended audience
-    
+
   userPrefix: |
     Please polish this physics document to enhance clarity and precision while maintaining all technical content.
     Pay special attention to equation formatting, consistent notation, and accurate physics terminology.
@@ -225,7 +226,7 @@ settings:
   requiredFiles:
     TEMPLATE: path/to/template.tex
     BIBFILE: path/to/bibliography.bib
-  
+
   requiredFilesInternal:
     STYLE_GUIDE: styles/physics-style-guide.tex
 ```
@@ -236,7 +237,7 @@ These files will be available to the agent as variables in prompts:
 prompts:
   userPrefix: |
     Follow the style guide provided:
-    
+
     {{STYLE_GUIDE_CONTENT}}
 ```
 
@@ -247,12 +248,12 @@ Configure your agent to find specific types of files:
 ```yaml
 settings:
   filePatternsContain:
-    - pattern: "bibliography"
+    - pattern: 'bibliography'
       varName: BIBLIOGRAPHY
-      categories: ["auxiliaryFile", "auxiliaryFiles"]
-    - pattern: "figure"
+      categories: ['auxiliaryFile', 'auxiliaryFiles']
+    - pattern: 'figure'
       varName: MAIN_FIGURE
-      categories: ["figureFile", "figureFiles"]
+      categories: ['figureFile', 'figureFiles']
 ```
 
 These patterns help the agent automatically identify relevant files based on their names.
@@ -264,10 +265,10 @@ For agents that work with multiple files, specify default outputs:
 ```yaml
 settings:
   defaultOutputFiles:
-    - "introduction.tex"
-    - "methods.tex"
-    - "results.tex"
-    - "discussion.tex"
+    - 'introduction.tex'
+    - 'methods.tex'
+    - 'results.tex'
+    - 'discussion.tex'
 ```
 
 ## Custom Agent Examples
@@ -281,7 +282,7 @@ inherits: write
 settings:
   agentType: CoT
   temperature: 0.1
-  
+
 prompts:
   systemPrompt: |
     You are an expert academic grant writer specializing in research proposals.
@@ -291,15 +292,15 @@ prompts:
     3. Describe a feasible methodology with clear steps
     4. Outline expected outcomes and potential impacts
     5. Provide a realistic timeline and resource requirements
-    
+
   userPrefix: |
     I need help drafting a research proposal on the following topic. Please create a structured proposal
     with all necessary sections following standard academic formats.
-    
+
   userRequest: |
     Please create a research proposal based on the following information:
     Topic: {{INSTRUCTION}}
-    
+
   userReflect: |
     Review this research proposal and improve it. Focus on:
     1. The clarity and significance of the research question
@@ -307,3 +308,4 @@ prompts:
     3. The feasibility of the proposed methodology
     4. The potential impact and innovation of the research
     5. The overall persuasiveness and academic ri
+```
