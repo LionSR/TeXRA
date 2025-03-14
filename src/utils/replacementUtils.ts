@@ -402,6 +402,7 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     conditon: 'condition',
     necessitates: 'requires',
     '’': "'",
+    // '’': "'",
   },
 };
 

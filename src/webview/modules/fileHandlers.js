@@ -77,10 +77,10 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
     if (containerDiv) {
       containerDiv.style.display = 'block';
     }
-    vscode.postMessage({
-      command: 'showInformationMessage',
-      text: `Added ${newFiles.length} file(s) to ${selectId}`,
-    });
+    // vscode.postMessage({
+    //   command: 'showInformationMessage',
+    //   text: `Added ${newFiles.length} file(s) to ${selectId}`,
+    // });
   }
   saveState();
 }
