@@ -99,19 +99,21 @@ CoAuthor intelligently handles file paths to ensure proper document processing:
 
 ### File Path Configuration
 
-You can customize how CoAuthor handles files by configuring included and ignored paths in VS Code settings:
+You can customize how CoAuthor handles files by configuring file extensions and ignored paths in VS Code settings:
 
 ```json
-"coauthor.files.included.inputDirectories": [
-  "Discrete-Time",
-  "PapersEx"
+"coauthor.files.included.inputExtensions": [
+  ".txt",
+  ".tex",
+  ".md"
 ],
 "coauthor.files.ignored.directories": [
   "build",
   "node_modules",
   "__pycache__",
-  "figures"
-]
+  "figures",
+  "venv"
+],
 ```
 
 ## Auto-Extraction Features
