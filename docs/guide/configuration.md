@@ -74,21 +74,11 @@ Configure how CoAuthor connects to AI model providers:
 
 ## File Management Configuration
 
-### Included Directories and Files
+### File Extensions
 
-Control which directories and file types CoAuthor includes:
+Control which file types CoAuthor includes:
 
 ```json
-"coauthor.files.included.inputDirectories": [
-  "Discrete-Time",
-  "PapersEx"
-],
-"coauthor.files.included.figureDirectories": [
-  "Discrete-Time",
-  "FiguresEx",
-  "Figures",
-  "Figs"
-],
 "coauthor.files.included.inputExtensions": [
   ".txt",
   ".tex",
@@ -100,14 +90,12 @@ Control which directories and file types CoAuthor includes:
   ".jpeg",
   ".jpg",
   ".svg",
-  ".gif",
-  ".bmp"
-]
+],
 ```
 
-### Ignored Files and Directories
+### Ignored Directories
 
-Specify which files and directories to exclude from CoAuthor's file lists:
+Control which directories CoAuthor ignores:
 
 ```json
 "coauthor.files.ignored.directories": [
@@ -115,8 +103,10 @@ Specify which files and directories to exclude from CoAuthor's file lists:
   "node_modules",
   "__pycache__",
   "figures",
+  "figs",
   "versions",
-  "history"
+  "history",
+  "venv"
 ],
 "coauthor.files.ignored.fileExtensions": [
   ".pdf",
@@ -229,7 +219,7 @@ For project-specific configurations, use workspace settings:
 ```json
 // .vscode/settings.json
 {
-  "coauthor.files.included.inputDirectories": ["src", "chapters"],
+  "coauthor.files.included.inputExtensions": [".tex", ".md", ".txt"],
   "coauthor.latex.tikzInputDirectory": "${workspaceFolder}/styles"
 }
 ```
