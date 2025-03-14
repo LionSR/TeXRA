@@ -203,6 +203,11 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
     '\\frac12': '\\ha',
+
+    // ST and ML:
+
+    '\\\\bet': '\\bet',
+    '\\\\bze': '\\bze',
   },
 };
 
