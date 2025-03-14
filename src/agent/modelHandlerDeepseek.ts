@@ -65,7 +65,7 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
 
           toolState.thinkingBlocks = [thinkingBlock];
           toolState.thinkingAdded = true;
-          this.logger.debug('Added reasoning content to toolState', groupId);
+          // this.logger.debug('Added reasoning content to toolState', groupId);
         }
         // For deepseek mode thinking content should not be attached back to the message as a content item.
         // Nevertheless one can include one in a bare way...
