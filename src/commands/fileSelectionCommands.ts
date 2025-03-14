@@ -120,10 +120,6 @@ async function selectMultipleInputFiles(
     return null;
   }
 
-  const includedInputDirectories = getConfig<string[]>(
-    'files.included.inputDirectories',
-    [],
-  );
   const includedInputExtensions = getConfig<string[]>(
     'files.included.inputExtensions',
     ['.txt', '.tex', '.md'],
@@ -145,16 +141,8 @@ async function selectMultipleInputFiles(
 
     if (!fileUris || fileUris.length === 0) return null;
 
-    const relativePaths = fileUris.map((uri) => {
-      const relativePath = getRelativePath(uri.fsPath);
-      const pathParts = relativePath.split(path.sep);
-      const startIndex = pathParts.findIndex((part) =>
-        includedInputDirectories.includes(part),
-      );
-      return startIndex !== -1
-        ? pathParts.slice(startIndex).join(path.sep)
-        : relativePath;
-    });
+    // Simplified path handling: just use the full relative path
+    const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
 
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
     logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
@@ -250,9 +238,6 @@ async function selectMultipleFigureFiles(
     return null;
   }
 
-  const includedFigureDirectories = getConfig<string[]>(
-    'files.included.figureDirectories',
-  );
   const includedFigureExtensions = getConfig<string[]>(
     'files.included.figureExtensions',
   );
@@ -271,16 +256,9 @@ async function selectMultipleFigureFiles(
   });
 
   if (fileUris && fileUris.length > 0) {
-    const relativePaths = fileUris.map((uri) => {
-      const relativePath = getRelativePath(uri.fsPath);
-      const pathParts = relativePath.split(path.sep);
-      const startIndex = pathParts.findIndex((part) =>
-        includedFigureDirectories.includes(part),
-      );
-      return startIndex !== -1
-        ? pathParts.slice(startIndex).join(path.sep)
-        : relativePath;
-    });
+    // Simplified path handling: just use the full relative path
+    const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
+
     showInfoMessage(`Selected files: ${relativePaths.join(', ')}`);
     logger.info(CHANNEL, `Selected files: ${relativePaths.join(', ')}`);
     return relativePaths;
