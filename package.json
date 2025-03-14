@@ -103,47 +103,6 @@
       {
         "title": "File Handling",
         "properties": {
-          "coauthor.files.included.inputDirectories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "Discrete-Time",
-              "PapersEx"
-            ],
-            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
-            "editPresentation": "multilineText",
-            "order": 1
-          },
-          "coauthor.files.included.auxDirectories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "Discrete-Time",
-              "PapersEx"
-            ],
-            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
-            "editPresentation": "multilineText",
-            "order": 2
-          },
-          "coauthor.files.included.figureDirectories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [
-              "Discrete-Time",
-              "FiguresEx",
-              "Figures",
-              "Figs"
-            ],
-            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
-            "editPresentation": "multilineText",
-            "order": 3
-          },
           "coauthor.files.included.figureExtensions": {
             "type": "array",
             "items": {
