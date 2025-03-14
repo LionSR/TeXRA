@@ -238,6 +238,26 @@ export abstract class ModelHandler {
         );
         this.logger.debug(`Processed image: ${figureFile}, type: ${mediaType}`);
 
+        // Special handling for OpenAI native PDF support
+        if (
+          this.isOpenai &&
+          this.capabilities.supportsVision &&
+          this.capabilities.supportsNativePdf &&
+          mediaType === 'application/pdf'
+        ) {
+          const imageEntry = {
+            type: 'file',
+            file: {
+              file_name: path.basename(figureFile),
+              file_data: Array.isArray(imgData) ? imgData[0] : imgData,
+            },
+          };
+          imageContents.push(imageEntry);
+          addedFigures.push(figureFile);
+          this.logger.debug(`Added native PDF: ${figureFile}`);
+          continue;
+        }
+
         if (Array.isArray(imgData)) {
           this.logger.debug(
             `Adding ${imgData.length} pages to the image contents`,

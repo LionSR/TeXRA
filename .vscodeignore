@@ -14,6 +14,8 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 .DS_Store
 venv/**
+docs/**
+docs/
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
