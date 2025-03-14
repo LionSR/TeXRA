@@ -112,7 +112,7 @@
               "Discrete-Time",
               "PapersEx"
             ],
-            "description": "Directories to consider as the root for input files",
+            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
             "editPresentation": "multilineText",
             "order": 1
           },
@@ -125,7 +125,7 @@
               "Discrete-Time",
               "PapersEx"
             ],
-            "description": "Directories to consider as the root for auxiliary files",
+            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
             "editPresentation": "multilineText",
             "order": 2
           },
@@ -140,7 +140,7 @@
               "Figures",
               "Figs"
             ],
-            "description": "Directories to include in the figure path",
+            "description": "Deprecated: This setting is no longer used for path manipulation. Use ignored directories instead.",
             "editPresentation": "multilineText",
             "order": 3
           },
@@ -306,7 +306,8 @@
               "stuff",
               "draft",
               "diff",
-              "miscellaneous"
+              "miscellaneous",
+              "venv"
             ],
             "description": "Directories to ignore when listing files",
             "editPresentation": "multilineText",
