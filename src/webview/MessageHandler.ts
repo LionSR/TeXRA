@@ -72,6 +72,13 @@ export class WebviewMessageHandler {
         return this.handleRequestEditedFile(message, webviewView);
       case 'requestBaseFile':
         return this.handleRequestBaseFile(webviewView);
+      // Handle file list updates from webview
+      case 'updateInputFiles':
+      case 'updateReferenceFiles':
+      case 'updateAuxiliaryFiles':
+      case 'updateFigureFiles':
+      case 'updateOutputFiles':
+        return this.handleUpdateFiles(message, webviewView);
       // Multiple file selection cases
       case 'setMultipleInputFiles':
       case 'setMultipleReferenceFiles':
@@ -722,5 +729,26 @@ export class WebviewMessageHandler {
         `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  private async handleUpdateFiles(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ) {
+    const command = message.command;
+    const fileType = command.replace('update', ''); // e.g., 'InputFiles'
+    const files = message.files || [];
+
+    logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
+
+    // Since we're just maintaining state and the files are stored in the webview state,
+    // we don't need to do anything else here. The webview manages its own state
+    // and we've already processed the remove action by saving it in the state.
+
+    // Echo back the updated list to confirm receipt
+    webviewView.webview.postMessage({
+      command: `setMultiple${fileType}`,
+      files: files,
+    });
   }
 }
