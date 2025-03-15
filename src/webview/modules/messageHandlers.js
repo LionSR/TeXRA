@@ -117,6 +117,9 @@ function handleStateRestoration(state) {
                 command: `update${capitalize(fileType)}Files`,
                 files: updatedFiles,
               });
+
+              // Save state to persist changes
+              saveState();
             });
           }
         });
