@@ -46,6 +46,8 @@ export function addFileToList(containerId, file) {
   if (!container || !toggleIcon) return;
 
   const fileElement = document.createElement('div');
+  fileElement.className = 'file-item';
+  fileElement.dataset.path = file;
   fileElement.innerHTML = `${file} <span class="remove-button">-</span>`;
 
   const removeButton = fileElement.querySelector('.remove-button');
@@ -55,6 +57,8 @@ export function addFileToList(containerId, file) {
       if (container.children.length === 0) {
         emptyMultipleFiles(containerId, `toggle${capitalize(containerId)}`);
       }
+      // Save state after removing the file to persist changes
+      saveState();
     });
   }
   container.appendChild(fileElement);
