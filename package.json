@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.22.8",
+  "version": "0.22.9",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -324,6 +324,44 @@
             "default": true,
             "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
             "order": 4
+          },
+          "coauthor.latex.enabledReplacements": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "latex_spacing",
+                "equations",
+                "sections",
+                "characters",
+                "latex_xml",
+                "scratchpad_xml",
+                "style",
+                "personal_style",
+                "max_style"
+              ]
+            },
+            "default": [
+              "latex_spacing",
+              "equations",
+              "sections",
+              "characters",
+              "latex_xml",
+              "scratchpad_xml",
+              "style",
+              "max_style"
+            ],
+            "description": "List of enabled LaTeX replacement categories",
+            "order": 5
+          },
+          "coauthor.latex.customReplacements": {
+            "type": "object",
+            "default": {},
+            "description": "Custom LaTeX replacements in the format: { 'from': 'to' }. Example: { '\\alpha': '\\al' }",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "order": 6
           }
         }
       },
