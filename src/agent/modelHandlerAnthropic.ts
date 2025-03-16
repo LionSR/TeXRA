@@ -13,7 +13,6 @@ import {
 } from '../utils/workspaceFileUtils';
 import {
   applyReplacements,
-  getReplacementsByCategory,
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
