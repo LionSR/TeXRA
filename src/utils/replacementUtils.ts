@@ -411,8 +411,10 @@ const STYLE_REPLACEMENTS: ReplacementCategory = {
     // thermodynamical: 'thermodynamic', // problematic with thermodynamically
     conditon: 'condition',
     necessitates: 'requires',
-    '’': "'",
+    // ' v': "'",
     // '’': "'",
+    Itô: 'Ito',
+    k_BT: 'k_B T',
   },
 };
 
@@ -708,6 +710,8 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\dd x ': '\\dd x~ ',
     "\\dd x'": "\\dd x'~",
     '\\quad\\Ra': '~~~\\Ra',
+    '\\Ra\,': '\\Ra~',
+    '\\tau_f': '\\tauf',
   },
 };
 
