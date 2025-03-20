@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);

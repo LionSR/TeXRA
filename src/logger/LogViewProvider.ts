@@ -6,7 +6,7 @@ import { LogViewContentProvider } from './LogViewContentProvider';
 import { LogViewMessageHandler } from './LogViewMessageHandler';
 import { TaskState } from './TaskState';
 import { AgentLogger } from './AgentLogger';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
 // @ts-ignore - Import JavaScript module
 import { STATUS, COMMANDS } from './logView/modules/constants.js';

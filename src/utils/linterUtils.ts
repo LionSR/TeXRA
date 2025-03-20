@@ -3,7 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import { getRelativePath, getFullPathFromWorkspace } from './workspaceFileUtils';
+import {
+  getRelativePath,
+  getFullPathFromWorkspace,
+} from './workspaceFileUtils';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);
@@ -17,13 +20,13 @@ export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
   try {
     // Convert relative path to absolute path
     const fullPath = getFullPathFromWorkspace(filePath);
-    
+
     // Convert to Uri to match diagnostics format
     const fileUri = vscode.Uri.file(fullPath);
-    
+
     // Get all diagnostics for the file from VS Code
     const diagnostics = vscode.languages.getDiagnostics(fileUri);
-    
+
     logger.debug(
       CHANNEL,
       `Retrieved ${diagnostics.length} diagnostics for ${filePath}`,

@@ -20,7 +20,7 @@ import {
   getAllReplacements,
   getAllReplacementsRegex,
 } from '../utils/replacementUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 
 // Local imports - agent components
