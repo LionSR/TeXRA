@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.22.11",
+  "version": "0.22.12",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -809,7 +809,7 @@
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
-    "fast-xml-parser": "^4.5.3",
+    "fast-xml-parser": "^5.0.9",
     "glob": "^10.4.5",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
