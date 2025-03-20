@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import { getConfig } from './commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'FrontendUtils';

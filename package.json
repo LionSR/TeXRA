@@ -429,6 +429,19 @@
         }
       },
       {
+        "title": "XML Validation",
+        "properties": {
+          "coauthor.xmlValidator.maxIterations": {
+            "type": "number",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of iterations when trying to fix XML validation errors",
+            "order": 1
+          }
+        }
+      },
+      {
         "title": "File Explorer",
         "properties": {
           "coauthor.explorer.agentsDirectory": {

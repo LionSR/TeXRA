@@ -13,7 +13,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
 import { executeCommand } from '../utils/execUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'LaTeXCommands';

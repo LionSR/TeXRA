@@ -11,11 +11,10 @@ import * as logger from '../logger/logUtils';
 import {
   showInfoMessage,
   showErrorMessage,
-  getConfig,
 } from '../frontend-utils/commonUtils';
 import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
 import { listInputFiles } from '../frontend-utils/fileListingUtils';
-
+import { getConfig } from '../utils/configUtils';
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 
