@@ -18,6 +18,7 @@ import { registerYamlCommands } from './commands/yamlCommands';
 import { registerAgentCommands } from './commands/agentCommands';
 import { registerApiKeyCommands } from './commands/apiKeyCommands';
 import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
+import { registerTextEditorCommands } from './commands/textEditorCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -47,6 +48,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     agent: registerAgentCommands(context),
     apiKey: registerApiKeyCommands(context),
     stateRestore: registerStateRestoreCommand(context),
+    textEditor: registerTextEditorCommands(context),
   };
 
   // Register webview provider
@@ -80,3 +82,4 @@ export { xmlCommands } from './commands/xmlCommands';
 export { yamlCommands } from './commands/yamlCommands';
 export { apiKeyCommands } from './commands/apiKeyCommands';
 export { stateRestoreCommand } from './commands/stateRestoreCommand';
+export { textEditorCommands } from './commands/textEditorCommands';
