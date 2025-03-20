@@ -19,6 +19,7 @@ import { registerAgentCommands } from './commands/agentCommands';
 import { registerApiKeyCommands } from './commands/apiKeyCommands';
 import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 import { registerTextEditorCommands } from './commands/textEditorCommands';
+import { registerLinterCommands } from './commands/linterCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -49,6 +50,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     apiKey: registerApiKeyCommands(context),
     stateRestore: registerStateRestoreCommand(context),
     textEditor: registerTextEditorCommands(context),
+    linter: registerLinterCommands(context),
   };
 
   // Register webview provider
@@ -83,3 +85,4 @@ export { yamlCommands } from './commands/yamlCommands';
 export { apiKeyCommands } from './commands/apiKeyCommands';
 export { stateRestoreCommand } from './commands/stateRestoreCommand';
 export { textEditorCommands } from './commands/textEditorCommands';
+export { linterCommands } from './commands/linterCommands';
