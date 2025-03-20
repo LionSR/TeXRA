@@ -253,10 +253,7 @@ export class XMLValidatorAgent {
           break;
         }
 
-        logger.info(
-          CHANNEL,
-          `Processing tool use: ${toolUseContent.name}.`,
-        );
+        logger.info(CHANNEL, `Processing tool use: ${toolUseContent.name}.`);
 
         // Extract tool parameters
         const toolInput = toolUseContent.input as any;
