@@ -800,6 +800,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
+    "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
     "fast-xml-parser": "^4.5.3",
