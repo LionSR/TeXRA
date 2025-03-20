@@ -8,6 +8,8 @@
 // Export base classes and types
 export * from './base';
 export * from './types';
+export * from './utils';
 
 // Export tool implementations
 export * from './TextEditorTool';
+export * from './XMLValidatorAgent';
