@@ -16,7 +16,7 @@ import {
   createDirectory,
 } from '../utils/workspaceFileUtils';
 import { renderPrompt } from '../utils/promptUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';

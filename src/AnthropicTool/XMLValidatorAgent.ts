@@ -9,6 +9,7 @@ import {
   getApiKey as getSecretApiKey,
   ApiProvider,
 } from '../utils/secretUtils';
+import { getConfig } from '../utils/configUtils';
 
 const CHANNEL = 'XMLValidatorAgent';
 logger.initialize(CHANNEL);
@@ -50,11 +51,16 @@ export class XMLValidatorAgent {
    */
   async validateAndFix(
     filePath: string,
-    maxIterations: number = 5,
+    maxIterations?: number,
   ): Promise<boolean> {
     logger.info(CHANNEL, `Starting XML validation and fixing for ${filePath}`);
 
     try {
+      // Get maxIterations from configuration if not provided
+      if (maxIterations === undefined) {
+        maxIterations = getConfig('xmlValidator.maxIterations', 5);
+      }
+
       // Verify the file exists before starting
       const fileExists = await workspaceFileUtils.fileExists(filePath);
       if (!fileExists) {
@@ -188,7 +194,7 @@ export class XMLValidatorAgent {
     content: string,
     filePath: string,
     errorContext: string,
-    maxIterations: number = 5,
+    maxIterations: number,
   ): Promise<ToolResult> {
     try {
       // Get the API key for Anthropic
