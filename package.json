@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.22.12",
+  "version": "0.22.13",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -570,6 +570,11 @@
       {
         "command": "coauthor.parseXml",
         "title": "Parse XML Structure",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.validateAndFixXml",
+        "title": "Validate and Fix XML using Claude",
         "category": "CoAuthor"
       },
       {
