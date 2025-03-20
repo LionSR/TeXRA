@@ -6,7 +6,7 @@
 import * as logger from '../logger/logUtils';
 
 // Import vscode workspace configuration
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 const CHANNEL = 'ReplacementUtils';
 logger.initialize(CHANNEL);
