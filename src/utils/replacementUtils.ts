@@ -102,6 +102,16 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     ' rho\\': '  \\rho\\',
 
     '\\sum\\limits_': '\\sum_',
+
+    // unicodes:
+    '$ μs': '$ $\\mu$s',
+    '$ μm': '$ $\\mu$m',
+    '$ μA': '$ $\\mu$A',
+    '$ μV': '$ $\\mu$V',
+    '$ μW': '$ $\\mu$W',
+    '$ μT': '$ $\\mu$T',
+    '$ μH': '$ $\\mu$H',
+    '$ μF': '$ $\\mu$F',
   },
 };
 
@@ -159,7 +169,79 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\omicron': '\\omicron',
     '\\\\\\rho': '\\rho',
     '\\\\rho': '\\rho',
+    '\\\\\\delta': '\\delta',
+    '\\\\left': '\\left',
+    '\\\\right': '\\right',
+    '\\\\left(': '\\left(',
+    '\\\\right(': '\\right(',
+    '\\\\left[': '\\left[',
+    '\\\\right[': '\\right[',
+    '\\\\frac': '\\frac',
+    '\\\\rho_': '\\rho_',
+    '\\\\rho^': '\\rho^',
+    '\\\\rho\\': '\\rho\\',
+    '\\\\sum_': '\\sum_',
+    '\\\\prod_': '\\prod_',
+    '\\\\int_': '\\int_',
+    '\\\\oint_': '\\oint_',
+    '\\\\nabla': '\\nabla',
+    // alphabet
+    '\\\\e^': 'e^',
+    // greek
+    '\\a_': 'a_',
+    '\\b_': 'b_',
+    '\\c_': 'c_',
+    '\\d_': 'd_',
+    '\\e_': 'e_',
+    '\\f_': 'f_',
+    '\\g_': 'g_',
+    '\\h_': 'h_',
+    '\\i_': 'i_',
+    '\\j_': 'j_',
+    '\\k_': 'k_',
+    '\\l_': 'l_',
+    '\\m_': 'm_',
+    '\\n_': 'n_',
+    '\\o_': 'o_',
+    '\\p_': 'p_',
+    '\\q_': 'q_',
+    '\\r_': 'r_',
+    '\\s_': 's_',
+    '\\t_': 't_',
+    '\\u_': 'u_',
+    '\\v_': 'v_',
+    '\\w_': 'w_',
+    '\\x_': 'x_',
+    '\\y_': 'y_',
+    '\\z_': 'z_',
+    // letters
+    '\\a^': 'a^',
+    '\\b^': 'b^',
+    '\\c^': 'c^',
+    '\\d^': 'd^',
     '\\e^': 'e^',
+    '\\f^': 'f^',
+    '\\g^': 'g^',
+    '\\h^': 'h^',
+    '\\i^': 'i^',
+    '\\j^': 'j^',
+    '\\k^': 'k^',
+    '\\l^': 'l^',
+    '\\m^': 'm^',
+    '\\n^': 'n^',
+    '\\o^': 'o^',
+    '\\p^': 'p^',
+    '\\q^': 'q^',
+    '\\r^': 'r^',
+    '\\s^': 's^',
+    '\\t^': 't^',
+    '\\u^': 'u^',
+    '\\v^': 'v^',
+    '\\w^': 'w^',
+    '\\x^': 'x^',
+    '\\y^': 'y^',
+    '\\z^': 'z^',
+
     // text formatting
     '\\\\mathbf': '\\mathbf',
     '\\\\mathbb': '\\mathbb',
@@ -179,7 +261,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\e^{': 'e^{',
     '\\\\der': '\\der',
     '\\\\partial': '\\partial',
-    '\\\\nabla': '\\nabla',
     '\\\\Delta': '\\Delta',
     '\\\\Gamma': '\\Gamma',
     '\\\\Lambda': '\\Lambda',
@@ -208,11 +289,6 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
     '\\frac12': '\\ha',
-
-    // ST and ML:
-
-    '\\\\bet': '\\bet',
-    '\\\\bze': '\\bze',
   },
 };
 
@@ -265,6 +341,8 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{response>': '\\end{response}',
     '\\end{scratchpad>': '</scratchpad>',
     '\\end{itemize>': '\\end{itemize}',
+    '\\end{enumerate>': '\\end{enumerate}',
+
     // Gemini problems
     '</minipage>': '\\end{minipage}',
     '\\begin{figure*}}': '\\begin{figure*}',
@@ -311,6 +389,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       '\\end{document}\\n</document>\\n<document name',
     '\\end{document}\\n</rebuttal_package>':
       '\\end{document}\\n</document>\\n</rebuttal_package>',
+
+    '<latex_document>\n```xml<latex_document>': '<latex_document>\n',
+
     // Special cases
     '{\\today}\\n\\n[Previous':
       '{\\today}\\n\\n\\begin{document}\\n\\makeheader[Previous', // Add document and header
@@ -492,6 +573,8 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\sigma': '\\sg',
     '\\Sigma': '\\Sig',
     '\\varphi': '\\vphi',
+    '\\\\bet': '\\bet',
+    '\\\\bze': '\\bze',
 
     // Greek Letters (Bold)
     '\\boldsymbol{\\alpha}': '\\bal',
