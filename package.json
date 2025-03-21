@@ -446,6 +446,18 @@
             "maximum": 20,
             "description": "Maximum number of iterations when trying to fix linter issues in code files",
             "order": 2
+          },
+          "coauthor.autoFix.latex": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically trigger LaTeX linter fix when linter issues are detected",
+            "order": 3
+          },
+          "coauthor.autoFix.xml": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically trigger XML validation fix when XML validation issues are detected",
+            "order": 4
           }
         }
       },
