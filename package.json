@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.23.1",
+  "version": "0.23.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
