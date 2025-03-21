@@ -1,5 +1,9 @@
+// Standard library imports
+
 import * as path from 'path';
 import * as vscode from 'vscode';
+
+// Local imports - core
 import { BaseAnthropicTool, CLIResult, ToolError, ToolResult } from './base';
 import {
   TextEditorToolParams,
@@ -7,7 +11,12 @@ import {
   EditorCommand,
   FileHistoryEntry,
 } from './types';
+
+// Local imports - utilities
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+
+// Local imports - Log
+import * as logger from '../logger/logUtils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -68,6 +77,7 @@ export class TextEditorTool extends BaseAnthropicTool {
               'Parameter `file_text` is required for command: create',
             );
           }
+          logger.info(CHANNEL, `create: ${filePath}`);
           return await this.create(filePath, input.file_text);
         case 'str_replace':
           if (!input.old_str) {
@@ -75,11 +85,16 @@ export class TextEditorTool extends BaseAnthropicTool {
               'Parameter `old_str` is required for command: str_replace',
             );
           }
+          logger.info(
+            CHANNEL,
+            `str_replace: ${input.old_str} -> ${input.new_str}`,
+          );
           return await this.strReplace(
             filePath,
             input.old_str,
             input.new_str || '',
           );
+
         case 'insert':
           if (input.insert_line === undefined) {
             throw new ToolError(
@@ -91,8 +106,13 @@ export class TextEditorTool extends BaseAnthropicTool {
               'Parameter `new_str` is required for command: insert',
             );
           }
+          logger.info(
+            CHANNEL,
+            `insert: ${input.insert_line} -> ${input.new_str}`,
+          );
           return await this.insert(filePath, input.insert_line, input.new_str);
         case 'undo_edit':
+          logger.info(CHANNEL, `undo_edit: ${filePath}`);
           return await this.undoEdit(filePath);
         default:
           throw new ToolError(

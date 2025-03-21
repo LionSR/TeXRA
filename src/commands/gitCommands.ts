@@ -5,7 +5,7 @@ import { exec } from 'child_process';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {

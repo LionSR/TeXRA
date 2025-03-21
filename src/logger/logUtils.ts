@@ -5,7 +5,7 @@ import Transport from 'winston-transport';
 
 // Local imports - logView
 import { LogViewProvider } from './LogViewProvider';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 const { combine, timestamp } = winston.format;
 
