@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { XMLValidator } from 'fast-xml-parser';
 import Anthropic from '@anthropic-ai/sdk';
 import { TextEditorTool } from './TextEditorTool';
-import { ToolResult, CLIResult } from './base';
+import { ToolResult } from './base';
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
 import * as logger from '../logger/logUtils';
 import {
@@ -96,7 +96,7 @@ export class XMLValidatorAgent {
       );
 
       // Call Claude to fix the XML
-      const fixResult = await this.callClaudeToFixXML(
+      const fixResult = await this.callClaudeToFix(
         validationResult,
         content,
         filePath,
@@ -181,7 +181,7 @@ export class XMLValidatorAgent {
   /**
    * Call Claude API to fix the XML error using the TextEditorTool
    */
-  private async callClaudeToFixXML(
+  private async callClaudeToFix(
     validationResult: {
       isValid: boolean;
       error?: {
@@ -391,9 +391,13 @@ export class XMLValidatorAgent {
     return `You are an expert XML validator and fixer. You will be given an XML file with validation errors.
 Your task is to fix these errors while making minimal changes to the file.
 
+Some rules:
+- If there are bare closing tags such as '</latex_document>' or other similar ones with error message 'Expected closing tag 'root' (opened in line 1, col 1) instead of closing tag 'latex_document'. at line XXX', you should usually add the opening tag '<latex_document>' or at the appropriate place. For example, by looking at the content around the end of the scratchpad, such as </scratchpad>. This is preferred over directly removing the bare closing tags. This is because we usually reserve <latex_document> tags for wrapping the output latex document.
+
 The error information is:
 - Message: ${validationResult.error?.message}
 - Line: ${validationResult.error?.line}
+
 
 Use the text_editor tool to view and modify the file. First view the file to understand its structure,
 then make targeted fixes using str_replace or insert operations.`;

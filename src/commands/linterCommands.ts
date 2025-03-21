@@ -51,13 +51,12 @@ export async function handleShowLinterMessages(): Promise<void> {
         `${msg.severity.toUpperCase()} [${msg.source}]: Line ${msg.line}, Col ${msg.column} - ${msg.message}`,
     );
 
-    // Show in output channel for better formatting
-    const outputChannel = vscode.window.createOutputChannel('CoAuthor Linter');
-    outputChannel.clear();
-    outputChannel.appendLine(`Linter messages for: ${relativePath}`);
-    outputChannel.appendLine('');
-    formattedMessages.forEach((msg) => outputChannel.appendLine(msg));
-    outputChannel.show();
+    // Use logger instead of output channel
+    logger.info(CHANNEL, `Linter messages for: ${relativePath}`);
+    formattedMessages.forEach((msg) => logger.info(CHANNEL, msg));
+    
+    // Show a notification
+    vscode.window.showInformationMessage(`Found ${messages.length} linter issues. Check the log for details.`);
   } catch (err) {
     logger.error(
       CHANNEL,
