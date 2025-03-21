@@ -10,26 +10,28 @@ import { AnthropicToolAgent } from './AnthropicToolAgent';
 // Local imports - utils
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
 
+// Local imports - types
+import { XMLValidationError, ValidationResult } from './types';
+
 // Local imports - Logging
 import * as logger from '../logger/logUtils';
 
 /**
  * Agent that validates XML files and fixes validation errors using Claude
  */
-export class XMLValidatorAgent extends AnthropicToolAgent {
+export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
+  /**
+   * Static factory method to create an XMLValidatorAgent instance
+   */
+  public static create(): XMLValidatorAgent {
+    return new XMLValidatorAgent();
+  }
+
   /**
    * Validate XML file
    * Implementation of abstract method from base class
    */
-  protected async validateFile(filePath: string): Promise<{
-    isValid: boolean;
-    error?: {
-      message: string;
-      line?: number;
-      code?: string;
-      data?: any;
-    };
-  }> {
+  protected async validateFile(filePath: string): Promise<ValidationResult<XMLValidationError>> {
     try {
       // Read the file content
       const content = await workspaceFileUtils.readFile(filePath);
@@ -57,7 +59,7 @@ export class XMLValidatorAgent extends AnthropicToolAgent {
     } catch (err) {
       logger.error(
         this.logChannel,
-        `Error validating XML file: ${err instanceof Error ? err.message : String(err)}`,
+        `Error validating XML file: ${this.formatErrorMessage(err)}`,
       );
 
       return {
@@ -74,17 +76,17 @@ export class XMLValidatorAgent extends AnthropicToolAgent {
    * Get context around an error
    * Implementation of abstract method from base class
    */
-  protected getErrorContext(content: string, error: any): string {
+  protected getErrorContext(content: string, error: XMLValidationError): string {
     try {
       const line = error?.line || 1;
-      return this.getContentAroundLine(content, line, 10);
+      return this.getContentAroundLine(content, line, this.contextLines);
     } catch (err) {
       logger.warn(
         this.logChannel,
-        `Error getting error context: ${err instanceof Error ? err.message : String(err)}`,
+        `Error getting error context: ${this.formatErrorMessage(err)}`,
       );
-      // Default to first 10 lines
-      return content.split('\n').slice(0, 10).join('\n');
+      // Default to first few lines using base class method
+      return this.getDefaultContext(content);
     }
   }
 
@@ -92,13 +94,7 @@ export class XMLValidatorAgent extends AnthropicToolAgent {
    * Create the system message for Claude with current validation error
    * Implementation of abstract method from base class
    */
-  protected createSystemMessage(validationResult: {
-    isValid: boolean;
-    error?: {
-      message: string;
-      line?: number;
-    };
-  }): string {
+  protected createSystemMessage(validationResult: ValidationResult<XMLValidationError>): string {
     if (validationResult.isValid) {
       return `You are an expert XML validator and fixer. The XML file is now valid. Confirm that there are no more issues to fix.`;
     }
@@ -122,13 +118,7 @@ then make targeted fixes using str_replace or insert operations.`;
    * Implementation of abstract method from base class
    */
   protected createInitialUserMessage(
-    validationResult: {
-      isValid: boolean;
-      error?: {
-        message: string;
-        line?: number;
-      };
-    },
+    validationResult: ValidationResult<XMLValidationError>,
     filePath: string,
     errorContext: string,
   ): string {
@@ -156,13 +146,7 @@ Use the text_editor tool to fix this specific error. Make the minimal changes ne
    * Implementation of abstract method from base class
    */
   protected createFollowUpMessage(
-    validationResult: {
-      isValid: boolean;
-      error?: {
-        message: string;
-        line?: number;
-      };
-    },
+    validationResult: ValidationResult<XMLValidationError>,
     isFixed: boolean,
     currentIteration: number,
   ): string {
