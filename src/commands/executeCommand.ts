@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 // Local imports - agent components
 import { AgentConfig } from '../agent/AgentConfig';
