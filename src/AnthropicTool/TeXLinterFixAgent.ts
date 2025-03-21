@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - core
 import { AnthropicToolAgent } from './AnthropicToolAgent';
-
 import { ToolResult } from './base';
 
 // Local imports - types
@@ -34,7 +33,9 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
    * Validate if the file has any linter issues
    * Implementation of abstract method from base class
    */
-  protected async validateFile(filePath: string): Promise<ValidationResult<LinterError[]>> {
+  protected async validateFile(
+    filePath: string,
+  ): Promise<ValidationResult<LinterError[]>> {
     try {
       const issues = linterUtils.getLinterMessages(filePath);
 
@@ -102,7 +103,9 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
    * Create system message for Claude with current linter issues
    * Implementation of abstract method from base class
    */
-  protected createSystemMessage(validation: ValidationResult<LinterError[]>): string {
+  protected createSystemMessage(
+    validation: ValidationResult<LinterError[]>,
+  ): string {
     // Ensure issues is always an array
     const issuesArray = validation.error || [];
 
