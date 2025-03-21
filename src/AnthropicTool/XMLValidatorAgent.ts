@@ -1,14 +1,21 @@
+// Standard library imports
+
 import * as vscode from 'vscode';
+
+// Third-party imports
 import { XMLValidator } from 'fast-xml-parser';
 import Anthropic from '@anthropic-ai/sdk';
+
+// Local imports
 import { TextEditorTool } from './TextEditorTool';
 import { ToolResult } from './base';
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
-import * as logger from '../logger/logUtils';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
 } from '../utils/secretUtils';
+
+import * as logger from '../logger/logUtils';
 import { getConfig } from '../utils/configUtils';
 
 const CHANNEL = 'XMLValidatorAgent';
