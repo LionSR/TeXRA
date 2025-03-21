@@ -6,6 +6,9 @@ import { AnthropicToolAgent } from './AnthropicToolAgent';
 
 import { ToolResult } from './base';
 
+// Local imports - types
+import { LinterError, ValidationResult } from './types';
+
 // Local imports - utils
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
 import * as linterUtils from '../utils/linterUtils';
@@ -19,15 +22,19 @@ logger.initialize(CHANNEL);
 /**
  * Agent that fixes linter issues in TeX files using Claude
  */
-export class TeXLinterFixAgent extends AnthropicToolAgent {
+export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
+  /**
+   * Static factory method to create a TeXLinterFixAgent instance
+   */
+  public static create(): TeXLinterFixAgent {
+    return new TeXLinterFixAgent();
+  }
+
   /**
    * Validate if the file has any linter issues
    * Implementation of abstract method from base class
    */
-  protected async validateFile(filePath: string): Promise<{
-    isValid: boolean;
-    error?: any;
-  }> {
+  protected async validateFile(filePath: string): Promise<ValidationResult<LinterError[]>> {
     try {
       const issues = linterUtils.getLinterMessages(filePath);
 
@@ -43,12 +50,12 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
 
       return {
         isValid: false,
-        error: issues,
+        error: issues as LinterError[],
       };
     } catch (err) {
       logger.error(
         this.logChannel,
-        `Error validating linter fixes: ${err instanceof Error ? err.message : String(err)}`,
+        `Error validating linter fixes: ${this.formatErrorMessage(err)}`,
       );
       return {
         isValid: false,
@@ -61,7 +68,7 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
    * Get context around the error for Claude
    * Implementation of abstract method from base class
    */
-  protected getErrorContext(content: string, issues: any): string {
+  protected getErrorContext(content: string, issues: LinterError[]): string {
     // Ensure issues is always an array
     const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
 
@@ -80,14 +87,14 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
 
     // Get context around the error line
     try {
-      return this.getContentAroundLine(content, errorLine, 10);
+      return this.getContentAroundLine(content, errorLine, this.contextLines);
     } catch (err) {
       logger.warn(
         this.logChannel,
-        `Error getting error context: ${err instanceof Error ? err.message : String(err)}`,
+        `Error getting error context: ${this.formatErrorMessage(err)}`,
       );
-      // Default to first 10 lines
-      return content.split('\n').slice(0, 10).join('\n');
+      // Default to first few lines using base class method
+      return this.getDefaultContext(content);
     }
   }
 
@@ -95,9 +102,9 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
    * Create system message for Claude with current linter issues
    * Implementation of abstract method from base class
    */
-  protected createSystemMessage(issues: any): string {
+  protected createSystemMessage(validation: ValidationResult<LinterError[]>): string {
     // Ensure issues is always an array
-    const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
+    const issuesArray = validation.error || [];
 
     if (!issuesArray.length) {
       return `You are an expert in fixing linter issues. The file is now free of linter issues. Confirm that there are no more issues to fix.`;
@@ -122,26 +129,24 @@ then make targeted fixes using str_replace or insert operations.`;
    * Implementation of abstract method from base class
    */
   protected createInitialUserMessage(
-    issues: any,
+    validation: ValidationResult<LinterError[]>,
     filePath: string,
     errorContext: string,
   ): string {
     // Ensure issues is always an array
-    const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
+    const issuesArray = validation.error || [];
 
     const firstFewIssues = issuesArray
       .slice(0, 5)
       .map((issue) => {
         // Defensive handling for issue properties
-        const severity = issue?.severity
-          ? issue.severity.toUpperCase()
-          : 'UNKNOWN';
+        const severity = issue?.severity || 'UNKNOWN';
         const source = issue?.source || 'unknown';
         const line = issue?.line || '?';
         const column = issue?.column || '?';
         const message = issue?.message || 'Unknown issue';
 
-        return `${severity} [${source}]: Line ${line}, Col ${column} - ${message}`;
+        return `${severity.toUpperCase()} [${source}]: Line ${line}, Col ${column} - ${message}`;
       })
       .join('\n');
 
@@ -163,7 +168,7 @@ Use the text_editor tool to fix these issues. Make the minimal changes needed to
    * Implementation of abstract method from base class
    */
   protected createFollowUpMessage(
-    issues: any,
+    validation: ValidationResult<LinterError[]>,
     isFixed: boolean,
     currentIteration: number,
   ): string {
@@ -176,22 +181,20 @@ Use the text_editor tool to fix these issues. Make the minimal changes needed to
     }
 
     // Ensure issues is always an array
-    const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
+    const issuesArray = validation.error || [];
 
     const remainingIssuesCount = issuesArray.length;
     const firstFew = issuesArray
       .slice(0, 3)
       .map((issue) => {
         // Defensive handling for issue properties
-        const severity = issue?.severity
-          ? issue.severity.toUpperCase()
-          : 'UNKNOWN';
+        const severity = issue?.severity || 'UNKNOWN';
         const source = issue?.source || 'unknown';
         const line = issue?.line || '?';
         const column = issue?.column || '?';
         const message = issue?.message || 'Unknown issue';
 
-        return `${severity} [${source}]: Line ${line}, Col ${column} - ${message}`;
+        return `${severity.toUpperCase()} [${source}]: Line ${line}, Col ${column} - ${message}`;
       })
       .join('\n');
 
@@ -204,7 +207,7 @@ Please continue fixing the linter issues.`;
   /**
    * Group issues by type for better summary
    */
-  private groupIssuesByType(issues: any[]): Record<string, number> {
+  private groupIssuesByType(issues: LinterError[]): Record<string, number> {
     const result: Record<string, number> = {};
 
     for (const issue of issues) {
