@@ -48,3 +48,31 @@ export interface FileHistoryEntry {
   path: string;
   content: string;
 }
+
+/**
+ * Base error interface with common properties
+ */
+export interface BaseError {
+  message: string;
+  line?: number;
+}
+
+/**
+ * Extended error interface with additional properties for XML validation errors
+ */
+export interface XMLValidationError extends BaseError {
+  code?: string;
+  data?: any;
+}
+
+/**
+ * Import the LinterMessage type from linterUtils
+ */
+
+/**
+ * Standard validation result interface for all agents
+ */
+export interface ValidationResult<T extends BaseError | BaseError[]> {
+  isValid: boolean;
+  error?: T;
+}

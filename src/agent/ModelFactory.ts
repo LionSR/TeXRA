@@ -9,7 +9,7 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
 } from './modelHandlerOpenRouter';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 /** Factory class for instantiating appropriate model handlers based on configuration. */
 export class ModelFactory {
