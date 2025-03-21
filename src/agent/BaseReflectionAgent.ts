@@ -52,7 +52,7 @@ import { OutputHandler } from './OutputHandler';
 import { messageToSkeleton } from './messageUtils';
 
 // System imports - common utilities
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 
 const K_SLICE = 200;
 

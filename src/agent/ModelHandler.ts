@@ -14,7 +14,7 @@ import {
   countPdfPages,
   processPdf2Png,
 } from '../utils/imgUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
