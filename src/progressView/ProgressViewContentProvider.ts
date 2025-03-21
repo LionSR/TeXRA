@@ -5,12 +5,12 @@ import * as fs from 'fs';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from './logUtils';
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'Webview';
 logger.initialize(CHANNEL);
 
-export class LogViewContentProvider {
+export class ProgressViewContentProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   getHtmlContent(webview: vscode.Webview): string {
@@ -19,8 +19,7 @@ export class LogViewContentProvider {
         vscode.Uri.joinPath(
           this.context.extensionUri,
           'src',
-          'logger',
-          'logView',
+          'progressView',
           filePath,
         );
 
@@ -84,7 +83,7 @@ export class LogViewContentProvider {
       const logFormattersUri = webview.asWebviewUri(logFormattersPath);
 
       // Replace placeholders in HTML with actual content
-      logger.debug(CHANNEL, 'Generated HTML content for LogView');
+      logger.debug(CHANNEL, 'Generated HTML content for ProgressView');
       return htmlContent
         .replace('${commonStyleUri}', commonStyleUri.toString())
         .replace('${styleUri}', styleUri.toString())
