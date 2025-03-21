@@ -31,7 +31,9 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
    * Validate XML file
    * Implementation of abstract method from base class
    */
-  protected async validateFile(filePath: string): Promise<ValidationResult<XMLValidationError>> {
+  protected async validateFile(
+    filePath: string,
+  ): Promise<ValidationResult<XMLValidationError>> {
     try {
       // Read the file content
       const content = await workspaceFileUtils.readFile(filePath);
@@ -76,7 +78,10 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
    * Get context around an error
    * Implementation of abstract method from base class
    */
-  protected getErrorContext(content: string, error: XMLValidationError): string {
+  protected getErrorContext(
+    content: string,
+    error: XMLValidationError,
+  ): string {
     try {
       const line = error?.line || 1;
       return this.getContentAroundLine(content, line, this.contextLines);
@@ -94,7 +99,9 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
    * Create the system message for Claude with current validation error
    * Implementation of abstract method from base class
    */
-  protected createSystemMessage(validationResult: ValidationResult<XMLValidationError>): string {
+  protected createSystemMessage(
+    validationResult: ValidationResult<XMLValidationError>,
+  ): string {
     if (validationResult.isValid) {
       return `You are an expert XML validator and fixer. The XML file is now valid. Confirm that there are no more issues to fix.`;
     }
