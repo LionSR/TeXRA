@@ -4,9 +4,11 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from './logUtils';
 import { LogViewProvider } from './LogViewProvider';
+
+import { taskStateToAgentConfig } from '../utils/configConversion';
+
 // @ts-ignore - Import JavaScript module
 import { COMMANDS } from './logView/modules/constants.js';
-import { taskStateToAgentConfig } from '../utils/configConversion';
 
 const CHANNEL = 'MessageHandler';
 

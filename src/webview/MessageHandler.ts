@@ -119,6 +119,9 @@ export class WebviewMessageHandler {
         return this.handleAddOpenedFiles(message.fileType, webviewView);
       case 'polishInstructionText':
         return this.handlePolishInstructionText(message, webviewView);
+      case 'showAgentHistory':
+        this.handleShowAgentHistory();
+        break;
     }
   }
 
@@ -750,5 +753,16 @@ export class WebviewMessageHandler {
       command: `setMultiple${fileType}`,
       files: files,
     });
+  }
+
+  /**
+   * Handle showing the agent history view
+   */
+  private async handleShowAgentHistory() {
+    try {
+      await vscode.commands.executeCommand('coauthor.showAgentHistory');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to open agent history: ${error}`);
+    }
   }
 }
