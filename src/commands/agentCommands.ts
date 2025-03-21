@@ -6,7 +6,7 @@ import * as logger from '../logger/logUtils';
 
 // Local imports - agent
 import { AgentConfig } from '../agent/AgentConfig';
-import { LogViewProvider } from '../logger/LogViewProvider';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { BaseReflectionAgent } from '../agent/BaseReflectionAgent';
 
 const CHANNEL = 'AgentCommands';
@@ -27,9 +27,9 @@ async function handleStopAgent(stream: string) {
   }
 
   // Update the UI status
-  const logViewProvider = LogViewProvider.getInstance();
-  if (logViewProvider) {
-    logViewProvider.updateStreamStatus(stream, 'stopped');
+  const progressViewProvider = ProgressViewProvider.getInstance();
+  if (progressViewProvider) {
+    progressViewProvider.updateStreamStatus(stream, 'stopped');
   }
 }
 

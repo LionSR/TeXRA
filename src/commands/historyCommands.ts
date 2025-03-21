@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentHistoryViewProvider } from '../history/AgentHistoryViewProvider';
+import { AgentHistoryViewProvider } from '../historyView/AgentHistoryViewProvider';
 
 export const historyCommands = {
   showHistory: 'coauthor.showAgentHistory',
