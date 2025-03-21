@@ -6,7 +6,8 @@ import { AnthropicToolAgent } from './AnthropicToolAgent';
 import { ToolResult } from './base';
 
 // Local imports - types
-import { LinterError, ValidationResult } from './types';
+import { ValidationResult } from './types';
+import { LinterMessage } from '../utils/linterUtils';
 
 // Local imports - utils
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
@@ -21,7 +22,7 @@ logger.initialize(CHANNEL);
 /**
  * Agent that fixes linter issues in TeX files using Claude
  */
-export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
+export class TeXLinterFixAgent extends AnthropicToolAgent<LinterMessage[]> {
   /**
    * Static factory method to create a TeXLinterFixAgent instance
    */
@@ -35,13 +36,14 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
    */
   protected async validateFile(
     filePath: string,
-  ): Promise<ValidationResult<LinterError[]>> {
+  ): Promise<ValidationResult<LinterMessage[]>> {
     try {
-      const issues = linterUtils.getLinterMessages(filePath);
+      // Get diagnostics - getLinterMessages now handles build triggering
+      const issues = await linterUtils.getLinterMessages(filePath);
 
       // Log raw linter issues for debugging
       logger.debug(
-        this.logChannel,
+        CHANNEL,
         `Linter issues raw data: ${JSON.stringify(issues)}`,
       );
 
@@ -51,11 +53,11 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
 
       return {
         isValid: false,
-        error: issues as LinterError[],
+        error: issues as LinterMessage[],
       };
     } catch (err) {
       logger.error(
-        this.logChannel,
+        CHANNEL,
         `Error validating linter fixes: ${this.formatErrorMessage(err)}`,
       );
       return {
@@ -69,7 +71,7 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
    * Get context around the error for Claude
    * Implementation of abstract method from base class
    */
-  protected getErrorContext(content: string, issues: LinterError[]): string {
+  protected getErrorContext(content: string, issues: LinterMessage[]): string {
     // Ensure issues is always an array
     const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
 
@@ -91,7 +93,7 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
       return this.getContentAroundLine(content, errorLine, this.contextLines);
     } catch (err) {
       logger.warn(
-        this.logChannel,
+        CHANNEL,
         `Error getting error context: ${this.formatErrorMessage(err)}`,
       );
       // Default to first few lines using base class method
@@ -104,7 +106,7 @@ export class TeXLinterFixAgent extends AnthropicToolAgent<LinterError[]> {
    * Implementation of abstract method from base class
    */
   protected createSystemMessage(
-    validation: ValidationResult<LinterError[]>,
+    validation: ValidationResult<LinterMessage[]>,
   ): string {
     // Ensure issues is always an array
     const issuesArray = validation.error || [];
@@ -132,7 +134,7 @@ then make targeted fixes using str_replace or insert operations.`;
    * Implementation of abstract method from base class
    */
   protected createInitialUserMessage(
-    validation: ValidationResult<LinterError[]>,
+    validation: ValidationResult<LinterMessage[]>,
     filePath: string,
     errorContext: string,
   ): string {
@@ -159,8 +161,7 @@ There are ${issuesArray.length} issues in total. Here are the first few:
 ${firstFewIssues}
 
 Here is the context around the first issue:
-\`\`\`
-${errorContext}
+\`\`\`${errorContext}
 \`\`\`
 
 Use the text_editor tool to fix these issues. Make the minimal changes needed to fix the linter problems.`;
@@ -171,7 +172,7 @@ Use the text_editor tool to fix these issues. Make the minimal changes needed to
    * Implementation of abstract method from base class
    */
   protected createFollowUpMessage(
-    validation: ValidationResult<LinterError[]>,
+    validation: ValidationResult<LinterMessage[]>,
     isFixed: boolean,
     currentIteration: number,
   ): string {
@@ -210,7 +211,7 @@ Please continue fixing the linter issues.`;
   /**
    * Group issues by type for better summary
    */
-  private groupIssuesByType(issues: LinterError[]): Record<string, number> {
+  private groupIssuesByType(issues: LinterMessage[]): Record<string, number> {
     const result: Record<string, number> = {};
 
     for (const issue of issues) {

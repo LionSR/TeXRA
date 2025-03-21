@@ -39,7 +39,6 @@ export abstract class AnthropicToolAgent<
   protected model: string = 'claude-3-7-sonnet-latest';
   protected readonly agentName: string;
   protected readonly configKey: string;
-  protected readonly logChannel: string;
   protected maxIterations: number = AnthropicToolAgent.DEFAULT_ITERATIONS;
   protected contextLines: number = AnthropicToolAgent.DEFAULT_CONTEXT_LINES;
   protected maxTokens: number = AnthropicToolAgent.DEFAULT_MAX_TOKENS;
@@ -55,8 +54,7 @@ export abstract class AnthropicToolAgent<
     this.configKey = `${baseName.charAt(0).toLowerCase() + baseName.slice(1)}.maxIterations`;
 
     // Use agent name as log channel
-    this.logChannel = this.agentName;
-    logger.initialize(this.logChannel);
+    logger.initialize(CHANNEL);
 
     // Initialize maxIterations from config
     this.maxIterations = getConfig(
@@ -83,13 +81,13 @@ export abstract class AnthropicToolAgent<
    * @returns Whether the fixing was successful
    */
   protected async runFixIssues(filePath: string): Promise<boolean> {
-    logger.info(this.logChannel, `Starting issue fixing for ${filePath}`);
+    logger.info(CHANNEL, `Starting issue fixing for ${filePath}`);
 
     try {
       // Verify the file exists before starting
       const fileExists = await workspaceFileUtils.fileExists(filePath);
       if (!fileExists) {
-        logger.error(this.logChannel, `File does not exist: ${filePath}`);
+        logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
         return false;
       }
@@ -99,20 +97,20 @@ export abstract class AnthropicToolAgent<
 
       // Log validation result for debugging
       logger.debug(
-        this.logChannel,
+        CHANNEL,
         `Validation result: ${JSON.stringify(validationResult)}`,
       );
 
       // If content is already valid, no need to fix anything
       if (validationResult.isValid) {
-        logger.info(this.logChannel, `No issues found in ${filePath}`);
+        logger.info(CHANNEL, `No issues found in ${filePath}`);
         vscode.window.showInformationMessage(`No issues found in ${filePath}`);
         return true;
       }
 
       // Log the issues
       logger.warn(
-        this.logChannel,
+        CHANNEL,
         `Validation failed: ${JSON.stringify(validationResult.error)}`,
       );
 
@@ -144,17 +142,14 @@ export abstract class AnthropicToolAgent<
       const finalValidation = await this.validateFile(filePath);
 
       if (finalValidation.isValid) {
-        logger.info(
-          this.logChannel,
-          `Successfully fixed all issues in ${filePath}`,
-        );
+        logger.info(CHANNEL, `Successfully fixed all issues in ${filePath}`);
         vscode.window.showInformationMessage(
           `Successfully fixed all issues in ${filePath}`,
         );
         return true;
       } else {
         logger.warn(
-          this.logChannel,
+          CHANNEL,
           `Could not fix all issues. Remaining: ${JSON.stringify(finalValidation.error)}`,
         );
         vscode.window.showErrorMessage(
@@ -164,7 +159,7 @@ export abstract class AnthropicToolAgent<
       }
     } catch (err) {
       logger.error(
-        this.logChannel,
+        CHANNEL,
         `Error in fixIssues: ${this.formatErrorMessage(err)}`,
       );
       vscode.window.showErrorMessage(
@@ -182,7 +177,7 @@ export abstract class AnthropicToolAgent<
       return await getSecretApiKey('anthropic' as ApiProvider);
     } catch (err) {
       logger.error(
-        this.logChannel,
+        CHANNEL,
         `Error getting Anthropic API key: ${this.formatErrorMessage(err)}`,
       );
       throw new Error(
@@ -212,7 +207,7 @@ export abstract class AnthropicToolAgent<
       // Verify the file exists before starting
       const fileExists = await workspaceFileUtils.fileExists(filePath);
       if (!fileExists) {
-        logger.error(this.logChannel, `File does not exist: ${filePath}`);
+        logger.error(CHANNEL, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
         return new ToolResult({
           error: `File does not exist: ${filePath}`,
@@ -231,7 +226,7 @@ export abstract class AnthropicToolAgent<
 
       // If already valid, we're done
       if (validationResult.isValid) {
-        logger.info(this.logChannel, `File is already valid: ${filePath}`);
+        logger.info(CHANNEL, `File is already valid: ${filePath}`);
         vscode.window.showInformationMessage(
           `File is already valid: ${filePath}`,
         );
@@ -270,7 +265,7 @@ export abstract class AnthropicToolAgent<
       while (currentIteration < this.maxIterations && !isFixed) {
         currentIteration++;
         logger.info(
-          this.logChannel,
+          CHANNEL,
           `Iteration ${currentIteration}/${this.maxIterations}`,
         );
 
@@ -292,7 +287,7 @@ export abstract class AnthropicToolAgent<
         });
 
         logger.debug(
-          this.logChannel,
+          CHANNEL,
           `Claude response (iteration ${currentIteration}): ${JSON.stringify(response)}`,
         );
 
@@ -302,16 +297,13 @@ export abstract class AnthropicToolAgent<
         );
         if (!toolUseContent || toolUseContent.type !== 'tool_use') {
           logger.warn(
-            this.logChannel,
+            CHANNEL,
             `Claude didn't use any tools in iteration ${currentIteration}`,
           );
           break;
         }
 
-        logger.info(
-          this.logChannel,
-          `Processing tool use: ${toolUseContent.name}.`,
-        );
+        logger.info(CHANNEL, `Processing tool use: ${toolUseContent.name}.`);
 
         // Extract tool parameters
         const toolInput = toolUseContent.input as any;
@@ -336,7 +328,7 @@ export abstract class AnthropicToolAgent<
           toolInput.command === 'insert'
         ) {
           logger.info(
-            this.logChannel,
+            CHANNEL,
             `Claude applied a fix with ${toolInput.command}`,
           );
 
@@ -349,13 +341,13 @@ export abstract class AnthropicToolAgent<
           // Check if file is now valid
           if (newValidationResult.isValid) {
             logger.info(
-              this.logChannel,
+              CHANNEL,
               `File is now valid after ${currentIteration} iterations`,
             );
             isFixed = true;
           } else {
             logger.info(
-              this.logChannel,
+              CHANNEL,
               `File still has issues after fix: ${JSON.stringify(newValidationResult.error)}`,
             );
 
@@ -407,7 +399,7 @@ export abstract class AnthropicToolAgent<
 
       // No action was taken by Claude
       logger.warn(
-        this.logChannel,
+        CHANNEL,
         `Claude did not make any changes to fix the file after ${this.maxIterations} iterations`,
       );
       return new ToolResult({
@@ -416,7 +408,7 @@ export abstract class AnthropicToolAgent<
       });
     } catch (err) {
       logger.error(
-        this.logChannel,
+        CHANNEL,
         `Error calling Claude API: ${this.formatErrorMessage(err)}`,
       );
 
