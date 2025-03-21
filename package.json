@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.23.4",
+  "version": "0.23.5",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -705,6 +705,11 @@
         "command": "coauthor.wolframAlphaQuery",
         "title": "Query Wolfram Alpha",
         "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.showAgentHistory",
+        "title": "Show Agent Execution History",
+        "category": "CoAuthor"
       }
     ],
     "viewsContainers": {
@@ -734,6 +739,12 @@
         {
           "id": "coauthor.folderExplorer",
           "name": "TeX Agents",
+          "when": "workbenchState != empty"
+        },
+        {
+          "type": "webview",
+          "id": "coauthor.historyView",
+          "name": "Agent History",
           "when": "workbenchState != empty"
         }
       ],

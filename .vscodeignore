@@ -29,6 +29,12 @@ docs/
 !src/webview/modules/*.js
 !src/common/styles/*.css
 
+!src/history/modules/*.js
+!src/history/styles/*.css
+!src/history/*.html
+!src/history/*.css
+!src/history/*.js
+
 !src/logger/logView/modules/*.js
 !src/logger/logView/styles/*.css
 
