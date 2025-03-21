@@ -124,7 +124,7 @@ The `utils/` directory contains various utility modules for:
 
 ### Log View
 
-The `logView/` directory implements the visual logging interface:
+The `progressView/` directory implements the visual logging interface:
 
 - Log viewer UI components
 - Log filtering and display

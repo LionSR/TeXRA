@@ -2,14 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - webview
-import { LogViewContentProvider } from './LogViewContentProvider';
-import { LogViewMessageHandler } from './LogViewMessageHandler';
-import { TaskState } from './TaskState';
-import { AgentLogger } from './AgentLogger';
+import { ProgressViewContentProvider } from './ProgressViewContentProvider';
+import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
+import { TaskState } from '../logger/TaskState';
+import { AgentLogger } from '../logger/AgentLogger';
 import { getConfig } from '../utils/configUtils';
 import { objectToTaskState } from '../utils/configConversion';
 // @ts-ignore - Import JavaScript module
-import { STATUS, COMMANDS } from './logView/modules/constants.js';
+import { STATUS, COMMANDS } from './modules/constants.js';
 
 // Type aliases for status values
 type StatusType =
@@ -49,7 +49,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'Housekeeping',
   'LaTeXCommands',
   'Utils',
-  'LogViewProvider',
+  'ProgressViewProvider',
   'executeAgent',
   'ImgUtils',
   'stateRestoreCommand',
@@ -62,13 +62,13 @@ const OUTPUT_CHANNEL_ONLY = new Set([
 // Channels that should not be persisted in workspace storage
 const NON_PERSISTENT_CHANNELS = new Set([...OUTPUT_CHANNEL_ONLY, 'ImgUtils']);
 
-export class LogViewProvider implements vscode.WebviewViewProvider {
-  private static _instance: LogViewProvider | undefined;
+export class ProgressViewProvider implements vscode.WebviewViewProvider {
+  private static _instance: ProgressViewProvider | undefined;
   private _view?: vscode.WebviewView;
   private _logStreams: Map<string, ColoredLogMessage[]> = new Map();
   private _logGroups: Map<string, Map<string, LogGroup>> = new Map(); // streamId -> groupId -> LogGroup
-  private readonly _contentProvider: LogViewContentProvider;
-  private readonly _messageHandler: LogViewMessageHandler;
+  private readonly _contentProvider: ProgressViewContentProvider;
+  private readonly _messageHandler: ProgressViewMessageHandler;
   private readonly _storageKey = 'coauthor.logStreams';
   private readonly _groupsStorageKey = 'coauthor.logGroups';
   private readonly _taskStateKey = 'coauthor.taskStates';
@@ -88,13 +88,13 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
   ) {
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
-    this._contentProvider = new LogViewContentProvider(context);
-    this._messageHandler = new LogViewMessageHandler(this);
+    this._contentProvider = new ProgressViewContentProvider(context);
+    this._messageHandler = new ProgressViewMessageHandler(this);
     this._loadState();
-    this.logger = new AgentLogger('LogViewProvider');
+    this.logger = new AgentLogger('ProgressViewProvider');
 
     // Set instance
-    LogViewProvider._instance = this;
+    ProgressViewProvider._instance = this;
 
     // Listen for workspace folder changes
     this._disposables.push(
@@ -105,7 +105,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  public static getInstance(): LogViewProvider | undefined {
+  public static getInstance(): ProgressViewProvider | undefined {
     return this._instance;
   }
 
@@ -238,7 +238,7 @@ export class LogViewProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       enableCommandUris: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, 'src', 'logger', 'logView'),
+        vscode.Uri.joinPath(this._extensionUri, 'src', 'progressView'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
         vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
         vscode.Uri.joinPath(
