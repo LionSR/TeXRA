@@ -1,13 +1,17 @@
 // Standard library imports
 import * as vscode from 'vscode';
 
-// Local imports
+// Local imports - core
 import { AnthropicToolAgent } from './AnthropicToolAgent';
+
 import { ToolResult } from './base';
+
+// Local imports - utils
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
 import * as linterUtils from '../utils/linterUtils';
+
+// Local imports - Logging
 import * as logger from '../logger/logUtils';
-import { getConfig } from '../utils/configUtils';
 
 const CHANNEL = 'TeXLinterFixAgent';
 logger.initialize(CHANNEL);
@@ -17,147 +21,23 @@ logger.initialize(CHANNEL);
  */
 export class TeXLinterFixAgent extends AnthropicToolAgent {
   /**
-   * Fix linter issues in a file
-   *
-   * @param filePath Path to the file to fix linter issues
-   * @param maxIterations Maximum number of fix attempts
-   * @returns Whether the fixing was successful
-   */
-  async fixLinterIssues(
-    filePath: string,
-    maxIterations?: number,
-  ): Promise<boolean> {
-    logger.info(CHANNEL, `Starting linter issue fixing for ${filePath}`);
-
-    try {
-      // Get maxIterations from configuration if not provided
-      if (maxIterations === undefined) {
-        maxIterations = getConfig('linterFixer.maxIterations', 5);
-      }
-
-      // Verify the file exists before starting
-      const fileExists = await workspaceFileUtils.fileExists(filePath);
-      if (!fileExists) {
-        logger.error(CHANNEL, `File does not exist: ${filePath}`);
-        vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
-        return false;
-      }
-
-      // Get initial linter issues
-      const initialLinterIssues = linterUtils.getLinterMessages(filePath);
-
-      // Log raw linter issues for debugging
-      logger.debug(
-        CHANNEL,
-        `Linter issues raw data: ${JSON.stringify(initialLinterIssues)}`,
-      );
-
-      // If no issues found, no need to fix anything
-      if (!initialLinterIssues || initialLinterIssues.length === 0) {
-        logger.info(CHANNEL, `No linter issues found in ${filePath}`);
-        vscode.window.showInformationMessage(
-          `No linter issues found in ${filePath}`,
-        );
-        return true;
-      }
-
-      // Log the linter issues
-      logger.warn(
-        CHANNEL,
-        `Found ${initialLinterIssues.length} linter issues in ${filePath}`,
-      );
-
-      // Read file content
-      const content = await workspaceFileUtils.readFile(filePath);
-
-      // Get the context around the first error
-      let errorContext = '';
-      try {
-        errorContext = this.getContentAroundLine(
-          content,
-          initialLinterIssues[0]?.line || 1,
-          10,
-        );
-      } catch (err) {
-        logger.warn(
-          CHANNEL,
-          `Error getting context around line: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        // Default context - first 10 lines of the file
-        errorContext = content.split('\n').slice(0, 10).join('\n');
-      }
-
-      // Call Claude to fix the issues
-      const fixResult = await this.callClaudeToFix(
-        filePath,
-        this.createInitialUserMessage(
-          initialLinterIssues,
-          filePath,
-          errorContext,
-        ),
-        (issues) => this.createSystemMessage(issues),
-        (issues, isFixed, currentIteration, maxIterations) =>
-          this.createFollowUpMessage(
-            issues,
-            isFixed,
-            currentIteration,
-            maxIterations,
-          ),
-        async (content) => this.validateFixes(filePath),
-        (content, issues) => this.getErrorContext(content, issues),
-        maxIterations,
-      );
-
-      // Final validation to check if all issues are fixed
-      const finalIssues = linterUtils.getLinterMessages(filePath);
-
-      if (!finalIssues || finalIssues.length === 0) {
-        logger.info(
-          CHANNEL,
-          `Successfully fixed all linter issues in ${filePath}`,
-        );
-        vscode.window.showInformationMessage(
-          `Successfully fixed all linter issues in ${filePath}`,
-        );
-        return true;
-      } else {
-        const initialCount = Array.isArray(initialLinterIssues)
-          ? initialLinterIssues.length
-          : 0;
-        const finalCount = Array.isArray(finalIssues) ? finalIssues.length : 0;
-
-        logger.warn(
-          CHANNEL,
-          `Could not fix all linter issues. Remaining: ${finalCount}`,
-        );
-        vscode.window.showInformationMessage(
-          `Reduced linter issues from ${initialCount} to ${finalCount} in ${filePath}`,
-        );
-        return initialCount > finalCount; // Return true if we made some progress
-      }
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error in fixLinterIssues: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      vscode.window.showErrorMessage(
-        `Error fixing linter issues: ${String(err)}`,
-      );
-      return false;
-    }
-  }
-
-  /**
    * Validate if the file has any linter issues
+   * Implementation of abstract method from base class
    */
-  private async validateFixes(filePath: string): Promise<{
+  protected async validateFile(filePath: string): Promise<{
     isValid: boolean;
     error?: any;
   }> {
     try {
       const issues = linterUtils.getLinterMessages(filePath);
 
-      if (issues.length === 0) {
+      // Log raw linter issues for debugging
+      logger.debug(
+        this.logChannel,
+        `Linter issues raw data: ${JSON.stringify(issues)}`,
+      );
+
+      if (!issues || issues.length === 0) {
         return { isValid: true };
       }
 
@@ -167,7 +47,7 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
       };
     } catch (err) {
       logger.error(
-        CHANNEL,
+        this.logChannel,
         `Error validating linter fixes: ${err instanceof Error ? err.message : String(err)}`,
       );
       return {
@@ -179,8 +59,9 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
 
   /**
    * Get context around the error for Claude
+   * Implementation of abstract method from base class
    */
-  private getErrorContext(content: string, issues: any): string {
+  protected getErrorContext(content: string, issues: any): string {
     // Ensure issues is always an array
     const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
 
@@ -198,13 +79,23 @@ export class TeXLinterFixAgent extends AnthropicToolAgent {
     }
 
     // Get context around the error line
-    return this.getContentAroundLine(content, errorLine, 10);
+    try {
+      return this.getContentAroundLine(content, errorLine, 10);
+    } catch (err) {
+      logger.warn(
+        this.logChannel,
+        `Error getting error context: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Default to first 10 lines
+      return content.split('\n').slice(0, 10).join('\n');
+    }
   }
 
   /**
    * Create system message for Claude with current linter issues
+   * Implementation of abstract method from base class
    */
-  private createSystemMessage(issues: any): string {
+  protected createSystemMessage(issues: any): string {
     // Ensure issues is always an array
     const issuesArray = Array.isArray(issues) ? issues : issues ? [issues] : [];
 
@@ -228,8 +119,9 @@ then make targeted fixes using str_replace or insert operations.`;
 
   /**
    * Create the initial user message for Claude with error details
+   * Implementation of abstract method from base class
    */
-  private createInitialUserMessage(
+  protected createInitialUserMessage(
     issues: any,
     filePath: string,
     errorContext: string,
@@ -268,18 +160,18 @@ Use the text_editor tool to fix these issues. Make the minimal changes needed to
 
   /**
    * Create follow-up message based on current linter status
+   * Implementation of abstract method from base class
    */
-  private createFollowUpMessage(
+  protected createFollowUpMessage(
     issues: any,
     isFixed: boolean,
     currentIteration: number,
-    maxIterations: number,
   ): string {
     if (isFixed) {
       return 'All linter issues are now fixed! Thank you.';
     }
 
-    if (currentIteration >= maxIterations) {
+    if (currentIteration >= this.maxIterations) {
       return "We've reached the maximum number of iterations. Please make one final attempt to fix the remaining issues.";
     }
 

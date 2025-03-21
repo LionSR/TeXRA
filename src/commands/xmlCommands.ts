@@ -122,8 +122,8 @@ export async function handleValidateAndFixXml(): Promise<void> {
       async (progress) => {
         progress.report({ message: 'Analyzing XML...' });
 
-        // Validate and fix with max 5 iterations
-        const result = await validator.validateAndFix(filePath, 5);
+        // Use the standard fixIssues method
+        const result = await validator.fixIssues(filePath);
 
         if (result) {
           progress.report({ message: 'Fixed successfully!' });
