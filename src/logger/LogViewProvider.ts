@@ -53,6 +53,10 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'executeAgent',
   'ImgUtils',
   'stateRestoreCommand',
+  'TexLinterFixAgent',
+  'AnthropicToolAgent',
+  'TextEditorTool',
+  'XMLValidatorAgent',
 ]);
 
 // Channels that should not be persisted in workspace storage
