@@ -3,11 +3,14 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+
+// Local imports - utils
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,
 } from '../utils/linterUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
+import { TeXLinterFixAgent } from '../AnthropicTool';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
@@ -15,6 +18,7 @@ logger.initialize(CHANNEL);
 export const linterCommands = {
   showLinterMessages: 'coauthor.showLinterMessages',
   countLinterMessages: 'coauthor.countLinterMessages',
+  fixLinterIssues: 'coauthor.fixLinterIssues',
 };
 
 /**
@@ -54,9 +58,11 @@ export async function handleShowLinterMessages(): Promise<void> {
     // Use logger instead of output channel
     logger.info(CHANNEL, `Linter messages for: ${relativePath}`);
     formattedMessages.forEach((msg) => logger.info(CHANNEL, msg));
-    
+
     // Show a notification
-    vscode.window.showInformationMessage(`Found ${messages.length} linter issues. Check the log for details.`);
+    vscode.window.showInformationMessage(
+      `Found ${messages.length} linter issues. Check the log for details.`,
+    );
   } catch (err) {
     logger.error(
       CHANNEL,
@@ -107,6 +113,77 @@ export async function handleCountLinterMessages(): Promise<void> {
   }
 }
 
+/**
+ * Fix linter issues in the current file using Claude
+ */
+export async function handleFixLinterIssues(): Promise<void> {
+  try {
+    // Get active editor
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      logger.warn(CHANNEL, 'No active editor found');
+      vscode.window.showWarningMessage('Please open a file first');
+      return;
+    }
+
+    // Save any unsaved changes before attempting to fix
+    if (editor.document.isDirty) {
+      await editor.document.save();
+    }
+
+    // Convert absolute file path to workspace-relative path
+    const absolutePath = editor.document.fileName;
+    const relativePath = getRelativePath(absolutePath);
+    logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
+
+    // Check if there are any linter issues
+    const issues = getLinterMessages(relativePath);
+    if (issues.length === 0) {
+      vscode.window.showInformationMessage(
+        'No linter issues found in the current file',
+      );
+      return;
+    }
+
+    // Show progress indicator
+    vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Fixing linter issues...',
+        cancellable: false,
+      },
+      async (progress) => {
+        progress.report({ message: 'Initializing Claude...' });
+
+        // Create the agent
+        const linterFixAgent = new TeXLinterFixAgent();
+
+        // Run the fix operation
+        progress.report({
+          message: 'Claude is analyzing and fixing issues...',
+        });
+        const result = await linterFixAgent.fixLinterIssues(relativePath);
+
+        if (result) {
+          progress.report({ message: 'Completed.' });
+        } else {
+          progress.report({ message: 'Failed to fix all issues.' });
+        }
+
+        return result;
+      },
+    );
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error in fixLinterIssues command: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    vscode.window.showErrorMessage(
+      `Error fixing linter issues: ${String(err)}`,
+    );
+  }
+}
+
 export function registerLinterCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -116,6 +193,10 @@ export function registerLinterCommands(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       linterCommands.countLinterMessages,
       handleCountLinterMessages,
+    ),
+    vscode.commands.registerCommand(
+      linterCommands.fixLinterIssues,
+      handleFixLinterIssues,
     ),
   );
   return linterCommands;

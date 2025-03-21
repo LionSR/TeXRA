@@ -13,3 +13,5 @@ export * from './utils';
 // Export tool implementations
 export * from './TextEditorTool';
 export * from './XMLValidatorAgent';
+export * from './AnthropicToolAgent';
+export * from './TeXLinterFixAgent';
