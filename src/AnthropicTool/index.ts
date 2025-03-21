@@ -5,13 +5,19 @@
  * such as the text editor tool.
  */
 
-// Export base classes and types
-export * from './base';
+// Import all agents and export them
+import { XMLValidatorAgent } from './XMLValidatorAgent';
+import { TeXLinterFixAgent } from './TeXLinterFixAgent';
+import { AnthropicToolAgent } from './AnthropicToolAgent';
+
+// Export individual classes
+export { XMLValidatorAgent, TeXLinterFixAgent, AnthropicToolAgent };
+
+// Export type definitions
 export * from './types';
-export * from './utils';
+
+// Export base tools
+export * from './base';
 
 // Export tool implementations
 export * from './TextEditorTool';
-export * from './XMLValidatorAgent';
-export * from './AnthropicToolAgent';
-export * from './TeXLinterFixAgent';
