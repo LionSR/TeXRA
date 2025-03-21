@@ -175,7 +175,7 @@ export class WebviewMessageHandler {
         toolConfig,
       };
 
-      vscode.commands.executeCommand('coauthor.execute', agentConfig);
+      await vscode.commands.executeCommand('coauthor.execute', agentConfig);
     } else {
       vscode.window.showErrorMessage(
         'Please select an input file or provide an output name override.',
