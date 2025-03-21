@@ -16,6 +16,9 @@ import { XMLValidationError, ValidationResult } from './types';
 // Local imports - Logging
 import * as logger from '../logger/logUtils';
 
+const CHANNEL = 'XMLValidatorAgent';
+logger.initialize(CHANNEL);
+
 /**
  * Agent that validates XML files and fixes validation errors using Claude
  */
@@ -60,7 +63,7 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
       };
     } catch (err) {
       logger.error(
-        this.logChannel,
+        CHANNEL,
         `Error validating XML file: ${this.formatErrorMessage(err)}`,
       );
 
@@ -87,7 +90,7 @@ export class XMLValidatorAgent extends AnthropicToolAgent<XMLValidationError> {
       return this.getContentAroundLine(content, line, this.contextLines);
     } catch (err) {
       logger.warn(
-        this.logChannel,
+        CHANNEL,
         `Error getting error context: ${this.formatErrorMessage(err)}`,
       );
       // Default to first few lines using base class method

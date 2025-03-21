@@ -66,13 +66,8 @@ export interface XMLValidationError extends BaseError {
 }
 
 /**
- * Extended error interface for linter errors with additional properties
+ * Import the LinterMessage type from linterUtils
  */
-export interface LinterError extends BaseError {
-  column?: number;
-  severity?: string;
-  source?: string;
-}
 
 /**
  * Standard validation result interface for all agents
