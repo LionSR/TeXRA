@@ -14,7 +14,7 @@ import {
   fileExists,
 } from '../utils/workspaceFileUtils';
 import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
-import { getConfig } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import { executeCommand } from '../utils/execUtils';
 
 // Local imports - housekeeping

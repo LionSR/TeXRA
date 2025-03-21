@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.22.11",
+  "version": "0.23.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -429,6 +429,39 @@
         }
       },
       {
+        "title": "Code Validation & Fixing",
+        "properties": {
+          "coauthor.xmlValidator.maxIterations": {
+            "type": "number",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of iterations when trying to fix XML validation errors",
+            "order": 1
+          },
+          "coauthor.linterFixer.maxIterations": {
+            "type": "number",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of iterations when trying to fix linter issues in code files",
+            "order": 2
+          },
+          "coauthor.autoFix.latex": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically trigger LaTeX linter fix when linter issues are detected",
+            "order": 3
+          },
+          "coauthor.autoFix.xml": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatically trigger XML validation fix when XML validation issues are detected",
+            "order": 4
+          }
+        }
+      },
+      {
         "title": "File Explorer",
         "properties": {
           "coauthor.explorer.agentsDirectory": {
@@ -573,6 +606,11 @@
         "category": "CoAuthor"
       },
       {
+        "command": "coauthor.validateAndFixXml",
+        "title": "Validate and Fix XML using Claude",
+        "category": "CoAuthor"
+      },
+      {
         "command": "coauthor.parseYaml",
         "title": "Parse YAML Structure",
         "category": "CoAuthor"
@@ -641,6 +679,22 @@
         "title": "Test Text Editor Tool",
         "category": "CoAuthor",
         "icon": "$(edit)"
+      },
+      {
+        "command": "coauthor.showLinterMessages",
+        "title": "Show Linter Messages",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.countLinterMessages",
+        "title": "Count Linter Messages",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.fixLinterIssues",
+        "title": "Fix Linter Issues with Claude",
+        "category": "CoAuthor",
+        "icon": "$(fix-all)"
       }
     ],
     "viewsContainers": {
@@ -809,7 +863,7 @@
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
-    "fast-xml-parser": "^4.5.3",
+    "fast-xml-parser": "^5.0.9",
     "glob": "^10.4.5",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
