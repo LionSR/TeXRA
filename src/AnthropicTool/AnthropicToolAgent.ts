@@ -24,9 +24,137 @@ logger.initialize(CHANNEL);
 export abstract class AnthropicToolAgent {
   protected textEditorTool: TextEditorTool;
   protected model: string = 'claude-3-7-sonnet-latest';
+  protected readonly agentName: string;
+  protected readonly configKey: string;
+  protected readonly logChannel: string;
+  protected maxIterations: number = 10; // Default value
 
   constructor() {
     this.textEditorTool = new TextEditorTool('text_editor_20250124');
+
+    // Derive agent name from class name
+    this.agentName = this.constructor.name;
+
+    // Remove 'Agent' suffix if present and convert to camelCase for config key
+    const baseName = this.agentName.replace(/Agent$/, '');
+    this.configKey = `${baseName.charAt(0).toLowerCase() + baseName.slice(1)}.maxIterations`;
+
+    // Use agent name as log channel
+    this.logChannel = this.agentName;
+    logger.initialize(this.logChannel);
+
+    // Initialize maxIterations from config
+    this.maxIterations = getConfig(this.configKey, 10);
+  }
+
+  /**
+   * Standard public method to fix issues in a file
+   * Clients should call this method rather than the protected runFixIssues
+   *
+   * @param filePath Path to the file to fix
+   * @returns Whether the fixing was successful
+   */
+  public async fixIssues(filePath: string): Promise<boolean> {
+    return this.runFixIssues(filePath);
+  }
+
+  /**
+   * Protected method that implements the fixing logic
+   *
+   * @param filePath Path to the file to fix
+   * @returns Whether the fixing was successful
+   */
+  protected async runFixIssues(filePath: string): Promise<boolean> {
+    logger.info(this.logChannel, `Starting issue fixing for ${filePath}`);
+
+    try {
+      // Verify the file exists before starting
+      const fileExists = await workspaceFileUtils.fileExists(filePath);
+      if (!fileExists) {
+        logger.error(this.logChannel, `File does not exist: ${filePath}`);
+        vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
+        return false;
+      }
+
+      // Initial validation
+      const validationResult = await this.validateFile(filePath);
+
+      // Log validation result for debugging
+      logger.debug(
+        this.logChannel,
+        `Validation result: ${JSON.stringify(validationResult)}`,
+      );
+
+      // If content is already valid, no need to fix anything
+      if (validationResult.isValid) {
+        logger.info(this.logChannel, `No issues found in ${filePath}`);
+        vscode.window.showInformationMessage(`No issues found in ${filePath}`);
+        return true;
+      }
+
+      // Log the issues
+      logger.warn(
+        this.logChannel,
+        `Validation failed: ${JSON.stringify(validationResult.error)}`,
+      );
+
+      // Read file content for context
+      const content = await workspaceFileUtils.readFile(filePath);
+
+      // Get the context around the error
+      let errorContext = '';
+      try {
+        errorContext = this.getErrorContext(content, validationResult.error);
+      } catch (err) {
+        logger.warn(
+          this.logChannel,
+          `Error getting context around line: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        // Default context - first 10 lines of the file
+        errorContext = content.split('\n').slice(0, 10).join('\n');
+      }
+
+      // Call Claude to fix the issues
+      const fixResult = await this.callClaudeToFix(
+        filePath,
+        this.createInitialUserMessage(validationResult, filePath, errorContext),
+        (errorInfo) => this.createSystemMessage(errorInfo),
+        (errorInfo, isFixed, currentIteration) =>
+          this.createFollowUpMessage(errorInfo, isFixed, currentIteration),
+        (filePath) => this.validateFile(filePath),
+        (content, error) => this.getErrorContext(content, error),
+      );
+
+      // Final validation to check if all issues are fixed
+      const finalValidation = await this.validateFile(filePath);
+
+      if (finalValidation.isValid) {
+        logger.info(
+          this.logChannel,
+          `Successfully fixed all issues in ${filePath}`,
+        );
+        vscode.window.showInformationMessage(
+          `Successfully fixed all issues in ${filePath}`,
+        );
+        return true;
+      } else {
+        logger.warn(
+          this.logChannel,
+          `Could not fix all issues. Remaining: ${JSON.stringify(finalValidation.error)}`,
+        );
+        vscode.window.showErrorMessage(
+          `Could not fix all issues in ${filePath}. See log for details.`,
+        );
+        return false;
+      }
+    } catch (err) {
+      logger.error(
+        this.logChannel,
+        `Error in fixIssues: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      vscode.window.showErrorMessage(`Error fixing issues: ${String(err)}`);
+      return false;
+    }
   }
 
   /**
@@ -37,7 +165,7 @@ export abstract class AnthropicToolAgent {
       return await getSecretApiKey('anthropic' as ApiProvider);
     } catch (err) {
       logger.error(
-        CHANNEL,
+        this.logChannel,
         `Error getting Anthropic API key: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw new Error(
@@ -57,21 +185,17 @@ export abstract class AnthropicToolAgent {
       errorInfo: any,
       isFixed: boolean,
       currentIteration: number,
-      maxIterations: number,
     ) => string,
     validateFix: (
-      content: string,
-    ) =>
-      | Promise<{ isValid: boolean; error?: any }>
-      | { isValid: boolean; error?: any },
+      filePath: string,
+    ) => Promise<{ isValid: boolean; error?: any }>,
     getErrorContext: (content: string, error: any) => string,
-    maxIterations: number,
   ): Promise<ToolResult> {
     try {
       // Verify the file exists before starting
       const fileExists = await workspaceFileUtils.fileExists(filePath);
       if (!fileExists) {
-        logger.error(CHANNEL, `File does not exist: ${filePath}`);
+        logger.error(this.logChannel, `File does not exist: ${filePath}`);
         vscode.window.showErrorMessage(`File does not exist: ${filePath}`);
         return new ToolResult({
           error: `File does not exist: ${filePath}`,
@@ -85,15 +209,12 @@ export abstract class AnthropicToolAgent {
       // Create Anthropic client
       const client = new Anthropic({ apiKey });
 
-      // Read initial file content
-      let content = await workspaceFileUtils.readFile(filePath);
-
       // Initial validation
-      let validationResult = await this.runValidation(content, validateFix);
+      let validationResult = await validateFix(filePath);
 
       // If already valid, we're done
       if (validationResult.isValid) {
-        logger.info(CHANNEL, `File is already valid: ${filePath}`);
+        logger.info(this.logChannel, `File is already valid: ${filePath}`);
         vscode.window.showInformationMessage(
           `File is already valid: ${filePath}`,
         );
@@ -102,6 +223,9 @@ export abstract class AnthropicToolAgent {
           isError: false,
         });
       }
+
+      // Read file content for error context
+      let content = await workspaceFileUtils.readFile(filePath);
 
       // Get initial error context
       let errorContext = getErrorContext(content, validationResult.error);
@@ -120,9 +244,12 @@ export abstract class AnthropicToolAgent {
       let isFixed = false;
 
       // Continue the conversation until we fix the issues or reach max iterations
-      while (currentIteration < maxIterations && !isFixed) {
+      while (currentIteration < this.maxIterations && !isFixed) {
         currentIteration++;
-        logger.info(CHANNEL, `Iteration ${currentIteration}/${maxIterations}`);
+        logger.info(
+          this.logChannel,
+          `Iteration ${currentIteration}/${this.maxIterations}`,
+        );
 
         // Make the system message with current validation error
         const systemMessage = createSystemMessage(validationResult);
@@ -142,7 +269,7 @@ export abstract class AnthropicToolAgent {
         });
 
         logger.debug(
-          CHANNEL,
+          this.logChannel,
           `Claude response (iteration ${currentIteration}): ${JSON.stringify(response)}`,
         );
 
@@ -152,13 +279,16 @@ export abstract class AnthropicToolAgent {
         );
         if (!toolUseContent || toolUseContent.type !== 'tool_use') {
           logger.warn(
-            CHANNEL,
+            this.logChannel,
             `Claude didn't use any tools in iteration ${currentIteration}`,
           );
           break;
         }
 
-        logger.info(CHANNEL, `Processing tool use: ${toolUseContent.name}.`);
+        logger.info(
+          this.logChannel,
+          `Processing tool use: ${toolUseContent.name}.`,
+        );
 
         // Extract tool parameters
         const toolInput = toolUseContent.input as any;
@@ -183,18 +313,12 @@ export abstract class AnthropicToolAgent {
           toolInput.command === 'insert'
         ) {
           logger.info(
-            CHANNEL,
+            this.logChannel,
             `Claude applied a fix with ${toolInput.command}`,
           );
 
-          // Re-read the file content after the change
-          const updatedContent = await workspaceFileUtils.readFile(filePath);
-
           // Re-validate the file
-          const newValidationResult = await this.runValidation(
-            updatedContent,
-            validateFix,
-          );
+          const newValidationResult = await validateFix(filePath);
 
           // Update the validation result for the next iteration
           validationResult = newValidationResult;
@@ -202,21 +326,19 @@ export abstract class AnthropicToolAgent {
           // Check if file is now valid
           if (newValidationResult.isValid) {
             logger.info(
-              CHANNEL,
+              this.logChannel,
               `File is now valid after ${currentIteration} iterations`,
             );
             isFixed = true;
           } else {
             logger.info(
-              CHANNEL,
+              this.logChannel,
               `File still has issues after fix: ${JSON.stringify(newValidationResult.error)}`,
             );
 
-            // Update the error context for the new error
-            errorContext = getErrorContext(
-              updatedContent,
-              newValidationResult.error,
-            );
+            // Read updated content and get new error context
+            content = await workspaceFileUtils.readFile(filePath);
+            errorContext = getErrorContext(content, newValidationResult.error);
           }
         }
 
@@ -241,7 +363,6 @@ export abstract class AnthropicToolAgent {
                 validationResult,
                 isFixed,
                 currentIteration,
-                maxIterations,
               ),
             },
           ],
@@ -255,16 +376,16 @@ export abstract class AnthropicToolAgent {
 
       // No action was taken by Claude
       logger.warn(
-        CHANNEL,
-        `Claude did not make any changes to fix the file after ${maxIterations} iterations`,
+        this.logChannel,
+        `Claude did not make any changes to fix the file after ${this.maxIterations} iterations`,
       );
       return new ToolResult({
-        error: `Claude did not fix the file after ${maxIterations} iterations`,
+        error: `Claude did not fix the file after ${this.maxIterations} iterations`,
         isError: true,
       });
     } catch (err) {
       logger.error(
-        CHANNEL,
+        this.logChannel,
         `Error calling Claude API: ${err instanceof Error ? err.message : String(err)}`,
       );
 
@@ -273,24 +394,6 @@ export abstract class AnthropicToolAgent {
         isError: true,
       });
     }
-  }
-
-  /**
-   * Helper to handle both sync and async validation functions
-   */
-  private async runValidation(
-    content: string,
-    validateFix: (
-      content: string,
-    ) =>
-      | Promise<{ isValid: boolean; error?: any }>
-      | { isValid: boolean; error?: any },
-  ): Promise<{ isValid: boolean; error?: any }> {
-    const result = validateFix(content);
-    if (result instanceof Promise) {
-      return await result;
-    }
-    return result;
   }
 
   /**
@@ -314,4 +417,44 @@ export abstract class AnthropicToolAgent {
       })
       .join('\n');
   }
+
+  /**
+   * Abstract method to validate a file and return validation results
+   * Must be implemented by concrete classes
+   */
+  protected abstract validateFile(
+    filePath: string,
+  ): Promise<{ isValid: boolean; error?: any }>;
+
+  /**
+   * Abstract method to get context around an error
+   * Must be implemented by concrete classes
+   */
+  protected abstract getErrorContext(content: string, error: any): string;
+
+  /**
+   * Abstract method to create system message for Claude
+   * Must be implemented by concrete classes
+   */
+  protected abstract createSystemMessage(errorInfo: any): string;
+
+  /**
+   * Abstract method to create initial user message for Claude
+   * Must be implemented by concrete classes
+   */
+  protected abstract createInitialUserMessage(
+    errorInfo: any,
+    filePath: string,
+    errorContext: string,
+  ): string;
+
+  /**
+   * Abstract method to create follow-up message for Claude
+   * Must be implemented by concrete classes
+   */
+  protected abstract createFollowUpMessage(
+    errorInfo: any,
+    isFixed: boolean,
+    currentIteration: number,
+  ): string;
 }
