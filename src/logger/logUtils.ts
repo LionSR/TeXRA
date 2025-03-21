@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 import * as winston from 'winston';
 import Transport from 'winston-transport';
 
-// Local imports - logView
-import { LogViewProvider } from './LogViewProvider';
+// Local imports - progressView
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { getConfig } from '../utils/configUtils';
 
 const { combine, timestamp } = winston.format;
@@ -47,7 +47,7 @@ function escapeHtml(text: string): string {
 // Create VSCode output channel transport
 class VSCodeTransport extends Transport {
   private channel: vscode.OutputChannel;
-  private logViewProvider?: LogViewProvider;
+  private progressViewProvider?: ProgressViewProvider;
   private streamName: string;
   private messageBuffer: {
     level: string;
@@ -61,13 +61,13 @@ class VSCodeTransport extends Transport {
   constructor(
     channel: vscode.OutputChannel,
     streamName: string,
-    logViewProvider?: LogViewProvider,
+    progressViewProvider?: ProgressViewProvider,
     opts?: Transport.TransportStreamOptions,
   ) {
     super(opts);
     this.channel = channel;
     this.streamName = streamName;
-    this.logViewProvider = logViewProvider;
+    this.progressViewProvider = progressViewProvider;
   }
 
   log(info: any, callback: () => void) {
@@ -90,7 +90,7 @@ class VSCodeTransport extends Transport {
     // Always write to output channel (plain text)
     this.channel.appendLine(formattedMessage);
 
-    // Skip debug messages in LogView if verbose output is disabled
+    // Skip debug messages in ProgressView if verbose output is disabled
     if (
       level === 'debug' &&
       !getConfig<boolean>('logger.verboseOutput', false)
@@ -99,7 +99,7 @@ class VSCodeTransport extends Transport {
       return;
     }
 
-    // Escape HTML tags in message for LogView
+    // Escape HTML tags in message for ProgressView
     const escapedMessage = escapeHtml(message);
 
     // Check if this is a scratchpad message
@@ -109,7 +109,7 @@ class VSCodeTransport extends Transport {
     // Add a data attribute for scratchpad messages to help with styling and processing
     const scratchpadAttr = isScratchpad ? 'data-is-scratchpad="true"' : '';
 
-    // Colored format for LogView using CSS classes, but with shorter timestamp display
+    // Colored format for ProgressView using CSS classes, but with shorter timestamp display
     const coloredFormattedMessage =
       `<div class="log-line ${isScratchpad ? 'scratchpad-log' : ''}" ${scratchpadAttr} ${groupId ? `data-group-id="${groupId}"` : ''} data-full-timestamp="${timestamp}">` +
       `<span class="timestamp" title="${timestamp}">${emoji} [${timeDisplay}]</span> ` +
@@ -117,16 +117,16 @@ class VSCodeTransport extends Transport {
       `<span class="message-${level}">${escapedMessage}</span>` +
       `</div>`;
 
-    // Write to LogView if available (with colors and escaped HTML)
-    if (this.logViewProvider) {
-      this.logViewProvider.addLogMessage(
+    // Write to ProgressView if available (with colors and escaped HTML)
+    if (this.progressViewProvider) {
+      this.progressViewProvider.addLogMessage(
         this.streamName,
         coloredFormattedMessage,
         level as 'error' | 'warn' | 'info' | 'debug',
         groupId,
       );
     } else {
-      // Buffer the message if LogViewProvider is not available
+      // Buffer the message if ProgressViewProvider is not available
       this.messageBuffer.push({
         level,
         message: coloredFormattedMessage,
@@ -138,13 +138,13 @@ class VSCodeTransport extends Transport {
     callback();
   }
 
-  // Method to replay buffered messages when LogViewProvider becomes available
-  replayBufferedMessages(logViewProvider: LogViewProvider) {
-    this.logViewProvider = logViewProvider;
+  // Method to replay buffered messages when ProgressViewProvider becomes available
+  replayBufferedMessages(progressViewProvider: ProgressViewProvider) {
+    this.progressViewProvider = progressViewProvider;
 
     // First replay any groups
     for (const group of this.groups.values()) {
-      this.logViewProvider.addLogGroup(
+      this.progressViewProvider.addLogGroup(
         this.streamName,
         group.id,
         group.name,
@@ -156,7 +156,7 @@ class VSCodeTransport extends Transport {
 
     // Then replay messages, which will be associated with their groups
     for (const msg of this.messageBuffer) {
-      this.logViewProvider.addLogMessage(
+      this.progressViewProvider.addLogMessage(
         this.streamName,
         msg.message,
         msg.level as 'error' | 'warn' | 'info' | 'debug',
@@ -185,8 +185,8 @@ class VSCodeTransport extends Transport {
     this.activeGroupId = groupId;
 
     // Log a message to mark the group start
-    if (this.logViewProvider) {
-      this.logViewProvider.addLogGroup(
+    if (this.progressViewProvider) {
+      this.progressViewProvider.addLogGroup(
         this.streamName,
         groupId,
         groupName,
@@ -209,8 +209,8 @@ class VSCodeTransport extends Transport {
     group.endTime = now.toISOString();
     group.status = status;
 
-    if (this.logViewProvider) {
-      this.logViewProvider.updateLogGroup(
+    if (this.progressViewProvider) {
+      this.progressViewProvider.updateLogGroup(
         this.streamName,
         groupId,
         status,
@@ -249,10 +249,10 @@ class VSCodeTransport extends Transport {
 const channelLoggers = new Map<string, winston.Logger>();
 const channelTransports = new Map<string, VSCodeTransport>();
 
-let globalLogViewProvider: LogViewProvider | undefined;
+let globalProgressViewProvider: ProgressViewProvider | undefined;
 
-export function setLogViewProvider(provider: LogViewProvider) {
-  globalLogViewProvider = provider;
+export function setProgressViewProvider(provider: ProgressViewProvider) {
+  globalProgressViewProvider = provider;
 
   // Replay buffered messages for all existing transports
   for (const transport of channelTransports.values()) {
@@ -281,7 +281,7 @@ function createLoggerForChannel(channel: string): winston.Logger {
   const transport = new VSCodeTransport(
     outputChannel,
     channel,
-    globalLogViewProvider,
+    globalProgressViewProvider,
   );
   channelTransports.set(channel, transport);
 

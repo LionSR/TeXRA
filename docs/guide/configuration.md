@@ -330,7 +330,7 @@ If you encounter configuration issues:
 1. **Reset to Defaults**: Clear custom settings to return to defaults
 2. **Check Syntax**: Ensure your JSON settings are correctly formatted
 3. **Reload Window**: Use "Developer: Reload Window" from the Command Palette
-4. **Check Logs**: Look for configuration-related errors in the StreamBoard
+4. **Check Logs**: Look for configuration-related errors in the ProgressBoard
 
 Common configuration issues include:
 

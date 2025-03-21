@@ -579,4 +579,11 @@ export function setupUIHandlers() {
       }
     });
   });
+
+  // Add event listener for history button
+  addEventListenerSafely('historyButton', 'click', function () {
+    vscode.postMessage({
+      command: 'showAgentHistory',
+    });
+  });
 }
