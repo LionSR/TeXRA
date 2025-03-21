@@ -723,7 +723,7 @@
       "panel": [
         {
           "id": "coauthor-panel",
-          "title": "CoAuthor StreamBoard",
+          "title": "CoAuthor ProgressBoard",
           "icon": "$(server-process)"
         }
       ]
@@ -752,8 +752,8 @@
         {
           "type": "webview",
           "id": "coauthor.logView",
-          "name": "CoAuthor: StreamBoard",
-          "contextualTitle": "StreamBoard",
+          "name": "CoAuthor: ProgressBoard",
+          "contextualTitle": "ProgressBoard",
           "icon": "$(server-process)"
         }
       ]
