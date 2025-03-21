@@ -24,7 +24,7 @@ A feature that combines changes from multiple document versions by understanding
 
 A feature that compares two LaTeX documents and generates a new document with additions, deletions, and modifications visually highlighted.
 
-### StreamBoard
+### ProgressBoard
 
 CoAuthor's logging interface that shows detailed information about the processing steps, model responses, and any issues encountered during execution.
 

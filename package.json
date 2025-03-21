@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.23.4",
+  "version": "0.23.6",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -705,6 +705,11 @@
         "command": "coauthor.wolframAlphaQuery",
         "title": "Query Wolfram Alpha",
         "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.showAgentHistory",
+        "title": "Show Agent Execution History",
+        "category": "CoAuthor"
       }
     ],
     "viewsContainers": {
@@ -718,7 +723,7 @@
       "panel": [
         {
           "id": "coauthor-panel",
-          "title": "CoAuthor StreamBoard",
+          "title": "CoAuthor ProgressBoard",
           "icon": "$(server-process)"
         }
       ]
@@ -735,14 +740,20 @@
           "id": "coauthor.folderExplorer",
           "name": "TeX Agents",
           "when": "workbenchState != empty"
+        },
+        {
+          "type": "webview",
+          "id": "coauthor.historyView",
+          "name": "Agent History",
+          "when": "workbenchState != empty"
         }
       ],
       "coauthor-panel": [
         {
           "type": "webview",
-          "id": "coauthor.logView",
-          "name": "CoAuthor: StreamBoard",
-          "contextualTitle": "StreamBoard",
+          "id": "coauthor.progressView",
+          "name": "CoAuthor: ProgressBoard",
+          "contextualTitle": "ProgressBoard",
           "icon": "$(server-process)"
         }
       ]
@@ -763,17 +774,17 @@
       "view/title": [
         {
           "command": "coauthor.indentTeX",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@1"
         },
         {
           "command": "coauthor.cleanOutput",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@2"
         },
         {
           "command": "coauthor.cleanBuild",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@3"
         },
         {

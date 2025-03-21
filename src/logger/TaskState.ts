@@ -1,6 +1,3 @@
-import { AgentConfig } from '../agent/AgentConfig';
-import { objectToTaskState } from '../utils/configConversion';
-
 /** Interface for storing task execution state */
 export interface TaskState {
   // Basic task info
