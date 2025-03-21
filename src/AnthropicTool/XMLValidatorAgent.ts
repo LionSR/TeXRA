@@ -1,22 +1,18 @@
 // Standard library imports
-
 import * as vscode from 'vscode';
 
 // Third-party imports
 import { XMLValidator } from 'fast-xml-parser';
-import Anthropic from '@anthropic-ai/sdk';
 
-// Local imports
-import { TextEditorTool } from './TextEditorTool';
-import { ToolResult } from './base';
-import * as workspaceFileUtils from '../utils/workspaceFileUtils';
-import {
-  getApiKey as getSecretApiKey,
-  ApiProvider,
-} from '../utils/secretUtils';
+// Local imports - core
+import { AnthropicToolAgent } from './AnthropicToolAgent';
 
-import * as logger from '../logger/logUtils';
+// Local imports - utils
 import { getConfig } from '../utils/configUtils';
+import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+
+// Local imports - Logging
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'XMLValidatorAgent';
 logger.initialize(CHANNEL);
@@ -24,31 +20,7 @@ logger.initialize(CHANNEL);
 /**
  * Agent that validates XML files and fixes validation errors using Claude
  */
-export class XMLValidatorAgent {
-  private textEditorTool: TextEditorTool;
-  private model: string = 'claude-3-7-sonnet-latest';
-
-  constructor() {
-    this.textEditorTool = new TextEditorTool('text_editor_20250124');
-  }
-
-  /**
-   * Get Anthropic API key from secure storage
-   */
-  private async getApiKey(): Promise<string> {
-    try {
-      return await getSecretApiKey('anthropic' as ApiProvider);
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error getting Anthropic API key: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw new Error(
-        'Anthropic API key not found. Please set it using the "Set API Key" command.',
-      );
-    }
-  }
-
+export class XMLValidatorAgent extends AnthropicToolAgent {
   /**
    * Validate an XML file and fix any errors found
    *
@@ -96,7 +68,7 @@ export class XMLValidatorAgent {
       );
 
       // Get the context around the error
-      const errorContext = this.getContentAroundErrorLine(
+      const errorContext = this.getContentAroundLine(
         content,
         validationResult.error?.line || 1,
         10,
@@ -104,10 +76,19 @@ export class XMLValidatorAgent {
 
       // Call Claude to fix the XML
       const fixResult = await this.callClaudeToFix(
-        validationResult,
-        content,
         filePath,
-        errorContext,
+        this.createInitialUserMessage(validationResult, filePath, errorContext),
+        (validationResult) => this.createSystemMessage(validationResult),
+        (validationResult, isFixed, currentIteration, maxIterations) =>
+          this.createFollowUpMessage(
+            validationResult,
+            isFixed,
+            currentIteration,
+            maxIterations,
+          ),
+        (content) => this.validateXML(content),
+        (content, error) =>
+          this.getContentAroundLine(content, error?.line || 1, 10),
         maxIterations,
       );
 
@@ -186,202 +167,6 @@ export class XMLValidatorAgent {
   }
 
   /**
-   * Call Claude API to fix the XML error using the TextEditorTool
-   */
-  private async callClaudeToFix(
-    validationResult: {
-      isValid: boolean;
-      error?: {
-        message: string;
-        line?: number;
-        code?: string;
-        data?: any;
-      };
-    },
-    content: string,
-    filePath: string,
-    errorContext: string,
-    maxIterations: number,
-  ): Promise<ToolResult> {
-    try {
-      // Get the API key for Anthropic
-      const apiKey = await this.getApiKey();
-
-      // Create Anthropic client
-      const client = new Anthropic({ apiKey });
-
-      // Initialize conversation
-      let messages = [
-        {
-          role: 'user' as const,
-          content: this.createInitialUserMessage(
-            validationResult,
-            filePath,
-            errorContext,
-          ),
-        },
-      ];
-
-      // Maximum conversation turns to try
-      let currentIteration = 0;
-      let lastToolResult: ToolResult | null = null;
-      let isFixed = false;
-
-      // Continue the conversation until we fix the XML or reach max iterations
-      while (currentIteration < maxIterations && !isFixed) {
-        currentIteration++;
-        logger.info(CHANNEL, `Iteration ${currentIteration}/${maxIterations}`);
-
-        // Make the system message with current validation error
-        const systemMessage = this.createSystemMessage(validationResult);
-
-        // Call Claude API
-        const response = await client.messages.create({
-          model: this.model,
-          max_tokens: 1024,
-          system: systemMessage,
-          messages,
-          tools: [
-            {
-              type: 'text_editor_20250124' as const,
-              name: 'str_replace_editor',
-            },
-          ],
-        });
-
-        logger.debug(
-          CHANNEL,
-          `Claude response (iteration ${currentIteration}): ${JSON.stringify(response)}`,
-        );
-
-        // Process tool use in Claude's response
-        const toolUseContent = response.content.find(
-          (c) => c.type === 'tool_use',
-        );
-        if (!toolUseContent || toolUseContent.type !== 'tool_use') {
-          logger.warn(
-            CHANNEL,
-            `Claude didn't use any tools in iteration ${currentIteration}`,
-          );
-          break;
-        }
-
-        logger.info(CHANNEL, `Processing tool use: ${toolUseContent.name}.`);
-
-        // Extract tool parameters
-        const toolInput = toolUseContent.input as any;
-
-        // Execute the tool
-        const toolResult = await this.textEditorTool.call({
-          command: toolInput.command,
-          path: toolInput.path || filePath,
-          old_str: toolInput.old_str,
-          new_str: toolInput.new_str,
-          view_range: toolInput.view_range,
-          insert_line: toolInput.insert_line,
-          file_text: toolInput.file_text,
-        });
-
-        // Save the most recent tool result
-        lastToolResult = toolResult;
-
-        // If the tool made a change (not just a view), check if XML is now valid
-        if (
-          toolInput.command === 'str_replace' ||
-          toolInput.command === 'insert'
-        ) {
-          logger.info(
-            CHANNEL,
-            `Claude applied a fix with ${toolInput.command}`,
-          );
-
-          // Re-read the file content after the change
-          const updatedContent = await workspaceFileUtils.readFile(filePath);
-
-          // Re-validate the XML
-          const newValidationResult = this.validateXML(updatedContent);
-
-          // Update the validation result for the next iteration
-          validationResult = newValidationResult;
-
-          // Check if XML is now valid
-          if (newValidationResult.isValid) {
-            logger.info(
-              CHANNEL,
-              `XML is now valid after ${currentIteration} iterations`,
-            );
-            isFixed = true;
-          } else {
-            logger.info(
-              CHANNEL,
-              `XML still has issues after fix: ${newValidationResult.error?.message} at line ${newValidationResult.error?.line}`,
-            );
-
-            // Update the error context for the new error
-            errorContext = this.getContentAroundErrorLine(
-              updatedContent,
-              newValidationResult.error?.line || 1,
-              10,
-            );
-          }
-        }
-
-        // Add Claude's response and the tool result to the conversation
-        messages.push({
-          role: 'assistant' as const,
-          content: [toolUseContent],
-        } as any);
-
-        messages.push({
-          role: 'user' as const,
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: toolUseContent.id,
-              content:
-                toolResult.output || `Tool ${toolInput.command} executed.`,
-            },
-            {
-              type: 'text',
-              text: this.createFollowUpMessage(
-                validationResult,
-                isFixed,
-                currentIteration,
-                maxIterations,
-              ),
-            },
-          ],
-        } as any);
-      }
-
-      // Return the last tool result if we have one
-      if (lastToolResult) {
-        return lastToolResult;
-      }
-
-      // No action was taken by Claude
-      logger.warn(
-        CHANNEL,
-        `Claude did not make any changes to fix the XML error after ${maxIterations} iterations`,
-      );
-      return new ToolResult({
-        error: `Claude did not fix the XML error after ${maxIterations} iterations`,
-        isError: true,
-      });
-    } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error calling Claude API: ${err instanceof Error ? err.message : String(err)}`,
-      );
-
-      return new ToolResult({
-        error: `Error calling Claude API: ${String(err)}`,
-        isError: true,
-      });
-    }
-  }
-
-  /**
    * Create the system message for Claude with current validation error
    */
   private createSystemMessage(validationResult: {
@@ -404,7 +189,6 @@ Some rules:
 The error information is:
 - Message: ${validationResult.error?.message}
 - Line: ${validationResult.error?.line}
-
 
 Use the text_editor tool to view and modify the file. First view the file to understand its structure,
 then make targeted fixes using str_replace or insert operations.`;
@@ -466,27 +250,5 @@ Message: ${validationResult.error?.message}
 ${validationResult.error?.line ? `Line: ${validationResult.error.line}` : ''}
 
 Please continue fixing the XML error.`;
-  }
-
-  /**
-   * Get content around an error line with specified number of lines before and after
-   */
-  private getContentAroundErrorLine(
-    content: string,
-    errorLine: number,
-    contextLines: number,
-  ): string {
-    const lines = content.split('\n');
-    const start = Math.max(0, errorLine - contextLines - 1);
-    const end = Math.min(lines.length, errorLine + contextLines);
-
-    return lines
-      .slice(start, end)
-      .map((line, i) => {
-        const lineNumber = start + i + 1;
-        const marker = lineNumber === errorLine ? '→ ' : '  ';
-        return `${lineNumber.toString().padStart(4, ' ')}: ${marker}${line}`;
-      })
-      .join('\n');
   }
 }

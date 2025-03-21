@@ -429,15 +429,23 @@
         }
       },
       {
-        "title": "XML Validation",
+        "title": "Code Validation & Fixing",
         "properties": {
           "coauthor.xmlValidator.maxIterations": {
             "type": "number",
-            "default": 5,
+            "default": 10,
             "minimum": 1,
             "maximum": 20,
             "description": "Maximum number of iterations when trying to fix XML validation errors",
             "order": 1
+          },
+          "coauthor.linterFixer.maxIterations": {
+            "type": "number",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of iterations when trying to fix linter issues in code files",
+            "order": 2
           }
         }
       },
@@ -662,15 +670,19 @@
       },
       {
         "command": "coauthor.showLinterMessages",
-        "title": "Show Linter Messages for Current File",
-        "category": "CoAuthor",
-        "icon": "$(warning)"
+        "title": "Show Linter Messages",
+        "category": "CoAuthor"
       },
       {
         "command": "coauthor.countLinterMessages",
-        "title": "Count Linter Issues in Current File",
+        "title": "Count Linter Messages",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.fixLinterIssues",
+        "title": "Fix Linter Issues with Claude",
         "category": "CoAuthor",
-        "icon": "$(debug-breakpoint-data)"
+        "icon": "$(fix-all)"
       }
     ],
     "viewsContainers": {
