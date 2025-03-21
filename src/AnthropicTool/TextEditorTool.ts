@@ -1,5 +1,9 @@
+// Standard library imports
+
 import * as path from 'path';
 import * as vscode from 'vscode';
+
+// Local imports - core
 import { BaseAnthropicTool, CLIResult, ToolError, ToolResult } from './base';
 import {
   TextEditorToolParams,
@@ -7,7 +11,11 @@ import {
   EditorCommand,
   FileHistoryEntry,
 } from './types';
+
+// Local imports - utilities
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
+
+// Local imports - Log
 import * as logger from '../logger/logUtils';
 
 // Constants
