@@ -10,6 +10,8 @@ import {
   countDiagnosticsBySeverity,
 } from '../utils/linterUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
+
+// Local imports - core
 import { TeXLinterFixAgent } from '../AnthropicTool';
 
 const CHANNEL = 'LinterCommands';

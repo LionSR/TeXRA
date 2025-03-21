@@ -4,17 +4,21 @@ import * as vscode from 'vscode';
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 
-// Local imports
+// Local imports - core
 import { TextEditorTool } from './TextEditorTool';
 import { ToolResult } from './base';
 import { BaseError, ValidationResult } from './types';
+
+// Local imports - utils
 import * as workspaceFileUtils from '../utils/workspaceFileUtils';
 import {
   getApiKey as getSecretApiKey,
   ApiProvider,
 } from '../utils/secretUtils';
-import * as logger from '../logger/logUtils';
 import { getConfig } from '../utils/configUtils';
+
+// Local imports - logging
+import * as logger from '../logger/logUtils';
 
 const CHANNEL = 'AnthropicToolAgent';
 logger.initialize(CHANNEL);
@@ -22,7 +26,9 @@ logger.initialize(CHANNEL);
 /**
  * Abstract base class for agents that use Claude to fix issues in files
  */
-export abstract class AnthropicToolAgent<ErrorType extends BaseError | BaseError[]> {
+export abstract class AnthropicToolAgent<
+  ErrorType extends BaseError | BaseError[],
+> {
   // Constants used throughout the class
   protected static readonly MAX_ALLOWED_ITERATIONS: number = 20;
   protected static readonly DEFAULT_ITERATIONS: number = 10;
@@ -130,7 +136,8 @@ export abstract class AnthropicToolAgent<ErrorType extends BaseError | BaseError
         (result, isFixed, currentIteration) =>
           this.createFollowUpMessage(result, isFixed, currentIteration),
         (path) => this.validateFile(path),
-        (contentText, errorData) => this.getErrorContext(contentText, errorData),
+        (contentText, errorData) =>
+          this.getErrorContext(contentText, errorData),
       );
 
       // Final validation to check if all issues are fixed
@@ -190,15 +197,15 @@ export abstract class AnthropicToolAgent<ErrorType extends BaseError | BaseError
   protected async callClaudeToFix(
     filePath: string,
     initialUserMessage: string,
-    createSystemMessage: (validationResult: ValidationResult<ErrorType>) => string,
+    createSystemMessage: (
+      validationResult: ValidationResult<ErrorType>,
+    ) => string,
     createFollowUpMessage: (
       validationResult: ValidationResult<ErrorType>,
       isFixed: boolean,
       currentIteration: number,
     ) => string,
-    validateFix: (
-      filePath: string,
-    ) => Promise<ValidationResult<ErrorType>>,
+    validateFix: (filePath: string) => Promise<ValidationResult<ErrorType>>,
     getErrorContext: (content: string, error: ErrorType) => string,
   ): Promise<ToolResult> {
     try {
@@ -355,7 +362,10 @@ export abstract class AnthropicToolAgent<ErrorType extends BaseError | BaseError
             // Read updated content and get new error context
             content = await workspaceFileUtils.readFile(filePath);
             if (newValidationResult.error) {
-              errorContext = getErrorContext(content, newValidationResult.error);
+              errorContext = getErrorContext(
+                content,
+                newValidationResult.error,
+              );
             } else {
               // Default context if no error is provided
               errorContext = this.getDefaultContext(content);
@@ -467,17 +477,14 @@ export abstract class AnthropicToolAgent<ErrorType extends BaseError | BaseError
    * Abstract method to get context around an error
    * Must be implemented by concrete classes
    */
-  protected abstract getErrorContext(
-    content: string, 
-    error: ErrorType
-  ): string;
+  protected abstract getErrorContext(content: string, error: ErrorType): string;
 
   /**
    * Abstract method to create system message for Claude
    * Must be implemented by concrete classes
    */
   protected abstract createSystemMessage(
-    validationResult: ValidationResult<ErrorType>
+    validationResult: ValidationResult<ErrorType>,
   ): string;
 
   /**

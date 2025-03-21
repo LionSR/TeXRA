@@ -4,7 +4,11 @@ import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
+
+// Local imports - core
 import { XMLValidatorAgent } from '../AnthropicTool';
+
+// Local imports - utils
 import { getRelativePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'XmlCommands';
