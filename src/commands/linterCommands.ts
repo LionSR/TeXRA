@@ -145,32 +145,36 @@ export async function handleFixLinterIssues(): Promise<void> {
       return;
     }
 
+    // Log the total number of issues found
+    logger.info(
+      CHANNEL,
+      `Found ${issues.length} linter issues in ${relativePath}`,
+    );
+
+    // Create the agent
+    const linterFixAgent = new TeXLinterFixAgent();
+
     // Show progress indicator
-    vscode.window.withProgress(
+    await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'Fixing linter issues...',
+        title: 'Fixing linter issues using Claude',
         cancellable: false,
       },
       async (progress) => {
-        progress.report({ message: 'Initializing Claude...' });
-
-        // Create the agent
-        const linterFixAgent = new TeXLinterFixAgent();
+        progress.report({ message: 'Analyzing issues...' });
 
         // Run the fix operation
-        progress.report({
-          message: 'Claude is analyzing and fixing issues...',
-        });
-        const result = await linterFixAgent.fixLinterIssues(relativePath);
+        const result = await linterFixAgent.fixIssues(relativePath);
 
         if (result) {
-          progress.report({ message: 'Completed.' });
+          progress.report({ message: 'Fixed successfully!' });
         } else {
-          progress.report({ message: 'Failed to fix all issues.' });
+          progress.report({ message: 'Could not fix all issues' });
         }
 
-        return result;
+        // Return a Promise that resolves after 1.5 seconds to give user time to see the result
+        return new Promise((resolve) => setTimeout(resolve, 1500));
       },
     );
   } catch (err) {
