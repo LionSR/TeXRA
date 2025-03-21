@@ -82,7 +82,7 @@ Be specific about what you want. Include what should change and what should rema
 ### Step 6: Execute the Agent
 
 1. Click the "Execute" button
-2. The StreamBoard panel (typically at the bottom) will show the progress
+2. The ProgressBoard panel (typically at the bottom) will show the progress
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
 <!-- ![Execution Progress](/images/execution-progress.png) -->

@@ -57,7 +57,7 @@ The merged document will be opened automatically. CoAuthor will:
 
 1. Create a new file with naming pattern: `basename_merge_r0_model.tex`
 2. Generate a diff file showing all changes
-3. Log the merge process details in the StreamBoard
+3. Log the merge process details in the ProgressBoard
 
 ## Advanced Merge Options
 
@@ -170,7 +170,7 @@ After a merge, you can view a diff highlighting changes:
 
 ### Merge Log Analysis
 
-The StreamBoard shows detailed merge analysis:
+The ProgressBoard shows detailed merge analysis:
 
 1. Identify the sections that were changed
 2. See the reasoning behind merge decisions
@@ -249,7 +249,7 @@ Integrate changes from the base document (main version) into the edited document
 
 If a merge operation fails:
 
-1. Check the StreamBoard for specific error messages
+1. Check the ProgressBoard for specific error messages
 2. Verify both input documents compile successfully
 3. Try merging smaller sections of the document
 4. Use a more powerful model (e.g., upgrade from Sonnet to Opus)
