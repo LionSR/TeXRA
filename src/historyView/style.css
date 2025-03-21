@@ -1,0 +1,173 @@
+/* 
+ * History view styles
+ */
+
+/* Base styles */
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
+  padding: 20px;
+}
+
+h2 {
+  margin-bottom: 20px;
+}
+
+/* History container and items */
+.history-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  border: 1px solid var(--vscode-panelSection-border);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background-color: var(--vscode-editor-background);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.history-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.history-timestamp {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.8em;
+  margin-bottom: 4px;
+}
+
+/* Header and details */
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-details {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.history-label {
+  font-weight: bold;
+  color: var(--vscode-editor-foreground);
+}
+
+.history-value {
+  color: var(--vscode-editor-foreground);
+  word-break: break-word;
+  padding: 4px 0;
+}
+
+/* Buttons */
+.button {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+}
+
+.button:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.button-clear {
+  background-color: var(--vscode-errorForeground);
+  margin-bottom: 20px;
+  padding: 6px 12px;
+}
+
+.button-clear:hover {
+  background-color: var(--vscode-testing-iconErrored);
+}
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.restore-btn {
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.restore-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.delete-btn {
+  background-color: var(--vscode-errorForeground);
+  color: var(--vscode-button-foreground);
+}
+
+.delete-btn:hover {
+  background-color: var(--vscode-testing-iconErrored);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  margin-top: 40px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Collapsible content */
+.collapsible {
+  max-height: 200px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapsible.expanded {
+  max-height: 1000px;
+}
+
+.toggle-button {
+  color: var(--vscode-textLink-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  margin-top: 4px;
+}
+
+/* Configuration section */
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 8px;
+  border-radius: 3px;
+  margin: 8px 0;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.config-key {
+  font-weight: 500;
+  color: var(--vscode-editorInfo-foreground);
+  min-width: 150px;
+}

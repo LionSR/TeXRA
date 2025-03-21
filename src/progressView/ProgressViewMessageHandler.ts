@@ -2,18 +2,18 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from './logUtils';
-import { LogViewProvider } from './LogViewProvider';
+import * as logger from '../logger/logUtils';
+import { ProgressViewProvider } from './ProgressViewProvider';
 
 import { taskStateToAgentConfig } from '../utils/configConversion';
 
 // @ts-ignore - Import JavaScript module
-import { COMMANDS } from './logView/modules/constants.js';
+import { COMMANDS } from './modules/constants.js';
 
 const CHANNEL = 'MessageHandler';
 
-export class LogViewMessageHandler {
-  constructor(private readonly provider: LogViewProvider) {}
+export class ProgressViewMessageHandler {
+  constructor(private readonly provider: ProgressViewProvider) {}
 
   async handleMessage(
     message: any,
