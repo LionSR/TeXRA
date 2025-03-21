@@ -8,6 +8,9 @@ import { getConfig } from '../utils/configUtils';
 import { AgentConfig } from '../agent/AgentConfig';
 import { executeAgent } from '../agent/executeAgent';
 
+// Local imports - history
+import { AgentHistoryManager } from '../historyView/AgentHistoryManager';
+
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -23,6 +26,9 @@ export const executeCommand = {
     context: vscode.ExtensionContext,
   ) => {
     try {
+      // Save the agent configuration to history (silently)
+      await AgentHistoryManager.addToHistory(context, config);
+
       // Run the agent directly
       await executeAgent(config, context);
     } catch (err) {

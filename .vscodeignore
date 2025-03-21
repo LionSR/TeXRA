@@ -22,19 +22,21 @@ docs/
 
 !resources/**
 !src/webview/*.js
-!src/webview/*.ts
 !src/webview/*.html
 !src/webview/*.css
 !src/webview/styles/*.css
 !src/webview/modules/*.js
 !src/common/styles/*.css
 
-!src/logger/logView/modules/*.js
-!src/logger/logView/styles/*.css
+!src/historyView/modules/*.js
+!src/historyView/styles/*.css
+!src/historyView/*.html
+!src/historyView/*.css
+!src/historyView/*.js
 
-!src/logger/logView/*.js
-!src/logger/logView/*.html
-!src/logger/logView/*.css
-!src/logger/LogViewProvider.ts
-!src/logger/LogViewContentProvider.ts
-!src/logger/LogViewMessageHandler.ts
+!src/progressView/modules/*.js
+!src/progressView/styles/*.css
+
+!src/progressView/*.js
+!src/progressView/*.html
+!src/progressView/*.css

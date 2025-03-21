@@ -195,7 +195,7 @@ Implement validation checks as part of your workflow:
 Use comparison tools to evaluate changes:
 
 1. Use LaTeXdiff to visualize specific changes
-2. Review the StreamBoard log to understand the AI's process
+2. Review the ProgressBoard log to understand the AI's process
 3. Compare multiple versions to select the best elements
 
 ## LaTeX-Specific Practices

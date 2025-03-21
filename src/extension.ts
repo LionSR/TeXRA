@@ -11,7 +11,7 @@ import { initializeSecrets } from './utils/secretUtils';
 import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 
 // Local imports - components
-import { LogViewProvider } from './logger/LogViewProvider';
+import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { FolderExplorer } from './FolderExplorer';
 import { registerCommands } from './commands';
 
@@ -92,8 +92,8 @@ export function activate(context: vscode.ExtensionContext) {
   initializeSecrets(context);
 
   // Create the log view provider
-  const logViewProvider = new LogViewProvider(context);
-  logger.setLogViewProvider(logViewProvider);
+  const progressViewProvider = new ProgressViewProvider(context);
+  logger.setProgressViewProvider(progressViewProvider);
 
   // Copy default agents
   copyDefaultAgents(context);
@@ -108,8 +108,8 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the tree data provider and webview providers
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'coauthor.logView',
-      logViewProvider,
+      'coauthor.progressView',
+      progressViewProvider,
     ),
     // Removed duplicate mainViewProvider registration since it's handled in commands.ts
     vscode.window.registerTreeDataProvider(

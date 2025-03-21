@@ -285,7 +285,7 @@ If you work across multiple computers:
 If you encounter persistent installation issues:
 
 1. Check the [GitHub Issues page](https://github.com/LionSR/coauthor/issues) for known problems
-2. Look for error messages in the CoAuthor StreamBoard
+2. Look for error messages in the CoAuthor ProgressBoard
 3. File a new issue with detailed information about your system and the specific error
 
 ## Next Steps

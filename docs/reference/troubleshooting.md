@@ -300,7 +300,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
    - Verify where CoAuthor is saving output files
    - Look in the same directory as the input file
-   - Check the StreamBoard log for file paths
+   - Check the ProgressBoard log for file paths
 
 2. **Permission issues**:
 
@@ -314,7 +314,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 4. **Process interruption**:
    - The AI process might have been interrupted before completion
-   - Check the StreamBoard for error messages or signs of interruption
+   - Check the ProgressBoard for error messages or signs of interruption
 
 ### Output File Corruption
 
@@ -445,14 +445,14 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 ## Debugging Tips
 
-### Using StreamBoard
+### Using ProgressBoard
 
-The StreamBoard is your main debugging tool:
+The ProgressBoard is your main debugging tool:
 
-1. **Access StreamBoard**:
+1. **Access ProgressBoard**:
 
-   - Look for "CoAuthor StreamBoard" in the panel at the bottom of VS Code
-   - If not visible, open it via the Command Palette: "CoAuthor: Show StreamBoard"
+   - Look for "CoAuthor ProgressBoard" in the panel at the bottom of VS Code
+   - If not visible, open it via the Command Palette: "CoAuthor: Show ProgressBoard"
 
 2. **Interpreting logs**:
 
@@ -467,7 +467,7 @@ The StreamBoard is your main debugging tool:
    - Expand nested entries to see detailed information
 
 4. **Sharing logs for support**:
-   - Copy relevant sections from the StreamBoard
+   - Copy relevant sections from the ProgressBoard
    - Include them when reporting issues on GitHub
 
 ### Getting Support
@@ -483,7 +483,7 @@ If you can't resolve an issue using this guide:
 
    - Provide detailed information about your environment
    - Include steps to reproduce the problem
-   - Attach relevant log excerpts from StreamBoard
+   - Attach relevant log excerpts from ProgressBoard
    - Mention your OS, VS Code version, and CoAuthor version
 
 3. **Temporary workarounds**:
