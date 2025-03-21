@@ -9,7 +9,7 @@ import { AgentConfig } from '../agent/AgentConfig';
 import { executeAgent } from '../agent/executeAgent';
 
 // Local imports - history
-import { AgentHistoryManager } from '../history/AgentHistoryManager';
+import { AgentHistoryManager } from '../historyView/AgentHistoryManager';
 
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {

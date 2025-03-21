@@ -751,7 +751,7 @@
       "coauthor-panel": [
         {
           "type": "webview",
-          "id": "coauthor.logView",
+          "id": "coauthor.progressView",
           "name": "CoAuthor: ProgressBoard",
           "contextualTitle": "ProgressBoard",
           "icon": "$(server-process)"
@@ -774,17 +774,17 @@
       "view/title": [
         {
           "command": "coauthor.indentTeX",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@1"
         },
         {
           "command": "coauthor.cleanOutput",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@2"
         },
         {
           "command": "coauthor.cleanBuild",
-          "when": "view == coauthor.logView",
+          "when": "view == coauthor.progressView",
           "group": "navigation@3"
         },
         {

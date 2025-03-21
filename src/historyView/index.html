@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${styleUri}" />
+    <title>CoAuthor History</title>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "./modules/vscodeApi.js": "${vscodeApiUri}",
+          "./modules/domHandlers.js": "${domHandlersUri}"
+        }
+      }
+    </script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+  </head>
+
+  <body>
+    <div>
+      <h2>Agent Execution History</h2>
+
+      <div id="clearButtonContainer">
+        <!-- Clear button will be added here if history items exist -->
+      </div>
+
+      <div id="historyContainer" class="history-container">
+        <!-- History items will be inserted here -->
+      </div>
+    </div>
+  </body>
+</html>

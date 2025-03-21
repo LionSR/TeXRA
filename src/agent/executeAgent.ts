@@ -22,7 +22,7 @@ import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
 import { MergeAgent } from './MergeAgent';
-import { LogViewProvider } from '../logger/LogViewProvider';
+import { ProgressViewProvider } from '../progressView/ProgressViewProvider';
 import { AgentLogger } from '../logger/AgentLogger';
 
 const CHANNEL = 'executeAgent';
@@ -128,9 +128,9 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
 ): Promise<void> {
   try {
     // Get logger instance
-    const logViewProvider = LogViewProvider.getInstance();
-    if (!logViewProvider) {
-      throw new Error('LogViewProvider not initialized');
+    const progressViewProvider = ProgressViewProvider.getInstance();
+    if (!progressViewProvider) {
+      throw new Error('ProgressViewProvider not initialized');
     }
 
     // Create agent to get config for stream ID
@@ -141,7 +141,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
     const fullStreamId = `${agentName}@${config.model}: ${path.basename(config.inputFile)}`;
 
     // Check if this stream is already running
-    const currentStatus = logViewProvider.getStreamStatus(fullStreamId);
+    const currentStatus = progressViewProvider.getStreamStatus(fullStreamId);
     if (currentStatus === 'running') {
       const errorMsg = `Task "${fullStreamId}" is already running. Please wait for it to complete or stop it first.`;
       // vscode.window.showErrorMessage(errorMsg);
@@ -185,8 +185,8 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
         );
 
         // Switch to this stream and set its status to running
-        logViewProvider.setActiveStream(fullStreamId);
-        logViewProvider.updateStreamStatus(fullStreamId, 'running');
+        progressViewProvider.setActiveStream(fullStreamId);
+        progressViewProvider.updateStreamStatus(fullStreamId, 'running');
 
         // Store taskState
         logger.debug(
@@ -202,7 +202,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
         logger.endGroup(taskDetailsGroupId, 'stopped');
 
         // Convert AgentConfig to TaskState using utility function
-        logViewProvider.setTaskState(
+        progressViewProvider.setTaskState(
           fullStreamId,
           agentConfigToTaskState(config),
         );
@@ -222,7 +222,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
           logger.info(`Task completed successfully`, mainTaskGroupId);
           logger.endGroup(mainTaskGroupId, 'stopped');
           // Update status to stopped on successful completion
-          logViewProvider.updateStreamStatus(fullStreamId, 'stopped');
+          progressViewProvider.updateStreamStatus(fullStreamId, 'stopped');
         } catch (err) {
           // Mark the task as failed
           logger.error(
@@ -231,7 +231,7 @@ async function executeAgentWithLogging<T extends AgentWithConfig>(
           );
           logger.endGroup(mainTaskGroupId, 'error');
           // Update status to error if agent run fails
-          logViewProvider.updateStreamStatus(fullStreamId, 'error');
+          progressViewProvider.updateStreamStatus(fullStreamId, 'error');
           throw err;
         }
       } catch (err) {
