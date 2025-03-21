@@ -1,5 +1,5 @@
 /**
- * Base styles for LogView
+ * Base styles for ProgressView
  * Core layout and structure
  */
 
@@ -80,7 +80,7 @@ body {
   }
 }
 
-/* LogView specific disabled state */
+/* ProgressView specific disabled state */
 .action-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

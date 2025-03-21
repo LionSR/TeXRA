@@ -21,6 +21,7 @@ import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 import { registerTextEditorCommands } from './commands/textEditorCommands';
 import { registerLinterCommands } from './commands/linterCommands';
 import { registerWolframAlphaCommands } from './commands/wolframAlphaCommands';
+import { registerHistoryCommands } from './commands/historyCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -53,6 +54,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     textEditor: registerTextEditorCommands(context),
     linter: registerLinterCommands(context),
     wolframAlpha: registerWolframAlphaCommands(context),
+    history: registerHistoryCommands(context),
   };
 
   // Register webview provider
@@ -89,3 +91,4 @@ export { stateRestoreCommand } from './commands/stateRestoreCommand';
 export { textEditorCommands } from './commands/textEditorCommands';
 export { linterCommands } from './commands/linterCommands';
 export { wolframAlphaCommands } from './commands/wolframAlphaCommands';
+export { historyCommands } from './commands/historyCommands';
