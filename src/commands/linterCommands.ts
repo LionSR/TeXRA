@@ -152,7 +152,7 @@ export async function handleFixLinterIssues(): Promise<void> {
     );
 
     // Create the agent
-    const linterFixAgent = new TeXLinterFixAgent();
+    const linterFixAgent = TeXLinterFixAgent.create();
 
     // Show progress indicator
     await vscode.window.withProgress(
