@@ -42,7 +42,7 @@ export async function handleShowLinterMessages(): Promise<void> {
     logger.debug(CHANNEL, `Getting linter messages for ${relativePath}`);
 
     // Get linter messages
-    const messages = getLinterMessages(relativePath);
+    const messages = await getLinterMessages(relativePath);
 
     if (messages.length === 0) {
       vscode.window.showInformationMessage(
@@ -92,8 +92,34 @@ export async function handleCountLinterMessages(): Promise<void> {
     const relativePath = getRelativePath(absolutePath);
     logger.debug(CHANNEL, `Counting linter messages for ${relativePath}`);
 
-    // Count messages by severity
-    const counts = countDiagnosticsBySeverity(relativePath);
+    // Get linter messages - now uses the async version to ensure build is triggered
+    const messages = await getLinterMessages(relativePath);
+
+    // Count by severity
+    const counts = {
+      errors: 0,
+      warnings: 0,
+      info: 0,
+      hints: 0,
+    };
+
+    messages.forEach((msg) => {
+      switch (msg.severity) {
+        case 'error':
+          counts.errors++;
+          break;
+        case 'warning':
+          counts.warnings++;
+          break;
+        case 'info':
+          counts.info++;
+          break;
+        case 'hint':
+          counts.hints++;
+          break;
+      }
+    });
+
     const total = counts.errors + counts.warnings + counts.info + counts.hints;
 
     if (total === 0) {
@@ -139,7 +165,7 @@ export async function handleFixLinterIssues(): Promise<void> {
     logger.debug(CHANNEL, `Fixing linter issues for ${relativePath}`);
 
     // Check if there are any linter issues
-    const issues = getLinterMessages(relativePath);
+    const issues = await getLinterMessages(relativePath);
     if (issues.length === 0) {
       vscode.window.showInformationMessage(
         'No linter issues found in the current file',
