@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.24.2",
+  "version": "0.24.4",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -704,6 +704,21 @@
       {
         "command": "coauthor.wolframAlphaQuery",
         "title": "Query Wolfram Alpha",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.testWolframScript",
+        "title": "Test Wolfram Script Installation",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.wolframScriptExecute",
+        "title": "Execute Wolfram Language Code",
+        "category": "CoAuthor"
+      },
+      {
+        "command": "coauthor.wolframScriptRunFile",
+        "title": "Run Current Wolfram Language File",
         "category": "CoAuthor"
       },
       {
