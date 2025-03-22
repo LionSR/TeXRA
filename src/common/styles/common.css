@@ -19,10 +19,8 @@
   --dropdown-background: var(--vscode-dropdown-background);
   --dropdown-foreground: var(--vscode-dropdown-foreground);
   --dropdown-border: var(--vscode-dropdown-border);
-  --icon-button-background: var(--vscode-button-secondaryBackground);
-  --icon-button-hover-background: var(--vscode-button-secondaryHoverBackground);
-  --icon-button-foreground: var(--vscode-button-secondaryForeground);
   --icon-color: var(--vscode-textLink-foreground);
+  --focus-border: var(--vscode-focusBorder);
 
   /* Typography */
   --font-size: var(--vscode-font-size);
@@ -51,6 +49,17 @@
   top: 0;
 }
 
+/* Common icon styling */
+.icon-with-text {
+  display: flex;
+  align-items: center;
+}
+
+.icon-with-text .codicon {
+  margin-right: var(--spacing-small);
+  color: var(--icon-color);
+}
+
 /* Unified button styling */
 .vscode-button {
   height: 24px;
@@ -65,7 +74,9 @@
   align-items: center;
   justify-content: center;
   margin-right: 4px;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  border-radius: var(--border-radius);
+  position: relative;
 }
 
 /* Add horizontal padding when containing text */
@@ -76,6 +87,15 @@
 
 .vscode-button:hover {
   background-color: var(--vscode-list-hoverBackground);
+}
+
+.vscode-button:focus {
+  outline: 1px solid var(--focus-border);
+  outline-offset: 1px;
+}
+
+.vscode-button:active {
+  background-color: var(--vscode-list-activeSelectionBackground);
 }
 
 .vscode-button:disabled {
@@ -90,6 +110,24 @@
 
 .vscode-button:hover .codicon {
   color: var(--vscode-textLink-foreground);
+}
+
+/* Primary button variation */
+.vscode-button.primary {
+  background-color: var(--button-background);
+  color: var(--button-foreground);
+  padding: 4px 10px;
+  height: 28px;
+  min-width: 80px;
+}
+
+.vscode-button.primary:hover {
+  background-color: var(--button-hover-background);
+}
+
+.vscode-button.primary .codicon {
+  color: var(--button-foreground);
+  margin-right: var(--spacing-small);
 }
 
 /* Input styling */
@@ -107,13 +145,44 @@
 }
 
 .vscode-input:focus {
-  outline: 1px solid var(--input-border);
+  outline: 1px solid var(--focus-border);
   outline-offset: -1px;
 }
 
 .vscode-input::placeholder {
   color: var(--text-color);
   opacity: 0.7;
+}
+
+/* Common textarea styling */
+.vscode-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--border-radius);
+  background-color: var(--input-background);
+  color: var(--input-foreground);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.vscode-textarea:focus {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+
+/* Common checkbox styling */
+.vscode-checkbox {
+  display: flex;
+  align-items: center;
+  font-weight: normal;
+}
+
+.vscode-checkbox input[type="checkbox"] {
+  margin-right: var(--spacing-small);
 }
 
 /* Container styling */
@@ -135,4 +204,48 @@ select {
   color: var(--dropdown-foreground);
   font-size: var(--font-size);
   cursor: pointer;
+}
+
+select:focus {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+
+/* Common header styling */
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--spacing-medium);
+}
+
+.section-header-between {
+  justify-content: space-between;
+}
+
+/* Common layout utilities */
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-space-between {
+  justify-content: space-between;
+}
+
+.flex-center {
+  justify-content: center;
+  align-items: center;
+}
+
+.flex-gap-small {
+  gap: var(--spacing-small);
+}
+
+.flex-gap-medium {
+  gap: var(--spacing-medium);
 }
