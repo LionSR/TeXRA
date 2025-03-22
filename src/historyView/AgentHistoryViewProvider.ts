@@ -21,36 +21,15 @@ logger.initialize(CHANNEL);
 export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coauthor.historyView';
   private _view?: vscode.WebviewPanel;
-  private _webviewView?: vscode.WebviewView;
-
+  
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   /**
-   * Implements WebviewViewProvider interface for sidebar integration
+   * This is required for the WebviewViewProvider interface but we won't use it
+   * as we're removing the sidebar integration
    */
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
-    this._webviewView = webviewView;
-
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'historyView'),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'styles',
-        ),
-      ],
-    };
-
-    // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      await this.handleWebviewMessage(message);
-    });
-
-    // Set initial HTML content
-    this.updateWebviewContent();
+    // We no longer use webview in the sidebar, but we need this method for the interface
   }
 
   /**
@@ -98,7 +77,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Handle messages from either webview type
+   * Handle messages from the webview
    */
   private async handleWebviewMessage(message: any) {
     switch (message.command) {
@@ -131,9 +110,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     const history = await AgentHistoryManager.getHistory(this.context);
 
     // Send data to the webview
-    const target = this._view || this._webviewView;
-    if (target) {
-      target.webview.postMessage({
+    if (this._view) {
+      this._view.webview.postMessage({
         command: 'updateHistory',
         historyItems: history,
       });
@@ -144,20 +122,12 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    * Update the content of the webview
    */
   private async updateWebviewContent() {
-    const htmlContent = this.getWebviewContent();
-
-    // Update panel if it exists
     if (this._view) {
-      this._view.webview.html = htmlContent;
+      this._view.webview.html = this.getWebviewContent();
+      
+      // Send history data after a short delay to ensure the webview is ready
+      setTimeout(() => this.sendHistoryData(), 100);
     }
-
-    // Update view if it exists
-    if (this._webviewView) {
-      this._webviewView.webview.html = htmlContent;
-    }
-
-    // Send history data after a short delay to ensure the webview is ready
-    setTimeout(() => this.sendHistoryData(), 100);
   }
 
   /**
@@ -196,18 +166,14 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         .replace('${styleUri}', styleUri.toString())
         .replace(
           '${commonStyleUri}',
-          this._view || this._webviewView
-            ? (this._view || this._webviewView)!.webview
-                .asWebviewUri(commonStyleUri)
-                .toString()
-            : '',
+          this._view ? this._view.webview.asWebviewUri(commonStyleUri).toString() : '',
         )
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
         .replace(/\${nonce}/g, nonce)
         .replace(
           /\${cspSource}/g,
-          (this._view || this._webviewView)?.webview.cspSource || '',
+          this._view?.webview.cspSource || '',
         );
     } catch (error) {
       console.error('Error generating HTML content:', error);
@@ -219,13 +185,17 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
    * Get a webview URI for a local resource
    */
   private getWebviewUri(relativePath: string): vscode.Uri {
+    if (!this._view) {
+      throw new Error('Webview is not available');
+    }
+    
     const diskPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'src',
       'historyView',
       relativePath,
     );
-    return (this._view || this._webviewView)!.webview.asWebviewUri(diskPath);
+    return this._view.webview.asWebviewUri(diskPath);
   }
 
   /**
@@ -319,9 +289,8 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
       vscode.window.showInformationMessage('Agent history cleared');
 
       // Notify the webview
-      const target = this._view || this._webviewView;
-      if (target) {
-        target.webview.postMessage({ command: 'historyCleared' });
+      if (this._view) {
+        this._view.webview.postMessage({ command: 'historyCleared' });
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to clear history: ${error}`);

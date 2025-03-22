@@ -75,15 +75,3 @@
   color: #ff4444;
   cursor: pointer;
 }
-
-/* Execute container */
-.execute-column {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: var(--spacing-medium);
-}
-
-.execute-row {
-  display: none;
-}
