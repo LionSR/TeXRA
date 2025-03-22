@@ -73,7 +73,7 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: 200px;
   display: none;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.8);
   padding: 4px;
   white-space: nowrap;
 }
@@ -127,13 +127,13 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: 150px;
   display: none;
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.8);
   padding: 4px;
   white-space: nowrap;
 }
 
 .auto-extract-options-content {
-  font-size: calc(var(--font-size) * 0.9);
+  font-size: calc(var(--font-size) * 0.8);
   background: var(--background-color);
   border: 1px solid var(--input-border);
   border-radius: var(--border-radius);
