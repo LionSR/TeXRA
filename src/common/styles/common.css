@@ -51,10 +51,11 @@
   top: 0;
 }
 
-/* Action button styling */
-.action-button {
-  padding: 2px 6px;
-  margin-right: var(--spacing-small);
+/* Unified button styling */
+.vscode-button {
+  height: 24px;
+  min-width: 24px;
+  padding: 2px;
   font-size: calc(var(--font-size) * 0.9);
   background-color: transparent;
   color: var(--vscode-foreground);
@@ -63,57 +64,31 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-tiny);
+  margin-right: 4px;
   transition: background-color 0.2s;
-  height: 24px;
 }
 
-.action-button:hover {
+/* Add horizontal padding when containing text */
+.vscode-button:has(span:not(.codicon)), 
+.vscode-button:has(.codicon + :not(.codicon)) {
+  padding: 2px 6px;
+}
+
+.vscode-button:hover {
   background-color: var(--vscode-list-hoverBackground);
 }
 
-.action-button:disabled {
+.vscode-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.action-button .codicon {
-  font-size: calc(var(--font-size) * 0.9);
-  color: var(--vscode-foreground);
-  margin-right: 2px;
-}
-
-.action-button:hover .codicon {
-  color: var(--vscode-textLink-foreground);
-}
-
-/* Icon button styling */
-.icon-button {
-  width: 24px;
-  height: 24px;
-  padding: 2px;
-  font-size: calc(var(--font-size) * 0.8);
-  background-color: transparent;
-  color: var(--vscode-foreground);
-  border: none;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-
-.icon-button:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.icon-button .codicon {
-  margin: 0;
+.vscode-button .codicon {
   font-size: calc(var(--font-size) * 0.9);
   color: var(--vscode-foreground);
 }
 
-.icon-button:hover .codicon {
+.vscode-button:hover .codicon {
   color: var(--vscode-textLink-foreground);
 }
 
