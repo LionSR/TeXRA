@@ -537,7 +537,6 @@ export function setupUIHandlers() {
     }
   });
 
-  // Replace the single addOpenedFilesButton handler with type-specific handlers
   ['Input', 'Reference', 'Auxiliary'].forEach((type) => {
     const buttonId = `addOpened${type}FilesButton`;
     addEventListenerSafely(buttonId, 'click', function () {

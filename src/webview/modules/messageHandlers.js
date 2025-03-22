@@ -279,9 +279,24 @@ export function setupMessageHandlers() {
       case 'setOpenedFiles':
         // Only update the specified file type's multiple selection
         if (message.fileType) {
-          const id = `multiple${capitalize(message.fileType)}Files`;
-          const toggleId = `toggle${capitalize(id)}`;
-          updateMultipleFileSelect(id, toggleId, message.files);
+          const fileType = message.fileType.replace('Files', '');
+          const singleFileId = `${uncapitalize(fileType)}File`;
+          const multipleFileId = `multiple${capitalize(fileType)}Files`;
+          const toggleId = `toggleMultiple${capitalize(fileType)}Files`;
+
+          let filesToAdd = message.files || [];
+
+          // If shouldFilter is true, filter out the file that's already selected in the single select
+          if (message.shouldFilter) {
+            const singleFileSelect = safeGetElementById(singleFileId);
+            if (singleFileSelect && singleFileSelect.value) {
+              filesToAdd = filesToAdd.filter(
+                (file) => file !== singleFileSelect.value,
+              );
+            }
+          }
+
+          updateMultipleFileSelect(multipleFileId, toggleId, filesToAdd);
         }
         break;
       case 'setBaseFile':
