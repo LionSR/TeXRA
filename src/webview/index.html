@@ -261,13 +261,12 @@
                     style="display: none"
                   >
                     <div class="dropdown-options-content">
-                      <label
+                      <label class="vscode-checkbox"
                         ><input type="checkbox" id="autoExtractFigure" /><i
                           class="codicon codicon-file-media"
-                        ></i>
-                        Figures</label
+                        ></i>Figures</label
                       >
-                      <label
+                      <label class="vscode-checkbox"
                         ><input type="checkbox" id="autoExtractTikzFigure" /><i
                           class="codicon codicon-file-code"
                         ></i
@@ -397,21 +396,21 @@
                   style="display: none"
                 >
                   <div class="dropdown-options-content">
-                    <label
+                    <label class="vscode-checkbox"
                       ><input type="checkbox" id="reflect" />
                       <i class="codicon codicon-refresh"></i> Reflect</label
                     >
-                    <label
+                    <label class="vscode-checkbox"
                       ><input type="checkbox" id="attachTeXCount" />
                       <i class="codicon codicon-symbol-numeric"></i> Attach TeX
                       Count</label
                     >
-                    <label
+                    <label class="vscode-checkbox"
                       ><input type="checkbox" id="usePrefillFromInput" />
                       <i class="codicon codicon-edit"></i> Use Prefill from
                       Input</label
                     >
-                    <label
+                    <label class="vscode-checkbox"
                       ><input type="checkbox" id="printInputPrompt" />
                       <i class="codicon codicon-file-code"></i> Print Input
                       Prompt</label
@@ -460,6 +459,7 @@
           </div>
           <textarea
             id="instructionInput"
+            class="vscode-textarea"
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></textarea>
           <div class="model-selection-footer">
@@ -476,7 +476,7 @@
               </select>
             </div>
           </div>
-          <button id="executeButton">
+          <button id="executeButton" class="vscode-button primary">
             <i class="codicon codicon-play"></i> Execute
           </button>
         </div>
