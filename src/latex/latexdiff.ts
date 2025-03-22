@@ -256,9 +256,15 @@ export async function runLatexdiff(
       `"${editedFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel });
-    if (!result.success || !result.stdout) {
+    const result = await executeCommand(command, { channel, timeout: 10000 });
+    if (!result.success) {
+      if (result.timedOut) {
+        throw new Error('Latexdiff operation timed out after 10 seconds');
+      }
       throw new Error('Failed to run latexdiff');
+    }
+    if (!result.stdout) {
+      throw new Error('Latexdiff produced no output');
     }
 
     // Write the output to the diff file
@@ -320,8 +326,11 @@ export async function runLatexdiffvc(
       `"${inputFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel });
+    const result = await executeCommand(command, { channel, timeout: 10000 });
     if (!result.success) {
+      if (result.timedOut) {
+        throw new Error('Latexdiff-vc operation timed out after 10 seconds');
+      }
       throw new Error('Failed to run latexdiff-vc');
     }
 
