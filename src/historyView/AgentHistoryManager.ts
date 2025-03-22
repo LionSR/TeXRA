@@ -3,7 +3,6 @@ import { randomUUID } from 'crypto';
 
 import { AgentConfig } from '../agent/AgentConfig';
 
-
 /**
  * Represents a historical agent execution
  */
