@@ -79,9 +79,3 @@ body {
     transform: rotate(360deg);
   }
 }
-
-/* ProgressView specific disabled state */
-.vscode-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}

@@ -20,14 +20,8 @@ export function registerHistoryCommands(context: vscode.ExtensionContext) {
     },
   );
 
-  // Register webview provider for possible sidebar integration
-  const historyWebviewProvider = vscode.window.registerWebviewViewProvider(
-    AgentHistoryViewProvider.viewType,
-    historyViewProvider,
-  );
-
   // Add subscriptions
-  context.subscriptions.push(showHistoryCommand, historyWebviewProvider);
+  context.subscriptions.push(showHistoryCommand);
 
   return {
     historyViewProvider,
