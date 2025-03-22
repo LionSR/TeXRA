@@ -32,6 +32,7 @@ interface ExecResult {
   success: boolean;
   stdout: string | null;
   stderr: string | null;
+  timedOut?: boolean;
 }
 
 /**
@@ -45,6 +46,7 @@ export async function executeCommand(
     channel?: string;
     truncate?: boolean;
     env?: Record<string, string>;
+    timeout?: number;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -59,11 +61,14 @@ export async function executeCommand(
       `Running command: ${finalCommand}`,
     );
 
-    const { stdout, stderr } = await execAsync(finalCommand, {
+    const execOptions = {
       cwd: workspacePath,
       encoding: options.encoding || 'utf8',
       env: options.env ? { ...process.env, ...options.env } : process.env,
-    });
+      timeout: options.timeout,
+    };
+
+    const { stdout, stderr } = await execAsync(finalCommand, execOptions);
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>
@@ -103,6 +108,10 @@ export async function executeCommand(
       stderr = (err as any).stderr?.trim() || null;
     }
 
+    // Check if it's a timeout error
+    const isTimeout = err instanceof Error && 
+      (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('Timeout'));
+
     const shouldTruncate = options.truncate ?? false;
     return {
       success: false,
@@ -110,6 +119,7 @@ export async function executeCommand(
       stderr: shouldTruncate
         ? truncateOutput(stderr || errorMessage)
         : stderr || errorMessage,
+      timedOut: isTimeout,
     };
   }
 }
