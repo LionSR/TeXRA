@@ -6,7 +6,6 @@ From https://products.wolframalpha.com/llm-api/documentation
 Because the Wolfram|Alpha LLM API is designed to interact directly with LLMs and not with end users, additional prompting may be required for a given model to understand how to form good calls to the API. The sample prompt below may be a useful starting point. Additional prompting and/or training material may be necessary depending on the capabilities of a given model.
 ```
 
-
 ```
 - WolframAlpha understands natural language queries about entities in chemistry, physics, geography, history, art, astronomy, and more.
 - WolframAlpha performs mathematical calculations, date and unit conversions, formula solving, etc.
@@ -28,6 +27,3 @@ Because the Wolfram|Alpha LLM API is designed to interact directly with LLMs and
  -- ONLY simplify or rephrase the initial query if a more relevant 'Assumption' or other input suggestions are not provided.
  -- Do not explain each step unless user input is needed. Proceed directly to making a better API call based on the available assumptions.
 ```
-
-
-
