@@ -1,7 +1,8 @@
-import * as vscode from 'vscode';
-
+// external import
 import axios from 'axios';
-import { getApiKey } from './secretUtils';
+
+// local import
+import { getApiKey } from '../utils/secretUtils';
 
 interface WolframValves {
   WOLFRAM_APP_ID: string;
