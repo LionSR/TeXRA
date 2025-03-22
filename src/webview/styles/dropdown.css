@@ -33,6 +33,7 @@
   border: 1px solid var(--vscode-button-border);
   transition: background-color 0.2s;
   pointer-events: auto;
+  font-weight: normal;
 }
 
 .auto-toggle:hover {
@@ -73,7 +74,7 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: 200px;
   display: none;
-  font-size: calc(var(--font-size) * 0.8);
+  font-size: calc(var(--font-size) * 0.9);
   padding: 4px;
   white-space: nowrap;
 }
@@ -85,26 +86,18 @@
   border: 1px solid var(--vscode-input-border);
   border-radius: var(--border-radius);
   box-shadow: inset 0 0 0 1px var(--vscode-menu-border);
+  font-weight: normal;
 }
 
-/* Dropdown option labels */
-.dropdown-options label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* Dropdown option labels - special styles not covered by vscode-checkbox */
+.dropdown-options .vscode-checkbox {
   padding: 4px 8px;
-  color: var(--vscode-foreground);
-  cursor: pointer;
   border-radius: calc(var(--border-radius) - 1px);
   font-weight: normal;
 }
 
-.dropdown-options label:hover {
+.dropdown-options .vscode-checkbox:hover {
   background: var(--vscode-list-hoverBackground);
-}
-
-.dropdown-options input[type='checkbox'] {
-  margin: 0;
 }
 
 .dropdown-options i {
@@ -114,55 +107,4 @@
   opacity: 0.8;
 }
 
-/* Specific styles for auto-extract options (for backward compatibility) */
-.auto-extract-options {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 100;
-  margin-top: var(--spacing-tiny);
-  background: var(--background-color);
-  border: 1px solid var(--dropdown-border);
-  border-radius: var(--border-radius);
-  box-shadow: var(--vscode-widget-shadow);
-  min-width: 150px;
-  display: none;
-  font-size: calc(var(--font-size) * 0.8);
-  padding: 4px;
-  white-space: nowrap;
-}
-
-.auto-extract-options-content {
-  font-size: calc(var(--font-size) * 0.8);
-  background: var(--background-color);
-  border: 1px solid var(--input-border);
-  border-radius: var(--border-radius);
-  box-shadow: inset 0 0 0 1px var(--dropdown-border);
-}
-
-.auto-extract-options label {
-  font-size: calc(var(--font-size) * 0.8);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  color: var(--text-color);
-  cursor: pointer;
-  border-radius: calc(var(--border-radius) - 1px);
-  font-weight: normal;
-}
-
-.auto-extract-options label:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.auto-extract-options input[type='checkbox'] {
-  margin: 0;
-}
-
-.auto-extract-options i {
-  width: 16px;
-  text-align: center;
-  color: var(--icon-color);
-  opacity: 0.8;
-}
+/* Remove legacy auto-extract-options styles as they're merged into dropdown-options */
