@@ -25,8 +25,8 @@
 }
 
 /* Ensure all button sizes are consistent */
-.latexdiffs-section .icon-button,
-.file-select-actions .icon-button {
+.latexdiffs-section .vscode-button,
+.file-select-actions .vscode-button {
   width: 24px;
   height: 24px;
 }
