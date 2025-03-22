@@ -502,10 +502,13 @@ export class WebviewMessageHandler {
     webviewView: vscode.WebviewView,
   ) {
     const openedFiles = await this.getOpenedFiles();
+
+    // Send opened files to webview with a flag to filter out already selected files
     webviewView.webview.postMessage({
       command: 'setOpenedFiles',
       files: openedFiles,
       fileType: fileType,
+      shouldFilter: true,
     });
   }
 
