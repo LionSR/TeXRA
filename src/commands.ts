@@ -21,6 +21,7 @@ import { registerStateRestoreCommand } from './commands/stateRestoreCommand';
 import { registerTextEditorCommands } from './commands/textEditorCommands';
 import { registerLinterCommands } from './commands/linterCommands';
 import { registerWolframAlphaCommands } from './commands/wolframAlphaCommands';
+import { registerWolframScriptCommands } from './commands/wolframScriptCommands';
 import { registerHistoryCommands } from './commands/historyCommands';
 
 import * as logger from './logger/logUtils';
@@ -54,6 +55,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     textEditor: registerTextEditorCommands(context),
     linter: registerLinterCommands(context),
     wolframAlpha: registerWolframAlphaCommands(context),
+    wolframScript: registerWolframScriptCommands(context),
     history: registerHistoryCommands(context),
   };
 
@@ -91,4 +93,5 @@ export { stateRestoreCommand } from './commands/stateRestoreCommand';
 export { textEditorCommands } from './commands/textEditorCommands';
 export { linterCommands } from './commands/linterCommands';
 export { wolframAlphaCommands } from './commands/wolframAlphaCommands';
+export { wolframScriptCommands } from './commands/wolframScriptCommands';
 export { historyCommands } from './commands/historyCommands';
