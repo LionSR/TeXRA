@@ -10,9 +10,15 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   safeGetElementById,
+  safeGetElementChecked,
 } from './utils.js';
 import { restoreState, saveState } from './stateManager.js';
-import { MULTIPLE_SELECTIONS } from './constants.js';
+import {
+  MULTIPLE_SELECTIONS,
+  CHECK_BOXES_AUTO_EXTRACT,
+  CHECK_BOXES_TOOL_USE,
+  CHECK_BOXES,
+} from './constants.js';
 import { capitalize, uncapitalize } from './utils.js';
 
 /**
@@ -45,7 +51,56 @@ function handleStateRestoration(state) {
   if (state.outputNameOverride)
     safeSetElementValue('outputNameOverride', state.outputNameOverride);
 
-  // Handle multiple file selections
+  // Handle output name override visibility
+  const outputNameOverride = safeGetElementById('outputNameOverride');
+  const toggleOutputNameOverrideDiv = safeGetElementById(
+    'toggleOutputNameOverride',
+  );
+  if (state.outputNameOverrideVisible) {
+    if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
+    if (toggleOutputNameOverrideDiv)
+      toggleOutputNameOverrideDiv.textContent = '<';
+  } else {
+    if (outputNameOverride) outputNameOverride.style.display = 'none';
+    if (toggleOutputNameOverrideDiv)
+      toggleOutputNameOverrideDiv.textContent = '>';
+  }
+
+  // Prepare the state to save with all necessary properties
+  const toolConfig = state.toolConfig || {};
+  const savedState = {
+    // Basic properties
+    agent: state.agent,
+    model: state.model,
+    instruction: state.instruction,
+
+    // File selections
+    inputFile: state.inputFile,
+    referenceFile: state.referenceFile,
+    auxiliaryFile: state.auxiliaryFile,
+    figureFile: state.figureFile,
+    outputNameOverride: state.outputNameOverride,
+    outputNameOverrideVisible: state.outputNameOverrideVisible,
+
+    // Tool config settings - flattened from either direct or toolConfig property
+    reflect: state.reflect || (toolConfig ? toolConfig.reflect : false),
+    autoExtractFigure:
+      state.autoExtractFigure ||
+      (toolConfig ? toolConfig.autoExtractFigure : false),
+    autoExtractTikzFigure:
+      state.autoExtractTikzFigure ||
+      (toolConfig ? toolConfig.autoExtractTikzFigure : false),
+    attachTeXCount:
+      state.attachTeXCount || (toolConfig ? toolConfig.attachTeXCount : false),
+    usePrefillFromInput:
+      state.usePrefillFromInput ||
+      (toolConfig ? toolConfig.usePrefillFromInput : false),
+    printInputPrompt:
+      state.printInputPrompt ||
+      (toolConfig ? toolConfig.printInputPrompt : false),
+  };
+
+  // Multiple file selections constants
   const multipleFileTypes = [
     'input',
     'reference',
@@ -54,6 +109,7 @@ function handleStateRestoration(state) {
     'output',
   ];
 
+  // Process multiple file selections
   for (const fileType of multipleFileTypes) {
     // Handle both formats (inputFiles and multipleInputFiles)
     const filesArray =
@@ -63,6 +119,12 @@ function handleStateRestoration(state) {
     const isVisible = state[`multiple${capitalize(fileType)}FilesVisible`];
     const toggleId = `toggleMultiple${capitalize(fileType)}Files`;
     const containerId = `multiple${capitalize(fileType)}FilesContainer`;
+
+    // Save to the state object for later use by restoreState
+    const targetArrayName = `multiple${capitalize(fileType)}Files`;
+    const visibilityName = `${targetArrayName}Visible`;
+    savedState[targetArrayName] = filesArray;
+    savedState[visibilityName] = isVisible !== undefined ? isVisible : false;
 
     // Get current UI state to see if we have existing files
     const multipleFilesId = `multiple${capitalize(fileType)}Files`;
@@ -125,82 +187,23 @@ function handleStateRestoration(state) {
         });
       }
     }
-    // Handle output name override visibility
-    const outputNameOverride = safeGetElementById('outputNameOverride');
-    const toggleOutputNameOverrideDiv = safeGetElementById(
-      'toggleOutputNameOverride',
-    );
-    if (state.outputNameOverrideVisible) {
-      if (outputNameOverride) outputNameOverride.style.display = 'inline-block';
-      if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.textContent = '<';
-    } else {
-      if (outputNameOverride) outputNameOverride.style.display = 'none';
-      if (toggleOutputNameOverrideDiv)
-        toggleOutputNameOverrideDiv.textContent = '>';
-    }
-
-    // Save the state to preserve across page refreshes
-    // Here we normalize the naming to match what the system expects
-    const savedState = {
-      ...vscode.getState(),
-      agent: state.agent,
-      model: state.model,
-      instruction: state.instruction,
-      inputFile: state.inputFile,
-      referenceFile: state.referenceFile,
-      auxiliaryFile: state.auxiliaryFile,
-      figureFile: state.figureFile,
-      outputNameOverride: state.outputNameOverride,
-      outputNameOverrideVisible: state.outputNameOverrideVisible,
-      reflect:
-        state.reflect || (state.toolConfig ? state.toolConfig.reflect : false),
-      autoExtractFigure:
-        state.autoExtractFigure ||
-        (state.toolConfig ? state.toolConfig.autoExtractFigure : false),
-      autoExtractTikzFigure:
-        state.autoExtractTikzFigure ||
-        (state.toolConfig ? state.toolConfig.autoExtractTikzFigure : false),
-      attachTeXCount:
-        state.attachTeXCount ||
-        (state.toolConfig ? state.toolConfig.attachTeXCount : false),
-      usePrefillFromInput:
-        state.usePrefillFromInput ||
-        (state.toolConfig ? state.toolConfig.usePrefillFromInput : false),
-      printInputPrompt:
-        state.printInputPrompt ||
-        (state.toolConfig ? state.toolConfig.printInputPrompt : false),
-    };
-
-    // Normalize file array names (support both formats)
-    for (const fileType of multipleFileTypes) {
-      const sourceArrayName = `${fileType}Files`;
-      const targetArrayName = `multiple${capitalize(fileType)}Files`;
-      const visibilityName = `${targetArrayName}Visible`;
-
-      savedState[targetArrayName] =
-        state[sourceArrayName] || state[targetArrayName] || [];
-      if (state[visibilityName] !== undefined) {
-        savedState[visibilityName] = state[visibilityName];
-      }
-    }
-
-    // Store the normalized state
-    vscode.setState(savedState);
-
-    // Prevent the automatic restoreState at the end of the message handler from overriding our changes
-    window._skipNextRestoreState = true;
-
-    // Show a toast notification
-    vscode.postMessage({
-      command: 'showInformationMessage',
-      text: 'Configuration restored from selected task',
-    });
   }
 
-  // checkboxes are not being restored for now
+  // Save the prepared state
+  vscode.setState(savedState);
 
-  saveState();
+  // Use the stateManager's restoreState to update UI elements from this state
+  // This will handle setting all form values and updating indicators
+  restoreState();
+
+  // Let the user know we've restored their configuration
+  vscode.postMessage({
+    command: 'showInformationMessage',
+    text: 'Configuration restored from selected task',
+  });
+
+  // Prevent the automatic restoreState that would happen at the end of the message handler
+  window._skipNextRestoreState = true;
 }
 
 export function setupMessageHandlers() {

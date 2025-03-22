@@ -109,7 +109,8 @@ export async function executeCommand(
     }
 
     // Check if it's a timeout error
-    const isTimeout = err instanceof Error && 
+    const isTimeout =
+      err instanceof Error &&
       (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('Timeout'));
 
     const shouldTruncate = options.truncate ?? false;
