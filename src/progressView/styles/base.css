@@ -81,7 +81,7 @@ body {
 }
 
 /* ProgressView specific disabled state */
-.action-button:disabled {
+.vscode-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
