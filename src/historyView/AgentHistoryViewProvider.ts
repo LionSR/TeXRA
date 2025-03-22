@@ -21,7 +21,7 @@ logger.initialize(CHANNEL);
 export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coauthor.historyView';
   private _view?: vscode.WebviewPanel;
-  
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   /**
@@ -124,7 +124,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
   private async updateWebviewContent() {
     if (this._view) {
       this._view.webview.html = this.getWebviewContent();
-      
+
       // Send history data after a short delay to ensure the webview is ready
       setTimeout(() => this.sendHistoryData(), 100);
     }
@@ -166,15 +166,14 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         .replace('${styleUri}', styleUri.toString())
         .replace(
           '${commonStyleUri}',
-          this._view ? this._view.webview.asWebviewUri(commonStyleUri).toString() : '',
+          this._view
+            ? this._view.webview.asWebviewUri(commonStyleUri).toString()
+            : '',
         )
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${domHandlersUri}', domHandlersUri.toString())
         .replace(/\${nonce}/g, nonce)
-        .replace(
-          /\${cspSource}/g,
-          this._view?.webview.cspSource || '',
-        );
+        .replace(/\${cspSource}/g, this._view?.webview.cspSource || '');
     } catch (error) {
       console.error('Error generating HTML content:', error);
       return `<html><body><h1>Error loading history view</h1><p>${error}</p></body></html>`;
@@ -188,7 +187,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     if (!this._view) {
       throw new Error('Webview is not available');
     }
-    
+
     const diskPath = vscode.Uri.joinPath(
       this.context.extensionUri,
       'src',
