@@ -40,7 +40,7 @@ export class WolframAlphaClient {
    */
   async initialize(): Promise<void> {
     try {
-      this.appId = await getApiKey('wolfram');
+      this.appId = await getApiKey('wolframllmapp');
     } catch (error) {
       console.error('Failed to get Wolfram Alpha API key:', error);
       throw error;

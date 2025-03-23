@@ -35,7 +35,7 @@ export const API_PROVIDERS = [
   'google',
   'xai',
   'deepseek',
-  'wolfram',
+  'wolframllmapp',
 ] as const;
 export type ApiProvider = (typeof API_PROVIDERS)[number];
 
