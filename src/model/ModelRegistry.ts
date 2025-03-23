@@ -354,6 +354,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 5.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsNativePdf: true,
       supportsVision: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
