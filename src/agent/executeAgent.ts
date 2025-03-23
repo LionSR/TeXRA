@@ -1,10 +1,9 @@
 // Standard library imports
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { glob } from 'glob';
 
 // Third-party imports
-// (none needed)
+import { glob } from 'glob';
 
 // Local imports - utilities
 import {
@@ -17,7 +16,7 @@ import { agentConfigToTaskState } from '../utils/configConversion';
 import { AgentConfig, createAgentConfig } from './AgentConfig';
 import { AgentSetting, AgentPrompt } from './AgentDataclass';
 import { loadAgentSettingAndPrompts } from './agentLoad';
-import { MODEL_CONFIGS } from './ModelRegistry';
+import { MODEL_CONFIGS } from '../model/ModelRegistry';
 import { ModelFactory } from './ModelFactory';
 import { DirectAgent } from './DirectAgent';
 import { CoTAgent } from './CoTAgent';
