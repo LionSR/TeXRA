@@ -49,7 +49,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   private registerCommands() {
-    if (!this.context) return;
+    if (!this.context) {
+      return;
+    }
 
     // Register commands for new file/folder creation
     this.context.subscriptions.push(
@@ -197,7 +199,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   private async startRename(item: FileItem) {
-    if (!item) return;
+    if (!item) {
+      return;
+    }
 
     // Prevent renaming built-in files/folders
     if (item.isBuiltIn) {
@@ -216,9 +220,12 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
       value: item.label,
       prompt: `Enter new name for ${item.label}`,
       validateInput: (value) => {
-        if (!value) return 'Name cannot be empty';
-        if (value.includes('/') || value.includes('\\'))
+        if (!value) {
+          return 'Name cannot be empty';
+        }
+        if (value.includes('/') || value.includes('\\')) {
           return 'Name cannot contain path separators';
+        }
         return null;
       },
     });
@@ -439,7 +446,9 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   private async deleteItem(item: FileItem) {
-    if (!item) return;
+    if (!item) {
+      return;
+    }
 
     // Prevent deleting built-in files/folders
     if (item.isBuiltIn) {

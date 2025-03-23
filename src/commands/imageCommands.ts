@@ -154,7 +154,9 @@ async function handleConvertPdfToImages(): Promise<
     const maxPages = await vscode.window.showInputBox({
       prompt: 'Enter maximum number of pages to convert (default: all)',
       validateInput: (value) => {
-        if (!value) return null;
+        if (!value) {
+          return null;
+        }
         const num = parseInt(value);
         return num > 0 ? null : 'Please enter a positive number';
       },

@@ -8,11 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utilities
-import {
-  deleteFile,
-  readDirectory,
-  fileExists,
-} from '../utils/workspaceFileUtils';
+import { deleteFile, readDirectory } from '../utils/workspaceFileUtils';
 import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import { getConfig } from '../utils/configUtils';
 import { executeCommand } from '../utils/execUtils';
