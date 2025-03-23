@@ -288,7 +288,14 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
 
     // Unusal line/paragraph separators (Gemini problem)
     '/[\u2028\u2029]/g': '\n',
-    '\\frac12': '\\ha',
+
+    '{\\align}': '{align}',
+    '{\\equation}': '{equation}',
+    '{\\itemize}': '{itemize}',
+    '{\\enumerate}': '{enumerate}',
+    '{\\figure}': '{figure}',
+    '{\\tikzpicture}': '{tikzpicture}',
+    '{\\document}': '{document}',
   },
 };
 
@@ -527,6 +534,16 @@ const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
     'machine learning task': 'machine-learning task',
     // UK vs US spelling
     analogue: 'analog',
+
+    // for passing chktex
+    'Appendix \\ref{': 'Appendix~\\ref{',
+    'Section \\ref{': 'Section~\\ref{',
+    'Figure \\ref{': 'Figure~\\ref{',
+    'Table \\ref{': 'Table~\\ref{',
+    'Equation \\ref{': 'Equation~\\ref{',
+    'Theorem \\ref{': 'Theorem~\\ref{',
+    'Lemma \\ref{': 'Lemma~\\ref{',
+    'Corollary \\ref{': 'Corollary~\\ref{',
   },
 };
 
@@ -609,6 +626,8 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\hat{\\mathbf{n}}': '\\hbn',
     '\\hat{\\mathbf{v}}': '\\hbv',
     '\\hat{\\boldsymbol{\\zeta}}': '\\hbze',
+
+    '\\frac12': '\\ha',
 
     // Mathcal Letters
     '\\mathcal{A}': '\\cA',

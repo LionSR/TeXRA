@@ -58,8 +58,39 @@ async function processDiffFile(
 ): Promise<void> {
   try {
     const content = await readFile(diffFileName);
-    const lines = content.split('\n');
 
+    // Process the content to remove labels from star environments
+    let processedContent = content;
+    const starEnvironments = [
+      'align\\*',
+      'equation\\*',
+      'gather\\*',
+      'multline\\*',
+      'flalign\\*',
+      'alignat\\*',
+    ];
+
+    // Create a pattern that matches any of the star environments
+    const envPattern = starEnvironments.join('|');
+
+    // This regex finds star environments and captures their content
+    const starEnvRegex = new RegExp(
+      `\\\\begin\\{(${envPattern})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
+      'g',
+    );
+
+    // Replace labels inside star environments
+    processedContent = processedContent.replace(
+      starEnvRegex,
+      (match, envName, content) => {
+        // Remove \label{...} from the environment content
+        const cleanContent = content.replace(/\\label\{[^}]*\}/g, '');
+        return `\\begin{${envName}}${cleanContent}\\end{${envName}}`;
+      },
+    );
+
+    // Now handle the rest of the processing
+    const lines = processedContent.split('\n');
     let newContent = '';
     let addBlock = false;
     const packagesToAddNewline = [
