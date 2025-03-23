@@ -1,5 +1,7 @@
 // Local imports - agent components
-import { ModelConfig, ModelProvider } from './ModelConfig';
+import { ModelConfig, ModelProvider } from '../model';
+
+// Local imports - model handlers
 import { ModelHandler } from './ModelHandler';
 import { ModelHandlerAnthropic } from './modelHandlerAnthropic';
 import { ModelHandlerGoogle } from './modelHandlerGoogle';
@@ -9,6 +11,8 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
 } from './modelHandlerOpenRouter';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+
+// Local imports - utils
 import { getConfig } from '../utils/configUtils';
 
 /** Factory class for instantiating appropriate model handlers based on configuration. */
