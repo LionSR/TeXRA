@@ -864,10 +864,10 @@ const TIKZ_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'gms',
   patterns: {
-    '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
-      '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
     '\\end{document}\\s*\\chapter': '\\chapter',
     '\\end{document}\\s*\\addcontentsline': '\\addcontentsline',
+    '(?<indent>[\\t ]*)}\s*\\end{tikzpicture};\s*\\end{tikzpicture}':
+      '${indent}\\end{tikzpicture}\n${indent}};\n${indent}\\end{tikzpicture}',
     '}(\\s*)\\end{tikzpicture};': '};$1\\end{tikzpicture}',
     '}(\\s*)\\end{tikzpicture}\\DIFaddendFL ;':
       '$1\\end{tikzpicture}};\DIFaddendFL',
