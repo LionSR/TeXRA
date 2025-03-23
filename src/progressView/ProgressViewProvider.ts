@@ -296,7 +296,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _updateWebview() {
-    if (!this._view) return;
+    if (!this._view) {
+      return;
+    }
 
     const streams = Array.from(this._logStreams.keys());
 
@@ -446,10 +448,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     }
 
     const streamGroups = this._logGroups.get(stream);
-    if (!streamGroups) return;
+    if (!streamGroups) {
+      return;
+    }
 
     const group = streamGroups.get(groupId);
-    if (!group) return;
+    if (!group) {
+      return;
+    }
 
     group.status = status;
     if (endTime) {
@@ -470,7 +476,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public updateLogContent(stream: string) {
-    if (!this._view) return;
+    if (!this._view) {
+      return;
+    }
 
     // If no stream is provided or stream doesn't exist, use the first available stream
     if (!stream || !this._logStreams.has(stream)) {
@@ -478,7 +486,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       stream = streams[0] || '';
     }
 
-    if (!this._logStreams.has(stream)) return;
+    if (!this._logStreams.has(stream)) {
+      return;
+    }
 
     const messages = this._logStreams.get(stream)!;
     // Filter debug messages if verbose output is disabled

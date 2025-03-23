@@ -211,7 +211,9 @@ export class OutputHandler {
     }
 
     for (const targetFile of targetFiles) {
-      if (!targetFile) continue;
+      if (!targetFile) {
+        continue;
+      }
 
       const targetBaseName = path.basename(targetFile);
 
@@ -220,7 +222,9 @@ export class OutputHandler {
       let bestMatchScore = 0;
 
       for (const sourceFile of sourceFiles) {
-        if (!sourceFile) continue;
+        if (!sourceFile) {
+          continue;
+        }
 
         const sourceBaseName = path.basename(sourceFile);
 
@@ -304,7 +308,9 @@ export class OutputHandler {
     }
 
     for (const outputFile of outputFiles) {
-      if (!outputFile) continue;
+      if (!outputFile) {
+        continue;
+      }
 
       try {
         const content = await readFile(outputFile);
