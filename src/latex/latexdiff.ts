@@ -160,14 +160,31 @@ async function processTikzPictureEndings(
   const patterns = [
     [/\\end\{document\}\s*\\chapter/g, '\\chapter'],
     [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
+  ];
+
+  const patterns_scope_tikzpicture = [
+    // Fix cases where }; appears before \end{tikzpicture}
+    [/\};(\s*)\\end\{tikzpicture\}/g, '\\end{tikzpicture}\\};'],
+    // Original patterns
     [/\}(\s*)\\end\{tikzpicture\};/g, '};$1\\end{tikzpicture}'],
     [
       /\}(\s*)\\end\{tikzpicture\}\\DIFaddendFL ;/g,
       '$1\\end{tikzpicture}};\\DIFaddendFL',
     ],
+    // Handle node closures with tikzpicture
+    [/\};(\s*)\\end\{tikzpicture\}(\s*)\};/g, '\\end{tikzpicture}$1\\};$2\\};'],
+    // Handle semicolons inside tikzpicture that should be after the environment
+    [
+      /\\begin\{tikzpicture\}(.*?)(\};)(\s*)\\end\{tikzpicture\}/gs,
+      '\\begin{tikzpicture}$1\\end{tikzpicture}$3$2',
+    ],
   ];
 
   for (const [pattern, replacement] of patterns) {
+    newContent = newContent.replace(pattern, replacement as string);
+  }
+
+  for (const [pattern, replacement] of patterns_scope_tikzpicture) {
     newContent = newContent.replace(pattern, replacement as string);
   }
 
@@ -286,7 +303,10 @@ export async function runLatexdiff(
       '--flatten',
       '--encoding=utf8',
       '-c',
-      '"PICTUREENV=(?:picture|tikzpicture|DIFnomarkup)[\\w\\d*@]*"',
+      '"PICTUREENV=(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*"',
+      // '"PICTUREENV=(?:picture|scope|DIFnomarkup)[\\w\\d*@]*"',
+      // '--math-markup=whole',
+      // '"MATHENV=(?:tikzpicture)"',
       `"${inputFile}"`,
       `"${editedFile}"`,
     ];
