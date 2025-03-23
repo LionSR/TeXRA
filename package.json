@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.24.4",
+  "version": "0.24.5",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -849,7 +849,7 @@
     "@types/difflib": "^0.2.7",
     "@types/marked": "^5.0.2",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^18.19.68",
+    "@types/node": "^20.17.25",
     "@types/nunjucks": "^3.2.5",
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
@@ -865,7 +865,7 @@
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^6.0.1"
   },
   "repository": {
     "type": "git",
@@ -895,7 +895,7 @@
     "diff-match-patch": "^1.0.5",
     "difflib": "^0.2.4",
     "fast-xml-parser": "^5.0.9",
-    "glob": "^10.4.5",
+    "glob": "^11.0.1",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
     "openai": "^4.86.1",
