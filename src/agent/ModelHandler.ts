@@ -24,7 +24,11 @@ import {
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
-import { ModelConfig, ModelProvider, ModelCapabilities } from './ModelConfig';
+import {
+  ModelConfig,
+  ModelProvider,
+  ModelCapabilities,
+} from '../model/ModelConfig';
 import { ToolState } from './ToolState';
 
 // Default continuation limits
