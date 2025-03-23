@@ -32,7 +32,9 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    if (!responseObject) return null;
+    if (!responseObject) {
+      return null;
+    }
 
     // Extract reasoning content from Deepseek response
     let reasoningContent = null;
@@ -71,7 +73,9 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
         // Nevertheless one can include one in a bare way...
       }
     }
-    if (!reasoningContent) return null;
+    if (!reasoningContent) {
+      return null;
+    }
 
     // Log preview of thinking content (assuming it's a string)
     this.logger.debug(

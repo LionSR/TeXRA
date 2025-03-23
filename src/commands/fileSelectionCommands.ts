@@ -139,7 +139,9 @@ async function selectMultipleInputFiles(
       },
     });
 
-    if (!fileUris || fileUris.length === 0) return null;
+    if (!fileUris || fileUris.length === 0) {
+      return null;
+    }
 
     // Simplified path handling: just use the full relative path
     const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));

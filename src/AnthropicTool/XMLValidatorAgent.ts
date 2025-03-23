@@ -1,5 +1,4 @@
-// Standard library imports
-import * as vscode from 'vscode';
+// Standard library imports - (none)
 
 // Third-party imports
 import { XMLValidator } from 'fast-xml-parser';

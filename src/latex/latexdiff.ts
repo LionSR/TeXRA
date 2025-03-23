@@ -171,8 +171,12 @@ export async function runLatexdiff(
 
     if (runIndent) {
       const indentResults = [];
-      if (!(await runLatexIndent(inputFile))) indentResults.push(inputFile);
-      if (!(await runLatexIndent(editedFile))) indentResults.push(editedFile);
+      if (!(await runLatexIndent(inputFile))) {
+        indentResults.push(inputFile);
+      }
+      if (!(await runLatexIndent(editedFile))) {
+        indentResults.push(editedFile);
+      }
       if (indentResults.length > 0) {
         logger.warn(
           channel,

@@ -59,7 +59,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    if (!responseObject) return null;
+    if (!responseObject) {
+      return null;
+    }
 
     // According to OpenRouter docs, reasoning is available at choices[0].message.reasoning
     if (

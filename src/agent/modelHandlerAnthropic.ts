@@ -723,7 +723,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
     groupId?: string,
     toolState?: ToolState,
   ): string | null {
-    if (!responseObject) return null;
+    if (!responseObject) {
+      return null;
+    }
 
     // Extract all thinking blocks from the response
     const thinkingBlocks = [];
@@ -749,7 +751,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
       return null;
     }
 
-    if (thinkingBlocks.length === 0) return null;
+    if (thinkingBlocks.length === 0) {
+      return null;
+    }
 
     this.logger.debug(
       `Found ${thinkingBlocks.length} thinking blocks`,
