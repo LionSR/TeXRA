@@ -240,7 +240,9 @@ export function formatAndLogContent(
   contentType: string = 'Scratchpad',
   groupId?: string,
 ): void {
-  if (!content) return;
+  if (!content) {
+    return;
+  }
 
   // Log original content for debugging
   console.log(

@@ -19,7 +19,7 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
 } from './utils.js';
-import { capitalize, uncapitalize } from './utils.js';
+import { capitalize } from './utils.js';
 
 export function setDefaultState() {
   // Hide output name override by default

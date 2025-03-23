@@ -101,8 +101,12 @@ export async function getTeXCount(
         logger.debug(channel, `Successfully counted ${filePath}`);
       } else {
         logger.error(channel, `Error getting tex count for ${filePath}`);
-        if (result.stdout) logger.error(channel, `Stdout: ${result.stdout}`);
-        if (result.stderr) logger.error(channel, `Stderr: ${result.stderr}`);
+        if (result.stdout) {
+          logger.error(channel, `Stdout: ${result.stdout}`);
+        }
+        if (result.stderr) {
+          logger.error(channel, `Stderr: ${result.stderr}`);
+        }
       }
     }
 

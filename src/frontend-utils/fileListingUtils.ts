@@ -26,7 +26,9 @@ export function getFilesIfNotEmpty<T>(files: T[] | undefined): T[] | null {
 
 export async function listInputFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (!workspacePath) return [];
+  if (!workspacePath) {
+    return [];
+  }
 
   const INCLUDED_INPUT_EXTENSIONS = getConfig<string[]>(
     'files.included.inputExtensions',
@@ -47,7 +49,9 @@ export const listReferenceFiles = listInputFiles;
 
 export async function listAuxiliaryFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (!workspacePath) return [];
+  if (!workspacePath) {
+    return [];
+  }
 
   const IGNORED_AUXILIARY_KEYWORDS = getConfig<string[]>(
     'files.ignored.auxiliaryKeywords',
@@ -68,7 +72,9 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
 
 export async function listFigureFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (!workspacePath) return [];
+  if (!workspacePath) {
+    return [];
+  }
 
   const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
     'files.ignored.figureDirectories',
@@ -90,7 +96,9 @@ export async function listFigureFiles(): Promise<string[]> {
 
 export async function listEditedFiles(baseFileName: string): Promise<string[]> {
   const workspacePath = getWorkspacePath();
-  if (!workspacePath) return [];
+  if (!workspacePath) {
+    return [];
+  }
 
   const INCLUDED_EDITED_EXTENSIONS = getConfig<string[]>(
     'files.included.editedExtensions',
