@@ -1,5 +1,4 @@
-// Standard library imports
-import * as vscode from 'vscode';
+// Standard library imports - (none)
 
 // Local imports - core
 import { AnthropicToolAgent } from './AnthropicToolAgent';

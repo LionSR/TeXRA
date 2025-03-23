@@ -203,7 +203,9 @@ class VSCodeTransport extends Transport {
   // End the current group
   endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
     const group = this.groups.get(groupId);
-    if (!group) return;
+    if (!group) {
+      return;
+    }
 
     const now = new Date();
     group.endTime = now.toISOString();

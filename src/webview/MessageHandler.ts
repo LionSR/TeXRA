@@ -577,7 +577,9 @@ export class WebviewMessageHandler {
         },
       });
 
-      if (!fileUris || fileUris.length === 0) return null;
+      if (!fileUris || fileUris.length === 0) {
+        return null;
+      }
 
       const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
       logger.info(
