@@ -27,7 +27,8 @@ prompts:
   userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
     <documents>
-    {{ AUXILIARY_FILES }}
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}

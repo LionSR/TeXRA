@@ -47,7 +47,8 @@ prompts:
     Here is the LaTeX document with input files (which may include appendix and LaTeX auxiliary files that define math commands):
 
     <documents>
-    {{ AUXILIARY_FILES }}
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
