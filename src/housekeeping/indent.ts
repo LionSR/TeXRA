@@ -19,8 +19,20 @@ import { EXCLUDED_DIRS } from './constants';
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
-export async function runIndentTeX(): Promise<void> {
-  logger.debug(CHANNEL, 'Starting LaTeX indentation process');
+/**
+ * Indents LaTeX files in a specific directory and its subdirectories
+ * @param directory The directory to process (relative to workspace). If not provided, uses the root.
+ * @param progressCallback Optional callback for progress updates
+ * @returns Promise<number> The number of files indented
+ */
+export async function indentLatexFilesInDirectory(
+  directory: string = '.',
+  progressCallback?: (message: string, increment?: number) => void,
+): Promise<number> {
+  logger.debug(
+    CHANNEL,
+    `Starting LaTeX indentation process for directory: ${directory}`,
+  );
 
   const config = getConfig<string>('latex.latexindentConfig', '');
   logger.debug(CHANNEL, `LaTeX indent config: ${config}`);
@@ -36,9 +48,11 @@ export async function runIndentTeX(): Promise<void> {
       vscode.window.showErrorMessage(
         `Latexindent config file not found at ${config}`,
       );
-      return;
+      return 0;
     }
   }
+
+  let indentedCount = 0;
 
   const processDirectory = async (dirPath: string) => {
     try {
@@ -56,6 +70,10 @@ export async function runIndentTeX(): Promise<void> {
         if (type === vscode.FileType.Directory) {
           await processDirectory(fullPath);
         } else if (type === vscode.FileType.File && name.endsWith('.tex')) {
+          if (progressCallback) {
+            progressCallback(`Indenting ${path.basename(fullPath)}...`, 0);
+          }
+
           logger.debug(CHANNEL, `Processing file: ${fullPath}`);
           try {
             const command = [
@@ -81,6 +99,7 @@ export async function runIndentTeX(): Promise<void> {
               logger.debug(CHANNEL, `Command stderr: ${result.stderr}`);
             }
             logger.info(CHANNEL, `Successfully indented: ${fullPath}`);
+            indentedCount++;
           } catch (err) {
             logger.error(CHANNEL, `Error indenting file ${fullPath}: ${err}`);
             continue;
@@ -93,7 +112,7 @@ export async function runIndentTeX(): Promise<void> {
   };
 
   try {
-    await processDirectory('.');
+    await processDirectory(directory);
 
     // Clean up temporary files recursively
     const processCleanup = async (dirPath: string) => {
@@ -132,12 +151,24 @@ export async function runIndentTeX(): Promise<void> {
       }
     };
 
-    // Start cleanup from workspace root
-    await processCleanup('.');
+    // Start cleanup from the specified directory
+    await processCleanup(directory);
 
-    logger.info(CHANNEL, 'All .tex files have been indented');
+    logger.info(
+      CHANNEL,
+      `${indentedCount} .tex files have been indented in ${directory}`,
+    );
+    return indentedCount;
   } catch (err) {
     logger.error(CHANNEL, `Error during indentation process: ${err}`);
     vscode.window.showErrorMessage(`Error during indentation: ${err}`);
+    return 0;
   }
+}
+
+/**
+ * Indents all LaTeX files in the workspace
+ */
+export async function runIndentTeX(): Promise<void> {
+  await indentLatexFilesInDirectory('.');
 }
