@@ -33,7 +33,8 @@ prompts:
     Here are the input files and document:
 
     <documents>
-    {{ AUXILIARY_FILES }}
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
     {{ ADDITIONAL_INPUTS }}
     <document name="{{ INPUT_FILE }}">
     {{ INPUT_CONTENT }}
