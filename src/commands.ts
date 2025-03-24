@@ -23,6 +23,7 @@ import { registerLinterCommands } from './commands/linterCommands';
 import { registerWolframAlphaCommands } from './commands/wolframAlphaCommands';
 import { registerWolframScriptCommands } from './commands/wolframScriptCommands';
 import { registerHistoryCommands } from './commands/historyCommands';
+import { registerArXivCommands } from './commands/arXivCommands';
 
 import * as logger from './logger/logUtils';
 
@@ -57,6 +58,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     wolframAlpha: registerWolframAlphaCommands(context),
     wolframScript: registerWolframScriptCommands(context),
     history: registerHistoryCommands(context),
+    arXiv: registerArXivCommands(context),
   };
 
   // Register webview provider
@@ -95,3 +97,4 @@ export { linterCommands } from './commands/linterCommands';
 export { wolframAlphaCommands } from './commands/wolframAlphaCommands';
 export { wolframScriptCommands } from './commands/wolframScriptCommands';
 export { historyCommands } from './commands/historyCommands';
+export { arXivCommands } from './commands/arXivCommands';
