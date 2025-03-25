@@ -343,6 +343,25 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== Google Gemini Models =====
+  gemini25p: {
+    name: 'gemini25p',
+    fullName: 'gemini-2.5-pro-exp-03-25',
+    openrouterFullName: 'google/gemini-2.5-pro-exp-03-25',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 64000,
+    contextWindow: 1000000,
+    inputPrice: 1.25,
+    outputPrice: 5.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsNativePdf: true,
+      supportsVision: true,
+      supportsReasoning: true,
+      reasoningEffort: ReasoningEffort.HIGH,
+      supportsReasoningEffort: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   gemini2p: {
     name: 'gemini2p',
     fullName: 'gemini-2.0-pro-exp-02-05',

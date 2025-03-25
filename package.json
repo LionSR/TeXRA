@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.24.8",
+  "version": "0.24.9",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -60,6 +60,7 @@
               "gpt45",
               "gpt4o",
               "gpt4ol",
+              "gemini25p",
               "gemini2p",
               "gemini2f",
               "gemini2fT",
