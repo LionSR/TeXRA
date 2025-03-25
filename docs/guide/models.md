@@ -205,6 +205,14 @@ Instruction: Fix typos and minor grammatical issues throughout the document.
 
 Google's Gemini models offer strong performance with competitive pricing and excellent multimodal capabilities.
 
+### Gemini 2.5 Pro (gemini25p)
+
+**Key Features:**
+
+- Strong reasoning abilities
+- Excellent image understanding
+- Large context window
+
 ### Gemini 2.0 Pro (gemini2p)
 
 **Key Features:**

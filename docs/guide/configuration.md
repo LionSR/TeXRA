@@ -48,6 +48,7 @@ Define which AI models appear in the model selection dropdown:
   "gpt45",
   "gpt4o",
   "gpt4ol",
+  "gemini25p",
   "gemini2p",
   "gemini2f",
   "gemini2fT",
