@@ -49,6 +49,7 @@ export const MODELS = [
   'gpt4o',
   'gpt4o-',
   'gpt4t',
+  'gemini25p',
   'gemini2p',
   'gemini2fT',
   'gemini2f',

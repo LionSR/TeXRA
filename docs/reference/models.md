@@ -327,7 +327,7 @@ From fastest to slowest:
 1. `gemini2f`, `haiku35`
 2. `gpt4o-`, `sonnet35`
 3. `gpt4o`, `sonnet37`
-4. `opus`, `o1`
+4. `opus`, `o1`, `gemini25p`
 
 ### 3. Cost Considerations
 
@@ -415,6 +415,7 @@ For long responses or reasoning-heavy models, you can enable streaming to see in
 | Paper to slides      | `sonnet37`        | `gemini2p`  |
 | Merging documents    | `sonnet37`        | `gpt4o`     |
 | Mathematical content | `o1`              | `sonnet37T` |
+| Mathematical content | `gemini25p`       | `sonnet37T` |
 
 ## Next Steps
 
