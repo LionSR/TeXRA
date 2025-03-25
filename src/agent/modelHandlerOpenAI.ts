@@ -75,7 +75,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
       useStreaming =
         useStreaming ||
         getConfig<boolean>('model.useStreamingOpenAIReasoning', false);
-      if (this.config.capabilities.supportsReasoningEffort) {
+      if (
+        this.config.capabilities.supportsReasoningEffort &&
+        this.config.capabilities.reasoningEffort
+      ) {
         kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
       }
     }
