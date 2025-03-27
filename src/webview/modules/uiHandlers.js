@@ -171,16 +171,17 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('eraseInstructionsButton', 'click', function () {
-    const instructionInput = safeGetElementById('instructionInput');
-    if (instructionInput) {
-      instructionInput.value = '';
+    const instruction = safeGetElementById('instruction');
+    if (instruction) {
+      instruction.value = '';
+      autoResizeTextarea(instruction);
       saveState();
     }
   });
 
   addEventListenerSafely('magicPolishButton', 'click', function () {
-    const instructionInput = safeGetElementById('instructionInput');
-    if (instructionInput && instructionInput.value.trim()) {
+    const instruction = safeGetElementById('instruction');
+    if (instruction && instruction.value.trim()) {
       // Get agent and model information
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
@@ -242,7 +243,7 @@ export function setupUIHandlers() {
 
       vscode.postMessage({
         command: 'polishInstructionText',
-        text: instructionInput.value,
+        text: instruction.value,
         // Context information
         agent: agent,
         model: model,
@@ -308,7 +309,7 @@ export function setupUIHandlers() {
         ? outputNameOverrideDiv.value.trim()
         : null;
 
-    const instruction = safeGetElementValue('instructionInput');
+    const instruction = safeGetElementValue('instruction');
 
     // auto extract options
     const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
@@ -510,13 +511,13 @@ export function setupUIHandlers() {
   });
 
   ELEMENTS_TO_SAVE.forEach((id) => {
-    if (id !== 'instructionInput') {
+    if (id !== 'instruction') {
       addEventListenerSafely(id, 'change', saveState);
     }
   });
 
-  // Special case for instructionInput as it uses 'input' event
-  addEventListenerSafely('instructionInput', 'input', saveState);
+  // Special case for instruction as it uses 'input' event
+  addEventListenerSafely('instruction', 'input', saveState);
   addEventListenerSafely('outputNameOverride', 'input', saveState);
 
   new Sortable(safeGetElementById('multipleOutputFiles'), {
