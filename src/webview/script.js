@@ -44,20 +44,25 @@ window.onload = function () {
   restoreState();
 
   // Setup auto-resize for instruction textarea
-  const instructionInput = document.getElementById('instructionInput');
-  if (instructionInput) {
+  const instruction = document.getElementById('instruction');
+  if (instruction) {
     // Initial resize
-    autoResizeTextarea(instructionInput);
+    autoResizeTextarea(instruction);
 
     // Add input and change event listeners
-    instructionInput.addEventListener('input', () => {
-      autoResizeTextarea(instructionInput);
+    instruction.addEventListener('input', () => {
+      autoResizeTextarea(instruction);
+      // Make sure changes to the textarea get saved in the state
+      saveState();
     });
 
     // Handle paste events
-    instructionInput.addEventListener('paste', () => {
+    instruction.addEventListener('paste', () => {
       // Use setTimeout to let the paste complete
-      setTimeout(() => autoResizeTextarea(instructionInput), 0);
+      setTimeout(() => {
+        autoResizeTextarea(instruction);
+        saveState();
+      }, 0);
     });
   }
 };

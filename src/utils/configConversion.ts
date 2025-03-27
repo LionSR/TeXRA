@@ -74,7 +74,7 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     // Basic task info
     agent: obj.agent || 'correct',
     model: obj.model || '',
-    instruction: obj.instruction || obj.instructionInput || '',
+    instruction: obj.instruction || '',
 
     // File selections
     inputFile: obj.inputFile || '',

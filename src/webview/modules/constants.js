@@ -35,7 +35,7 @@ export const VALUE_ELEMENTS = [
   'editedFile',
   'baseFile',
   // instruction
-  'instructionInput',
+  'instruction',
   // output
   'outputNameOverride',
   // git

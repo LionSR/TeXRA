@@ -32,13 +32,12 @@ function handleStateRestoration(state) {
   if (state.model) safeSetElementValue('model', state.model);
 
   // Fix instruction restoration - needs to use the correct ID
-  // Try both instruction and instructionInput fields to handle both formats
-  const instructionContent = state.instruction || state.instructionInput || '';
-  const instructionInput = safeGetElementById('instructionInput');
-  if (instructionInput) {
-    instructionInput.value = instructionContent;
+  const instructionContent = state.instruction || '';
+  const instruction = safeGetElementById('instruction');
+  if (instruction) {
+    instruction.value = instructionContent;
     // Also trigger any associated events/validation
-    instructionInput.dispatchEvent(new Event('input'));
+    instruction.dispatchEvent(new Event('input'));
   }
 
   // Restore single file selections
@@ -73,7 +72,6 @@ function handleStateRestoration(state) {
     agent: state.agent,
     model: state.model,
     instruction: instructionContent, // Use the resolved instruction content
-    instructionInput: instructionContent, // Save in both formats for compatibility
 
     // File selections
     inputFile: state.inputFile,
@@ -228,9 +226,9 @@ export function setupMessageHandlers() {
         }
         break;
       case 'instructionTextPolished':
-        const instructionInput = safeGetElementById('instructionInput');
-        if (instructionInput && message.text) {
-          instructionInput.value = message.text;
+        const instruction = safeGetElementById('instruction');
+        if (instruction && message.text) {
+          instruction.value = message.text;
           vscode.postMessage({
             command: 'showInformationMessage',
             text: 'Instruction text has been polished!',
