@@ -32,13 +32,13 @@ function handleStateRestoration(state) {
   if (state.model) safeSetElementValue('model', state.model);
 
   // Fix instruction restoration - needs to use the correct ID
-  if (state.instruction) {
-    const instructionInput = safeGetElementById('instructionInput');
-    if (instructionInput) {
-      instructionInput.value = state.instruction;
-      // Also trigger any associated events/validation
-      instructionInput.dispatchEvent(new Event('input'));
-    }
+  // Try both instruction and instructionInput fields to handle both formats
+  const instructionContent = state.instruction || state.instructionInput || '';
+  const instructionInput = safeGetElementById('instructionInput');
+  if (instructionInput) {
+    instructionInput.value = instructionContent;
+    // Also trigger any associated events/validation
+    instructionInput.dispatchEvent(new Event('input'));
   }
 
   // Restore single file selections
@@ -72,7 +72,8 @@ function handleStateRestoration(state) {
     // Basic properties
     agent: state.agent,
     model: state.model,
-    instruction: state.instruction,
+    instruction: instructionContent, // Use the resolved instruction content
+    instructionInput: instructionContent, // Save in both formats for compatibility
 
     // File selections
     inputFile: state.inputFile,
