@@ -62,7 +62,16 @@ export function restoreState() {
     };
 
     VALUE_ELEMENTS.forEach((id) => {
-      safeSetElementValue(id, previousState[id] || defaultValues[id] || '');
+      // Special handling for instruction field: Try both "instruction" and "instructionInput"
+      if (
+        id === 'instructionInput' &&
+        !previousState[id] &&
+        previousState['instruction']
+      ) {
+        safeSetElementValue(id, previousState['instruction']);
+      } else {
+        safeSetElementValue(id, previousState[id] || defaultValues[id] || '');
+      }
     });
 
     CHECK_BOXES.forEach((id) => {
@@ -156,6 +165,10 @@ export function saveState() {
     const value = safeGetElementValue(id);
     if (value !== undefined) {
       state[id] = value;
+    }
+    // Also save instructionInput value as instruction for history compatibility
+    if (id === 'instructionInput' && value !== undefined) {
+      state['instruction'] = value;
     }
   });
 
