@@ -80,10 +80,10 @@ export class WebviewMessageHandler {
       case 'updateOutputFiles':
         return this.handleUpdateFiles(message, webviewView);
       // Multiple file selection cases
-      case 'setMultipleInputFiles':
-      case 'setMultipleReferenceFiles':
-      case 'setMultipleAuxiliaryFiles':
-      case 'setMultipleFigureFiles':
+      case 'setInputFiles':
+      case 'setReferenceFiles':
+      case 'setAuxiliaryFiles':
+      case 'setFigureFiles':
         return this.handleSetMultipleFiles(message, webviewView);
       case 'selectMultipleFiles':
         return this.handleSelectMultipleFiles(message, webviewView);
@@ -308,22 +308,22 @@ export class WebviewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ) {
-    const multipleFileType = message.fileType;
+    const fileType = message.fileType;
     let selectedFiles: string[] | null = null;
 
-    if (multipleFileType === 'OutputFiles') {
-      selectedFiles = await this.selectMultipleOutputFiles(message.currentFile);
+    if (fileType === 'OutputFiles') {
+      selectedFiles = await this.selectOutputFiles(message.currentFile);
     } else {
       const currentFileForMultiple = message.currentFile;
       selectedFiles = await vscode.commands.executeCommand<string[]>(
-        `coauthor.selectMultiple${multipleFileType}`,
+        `coauthor.select${fileType}`,
         currentFileForMultiple,
       );
     }
 
     if (selectedFiles) {
       webviewView.webview.postMessage({
-        command: `setMultiple${multipleFileType}`,
+        command: `set${fileType}`,
         files: selectedFiles,
       });
     }
@@ -549,7 +549,7 @@ export class WebviewMessageHandler {
     return relevantFiles;
   }
 
-  private async selectMultipleOutputFiles(
+  private async selectOutputFiles(
     currentInputFile: string,
   ): Promise<string[] | null> {
     const workspacePath = getWorkspacePath();
@@ -629,16 +629,15 @@ export class WebviewMessageHandler {
       // Helper to add multiple files to context if valid and toggle is active
       const addMultipleFilesIfValid = (
         contextKey: keyof FileContext,
-        messageKey: string,
         toggleKey: string,
       ) => {
         if (
           message[toggleKey] &&
-          message[messageKey] &&
-          Array.isArray(message[messageKey]) &&
-          message[messageKey].length > 0
+          message[contextKey] &&
+          Array.isArray(message[contextKey]) &&
+          message[contextKey].length > 0
         ) {
-          (fileContext as any)[contextKey] = message[messageKey];
+          (fileContext as any)[contextKey] = message[contextKey];
         }
       };
 
@@ -649,31 +648,11 @@ export class WebviewMessageHandler {
       addSingleFileIfValid('figureFile', 'figureFile');
 
       // Add multiple files if their toggle is active
-      addMultipleFilesIfValid(
-        'inputFiles',
-        'inputFiles',
-        'multipleInputFilesActive',
-      );
-      addMultipleFilesIfValid(
-        'referenceFiles',
-        'referenceFiles',
-        'multipleReferenceFilesActive',
-      );
-      addMultipleFilesIfValid(
-        'auxiliaryFiles',
-        'auxiliaryFiles',
-        'multipleAuxiliaryFilesActive',
-      );
-      addMultipleFilesIfValid(
-        'figureFiles',
-        'figureFiles',
-        'multipleFigureFilesActive',
-      );
-      addMultipleFilesIfValid(
-        'outputFiles',
-        'outputFiles',
-        'multipleOutputFilesActive',
-      );
+      addMultipleFilesIfValid('inputFiles', 'inputFilesActive');
+      addMultipleFilesIfValid('referenceFiles', 'referenceFilesActive');
+      addMultipleFilesIfValid('auxiliaryFiles', 'auxiliaryFilesActive');
+      addMultipleFilesIfValid('figureFiles', 'figureFilesActive');
+      addMultipleFilesIfValid('outputFiles', 'outputFilesActive');
 
       // Show progress notification with incremental updates
       vscode.window.withProgress(
@@ -755,7 +734,7 @@ export class WebviewMessageHandler {
 
     // Echo back the updated list to confirm receipt
     webviewView.webview.postMessage({
-      command: `setMultiple${fileType}`,
+      command: `set${fileType}`,
       files: files,
     });
   }

@@ -115,18 +115,21 @@ function handleStateRestoration(state) {
       state[`${fileType}Files`] ||
       state[`multiple${capitalize(fileType)}Files`] ||
       [];
-    const isVisible = state[`multiple${capitalize(fileType)}FilesVisible`];
-    const toggleId = `toggleMultiple${capitalize(fileType)}Files`;
-    const containerId = `multiple${capitalize(fileType)}FilesContainer`;
+    const isVisible =
+      state[`${fileType}FilesActive`] ||
+      state[`multiple${capitalize(fileType)}FilesActive`] ||
+      false;
+    const toggleId = `toggle${capitalize(fileType)}Files`;
+    const containerId = `${fileType}FilesContainer`;
 
     // Save to the state object for later use by restoreState
-    const targetArrayName = `multiple${capitalize(fileType)}Files`;
-    const visibilityName = `${targetArrayName}Visible`;
+    const targetArrayName = `${fileType}Files`;
+    const visibilityName = `${targetArrayName}Active`;
     savedState[targetArrayName] = filesArray;
-    savedState[visibilityName] = isVisible !== undefined ? isVisible : false;
+    savedState[visibilityName] = isVisible;
 
     // Get current UI state to see if we have existing files
-    const multipleFilesId = `multiple${capitalize(fileType)}Files`;
+    const multipleFilesId = `${fileType}Files`;
     const multipleFiles = safeGetElementById(multipleFilesId);
     const existingFiles = multipleFiles
       ? Array.from(multipleFiles.querySelectorAll('.file-item')).map(
@@ -135,16 +138,16 @@ function handleStateRestoration(state) {
       : [];
 
     // Only clear and update if we have files to restore or visibility has changed
-    if (filesArray.length > 0 || isVisible !== undefined) {
+    if (filesArray.length > 0 || isVisible) {
       // Show or hide the multi file container if visibility is specified
       const container = safeGetElementById(containerId);
-      if (container && isVisible !== undefined) {
+      if (container) {
         container.style.display = isVisible ? 'block' : 'none';
       }
 
       // Update the toggle indicator based on visibility
       const toggleElement = safeGetElementById(toggleId);
-      if (toggleElement && isVisible !== undefined) {
+      if (toggleElement) {
         toggleElement.textContent = isVisible ? '▲' : '▼';
       }
 
@@ -180,7 +183,11 @@ function handleStateRestoration(state) {
               });
 
               // Save state to persist changes
-              saveState();
+              // saveState();
+              // Use vscode.setState directly instead of calling saveState
+              const currentState = vscode.getState() || {};
+              currentState[`${fileType}Files`] = updatedFiles;
+              vscode.setState(currentState);
             });
           }
         });
@@ -255,13 +262,13 @@ export function setupMessageHandlers() {
         );
         break;
       // Multiple file selection
-      case 'setMultipleInputFiles':
-      case 'setMultipleReferenceFiles':
-      case 'setMultipleAuxiliaryFiles':
-      case 'setMultipleFigureFiles':
-      case 'setMultipleOutputFiles':
+      case 'setInputFiles':
+      case 'setReferenceFiles':
+      case 'setAuxiliaryFiles':
+      case 'setFigureFiles':
+      case 'setOutputFiles':
         updateMultipleFileSelect(
-          `${message.command.replace('setMultiple', 'multiple')}`,
+          message.command.replace('set', ''),
           `toggle${message.command.replace('set', '')}`,
           message.files,
         );
@@ -280,8 +287,8 @@ export function setupMessageHandlers() {
         if (message.fileType) {
           const fileType = message.fileType.replace('Files', '');
           const singleFileId = `${uncapitalize(fileType)}File`;
-          const multipleFileId = `multiple${capitalize(fileType)}Files`;
-          const toggleId = `toggleMultiple${capitalize(fileType)}Files`;
+          const multipleFileId = `${uncapitalize(fileType)}Files`;
+          const toggleId = `toggle${capitalize(fileType)}Files`;
 
           let filesToAdd = message.files || [];
 

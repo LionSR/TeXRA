@@ -57,10 +57,7 @@
                 >
                   <i class="codicon codicon-close"></i>
                 </button>
-                <span
-                  id="toggleMultipleInputFiles"
-                  class="toggle-icon"
-                  title="Multiple"
+                <span id="toggleInputFiles" class="toggle-icon" title="Multiple"
                   >▼</span
                 >
                 <button
@@ -71,14 +68,14 @@
                   <i class="codicon codicon-folder-opened"></i>
                 </button>
                 <button
-                  id="emptyMultipleInputFilesButton"
+                  id="emptyInputFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectMultipleInputFilesButton"
+                  id="selectInputFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -90,12 +87,12 @@
               <option value="">None</option>
             </select>
             <div
-              id="multipleInputFilesContainer"
+              id="inputFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div id="multipleInputFiles" class="multiple-files-list"></div>
+                <div id="inputFiles" class="multiple-files-list"></div>
               </div>
             </div>
           </div>
@@ -124,7 +121,7 @@
                   <i class="codicon codicon-close"></i>
                 </button>
                 <span
-                  id="toggleMultipleReferenceFiles"
+                  id="toggleReferenceFiles"
                   class="toggle-icon"
                   title="Multiple"
                   >▼</span
@@ -137,14 +134,14 @@
                   <i class="codicon codicon-folder-opened"></i>
                 </button>
                 <button
-                  id="emptyMultipleReferenceFilesButton"
+                  id="emptyReferenceFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectMultipleReferenceFilesButton"
+                  id="selectReferenceFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -156,15 +153,12 @@
               <option value="">None</option>
             </select>
             <div
-              id="multipleReferenceFilesContainer"
+              id="referenceFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div
-                  id="multipleReferenceFiles"
-                  class="multiple-files-list"
-                ></div>
+                <div id="referenceFiles" class="multiple-files-list"></div>
               </div>
             </div>
           </div>
@@ -193,7 +187,7 @@
                   <i class="codicon codicon-close"></i>
                 </button>
                 <span
-                  id="toggleMultipleAuxiliaryFiles"
+                  id="toggleAuxiliaryFiles"
                   class="toggle-icon"
                   title="Multiple"
                   >▼</span
@@ -206,14 +200,14 @@
                   <i class="codicon codicon-folder-opened"></i>
                 </button>
                 <button
-                  id="emptyMultipleAuxiliaryFilesButton"
+                  id="emptyAuxiliaryFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectMultipleAuxiliaryFilesButton"
+                  id="selectAuxiliaryFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -225,15 +219,12 @@
               <option value="">None</option>
             </select>
             <div
-              id="multipleAuxiliaryFilesContainer"
+              id="auxiliaryFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div
-                  id="multipleAuxiliaryFiles"
-                  class="multiple-files-list"
-                ></div>
+                <div id="auxiliaryFiles" class="multiple-files-list"></div>
               </div>
             </div>
           </div>
@@ -286,20 +277,20 @@
                   <i class="codicon codicon-close"></i>
                 </button>
                 <span
-                  id="toggleMultipleFigureFiles"
+                  id="toggleFigureFiles"
                   class="toggle-icon"
                   title="Multiple"
                   >▼</span
                 >
                 <button
-                  id="emptyMultipleFigureFilesButton"
+                  id="emptyFigureFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectMultipleFigureFilesButton"
+                  id="selectFigureFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -311,12 +302,12 @@
               <option value="">None</option>
             </select>
             <div
-              id="multipleFigureFilesContainer"
+              id="figureFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div id="multipleFigureFiles" class="multiple-files-list"></div>
+                <div id="figureFiles" class="multiple-files-list"></div>
               </div>
             </div>
           </div>
@@ -324,7 +315,7 @@
             <div class="file-select-header">
               <div class="file-select-label-group">
                 <span
-                  id="toggleMultipleOutputFiles"
+                  id="toggleOutputFiles"
                   class="toggle-icon"
                   title="Multiple"
                   >▼</span
@@ -333,14 +324,14 @@
               </div>
               <div class="file-select-actions">
                 <button
-                  id="emptyMultipleOutputFilesButton"
+                  id="emptyOutputFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectMultipleOutputFilesButton"
+                  id="selectOutputFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -349,12 +340,12 @@
               </div>
             </div>
             <div
-              id="multipleOutputFilesContainer"
+              id="outputFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div id="multipleOutputFiles" class="multiple-files-list"></div>
+                <div id="outputFiles" class="multiple-files-list"></div>
                 <div class="output-filename-override" style="margin-top: 8px">
                   <div
                     class="file-select-label-group"
@@ -450,9 +441,9 @@
                 <i class="codicon codicon-sparkle"></i>
               </button>
               <button
-                id="eraseInstructionsButton"
+                id="eraseInstructionButton"
                 class="vscode-button"
-                title="Erase Instructions"
+                title="Erase Instruction"
               >
                 <i class="codicon codicon-clear-all"></i>
               </button>
