@@ -1,0 +1,44 @@
+name: latex_xml
+description: Fixes specific to XML output processing
+isRegex: false
+patterns:
+  # Random tag fixes
+  '<ctrl96>': ''
+
+  # Basic tag fixes - notice no extra backslash escaping needed!
+  '\end{document>': '\end{document}'
+  '\end{figure>': '\end{figure}'
+  '\end{tikzpicture>': '\end{tikzpicture}'
+  '\end{revised_statement>': '</revised_statement>'
+  '\end{scope>': '\end{scope}'
+  '\end{latex_document>': '</latex_document>\n'
+  '\end{output>': '\end{output}'
+  '\end{response>': '\end{response}'
+  '\end{scratchpad>': '</scratchpad>'
+  '\end{itemize>': '\end{itemize}'
+  '\end{enumerate>': '\end{enumerate}'
+
+  # Gemini problems
+  'in~\cref{': 'in \cref{'
+  'In~\cref{': 'In \cref{'
+  'in~Sec': 'in Sec'
+  'In~Sec': 'In Sec'
+  'by~Eq': 'by Eq'
+  'by~Eqs': 'by Eqs'
+  'by~Eqs.': 'by Eqs.'
+
+  # LaTeX to XML conversions
+  '\end{idea}': '</idea>'
+  '\end{scratchpad}': '</scratchpad>'
+  '\end\n': '\end{document}\n'
+  '</figure>\n': '\end{figure}\n'
+  '</enumerate>': '\end{enumerate}'
+
+  # Document nesting and structure
+  '\end{document}\n\n\<document name=': '\end{document}\n</document>\n\<document name='
+
+  # Special cases - multiline replacements using YAML block syntax
+  'Here is the revised \LaTeX document.\n\n```latex': |
+    Here is the revised \LaTeX document.
+
+    <latex_document>

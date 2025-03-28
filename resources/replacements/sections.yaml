@@ -1,0 +1,10 @@
+name: sections
+description: Fixes for section spacing in LaTeX documents
+isRegex: false
+patterns:
+  '\end{align}\n\section': '\end{align}\n\n\n\section'
+  '\end{equation}\n\section': '\end{equation}\n\n\n\section'
+  '\end{align}\n\subsection': '\end{align}\n\n\n\subsection'
+  '\end{equation}\n\subsection': '\end{equation}\n\n\n\subsection'
+  '\end{align}\n\paragraph': '\end{align}\n\n\n\paragraph'
+  '\end{equation}\n\paragraph': '\end{equation}\n\n\n\paragraph'

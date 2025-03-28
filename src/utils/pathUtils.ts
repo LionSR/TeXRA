@@ -54,6 +54,31 @@ export async function getCustomAgentsDirectory(): Promise<string> {
 }
 
 /**
+ * Get custom replacements directory from settings
+ * Returns empty string if not set or not valid
+ */
+export async function getCustomReplacementsDirectory(): Promise<string> {
+  const customPath = getConfig<string>('replacements.customDirectory', '');
+
+  if (!customPath) {
+    return '';
+  }
+
+  if (!path.isAbsolute(customPath)) {
+    logger.error(
+      CHANNEL,
+      `Custom replacements directory must be an absolute path: ${customPath}`,
+    );
+    vscode.window.showErrorMessage(
+      'Custom replacements directory must be an absolute path',
+    );
+    return '';
+  }
+
+  return customPath;
+}
+
+/**
  * Get the absolute path to the agents directory, prioritizing custom over built-in.
  * This maintains backward compatibility for existing code.
  */

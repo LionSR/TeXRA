@@ -18,7 +18,6 @@ logger.initialize(CHANNEL);
 /*
 TODO: 
 - make it possible to right click 
-- make it possible to create new files like in vs code
 */
 
 export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {

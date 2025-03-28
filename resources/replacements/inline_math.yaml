@@ -1,0 +1,22 @@
+name: inlineMath
+description: Fixes for LaTeX inline math formatting
+isRegex: true
+flags: g
+patterns:
+  # Convert \( ... \) to $...$
+  '\\\\\\(\\s*(.*?)\\s*\\\\\\)': '$$$1$'
+
+  # Remove spacing commands with arbitrary integers
+  '\\[-?\\d+pt\\]': ''
+  '\\[-?\\d+mm\\]': ''
+  '\\[-?\\d+ex\\]': ''
+  '\\[0\\.-?\\d+mm\\]': ''
+  '\\[0\\.-?\\d+ex\\]': ''
+
+  # Remove horizontal and vertical space commands
+  '\\\\hspace\\[-?\\d+pt\\]': ''
+  '\\\\hspace\\{-?\\d+mm\\}': ''
+  '\\\\hspace\\{-?\\d+ex\\}': ''
+  '\\\\vspace\\{-?\\d+pt\\}': ''
+  '\\\\vspace\\{-?\\d+mm\\}': ''
+  '\\\\vspace\\{-?\\d+ex\\}': '\n'

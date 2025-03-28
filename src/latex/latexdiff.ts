@@ -311,10 +311,10 @@ export async function runLatexdiff(
       `"${editedFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel, timeout: 10000 });
+    const result = await executeCommand(command, { channel, timeout: 20000 });
     if (!result.success) {
       if (result.timedOut) {
-        throw new Error('Latexdiff operation timed out after 10 seconds');
+        throw new Error('Latexdiff operation timed out after 20 seconds');
       }
       throw new Error('Failed to run latexdiff');
     }
@@ -381,10 +381,10 @@ export async function runLatexdiffvc(
       `"${inputFile}"`,
     ];
 
-    const result = await executeCommand(command, { channel, timeout: 10000 });
+    const result = await executeCommand(command, { channel, timeout: 20000 });
     if (!result.success) {
       if (result.timedOut) {
-        throw new Error('Latexdiff-vc operation timed out after 10 seconds');
+        throw new Error('Latexdiff-vc operation timed out after 20 seconds');
       }
       throw new Error('Failed to run latexdiff-vc');
     }

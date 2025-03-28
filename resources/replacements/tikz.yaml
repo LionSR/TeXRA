@@ -1,0 +1,19 @@
+name: tikz
+description: Fixes for TikZ picture formatting and structure
+isRegex: true
+flags: gms
+patterns:
+  # Regular expression patterns are much cleaner in YAML
+  # Named capture groups are easier to maintain
+  '\end{document}\s*\chapter': '\chapter'
+  '\end{document}\s*\addcontentsline': '\addcontentsline'
+
+  # Complex pattern with named capture group - notice how clean this looks compared to JSON
+  '(?<indent>[\t ]*)}\\s*\end{tikzpicture};\\s*\end{tikzpicture}': |
+    ${indent}\end{tikzpicture}
+    ${indent}};
+    ${indent}\end{tikzpicture}
+
+  # More patterns with capture groups
+  '}(\s*)\end{tikzpicture};': '};$1\end{tikzpicture}'
+  '}(\s*)\end{tikzpicture}\DIFaddendFL ;': '$1\end{tikzpicture}};\\DIFaddendFL'

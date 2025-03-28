@@ -47,6 +47,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'MessageHandler',
   'AgentLoad',
   'Housekeeping',
+  'AgentHistoryViewProvider',
   'LaTeXCommands',
   'Utils',
   'ProgressViewProvider',

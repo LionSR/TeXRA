@@ -1,0 +1,30 @@
+name: parentheses
+description: Standardize parentheses sizing using regex patterns
+isRegex: true
+flags: g
+patterns:
+  # Regular parentheses
+  '\\big\\(([^\\n]*?)\\big\\)': '($1)'
+  '\\big\\[([^\\n]*?)\\big\\]': '[$1]'
+  '\\bigl\\(([^\\n]*?)\\bigr\\)': '($1)'
+  '\\bigl\\[([^\\n]*?)\\bigr\\]': '[$1]'
+
+  # Big to \left \right
+  '\\Big\\(([^\\n]*?)\\Big\\)': '\left($1\right)'
+  '\\Big\\[([^\\n]*?)\\Big\\]': '\left[$1\right]'
+  '\\Big\\{([^\\n]*?)\\Big\\}': '\left\{$1\right\}'
+
+  # Big parentheses to \left \right
+  '\\Bigl\\(([^\\n]*?)\\Bigr\\)': '\left($1\right)'
+  '\\Bigl\\[([^\\n]*?)\\Bigr\\]': '\left[$1\right]'
+  '\\Bigl\\\\{([^\\n]*?)\\Bigr\\\\}': '\left\{$1\right\}'
+
+  # Bigger parentheses
+  '\\biggl\\(([^\\n]*?)\\biggr\\)': '\left($1\right)'
+  '\\biggl\\[([^\\n]*?)\\biggr\\]': '\left[$1\right]'
+  '\\biggl\\\\{([^\\n]*?)\\biggr\\\\}': '\left\{$1\right\}'
+
+  # Biggest parentheses
+  '\\Biggl\\(([^\\n]*?)\\Biggr\\)': '\left($1\right)'
+  '\\Biggl\\[([^\\n]*?)\\Biggr\\]': '\left[$1\right]'
+  '\\Biggl\\\\{([^\\n]*?)\\Biggr\\\\}': '\left\{$1\right\}'

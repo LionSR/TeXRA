@@ -1,0 +1,88 @@
+name: latex_spacing
+description: Fixes for LaTeX spacing, punctuation, and formatting [for O1 model]
+isRegex: false
+patterns:
+  # Basic spacing fixes
+  ', \;': ', '
+  ' \;': ' '
+  ' \; ': ' '
+  ' \,\nn': ' \nn'
+  ',\,\': ', '
+  ')\,\': ') \'
+  '}\,\': '} \'
+  '|\,\': '| \'
+  ' \,\': ' \'
+  '\,\n': '\n'
+  '\n    \\': '\\'
+  '\!\!': ''
+  '.  ': '. '
+  ' nn\n': ' \nn\n'
+
+  # Operator spacing
+  '\;+\;': '+'
+  '\;-\;': '-'
+  '\;*\;': '*'
+  '\;/\;': '/'
+  '\;=\;': '='
+  '+\;': '+'
+  '-\;': '-'
+  '=\;': '='
+
+  # Align environment formatting
+  '\n    \nonumber\\': '\nonumber\\'
+  '\n    +': ' +'
+  '\n    \n&=': '\n    &='
+  '\n    ,\n': ',\n'
+  '\!\n    ': '\n    '
+  '\n    =\n': ' ='
+  '\n    \propto\n': ' ='
+  '\n     &\n    -': '\n    & -'
+  '(\n    ': '('
+  '\n    )': ')'
+  '\n     &\n    \times': '\n    & \times'
+
+  # Specific context spacing
+  'e^{\,i\,': 'e^{i '
+  'e^{\,': 'e^{'
+  '-\,i\, ': '-i '
+  '-\,i\,': '-i'
+  '\,i\,': ' i '
+  '-\,': '-'
+  '\,&': ' &'
+  '{-\,0}': '{0}'
+  '{-\,1}': '{1}'
+
+  # Skip commands
+  '\medskip\n': ''
+  '\smallskip\n': ''
+  '\bigskip\n': ''
+
+  # Punctuation in math mode
+  '.$': '$.'
+  # ',$': '$,', # this is problematic for eg. tikz figure xticklabels={$-\Sig$,0$,\Sig$},
+  '$-\,': '$-'
+
+  # Simplify delimiters
+  '\left[\dots\right]': '[\dots]'
+
+  # Miscellaneous
+  '\displaystyle': ''
+  '\Longleftrightarrow': '\LRa'
+
+  # For o1/o3 but at last
+  '=    \': '= \'
+  ' rho_': '  \rho_'
+  ' rho^': '  \rho^'
+  ' rho\': '  \rho\'
+
+  '\sum\limits_': '\sum_'
+
+  # Unicode fixes
+  '$ μs': '$ $\mu$s'
+  '$ μm': '$ $\mu$m'
+  '$ μA': '$ $\mu$A'
+  '$ μV': '$ $\mu$V'
+  '$ μW': '$ $\mu$W'
+  '$ μT': '$ $\mu$T'
+  '$ μH': '$ $\mu$H'
+  '$ μF': '$ $\mu$F'

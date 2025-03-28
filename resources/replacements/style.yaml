@@ -1,0 +1,29 @@
+name: style
+description: Style improvements and word choice fixes
+isRegex: false
+patterns:
+  'delve': 'discuss'
+  'embark': 'start'
+  'realm': 'area'
+  'intricate': 'complex'
+  '"exact"': "``exact'"
+  'delving into': 'discussing'
+  "It's important to note": 'Note that'
+  'our exploration': 'our discussion'
+  'inter-layer': 'interlayer'
+  'Near the 50\%': 'Near 50\%'
+  'on the order of': 'of the order of'
+  'improves consistently': 'consistently improves'
+  'with results shown': 'with the results shown'
+  'imaginary time evolution': 'imaginary-time evolution'
+  'showcasing': 'showing'
+  'paradigm shift': 'big change'
+  'envisage': 'imagine'
+
+  # Typos
+  'parameterizing': 'parametrizing'
+  'Normalizing': 'Normalizing'
+  'conditon': 'condition'
+  'necessitates': 'requires'
+  'Itô': 'Ito'
+  'k_BT': 'k_B T'
