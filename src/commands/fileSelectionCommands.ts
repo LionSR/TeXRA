@@ -43,24 +43,28 @@ export function registerFileSelectionCommands(
       selectInputFile,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleInputFiles',
-      selectMultipleInputFiles,
+      'coauthor.selectInputFiles',
+      selectInputFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleReferenceFiles',
-      selectMultipleReferenceFiles,
+      'coauthor.selectReferenceFiles',
+      selectReferenceFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleAuxiliaryFiles',
-      selectMultipleAuxiliaryFiles,
+      'coauthor.selectAuxiliaryFiles',
+      selectAuxiliaryFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectMultipleFigureFiles',
-      selectMultipleFigureFiles,
+      'coauthor.selectFigureFiles',
+      selectFigureFiles,
     ),
     vscode.commands.registerCommand(
       'coauthor.selectFigureFile',
       selectFigureFile,
+    ),
+    vscode.commands.registerCommand(
+      'coauthor.selectOutputFiles',
+      selectOutputFiles,
     ),
     vscode.commands.registerCommand(
       'coauthor.selectEditedFile',
@@ -111,7 +115,7 @@ async function selectInputFile(
   return null;
 }
 
-async function selectMultipleInputFiles(
+async function selectInputFiles(
   currentInputFile: string,
 ): Promise<string[] | null> {
   const defaultUri = getDefaultUri(currentInputFile);
@@ -158,7 +162,7 @@ async function selectMultipleInputFiles(
   }
 }
 
-async function selectMultipleReferenceFiles(
+async function selectReferenceFiles(
   currentReferenceFile: string,
 ): Promise<string[] | null> {
   const defaultUri = getDefaultUri(currentReferenceFile);
@@ -196,7 +200,7 @@ async function selectMultipleReferenceFiles(
   return null;
 }
 
-async function selectMultipleAuxiliaryFiles(
+async function selectAuxiliaryFiles(
   currentAuxiliaryFile: string,
 ): Promise<string[] | null> {
   const defaultUri = getDefaultUri(currentAuxiliaryFile);
@@ -231,7 +235,7 @@ async function selectMultipleAuxiliaryFiles(
   return null;
 }
 
-async function selectMultipleFigureFiles(
+async function selectFigureFiles(
   currentFigureFile: string,
 ): Promise<string[] | null> {
   const defaultUri = getDefaultUri(currentFigureFile);
@@ -289,6 +293,49 @@ async function selectFigureFile(): Promise<string | null> {
   return null;
 }
 
+async function selectOutputFiles(
+  currentInputFile: string,
+): Promise<string[] | null> {
+  const defaultUri = getDefaultUri(currentInputFile);
+  if (!defaultUri) {
+    showErrorMessage('No workspace folder open');
+    return null;
+  }
+
+  try {
+    const fileUris = await vscode.window.showOpenDialog({
+      canSelectMany: true,
+      openLabel: 'Select Output Files',
+      canSelectFiles: true,
+      canSelectFolders: false,
+      defaultUri: defaultUri,
+      filters: {
+        'Text files': ['tex', 'txt', 'md'],
+      },
+    });
+
+    if (!fileUris || fileUris.length === 0) {
+      return null;
+    }
+
+    const relativePaths = fileUris.map((uri) => getRelativePath(uri.fsPath));
+    logger.info(CHANNEL, `Selected output files: ${relativePaths.join(', ')}`);
+    vscode.window.showInformationMessage(
+      `Selected output files: ${relativePaths.join(', ')}`,
+    );
+    return relativePaths;
+  } catch (err) {
+    logger.error(
+      CHANNEL,
+      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    vscode.window.showErrorMessage(
+      `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
 async function selectEditedFile(): Promise<string | null> {
   const fileUri = await vscode.window.showOpenDialog({
     canSelectMany: false,
@@ -339,11 +386,12 @@ async function refreshBaseFiles(): Promise<string[]> {
 
 export const fileSelectionCommands = {
   selectInputFile,
-  selectMultipleInputFiles,
-  selectMultipleReferenceFiles,
-  selectMultipleAuxiliaryFiles,
-  selectMultipleFigureFiles,
+  selectInputFiles,
+  selectReferenceFiles,
+  selectAuxiliaryFiles,
+  selectFigureFiles,
   selectFigureFile,
+  selectOutputFiles,
   selectEditedFile,
   getCurrentFile,
   selectBaseFile,

@@ -7,6 +7,16 @@
 // Local imports - models
 import { AgentConfig } from '../agent/AgentConfig';
 import { TaskState } from '../logger/TaskState';
+import { ToolConfig } from '../agent/ToolConfig';
+
+import {
+  FILE_TYPES,
+  SINGLE_FILE_FIELDS,
+  MULTIPLE_FILE_FIELDS,
+  ACTIVE_FLAGS,
+  AUTO_EXTRACT_FIELDS,
+  TOOL_CONFIG_FIELDS,
+} from './constants';
 
 /**
  * Converts an AgentConfig object to a TaskState object
@@ -15,51 +25,50 @@ import { TaskState } from '../logger/TaskState';
  * @returns A TaskState representing the same configuration
  */
 export function agentConfigToTaskState(config: AgentConfig): TaskState {
-  return {
+  // Initialize with required properties
+  const taskState: Partial<TaskState> = {
     // Basic task info
     agent: config.agent,
     model: config.model,
     instruction: config.instruction || '',
 
-    // File selections
-    inputFile: config.inputFile || '',
-    referenceFile: config.referenceFile || '',
-    auxiliaryFile: config.auxiliaryFile || '',
-    figureFile: config.figureFile || '',
-    outputNameOverride: config.outputNameOverride || '',
-
-    // Multiple file selections
-    multipleInputFiles: config.inputFiles || [],
-    multipleReferenceFiles: config.referenceFiles || [],
-    multipleAuxiliaryFiles: config.auxiliaryFiles || [],
-    multipleFigureFiles: config.figureFiles || [],
-    multipleOutputFiles: config.outputFiles || [],
-
-    // Multiple file selection visibility
-    multipleInputFilesVisible:
-      Array.isArray(config.inputFiles) && config.inputFiles.length > 0,
-    multipleReferenceFilesVisible:
-      Array.isArray(config.referenceFiles) && config.referenceFiles.length > 0,
-    multipleAuxiliaryFilesVisible:
-      Array.isArray(config.auxiliaryFiles) && config.auxiliaryFiles.length > 0,
-    multipleFigureFilesVisible:
-      Array.isArray(config.figureFiles) && config.figureFiles.length > 0,
-    multipleOutputFilesVisible:
-      Array.isArray(config.outputFiles) && config.outputFiles.length > 0,
-
-    // Auto extract settings
-    autoExtractFigure: config.toolConfig?.autoExtractFigure || false,
-    autoExtractTikzFigure: config.toolConfig?.autoExtractTikzFigure || false,
-
-    // Tool config settings
-    attachTeXCount: config.toolConfig?.attachTeXCount || false,
-    usePrefillFromInput: config.toolConfig?.usePrefillFromInput || false,
-    printInputPrompt: config.toolConfig?.printInputPrompt || false,
-    reflect: config.toolConfig?.reflect || false,
-
     // Output name override visibility
+    outputNameOverride: config.outputNameOverride || '',
     outputNameOverrideVisible: !!config.outputNameOverride,
   };
+
+  // Add single file selections with defaults
+  SINGLE_FILE_FIELDS.forEach((field) => {
+    if (field !== 'outputFile') {
+      // outputFile isn't part of the schema
+      (taskState as any)[field] = (config as any)[field] || '';
+    }
+  });
+
+  // Add multiple file selections with defaults
+  MULTIPLE_FILE_FIELDS.forEach((field) => {
+    (taskState as any)[field] = (config as any)[field] || [];
+  });
+
+  // Set active flags based on array content
+  ACTIVE_FLAGS.forEach((flag) => {
+    const filesField = flag.replace('Active', '');
+    (taskState as any)[flag] =
+      Array.isArray((config as any)[filesField]) &&
+      (config as any)[filesField].length > 0;
+  });
+
+  // Add auto extract settings
+  AUTO_EXTRACT_FIELDS.forEach((field) => {
+    (taskState as any)[field] = config.toolConfig?.[field] || false;
+  });
+
+  // Add tool config settings
+  TOOL_CONFIG_FIELDS.forEach((field) => {
+    (taskState as any)[field] = config.toolConfig?.[field] || false;
+  });
+
+  return taskState as TaskState;
 }
 
 /**
@@ -70,54 +79,48 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
  * @returns A TaskState representing the same configuration
  */
 export function objectToTaskState(obj: Record<string, any>): TaskState {
-  return {
+  // Initialize with required properties
+  const taskState: Partial<TaskState> = {
     // Basic task info
     agent: obj.agent || 'correct',
     model: obj.model || '',
     instruction: obj.instruction || '',
 
-    // File selections
-    inputFile: obj.inputFile || '',
-    referenceFile: obj.referenceFile || '',
-    auxiliaryFile: obj.auxiliaryFile || '',
-    figureFile: obj.figureFile || '',
-    outputNameOverride: obj.outputNameOverride || '',
-
-    // Multiple file selections
-    multipleInputFiles: obj.multipleInputFiles || [],
-    multipleReferenceFiles: obj.multipleReferenceFiles || [],
-    multipleAuxiliaryFiles: obj.multipleAuxiliaryFiles || [],
-    multipleFigureFiles: obj.multipleFigureFiles || [],
-    multipleOutputFiles: obj.multipleOutputFiles || [],
-
-    // Multiple file selection visibility
-    multipleInputFilesVisible: obj.multipleInputFilesVisible || false,
-    multipleReferenceFilesVisible: obj.multipleReferenceFilesVisible || false,
-    multipleAuxiliaryFilesVisible: obj.multipleAuxiliaryFilesVisible || false,
-    multipleFigureFilesVisible: obj.multipleFigureFilesVisible || false,
-    multipleOutputFilesVisible: obj.multipleOutputFilesVisible || false,
-
-    // Auto extract settings
-    autoExtractFigure:
-      obj.autoExtractFigure || obj.toolConfig?.autoExtractFigure || false,
-    autoExtractTikzFigure:
-      obj.autoExtractTikzFigure ||
-      obj.toolConfig?.autoExtractTikzFigure ||
-      false,
-
-    // Tool config settings
-    attachTeXCount:
-      obj.attachTeXCount || obj.toolConfig?.attachTeXCount || false,
-    usePrefillFromInput:
-      obj.usePrefillFromInput || obj.toolConfig?.usePrefillFromInput || false,
-    printInputPrompt:
-      obj.printInputPrompt || obj.toolConfig?.printInputPrompt || false,
-    reflect: obj.reflect || obj.toolConfig?.reflect || false,
-
     // Output name override visibility
+    outputNameOverride: obj.outputNameOverride || '',
     outputNameOverrideVisible:
       obj.outputNameOverrideVisible || !!obj.outputNameOverride || false,
   };
+
+  // Add single file selections with defaults
+  SINGLE_FILE_FIELDS.forEach((field) => {
+    if (field !== 'outputFile') {
+      // outputFile isn't part of the schema
+      (taskState as any)[field] = obj[field] || '';
+    }
+  });
+
+  // Add multiple file selections with defaults
+  MULTIPLE_FILE_FIELDS.forEach((field) => {
+    (taskState as any)[field] = obj[field] || [];
+  });
+
+  // Set active flags
+  ACTIVE_FLAGS.forEach((flag) => {
+    (taskState as any)[flag] = obj[flag] || false;
+  });
+
+  // Add auto extract settings - check both direct property and toolConfig
+  AUTO_EXTRACT_FIELDS.forEach((field) => {
+    (taskState as any)[field] = obj[field] || obj.toolConfig?.[field] || false;
+  });
+
+  // Add tool config settings - check both direct property and toolConfig
+  TOOL_CONFIG_FIELDS.forEach((field) => {
+    (taskState as any)[field] = obj[field] || obj.toolConfig?.[field] || false;
+  });
+
+  return taskState as TaskState;
 }
 
 /**
@@ -127,47 +130,45 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
  * @returns An AgentConfig representing the same configuration
  */
 export function taskStateToAgentConfig(taskState: TaskState): AgentConfig {
-  return {
+  // Initialize with partial config
+  const agentConfig: Partial<AgentConfig> = {
     // Basic task info
     agent: taskState.agent,
     model: taskState.model,
     instruction: taskState.instruction,
 
-    // File selections
-    inputFile: taskState.inputFile,
-    referenceFile: taskState.referenceFile || null,
-    auxiliaryFile: taskState.auxiliaryFile || null,
-    figureFile: taskState.figureFile || null,
-    outputNameOverride: taskState.outputNameOverride || null,
-
-    // Multiple file selections
-    inputFiles: taskState.multipleInputFilesVisible
-      ? taskState.multipleInputFiles
-      : null,
-    referenceFiles: taskState.multipleReferenceFilesVisible
-      ? taskState.multipleReferenceFiles
-      : null,
-    auxiliaryFiles: taskState.multipleAuxiliaryFilesVisible
-      ? taskState.multipleAuxiliaryFiles
-      : null,
-    figureFiles: taskState.multipleFigureFilesVisible
-      ? taskState.multipleFigureFiles
-      : null,
-    outputFiles: taskState.multipleOutputFilesVisible
-      ? taskState.multipleOutputFiles
-      : null,
-
     // Edited file (not part of TaskState)
     editedFile: null,
 
-    // Tool configuration
-    toolConfig: {
-      autoExtractFigure: taskState.autoExtractFigure,
-      autoExtractTikzFigure: taskState.autoExtractTikzFigure,
-      attachTeXCount: taskState.attachTeXCount,
-      usePrefillFromInput: taskState.usePrefillFromInput,
-      printInputPrompt: taskState.printInputPrompt,
-      reflect: taskState.reflect,
-    },
+    // Initialize tool config
+    toolConfig: {} as ToolConfig,
   };
+
+  // Add single file selections with null defaults
+  SINGLE_FILE_FIELDS.forEach((field) => {
+    if (field !== 'outputFile') {
+      // outputFile isn't part of the schema
+      (agentConfig as any)[field] = (taskState as any)[field] || null;
+    }
+  });
+
+  // Add multiple file selections, only if active
+  MULTIPLE_FILE_FIELDS.forEach((field) => {
+    const activeFlag = `${field}Active`;
+    (agentConfig as any)[field] =
+      (taskState as any)[activeFlag] && (taskState as any)[field]
+        ? (taskState as any)[field]
+        : null;
+  });
+
+  // Special case for outputNameOverride since it needs null rather than empty string
+  agentConfig.outputNameOverride = taskState.outputNameOverride || null;
+
+  // Add tool config settings
+  const allConfigFields = [...AUTO_EXTRACT_FIELDS, ...TOOL_CONFIG_FIELDS];
+  allConfigFields.forEach((field) => {
+    (agentConfig.toolConfig as any)[field] = (taskState as any)[field];
+  });
+
+  return agentConfig as AgentConfig;
 }
