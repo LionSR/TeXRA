@@ -1,4 +1,5 @@
 import { vscode } from './vscodeApi.js';
+
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
@@ -104,14 +105,19 @@ export function restoreState() {
         return;
       }
       selectDiv.innerHTML = '';
-      if (previousState[id] && previousState[id].length > 0) {
-        previousState[id].forEach((file) => {
+
+      // Get files and visibility from state
+      const filesArray = previousState[id] || [];
+      const isVisible = previousState[`${id}Visible`];
+
+      if (filesArray && filesArray.length > 0) {
+        filesArray.forEach((file) => {
           addFileToList(id, file);
         });
         setMultipleFileSelectVisibility(
           id,
           toggleId,
-          previousState[`${id}Visible`],
+          isVisible !== undefined ? isVisible : true,
         );
       } else {
         setMultipleFileSelectVisibility(id, toggleId, false);

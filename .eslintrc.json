@@ -15,7 +15,7 @@
       }
     ],
     "@stylistic/semi": "warn",
-    "curly": "warn",
+    "curly": "off",
     "eqeqeq": "warn",
     "no-throw-literal": "warn",
     "semi": "off"
