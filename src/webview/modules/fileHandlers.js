@@ -177,80 +177,81 @@ export function handleCheckboxChange(event) {
   });
 }
 
+/**
+ * Initialize the output files list with the input file
+ */
 export function initializeOutputFiles() {
-  const outputFilesDiv = safeGetElementById('multipleOutputFiles');
-  if (!outputFilesDiv) return;
-
-  // Check if there are saved output files
+  // Get the current state
   const state = vscode.getState();
-  if (
-    state &&
-    state.multipleOutputFiles &&
-    state.multipleOutputFiles.length > 0
-  ) {
-    // Use saved values
-    outputFilesDiv.innerHTML = '';
-    state.multipleOutputFiles.forEach((file) => {
-      addFileToList('multipleOutputFiles', file);
-    });
-  } else {
-    // Initialize from input files
-    outputFilesDiv.innerHTML = '';
-    const inputFileDiv = safeGetElementById('inputFile');
-    const multipleInputFilesDiv = safeGetElementById('multipleInputFiles');
 
-    // Add the main input file
-    if (inputFileDiv && inputFileDiv.value) {
-      addFileToList('multipleOutputFiles', inputFileDiv.value);
-    }
+  // Get references to the DOM elements
+  const inputFileDiv = safeGetElementById('inputFile');
+  const outputFilesDiv = safeGetElementById('outputFiles');
 
-    // Add multiple input files
-    if (multipleInputFilesDiv) {
-      const additionalFiles = getSelectedFiles(multipleInputFilesDiv);
-      additionalFiles.forEach((file) => {
-        addFileToList('multipleOutputFiles', file);
+  // Get the current input file value
+  const inputFile = inputFileDiv?.value;
+
+  // Check if we have an input file and output files div
+  if (inputFile && outputFilesDiv) {
+    // If the state has output files, populate the list
+    if (state.outputFiles && state.outputFiles.length > 0) {
+      // Clear the list first
+      outputFilesDiv.innerHTML = '';
+
+      // Then add each file
+      state.outputFiles.forEach((file) => {
+        addFileToList('outputFiles', file);
       });
+    } else {
+      // Clear the list
+      outputFilesDiv.innerHTML = '';
+
+      // Add the current input file as output
+      addFileToList('outputFiles', inputFileDiv.value);
+    }
+  } else if (outputFilesDiv) {
+    // If we don't have an input file, just clear the output files list
+    outputFilesDiv.innerHTML = '';
+  }
+
+  // Add opened files to the output files list
+  const openedFiles = vscode.getState()?.openedFiles || [];
+  openedFiles.forEach((file) => {
+    addFileToList('outputFiles', file);
+  });
+
+  // Make sure the Output Filename toggle works when Multiple Outputs is enabled
+  const outputNameOverrideInput = safeGetElementById('outputNameOverride');
+  const outputNameOverrideToggle = safeGetElementById(
+    'toggleOutputNameOverride',
+  );
+
+  if (outputNameOverrideInput && outputNameOverrideToggle) {
+    // Get the current state from the stored state
+    const state = vscode.getState();
+    const isOutputNameOverrideVisible =
+      state && state.outputNameOverrideVisible;
+
+    // Restore the output name override toggle state
+    if (isOutputNameOverrideVisible) {
+      outputNameOverrideInput.style.display = 'inline-block';
+      outputNameOverrideToggle.textContent = '<';
     }
   }
 
-  // Show the container if files were added
-  const container = safeGetElementById('multipleOutputFilesContainer');
-  const toggleIcon = safeGetElementById('toggleMultipleOutputFiles');
-  if (container && toggleIcon && outputFilesDiv.children.length > 0) {
-    container.style.display = 'block';
-    toggleIcon.textContent = '▲';
-  }
   saveState();
 }
 
-export function toggleMultipleOutputFiles() {
-  const isVisible =
-    safeGetElementById('multipleOutputFilesContainer').style.display !== 'none';
-  if (!isVisible) {
-    initializeOutputFiles();
+export function toggleOutputFiles() {
+  const containerVisible =
+    safeGetElementById('outputFilesContainer').style.display !== 'none';
 
-    // Make sure the Output Filename toggle works when Multiple Outputs is enabled
-    const outputNameOverrideInput = safeGetElementById('outputNameOverride');
-    const outputNameOverrideToggle = safeGetElementById(
-      'toggleOutputNameOverride',
-    );
-
-    if (outputNameOverrideInput && outputNameOverrideToggle) {
-      // Get the current state from the stored state
-      const state = vscode.getState();
-      const isOutputNameOverrideVisible =
-        state && state.outputNameOverrideVisible;
-
-      // Restore the output name override toggle state
-      if (isOutputNameOverrideVisible) {
-        outputNameOverrideInput.style.display = 'inline-block';
-        outputNameOverrideToggle.textContent = '<';
-      }
-    }
+  if (containerVisible) {
+    toggleMultipleFiles('outputFiles', 'toggleOutputFiles');
   } else {
-    toggleMultipleFiles('multipleOutputFiles', 'toggleMultipleOutputFiles');
+    initializeOutputFiles();
+    toggleMultipleFiles('outputFiles', 'toggleOutputFiles');
   }
-  saveState();
 }
 
 export function toggleOutputNameOverride() {
@@ -287,8 +288,8 @@ export function emptyMultipleFiles(containerId, toggleId) {
   const toggleIconDiv = safeGetElementById(toggleId);
   if (toggleIconDiv) toggleIconDiv.textContent = '▼';
 
-  // Reset Output Filename override if we're emptying multiple output files
-  if (containerId === 'multipleOutputFiles') {
+  // Reset Output Filename override if we're emptying output files
+  if (containerId === 'outputFiles') {
     const outputNameOverrideInput = safeGetElementById('outputNameOverride');
     const outputNameOverrideToggle = safeGetElementById(
       'toggleOutputNameOverride',
@@ -325,5 +326,18 @@ export function handleSetCurrentFile({ fileType, filePath }) {
       command: 'showInformationMessage',
       text: `The current file is not in the ${fileType} file list: ${filePath}`,
     });
+  }
+}
+
+export function initializeOutputContainer() {
+  const container = safeGetElementById('outputFilesContainer');
+  const toggleIcon = safeGetElementById('toggleOutputFiles');
+
+  if (container && toggleIcon) {
+    const state = vscode.getState();
+    const shouldShow = state && state.outputFilesActive;
+
+    container.style.display = shouldShow ? 'block' : 'none';
+    toggleIcon.textContent = shouldShow ? '▲' : '▼';
   }
 }

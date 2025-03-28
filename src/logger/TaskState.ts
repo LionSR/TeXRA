@@ -13,18 +13,18 @@ export interface TaskState {
   outputNameOverride: string;
 
   // Multiple file selections
-  multipleInputFiles: string[];
-  multipleReferenceFiles: string[];
-  multipleAuxiliaryFiles: string[];
-  multipleFigureFiles: string[];
-  multipleOutputFiles: string[];
+  inputFiles: string[];
+  referenceFiles: string[];
+  auxiliaryFiles: string[];
+  figureFiles: string[];
+  outputFiles: string[];
 
   // Multiple file selection visibility
-  multipleInputFilesVisible: boolean;
-  multipleReferenceFilesVisible: boolean;
-  multipleAuxiliaryFilesVisible: boolean;
-  multipleFigureFilesVisible: boolean;
-  multipleOutputFilesVisible: boolean;
+  inputFilesActive: boolean;
+  referenceFilesActive: boolean;
+  auxiliaryFilesActive: boolean;
+  figureFilesActive: boolean;
+  outputFilesActive: boolean;
 
   // Auto extract settings
   autoExtractFigure: boolean;
