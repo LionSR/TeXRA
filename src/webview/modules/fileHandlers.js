@@ -208,6 +208,16 @@ export function initializeOutputFiles() {
 
       // Add the current input file as output
       addFileToList('outputFiles', inputFileDiv.value);
+
+      // Also add any input files from the multiple input files list
+      if (state.inputFiles && state.inputFiles.length > 0) {
+        state.inputFiles.forEach((file) => {
+          if (file !== inputFile) {
+            // Avoid duplicates
+            addFileToList('outputFiles', file);
+          }
+        });
+      }
     }
   } else if (outputFilesDiv) {
     // If we don't have an input file, just clear the output files list
