@@ -1,10 +1,10 @@
 # Installation Guide
 
-This guide will walk you through the process of installing CoAuthor and all its dependencies to ensure optimal performance.
+This guide will walk you through the process of installing TexRA and all its dependencies to ensure optimal performance.
 
 ## System Requirements
 
-CoAuthor is designed to work on all major operating systems with the following minimum requirements:
+TexRA is designed to work on all major operating systems with the following minimum requirements:
 
 - **Visual Studio Code**: Version 1.96.2 or newer
 - **Operating System**: Windows 10/11, macOS 10.14+, or Linux (Ubuntu 18.04+)
@@ -59,12 +59,12 @@ If you need to customize the extension or want to work with the latest developme
 
 ## Installing Required Dependencies
 
-CoAuthor relies on several external tools to function properly. Follow the instructions for your operating system.
+TexRA relies on several external tools to function properly. Follow the instructions for your operating system.
 
 ### LaTeX Distribution
 
 ::: tip IMPORTANT
-A LaTeX distribution is required for CoAuthor to properly process LaTeX documents.
+A LaTeX distribution is required for TexRA to properly process LaTeX documents.
 :::
 
 #### Windows
@@ -181,11 +181,11 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-CoAuthor requires API keys to access language models. Here's how to set them up:
+TexRA requires API keys to access language models. Here's how to set them up:
 
-1. Open VS Code with CoAuthor installed
-2. Click on the CoAuthor icon in the Activity Bar
-3. Click "Set API Key" in the CoAuthor panel
+1. Open VS Code with TexRA installed
+2. Click on the TexRA icon in the Activity Bar
+3. Click "Set API Key" in the TexRA panel
 4. Select the provider (OpenAI or Anthropic)
 5. Enter your API key when prompted
 
@@ -199,27 +199,27 @@ CoAuthor requires API keys to access language models. Here's how to set them up:
 
 ## Verifying Installation
 
-To verify that CoAuthor and all dependencies are correctly installed:
+To verify that TexRA and all dependencies are correctly installed:
 
 1. Open VS Code
-2. Click on the CoAuthor icon in the Activity Bar
-3. The CoAuthor panel should load without errors
+2. Click on the TexRA icon in the Activity Bar
+3. The TexRA panel should load without errors
 4. Create or open a LaTeX document
 5. Try a simple command like "Indent Current TeX" from the editor title menu
 
-If any component is missing, CoAuthor will typically show an error message indicating what needs to be installed.
+If any component is missing, TexRA will typically show an error message indicating what needs to be installed.
 
 ## Optimizing Your Setup
 
 ### Setting Up VS Code
 
-For optimal use with CoAuthor:
+For optimal use with TexRA:
 
-1. Move CoAuthor to the secondary sidebar:
+1. Move TexRA to the secondary sidebar:
 
    - Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
    - Run "View: Toggle Secondary Side Bar Visibility" (or use Alt+Cmd+B on macOS)
-   - Drag the CoAuthor view from the primary sidebar to the secondary sidebar
+   - Drag the TexRA view from the primary sidebar to the secondary sidebar
 
 2. Configure LaTeX Workshop (if installed):
    - In VS Code settings, search for "Latex-workshop: Out Dir"
@@ -260,7 +260,7 @@ If you work across multiple computers:
 1. **Extension Not Loading**:
 
    - Check VS Code's minimum version requirement (1.96.2+)
-   - Look for errors in the Output panel (select "CoAuthor" in the dropdown)
+   - Look for errors in the Output panel (select "TexRA" in the dropdown)
    - Try reinstalling the extension
 
 2. **LaTeX Processing Errors**:
@@ -285,9 +285,9 @@ If you work across multiple computers:
 If you encounter persistent installation issues:
 
 1. Check the [GitHub Issues page](https://github.com/LionSR/coauthor/issues) for known problems
-2. Look for error messages in the CoAuthor ProgressBoard
+2. Look for error messages in the TexRA ProgressBoard
 3. File a new issue with detailed information about your system and the specific error
 
 ## Next Steps
 
-With CoAuthor and all dependencies installed, you're ready to start using the tool to enhance your academic writing. Check out the [Quick Start Guide](/guide/quick-start) to learn the basics, or explore specific features in the other documentation sections.
+With TexRA and all dependencies installed, you're ready to start using the tool to enhance your academic writing. Check out the [Quick Start Guide](/guide/quick-start) to learn the basics, or explore specific features in the other documentation sections.
