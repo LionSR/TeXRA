@@ -1,12 +1,12 @@
 ---
 layout: home
 hero:
-  name: CoAuthor
+  name: TexRA
   text: Your Intelligent Academic Writing Assistant
   tagline: Enhance your research writing with powerful AI integration in VS Code
   image:
     src: /quantum-deer.png
-    alt: CoAuthor Logo
+    alt: TexRA Logo
   actions:
     - theme: brand
       text: Get Started
@@ -35,11 +35,11 @@ features:
 
 <div class="custom-block">
   <p>
-    CoAuthor is a VS Code extension that brings the power of large language models to your academic writing workflow. It's designed to help researchers, professors, and students produce high-quality academic content by leveraging AI to handle formatting, corrections, and creative aspects of document preparation.
+    TexRA is a VS Code extension that brings the power of large language models to your academic writing workflow. It's designed to help researchers, professors, and students produce high-quality academic content by leveraging AI to handle formatting, corrections, and creative aspects of document preparation.
   </p>
 </div>
 
-## Why CoAuthor?
+## Why TexRA?
 
 Traditional LLM interfaces like ChatGPT or Claude often lead to shallow conversations that fail to exploit the models' full potential in academic contexts due to:
 
@@ -47,7 +47,7 @@ Traditional LLM interfaces like ChatGPT or Claude often lead to shallow conversa
 - Lack of integration with academic tools
 - Inability to handle multi-step reasoning processes effectively
 
-CoAuthor addresses these limitations by implementing:
+TexRA addresses these limitations by implementing:
 
 - **Reflection**: The LLM examines its own work to identify improvements
 - **Tool use**: The LLM leverages external tools to gather information or process data
@@ -82,7 +82,7 @@ CoAuthor addresses these limitations by implementing:
 
 ## Designed for Academic Research
 
-CoAuthor is specially designed to understand the unique requirements of academic writing:
+TexRA is specially designed to understand the unique requirements of academic writing:
 
 - Mathematical notation and formulas
 - Citation management
@@ -92,7 +92,7 @@ CoAuthor is specially designed to understand the unique requirements of academic
 
 ## Quotes from Users
 
-> "CoAuthor has transformed my paper writing process. What used to take weeks now takes days."
+> "TexRA has transformed my paper writing process. What used to take weeks now takes days."
 >
 > — Professor in Computer Science
 
@@ -102,7 +102,7 @@ CoAuthor is specially designed to understand the unique requirements of academic
 
 ## Get Started Today
 
-Installing and using CoAuthor is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
+Installing and using TexRA is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
 
 <div class="cta-container">
   <a href="/guide/" class="cta-button">Explore the Documentation</a>
