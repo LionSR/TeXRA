@@ -1,10 +1,10 @@
 # Tool Integration
 
-CoAuthor enhances AI capabilities by integrating with specialized external tools for academic writing. This approach follows Andrew Ng's framework for building effective AI agents, particularly focusing on tool use as a key design pattern.
+TexRA enhances AI capabilities by integrating with specialized external tools for academic research. This approach follows Andrew Ng's framework for building effective AI agents, particularly focusing on tool use as a key design pattern.
 
 ## Understanding Tool Integration
 
-While language models are powerful, they benefit from specialized tools for specific tasks. CoAuthor's tool integration:
+While language models are powerful, they benefit from specialized tools for specific tasks. TexRA's tool integration:
 
 1. Leverages external programs for specialized tasks
 2. Provides structured data to the AI for better context
@@ -13,7 +13,7 @@ While language models are powerful, they benefit from specialized tools for spec
 
 ## Core Integrated Tools
 
-CoAuthor integrates several key tools specifically designed for academic writing:
+TexRA integrates several key tools specifically designed for academic research:
 
 ### LaTeX Tools
 
@@ -28,7 +28,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Generates a visual diff document
 - Aids in reviewing changes between versions
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Accessible directly from the LaTeXdiffs section
 - Automated diff generation after processing documents
@@ -48,7 +48,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Makes code more readable and maintainable
 - Standardizes document formatting
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Available via the "Indent TeX" command
 - Automated indentation of generated documents
@@ -69,7 +69,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Provides detailed document statistics
 - Helps assess document complexity and length
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Available via the "Count Words in Current TeX File" command
 - Optional integration in prompts via "Attach TeX Count" option
@@ -88,7 +88,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Resizes and adjusts images as needed
 - Creates viewable previews of figures
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Automatic processing of figures for AI vision
 - Creation of viewable previews from PDFs
@@ -105,7 +105,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Enables multi-page document handling
 - Supports high-quality image extraction
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Used with GraphicsMagick/ImageMagick for PDF processing
 - Ensures high-quality figure extraction
@@ -122,7 +122,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 - Tracks document evolution over time
 - Supports collaborative workflows
 
-**Integration in CoAuthor**:
+**Integration in TexRA**:
 
 - Commit listing in the LaTeXdiffs section
 - Support for comparing against previous versions
@@ -130,7 +130,7 @@ CoAuthor integrates several key tools specifically designed for academic writing
 
 ## Tool Configuration Options
 
-CoAuthor provides several ways to configure tool integration:
+TexRA provides several ways to configure tool integration:
 
 ### Tool Config Dropdown
 
@@ -171,7 +171,7 @@ Configure tool integration through VS Code settings:
 
 ## How Tool Integration Works
 
-Behind the scenes, CoAuthor orchestrates a series of tool operations:
+Behind the scenes, TexRA orchestrates a series of tool operations:
 
 ### Document Analysis Workflow
 
@@ -197,7 +197,7 @@ Behind the scenes, CoAuthor orchestrates a series of tool operations:
 
 ## Leveraging Tools Effectively
 
-To get the most from CoAuthor's tool integration:
+To get the most from TexRA's tool integration:
 
 ### For Document Statistics
 
@@ -260,7 +260,7 @@ For advanced workflows, you can chain multiple tools:
 
 ### External Tool Integration
 
-CoAuthor can work alongside other VS Code extensions:
+TexRA can work alongside other VS Code extensions:
 
 - **LaTeX Workshop**: For compilation and preview
 - **GitLens**: For enhanced git visualization
@@ -300,8 +300,8 @@ If you encounter issues with tool integration:
 
 ## Next Steps
 
-Now that you understand CoAuthor's tool integration, you might want to explore:
+Now that you understand TexRA's tool integration, you might want to explore:
 
 - [TikZ Figures](/guide/tikz-figures) - Learn more about working with figures
 - [LaTeX Diff](/guide/latex-diff) - Explore document comparison features
-- [Configuration](/guide/configuration) - Customize CoAuthor's tool integration
+- [Configuration](/guide/configuration) - Customize TexRA's tool integration
