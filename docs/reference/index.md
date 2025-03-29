@@ -1,10 +1,10 @@
 # Reference
 
-Welcome to the CoAuthor reference section. This area provides detailed technical information, specifications, and resources to help you get the most out of the extension.
+Welcome to the TexRA reference section. This area provides detailed technical information, specifications, and resources to help you get the most out of the extension.
 
 ## What's in this Section
 
-The reference section contains comprehensive technical details about CoAuthor's components, including:
+The reference section contains comprehensive technical details about TexRA's components, including:
 
 ### Agent Reference
 
@@ -31,7 +31,7 @@ Technical specifications for all supported AI models:
 
 ### Settings Reference
 
-Complete documentation of all CoAuthor configuration options:
+Complete documentation of all TexRA configuration options:
 
 - Configuration JSON schema
 - Default values
@@ -55,7 +55,7 @@ Find solutions to common problems and issues:
 
 ## Best Practices
 
-Recommended approaches for effective use of CoAuthor:
+Recommended approaches for effective use of TexRA:
 
 - Optimal workflows
 - Performance optimization
@@ -71,7 +71,7 @@ Definitions of technical terms used throughout the documentation:
 
 - AI terminology
 - LaTeX concepts
-- CoAuthor-specific vocabulary
+- TexRA-specific vocabulary
 - Academic publishing terms
 
 [View Glossary →](/reference/glossary)
@@ -79,10 +79,10 @@ Definitions of technical terms used throughout the documentation:
 ## API Reference
 
 ::: warning Note
-The API reference is primarily intended for extension developers and those who want to integrate with CoAuthor programmatically.
+The API reference is primarily intended for extension developers and those who want to integrate with TexRA programmatically.
 :::
 
-Documentation of CoAuthor's internal APIs:
+Documentation of TexRA's internal APIs:
 
 - Command API
 - Extension API
@@ -111,7 +111,7 @@ Examples and templates shared by the community:
 
 ### Integration Examples
 
-How to integrate CoAuthor with other tools:
+How to integrate TexRA with other tools:
 
 - LaTeX Workshop configuration
 - Git integration

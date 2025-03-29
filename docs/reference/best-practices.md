@@ -1,10 +1,10 @@
 # Best Practices
 
-This guide provides recommendations for getting the most out of CoAuthor in your academic writing workflow. Following these best practices will help you achieve better results, work more efficiently, and maximize the benefits of AI-assisted academic writing.
+This guide provides recommendations for getting the most out of TexRA in your academic writing workflow. Following these best practices will help you achieve better results, work more efficiently, and maximize the benefits of AI-assisted academic writing.
 
 ## Effective Prompting
 
-The quality of your instructions significantly impacts the results you get from CoAuthor. Here are strategies for writing effective instructions:
+The quality of your instructions significantly impacts the results you get from TexRA. Here are strategies for writing effective instructions:
 
 ### Be Specific and Clear
 
@@ -120,7 +120,7 @@ project/
 
 ## Workflow Integration
 
-Integrate CoAuthor effectively into your writing process:
+Integrate TexRA effectively into your writing process:
 
 ### Staged Approach
 
@@ -152,7 +152,7 @@ When collaborating with others:
 
 ## Performance Optimization
 
-Optimize CoAuthor's performance for your workflow:
+Optimize TexRA's performance for your workflow:
 
 ### Resource Management
 
@@ -276,8 +276,8 @@ over text and include bullet points rather than full paragraphs.
 
 ## Next Steps
 
-Now that you're familiar with CoAuthor best practices, you might want to explore:
+Now that you're familiar with TexRA best practices, you might want to explore:
 
-- [Configuration](/guide/configuration) - Learn how to customize CoAuthor
+- [Configuration](/guide/configuration) - Learn how to customize TexRA
 - [Custom Agents](/guide/custom-agents) - Create specialized agents for your workflow
 - [Intelligent Merge](/guide/intelligent-merge) - Master the art of document merging
