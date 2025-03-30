@@ -201,7 +201,12 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        text = text.replaceAll(old, newText as string);
+        // Use String.prototype.replace with a special regular expression that
+        // includes the 'g' flag (global) to mimic replaceAll behavior,
+        // but allows us to properly handle backslashes by escaping them as needed
+        // The key difference is we escape special regex characters including backslashes
+        const escapedPattern = old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp(escapedPattern, 'g'), newText as string);
       }
     }
   }
