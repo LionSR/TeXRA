@@ -270,6 +270,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\label{': '\\label{',
     '\\\nlabel{': '\\label{',
 
+    // align problem
+    '\n\n\\end{align}': '\n\\end{align}',
+
     // latex ending separators
     '\n\\\nend{align}': '\n\\end{align}',
     '\n\\\nend{equation}': '\n\\end{equation}',
@@ -351,6 +354,25 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{enumerate>': '\\end{enumerate}',
 
     // Gemini problems
+    'in~\\cref{': 'in \\cref{',
+    'In~\\cref{': 'In \\cref{',
+    'in~Sec': 'in Sec',
+    'In~Sec': 'In Sec',
+    'by~Eq': 'by Eq',
+    'by~Eqs': 'by Eqs',
+    'by~Eqs.': 'by Eqs.',
+    'see~Sec': 'see Sec',
+    'See~Sec': 'See Sec',
+    'from~Eq': 'from Eq',
+    'From~Eq': 'From Eq',
+    'from~Eqs': 'from Eqs',
+    'From~Eqs': 'From Eqs',
+    'from~Eqs.': 'from Eqs.',
+    'From~Eqs.': 'From Eqs.',
+    'cf.~Eq': 'cf. Eq',
+    'to~App': 'to App',
+    '~(\\ref{': ' (\\ref{',
+
     '</minipage>': '\\end{minipage}',
     '\\begin{figure*}}': '\\begin{figure*}',
     '\\begin{figure}}': '\\begin{figure}',

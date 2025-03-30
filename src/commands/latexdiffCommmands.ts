@@ -294,7 +294,7 @@ async function handleRunLatexdiff(config: any) {
     }
 
     // Extract configuration parameters
-    const { agent, model, inputFile, multipleOutputFiles } = config;
+    const { agent, model, inputFile, outputFiles } = config;
 
     if (!agent || !model || !inputFile) {
       vscode.window.showErrorMessage(
@@ -326,9 +326,9 @@ async function handleRunLatexdiff(config: any) {
         // Determine the input files (could be multiple)
         let inputFiles: string[] = [];
 
-        if (multipleOutputFiles && Array.isArray(multipleOutputFiles)) {
+        if (outputFiles && Array.isArray(outputFiles)) {
           // If we have specified multiple output files, use those as base for comparison
-          inputFiles = multipleOutputFiles;
+          inputFiles = outputFiles;
         } else {
           // Otherwise, use the single input file
           inputFiles = [inputFile];

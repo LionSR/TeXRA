@@ -1,10 +1,10 @@
 # File Management
 
-CoAuthor provides a comprehensive file management system designed specifically for academic writing workflows. This guide explains how to effectively organize, select, and manage files when working with CoAuthor.
+TexRA provides a comprehensive file management system designed specifically for academic research workflows. This guide explains how to effectively organize, select, and manage files when working with TexRA.
 
 ## File Categories
 
-CoAuthor organizes files into several categories:
+TexRA organizes files into several categories:
 
 ### Input Files
 
@@ -45,7 +45,7 @@ Figure files include images and diagrams used in your document:
 
 ## File Selection Interface
 
-The CoAuthor interface provides a streamlined way to select and manage files:
+The TexRA interface provides a streamlined way to select and manage files:
 
 ![File Selection Interface](/images/file-selection.png)
 
@@ -89,17 +89,17 @@ When using multiple input files, you may need to specify multiple output files:
 
 ## File Path Handling
 
-CoAuthor intelligently handles file paths to ensure proper document processing:
+TexRA intelligently handles file paths to ensure proper document processing:
 
 ### Relative vs. Absolute Paths
 
 - **Display**: Files are displayed with paths relative to the workspace root
-- **Processing**: CoAuthor resolves paths to their absolute form when needed
+- **Processing**: TexRA resolves paths to their absolute form when needed
 - **Output**: Output files are typically saved in the same directory as their corresponding input files
 
 ### File Path Configuration
 
-You can customize how CoAuthor handles files by configuring file extensions and ignored paths in VS Code settings:
+You can customize how TexRA handles files by configuring file extensions and ignored paths in VS Code settings:
 
 ```json
 "coauthor.files.included.inputExtensions": [
@@ -118,7 +118,7 @@ You can customize how CoAuthor handles files by configuring file extensions and 
 
 ## Auto-Extraction Features
 
-CoAuthor can automatically extract files from your documents:
+TexRA can automatically extract files from your documents:
 
 ### Auto-Extract Options
 
@@ -127,7 +127,7 @@ Access these options through the "Auto Extract" dropdown:
 1. **Figures**: Automatically extract image references from LaTeX documents
 2. **TikZ Figures**: Automatically extract and compile TikZ figures
 
-When enabled, CoAuthor will:
+When enabled, TexRA will:
 
 1. Scan your LaTeX documents for figure references
 2. Extract the referenced images
@@ -147,7 +147,7 @@ For TikZ figure extraction, you can customize the template and paths:
 
 ## Output File Naming
 
-CoAuthor uses a structured naming convention for output files:
+TexRA uses a structured naming convention for output files:
 
 ```
 original_filename_agent_r0_model.extension
@@ -173,7 +173,7 @@ For specific needs, you can override the default naming:
 
 ## File Management Commands
 
-CoAuthor provides several commands for managing generated files:
+TexRA provides several commands for managing generated files:
 
 ### Pack
 
@@ -201,7 +201,7 @@ For complex LaTeX projects with many files and dependencies:
 
 ### LaTeX Directory Structure
 
-CoAuthor works well with standard LaTeX project structures:
+TexRA works well with standard LaTeX project structures:
 
 ```
 project/
@@ -217,7 +217,7 @@ project/
 
 ### Input File Detection
 
-CoAuthor automatically detects appropriate input files based on:
+TexRA automatically detects appropriate input files based on:
 
 1. File extension (`.tex`, `.txt`, `.md`)
 2. Location in project hierarchy
@@ -271,8 +271,8 @@ For working across multiple computers:
 
 ## Next Steps
 
-Now that you understand how to manage files in CoAuthor, you might want to explore:
+Now that you understand how to manage files in TexRA, you might want to explore:
 
-- [Tool Integration](/guide/tool-integration) - Learn how CoAuthor leverages external tools
+- [Tool Integration](/guide/tool-integration) - Learn how TexRA leverages external tools
 - [LaTeX Diff](/guide/latex-diff) - Understand how to compare document versions
 - [Intelligent Merge](/guide/intelligent-merge) - Learn about merging edited documents
