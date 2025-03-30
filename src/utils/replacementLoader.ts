@@ -201,36 +201,7 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        // CRITICAL FIX: We need to detect if the pattern contains a character sequence
-        // that JavaScript might interpret incorrectly due to backslash handling
-
-        // A list of problematic backslash letter combinations that need special handling
-        // These are characters that aren't treated as escape sequences in JavaScript
-        // but might cause issues with LaTeX commands
-        const problematicPatterns = /\\[a-zA-Z]/;
-
-        // Either use regex for any pattern with backslashes or problematic characters
-        if (old.includes('\\') || problematicPatterns.test(old)) {
-          try {
-            // For patterns with backslashes, we need to use the regex approach
-            // Escape any regex special characters first
-            const escapedPattern = old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-            // Use a RegExp with global flag to replace all occurrences
-            text = text.replace(
-              new RegExp(escapedPattern, 'g'),
-              newText as string,
-            );
-          } catch (error) {
-            logger.error(
-              CHANNEL,
-              `Error applying non-regex pattern "${old}": ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-        } else {
-          // For patterns without backslashes, we can use the simpler replaceAll
-          text = text.replaceAll(old, newText as string);
-        }
+        text = text.replaceAll(old, newText as string);
       }
     }
   }
