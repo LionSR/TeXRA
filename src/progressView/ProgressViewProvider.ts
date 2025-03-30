@@ -57,6 +57,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'AnthropicToolAgent',
   'TextEditorTool',
   'XMLValidatorAgent',
+  'arXivUtils',
 ]);
 
 // Channels that should not be persisted in workspace storage
