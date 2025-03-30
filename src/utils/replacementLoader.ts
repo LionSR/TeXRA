@@ -201,12 +201,21 @@ export function applyReplacements(
       }
     } else {
       for (const [old, newText] of Object.entries(category.patterns)) {
-        // Use String.prototype.replace with a special regular expression that
-        // includes the 'g' flag (global) to mimic replaceAll behavior,
-        // but allows us to properly handle backslashes by escaping them as needed
-        // The key difference is we escape special regex characters including backslashes
-        const escapedPattern = old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        text = text.replace(new RegExp(escapedPattern, 'g'), newText as string);
+        // The issue: When a pattern like '\e_' is loaded from YAML, JavaScript's replaceAll
+        // interprets '\e' as just 'e', not the literal sequence '\e'.
+        // Solution: First check if the pattern contains a backslash and handle it specially
+        if (old.includes('\\')) {
+          // For patterns with backslashes, we'll use a regex approach for safety
+          // Escape any regex special characters first
+          const escapedPattern = old.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          text = text.replace(
+            new RegExp(escapedPattern, 'g'),
+            newText as string,
+          );
+        } else {
+          // For patterns without backslashes, we can use the simpler replaceAll
+          text = text.replaceAll(old, newText as string);
+        }
       }
     }
   }
