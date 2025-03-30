@@ -104,45 +104,41 @@
 }
 
 /* Add this specific selector for Multiple Output Files section */
-.file-select:has(#multipleOutputFilesContainer[style*='none'])
-  #emptyMultipleOutputFilesButton,
-.file-select:has(#multipleOutputFilesContainer[style*='none'])
-  #selectMultipleOutputFilesButton {
+.file-select:has(#outputFilesContainer[style*='none']) #emptyOutputFilesButton,
+.file-select:has(#outputFilesContainer[style*='none'])
+  #selectOutputFilesButton {
   display: none;
 }
 
 /* Hide multiple file operation buttons when containers are not toggled */
-.file-select:has(#multipleInputFilesContainer[style*='none'])
-  #emptyMultipleInputFilesButton,
-.file-select:has(#multipleInputFilesContainer[style*='none'])
-  #selectMultipleInputFilesButton,
-.file-select:has(#multipleInputFilesContainer[style*='none'])
+.file-select:has(#inputFilesContainer[style*='none']) #emptyInputFilesButton,
+.file-select:has(#inputFilesContainer[style*='none']) #selectInputFilesButton,
+.file-select:has(#inputFilesContainer[style*='none'])
   #addOpenedInputFilesButton {
   display: none;
 }
 
-.file-select:has(#multipleReferenceFilesContainer[style*='none'])
-  #emptyMultipleReferenceFilesButton,
-.file-select:has(#multipleReferenceFilesContainer[style*='none'])
-  #selectMultipleReferenceFilesButton,
-.file-select:has(#multipleReferenceFilesContainer[style*='none'])
+.file-select:has(#referenceFilesContainer[style*='none'])
+  #emptyReferenceFilesButton,
+.file-select:has(#referenceFilesContainer[style*='none'])
+  #selectReferenceFilesButton,
+.file-select:has(#referenceFilesContainer[style*='none'])
   #addOpenedReferenceFilesButton {
   display: none;
 }
 
-.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
-  #emptyMultipleAuxiliaryFilesButton,
-.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
-  #selectMultipleAuxiliaryFilesButton,
-.file-select:has(#multipleAuxiliaryFilesContainer[style*='none'])
+.file-select:has(#auxiliaryFilesContainer[style*='none'])
+  #emptyAuxiliaryFilesButton,
+.file-select:has(#auxiliaryFilesContainer[style*='none'])
+  #selectAuxiliaryFilesButton,
+.file-select:has(#auxiliaryFilesContainer[style*='none'])
   #addOpenedAuxiliaryFilesButton {
   display: none;
 }
 
-.file-select:has(#multipleFigureFilesContainer[style*='none'])
-  #emptyMultipleFigureFilesButton,
-.file-select:has(#multipleFigureFilesContainer[style*='none'])
-  #selectMultipleFigureFilesButton {
+.file-select:has(#figureFilesContainer[style*='none']) #emptyFigureFilesButton,
+.file-select:has(#figureFilesContainer[style*='none'])
+  #selectFigureFilesButton {
   display: none;
 }
 

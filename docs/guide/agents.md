@@ -1,6 +1,6 @@
 # AI Agents
 
-CoAuthor provides a variety of specialized AI agents designed to assist with different aspects of academic writing. Each agent has been optimized for specific tasks through careful prompt engineering and tool integration.
+TexRA provides a variety of specialized AI agents designed to assist with different aspects of academic writing. Each agent has been optimized for specific tasks through careful prompt engineering and tool integration.
 
 ## Core Agents
 
@@ -298,8 +298,8 @@ See [Custom Agents](/guide/custom-agents) for detailed instructions.
 
 ## Next Steps
 
-Now that you understand the different agents available in CoAuthor, you might want to explore:
+Now that you understand the different agents available in TexRA, you might want to explore:
 
 - [Models](/guide/models) - Learn about the different AI models and their capabilities
 - [File Management](/guide/file-management) - Understand how to work with multiple files
-- [Tool Integration](/guide/tool-integration) - Discover how CoAuthor integrates with external tools
+- [Tool Integration](/guide/tool-integration) - Discover how TexRA integrates with external tools

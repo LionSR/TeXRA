@@ -5,13 +5,14 @@ import {
   CHECK_BOXES,
   ELEMENTS_TO_SAVE,
   CHECK_BOXES_AUTO_EXTRACT,
+  FILE_TYPES,
 } from './constants.js';
 import {
   updateEditedFileSelect,
   getSelectedFiles,
   handleCheckboxChange,
   toggleMultipleFiles,
-  toggleMultipleOutputFiles,
+  toggleOutputFiles,
   toggleOutputNameOverride,
   emptyMultipleFiles,
 } from './fileHandlers.js';
@@ -35,6 +36,54 @@ export function setupUIHandlers() {
       });
     }
   });
+
+  // Helper functions for common tasks
+  function getOutputNameOverride() {
+    const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
+    return outputNameOverrideDiv &&
+      outputNameOverrideDiv.style.display !== 'none'
+      ? outputNameOverrideDiv.value.trim()
+      : null;
+  }
+
+  // Get values for single file inputs (input, reference, auxiliary, figure)
+  function getSingleFileData(
+    fileTypes = ['input', 'reference', 'auxiliary', 'figure'],
+  ) {
+    const data = {};
+    fileTypes.forEach((type) => {
+      data[`${type}File`] = safeGetElementValue(`${type}File`);
+    });
+    return data;
+  }
+
+  // Get multiple file data with filtering of single files
+  function getMultipleFileData(singleFiles = {}) {
+    const multipleFilesData = {};
+
+    MULTIPLE_SELECTIONS.forEach((id) => {
+      // Check if container is visible
+      const container = safeGetElementById(`${id}Container`);
+      const isActive = container?.style.display === 'block';
+      multipleFilesData[`${id}Active`] = isActive;
+
+      // Get the matching single file (if it exists)
+      const singleFileKey = id.replace('Files', 'File');
+      const singleFile = singleFiles[singleFileKey];
+
+      // Get all files if container is visible
+      const filesDiv = safeGetElementById(id);
+      const files = isActive && filesDiv ? getSelectedFiles(filesDiv) : [];
+
+      // Filter out single file if it exists (except for outputFiles)
+      multipleFilesData[id] =
+        id !== 'outputFiles' && singleFile
+          ? files.filter((file) => file !== singleFile)
+          : files;
+    });
+
+    return multipleFilesData;
+  }
 
   // Add auto-extract toggle handler
   function updateAutoToggleState() {
@@ -70,17 +119,24 @@ export function setupUIHandlers() {
   });
 
   // Add event listeners for the empty buttons
-  ['Input', 'Reference', 'Auxiliary', 'Figure', 'Base', 'Edited'].forEach(
-    (type) => {
-      addEventListenerSafely(`empty${type}FileButton`, 'click', () => {
-        const selectElement = safeGetElementById(`${uncapitalize(type)}File`);
-        if (selectElement) {
-          selectElement.value = '';
-          saveState();
-        }
-      });
-    },
-  );
+  const fileTypesWithEmptyButtons = [
+    'input',
+    'reference',
+    'auxiliary',
+    'figure',
+    'base',
+    'edited',
+  ];
+  fileTypesWithEmptyButtons.forEach((type) => {
+    const capitalizedType = capitalize(type);
+    addEventListenerSafely(`empty${capitalizedType}FileButton`, 'click', () => {
+      const selectElement = safeGetElementById(`${type}File`);
+      if (selectElement) {
+        selectElement.value = '';
+        saveState();
+      }
+    });
+  });
 
   addEventListenerSafely('agent', 'change', function () {
     const selectedAgent = this.value;
@@ -122,17 +178,14 @@ export function setupUIHandlers() {
   });
 
   // Handle multiple file selection buttons
-  const multipleFileSelectors = [
-    { id: 'InputFiles', selectId: 'inputFile' },
-    { id: 'ReferenceFiles', selectId: 'referenceFile' },
-    { id: 'AuxiliaryFiles', selectId: 'auxiliaryFile' },
-    { id: 'FigureFiles', selectId: 'figureFile' },
-    { id: 'OutputFiles', selectId: 'inputFile' }, // OutputFiles uses inputFile as reference
-  ];
+  const multipleFileSelectors = FILE_TYPES.map((type) => ({
+    id: `${capitalize(type)}Files`,
+    selectId: type === 'output' ? 'inputFile' : `${type}File`, // OutputFiles uses inputFile as reference
+  }));
 
   multipleFileSelectors.forEach(({ id, selectId }) => {
-    const selectMultipleButtonId = `selectMultiple${capitalize(id)}Button`;
-    addEventListenerSafely(selectMultipleButtonId, 'click', function () {
+    const selectMultipleFilesButtonId = `select${id}Button`;
+    addEventListenerSafely(selectMultipleFilesButtonId, 'click', function () {
       const currentFile = safeGetElementValue(selectId);
       vscode.postMessage({
         command: 'selectMultipleFiles',
@@ -170,7 +223,7 @@ export function setupUIHandlers() {
     }
   });
 
-  addEventListenerSafely('eraseInstructionsButton', 'click', function () {
+  addEventListenerSafely('eraseInstructionButton', 'click', function () {
     const instruction = safeGetElementById('instruction');
     if (instruction) {
       instruction.value = '';
@@ -186,86 +239,22 @@ export function setupUIHandlers() {
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
 
-      // Get single files
-      const inputFile = safeGetElementValue('inputFile');
-      const referenceFile = safeGetElementValue('referenceFile');
-      const auxiliaryFile = safeGetElementValue('auxiliaryFile');
-      const figureFile = safeGetElementValue('figureFile');
-
-      // Check if multiple files containers are visible and get the files
-      const isMultipleInputFilesActive =
-        safeGetElementById('multipleInputFilesContainer')?.style.display ===
-        'block';
-      const isMultipleReferenceFilesActive =
-        safeGetElementById('multipleReferenceFilesContainer')?.style.display ===
-        'block';
-      const isMultipleAuxiliaryFilesActive =
-        safeGetElementById('multipleAuxiliaryFilesContainer')?.style.display ===
-        'block';
-      const isMultipleFigureFilesActive =
-        safeGetElementById('multipleFigureFilesContainer')?.style.display ===
-        'block';
-      const isMultipleOutputFilesActive =
-        safeGetElementById('multipleOutputFilesContainer')?.style.display ===
-        'block';
-
-      // Get multiple files if containers are visible
-      const inputFiles = isMultipleInputFilesActive
-        ? getSelectedFiles(safeGetElementById('multipleInputFiles')).filter(
-            (file) => file !== inputFile,
-          )
-        : [];
-      const referenceFiles = isMultipleReferenceFilesActive
-        ? getSelectedFiles(safeGetElementById('multipleReferenceFiles')).filter(
-            (file) => file !== referenceFile,
-          )
-        : [];
-      const auxiliaryFiles = isMultipleAuxiliaryFilesActive
-        ? getSelectedFiles(safeGetElementById('multipleAuxiliaryFiles')).filter(
-            (file) => file !== auxiliaryFile,
-          )
-        : [];
-      const figureFiles = isMultipleFigureFilesActive
-        ? getSelectedFiles(safeGetElementById('multipleFigureFiles')).filter(
-            (file) => file !== figureFile,
-          )
-        : [];
-      const outputFiles = isMultipleOutputFilesActive
-        ? getSelectedFiles(safeGetElementById('multipleOutputFiles'))
-        : [];
-
-      // Get output name override if visible
-      const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-      const outputNameOverride =
-        outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
-          ? outputNameOverrideDiv.value.trim()
-          : null;
+      // Get single files and multiple files data
+      const singleFiles = getSingleFileData();
+      const multipleFilesData = getMultipleFileData(singleFiles);
 
       vscode.postMessage({
         command: 'polishInstructionText',
         text: instruction.value,
         // Context information
-        agent: agent,
-        model: model,
+        agent,
+        model,
         // Single files
-        inputFile: inputFile,
-        referenceFile: referenceFile,
-        auxiliaryFile: auxiliaryFile,
-        figureFile: figureFile,
-        // Toggle status
-        multipleInputFilesActive: isMultipleInputFilesActive,
-        multipleReferenceFilesActive: isMultipleReferenceFilesActive,
-        multipleAuxiliaryFilesActive: isMultipleAuxiliaryFilesActive,
-        multipleFigureFilesActive: isMultipleFigureFilesActive,
-        multipleOutputFilesActive: isMultipleOutputFilesActive,
-        // Multiple files
-        inputFiles: inputFiles,
-        referenceFiles: referenceFiles,
-        auxiliaryFiles: auxiliaryFiles,
-        figureFiles: figureFiles,
-        outputFiles: outputFiles,
+        ...singleFiles,
+        // Toggle status and multiple files
+        ...multipleFilesData,
         // Output override
-        outputNameOverride: outputNameOverride,
+        outputNameOverride: getOutputNameOverride(),
       });
     }
   });
@@ -273,95 +262,44 @@ export function setupUIHandlers() {
   addEventListenerSafely('executeButton', 'click', function () {
     const agent = safeGetElementValue('agent');
     const model = safeGetElementValue('model');
-
-    // Get single files
-    const inputFile = safeGetElementValue('inputFile');
-    const referenceFile = safeGetElementValue('referenceFile');
-    const auxiliaryFile = safeGetElementValue('auxiliaryFile');
-    const figureFile = safeGetElementValue('figureFile');
-
-    // Get multiple files
-    const getMultipleFiles = (selectId) => {
-      const selectDiv = safeGetElementById(selectId);
-      const containerDiv = safeGetElementById(`${selectId}Container`);
-      return selectDiv && containerDiv && containerDiv.style.display === 'block'
-        ? getSelectedFiles(selectDiv)
-        : [];
-    };
-
-    const inputFiles = getMultipleFiles('multipleInputFiles').filter(
-      (file) => file !== inputFile,
-    );
-    const referenceFiles = getMultipleFiles('multipleReferenceFiles').filter(
-      (file) => file !== referenceFile,
-    );
-    const auxiliaryFiles = getMultipleFiles('multipleAuxiliaryFiles').filter(
-      (file) => file !== auxiliaryFile,
-    );
-    const figureFiles = getMultipleFiles('multipleFigureFiles').filter(
-      (file) => file !== figureFile,
-    );
-    const outputFiles = getMultipleFiles('multipleOutputFiles');
-
-    const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-    const outputNameOverride =
-      outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
-        ? outputNameOverrideDiv.value.trim()
-        : null;
-
     const instruction = safeGetElementValue('instruction');
 
-    // auto extract options
-    const autoExtractFigure = safeGetElementChecked('autoExtractFigure');
-    const autoExtractTikzFigure = safeGetElementChecked(
-      'autoExtractTikzFigure',
-    );
+    // Get single files and multiple files data
+    const singleFiles = getSingleFileData();
+    const multipleFilesData = getMultipleFileData(singleFiles);
 
-    // tool config options
-    const reflect = safeGetElementChecked('reflect');
-    const attachTeXCount = safeGetElementChecked('attachTeXCount');
-    const usePrefillFromInput = safeGetElementChecked('usePrefillFromInput');
-    const printInputPrompt = safeGetElementChecked('printInputPrompt');
+    // Get checkbox values using loops
+    const checkboxValues = {};
+    CHECK_BOXES.forEach((id) => {
+      checkboxValues[id] = safeGetElementChecked(id);
+    });
 
     vscode.postMessage({
       command: 'execute',
       // parameters
-      agent: agent,
-      model: model,
-      // files
-      inputFile: inputFile,
-      inputFiles: inputFiles,
-      referenceFile: referenceFile,
-      referenceFiles: referenceFiles,
-      auxiliaryFile: auxiliaryFile,
-      auxiliaryFiles: auxiliaryFiles,
-      figureFile: figureFile,
-      figureFiles: figureFiles,
+      agent,
+      model,
       // instruction
-      instruction: instruction,
-      // auto extract options
-      autoExtractFigure: autoExtractFigure,
-      autoExtractTikzFigure: autoExtractTikzFigure,
-      // tool config options
-      reflect: reflect,
-      attachTeXCount: attachTeXCount,
-      usePrefillFromInput: usePrefillFromInput,
-      printInputPrompt: printInputPrompt,
-
-      // output
-      outputFiles: outputFiles,
-      outputNameOverride: outputNameOverride,
+      instruction,
+      // single files
+      ...singleFiles,
+      // multiple files
+      ...multipleFilesData,
+      // checkboxes (auto extract options and tool config)
+      ...checkboxValues,
+      // output override
+      outputNameOverride: getOutputNameOverride(),
     });
   });
 
   addEventListenerSafely('mergeButton', 'click', function () {
-    const inputFile = safeGetElementValue('inputFile');
+    const { inputFile } = getSingleFileData(['input']);
     const editedFile = safeGetElementValue('editedFile');
 
     vscode.postMessage({
       command: 'merge',
-      inputFile: inputFile,
-      editedFile: editedFile,
+      inputFile,
+      editedFile,
     });
 
     vscode.postMessage({
@@ -372,28 +310,16 @@ export function setupUIHandlers() {
 
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}Button`, 'click', function () {
-      const inputFile = safeGetElementValue('inputFile');
+      // Get basic data
+      const { inputFile } = getSingleFileData(['input']);
       const agent = safeGetElementValue('agent');
       const model = safeGetElementValue('model');
-      const outputNameOverrideDiv = safeGetElementById('outputNameOverride');
-      const outputNameOverride =
-        outputNameOverrideDiv && outputNameOverrideDiv.style.display !== 'none'
-          ? outputNameOverrideDiv.value.trim()
-          : null;
 
-      const inputFiles = getSelectedFiles(
-        safeGetElementById('multipleInputFiles'),
-      );
-      const outputFiles = getSelectedFiles(
-        safeGetElementById('multipleOutputFiles'),
-      );
+      // Get output files
+      const outputFiles = getSelectedFiles(safeGetElementById('outputFiles'));
 
-      // BUG: Determine if we should use multiple or single mode
-      // Note: inputFiles.length>0 is reserved for agents with default output files
-      // but this is not currently supported due to back-front end separation
-      const outputFilesContainer = safeGetElementById(
-        'multipleOutputFilesContainer',
-      );
+      // Check if we should use multiple or single mode
+      const outputFilesContainer = safeGetElementById('outputFilesContainer');
       const useMultiple =
         outputFilesContainer &&
         outputFilesContainer.style.display === 'block' &&
@@ -402,16 +328,16 @@ export function setupUIHandlers() {
       if (useMultiple) {
         vscode.postMessage({
           command: `${action}Multiple`,
-          inputFile: inputFile,
-          agent: agent,
-          model: model,
-          outputNameOverride: outputNameOverride,
-          outputFiles: outputFiles,
+          inputFile,
+          agent,
+          model,
+          outputNameOverride: getOutputNameOverride(),
+          outputFiles,
         });
 
         vscode.postMessage({
           command: 'showInformationMessage',
-          text: `${capitalize(action)}ing multiple files: ${[inputFile, ...inputFiles].join(', ')}`,
+          text: `${capitalize(action)}ing multiple files: ${[inputFile, ...outputFiles].join(', ')}`,
         });
       } else {
         if (!inputFile || !agent || !model) {
@@ -424,10 +350,10 @@ export function setupUIHandlers() {
 
         vscode.postMessage({
           command: `${action}Single`,
-          inputFile: inputFile,
-          agent: agent,
-          model: model,
-          outputNameOverride: outputNameOverride,
+          inputFile,
+          agent,
+          model,
+          outputNameOverride: getOutputNameOverride(),
         });
 
         vscode.postMessage({
@@ -438,16 +364,17 @@ export function setupUIHandlers() {
     });
   });
 
+  // LaTeX diff operations
   addEventListenerSafely('latexdiffButton', 'click', function () {
-    const inputFile = safeGetElementValue('inputFile');
+    const { inputFile } = getSingleFileData(['input']);
     const baseFile = safeGetElementValue('baseFile');
     const editedFile = safeGetElementValue('editedFile');
 
     vscode.postMessage({
       command: 'latexdiff',
-      inputFile: inputFile,
-      baseFile: baseFile,
-      editedFile: editedFile,
+      inputFile,
+      baseFile,
+      editedFile,
     });
 
     vscode.postMessage({
@@ -457,15 +384,15 @@ export function setupUIHandlers() {
   });
 
   addEventListenerSafely('latexdiffvcButton', 'click', function () {
-    const inputFile = safeGetElementValue('inputFile');
+    const { inputFile } = getSingleFileData(['input']);
     const baseFile = safeGetElementValue('baseFile');
     const commitHash = safeGetElementValue('commit');
 
     vscode.postMessage({
       command: 'latexdiffvc',
-      inputFile: inputFile,
-      baseFile: baseFile,
-      commitHash: commitHash,
+      inputFile,
+      baseFile,
+      commitHash,
     });
 
     vscode.postMessage({
@@ -474,17 +401,18 @@ export function setupUIHandlers() {
     });
   });
 
+  // Pack/clean LaTeX diff operations
   ['pack', 'clean'].forEach((action) => {
     addEventListenerSafely(`${action}LatexdiffvcButton`, 'click', function () {
-      const inputFile = safeGetElementValue('inputFile');
+      const { inputFile } = getSingleFileData(['input']);
       const baseFile = safeGetElementValue('baseFile');
       const commitHash = safeGetElementValue('commit');
 
       vscode.postMessage({
         command: `${action}Latexdiffvc`,
-        inputFile: inputFile,
-        baseFile: baseFile,
-        commitHash: commitHash,
+        inputFile,
+        baseFile,
+        commitHash,
         clean: action === 'clean',
       });
 
@@ -520,41 +448,42 @@ export function setupUIHandlers() {
   addEventListenerSafely('instruction', 'input', saveState);
   addEventListenerSafely('outputNameOverride', 'input', saveState);
 
-  new Sortable(safeGetElementById('multipleOutputFiles'), {
+  new Sortable(safeGetElementById('outputFiles'), {
     animation: 150,
     onEnd: saveState,
   });
 
   // Output Filename toggle only works when inside Multiple Outputs container
   addEventListenerSafely('toggleOutputNameOverride', 'click', function () {
-    const multipleOutputFilesContainer = safeGetElementById(
-      'multipleOutputFilesContainer',
-    );
+    const outputFilesContainer = safeGetElementById('outputFilesContainer');
     if (
-      multipleOutputFilesContainer &&
-      multipleOutputFilesContainer.style.display === 'block'
+      outputFilesContainer &&
+      outputFilesContainer.style.display === 'block'
     ) {
       toggleOutputNameOverride();
     }
   });
 
-  ['Input', 'Reference', 'Auxiliary'].forEach((type) => {
-    const buttonId = `addOpened${type}FilesButton`;
-    addEventListenerSafely(buttonId, 'click', function () {
+  // Add event listeners for file operations (add opened files, get current file)
+  const fileTypesWithOperations = ['input', 'reference', 'auxiliary'];
+  fileTypesWithOperations.forEach((type) => {
+    const capitalizedType = capitalize(type);
+
+    // Add opened files button
+    const addOpenedButtonId = `addOpened${capitalizedType}FilesButton`;
+    addEventListenerSafely(addOpenedButtonId, 'click', () => {
       vscode.postMessage({
         command: 'addOpenedFiles',
-        fileType: uncapitalize(type),
+        fileType: type,
       });
     });
-  });
 
-  // Add event listeners for current file buttons
-  ['Input', 'Reference', 'Auxiliary'].forEach((type) => {
-    const currentFileButtonId = `current${capitalize(type)}FileButton`;
+    // Current file button
+    const currentFileButtonId = `current${capitalizedType}FileButton`;
     addEventListenerSafely(currentFileButtonId, 'click', () => {
       vscode.postMessage({
         command: 'getCurrentFile',
-        fileType: uncapitalize(type),
+        fileType: type,
       });
     });
   });
@@ -572,8 +501,8 @@ export function setupUIHandlers() {
   MULTIPLE_SELECTIONS.forEach((id) => {
     const toggleId = `toggle${capitalize(id)}`;
     addEventListenerSafely(toggleId, 'click', () => {
-      if (id === 'multipleOutputFiles') {
-        toggleMultipleOutputFiles();
+      if (id === 'outputFiles') {
+        toggleOutputFiles();
       } else {
         toggleMultipleFiles(id, toggleId);
       }
