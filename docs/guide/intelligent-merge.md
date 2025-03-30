@@ -1,10 +1,10 @@
 # Intelligent Merge
 
-CoAuthor's intelligent merge feature allows you to seamlessly combine changes from multiple document versions or authors. This powerful capability goes beyond simple text merging by understanding the context and intent of changes, making it invaluable for collaborative academic writing.
+TexRA's intelligent merge feature allows you to seamlessly combine changes from multiple document versions or authors. This powerful capability goes beyond simple text merging by understanding the context and intent of changes, making it invaluable for collaborative academic writing.
 
 ## Understanding Intelligent Merge
 
-Unlike traditional text merge tools that work line-by-line, CoAuthor's intelligent merge:
+Unlike traditional text merge tools that work line-by-line, TexRA's intelligent merge:
 
 1. Analyzes the semantic content of both documents
 2. Identifies substantive changes vs. stylistic differences
@@ -12,7 +12,7 @@ Unlike traditional text merge tools that work line-by-line, CoAuthor's intellige
 4. Resolves conflicts intelligently based on context
 5. Maintains consistent style and terminology
 
-This approach is particularly valuable for academic writing, where precision and clarity are critical.
+This approach is particularly valuable for academic research, where precision and clarity are critical.
 
 ## When to Use Intelligent Merge
 
@@ -30,7 +30,7 @@ Here's how to perform a basic intelligent merge:
 
 ### Step 1: Select Files
 
-In the LaTeXdiffs section of the CoAuthor panel:
+In the LaTeXdiffs section of the TexRA panel:
 
 1. **Base File**: Select the original document version
 2. **Edited File**: Select the modified document version
@@ -45,7 +45,7 @@ The Base File is typically your "main" or "canonical" version, while the Edited 
 
 Click the "Merge" button with the <i class="codicon codicon-merge"></i> icon.
 
-CoAuthor will:
+TexRA will:
 
 1. Analyze both documents
 2. Identify meaningful changes
@@ -53,7 +53,7 @@ CoAuthor will:
 
 ### Step 3: Review the Result
 
-The merged document will be opened automatically. CoAuthor will:
+The merged document will be opened automatically. TexRA will:
 
 1. Create a new file with naming pattern: `basename_merge_r0_model.tex`
 2. Generate a diff file showing all changes
@@ -67,7 +67,7 @@ For more control over the merge process:
 
 You can guide the merge process through specific instructions:
 
-1. In the CoAuthor main panel, select the `merge` agent
+1. In the TexRA main panel, select the `merge` agent
 2. Choose your model (Claude 3.7 Sonnet recommended)
 3. Provide specific instructions in the instruction box
 4. Select your base and edited files
@@ -124,7 +124,7 @@ For textual descriptions, prefer the edited file's versions when they provide mo
 
 ## LaTeX-Specific Merge Features
 
-CoAuthor's merge functionality is specifically optimized for LaTeX documents:
+TexRA's merge functionality is specifically optimized for LaTeX documents:
 
 ### LaTeX Structure Preservation
 
@@ -156,7 +156,7 @@ For documents with citations:
 
 ## Visualizing Merge Results
 
-CoAuthor provides several ways to visualize merge results:
+TexRA provides several ways to visualize merge results:
 
 ### LaTeX Diff View
 
@@ -274,7 +274,7 @@ If important content is lost during merging:
 
 ## Next Steps
 
-Now that you understand CoAuthor's intelligent merge feature, you might want to explore:
+Now that you understand TexRA's intelligent merge feature, you might want to explore:
 
 - [LaTeX Diff](/guide/latex-diff) - Learn more about comparing document versions
 - [File Management](/guide/file-management) - Understand how to organize files for efficient workflows

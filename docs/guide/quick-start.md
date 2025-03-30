@@ -1,10 +1,10 @@
 # Quick Start Guide
 
-This guide will help you get up and running with CoAuthor quickly. In just a few minutes, you'll be able to use AI to enhance your academic writing in VS Code.
+This guide will help you get up and running with TexRA quickly. In just a few minutes, you'll be able to use AI to enhance your academic writing in VS Code.
 
 ## Overview
 
-CoAuthor integrates powerful AI capabilities directly into your writing workflow. Here's what you can do:
+TexRA integrates powerful AI capabilities directly into your writing workflow. Here's what you can do:
 
 - Fix grammar and typos in academic documents
 - Improve writing style and clarity
@@ -13,7 +13,7 @@ CoAuthor integrates powerful AI capabilities directly into your writing workflow
 
 ## Basic Workflow
 
-The typical CoAuthor workflow consists of these steps:
+The typical TexRA workflow consists of these steps:
 
 1. Select files to process (input, reference, auxiliary, figures)
 2. Choose the appropriate agent (correct, polish, draw, etc.)
@@ -22,14 +22,14 @@ The typical CoAuthor workflow consists of these steps:
 5. Execute the agent
 6. Review the generated output
 
-## Your First CoAuthor Task
+## Your First TexRA Task
 
 Let's go through an example to illustrate the basic workflow.
 
 ### Step 1: Open a Document
 
 1. Open VS Code
-2. Navigate to the CoAuthor panel in the sidebar (click the quantum deer icon)
+2. Navigate to the TexRA panel in the sidebar (click the quantum deer icon)
 3. Open or create a LaTeX document you'd like to improve
 
 ::: tip
@@ -38,7 +38,7 @@ Make sure your document is part of a workspace (folder) for best results.
 
 ### Step 2: Select Files
 
-1. In the CoAuthor panel, click the "Current" button next to "Input" to set your active document as the input file
+1. In the TexRA panel, click the "Current" button next to "Input" to set your active document as the input file
 2. (Optional) Add reference, auxiliary, or figure files if needed for your task
 
 ::: info Multiple Files
@@ -93,13 +93,13 @@ Be specific about what you want. Include what should change and what should rema
 2. Review the changes made by the AI
 3. You can compare the original and modified versions using:
    - VS Code's built-in diff viewer
-   - CoAuthor's LaTeXdiff feature in the CoAuthor panel
+   - TexRA's LaTeXdiff feature in the TexRA panel
 
 <!-- ![Results Review](/images/results-review.png) -->
 
 ## Common Quick Tasks
 
-Here are some common tasks you can try with CoAuthor:
+Here are some common tasks you can try with TexRA:
 
 ### Fixing Grammar and Typos
 
@@ -127,7 +127,7 @@ Here are some common tasks you can try with CoAuthor:
 
 ## Understanding the Output
 
-When CoAuthor completes a task, it produces:
+When TexRA completes a task, it produces:
 
 1. **Output File**: The main result with the requested changes
 2. **Log Files**: Detailed information about the process
@@ -141,7 +141,7 @@ For example, if your input file is `paper.tex` and you used the `polish` agent w
 
 ## Next Steps
 
-Now that you've completed your first task with CoAuthor, you can:
+Now that you've completed your first task with TexRA, you can:
 
 - Explore more [advanced agents](/guide/agents) for specialized tasks
 - Learn about [LaTeX diff](/guide/latex-diff) for comparing document versions
