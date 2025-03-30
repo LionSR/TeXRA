@@ -73,8 +73,8 @@ export class ProgressViewMessageHandler {
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      multipleOutputFiles: taskState.multipleOutputFiles,
-      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+      outputFiles: taskState.outputFiles,
+      outputFilesActive: taskState.outputFilesActive,
     });
   }
 
@@ -111,8 +111,8 @@ export class ProgressViewMessageHandler {
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      multipleOutputFiles: taskState.multipleOutputFiles,
-      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+      outputFiles: taskState.outputFiles,
+      outputFilesActive: taskState.outputFilesActive,
     });
   }
 
@@ -152,8 +152,8 @@ export class ProgressViewMessageHandler {
       model: taskState.model,
       inputFile: taskState.inputFile,
       outputNameOverride: taskState.outputNameOverride,
-      multipleOutputFiles: taskState.multipleOutputFiles,
-      multipleOutputFilesVisible: taskState.multipleOutputFilesVisible,
+      outputFiles: taskState.outputFiles,
+      outputFilesActive: taskState.outputFilesActive,
     });
   }
 }

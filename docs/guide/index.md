@@ -1,26 +1,26 @@
-# Introduction to CoAuthor
+# Introduction to TexRA
 
-Welcome to CoAuthor, your intelligent academic writing assistant integrated directly into VS Code. This guide will help you understand what CoAuthor is, how it works, and how it can enhance your academic writing workflow.
+Welcome to TexRA, your intelligent academic writing assistant integrated directly into VS Code. This guide will help you understand what TexRA is, how it works, and how it can enhance your academic writing workflow.
 
-## What is CoAuthor?
+## What is TexRA?
 
-CoAuthor is a VS Code extension designed to harness the power of large language models (LLMs) for academic writing and research. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on the content while the AI assists with formatting, clarity, and technical precision.
+TexRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and research. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on the content while the AI assists with formatting, clarity, and technical precision.
 
-Unlike general-purpose AI interfaces like ChatGPT or Claude, CoAuthor is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
+Unlike general-purpose AI interfaces like ChatGPT or Claude, TexRA is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
 
-## The Philosophy Behind CoAuthor
+## The Philosophy Behind TexRA
 
-CoAuthor was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic writing that are often underutilized. The extension implements an approach inspired by key AI design patterns:
+TexRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic writing that are often underutilized. The extension implements an approach inspired by key AI design patterns:
 
 1. **Reflection**: The LLM examines its own work to identify improvements
 2. **Tool use**: The LLM leverages external tools to gather information or process data
 3. **Planning**: The LLM develops and executes multi-step plans to achieve complex goals
 
-Through these patterns, CoAuthor creates an iterative process that mimics expert academic writing - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
+Through these patterns, TexRA creates an iterative process that mimics expert academic writing - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
 
 ## Key Features
 
-CoAuthor offers a comprehensive set of features designed for academic workflows:
+TexRA offers a comprehensive set of features designed for academic workflows:
 
 ### Specialized AI Agents
 
@@ -48,9 +48,9 @@ CoAuthor offers a comprehensive set of features designed for academic workflows:
 - File organization and batch processing
 - Integration with external academic tools
 
-## How CoAuthor Works
+## How TexRA Works
 
-At its core, CoAuthor works by:
+At its core, TexRA works by:
 
 1. **Analyzing** your academic documents and instructions
 2. **Planning** a detailed approach to fulfill your requirements
@@ -60,9 +60,9 @@ At its core, CoAuthor works by:
 
 This process leverages the strengths of language models while addressing their limitations through structured workflows and specialized tools.
 
-## Who Should Use CoAuthor?
+## Who Should Use TexRA?
 
-CoAuthor is designed for:
+TexRA is designed for:
 
 - **Researchers** writing academic papers, grants, or reports
 - **Professors** creating lecture notes, slides, or educational materials
@@ -72,10 +72,10 @@ CoAuthor is designed for:
 
 ## Getting Started
 
-Ready to enhance your academic writing with CoAuthor? The next sections will guide you through:
+Ready to enhance your academic writing with TexRA? The next sections will guide you through:
 
-- [Installation](/guide/installation): Setting up CoAuthor and its dependencies
-- [Quick Start](/guide/quick-start): Your first steps with CoAuthor
+- [Installation](/guide/installation): Setting up TexRA and its dependencies
+- [Quick Start](/guide/quick-start): Your first steps with TexRA
 - [Core Concepts](/guide/agents): Understanding the fundamental components
 
 Let's begin your journey toward more efficient and effective academic writing!

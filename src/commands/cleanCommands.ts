@@ -95,9 +95,7 @@ export async function handleClean(config: any) {
     return;
   }
 
-  const outputFiles = config.multipleOutputFilesVisible
-    ? config.multipleOutputFiles || []
-    : [];
+  const outputFiles = config.outputFilesActive ? config.outputFiles || [] : [];
 
   if (outputFiles.length > 0) {
     logger.info(
