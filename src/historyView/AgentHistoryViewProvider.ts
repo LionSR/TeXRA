@@ -265,9 +265,9 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
           taskState,
         );
 
-        vscode.window.showInformationMessage(
-          `Configuration restored to main view`,
-        );
+        // vscode.window.showInformationMessage(
+        //   `Configuration restored to main view`,
+        // );
       } else {
         vscode.window.showErrorMessage(`History item not found`);
       }

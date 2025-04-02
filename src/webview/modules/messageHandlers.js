@@ -189,10 +189,10 @@ function handleStateRestoration(state) {
   restoreState();
 
   // Let the user know we've restored their configuration
-  vscode.postMessage({
-    command: 'showInformationMessage',
-    text: 'Configuration restored from selected task',
-  });
+  // vscode.postMessage({
+  //   command: 'showInformationMessage',
+  //   text: 'Configuration restored from selected task',
+  // });
 
   // Prevent the automatic restoreState that would happen at the end of the message handler
   window._skipNextRestoreState = true;
