@@ -71,6 +71,7 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
 
   const existingFiles = getSelectedFiles(selectDiv);
   const newFiles = files.filter((file) => !existingFiles.includes(file));
+
   if (newFiles.length > 0) {
     newFiles.forEach((file) => {
       addFileToList(selectId, file);
@@ -81,10 +82,6 @@ export function updateMultipleFileSelect(selectId, toggleId, files) {
     if (containerDiv) {
       containerDiv.style.display = 'block';
     }
-    // vscode.postMessage({
-    //   command: 'showInformationMessage',
-    //   text: `Added ${newFiles.length} file(s) to ${selectId}`,
-    // });
   }
   saveState();
 }
@@ -293,6 +290,7 @@ export function emptyMultipleFiles(containerId, toggleId) {
   const listDiv = safeGetElementById(containerId);
   const container = safeGetElementById(`${containerId}Container`);
   if (!listDiv || !container) return;
+
   listDiv.innerHTML = '';
   container.style.display = 'none';
   const toggleIconDiv = safeGetElementById(toggleId);
