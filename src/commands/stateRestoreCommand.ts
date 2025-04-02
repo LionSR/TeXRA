@@ -107,7 +107,7 @@ async function restoreState(config: any) {
     }
 
     logger.info(CHANNEL, 'Main webview state restoration requested');
-    vscode.window.showInformationMessage('Configuration restored to main view');
+    // vscode.window.showInformationMessage('Configuration restored to main view');
   } catch (error) {
     logger.error(
       CHANNEL,
