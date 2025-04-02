@@ -13,12 +13,7 @@ import {
   safeGetElementChecked,
 } from './utils.js';
 import { restoreState, saveState } from './stateManager.js';
-import {
-  MULTIPLE_SELECTIONS,
-  CHECK_BOXES_AUTO_EXTRACT,
-  CHECK_BOXES_TOOL_USE,
-  CHECK_BOXES,
-} from './constants.js';
+import { FILE_TYPES } from './constants.js';
 import { capitalize, uncapitalize } from './utils.js';
 
 /**
@@ -99,17 +94,8 @@ function handleStateRestoration(state) {
       (toolConfig ? toolConfig.printInputPrompt : false),
   };
 
-  // Multiple file selections constants
-  const multipleFileTypes = [
-    'input',
-    'reference',
-    'auxiliary',
-    'figure',
-    'output',
-  ];
-
   // Process multiple file selections
-  for (const fileType of multipleFileTypes) {
+  for (const fileType of FILE_TYPES) {
     // Handle both formats (inputFiles and multipleInputFiles)
     const filesArray =
       state[`${fileType}Files`] ||
@@ -203,10 +189,10 @@ function handleStateRestoration(state) {
   restoreState();
 
   // Let the user know we've restored their configuration
-  vscode.postMessage({
-    command: 'showInformationMessage',
-    text: 'Configuration restored from selected task',
-  });
+  // vscode.postMessage({
+  //   command: 'showInformationMessage',
+  //   text: 'Configuration restored from selected task',
+  // });
 
   // Prevent the automatic restoreState that would happen at the end of the message handler
   window._skipNextRestoreState = true;
@@ -249,6 +235,9 @@ export function setupMessageHandlers() {
       case 'setAuxiliaryFile':
       case 'setFigureFile':
       case 'setEditedFile':
+        // console.log(
+        //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,
+        // );
         updateFileSelect(uncapitalize(message.command.slice(3)), message.files);
         break;
       case 'inputFileSelected':
@@ -267,11 +256,15 @@ export function setupMessageHandlers() {
       case 'setAuxiliaryFiles':
       case 'setFigureFiles':
       case 'setOutputFiles':
-        updateMultipleFileSelect(
-          message.command.replace('set', ''),
-          `toggle${message.command.replace('set', '')}`,
-          message.files,
-        );
+        // console.log(
+        //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,
+        // );
+        // Always use lowercase container ID to match HTML structure
+        const fileTypeKey = message.command.replace('set', '');
+        const containerID = uncapitalize(fileTypeKey);
+        const toggleID = `toggle${fileTypeKey}`;
+
+        updateMultipleFileSelect(containerID, toggleID, message.files);
         break;
       case 'setRecentCommits':
         handleRecentCommits(message);
