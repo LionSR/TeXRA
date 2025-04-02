@@ -25,7 +25,7 @@ import {
 } from './utils.js';
 
 // Add this function to handle textarea auto-resize
-function autoResizeTextarea(textarea) {
+export function autoResizeTextarea(textarea) {
   // Reset height to auto to get the correct scrollHeight
   textarea.style.height = 'auto';
   const maxHeight = 400;
