@@ -606,8 +606,4 @@ export class ModelHandlerOpenAI extends ModelHandler {
   ): string | null {
     return null;
   }
-
-  private _pruneMessages(messages: any[]): void {
-    // Implementation of _pruneMessages method
-  }
 }
