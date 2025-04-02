@@ -70,16 +70,54 @@ function createHistoryItemElement(item) {
   // Create the basic details section
   const basicDetails = document.createElement('div');
   basicDetails.className = 'history-details';
-  basicDetails.innerHTML = `
+
+  // Build basic details HTML with agent, model, and instruction
+  let basicDetailsHTML = `
     <span class="history-label">Agent:</span>
     <span class="history-value">${config.agent}</span>
     
     <span class="history-label">Model:</span>
     <span class="history-value">${config.model}</span>
     
-    <span class="history-label">Input File:</span>
-    <span class="history-value">${config.inputFile || 'None'}</span>
+    <span class="history-label">Instruction:</span>
+    <span class="history-value">${config.instruction || 'None'}</span>
   `;
+
+  // Define file types to show in basic details
+  const basicFileTypes = [
+    { type: 'input', singular: 'Input File', plural: 'Input Files' },
+    { type: 'figure', singular: 'Figure', plural: 'Figures' },
+  ];
+
+  // Add file information to basic details
+  basicFileTypes.forEach(({ type, singular, plural }) => {
+    const singleFile = config[`${type}File`];
+    const multipleFiles = config[`${type}Files`];
+
+    // Always show single file first if it exists
+    if (singleFile) {
+      basicDetailsHTML += `
+        <span class="history-label">${singular}:</span>
+        <span class="history-value">${singleFile}</span>
+      `;
+    } else if (type === 'input') {
+      // Always show input file even if none
+      basicDetailsHTML += `
+        <span class="history-label">${singular}:</span>
+        <span class="history-value">None</span>
+      `;
+    }
+
+    // Also show multiple files if they exist
+    if (multipleFiles && multipleFiles.length > 0) {
+      basicDetailsHTML += `
+        <span class="history-label">${plural}:</span>
+        <span class="history-value">${multipleFiles.join(', ')}</span>
+      `;
+    }
+  });
+
+  basicDetails.innerHTML = basicDetailsHTML;
 
   // Create the collapsible details section
   const collapsibleDetails = document.createElement('div');
@@ -89,67 +127,36 @@ function createHistoryItemElement(item) {
   const detailsContainer = document.createElement('div');
   detailsContainer.className = 'history-details';
 
-  // Add instruction
-  let detailsHTML = `
-    <span class="history-label">Instruction:</span>
-    <span class="history-value">${config.instruction || 'None'}</span>
-  `;
+  // Build the collapsible details HTML
+  let detailsHTML = '';
 
-  // Add input files
-  if (config.inputFiles && config.inputFiles.length > 0) {
-    detailsHTML += `
-      <span class="history-label">Input Files:</span>
-      <span class="history-value">${config.inputFiles.join(', ')}</span>
-    `;
-  }
+  // Define file types for collapsible section
+  const collapsibleFileTypes = [
+    { type: 'reference', singular: 'Reference', plural: 'References' },
+    { type: 'auxiliary', singular: 'Auxiliary', plural: 'Auxiliaries' },
+  ];
 
-  // Add reference file
-  if (config.referenceFile) {
-    detailsHTML += `
-      <span class="history-label">Reference:</span>
-      <span class="history-value">${config.referenceFile}</span>
-    `;
-  }
+  // Add file information to collapsible details
+  collapsibleFileTypes.forEach(({ type, singular, plural }) => {
+    const singleFile = config[`${type}File`];
+    const multipleFiles = config[`${type}Files`];
 
-  // Add reference files
-  if (config.referenceFiles && config.referenceFiles.length > 0) {
-    detailsHTML += `
-      <span class="history-label">References:</span>
-      <span class="history-value">${config.referenceFiles.join(', ')}</span>
-    `;
-  }
+    // Always show single file first if it exists
+    if (singleFile) {
+      detailsHTML += `
+        <span class="history-label">${singular}:</span>
+        <span class="history-value">${singleFile}</span>
+      `;
+    }
 
-  // Add auxiliary file
-  if (config.auxiliaryFile) {
-    detailsHTML += `
-      <span class="history-label">Auxiliary:</span>
-      <span class="history-value">${config.auxiliaryFile}</span>
-    `;
-  }
-
-  // Add auxiliary files
-  if (config.auxiliaryFiles && config.auxiliaryFiles.length > 0) {
-    detailsHTML += `
-      <span class="history-label">Auxiliaries:</span>
-      <span class="history-value">${config.auxiliaryFiles.join(', ')}</span>
-    `;
-  }
-
-  // Add figure file
-  if (config.figureFile) {
-    detailsHTML += `
-      <span class="history-label">Figure:</span>
-      <span class="history-value">${config.figureFile}</span>
-    `;
-  }
-
-  // Add figure files
-  if (config.figureFiles && config.figureFiles.length > 0) {
-    detailsHTML += `
-      <span class="history-label">Figures:</span>
-      <span class="history-value">${config.figureFiles.join(', ')}</span>
-    `;
-  }
+    // Also show multiple files if they exist
+    if (multipleFiles && multipleFiles.length > 0) {
+      detailsHTML += `
+        <span class="history-label">${plural}:</span>
+        <span class="history-value">${multipleFiles.join(', ')}</span>
+      `;
+    }
+  });
 
   // Add output files
   if (config.outputFiles && config.outputFiles.length > 0) {
@@ -172,20 +179,27 @@ function createHistoryItemElement(item) {
     detailsHTML += renderToolConfig('Tool Config', config.toolConfig);
   }
 
-  detailsContainer.innerHTML = detailsHTML;
-  collapsibleDetails.appendChild(detailsContainer);
+  // Only create the collapsible section if there are details to show
+  if (detailsHTML) {
+    detailsContainer.innerHTML = detailsHTML;
+    collapsibleDetails.appendChild(detailsContainer);
 
-  // Create the toggle button
-  const toggleButton = document.createElement('button');
-  toggleButton.className = 'toggle-button';
-  toggleButton.setAttribute('data-id', item.id);
-  toggleButton.textContent = 'Show more';
+    // Create the toggle button
+    const toggleButton = document.createElement('button');
+    toggleButton.className = 'toggle-button';
+    toggleButton.setAttribute('data-id', item.id);
+    toggleButton.textContent = 'Show more';
 
-  // Assemble the full history item
-  container.appendChild(header);
-  container.appendChild(basicDetails);
-  container.appendChild(collapsibleDetails);
-  container.appendChild(toggleButton);
+    // Assemble the full history item
+    container.appendChild(header);
+    container.appendChild(basicDetails);
+    container.appendChild(collapsibleDetails);
+    container.appendChild(toggleButton);
+  } else {
+    // If no additional details, just add the basic info
+    container.appendChild(header);
+    container.appendChild(basicDetails);
+  }
 
   return container;
 }
