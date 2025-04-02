@@ -50,6 +50,8 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'LaTeXCommands',
   'Utils',
   'ProgressViewProvider',
+  'AgentHistoryViewProvider',
+  'ReplacementUtils',
   'executeAgent',
   'ImgUtils',
   'stateRestoreCommand',
