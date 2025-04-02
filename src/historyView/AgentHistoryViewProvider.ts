@@ -1,16 +1,11 @@
-import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 
 // Local imports - core
-import { AgentHistoryManager, AgentHistoryItem } from './AgentHistoryManager';
+import { AgentHistoryManager } from './AgentHistoryManager';
 import { executeCommand } from '../commands/executeCommand';
 
-import { stateRestoreCommand } from '../commands/stateRestoreCommand';
-import {
-  objectToTaskState,
-  agentConfigToTaskState,
-} from '../utils/configConversion';
+import { agentConfigToTaskState } from '../utils/configConversion';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -142,7 +137,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         'historyView',
         'index.html',
       );
-      let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
       // Get the paths for scripts and styles
       const scriptUri = this.getWebviewUri('script.js');

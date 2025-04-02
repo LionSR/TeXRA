@@ -22,8 +22,24 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
   capitalize,
-  uncapitalize,
 } from './utils.js';
+
+// Add this function to handle textarea auto-resize
+function autoResizeTextarea(textarea) {
+  // Reset height to auto to get the correct scrollHeight
+  textarea.style.height = 'auto';
+  const maxHeight = 400;
+
+  // Calculate the new height
+  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+  // Set new height
+  textarea.style.height = newHeight + 'px';
+
+  // Show/hide scrollbar based on content height
+  textarea.style.overflowY =
+    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
 
 export function setupUIHandlers() {
   // Make all multiple file selections sortable

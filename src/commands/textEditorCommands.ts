@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -11,7 +8,7 @@ import * as logger from '../logger/logUtils';
 import { TextEditorTool, ToolCallInput } from '../AnthropicTool';
 
 // Local imports - utilities
-import { getRelativePath, getWorkspacePath } from '../utils/workspaceFileUtils';
+import { getRelativePath } from '../utils/workspaceFileUtils';
 
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);

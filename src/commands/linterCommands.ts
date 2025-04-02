@@ -5,10 +5,7 @@ import * as vscode from 'vscode';
 import * as logger from '../logger/logUtils';
 
 // Local imports - utils
-import {
-  getLinterMessages,
-  countDiagnosticsBySeverity,
-} from '../utils/linterUtils';
+import { getLinterMessages } from '../utils/linterUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
 
 // Local imports - core

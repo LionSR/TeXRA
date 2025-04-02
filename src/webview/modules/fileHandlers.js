@@ -156,7 +156,7 @@ export function handleRecentCommits(message) {
     addOptionToSelect(commitDiv, 'HEAD', 'HEAD');
     message.commits.forEach((commit) => {
       const [commitHash, ...commitMessageParts] = commit.split(': ');
-      const commitMessage = commitMessageParts.join(': ');
+      // const commitMessage = commitMessageParts.join(': ');
       addOptionToSelect(commitDiv, commitHash, commit);
     });
     setElementsDisabled([commitDiv, ...commitButtons], false);

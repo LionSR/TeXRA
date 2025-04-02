@@ -1,7 +1,6 @@
 // Third-party imports
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
@@ -99,7 +98,7 @@ async function getApiKey(provider: 'openai' | 'anthropic'): Promise<string> {
     return await getSecretApiKey(provider as ApiProvider);
   } catch (err) {
     throw new Error(
-      `${provider.toUpperCase()} API key not found. Please set it using the "Set API Key" command.`,
+      `${provider.toUpperCase()} API key not found (error: ${err}). Please set it using the "Set API Key" command.`,
     );
   }
 }
