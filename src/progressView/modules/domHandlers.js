@@ -15,7 +15,6 @@ import {
   createGroupHeader,
   getMessageTimestamp,
   formatLogEntry,
-  formatTime,
   getStatusIcon,
   formatDuration,
 } from './logFormatters.js';
@@ -64,7 +63,6 @@ export function updateStatus(status) {
   const runAgainBtn = document.getElementById('runAgainBtn');
   const packButton = document.getElementById('packStreamBtn');
   const cleanButton = document.getElementById('cleanStreamBtn');
-  const eraseButton = document.getElementById('eraseStreamBtn');
   const restoreButton = document.getElementById('restoreStateBtn');
   const diffButton = document.getElementById('diffStreamBtn');
 

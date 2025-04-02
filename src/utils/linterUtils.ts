@@ -3,10 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';
-import {
-  getRelativePath,
-  getFullPathFromWorkspace,
-} from './workspaceFileUtils';
+import { getFullPathFromWorkspace } from './workspaceFileUtils';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);

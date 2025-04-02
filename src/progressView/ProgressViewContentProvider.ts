@@ -65,7 +65,7 @@ export class ProgressViewContentProvider {
         'dist',
         'codicon.ttf',
       );
-      let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
       const nonce = this.getNonce();
       const styleUri = webview.asWebviewUri(cssPath);
       const commonStyleUri = webview.asWebviewUri(commonCssPath);

@@ -3,27 +3,8 @@ import { restoreState, saveState } from './modules/stateManager.js';
 import { setupMessageHandlers } from './modules/messageHandlers.js';
 import { setupUIHandlers } from './modules/uiHandlers.js';
 
-import {
-  CHECK_BOXES_TOOL_USE,
-  CHECK_BOXES_AUTO_EXTRACT,
-} from './modules/constants.js';
-
-// Add this function to handle textarea auto-resize
-function autoResizeTextarea(textarea) {
-  // Reset height to auto to get the correct scrollHeight
-  textarea.style.height = 'auto';
-  const maxHeight = 400;
-
-  // Calculate the new height
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-
-  // Set new height
-  textarea.style.height = newHeight + 'px';
-
-  // Show/hide scrollbar based on content height
-  textarea.style.overflowY =
-    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-}
+import { CHECK_BOXES_TOOL_USE } from './modules/constants.js';
+import { autoResizeTextarea } from './modules/uiHandlers.js';
 
 window.onload = function () {
   const dataRequests = [

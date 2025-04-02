@@ -161,12 +161,9 @@ export async function runPackMultiple(
   );
   logger.debug(CHANNEL, `Additional files: ${inputFiles.join(', ')}`);
 
-  let baseName: string;
-  let outputDir: string;
-
   const fileToPack = outputNameOverride || inputFile;
-  baseName = path.parse(fileToPack).name;
-  outputDir = path.dirname(fileToPack);
+  const baseName = path.parse(fileToPack).name;
+  const outputDir = path.dirname(fileToPack);
 
   const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
   const commonOutputFolder = path.join(
@@ -237,8 +234,6 @@ export async function runPack(
     vscode.window.showErrorMessage('Missing required parameters for pack');
     return '';
   }
-
-  const fileToPack = outputNameOverride || inputFile;
 
   // Use multiple mode if there are output files
   if (outputFiles.length > 0) {
