@@ -10,7 +10,6 @@ import { TaskState } from '../logger/TaskState';
 import { ToolConfig } from '../agent/ToolConfig';
 
 import {
-  FILE_TYPES,
   SINGLE_FILE_FIELDS,
   MULTIPLE_FILE_FIELDS,
   ACTIVE_FLAGS,

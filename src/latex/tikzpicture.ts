@@ -3,7 +3,6 @@ import * as path from 'path';
 
 // Third-party imports
 import * as nunjucks from 'nunjucks';
-import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '../logger/logUtils';

@@ -107,7 +107,7 @@ function formatSpecialContent(message, content, contentType) {
       .replace(/\s+/g, '-')
       .replace(':', '');
     return message.replace(
-      new RegExp(`<span class="message-info">${contentType}.*?<\/span>`, 's'),
+      new RegExp(`<span class="message-info">${contentType}.*?</span>`, 's'),
       `<span class="message-info">${contentType}</span>
        <div class="special-content ${cssClass}">${parsedMarkdown}</div>`,
     );

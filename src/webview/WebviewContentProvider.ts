@@ -40,7 +40,7 @@ export class WebviewContentProvider {
       const utilsPath = getWebviewPath('modules/utils.js');
       const vscodeApiPath = getWebviewPath('modules/vscodeApi.js');
 
-      let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
+      const htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf-8');
 
       const nonce = this.getNonce();
       const styleUri = webview.asWebviewUri(cssPath);
@@ -84,7 +84,7 @@ export class WebviewContentProvider {
 
       // Replace placeholders in HTML with actual content
       logger.debug(CHANNEL, 'Generated HTML content for webview');
-      return htmlContent
+      const finalHtml = htmlContent
         .replace('${commonStyleUri}', commonStyleUri.toString())
         .replace('${styleUri}', styleUri.toString())
         .replace('${scriptUri}', scriptUri.toString())
@@ -100,6 +100,8 @@ export class WebviewContentProvider {
         .replace('${vscodeApiUri}', vscodeApiUri.toString())
         .replace('${codiconUri}', codiconUri.toString())
         .replace('${codiconsFontUri}', codiconsFontUri.toString());
+
+      return finalHtml;
     } catch (err) {
       logger.error(
         CHANNEL,
