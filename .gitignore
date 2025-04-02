@@ -1,11 +1,7 @@
 node_modules/
 dist/
-
 .env
-
-Notebooks
 .aider*
-
 releases/
 
 .cursor
