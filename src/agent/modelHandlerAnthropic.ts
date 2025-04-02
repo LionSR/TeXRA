@@ -264,7 +264,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     }
 
     // Extract base response
-    let stopReason = responseObject.stop_reason;
+    const stopReason = responseObject.stop_reason;
     let newResponse = '';
 
     if (
@@ -506,7 +506,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    let lastMessage = messages.at(-1);
+    const lastMessage = messages.at(-1);
 
     if (lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
@@ -553,8 +553,8 @@ export class ModelHandlerAnthropic extends ModelHandler {
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
-    let lastMessage = messages.at(-1);
-    let secondLastMessage = messages.at(-2);
+    const lastMessage = messages.at(-1);
+    const secondLastMessage = messages.at(-2);
 
     if (lastMessage.role !== 'user') {
       this.logger.error(
@@ -657,7 +657,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         'Last message is a request message rather than a ask to continue after cut off',
       );
       // Create a new assistant message with the response
-      let assistantMessage: { role: string; content: any[] } = {
+      const assistantMessage: { role: string; content: any[] } = {
         role: 'assistant',
         content: [],
       };

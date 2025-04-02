@@ -249,7 +249,7 @@ export abstract class AnthropicToolAgent<
       }
 
       // Initialize conversation
-      let messages = [
+      const messages = [
         {
           role: 'user' as const,
           content: initialUserMessage,

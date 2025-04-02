@@ -6,12 +6,7 @@ import {
   handleRecentCommits,
   handleSetCurrentFile,
 } from './fileHandlers.js';
-import {
-  safeSetElementValue,
-  safeSetElementChecked,
-  safeGetElementById,
-  safeGetElementChecked,
-} from './utils.js';
+import { safeSetElementValue, safeGetElementById } from './utils.js';
 import { restoreState, saveState } from './stateManager.js';
 import { FILE_TYPES } from './constants.js';
 import { capitalize, uncapitalize } from './utils.js';

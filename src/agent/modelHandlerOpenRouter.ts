@@ -142,7 +142,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     newResponse: string,
     toolState: ToolState,
   ): void {
-    let lastMessage = messages.at(-1);
+    const lastMessage = messages.at(-1);
     if (lastMessage.role === 'user' || lastMessage.role === 'system') {
       messages.push({
         role: 'assistant',

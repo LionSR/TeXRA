@@ -487,7 +487,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
       'Updating message content for OpenAI models with prefill support',
     );
 
-    let lastMessage = messages.at(-1);
+    const lastMessage = messages.at(-1);
 
     if (lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
@@ -528,8 +528,8 @@ export class ModelHandlerOpenAI extends ModelHandler {
     );
 
     // For OpenAI models without prefill, the last message is always a user/system message
-    let lastMessage = messages.at(-1);
-    let secondLastMessage = messages.at(-2);
+    const lastMessage = messages.at(-1);
+    const secondLastMessage = messages.at(-2);
 
     if (lastMessage.role !== 'user' && lastMessage.role !== 'system') {
       this.logger.error(
@@ -605,5 +605,9 @@ export class ModelHandlerOpenAI extends ModelHandler {
     toolState?: ToolState,
   ): string | null {
     return null;
+  }
+
+  private _pruneMessages(messages: any[]): void {
+    // Implementation of _pruneMessages method
   }
 }
