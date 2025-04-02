@@ -53,7 +53,7 @@ export async function extractFigurePathsFromLatex(
 
   try {
     const latexDir = path.dirname(latexFile);
-    let graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
+    const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
     // Regular expressions to match figure inclusion commands
     const figurePatterns = [

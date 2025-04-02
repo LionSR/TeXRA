@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 // Local imports - core
 import * as logger from './logger/logUtils';
 import { initializeSecrets } from './utils/secretUtils';
-import { fileExistsAbsolute } from './utils/absoluteFileUtils';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';

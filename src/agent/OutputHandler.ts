@@ -483,7 +483,7 @@ export class OutputHandler {
       outputFile,
       this.agentSetting.documentTag,
     );
-    let content = await readFile(processedOutputFile);
+    const content = await readFile(processedOutputFile);
     await writeFile(processedOutputFile, content);
     return processedOutputFile;
   }
