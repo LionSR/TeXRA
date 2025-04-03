@@ -386,7 +386,9 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '</enumerate>': '\\end{enumerate}',
     '<itemize>': '\\begin{itemize}',
     '</itemize>': '\\end{itemize}',
-  
+    '<item>': '\\item',
+    '</item>': '',
+
     '\\begin{latex_document}': '<latex_document>',
     '\\end{latex_document}': '</latex_document>',
     // the following logic is tricky, we might have to use some regex to match the tags
