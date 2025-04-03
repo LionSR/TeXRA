@@ -231,12 +231,12 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="figureFile"
+                <label for="mediaFile"
                   ><i
                     class="codicon codicon-file-media clickable"
-                    title="Figure (Click to refresh)"
+                    title="Media (Click to refresh)"
                   ></i>
-                  Figure</label
+                  Media</label
                 >
                 <div class="dropdown-container dropdown-left">
                   <span
@@ -270,27 +270,24 @@
               </div>
               <div class="file-select-actions">
                 <button
-                  id="emptyFigureFileButton"
+                  id="emptyMediaFileButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-close"></i>
                 </button>
-                <span
-                  id="toggleFigureFiles"
-                  class="toggle-icon"
-                  title="Multiple"
+                <span id="toggleMediaFiles" class="toggle-icon" title="Multiple"
                   >▼</span
                 >
                 <button
-                  id="emptyFigureFilesButton"
+                  id="emptyMediaFilesButton"
                   class="vscode-button"
                   title="Empty"
                 >
                   <i class="codicon codicon-trash"></i>
                 </button>
                 <button
-                  id="selectFigureFilesButton"
+                  id="selectMediaFilesButton"
                   class="vscode-button"
                   title="Add"
                 >
@@ -298,16 +295,16 @@
                 </button>
               </div>
             </div>
-            <select id="figureFile">
+            <select id="mediaFile">
               <option value="">None</option>
             </select>
             <div
-              id="figureFilesContainer"
+              id="mediaFilesContainer"
               class="multiple-files-container"
               style="display: none"
             >
               <div class="multiple-files-content">
-                <div id="figureFiles" class="multiple-files-list"></div>
+                <div id="mediaFiles" class="multiple-files-list"></div>
               </div>
             </div>
           </div>

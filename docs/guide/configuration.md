@@ -85,7 +85,7 @@ Control which file types TexRA includes:
   ".tex",
   ".md"
 ],
-"coauthor.files.included.figureExtensions": [
+"coauthor.files.included.mediaExtensions": [
   ".png",
   ".pdf",
   ".jpeg",

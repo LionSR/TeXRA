@@ -36,7 +36,7 @@ function handleStateRestoration(state) {
     safeSetElementValue('referenceFile', state.referenceFile);
   if (state.auxiliaryFile)
     safeSetElementValue('auxiliaryFile', state.auxiliaryFile);
-  if (state.figureFile) safeSetElementValue('figureFile', state.figureFile);
+  if (state.mediaFile) safeSetElementValue('mediaFile', state.mediaFile);
   if (state.outputNameOverride)
     safeSetElementValue('outputNameOverride', state.outputNameOverride);
 
@@ -67,7 +67,7 @@ function handleStateRestoration(state) {
     inputFile: state.inputFile,
     referenceFile: state.referenceFile,
     auxiliaryFile: state.auxiliaryFile,
-    figureFile: state.figureFile,
+    mediaFile: state.mediaFile,
     outputNameOverride: state.outputNameOverride,
     outputNameOverrideVisible: state.outputNameOverrideVisible,
 
@@ -228,7 +228,7 @@ export function setupMessageHandlers() {
       case 'setInputFile':
       case 'setReferenceFile':
       case 'setAuxiliaryFile':
-      case 'setFigureFile':
+      case 'setMediaFile':
       case 'setEditedFile':
         // console.log(
         //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,
@@ -238,7 +238,7 @@ export function setupMessageHandlers() {
       case 'inputFileSelected':
       case 'referenceFileSelected':
       case 'auxiliaryFileSelected':
-      case 'figureFileSelected':
+      case 'mediaFileSelected':
       case 'editedFileSelected':
         safeSetElementValue(
           message.command.replace('Selected', ''),
@@ -249,7 +249,7 @@ export function setupMessageHandlers() {
       case 'setInputFiles':
       case 'setReferenceFiles':
       case 'setAuxiliaryFiles':
-      case 'setFigureFiles':
+      case 'setMediaFiles':
       case 'setOutputFiles':
         // console.log(
         //   `Handling ${message.command} with ${message.files ? message.files.length : 0} files`,

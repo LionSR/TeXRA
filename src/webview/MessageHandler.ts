@@ -15,7 +15,7 @@ import {
   listInputFiles,
   listReferenceFiles,
   listAuxiliaryFiles,
-  listFigureFiles,
+  listMediaFiles,
   listEditedFiles,
   getFilesIfNotEmpty,
 } from '../frontend-utils/fileListingUtils';
@@ -49,7 +49,7 @@ export class WebviewMessageHandler {
       case 'selectInputFile':
       case 'selectReferenceFile':
       case 'selectAuxiliaryFile':
-      case 'selectFigureFile':
+      case 'selectMediaFile':
         return this.handleFileSelection(message, webviewView);
       case 'selectEditedFile':
         return this.handleEditedFileSelection(webviewView);
@@ -58,7 +58,7 @@ export class WebviewMessageHandler {
         return this.handleInputFileSelected(message, webviewView);
       case 'referenceFileSelected':
       case 'auxiliaryFileSelected':
-      case 'figureFileSelected':
+      case 'mediaFileSelected':
       case 'editedFileSelected':
         return this.handleGenericFileSelected(message);
       // Request File cases
@@ -66,7 +66,7 @@ export class WebviewMessageHandler {
         return this.handleRequestInputFile(webviewView);
       case 'requestReferenceFile':
       case 'requestAuxiliaryFile':
-      case 'requestFigureFile':
+      case 'requestMediaFile':
         return this.handleRequestFile(message, webviewView);
       case 'requestEditedFile':
         return this.handleRequestEditedFile(message, webviewView);
@@ -76,14 +76,14 @@ export class WebviewMessageHandler {
       case 'updateInputFiles':
       case 'updateReferenceFiles':
       case 'updateAuxiliaryFiles':
-      case 'updateFigureFiles':
+      case 'updateMediaFiles':
       case 'updateOutputFiles':
         return this.handleUpdateFiles(message, webviewView);
       // Multiple file selection cases
       case 'setInputFiles':
       case 'setReferenceFiles':
       case 'setAuxiliaryFiles':
-      case 'setFigureFiles':
+      case 'setMediaFiles':
         return this.handleSetMultipleFiles(message, webviewView);
       case 'selectMultipleFiles':
         return this.handleSelectMultipleFiles(message, webviewView);
@@ -170,8 +170,8 @@ export class WebviewMessageHandler {
         referenceFiles: getFilesIfNotEmpty(message.referenceFiles),
         auxiliaryFile: message.auxiliaryFile,
         auxiliaryFiles: getFilesIfNotEmpty(message.auxiliaryFiles),
-        figureFile: message.figureFile,
-        figureFiles: getFilesIfNotEmpty(message.figureFiles),
+        mediaFile: message.mediaFile,
+        mediaFiles: getFilesIfNotEmpty(message.mediaFiles),
         outputFiles: getFilesIfNotEmpty(message.outputFiles),
         outputNameOverride: message.outputNameOverride,
         editedFile: null,
@@ -264,8 +264,8 @@ export class WebviewMessageHandler {
           return await listReferenceFiles();
         case 'Auxiliary':
           return await listAuxiliaryFiles();
-        case 'Figure':
-          return await listFigureFiles();
+        case 'Media':
+          return await listMediaFiles();
         default:
           return [];
       }
@@ -334,7 +334,7 @@ export class WebviewMessageHandler {
       input: await listInputFiles(),
       reference: await listReferenceFiles(),
       auxiliary: await listAuxiliaryFiles(),
-      figure: await listFigureFiles(),
+      figure: await listMediaFiles(),
     };
 
     Object.entries(refreshedFiles).forEach(([type, files]) => {
@@ -645,13 +645,13 @@ export class WebviewMessageHandler {
       addSingleFileIfValid('inputFile', 'inputFile');
       addSingleFileIfValid('referenceFile', 'referenceFile');
       addSingleFileIfValid('auxiliaryFile', 'auxiliaryFile');
-      addSingleFileIfValid('figureFile', 'figureFile');
+      addSingleFileIfValid('mediaFile', 'mediaFile');
 
       // Add multiple files if their toggle is active
       addMultipleFilesIfValid('inputFiles', 'inputFilesActive');
       addMultipleFilesIfValid('referenceFiles', 'referenceFilesActive');
       addMultipleFilesIfValid('auxiliaryFiles', 'auxiliaryFilesActive');
-      addMultipleFilesIfValid('figureFiles', 'figureFilesActive');
+      addMultipleFilesIfValid('mediaFiles', 'mediaFilesActive');
       addMultipleFilesIfValid('outputFiles', 'outputFilesActive');
 
       // Show progress notification with incremental updates
