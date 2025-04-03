@@ -9,21 +9,21 @@ export interface TaskState {
   inputFile: string;
   referenceFile: string;
   auxiliaryFile: string;
-  figureFile: string;
+  mediaFile: string;
   outputNameOverride: string;
 
   // Multiple file selections
   inputFiles: string[];
   referenceFiles: string[];
   auxiliaryFiles: string[];
-  figureFiles: string[];
+  mediaFiles: string[];
   outputFiles: string[];
 
   // Multiple file selection visibility
   inputFilesActive: boolean;
   referenceFilesActive: boolean;
   auxiliaryFilesActive: boolean;
-  figureFilesActive: boolean;
+  mediaFilesActive: boolean;
   outputFilesActive: boolean;
 
   // Auto extract settings

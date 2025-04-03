@@ -39,9 +39,15 @@ These are supporting files needed for proper document processing:
 
 Figure files include images and diagrams used in your document:
 
-- Standard image formats (`.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`)
+- Standard image formats (`.png`, `.jpg`, `.jpeg`, `.gif`, `.heic`, `.heif`, `.webp`)
 - Vector graphics (`.pdf`, `.svg`)
 - TikZ figures extracted from documents
+
+### Audio Files
+
+Audio files include audio files used in your document:
+
+- Standard audio formats (`.wav`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac`)
 
 ## File Selection Interface
 

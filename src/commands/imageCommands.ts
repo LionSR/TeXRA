@@ -8,7 +8,7 @@ import * as logger from '../logger/logUtils';
 import { getRelativePath } from '../utils/workspaceFileUtils';
 import {
   countPdfPages,
-  getBase64EncodedImage,
+  getBase64EncodedMedia,
   processPdf2Png,
   singlePagePdf2Png,
 } from '../utils/imgUtils';
@@ -80,9 +80,10 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
       canSelectFolders: false,
       canSelectMany: false,
       filters: {
-        'Image files': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg'],
+        'Image files': ['png', 'jpg', 'jpeg', 'gif', 'heic', 'heif', 'webp'],
+        'Audio files': ['wav', 'm4a', 'mp3', 'aiff', 'aac', 'ogg', 'flac'],
       },
-      title: 'Select image file to encode',
+      title: 'Select image or audio file to encode',
     });
 
     if (!fileUris || fileUris.length === 0) {
@@ -92,7 +93,7 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
     const selectedFile = getRelativePath(fileUris[0].fsPath);
     logger.debug(CHANNEL, `Processing image file: ${selectedFile}`);
 
-    const base64String = await getBase64EncodedImage(selectedFile);
+    const base64String = await getBase64EncodedMedia(selectedFile);
 
     // Also show a truncated version in the debug log for quick verification
     const truncatedString = base64String.substring(0, 100) + '...';

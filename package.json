@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.25.6",
+  "version": "0.26.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -39,7 +39,8 @@
               "paper2poster",
               "paper2note",
               "polish_cover",
-              "solve_qi"
+              "solve_qi",
+              "transcribe_audio"
             ],
             "description": "List of available agents",
             "scope": "resource"
@@ -104,7 +105,7 @@
       {
         "title": "File Handling",
         "properties": {
-          "coauthor.files.included.figureExtensions": {
+          "coauthor.files.included.mediaExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -114,9 +115,17 @@
               ".pdf",
               ".jpeg",
               ".jpg",
-              ".svg",
               ".gif",
-              ".bmp"
+              ".heic",
+              ".heif",
+              ".webp",
+              ".wav",
+              ".m4a",
+              ".mp3",
+              ".aiff",
+              ".aac",
+              ".ogg",
+              ".flac"
             ],
             "description": "File extensions to include when searching for figures",
             "editPresentation": "multilineText",
@@ -244,7 +253,8 @@
               "node_modules",
               "__pycache__",
               "versions",
-              "history"
+              "history",
+              "venv"
             ],
             "description": "Directories to ignore in the figure path",
             "editPresentation": "multilineText",
@@ -260,6 +270,7 @@
               "node_modules",
               "__pycache__",
               "figures",
+              "media",
               "figs",
               "versions",
               "history",
@@ -288,7 +299,8 @@
               "draw",
               "versions",
               "history",
-              ".egg-info"
+              ".egg-info",
+              "venv"
             ],
             "description": "Keywords to ignore when selecting files",
             "editPresentation": "multilineText",

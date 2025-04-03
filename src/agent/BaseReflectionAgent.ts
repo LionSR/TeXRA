@@ -887,13 +887,13 @@ export abstract class BaseReflectionAgent {
       // Handle figure extraction for vision-capable models
       if (this.modelHandler.capabilities.supportsVision) {
         if (
-          this.agentConfig.figureFile &&
-          !toolState.figureFiles.includes(this.agentConfig.figureFile)
+          this.agentConfig.mediaFile &&
+          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
         ) {
-          toolState.addFigureFiles([this.agentConfig.figureFile]);
+          toolState.addMediaFiles([this.agentConfig.mediaFile]);
         }
-        if (this.agentConfig.figureFiles) {
-          toolState.addFigureFiles(this.agentConfig.figureFiles);
+        if (this.agentConfig.mediaFiles) {
+          toolState.addMediaFiles(this.agentConfig.mediaFiles);
         }
 
         if (this.agentConfig.toolConfig.autoExtractFigure) {
@@ -905,7 +905,7 @@ export abstract class BaseReflectionAgent {
               `Extracted ${extractedFigures.length} figures from ${this.agentConfig.inputFile}. Figures: ${extractedFigures.join(', ')}`,
               round0GroupId,
             );
-            toolState.addFigureFiles(extractedFigures);
+            toolState.addMediaFiles(extractedFigures);
           }
         }
 
@@ -914,7 +914,7 @@ export abstract class BaseReflectionAgent {
             const extractedTikzFigures =
               await extractAndCompileTikzPicturesWithLabels(inputFile);
             if (extractedTikzFigures) {
-              toolState.addFigureFiles(extractedTikzFigures);
+              toolState.addMediaFiles(extractedTikzFigures);
             }
           }
         }
@@ -949,7 +949,7 @@ export abstract class BaseReflectionAgent {
       const initialMessages = await this.modelHandler.initializeMessages(
         prefixWithStats,
         userRequest,
-        toolState.figureFiles,
+        toolState.mediaFiles,
         systemPrompt,
       );
       messages.push(...initialMessages);
@@ -1111,7 +1111,7 @@ export abstract class BaseReflectionAgent {
         await this.modelHandler.createReflectionMessages(
           messages,
           userMessage,
-          toolState.figureFiles,
+          toolState.mediaFiles,
         );
 
       // Handle prefill for reflection round
@@ -1244,7 +1244,7 @@ export abstract class BaseReflectionAgent {
         const extractedTikzFigures =
           await extractAndCompileTikzPicturesWithLabels(outputFile);
         if (extractedTikzFigures) {
-          toolState.addFigureFiles(extractedTikzFigures);
+          toolState.addMediaFiles(extractedTikzFigures);
         }
       }
     }

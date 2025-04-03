@@ -7,11 +7,11 @@ import OpenAI, {
   NotFoundError,
   PermissionDeniedError,
 } from 'openai';
+import { ChatCompletionContentPart } from 'openai/resources/chat/completions';
 
 // Local imports - utilities
 import {
   readFile,
-  fileExists,
   writeFile,
   fileExistsAndNonTrivial,
 } from '../utils/workspaceFileUtils';
@@ -30,7 +30,6 @@ import { AgentStateRound } from './AgentState';
 import { ModelHandler } from './ModelHandler';
 import { OpenAIAPIResponseUsage, ResponseUsageFactory } from './ResponseUsage';
 import { ToolState } from './ToolState';
-import { AgentLogger } from '../logger/AgentLogger';
 
 const K_SLICE = 200;
 
@@ -120,7 +119,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    figureFiles?: string[],
+    mediaFiles?: string[],
     systemPrompt?: string,
   ): Promise<any[]> {
     const messages: any[] = [];
@@ -142,31 +141,42 @@ export class ModelHandlerOpenAI extends ModelHandler {
       }
     }
 
-    // Create content list with user prefix
-    const content: any[] = [{ type: 'text', text: userPrefix }];
+    // Create content list for the user message
+    const userMessageContent: ChatCompletionContentPart[] = [
+      { type: 'text', text: userPrefix },
+    ];
 
-    // Add images if provided
-    if (figureFiles && this.config.capabilities.supportsVision) {
-      content.push(...(await this.createImageMessage(figureFiles)));
+    // Add media if provided
+    if (
+      mediaFiles &&
+      (this.config.capabilities.supportsVision ||
+        this.config.capabilities.supportsNativeAudio)
+    ) {
+      // createMediaMessage returns an array of objects formatted by createMediaContent
+      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      userMessageContent.push(...formattedMediaContent);
     }
 
-    const lastRole = messages.at(-1).role;
-    if (messages.length > 0) {
-      if (lastRole === 'system') {
-        messages.push({ role: 'user', content });
-      } else if (lastRole === 'user') {
-        messages.at(-1).content.push(...content);
-      }
+    // Append the formatted content to the correct message
+    const lastRole = messages.length > 0 ? messages.at(-1).role : null;
+    if (lastRole === 'system' || messages.length === 0) {
+      messages.push({ role: 'user', content: userMessageContent });
+    } else if (lastRole === 'user') {
+      messages.at(-1).content.push(...userMessageContent);
     } else {
-      messages.push({ role: 'user', content });
+      // Fallback: Should not happen with current logic but good to handle
+      messages.push({ role: 'user', content: userMessageContent });
+      this.logger.warn(
+        'Unexpected message structure, adding new user message.',
+      );
     }
 
-    // Add user request
-    const role = this.config.capabilities.supportsIntermDevMsgs
+    // Add final user request
+    const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
     messages.push({
-      role,
+      role: requestRole,
       content: [{ type: 'text', text: userRequest }],
     });
 
@@ -177,44 +187,99 @@ export class ModelHandlerOpenAI extends ModelHandler {
   async createReflectionMessages(
     messages: any[],
     userMessage: string,
-    figureFiles?: string[],
+    mediaFiles?: string[],
   ): Promise<any[]> {
-    const content: any[] = [];
+    const reflectionContent: ChatCompletionContentPart[] = [];
 
     // const role = this.config.capabilities.supportsIntermDevMsgs
     // ? 'system'
     // : 'user';
     // technically we can use system for the reflection messages, but it does not support images...
     // Error in createResponse: Error: 400 Invalid 'messages[4]'. Image URLs are only allowed for messages with role 'user', but this message with role 'system' contains an image URL.
+    // system role does not support images/audio
     const role = 'user';
 
-    if (figureFiles && figureFiles.length > 0) {
+    if (
+      mediaFiles &&
+      mediaFiles.length > 0 &&
+      (this.config.capabilities.supportsVision ||
+        this.config.capabilities.supportsNativeAudio)
+    ) {
       try {
-        const imageContent = await this.createImageMessage(figureFiles);
-        content.push(...imageContent);
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+        reflectionContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.error(`Error processing image files: ${err}`);
+        this.logger.error(
+          `Error processing media files for reflection: ${err}`,
+        );
       }
     }
-    content.push({ type: 'text', text: userMessage });
+    reflectionContent.push({ type: 'text', text: userMessage });
 
-    messages.push({ role, content });
+    messages.push({ role, content: reflectionContent });
     return messages;
   }
 
-  /** Formats image content for OpenAI's vision API. */
-  createImageContent(imageContents: any[]): any[] {
-    return imageContents.flatMap((image) => [
-      { type: 'text', text: `Image: ${image.file_name}` },
-      {
-        type: 'image_url',
-        image_url: {
-          url: `data:${image.media_type};base64,${image.data}`,
-          media_type: image.media_type,
-          data: image.data,
-        },
-      },
-    ]);
+  /** Formats image/audio content for OpenAI/Google's vision/audio API. */
+  createMediaContent(mediaMessage: any[]): ChatCompletionContentPart[] {
+    return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
+      if (media.media_category === 'image') {
+        return [
+          { type: 'text', text: `Image: ${media.file_name}` },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${media.media_type};base64,${media.data}`,
+              detail: 'high',
+              // media_type and data are not standard OpenAI
+              // Re-add them if needed for other providers (which is not the case for Google/OpenRouter)
+            },
+          },
+        ];
+      } else if (
+        media.media_category === 'audio' &&
+        this.isGoogle &&
+        this.config.capabilities.supportsNativeAudio
+      ) {
+        // Currently only Google via OpenAI compatibility layer supports this
+        let audioFormat = media.media_type;
+        if (media.media_type.includes('/')) {
+          audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
+        }
+        // actually, currently only mp3 and wav are supported
+        // openai.BadRequestError: Error code: 400 - [{‘error’: {‘code’: 400, ‘message’: ‘Invalid audio format “m4a” for audio generation. Valid formats are: [wav, mp3]’, ‘status’: ‘INVALID_ARGUMENT’}}]
+
+        // For the size:
+        // You can use the File API to upload an audio file of any size.
+        // Always use the File API when the total request size (including the files, text prompt, system instructions, etc.) is larger than 20 MB.
+        // The maximum request size is 20 MB, which includes text prompts, system instructions, and files provided inline. If your file's size will make the total request size exceed 20 MB, then use the File API to upload files for use in requests.
+        // If you're using an audio sample multiple times, it is more efficient to use the File API.
+        // https://ai.google.dev/gemini-api/docs/audio?hl=en&lang=python
+
+        // The structure below might need adjustment based on exact API requirements
+        // Using a structure closer to the message format from documentation
+        // It seems this needs to be part of the user message content directly.
+        // Let's adapt this to return the structured object expected within the message content array.
+        return [
+          { type: 'text', text: `Audio: ${media.file_name}` }, // Text description goes separately
+          {
+            type: 'input_audio' as any, // Cast as any to bypass strict OpenAI typing for now
+            input_audio: {
+              data: media.data,
+              format: audioFormat,
+            },
+          },
+        ];
+      } else if (media.media_category === 'audio') {
+        this.logger.warn(
+          `Audio input received (${media.file_name}) but native audio is not supported by this specific model/provider (${this.config.provider}). Skipping.`,
+        );
+        return []; // Return empty array if audio not supported
+      } else {
+        this.logger.warn(`Unknown media category: ${media.media_category}`);
+        return [];
+      }
+    });
   }
 
   /** Extracts response text and usage statistics from API response. */
