@@ -8,7 +8,7 @@ import {
   createPartFromUri,
 } from '@google/genai';
 import { ModelHandler } from './ModelHandler';
-import { ModelConfig } from '../model/ModelConfig';
+
 import { AgentConfig } from './AgentConfig';
 import { AgentSetting, hasEndTag } from './AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from './AgentState';
@@ -20,6 +20,7 @@ import {
   fileExistsAndNonTrivial,
   getFullPathFromWorkspace,
 } from '../utils/workspaceFileUtils';
+import { fileExistsAbsolute } from '../utils/absoluteFileUtils';
 import {
   applyReplacements,
   getAllReplacements,
@@ -27,7 +28,7 @@ import {
 } from '../utils/replacementUtils';
 import { extractAndLogScratchpad } from '../utils/xmlUtils';
 import * as path from 'path';
-import * as fs from 'fs';
+
 import { getConfig } from '../utils/configUtils';
 
 // Local constant
@@ -245,6 +246,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = getFullPathFromWorkspace(mediaFile);
+          if (!fileExistsAbsolute(absolutePath)) {
+            this.logger.error(`File does not exist: ${absolutePath}`);
+            continue;
+          }
+
           const explicitMimeType = this.determineMimeType(absolutePath);
 
           if (!explicitMimeType) {
@@ -256,13 +262,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadParams = {
             file: absolutePath,
-            // config: { mimeType: explicitMimeType },
-            // displayName: path.basename(mediaFile), // Temporarily remove displayName
+            config: { mimeType: explicitMimeType },
           };
 
           this.logger.debug(
             `Attempting upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
           );
+
           const uploadResult: File = await client.files.upload(uploadParams);
 
           this.logger.info(
@@ -293,6 +299,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
   private determineMimeType(filePath: string): string | null {
     const ext = path.extname(filePath).toLowerCase();
+    this.logger.debug(
+      `Determining MIME type for extension: '${ext}' from file: ${filePath}`,
+    );
+
     const mimeMap: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
@@ -321,6 +331,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.warn(
         `Cannot determine mime type for ${filePath} from extension '${ext}'.`,
       );
+    } else {
+      this.logger.debug(
+        `Determined MIME type: ${mimeType} for file: ${filePath}`,
+      );
     }
     return mimeType || null;
   }
@@ -345,6 +359,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       for (const mediaFile of mediaFiles) {
         try {
           const absolutePath = getFullPathFromWorkspace(mediaFile);
+          if (!fileExistsAbsolute(absolutePath)) {
+            this.logger.error(`File does not exist: ${absolutePath}`);
+            continue;
+          }
+
           const explicitMimeType = this.determineMimeType(absolutePath);
 
           if (!explicitMimeType) {
@@ -356,13 +375,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
 
           const uploadParams = {
             file: absolutePath,
-            // config: { mimeType: explicitMimeType },
-            // displayName: path.basename(mediaFile) + '_reflection', // Temporarily remove displayName
+            config: { mimeType: explicitMimeType },
           };
 
           this.logger.debug(
             `Attempting reflection upload for ${mediaFile} with params: ${JSON.stringify(uploadParams)}`,
           );
+          this.logger.debug(`MIME type being used: ${explicitMimeType}`);
+
           const uploadResult: File = await client.files.upload(uploadParams);
 
           this.logger.info(
@@ -453,6 +473,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
       candidate?.finishReason ?? FinishReason.FINISH_REASON_UNSPECIFIED;
+
+    // If the model stopped naturally but didn't include the end tag, append it
+    if (
+      stopReason === FinishReason.STOP &&
+      endTag &&
+      !responseText.endsWith(endTag)
+    ) {
+      this.logger.info(
+        `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,
+      );
+      responseText += endTag;
+    }
 
     return [responseText, usage, stopReason];
   }
@@ -606,6 +638,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         );
       } else {
         toolState.updateAccumulatedOutput(prefill);
+        // this is suspicious because gemini thinking model who does not support prefill is calling this code path
         this.logger.debug(`Using standard prefill, updated toolState.`);
       }
       this.logger.debug(`Skipping pseudo-prefill message for native SDK.`);
