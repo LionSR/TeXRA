@@ -136,9 +136,8 @@
   display: none;
 }
 
-.file-select:has(#figureFilesContainer[style*='none']) #emptyFigureFilesButton,
-.file-select:has(#figureFilesContainer[style*='none'])
-  #selectFigureFilesButton {
+.file-select:has(#mediaFilesContainer[style*='none']) #emptyMediaFilesButton,
+.file-select:has(#mediaFilesContainer[style*='none']) #selectMediaFilesButton {
   display: none;
 }
 

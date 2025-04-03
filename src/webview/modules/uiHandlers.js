@@ -64,7 +64,7 @@ export function setupUIHandlers() {
 
   // Get values for single file inputs (input, reference, auxiliary, figure)
   function getSingleFileData(
-    fileTypes = ['input', 'reference', 'auxiliary', 'figure'],
+    fileTypes = ['input', 'reference', 'auxiliary', 'media'],
   ) {
     const data = {};
     fileTypes.forEach((type) => {
@@ -139,7 +139,7 @@ export function setupUIHandlers() {
     'input',
     'reference',
     'auxiliary',
-    'figure',
+    'media',
     'base',
     'edited',
   ];
@@ -162,7 +162,7 @@ export function setupUIHandlers() {
       reflectCheckbox.checked = !selectedAgent.startsWith('correct');
     }
 
-    vscode.postMessage({ command: 'requestFigureFile' });
+    vscode.postMessage({ command: 'requestMediaFile' });
 
     saveState();
   });
