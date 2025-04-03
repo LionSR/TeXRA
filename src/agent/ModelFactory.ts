@@ -5,6 +5,7 @@ import { ModelConfig, ModelProvider } from '../model';
 import { ModelHandler } from './ModelHandler';
 import { ModelHandlerAnthropic } from './modelHandlerAnthropic';
 import { ModelHandlerGoogle } from './modelHandlerGoogle';
+import { ModelHandlerGoogleGenAI } from './modelHandlerGoogleGenAI';
 import { ModelHandlerDeepseek } from './modelHandlerDeepseek';
 import {
   ModelHandlerOpenRouter,
@@ -41,7 +42,19 @@ export class ModelFactory {
       return new ModelHandlerOpenRouter(config);
     }
 
-    // Map providers to their handler classes
+    // Check for native Google SDK usage *before* the general provider map
+    const useNativeGoogleSDK = getConfig<boolean>(
+      'model.useNativeGoogleSDK',
+      false,
+    );
+    if (config.provider === ModelProvider.GOOGLE && useNativeGoogleSDK) {
+      console.log(
+        'Using Native Google GenAI SDK Handler (ModelHandlerGoogleGenAI)',
+      ); // Log for clarity
+      return new ModelHandlerGoogleGenAI(config);
+    }
+
+    // Map providers to their handler classes (excluding the native Google handler handled above)
     const handlerMap = new Map<
       ModelProvider,
       new (config: ModelConfig) => ModelHandler
@@ -58,6 +71,7 @@ export class ModelFactory {
       throw new Error(`Unsupported model provider: ${config.provider}`);
     }
 
+    console.log(`Using Handler: ${HandlerClass.name}`);
     return new HandlerClass(config);
   }
 }
