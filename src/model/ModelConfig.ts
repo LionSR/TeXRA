@@ -30,6 +30,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsSystemPrompt: true,
   supportsIntermDevMsgs: false,
   supportsReasoningEffort: false,
+  supportsNativeAudio: false,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -56,6 +57,7 @@ export interface ModelCapabilities {
   supportsSystemPrompt: boolean;
   supportsIntermDevMsgs: boolean;
   supportsReasoningEffort: boolean;
+  supportsNativeAudio: boolean;
 }
 
 /** Complete configuration for a language model instance. */
