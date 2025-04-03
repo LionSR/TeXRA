@@ -3,7 +3,7 @@ export const FILE_TYPES = [
   'input',
   'reference',
   'auxiliary',
-  'figure',
+  'media',
   'output',
 ];
 export const SINGLE_FILE_FIELDS = FILE_TYPES.map((type) => `${type}File`);

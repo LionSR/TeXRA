@@ -1,6 +1,8 @@
 export const EXCLUDED_DIRS = new Set([
   'figs',
   'figures',
+  'media',
+  'medias',
   'build',
   'versions',
   'history',

@@ -70,7 +70,7 @@ export async function listAuxiliaryFiles(): Promise<string[]> {
   );
 }
 
-export async function listFigureFiles(): Promise<string[]> {
+export async function listMediaFiles(): Promise<string[]> {
   const workspacePath = getWorkspacePath();
   if (!workspacePath) {
     return [];
@@ -81,7 +81,7 @@ export async function listFigureFiles(): Promise<string[]> {
   );
 
   const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(
-    'files.included.figureExtensions',
+    'files.included.mediaExtensions',
   );
 
   return getFilesRecursively(

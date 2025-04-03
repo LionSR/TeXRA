@@ -37,8 +37,8 @@ export interface FileContext {
   referenceFiles?: string[];
   auxiliaryFile?: string;
   auxiliaryFiles?: string[];
-  figureFile?: string;
-  figureFiles?: string[];
+  mediaFile?: string;
+  mediaFiles?: string[];
   outputFiles?: string[];
 }
 
@@ -84,8 +84,8 @@ export async function polishTextWithAI(
         (fileContext.referenceFiles && fileContext.referenceFiles.length > 0) ||
         fileContext.auxiliaryFile ||
         (fileContext.auxiliaryFiles && fileContext.auxiliaryFiles.length > 0) ||
-        fileContext.figureFile ||
-        (fileContext.figureFiles && fileContext.figureFiles.length > 0) ||
+        fileContext.mediaFile ||
+        (fileContext.mediaFiles && fileContext.mediaFiles.length > 0) ||
         (fileContext.outputFiles && fileContext.outputFiles.length > 0);
 
       if (hasFiles) {
@@ -101,7 +101,7 @@ export async function polishTextWithAI(
           { name: 'Input Files', files: fileContext.inputFiles },
           { name: 'Reference Files', files: fileContext.referenceFiles },
           { name: 'Auxiliary Files', files: fileContext.auxiliaryFiles },
-          { name: 'Figure Files', files: fileContext.figureFiles },
+          { name: 'Media Files', files: fileContext.mediaFiles },
           { name: 'Output Files', files: fileContext.outputFiles },
         ];
 
@@ -118,8 +118,8 @@ export async function polishTextWithAI(
         if (fileContext.auxiliaryFile) {
           fileContextString += `Auxiliary File: ${fileContext.auxiliaryFile}\n`;
         }
-        if (fileContext.figureFile) {
-          fileContextString += `Figure File: ${fileContext.figureFile}\n`;
+        if (fileContext.mediaFile) {
+          fileContextString += `Figure File: ${fileContext.mediaFile}\n`;
         }
       }
     }
