@@ -209,6 +209,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.error(
         `Error during Google GenAI Chat API call: ${error?.message || error}`,
       );
+      this.logger.error(error.message);
       if (error.message?.includes('request.contents[0].parts')) {
         this.logger.error(
           'Potential issue with sendMessage parameter structure. Check conversion.',
