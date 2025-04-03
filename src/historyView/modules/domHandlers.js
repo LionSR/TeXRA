@@ -85,8 +85,8 @@ function createHistoryItemElement(item) {
 
   // Define file types to show in basic details
   const basicFileTypes = [
-    { type: 'input', singular: 'Input File', plural: 'Input Files' },
-    { type: 'figure', singular: 'Figure', plural: 'Figures' },
+    { type: 'input', singular: 'InputFile', plural: 'InputFiles' },
+    { type: 'media', singular: 'MediaFile', plural: 'MediaFiles' },
   ];
 
   // Add file information to basic details
@@ -132,8 +132,8 @@ function createHistoryItemElement(item) {
 
   // Define file types for collapsible section
   const collapsibleFileTypes = [
-    { type: 'reference', singular: 'Reference', plural: 'References' },
-    { type: 'auxiliary', singular: 'Auxiliary', plural: 'Auxiliaries' },
+    { type: 'reference', singular: 'ReferenceFile', plural: 'ReferenceFiles' },
+    { type: 'auxiliary', singular: 'AuxiliaryFile', plural: 'AuxiliaryFiles' },
   ];
 
   // Add file information to collapsible details

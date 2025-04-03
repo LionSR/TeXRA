@@ -3,7 +3,7 @@ export const FILE_TYPES = [
   'input',
   'reference',
   'auxiliary',
-  'figure',
+  'media',
   'output',
 ];
 
@@ -12,7 +12,7 @@ export const SINGLE_FILE_ELEMENTS = [
   'inputFile',
   'referenceFile',
   'auxiliaryFile',
-  'figureFile',
+  'mediaFile',
   'editedFile',
   'baseFile',
 ];

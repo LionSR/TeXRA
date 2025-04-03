@@ -12,7 +12,7 @@ window.onload = function () {
     'requestInputFile',
     'requestReferenceFile',
     'requestAuxiliaryFile',
-    'requestFigureFile',
+    'requestMediaFile',
     'requestRecentCommits',
     'requestBaseFile',
   ];
