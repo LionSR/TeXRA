@@ -251,9 +251,9 @@ settings:
     - pattern: 'bibliography'
       varName: BIBLIOGRAPHY
       categories: ['auxiliaryFile', 'auxiliaryFiles']
-    - pattern: 'figure'
+    - pattern: 'media'
       varName: MAIN_FIGURE
-      categories: ['figureFile', 'figureFiles']
+      categories: ['mediaFile', 'mediaFiles']
 ```
 
 These patterns help the agent automatically identify relevant files based on their names.
