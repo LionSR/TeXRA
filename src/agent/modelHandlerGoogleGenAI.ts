@@ -483,7 +483,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       this.logger.info(
         `Model stopped naturally but didn't include end tag. Appending ${endTag}.`,
       );
-      responseText += endTag;
+      responseText += `\n${endTag}`;
     }
 
     return [responseText, usage, stopReason];
@@ -638,7 +638,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         );
       } else {
         toolState.updateAccumulatedOutput(prefill);
-        this.logger.debug(`Using standard prefill, updated toolState.`);
+        // this.logger.debug(`Using standard prefill, updated toolState.`);
       }
 
       // Add pseudo-prefill instruction instead of skipping it
@@ -646,9 +646,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
       if (Array.isArray(lastMessage.content)) {
-        lastMessage.content.push({ text: pseudoPrefillMsg });
+        lastMessage.content.push({ type: 'text', text: pseudoPrefillMsg });
       } else {
-        lastMessage.content = [{ text: pseudoPrefillMsg }];
+        lastMessage.content = [{ type: 'text', text: pseudoPrefillMsg }];
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);

@@ -103,7 +103,7 @@
           "coauthor.model.useNativeGoogleSDK": {
             "type": "boolean",
             "default": false,
-            "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. Requires @google/genai package to be installed.",
+            "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
             "scope": "resource"
           }
         }
