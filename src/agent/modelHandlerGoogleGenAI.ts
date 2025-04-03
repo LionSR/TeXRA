@@ -640,17 +640,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         toolState.updateAccumulatedOutput(prefill);
         this.logger.debug(`Using standard prefill, updated toolState.`);
       }
-      
+
       // Add pseudo-prefill instruction instead of skipping it
       const lastMessage = messages[messages.length - 1];
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
-      
+
       if (Array.isArray(lastMessage.content)) {
         lastMessage.content.push({ text: pseudoPrefillMsg });
       } else {
         lastMessage.content = [{ text: pseudoPrefillMsg }];
       }
-      
+
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
       return [endTurn, messages];
     }

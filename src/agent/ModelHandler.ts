@@ -363,7 +363,9 @@ export abstract class ModelHandler {
         ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
         : Number.POSITIVE_INFINITY;
 
-    const endTurn = ['end_turn', 'stop_sequence', 'stop'].includes(stopReason);
+    const endTurn = ['end_turn', 'stop_sequence', 'stop', 'STOP'].includes(
+      stopReason,
+    );
     const encounterDocumentTag = newResponse.includes(
       `</${agentSetting.documentTag}>`,
     );
