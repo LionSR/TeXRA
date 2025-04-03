@@ -96,7 +96,8 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
   private setupFileWatcher() {
     // Create a file system watcher for relevant file types
-    const filePattern = '**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,bmp}';
+    const filePattern =
+      '**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,heic,heif,webp,wav,mp3,m4a,aiff,aac,ogg,flac}';
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
 
     // Handle file changes

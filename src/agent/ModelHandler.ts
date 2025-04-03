@@ -10,7 +10,7 @@ import { AgentLogger } from '../logger/AgentLogger';
 // Local imports - utilities
 import { fileExists } from '../utils/workspaceFileUtils';
 import {
-  getBase64EncodedImage,
+  getBase64EncodedMedia,
   countPdfPages,
   processPdf2Png,
 } from '../utils/imgUtils';
@@ -125,7 +125,7 @@ export abstract class ModelHandler {
       [ModelProvider.GOOGLE]:
         'https://generativelanguage.googleapis.com/v1beta/openai/',
       [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
-      [ModelProvider.ANTHROPIC]: null, // Anthropic uses default base URL
+      [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
       [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
       [ModelProvider.XAI]: 'https://api.x.ai/v1',
       [ModelProvider.OTHERS]: null,
@@ -141,6 +141,7 @@ export abstract class ModelHandler {
       ModelProvider.OTHERS,
       ModelProvider.DEEPSEEK,
       ModelProvider.XAI,
+      ModelProvider.ANTHROPIC,
     ].includes(this.config.provider);
   }
 
@@ -176,71 +177,114 @@ export abstract class ModelHandler {
   }
 
   /**
-   * Process image for models.
-   * @param figureFile Path to the image file
-   * @param fileExtension File extension (e.g. '.jpg', '.pdf')
-   * @returns Tuple of [base64 encoded image data, media type]
+   * Process image or audio for models.
+   * @param mediaFile Path to the media file
+   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
+   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
    */
-  protected async processImage(
-    figureFile: string,
+  protected async processMedia(
+    mediaFile: string,
     fileExtension: string,
-  ): Promise<[string | string[], string]> {
-    let imgData: string | string[];
+  ): Promise<[string | string[], string, 'image' | 'audio']> {
     const ext = fileExtension.toLowerCase();
+    let mediaData: string | string[];
+    let mediaType: string;
+    let mediaCategory: 'image' | 'audio';
 
-    const mediaTypes: { [key: string]: string } = {
+    const imageMediaTypes: { [key: string]: string } = {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.heic': 'image/heic',
+      '.heif': 'image/heif',
+      '.gif': 'image/gif',
       '.pdf':
         this.capabilities.supportsNativePdf &&
-        (await countPdfPages(figureFile)) > 1
+        (await countPdfPages(mediaFile)) > 1
           ? 'application/pdf'
-          : 'image/png',
+          : 'image/png', // Treat single-page PDF as PNG for vision; maybe this can be released now that openai supports native pdfs
     };
 
-    if (!(ext in mediaTypes)) {
-      throw new Error(`Unsupported file extension: ${fileExtension}`);
-    }
+    const audioMediaTypes: { [key: string]: string } = {
+      '.wav': 'audio/wav',
+      '.m4a': 'audio/m4a',
+      '.mp3': 'audio/mp3',
+      '.mpeg': 'audio/mpeg',
+      '.aiff': 'audio/aiff',
+      '.aac': 'audio/aac',
+      '.ogg': 'audio/ogg',
+      '.flac': 'audio/flac',
+    };
 
-    const mediaType = mediaTypes[ext];
-    if (ext === '.pdf' && mediaType === 'image/png') {
-      const pdfResult = await processPdf2Png(figureFile);
-      if (pdfResult === null) {
-        throw new Error(`Failed to process PDF file: ${figureFile}`);
+    if (ext in imageMediaTypes) {
+      mediaType = imageMediaTypes[ext];
+      mediaCategory = 'image';
+      this.logger.debug(
+        `Processing as image: ${mediaFile}, type: ${mediaType}`,
+      );
+      if (ext === '.pdf' && mediaType === 'image/png') {
+        const pdfResult = await processPdf2Png(mediaFile);
+        if (pdfResult === null) {
+          throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
+        }
+        mediaData = pdfResult;
+      } else {
+        mediaData = await getBase64EncodedMedia(mediaFile);
       }
-      imgData = pdfResult;
+    } else if (
+      ext in audioMediaTypes &&
+      this.capabilities.supportsNativeAudio
+    ) {
+      mediaType = audioMediaTypes[ext];
+      mediaCategory = 'audio';
+      this.logger.debug(
+        `Processing as audio: ${mediaFile}, type: ${mediaType}`,
+      );
+      mediaData = await getBase64EncodedMedia(mediaFile);
+      // Audio files are typically processed as a single base64 string
+      if (Array.isArray(mediaData)) {
+        this.logger.warn(
+          `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
+        );
+        // I think this should not happen, but just in case
+        mediaData = mediaData[0];
+      }
     } else {
-      imgData = await getBase64EncodedImage(figureFile);
+      throw new Error(
+        `Unsupported or disabled file extension: ${fileExtension}. Image support: ${this.capabilities.supportsVision}, Audio support: ${this.capabilities.supportsNativeAudio}`,
+      );
     }
 
-    return [imgData, mediaType];
+    return [mediaData, mediaType, mediaCategory];
   }
 
   /**
-   * Create image messages for the conversation.
+   * Create image/audio messages for the conversation.
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
    */
-  public async createImageMessage(figureFiles: string[]): Promise<any[]> {
-    const imageContents: any[] = [];
-    const addedFigures: string[] = [];
+  public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
+    const mediaMessage: any[] = [];
+    const addedMedia: string[] = [];
 
-    for (const figureFile of figureFiles) {
-      if (!(await fileExists(figureFile))) {
-        this.logger.error(`File not found: ${figureFile}`);
+    for (const mediaFile of mediaFiles) {
+      if (!(await fileExists(mediaFile))) {
+        this.logger.error(`File not found: ${mediaFile}`);
         continue;
       }
 
-      const fileExtension = path.extname(figureFile).toLowerCase();
+      const fileExtension = path.extname(mediaFile).toLowerCase();
 
       try {
-        this.logger.debug(`Processing image: ${figureFile}`);
-        const [imgData, mediaType] = await this.processImage(
-          figureFile,
+        this.logger.debug(`Processing media: ${mediaFile}`);
+        const [mediaData, mediaType, mediaCategory] = await this.processMedia(
+          mediaFile,
           fileExtension,
         );
-        this.logger.debug(`Processed image: ${figureFile}, type: ${mediaType}`);
+        this.logger.debug(
+          `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
+        );
 
         // Special handling for OpenAI native PDF support
         if (
@@ -252,53 +296,55 @@ export abstract class ModelHandler {
           const imageEntry = {
             type: 'file',
             file: {
-              file_name: path.basename(figureFile),
-              file_data: Array.isArray(imgData) ? imgData[0] : imgData,
+              file_name: path.basename(mediaFile),
+              file_data: Array.isArray(mediaData) ? mediaData[0] : mediaData,
             },
           };
-          imageContents.push(imageEntry);
-          addedFigures.push(figureFile);
-          this.logger.debug(`Added native PDF: ${figureFile}`);
+          mediaMessage.push(imageEntry);
+          addedMedia.push(mediaFile);
+          this.logger.debug(`Added native PDF: ${mediaFile}`);
           continue;
         }
 
-        if (Array.isArray(imgData)) {
+        if (Array.isArray(mediaData)) {
           this.logger.debug(
-            `Adding ${imgData.length} pages to the image contents`,
+            `Adding ${mediaData.length} pages/parts to the media contents`,
           );
-          for (let i = 0; i < imgData.length; i++) {
-            const imageEntry = {
-              file_name: `${path.basename(figureFile)}_page_${i + 1}`,
-              data: imgData[i],
+          for (let i = 0; i < mediaData.length; i++) {
+            const mediaEntry = {
+              file_name: `${path.basename(mediaFile)}_page_${i + 1}`,
+              data: mediaData[i],
               media_type: mediaType,
+              media_category: mediaCategory,
             };
-            imageContents.push(imageEntry);
-            addedFigures.push(`${figureFile}_page_${i + 1}`);
+            mediaMessage.push(mediaEntry);
+            addedMedia.push(`${mediaFile}_page_${i + 1}`);
           }
         } else {
           this.logger.debug(
-            `Adding single page to the image contents: ${figureFile}`,
+            `Adding single part to the media contents: ${mediaFile}`,
           );
-          const imageEntry = {
-            file_name: path.basename(figureFile),
-            data: imgData,
+          const mediaEntry = {
+            file_name: path.basename(mediaFile),
+            data: mediaData,
             media_type: mediaType,
+            media_category: mediaCategory,
           };
-          imageContents.push(imageEntry);
-          addedFigures.push(figureFile);
+          mediaMessage.push(mediaEntry);
+          addedMedia.push(mediaFile);
         }
       } catch (err) {
-        this.logger.error(`Failed to process image ${figureFile}: ${err}`);
+        this.logger.error(`Failed to process media ${mediaFile}: ${err}`);
         continue;
       }
     }
 
-    if (figureFiles.length > 0) {
-      this.logger.info(`Trying to load images: ${figureFiles}`);
-      this.logger.info(`Successfully added: ${addedFigures}`);
+    if (mediaFiles.length > 0) {
+      this.logger.info(`Trying to load media: ${mediaFiles}`);
+      this.logger.info(`Successfully added: ${addedMedia}`);
     }
 
-    return this.createImageContent(imageContents);
+    return this.createMediaContent(mediaMessage);
   }
 
   /**
@@ -384,7 +430,7 @@ export abstract class ModelHandler {
   abstract initializeMessages(
     userPrefix: string,
     userRequest: string,
-    figureFiles?: string[],
+    mediaFiles?: string[],
     systemPrompt?: string,
   ): Promise<any[]>;
 
@@ -395,14 +441,14 @@ export abstract class ModelHandler {
   abstract createReflectionMessages(
     messages: any[],
     userMessage: string,
-    figureFiles?: string[],
+    mediaFiles?: string[],
   ): Promise<any[]>;
 
   /**
    * Formats image content into provider-specific message format.
    * @returns Array of formatted image/document content objects
    */
-  abstract createImageContent(imageContents: any[]): any[];
+  abstract createMediaContent(mediaMessage: any[]): any[];
 
   /**
    * Extracts the response text and metadata from the model's response object

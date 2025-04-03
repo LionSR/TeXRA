@@ -66,31 +66,31 @@ async function cleanupTempFiles(
 
 /**
  * Convert an image file to a base64 encoded string
- * @param imagePath Path to the image file (relative to workspace)
+ * @param mediaPath Path to the image file (relative to workspace)
  * @returns Promise<string> Base64 encoded string of the image
  */
-export async function getBase64EncodedImage(
-  imagePath: string,
+export async function getBase64EncodedMedia(
+  mediaPath: string,
 ): Promise<string> {
   try {
     // Check if file exists
-    if (!(await fileExists(imagePath))) {
-      logger.error(CHANNEL, `Image file not found: ${imagePath}`);
-      throw new Error(`Image file not found: ${imagePath}`);
+    if (!(await fileExists(mediaPath))) {
+      logger.error(CHANNEL, `Image file not found: ${mediaPath}`);
+      throw new Error(`Image file not found: ${mediaPath}`);
     }
 
     // Read the image file as bytes
-    const imageBytes = readFileBytesSync(imagePath);
+    const mediaBytes = readFileBytesSync(mediaPath);
 
     // Convert to base64
-    const base64String = imageBytes.toString('base64');
+    const base64String = mediaBytes.toString('base64');
 
-    logger.debug(CHANNEL, `Successfully encoded image: ${imagePath}`);
+    logger.debug(CHANNEL, `Successfully encoded image: ${mediaPath}`);
     return base64String;
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error encoding image to base64: ${err instanceof Error ? err.message : String(err)}`,
+      `Error encoding media to base64: ${err instanceof Error ? err.message : String(err)}`,
     );
     throw err;
   }

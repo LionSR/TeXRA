@@ -14,8 +14,8 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   referenceFiles: [],
   auxiliaryFile: null,
   auxiliaryFiles: [],
-  figureFile: null,
-  figureFiles: [],
+  mediaFile: null,
+  mediaFiles: [],
   outputFiles: null,
   outputNameOverride: null,
   editedFile: null,
@@ -36,8 +36,8 @@ export interface AgentConfig {
   referenceFiles: string[] | null;
   auxiliaryFile: string | null;
   auxiliaryFiles: string[] | null;
-  figureFile: string | null;
-  figureFiles: string[] | null;
+  mediaFile: string | null;
+  mediaFiles: string[] | null;
   outputFiles: string[] | null;
   outputNameOverride: string | null;
   editedFile: string | null;
