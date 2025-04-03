@@ -2,7 +2,7 @@
   "name": "coauthor",
   "displayName": "CoAuthor",
   "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.26.0",
+  "version": "0.26.1",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -98,6 +98,12 @@
             "type": "boolean",
             "default": false,
             "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
+            "scope": "resource"
+          },
+          "coauthor.model.useNativeGoogleSDK": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. Requires @google/genai package to be installed.",
             "scope": "resource"
           }
         }
@@ -876,9 +882,9 @@
     "@vscode/test-electron": "^2.4.0",
     "chokidar": "^3.6.0",
     "eslint": "^9.23.0",
+    "globals": "^15.8.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
-    "globals": "^15.8.0",
     "path-browserify": "^1.0.1",
     "prettier": "^3.4.2",
     "spawn-sync": "^2.0.0",
@@ -909,6 +915,7 @@
   "homepage": "https://github.com/LionSR/coauthor#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@google/genai": "^0.7.0",
     "@types/yaml": "^1.9.6",
     "@vscode/codicons": "^0.0.36",
     "@wolfram-alpha/wolfram-alpha-api": "^23.1004.144821-RELEASE",
