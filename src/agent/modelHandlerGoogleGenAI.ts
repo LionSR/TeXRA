@@ -638,10 +638,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
         );
       } else {
         toolState.updateAccumulatedOutput(prefill);
-        // this is suspicious because gemini thinking model who does not support prefill is calling this code path
         this.logger.debug(`Using standard prefill, updated toolState.`);
       }
-      this.logger.debug(`Skipping pseudo-prefill message for native SDK.`);
+      
+      // Add pseudo-prefill instruction instead of skipping it
+      const lastMessage = messages[messages.length - 1];
+      const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
+      
+      if (Array.isArray(lastMessage.content)) {
+        lastMessage.content.push({ text: pseudoPrefillMsg });
+      } else {
+        lastMessage.content = [{ text: pseudoPrefillMsg }];
+      }
+      
+      this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
       return [endTurn, messages];
     }
 
