@@ -13,7 +13,7 @@ export interface IToolState {
   accumulatedOutput: string;
 
   /** Paths to figure files */
-  figureFiles: string[];
+  mediaFiles: string[];
 
   /** Collection of all thinking blocks from the response (used for Anthropic models) */
   thinkingBlocks: any[];
@@ -23,7 +23,7 @@ export interface IToolState {
 
   updateLastResponse(response: string): void;
   updateAccumulatedOutput(output: string): void;
-  addFigureFiles(files: string[]): void;
+  addMediaFiles(files: string[]): void;
 }
 
 /** Manages tool-specific runtime state and operations within a conversation round. */
@@ -32,7 +32,7 @@ export class ToolState implements IToolState {
   firstKCharsFromInput: string | null;
   lastResponse: string;
   accumulatedOutput: string;
-  figureFiles: string[];
+  mediaFiles: string[];
   thinkingBlocks: any[];
   thinkingAdded: boolean;
 
@@ -49,7 +49,7 @@ export class ToolState implements IToolState {
     this.firstKCharsFromInput = null;
     this.lastResponse = '';
     this.accumulatedOutput = '';
-    this.figureFiles = [];
+    this.mediaFiles = [];
     this.thinkingBlocks = [];
     this.thinkingAdded = false;
   }
@@ -79,7 +79,7 @@ export class ToolState implements IToolState {
    * Adds new figure file paths to the collection.
    * @param files Array of paths to new figure files
    */
-  addFigureFiles(files: string[]): void {
-    this.figureFiles.push(...files);
+  addMediaFiles(files: string[]): void {
+    this.mediaFiles.push(...files);
   }
 }
