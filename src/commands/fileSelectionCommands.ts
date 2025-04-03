@@ -55,12 +55,12 @@ export function registerFileSelectionCommands(
       selectAuxiliaryFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectFigureFiles',
-      selectFigureFiles,
+      'coauthor.selectMediaFiles',
+      selectMediaFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectFigureFile',
-      selectFigureFile,
+      'coauthor.selectMediaFile',
+      selectMediaFile,
     ),
     vscode.commands.registerCommand(
       'coauthor.selectOutputFiles',
@@ -235,22 +235,25 @@ async function selectAuxiliaryFiles(
   return null;
 }
 
-async function selectFigureFiles(
-  currentFigureFile: string,
+async function selectMediaFiles(
+  currentMediaFile: string,
 ): Promise<string[] | null> {
-  const defaultUri = getDefaultUri(currentFigureFile);
+  const defaultUri = getDefaultUri(currentMediaFile);
   if (!defaultUri) {
     showErrorMessage('No workspace folder open');
     return null;
   }
 
   const includedFigureExtensions = getConfig<string[]>(
-    'files.included.figureExtensions',
+    'files.included.mediaExtensions',
+  );
+  const includedAudioExtensions = getConfig<string[]>(
+    'files.included.audioExtensions',
   );
 
   const fileUris = await vscode.window.showOpenDialog({
     canSelectMany: true,
-    openLabel: 'Select Figures',
+    openLabel: 'Select Media',
     canSelectFiles: true,
     canSelectFolders: false,
     defaultUri: defaultUri,
@@ -258,6 +261,7 @@ async function selectFigureFiles(
       'Image files': includedFigureExtensions.map((ext) =>
         ext.replace('.', ''),
       ),
+      'Audio files': includedAudioExtensions.map((ext) => ext.replace('.', '')),
     },
   });
 
@@ -272,22 +276,25 @@ async function selectFigureFiles(
   return null;
 }
 
-async function selectFigureFile(): Promise<string | null> {
+async function selectMediaFile(): Promise<string | null> {
   const fileUri = await vscode.window.showOpenDialog({
     canSelectMany: false,
-    openLabel: 'Select Figure File',
+    openLabel: 'Select Media File',
     canSelectFiles: true,
     canSelectFolders: false,
     filters: {
-      Images: getConfig<string[]>('files.included.figureExtensions').map(
+      Images: getConfig<string[]>('files.included.mediaExtensions').map((ext) =>
+        ext.replace('.', ''),
+      ),
+      'Audio files': getConfig<string[]>('files.included.audioExtensions').map(
         (ext) => ext.replace('.', ''),
       ),
     },
   });
   if (fileUri && fileUri[0]) {
     const relativePath = getRelativePath(fileUri[0].fsPath);
-    showInfoMessage(`Selected figure file: ${relativePath}`);
-    logger.info(CHANNEL, `Selected figure file: ${relativePath}`);
+    showInfoMessage(`Selected media file: ${relativePath}`);
+    logger.info(CHANNEL, `Selected media file: ${relativePath}`);
     return relativePath;
   }
   return null;
@@ -389,8 +396,8 @@ export const fileSelectionCommands = {
   selectInputFiles,
   selectReferenceFiles,
   selectAuxiliaryFiles,
-  selectFigureFiles,
-  selectFigureFile,
+  selectMediaFiles,
+  selectMediaFile,
   selectOutputFiles,
   selectEditedFile,
   getCurrentFile,

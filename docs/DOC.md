@@ -198,13 +198,7 @@ Customize the extension through VS Code settings:
 
 ```json
 {
-  "coauthor.agents": ["correct", "polish", "draw"],
-  "coauthor.includedDirectories": [
-    "Discrete-Time",
-    "FiguresEx",
-    "AnotherDirectory"
-  ],
-  "coauthor.logging.level": "info"
+  "coauthor.agents": ["correct", "polish", "draw"]
 }
 ```
 

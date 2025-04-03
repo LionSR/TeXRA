@@ -3,6 +3,10 @@
 
 // Third-party imports
 import { Anthropic } from '@anthropic-ai/sdk';
+import {
+  MessageParam,
+  ContentBlock,
+} from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - utilities
 import {
@@ -127,33 +131,47 @@ export class ModelHandlerAnthropic extends ModelHandler {
     return response;
   }
 
-  /** Initializes the message array for Anthropic chat models with user prefix, request, and optional images. */
+  /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
   async initializeMessages(
     userPrefix: string,
     userRequest: string,
-    figureFiles?: string[],
+    mediaFiles?: string[],
     systemPrompt?: string,
-  ): Promise<any[]> {
-    // Create content list with user prefix
-    const content: any[] = [{ type: 'text', text: userPrefix }];
+  ): Promise<MessageParam[]> {
+    // Create content list for the user message
+    const userMessageContent: ContentBlock[] = [
+      { type: 'text', text: userPrefix, citations: null },
+    ];
 
-    // Add images if provided
-    if (figureFiles) {
-      content.push(...(await this.createImageMessage(figureFiles)));
+    // Add media if provided (Anthropic currently only supports images)
+    if (mediaFiles && this.config.capabilities.supportsVision) {
+      const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+      // Filter out any non-image content just in case, although createMediaContent should handle this
+      userMessageContent.push(
+        ...formattedMediaContent.filter(
+          (c) =>
+            c.type === 'image' ||
+            (c.type === 'text' && c.text?.startsWith('Image:')),
+        ),
+      );
     }
 
     // Add user request with optional caching
-    const request = {
+    const requestBlock: ContentBlock = {
       type: 'text',
       text: userRequest,
+      citations: null,
       ...(this.capabilities.supportsPromptCaching
         ? { cache_control: { type: 'ephemeral' } }
         : {}),
     };
-    content.push(request);
+    userMessageContent.push(requestBlock);
 
     // Note: Anthropic handles system prompts differently via createResponse()
-    return [{ role: 'user', content }];
+    const messages: MessageParam[] = [
+      { role: 'user', content: userMessageContent },
+    ];
+    return messages;
   }
 
   public removeCacheControl(content: any[]) {
@@ -175,73 +193,107 @@ export class ModelHandlerAnthropic extends ModelHandler {
   async createReflectionMessages(
     messages: any[],
     userMessage: string,
-    figureFiles?: string[],
-  ): Promise<any[]> {
-    // Create content list
-    const content: any[] = [];
+    mediaFiles?: string[],
+  ): Promise<MessageParam[]> {
+    // Create content list for the reflection message
+    const reflectionContent: ContentBlock[] = [];
 
-    // Add images if provided
-    if (figureFiles && figureFiles.length > 0) {
+    // Add media if provided (Anthropic currently only supports images)
+    if (
+      mediaFiles &&
+      mediaFiles.length > 0 &&
+      this.config.capabilities.supportsVision
+    ) {
       try {
-        const imageContent = await this.createImageMessage(figureFiles);
-        content.push(...imageContent);
+        const formattedMediaContent = await this.createMediaMessage(mediaFiles);
+        // Filter out any non-image content
+        reflectionContent.push(
+          ...formattedMediaContent.filter(
+            (c) =>
+              c.type === 'image' ||
+              (c.type === 'text' && c.text?.startsWith('Image:')),
+          ),
+        );
       } catch (err) {
-        this.logger.error(`Error processing image files: ${err}`);
+        this.logger.error(
+          `Error processing media files for reflection: ${err}`,
+        );
       }
     }
 
-    // Add message with optional caching
-    const message = {
+    // Add message text with optional caching
+    const messageBlock: ContentBlock = {
       type: 'text',
       text: userMessage,
+      citations: null,
       ...(this.capabilities.supportsPromptCaching
         ? { cache_control: { type: 'ephemeral' } }
         : {}),
     };
-    content.push(message);
+    reflectionContent.push(messageBlock);
 
     // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
     // Remove cache_control from ALL previous message contents
     if (this.capabilities.supportsPromptCaching) {
       for (const msg of messages) {
-        this.removeCacheControl(msg.content);
+        if (Array.isArray(msg.content)) {
+          this.removeCacheControl(msg.content);
+        }
       }
     }
 
-    messages.push({ role: 'user', content });
+    messages.push({ role: 'user', content: reflectionContent });
     return messages;
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createImageContent(imageContents: any[]): any[] {
+  createMediaContent(mediaMessage: any[]): ContentBlock[] {
     this.logger.debug(
-      `Creating image content for ${imageContents.length} images`,
+      `Creating media content for ${mediaMessage.length} items for Anthropic`,
     );
-    return imageContents.flatMap((image) => {
-      // Always ensure media_type exists
-      if (!image.media_type) {
-        // Default to image/png since PDFs from TikZ are converted to PNG
-        image.media_type = 'image/png';
-        this.logger.debug(`Applied default media_type: image/png`);
-      }
+    return mediaMessage.flatMap((media): ContentBlock[] => {
+      if (media.media_category === 'image') {
+        // for backward compatibility
+        // Always ensure media_type exists
+        if (!media.media_type) {
+          // Default to image/png since PDFs from TikZ are converted to PNG
+          media.media_type = 'image/png';
+          this.logger.warn(
+            `No media_type found for image ${media.file_name}, defaulting to image/png`,
+          );
+        }
 
-      const isPdf =
-        this.capabilities.supportsNativePdf &&
-        image.media_type === 'application/pdf';
-      return [
-        {
-          type: 'text',
-          text: `${isPdf ? 'Document' : 'Image'}: ${image.file_name}`,
-        },
-        {
-          type: isPdf ? 'document' : 'image',
-          source: {
-            type: 'base64',
-            media_type: image.media_type,
-            data: image.data,
+        // Check for native PDF support
+        const isPdf =
+          this.capabilities.supportsNativePdf &&
+          media.media_type === 'application/pdf';
+        return [
+          {
+            type: 'text',
+            text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
+            citations: null,
           },
-        },
-      ];
+          {
+            type: isPdf ? 'document' : 'image',
+            source: {
+              type: 'base64',
+              media_type: media.media_type,
+              data: media.data,
+            },
+          } as any,
+        ];
+      } else if (media.media_category === 'audio') {
+        // Anthropic doesn't explicitly support native audio input yet
+        this.logger.warn(
+          `Audio input received (${media.file_name}) but native audio is not currently supported by the Anthropic handler. Skipping.`,
+        );
+        return []; // Return empty array to skip audio
+      } else {
+        this.logger.warn(
+          `Unknown media category for Anthropic: ${media.media_category}`,
+        );
+        return [];
+      }
     });
   }
 
