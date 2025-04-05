@@ -15,10 +15,10 @@ const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
 export const yamlCommands = {
-  testAgentLoading: 'coauthor.testAgentLoading',
-  loadSpecificAgent: 'coauthor.loadSpecificAgent',
-  parseYaml: 'coauthor.parseYaml',
-  testYamlBrackets: 'coauthor.testYamlBrackets',
+  testAgentLoading: 'texra.testAgentLoading',
+  loadSpecificAgent: 'texra.loadSpecificAgent',
+  parseYaml: 'texra.parseYaml',
+  testYamlBrackets: 'texra.testYamlBrackets',
 };
 
 export async function handleTestAgentLoading(

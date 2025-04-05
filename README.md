@@ -1,6 +1,6 @@
-# CoAuthor: Your Favourite and Intelligent Coauthor for Academic Research
+# TeXRA: Your Favourite and Intelligent TeXRA for Academic Research
 
-CoAuthor is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
+TeXRA is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
 
 See [PHILOSOPHY.md](PHILOSOPHY.md).
 
@@ -25,7 +25,7 @@ See [PHILOSOPHY.md](PHILOSOPHY.md).
 
 ## Architecture
 
-CoAuthor is built as a TypeScript-based VS Code extension that provides:
+TeXRA is built as a TypeScript-based VS Code extension that provides:
 
 - Multiple AI agent support: correct, polish, draw, adapt, and more
 - LaTeX document processing and enhancement
@@ -37,7 +37,7 @@ CoAuthor is built as a TypeScript-based VS Code extension that provides:
 ## Installation Guide
 
 1. Open VS Code
-2. Download the newest release (`.vsix` file, e.g., `coauthor-0.5.6.vsix`) from the release page of the Github repo
+2. Download the newest release (`.vsix` file, e.g., `texra-0.5.6.vsix`) from the release page of the Github repo
 3. Find the newest `.vsix` file in the VS Code file explorer
 4. Right-click on the `.vsix` file
 5. From the context menu, select "Install Extension VSIX"
@@ -47,7 +47,7 @@ CoAuthor is built as a TypeScript-based VS Code extension that provides:
 
 ## Required Dependencies
 
-CoAuthor requires several system dependencies for full functionality:
+TeXRA requires several system dependencies for full functionality:
 
 ### LaTeX Distribution
 
@@ -94,7 +94,7 @@ After installing these dependencies, ensure they are accessible from the command
 ## Basic Usage
 
 1. Open a LaTeX or text file in VS Code
-2. Access the CoAuthor sidebar (look for the scholarly duck icon in the Activity Bar)
+2. Access the TeXRA sidebar (look for the scholarly duck icon in the Activity Bar)
 3. Select your desired agent (e.g., polish, correct, draw)
 4. Choose your input file(s) and any additional options
 5. (Optional) Select auxiliary files or figures
@@ -106,7 +106,7 @@ Although many models are supported, we recommend using Anthropic sonnet\*/opus o
 
 ## Available AI Agents
 
-CoAuthor supports a variety of intelligent agents, including but not limited to:
+TeXRA supports a variety of intelligent agents, including but not limited to:
 
 - `correct`: Fix typos and minor errors in LaTeX documents
 - `polish`: Improve the writing style and clarity of LaTeX documents
@@ -121,7 +121,7 @@ CoAuthor supports a variety of intelligent agents, including but not limited to:
 
 ## Customization
 
-CoAuthor offers various customization options through VS Code settings:
+TeXRA offers various customization options through VS Code settings:
 
 - Configure available AI agents and their parameters
 - Adjust included directories and file types
@@ -179,15 +179,15 @@ For users working on multiple computers, we recommend using a cloud storage serv
 To maintain your local directory structure while syncing these folders, we suggest using soft links. This approach allows you to store the actual folders in Dropbox while creating symbolic links in your local project directory. For example:
 
 ```bash
-ln -s /path/to/Dropbox/coauthor-papers/ProjectName/Diffs /path/to/local/ProjectName
-ln -s /path/to/Dropbox/coauthor-papers/ProjectName/History /path/to/local/ProjectName
+ln -s /path/to/Dropbox/texra-papers/ProjectName/Diffs /path/to/local/ProjectName
+ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName
 ```
 
 Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and local project paths.
 
 ## License
 
-Before the author(s) have figured out the best way to use and distribute CoAuthor and its potential academic value and social impact, the code is under private license.
+Before the author(s) have figured out the best way to use and distribute TeXRA and its potential academic value and social impact, the code is under private license.
 
 © [Sirui Lu] [2024]. All rights reserved.
 This repository and its contents are proprietary and confidential.

@@ -17,14 +17,11 @@ logger.initialize(CHANNEL);
 
 export function registerCleanCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.clean', handleClean),
-    vscode.commands.registerCommand('coauthor.cleanSingle', handleCleanSingle),
-    vscode.commands.registerCommand(
-      'coauthor.cleanMultiple',
-      handleCleanMultiple,
-    ),
-    vscode.commands.registerCommand('coauthor.cleanOutput', runCleanOutput),
-    vscode.commands.registerCommand('coauthor.cleanBuild', runCleanBuild),
+    vscode.commands.registerCommand('texra.clean', handleClean),
+    vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
+    vscode.commands.registerCommand('texra.cleanMultiple', handleCleanMultiple),
+    vscode.commands.registerCommand('texra.cleanOutput', runCleanOutput),
+    vscode.commands.registerCommand('texra.cleanBuild', runCleanBuild),
   );
 }
 

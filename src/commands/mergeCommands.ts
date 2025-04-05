@@ -10,7 +10,7 @@ import { executeMergeAgent } from '../agent/executeAgent';
 export function registerMergeCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.merge',
+      'texra.merge',
       (inputFile: string, baseFile: string, editedFile: string) =>
         handleMerge(context, inputFile, baseFile, editedFile),
     ),
