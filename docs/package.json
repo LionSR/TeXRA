@@ -1,5 +1,5 @@
 {
-  "name": "coauthor-docs",
+  "name": "texra-docs",
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "docs:deploy": "gh-pages -d .vitepress/dist"
   },
   "keywords": [
-    "coauthor",
+    "texra",
     "documentation",
     "academic-writing",
     "vscode-extension",

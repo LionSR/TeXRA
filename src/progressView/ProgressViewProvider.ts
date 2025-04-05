@@ -72,16 +72,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private _logGroups: Map<string, Map<string, LogGroup>> = new Map(); // streamId -> groupId -> LogGroup
   private readonly _contentProvider: ProgressViewContentProvider;
   private readonly _messageHandler: ProgressViewMessageHandler;
-  private readonly _storageKey = 'coauthor.logStreams';
-  private readonly _groupsStorageKey = 'coauthor.logGroups';
-  private readonly _taskStateKey = 'coauthor.taskStates';
+  private readonly _storageKey = 'texra.logStreams';
+  private readonly _groupsStorageKey = 'texra.logGroups';
+  private readonly _taskStateKey = 'texra.taskStates';
   private _disposables: vscode.Disposable[] = [];
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _viewDisposables: vscode.Disposable[] = [];
   private _streamStatus: Map<string, StreamStatusType> = new Map();
   private _activeStream: string = '';
-  private readonly _activeStreamKey = 'coauthor.activeLogStream';
+  private readonly _activeStreamKey = 'texra.activeLogStream';
   private _taskStates: Map<string, TaskState> = new Map();
   private readonly logger: AgentLogger;
 

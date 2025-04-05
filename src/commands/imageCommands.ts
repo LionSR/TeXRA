@@ -18,20 +18,17 @@ logger.initialize(CHANNEL);
 
 export function registerImageCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
+    vscode.commands.registerCommand('texra.countPdfPages', handleCountPdfPages),
     vscode.commands.registerCommand(
-      'coauthor.countPdfPages',
-      handleCountPdfPages,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.encodeImageToBase64',
+      'texra.encodeImageToBase64',
       handleEncodeImageToBase64,
     ),
     vscode.commands.registerCommand(
-      'coauthor.convertPdfToImages',
+      'texra.convertPdfToImages',
       handleConvertPdfToImages,
     ),
     vscode.commands.registerCommand(
-      'coauthor.testPdfToImage',
+      'texra.testPdfToImage',
       handleTestPdfToImage,
     ),
   );

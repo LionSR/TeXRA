@@ -178,7 +178,7 @@ export class WebviewMessageHandler {
         toolConfig,
       };
 
-      await vscode.commands.executeCommand('coauthor.execute', agentConfig);
+      await vscode.commands.executeCommand('texra.execute', agentConfig);
     } else {
       vscode.window.showErrorMessage(
         'Please select an input file or provide an output name override.',
@@ -188,7 +188,7 @@ export class WebviewMessageHandler {
 
   private async handleMerge(message: any) {
     vscode.commands.executeCommand(
-      `coauthor.${message.command}`,
+      `texra.${message.command}`,
       message.inputFile,
       message.baseFile,
       message.editedFile,
@@ -203,7 +203,7 @@ export class WebviewMessageHandler {
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
     const file = await vscode.commands.executeCommand<string>(
-      `coauthor.${message.command}`,
+      `texra.${message.command}`,
     );
     if (file) {
       logger.debug(CHANNEL, `Selected ${singleFileType}: ${file}`);
@@ -216,7 +216,7 @@ export class WebviewMessageHandler {
 
   private async handleEditedFileSelection(webviewView: vscode.WebviewView) {
     const editedFile = await vscode.commands.executeCommand<string>(
-      'coauthor.selectEditedFile',
+      'texra.selectEditedFile',
     );
     if (editedFile) {
       webviewView.webview.postMessage({
@@ -248,7 +248,7 @@ export class WebviewMessageHandler {
   private async handleRequestInputFile(webviewView: vscode.WebviewView) {
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
-        'coauthor.refreshInputFiles',
+        'texra.refreshInputFiles',
       )) || [];
     this.postFileUpdate(webviewView, 'Input', refreshedInputFiles);
   }
@@ -316,7 +316,7 @@ export class WebviewMessageHandler {
     } else {
       const currentFileForMultiple = message.currentFile;
       selectedFiles = await vscode.commands.executeCommand<string[]>(
-        `coauthor.select${fileType}`,
+        `texra.select${fileType}`,
         currentFileForMultiple,
       );
     }
@@ -345,12 +345,12 @@ export class WebviewMessageHandler {
   }
 
   private handleHousekeeping(message: any) {
-    vscode.commands.executeCommand(`coauthor.${message.command}`);
+    vscode.commands.executeCommand(`texra.${message.command}`);
   }
 
   private handleSingleOperation(message: any) {
     vscode.commands.executeCommand(
-      `coauthor.${message.command}`,
+      `texra.${message.command}`,
       message.inputFile,
       message.agent,
       message.model,
@@ -374,7 +374,7 @@ export class WebviewMessageHandler {
     );
 
     vscode.commands.executeCommand(
-      `coauthor.${message.command}`,
+      `texra.${message.command}`,
       message.inputFile,
       message.agent,
       message.model,
@@ -385,7 +385,7 @@ export class WebviewMessageHandler {
 
   private handleLatexdiff(message: any) {
     vscode.commands.executeCommand(
-      'coauthor.latexdiff',
+      'texra.latexdiff',
       message.inputFile,
       message.baseFile,
       message.editedFile,
@@ -394,7 +394,7 @@ export class WebviewMessageHandler {
 
   private handleLatexdiffvc(message: any) {
     vscode.commands.executeCommand(
-      'coauthor.latexdiffvc',
+      'texra.latexdiffvc',
       message.inputFile,
       message.baseFile,
       message.commitHash,
@@ -403,7 +403,7 @@ export class WebviewMessageHandler {
 
   private handleLatexdiffvcOperation(message: any) {
     vscode.commands.executeCommand(
-      `coauthor.${message.command}`,
+      `texra.${message.command}`,
       message.inputFile,
       message.baseFile,
       message.commitHash,
@@ -413,12 +413,10 @@ export class WebviewMessageHandler {
 
   private async handleRequestRecentCommits(webviewView: vscode.WebviewView) {
     const isGitRepo = await vscode.commands.executeCommand<boolean>(
-      'coauthor.isGitRepository',
+      'texra.isGitRepository',
     );
     const commits = isGitRepo
-      ? await vscode.commands.executeCommand<string[]>(
-          'coauthor.getRecentCommits',
-        )
+      ? await vscode.commands.executeCommand<string[]>('texra.getRecentCommits')
       : [];
     webviewView.webview.postMessage({
       command: 'setRecentCommits',
@@ -429,11 +427,11 @@ export class WebviewMessageHandler {
 
   private async handleRefreshCommits(webviewView: vscode.WebviewView) {
     const isGitRepoRefresh = await vscode.commands.executeCommand<boolean>(
-      'coauthor.isGitRepository',
+      'texra.isGitRepository',
     );
     if (isGitRepoRefresh) {
       const commits_refresh = await vscode.commands.executeCommand<string[]>(
-        'coauthor.getRecentCommits',
+        'texra.getRecentCommits',
       );
       webviewView.webview.postMessage({
         command: 'setRecentCommits',
@@ -453,7 +451,7 @@ export class WebviewMessageHandler {
   ) {
     const fileType = message.fileType || 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
-      'coauthor.getCurrentFile',
+      'texra.getCurrentFile',
     );
     if (currentOpenFile) {
       if (fileType === 'edited') {
@@ -744,7 +742,7 @@ export class WebviewMessageHandler {
    */
   private async handleShowAgentHistory() {
     try {
-      await vscode.commands.executeCommand('coauthor.showAgentHistory');
+      await vscode.commands.executeCommand('texra.showAgentHistory');
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to open agent history: ${error}`);
     }
