@@ -7,7 +7,7 @@ const CHANNEL = 'arXivCommands';
 
 // Command IDs
 export const arXivCommands = {
-  downloadArXivSource: 'coauthor.downloadArXivSource',
+  downloadArXivSource: 'texra.downloadArXivSource',
 };
 
 /**

@@ -15,8 +15,8 @@ const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
 
 export const xmlCommands = {
-  parseXml: 'coauthor.parseXml',
-  validateAndFixXml: 'coauthor.validateAndFixXml',
+  parseXml: 'texra.parseXml',
+  validateAndFixXml: 'texra.validateAndFixXml',
 };
 
 export async function handleParseXml(): Promise<void> {

@@ -350,7 +350,7 @@ From lowest to highest cost per token:
 The model selection dropdown in the TexRA interface shows all available models. The list of available models can be customized in VS Code settings:
 
 ```json
-"coauthor.models": [
+"texra.models": [
   "sonnet37T",
   "sonnet37",
   "sonnet35",
@@ -384,7 +384,7 @@ To enable OpenRouter:
 3. Enable OpenRouter in VS Code settings:
 
 ```json
-"coauthor.model.useOpenRouter": true
+"texra.model.useOpenRouter": true
 ```
 
 ## Streaming Support
@@ -392,9 +392,9 @@ To enable OpenRouter:
 For long responses or reasoning-heavy models, you can enable streaming to see incremental results:
 
 ```json
-"coauthor.model.useStreaming": true,
-"coauthor.model.useStreamingAnthropicReasoning": true,
-"coauthor.model.useStreamingOpenAIReasoning": true
+"texra.model.useStreaming": true,
+"texra.model.useStreamingAnthropicReasoning": true,
+"texra.model.useStreamingOpenAIReasoning": true
 ```
 
 ## Performance Tips
