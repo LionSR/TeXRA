@@ -108,12 +108,12 @@ TexRA intelligently handles file paths to ensure proper document processing:
 You can customize how TexRA handles files by configuring file extensions and ignored paths in VS Code settings:
 
 ```json
-"coauthor.files.included.inputExtensions": [
+"texra.files.included.inputExtensions": [
   ".txt",
   ".tex",
   ".md"
 ],
-"coauthor.files.ignored.directories": [
+"texra.files.ignored.directories": [
   "build",
   "node_modules",
   "__pycache__",
@@ -147,8 +147,8 @@ When enabled, TexRA will:
 For TikZ figure extraction, you can customize the template and paths:
 
 ```json
-"coauthor.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n...",
-"coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs"
+"texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n...",
+"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs"
 ```
 
 ## Output File Naming
@@ -251,8 +251,8 @@ For working across multiple computers:
 
 2. Create symbolic links to maintain your local directory structure:
    ```bash
-   ln -s /path/to/Dropbox/coauthor-papers/ProjectName/Diffs /path/to/local/ProjectName
-   ln -s /path/to/Dropbox/coauthor-papers/ProjectName/History /path/to/local/ProjectName
+   ln -s /path/to/Dropbox/texra-papers/ProjectName/Diffs /path/to/local/ProjectName
+   ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName
    ```
 
 ## Best Practices

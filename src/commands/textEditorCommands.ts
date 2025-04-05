@@ -16,7 +16,7 @@ logger.initialize(CHANNEL);
 export function registerTextEditorCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.testTextEditor',
+      'texra.testTextEditor',
       handleTestTextEditor,
     ),
   );

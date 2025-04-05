@@ -2,7 +2,7 @@
 import { defineConfig } from 'vitepress';
 
 export default defineConfig({
-  title: 'CoAuthor',
+  title: 'TeXRA',
   description: 'Your Intelligent Academic Writing Assistant',
   head: [['link', { rel: 'icon', href: '/quantum-deer.png' }]],
   themeConfig: {
@@ -11,7 +11,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/' },
       { text: 'Reference', link: '/reference/' },
-      { text: 'GitHub', link: 'https://github.com/LionSR/coauthor' },
+      { text: 'GitHub', link: 'https://github.com/LionSR/texra' },
     ],
     sidebar: {
       '/guide/': [
@@ -68,9 +68,7 @@ export default defineConfig({
         },
       ],
     },
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/LionSR/coauthor' },
-    ],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/LionSR/texra' }],
     search: {
       provider: 'local',
     },

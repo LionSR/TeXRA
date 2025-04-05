@@ -8,8 +8,8 @@ import {
 } from '../utils/secretUtils';
 
 export const apiKeyCommands = {
-  setApiKey: 'coauthor.setApiKey',
-  removeApiKey: 'coauthor.removeApiKey',
+  setApiKey: 'texra.setApiKey',
+  removeApiKey: 'texra.removeApiKey',
 };
 
 export function registerApiKeyCommands(context: vscode.ExtensionContext) {

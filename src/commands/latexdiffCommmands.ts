@@ -37,28 +37,25 @@ logger.initialize(CHANNEL);
 
 export function registerLatexdiffCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.latexdiff', handleLatexdiff),
-    vscode.commands.registerCommand('coauthor.latexdiffvc', handleLatexdiffvc),
+    vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
+    vscode.commands.registerCommand('texra.latexdiffvc', handleLatexdiffvc),
     vscode.commands.registerCommand(
-      'coauthor.packLatexdiffvc',
+      'texra.packLatexdiffvc',
       handlePackLatexdiffvc,
     ),
     vscode.commands.registerCommand(
-      'coauthor.packLatexdiffvcMultiple',
+      'texra.packLatexdiffvcMultiple',
       handlePackLatexdiffvcMultiple,
     ),
     vscode.commands.registerCommand(
-      'coauthor.cleanLatexdiffvc',
+      'texra.cleanLatexdiffvc',
       handleCleanLatexdiffvc,
     ),
     vscode.commands.registerCommand(
-      'coauthor.cleanLatexdiffvcMultiple',
+      'texra.cleanLatexdiffvcMultiple',
       handleCleanLatexdiffvcMultiple,
     ),
-    vscode.commands.registerCommand(
-      'coauthor.runLatexdiff',
-      handleRunLatexdiff,
-    ),
+    vscode.commands.registerCommand('texra.runLatexdiff', handleRunLatexdiff),
   );
 }
 
