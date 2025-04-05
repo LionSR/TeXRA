@@ -99,7 +99,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 1. **OpenRouter configuration**:
 
    - Verify your OpenRouter API key is correctly set
-   - Check that `coauthor.model.useOpenRouter` is set to `true`
+   - Check that `texra.model.useOpenRouter` is set to `true`
 
 2. **Model availability**:
 
@@ -154,7 +154,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Customize the TikZ template in settings to include necessary packages:
 
    ```json
-   "coauthor.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n..."
+   "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n..."
    ```
 
 3. **Path configuration**:
@@ -162,7 +162,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Set the correct TikZ input directory:
 
    ```json
-   "coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs"
+   "texra.latex.tikzInputDirectory": "/path/to/tikz/inputs"
    ```
 
 4. **Compilation errors**:
@@ -214,7 +214,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Enable streaming for long responses:
 
    ```json
-   "coauthor.model.useStreaming": true
+   "texra.model.useStreaming": true
    ```
 
 3. **Context length**:
@@ -280,7 +280,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Check file extension settings to ensure your files are included:
 
    ```json
-   "coauthor.files.included.inputExtensions": [".txt", ".tex", ".md"]
+   "texra.files.included.inputExtensions": [".txt", ".tex", ".md"]
    ```
 
 4. **Multiple file selection issues**:
@@ -328,7 +328,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Enable streaming for more reliable completion:
 
    ```json
-   "coauthor.model.useStreaming": true
+   "texra.model.useStreaming": true
    ```
 
 2. **XML parsing issues**:
@@ -440,7 +440,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Configure consistent output directories:
    ```json
    "latex-workshop.latex.outDir": "%DIR%/build",
-   "coauthor.files.ignored.directories": ["build"]
+   "texra.files.ignored.directories": ["build"]
    ```
 
 ## Debugging Tips
@@ -476,7 +476,7 @@ If you can't resolve an issue using this guide:
 
 1. **Check GitHub issues**:
 
-   - Search existing issues on the [TexRA repository](https://github.com/LionSR/coauthor/issues)
+   - Search existing issues on the [TexRA repository](https://github.com/LionSR/texra/issues)
    - Look for similar problems and solutions
 
 2. **Report new issues**:

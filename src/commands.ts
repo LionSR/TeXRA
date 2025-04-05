@@ -8,7 +8,7 @@ import { registerPackCommands } from './commands/packCommands';
 import { registerCleanCommands } from './commands/cleanCommands';
 import { registerMergeCommands } from './commands/mergeCommands';
 import { registerExecuteCommand } from './commands/executeCommand';
-import { CoAuthorViewProvider } from './ViewProvider';
+import { TeXRAViewProvider } from './ViewProvider';
 import { registerLatexCommands } from './commands/latexCommands';
 import { registerImageCommands } from './commands/imageCommands';
 import { registerFigureCommands } from './commands/figCommands';
@@ -64,8 +64,8 @@ export function registerCommands(context: vscode.ExtensionContext) {
   // Register webview provider
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'coauthor.mainView',
-      new CoAuthorViewProvider(context),
+      'texra.mainView',
+      new TeXRAViewProvider(context),
       {
         webviewOptions: {
           retainContextWhenHidden: true,

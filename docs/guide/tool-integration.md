@@ -55,7 +55,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Configurable through settings:
 
 ```json
-"coauthor.latex.latexindentConfig": "/path/to/config"
+"texra.latex.latexindentConfig": "/path/to/config"
 ```
 
 #### texcount
@@ -156,17 +156,17 @@ Configure tool integration through VS Code settings:
 
 ```json
 // LaTeX tools configuration
-"coauthor.latex.latexindentConfig": "/path/to/latexindent.yaml",
-"coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs",
-"coauthor.latex.includeWorkspaceInTexinputs": true,
+"texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
+"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs",
+"texra.latex.includeWorkspaceInTexinputs": true,
 
 // Tool configuration
-"coauthor.model.useStreaming": true,
-"coauthor.model.useStreamingAnthropicReasoning": true,
-"coauthor.agent.pauseForConfirmation": false,
+"texra.model.useStreaming": true,
+"texra.model.useStreamingAnthropicReasoning": true,
+"texra.agent.pauseForConfirmation": false,
 
 // Git configuration
-"coauthor.git.numberOfCommitsToShow": 20
+"texra.git.numberOfCommitsToShow": 20
 ```
 
 ## How Tool Integration Works
@@ -270,7 +270,7 @@ Configure these tools to work together:
 
 ```json
 "latex-workshop.latex.outDir": "%DIR%/build",
-"coauthor.files.ignored.directories": ["build"]
+"texra.files.ignored.directories": ["build"]
 ```
 
 ## Troubleshooting Tool Integration

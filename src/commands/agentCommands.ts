@@ -13,7 +13,7 @@ logger.initialize(CHANNEL);
 
 export function registerAgentCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.stopAgent', handleStopAgent),
+    vscode.commands.registerCommand('texra.stopAgent', handleStopAgent),
   );
 }
 
