@@ -11,7 +11,7 @@ import { AgentHistoryManager } from '../historyView/AgentHistoryManager';
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.execute', (config: AgentConfig) =>
+    vscode.commands.registerCommand('texra.execute', (config: AgentConfig) =>
       executeCommand.executeCommand(config, context),
     ),
   );

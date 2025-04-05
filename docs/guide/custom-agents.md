@@ -45,7 +45,7 @@ Custom agents live in a dedicated directory:
 You can also set a custom agents directory in settings:
 
 ```json
-"coauthor.explorer.agentsDirectory": "/path/to/custom/agents"
+"texra.explorer.agentsDirectory": "/path/to/custom/agents"
 ```
 
 ### Step 2: Create a New YAML File

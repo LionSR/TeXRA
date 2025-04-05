@@ -16,7 +16,7 @@ export interface AgentHistoryItem {
  * Manages the storage and retrieval of agent execution history
  */
 export class AgentHistoryManager {
-  private static readonly HISTORY_STORAGE_KEY = 'coauthor.agentHistory';
+  private static readonly HISTORY_STORAGE_KEY = 'texra.agentHistory';
   private static readonly MAX_HISTORY_ITEMS = 100;
 
   /**

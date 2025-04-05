@@ -10,14 +10,8 @@ import { getWorkspacePath } from '../utils/workspaceFileUtils';
 
 export function registerGitCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'coauthor.isGitRepository',
-      isGitRepository,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.getRecentCommits',
-      getRecentCommits,
-    ),
+    vscode.commands.registerCommand('texra.isGitRepository', isGitRepository),
+    vscode.commands.registerCommand('texra.getRecentCommits', getRecentCommits),
   );
 }
 

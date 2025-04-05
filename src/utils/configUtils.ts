@@ -8,14 +8,14 @@ export function getConfig<T>(path: string, defaultValue?: T): T {
     .getConfiguration(parts[0])
     .get(parts.slice(1).join('.'));
 
-  // If not found, try under coauthor namespace
+  // If not found, try under texra namespace
   if (result === undefined) {
-    result = vscode.workspace.getConfiguration('coauthor').get(path);
+    result = vscode.workspace.getConfiguration('texra').get(path);
   }
 
-  // If still not found, try with explicit coauthor prefix
+  // If still not found, try with explicit texra prefix
   if (result === undefined) {
-    result = vscode.workspace.getConfiguration().get(`coauthor.${path}`);
+    result = vscode.workspace.getConfiguration().get(`texra.${path}`);
   }
 
   // Return default value if still undefined

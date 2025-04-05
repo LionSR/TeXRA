@@ -30,7 +30,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Get latexindent config from settings
-    const config = vscode.workspace.getConfiguration('coauthor.latex');
+    const config = vscode.workspace.getConfiguration('texra.latex');
     const latexindentConfig = config.get<string>('latexindentConfig');
 
     // Build command array - note we're using -w (overwrite) and -s (silent)

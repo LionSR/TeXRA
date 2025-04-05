@@ -15,9 +15,9 @@ const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
 
 export const linterCommands = {
-  showLinterMessages: 'coauthor.showLinterMessages',
-  countLinterMessages: 'coauthor.countLinterMessages',
-  fixLinterIssues: 'coauthor.fixLinterIssues',
+  showLinterMessages: 'texra.showLinterMessages',
+  countLinterMessages: 'texra.countLinterMessages',
+  fixLinterIssues: 'texra.fixLinterIssues',
 };
 
 /**
