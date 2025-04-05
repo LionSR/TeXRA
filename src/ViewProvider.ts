@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { WebviewMessageHandler } from './webview/MessageHandler';
 import { WebviewContentProvider } from './webview/WebviewContentProvider';
 
-export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
+export class TeXRAViewProvider implements vscode.WebviewViewProvider {
   private messageHandler: WebviewMessageHandler;
   private contentProvider: WebviewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
@@ -24,31 +24,31 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
 
   private registerCommandHandlers() {
     // Only register commands if they haven't been registered yet
-    if (!CoAuthorViewProvider.commandsRegistered) {
+    if (!TeXRAViewProvider.commandsRegistered) {
       // Create a promise to check if the command exists and register if it doesn't
       const registerCommandPromise = vscode.commands
         .getCommands(true)
         .then((commands) => {
-          if (!commands.includes('coauthor.getWebviewView')) {
+          if (!commands.includes('texra.getWebviewView')) {
             this.context.subscriptions.push(
-              vscode.commands.registerCommand('coauthor.getWebviewView', () => {
+              vscode.commands.registerCommand('texra.getWebviewView', () => {
                 return this.webviewView;
               }),
             );
-            CoAuthorViewProvider.commandsRegistered = true;
+            TeXRAViewProvider.commandsRegistered = true;
             return true;
           }
-          CoAuthorViewProvider.commandsRegistered = true;
+          TeXRAViewProvider.commandsRegistered = true;
           return false;
         });
 
       // Log the result for diagnostics
       registerCommandPromise.then((registered) => {
         if (registered) {
-          console.log('Registered coauthor.getWebviewView command');
+          console.log('Registered texra.getWebviewView command');
         } else {
           console.log(
-            'Command coauthor.getWebviewView already exists, skipped registration',
+            'Command texra.getWebviewView already exists, skipped registration',
           );
         }
       });
@@ -76,9 +76,9 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     this.context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
         if (
-          e.affectsConfiguration('coauthor.agents') ||
-          e.affectsConfiguration('coauthor.models') ||
-          e.affectsConfiguration('coauthor.files')
+          e.affectsConfiguration('texra.agents') ||
+          e.affectsConfiguration('texra.models') ||
+          e.affectsConfiguration('texra.files')
         ) {
           this.refreshOptionsAndView();
         }
@@ -156,7 +156,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
     // Check if there's state to restore from the command
     const hasStateToRestore = await vscode.commands.executeCommand(
       'getContext',
-      'coauthor.hasStateToRestore',
+      'texra.hasStateToRestore',
     );
 
     if (hasStateToRestore) {
@@ -164,7 +164,7 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
         // Get the stored state
         const stateJson = await vscode.commands.executeCommand(
           'getContext',
-          'coauthor.stateToRestore',
+          'texra.stateToRestore',
         );
         if (stateJson) {
           const state = JSON.parse(stateJson as string);
@@ -178,12 +178,12 @@ export class CoAuthorViewProvider implements vscode.WebviewViewProvider {
           // Clear the stored state
           await vscode.commands.executeCommand(
             'setContext',
-            'coauthor.hasStateToRestore',
+            'texra.hasStateToRestore',
             false,
           );
           await vscode.commands.executeCommand(
             'setContext',
-            'coauthor.stateToRestore',
+            'texra.stateToRestore',
             '',
           );
 

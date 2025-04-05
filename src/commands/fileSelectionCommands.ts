@@ -38,48 +38,30 @@ export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ) {
   context.subscriptions.push(
+    vscode.commands.registerCommand('texra.selectInputFile', selectInputFile),
+    vscode.commands.registerCommand('texra.selectInputFiles', selectInputFiles),
     vscode.commands.registerCommand(
-      'coauthor.selectInputFile',
-      selectInputFile,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.selectInputFiles',
-      selectInputFiles,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.selectReferenceFiles',
+      'texra.selectReferenceFiles',
       selectReferenceFiles,
     ),
     vscode.commands.registerCommand(
-      'coauthor.selectAuxiliaryFiles',
+      'texra.selectAuxiliaryFiles',
       selectAuxiliaryFiles,
     ),
+    vscode.commands.registerCommand('texra.selectMediaFiles', selectMediaFiles),
+    vscode.commands.registerCommand('texra.selectMediaFile', selectMediaFile),
     vscode.commands.registerCommand(
-      'coauthor.selectMediaFiles',
-      selectMediaFiles,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.selectMediaFile',
-      selectMediaFile,
-    ),
-    vscode.commands.registerCommand(
-      'coauthor.selectOutputFiles',
+      'texra.selectOutputFiles',
       selectOutputFiles,
     ),
+    vscode.commands.registerCommand('texra.selectEditedFile', selectEditedFile),
+    vscode.commands.registerCommand('texra.getCurrentFile', getCurrentFile),
+    vscode.commands.registerCommand('texra.selectBaseFile', selectBaseFile),
     vscode.commands.registerCommand(
-      'coauthor.selectEditedFile',
-      selectEditedFile,
-    ),
-    vscode.commands.registerCommand('coauthor.getCurrentFile', getCurrentFile),
-    vscode.commands.registerCommand('coauthor.selectBaseFile', selectBaseFile),
-    vscode.commands.registerCommand(
-      'coauthor.refreshInputFiles',
+      'texra.refreshInputFiles',
       refreshInputFiles,
     ),
-    vscode.commands.registerCommand(
-      'coauthor.refreshBaseFiles',
-      refreshBaseFiles,
-    ),
+    vscode.commands.registerCommand('texra.refreshBaseFiles', refreshBaseFiles),
   );
 }
 

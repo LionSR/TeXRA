@@ -19,7 +19,7 @@ You can configure TexRA through VS Code's settings:
 Control which agents are available in the dropdown menu:
 
 ```json
-"coauthor.agents": [
+"texra.agents": [
   "correct",
   "polish",
   "draw",
@@ -37,7 +37,7 @@ Control which agents are available in the dropdown menu:
 Define which AI models appear in the model selection dropdown:
 
 ```json
-"coauthor.models": [
+"texra.models": [
   "sonnet37T",
   "sonnet37",
   "sonnet35",
@@ -62,10 +62,10 @@ Define which AI models appear in the model selection dropdown:
 Configure how TexRA connects to AI model providers:
 
 ```json
-"coauthor.model.useOpenRouter": false,
-"coauthor.model.useStreaming": false,
-"coauthor.model.useStreamingAnthropicReasoning": false,
-"coauthor.model.useStreamingOpenAIReasoning": false
+"texra.model.useOpenRouter": false,
+"texra.model.useStreaming": false,
+"texra.model.useStreamingAnthropicReasoning": false,
+"texra.model.useStreamingOpenAIReasoning": false
 ```
 
 - `useOpenRouter`: Access models through OpenRouter instead of direct APIs
@@ -80,12 +80,12 @@ Configure how TexRA connects to AI model providers:
 Control which file types TexRA includes:
 
 ```json
-"coauthor.files.included.inputExtensions": [
+"texra.files.included.inputExtensions": [
   ".txt",
   ".tex",
   ".md"
 ],
-"coauthor.files.included.mediaExtensions": [
+"texra.files.included.mediaExtensions": [
   ".png",
   ".pdf",
   ".jpeg",
@@ -99,7 +99,7 @@ Control which file types TexRA includes:
 Control which directories TexRA ignores:
 
 ```json
-"coauthor.files.ignored.directories": [
+"texra.files.ignored.directories": [
   "build",
   "node_modules",
   "__pycache__",
@@ -109,7 +109,7 @@ Control which directories TexRA ignores:
   "history",
   "venv"
 ],
-"coauthor.files.ignored.fileExtensions": [
+"texra.files.ignored.fileExtensions": [
   ".pdf",
   ".bst",
   ".bib",
@@ -121,11 +121,11 @@ Control which directories TexRA ignores:
   ".ts",
   ".js"
 ],
-"coauthor.files.ignored.inputFiles": [
+"texra.files.ignored.inputFiles": [
   "command.tex",
   "preamble.tex"
 ],
-"coauthor.files.ignored.keywords": [
+"texra.files.ignored.keywords": [
   "Makefile",
   "template",
   "_log",
@@ -145,7 +145,7 @@ Control which directories TexRA ignores:
 Configure LaTeX indentation behavior:
 
 ```json
-"coauthor.latex.latexindentConfig": "/path/to/latexindent.yaml"
+"texra.latex.latexindentConfig": "/path/to/latexindent.yaml"
 ```
 
 This setting points to a configuration file for `latexindent`, which controls how LaTeX files are formatted.
@@ -155,9 +155,9 @@ This setting points to a configuration file for `latexindent`, which controls ho
 Configure how TikZ figures are extracted and compiled:
 
 ```json
-"coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs",
-"coauthor.latex.includeWorkspaceInTexinputs": true,
-"coauthor.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
+"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs",
+"texra.latex.includeWorkspaceInTexinputs": true,
+"texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
 ```
 
 - `tikzInputDirectory`: Additional directories to include in the TEXINPUTS path when compiling TikZ figures
@@ -169,7 +169,7 @@ Configure how TikZ figures are extracted and compiled:
 Control agent execution behavior:
 
 ```json
-"coauthor.agent.pauseForConfirmation": false
+"texra.agent.pauseForConfirmation": false
 ```
 
 When set to `true`, TexRA will pause for confirmation after each agent, even when reflection is enabled.
@@ -179,7 +179,7 @@ When set to `true`, TexRA will pause for confirmation after each agent, even whe
 Configure Git integration features:
 
 ```json
-"coauthor.git.numberOfCommitsToShow": 20
+"texra.git.numberOfCommitsToShow": 20
 ```
 
 This setting controls how many recent commits are shown in the commit selection dropdown for LaTeX diff operations.
@@ -189,7 +189,7 @@ This setting controls how many recent commits are shown in the commit selection 
 Configure the folder explorer view:
 
 ```json
-"coauthor.explorer.agentsDirectory": "/path/to/custom/agents"
+"texra.explorer.agentsDirectory": "/path/to/custom/agents"
 ```
 
 This setting specifies a custom root path for the TexRA file explorer view, which can be absolute or relative to the workspace root.
@@ -199,8 +199,8 @@ This setting specifies a custom root path for the TexRA file explorer view, whic
 Control logging behavior:
 
 ```json
-"coauthor.logger.verboseOutput": false,
-"coauthor.debug.saveMessageObjects": false
+"texra.logger.verboseOutput": false,
+"texra.debug.saveMessageObjects": false
 ```
 
 - `verboseOutput`: Show detailed debug messages in the logger view
@@ -220,8 +220,8 @@ For project-specific configurations, use workspace settings:
 ```json
 // .vscode/settings.json
 {
-  "coauthor.files.included.inputExtensions": [".tex", ".md", ".txt"],
-  "coauthor.latex.tikzInputDirectory": "${workspaceFolder}/styles"
+  "texra.files.included.inputExtensions": [".tex", ".md", ".txt"],
+  "texra.latex.tikzInputDirectory": "${workspaceFolder}/styles"
 }
 ```
 
@@ -236,7 +236,7 @@ Some settings may need adjustment based on your operating system:
 For Windows, use backslashes or escaped forward slashes in paths:
 
 ```json
-"coauthor.latex.tikzInputDirectory": "C:\\Users\\Username\\Documents\\LaTeX\\tikz"
+"texra.latex.tikzInputDirectory": "C:\\Users\\Username\\Documents\\LaTeX\\tikz"
 ```
 
 #### macOS and Linux
@@ -244,7 +244,7 @@ For Windows, use backslashes or escaped forward slashes in paths:
 For macOS and Linux, use forward slashes:
 
 ```json
-"coauthor.latex.tikzInputDirectory": "/Users/username/Documents/LaTeX/tikz"
+"texra.latex.tikzInputDirectory": "/Users/username/Documents/LaTeX/tikz"
 ```
 
 ## Creating Custom Profiles
@@ -262,9 +262,9 @@ While TexRA doesn't have built-in profile support, you can create multiple confi
 For better performance:
 
 ```json
-"coauthor.model.useStreaming": true,
-"coauthor.files.ignored.directories": ["build", "node_modules", "versions", "history"],
-"coauthor.logger.verboseOutput": false
+"texra.model.useStreaming": true,
+"texra.files.ignored.directories": ["build", "node_modules", "versions", "history"],
+"texra.logger.verboseOutput": false
 ```
 
 ### Optimizing for Quality
@@ -272,8 +272,8 @@ For better performance:
 For highest quality results:
 
 ```json
-"coauthor.model.useStreamingAnthropicReasoning": true,
-"coauthor.model.useStreamingOpenAIReasoning": true
+"texra.model.useStreamingAnthropicReasoning": true,
+"texra.model.useStreamingOpenAIReasoning": true
 ```
 
 ### Optimizing for Collaboration
@@ -281,8 +281,8 @@ For highest quality results:
 For team collaboration:
 
 ```json
-"coauthor.git.numberOfCommitsToShow": 30,
-"coauthor.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml"
+"texra.git.numberOfCommitsToShow": 30,
+"texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml"
 ```
 
 Use workspace settings to ensure consistent configuration across the team.
@@ -302,10 +302,10 @@ For advanced configurations, you can directly edit the VS Code settings JSON:
 Some TexRA commands can be configured through their own settings:
 
 ```json
-"coauthor.setApiKey": {
+"texra.setApiKey": {
   "defaultProvider": "anthropic"
 },
-"coauthor.cleanOutput": {
+"texra.cleanOutput": {
   "confirmBeforeDeleting": true
 }
 ```
@@ -317,11 +317,11 @@ Configure TexRA to work well with other extensions:
 ```json
 // LaTeX Workshop compatibility
 "latex-workshop.latex.outDir": "%DIR%/build",
-"coauthor.files.ignored.directories": ["build"],
+"texra.files.ignored.directories": ["build"],
 
 // Git extensions compatibility
 "git.enableSmartCommit": true,
-"coauthor.git.numberOfCommitsToShow": 20
+"texra.git.numberOfCommitsToShow": 20
 ```
 
 ## Troubleshooting Configuration

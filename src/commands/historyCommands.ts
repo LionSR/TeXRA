@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { AgentHistoryViewProvider } from '../historyView/AgentHistoryViewProvider';
 
 export const historyCommands = {
-  showHistory: 'coauthor.showAgentHistory',
+  showHistory: 'texra.showAgentHistory',
 };
 
 /**

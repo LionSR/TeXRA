@@ -13,7 +13,7 @@ logger.initialize(CHANNEL);
  */
 export function registerStateRestoreCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.restoreState', restoreState),
+    vscode.commands.registerCommand('texra.restoreState', restoreState),
   );
 
   logger.info(CHANNEL, 'Registered state restore command');
@@ -32,7 +32,7 @@ async function restoreState(config: any) {
   try {
     // Focus the webview panel first to make sure it's visible
     // Use the specific view ID instead of the extension to avoid sidebar switching issues
-    await vscode.commands.executeCommand('coauthor.mainView.focus');
+    await vscode.commands.executeCommand('texra.mainView.focus');
 
     // Create a complete state object from the task state using utility function
     const taskState = objectToTaskState(config);
@@ -53,7 +53,7 @@ async function restoreState(config: any) {
     try {
       const webviewView =
         await vscode.commands.executeCommand<vscode.WebviewView>(
-          'coauthor.getWebviewView',
+          'texra.getWebviewView',
         );
 
       if (webviewView) {
@@ -68,18 +68,18 @@ async function restoreState(config: any) {
         // Fallback to context storage method
         await vscode.commands.executeCommand(
           'setContext',
-          'coauthor.hasStateToRestore',
+          'texra.hasStateToRestore',
           true,
         );
         await vscode.commands.executeCommand(
           'setContext',
-          'coauthor.stateToRestore',
+          'texra.stateToRestore',
           JSON.stringify(stateToRestore),
         );
 
         // Try to focus the main view to trigger its activation
         // Use the specific view ID to avoid sidebar switching issues
-        await vscode.commands.executeCommand('coauthor.mainView.focus');
+        await vscode.commands.executeCommand('texra.mainView.focus');
         logger.info(CHANNEL, 'State stored in context for later restoration');
       }
     } catch (error) {
@@ -91,18 +91,18 @@ async function restoreState(config: any) {
       // Fallback to context storage method
       await vscode.commands.executeCommand(
         'setContext',
-        'coauthor.hasStateToRestore',
+        'texra.hasStateToRestore',
         true,
       );
       await vscode.commands.executeCommand(
         'setContext',
-        'coauthor.stateToRestore',
+        'texra.stateToRestore',
         JSON.stringify(stateToRestore),
       );
 
       // Try to focus the main view to trigger its activation
       // Use the specific view ID to avoid sidebar switching issues
-      await vscode.commands.executeCommand('coauthor.mainView.focus');
+      await vscode.commands.executeCommand('texra.mainView.focus');
       logger.info(CHANNEL, 'State stored in context for later restoration');
     }
 

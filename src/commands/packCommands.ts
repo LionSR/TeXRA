@@ -12,12 +12,9 @@ logger.initialize(CHANNEL);
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('coauthor.pack', handlePack),
-    vscode.commands.registerCommand('coauthor.packSingle', handlePackSingle),
-    vscode.commands.registerCommand(
-      'coauthor.packMultiple',
-      handlePackMultiple,
-    ),
+    vscode.commands.registerCommand('texra.pack', handlePack),
+    vscode.commands.registerCommand('texra.packSingle', handlePackSingle),
+    vscode.commands.registerCommand('texra.packMultiple', handlePackMultiple),
   );
 }
 

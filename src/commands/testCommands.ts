@@ -13,7 +13,7 @@ logger.initialize(CHANNEL);
 export function registerTestCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.testConnection',
+      'texra.testConnection',
       handleTestConnection,
     ),
   );
