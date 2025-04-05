@@ -117,7 +117,7 @@ You can customize how TexRA handles TikZ figures through several settings:
 The TikZ template determines the standalone document structure used for extracted figures:
 
 ```json
-"coauthor.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
+"texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
 ```
 
 Customize this template to include additional packages or settings required by your figures.
@@ -127,7 +127,7 @@ Customize this template to include additional packages or settings required by y
 If your TikZ figures depend on custom styles or macros, you can specify an input directory:
 
 ```json
-"coauthor.latex.tikzInputDirectory": "/path/to/tikz/inputs"
+"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs"
 ```
 
 This directory will be added to the LaTeX search path when compiling figures.
@@ -137,7 +137,7 @@ This directory will be added to the LaTeX search path when compiling figures.
 By default, TexRA includes your workspace root in the TEXINPUTS environment variable:
 
 ```json
-"coauthor.latex.includeWorkspaceInTexinputs": true
+"texra.latex.includeWorkspaceInTexinputs": true
 ```
 
 This helps LaTeX find packages and styles located elsewhere in your project.

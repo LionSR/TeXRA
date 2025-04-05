@@ -23,15 +23,15 @@ logger.initialize(CHANNEL);
 export function registerFigureCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.extractFigurePaths',
+      'texra.extractFigurePaths',
       handleExtractFigurePaths,
     ),
     vscode.commands.registerCommand(
-      'coauthor.extractTikzFigures',
+      'texra.extractTikzFigures',
       handleExtractTikzFigures,
     ),
     vscode.commands.registerCommand(
-      'coauthor.compileTikzFigures',
+      'texra.compileTikzFigures',
       handleCompileTikzFigures,
     ),
   );

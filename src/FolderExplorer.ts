@@ -56,24 +56,24 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
     // Register commands for new file/folder creation
     this.context.subscriptions.push(
       vscode.commands.registerCommand(
-        'coauthor.folderExplorer.newFile',
+        'texra.folderExplorer.newFile',
         (node: FileItem) => this.createNew(node, false),
       ),
       vscode.commands.registerCommand(
-        'coauthor.folderExplorer.newFolder',
+        'texra.folderExplorer.newFolder',
         (node: FileItem) => this.createNew(node, true),
       ),
       vscode.commands.registerCommand(
-        'coauthor.folderExplorer.rename',
+        'texra.folderExplorer.rename',
         (node: FileItem) => this.startRename(node),
       ),
       vscode.commands.registerCommand(
-        'coauthor.folderExplorer.delete',
+        'texra.folderExplorer.delete',
         (node: FileItem) => this.deleteItem(node),
       ),
       // Register custom file open command
       vscode.commands.registerCommand(
-        'coauthor.folderExplorer.openFile',
+        'texra.folderExplorer.openFile',
         (uri: vscode.Uri) => this.openFile(uri),
       ),
     );
@@ -419,7 +419,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
               resourceUri,
               vscode.TreeItemCollapsibleState.None,
               {
-                command: 'coauthor.folderExplorer.openFile', // Use custom command instead of vscode.open
+                command: 'texra.folderExplorer.openFile', // Use custom command instead of vscode.open
                 title: 'Open File',
                 arguments: [resourceUri],
               },

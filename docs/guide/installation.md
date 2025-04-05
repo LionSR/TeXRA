@@ -16,7 +16,7 @@ TexRA is designed to work on all major operating systems with the following mini
 
 ### Method 1: Direct Installation from VSIX
 
-1. Download the latest release (`.vsix` file) from the [GitHub release page](https://github.com/LionSR/coauthor/releases)
+1. Download the latest release (`.vsix` file) from the [GitHub release page](https://github.com/LionSR/texra/releases)
 2. In VS Code, locate the `.vsix` file in the file explorer
 3. Right-click on the `.vsix` file
 4. Select "Install Extension VSIX" from the context menu
@@ -31,8 +31,8 @@ If you need to customize the extension or want to work with the latest developme
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/LionSR/coauthor.git
-   cd coauthor
+   git clone https://github.com/LionSR/texra.git
+   cd texra
    ```
 
 2. Install Node.js dependencies:
@@ -249,8 +249,8 @@ If you work across multiple computers:
 
 2. Create symbolic links to maintain your local directory structure:
    ```bash
-   ln -s /path/to/Dropbox/coauthor-papers/ProjectName/Diffs /path/to/local/ProjectName
-   ln -s /path/to/Dropbox/coauthor-papers/ProjectName/History /path/to/local/ProjectName
+   ln -s /path/to/Dropbox/texra-papers/ProjectName/Diffs /path/to/local/ProjectName
+   ln -s /path/to/Dropbox/texra-papers/ProjectName/History /path/to/local/ProjectName
    ```
 
 ## Troubleshooting Installation
@@ -284,7 +284,7 @@ If you work across multiple computers:
 
 If you encounter persistent installation issues:
 
-1. Check the [GitHub Issues page](https://github.com/LionSR/coauthor/issues) for known problems
+1. Check the [GitHub Issues page](https://github.com/LionSR/texra/issues) for known problems
 2. Look for error messages in the TexRA ProgressBoard
 3. File a new issue with detailed information about your system and the specific error
 

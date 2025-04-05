@@ -14,7 +14,7 @@ const CHANNEL = 'AgentHistoryViewProvider';
 logger.initialize(CHANNEL);
 
 export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'coauthor.historyView';
+  public static readonly viewType = 'texra.historyView';
   private _view?: vscode.WebviewPanel;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
@@ -40,7 +40,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
     // Otherwise, create a new panel
     this._view = vscode.window.createWebviewPanel(
       AgentHistoryViewProvider.viewType,
-      'CoAuthor History',
+      'TeXRA History',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -255,10 +255,7 @@ export class AgentHistoryViewProvider implements vscode.WebviewViewProvider {
         );
 
         // Send the properly formatted taskState to the restoreState command
-        await vscode.commands.executeCommand(
-          'coauthor.restoreState',
-          taskState,
-        );
+        await vscode.commands.executeCommand('texra.restoreState', taskState);
 
         // vscode.window.showInformationMessage(
         //   `Configuration restored to main view`,
