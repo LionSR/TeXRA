@@ -23,11 +23,11 @@ logger.initialize(CHANNEL);
 export function registerLatexCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      'coauthor.indentCurrentTeX',
+      'texra.indentCurrentTeX',
       handleIndentCurrentTeX,
     ),
-    vscode.commands.registerCommand('coauthor.getTeXCount', handleGetTeXCount),
-    vscode.commands.registerCommand('coauthor.indentTeX', runIndentTeX),
+    vscode.commands.registerCommand('texra.getTeXCount', handleGetTeXCount),
+    vscode.commands.registerCommand('texra.indentTeX', runIndentTeX),
   );
 }
 

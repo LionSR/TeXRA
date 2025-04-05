@@ -1,8 +1,8 @@
 {
-  "name": "coauthor",
-  "displayName": "CoAuthor",
-  "description": "CoAuthor: your never complain nor PUA nor on two-month holidays coauthor.",
-  "version": "0.26.2",
+  "name": "texra",
+  "displayName": "TeXRA",
+  "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
+  "version": "0.27.0",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -14,16 +14,16 @@
     "AI"
   ],
   "activationEvents": [
-    "onView:coauthor",
+    "onView:texra",
     "onColorTheme"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": [
       {
-        "title": "CoAuthor",
+        "title": "TeXRA",
         "properties": {
-          "coauthor.agents": {
+          "texra.agents": {
             "type": "array",
             "items": {
               "type": "string"
@@ -45,7 +45,7 @@
             "description": "List of available agents",
             "scope": "resource"
           },
-          "coauthor.models": {
+          "texra.models": {
             "type": "array",
             "items": {
               "type": "string"
@@ -76,31 +76,31 @@
       {
         "title": "Model Settings",
         "properties": {
-          "coauthor.model.useOpenRouter": {
+          "texra.model.useOpenRouter": {
             "type": "boolean",
             "default": false,
             "description": "Whether to use OpenRouter for API calls when possible",
             "scope": "resource"
           },
-          "coauthor.model.useStreaming": {
+          "texra.model.useStreaming": {
             "type": "boolean",
             "default": false,
             "description": "Enable streaming API responses when supported by the model. This will be more robust for long responses.",
             "scope": "resource"
           },
-          "coauthor.model.useStreamingAnthropicReasoning": {
+          "texra.model.useStreamingAnthropicReasoning": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming API responses when supported by the Anthropic model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
+            "description": "Enable streaming API responses when supported by the Anthropic model. This will be more robust for long responses. This overrides the texra.model.useStreaming setting.",
             "scope": "resource"
           },
-          "coauthor.model.useStreamingOpenAIReasoning": {
+          "texra.model.useStreamingOpenAIReasoning": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the coauthor.model.useStreaming setting.",
+            "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the texra.model.useStreaming setting.",
             "scope": "resource"
           },
-          "coauthor.model.useNativeGoogleSDK": {
+          "texra.model.useNativeGoogleSDK": {
             "type": "boolean",
             "default": false,
             "description": "Use the native @google/genai SDK for Google models instead of the OpenAI-compatible API. This feature is experimental and may not work as expected.",
@@ -111,7 +111,7 @@
       {
         "title": "File Handling",
         "properties": {
-          "coauthor.files.included.mediaExtensions": {
+          "texra.files.included.mediaExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -137,7 +137,7 @@
             "editPresentation": "multilineText",
             "order": 4
           },
-          "coauthor.files.included.inputExtensions": {
+          "texra.files.included.inputExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -151,7 +151,7 @@
             "editPresentation": "multilineText",
             "order": 5
           },
-          "coauthor.files.included.referenceExtensions": {
+          "texra.files.included.referenceExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -165,7 +165,7 @@
             "editPresentation": "multilineText",
             "order": 6
           },
-          "coauthor.files.included.auxiliaryExtensions": {
+          "texra.files.included.auxiliaryExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -180,7 +180,7 @@
             "editPresentation": "multilineText",
             "order": 7
           },
-          "coauthor.files.included.editedExtensions": {
+          "texra.files.included.editedExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -193,7 +193,7 @@
             "editPresentation": "multilineText",
             "order": 8
           },
-          "coauthor.files.ignored.fileExtensions": {
+          "texra.files.ignored.fileExtensions": {
             "type": "array",
             "items": {
               "type": "string"
@@ -214,7 +214,7 @@
             "editPresentation": "multilineText",
             "order": 9
           },
-          "coauthor.files.ignored.inputFiles": {
+          "texra.files.ignored.inputFiles": {
             "type": "array",
             "items": {
               "type": "string"
@@ -227,7 +227,7 @@
             "editPresentation": "multilineText",
             "order": 10
           },
-          "coauthor.files.ignored.auxiliaryKeywords": {
+          "texra.files.ignored.auxiliaryKeywords": {
             "type": "array",
             "items": {
               "type": "string"
@@ -249,7 +249,7 @@
             "editPresentation": "multilineText",
             "order": 11
           },
-          "coauthor.files.ignored.figureDirectories": {
+          "texra.files.ignored.figureDirectories": {
             "type": "array",
             "items": {
               "type": "string"
@@ -266,7 +266,7 @@
             "editPresentation": "multilineText",
             "order": 12
           },
-          "coauthor.files.ignored.directories": {
+          "texra.files.ignored.directories": {
             "type": "array",
             "items": {
               "type": "string"
@@ -290,7 +290,7 @@
             "editPresentation": "multilineText",
             "order": 13
           },
-          "coauthor.files.ignored.keywords": {
+          "texra.files.ignored.keywords": {
             "type": "array",
             "items": {
               "type": "string"
@@ -317,34 +317,34 @@
       {
         "title": "LaTeX",
         "properties": {
-          "coauthor.latex.latexindentConfig": {
+          "texra.latex.latexindentConfig": {
             "type": "string",
             "default": "",
             "description": "Path to latexindent configuration file",
             "editPresentation": "singlelineText",
             "order": 1
           },
-          "coauthor.latex.tikzInputDirectory": {
+          "texra.latex.tikzInputDirectory": {
             "type": "string",
             "default": "",
             "description": "Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.",
             "editPresentation": "singlelineText",
             "order": 2
           },
-          "coauthor.latex.tikzTemplate": {
+          "texra.latex.tikzTemplate": {
             "type": "string",
             "default": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}",
             "description": "Template used for generating standalone documents when extracting and compiling TikZ figures",
             "editPresentation": "multilineText",
             "order": 3
           },
-          "coauthor.latex.includeWorkspaceInTexinputs": {
+          "texra.latex.includeWorkspaceInTexinputs": {
             "type": "boolean",
             "default": true,
             "description": "Include the workspace root directory in TEXINPUTS when compiling TikZ figures",
             "order": 4
           },
-          "coauthor.latex.enabledReplacements": {
+          "texra.latex.enabledReplacements": {
             "type": "array",
             "items": {
               "type": "string",
@@ -373,7 +373,7 @@
             "description": "List of enabled LaTeX replacement categories",
             "order": 5
           },
-          "coauthor.latex.customReplacements": {
+          "texra.latex.customReplacements": {
             "type": "object",
             "default": {},
             "description": "Custom LaTeX replacements in the format: { 'from': 'to' }. Example: { '\\alpha': '\\al' }",
@@ -387,7 +387,7 @@
       {
         "title": "Execution",
         "properties": {
-          "coauthor.agent.pauseForConfirmation": {
+          "texra.agent.pauseForConfirmation": {
             "type": "boolean",
             "default": false,
             "description": "Whether to pause for confirmation after each agent even with reflect=True",
@@ -398,7 +398,7 @@
       {
         "title": "Git",
         "properties": {
-          "coauthor.git.numberOfCommitsToShow": {
+          "texra.git.numberOfCommitsToShow": {
             "type": "number",
             "default": 20,
             "minimum": 1,
@@ -411,7 +411,7 @@
       {
         "title": "Merge Operations",
         "properties": {
-          "coauthor.merge.defaultModel": {
+          "texra.merge.defaultModel": {
             "type": "string",
             "default": "sonnet37",
             "enum": [
@@ -435,7 +435,7 @@
             "description": "Default model to use for merge operations",
             "order": 1
           },
-          "coauthor.merge.defaultReflect": {
+          "texra.merge.defaultReflect": {
             "type": "string",
             "default": "False",
             "enum": [
@@ -450,7 +450,7 @@
       {
         "title": "Code Validation & Fixing",
         "properties": {
-          "coauthor.xmlValidator.maxIterations": {
+          "texra.xmlValidator.maxIterations": {
             "type": "number",
             "default": 10,
             "minimum": 1,
@@ -458,7 +458,7 @@
             "description": "Maximum number of iterations when trying to fix XML validation errors",
             "order": 2
           },
-          "coauthor.linterFixer.maxIterations": {
+          "texra.linterFixer.maxIterations": {
             "type": "number",
             "default": 10,
             "minimum": 1,
@@ -466,13 +466,13 @@
             "description": "Maximum number of iterations when trying to fix linter issues in code files",
             "order": 2
           },
-          "coauthor.autoIterateOnLinter.latex": {
+          "texra.autoIterateOnLinter.latex": {
             "type": "boolean",
             "default": false,
             "description": "Automatically trigger LaTeX linter fix when linter issues are detected",
             "order": 3
           },
-          "coauthor.autoIterateOnLinter.xml": {
+          "texra.autoIterateOnLinter.xml": {
             "type": "boolean",
             "default": false,
             "description": "Automatically trigger XML validation fix when XML validation issues are detected",
@@ -483,10 +483,10 @@
       {
         "title": "File Explorer",
         "properties": {
-          "coauthor.explorer.agentsDirectory": {
+          "texra.explorer.agentsDirectory": {
             "type": "string",
             "default": "",
-            "description": "Root path for the CoAuthor file explorer view. Can be absolute or relative to workspace root.",
+            "description": "Root path for the TeXRA file explorer view. Can be absolute or relative to workspace root.",
             "scope": "resource"
           }
         }
@@ -494,16 +494,16 @@
       {
         "title": "API Keys",
         "properties": {
-          "coauthor.apiKeys.set": {
+          "texra.apiKeys.set": {
             "type": "null",
             "scope": "application",
-            "markdownDescription": "API keys are now stored securely. [Click here to set an API key](command:coauthor.setApiKey)",
+            "markdownDescription": "API keys are now stored securely. [Click here to set an API key](command:texra.setApiKey)",
             "readOnly": true
           },
-          "coauthor.apiKeys.remove": {
+          "texra.apiKeys.remove": {
             "type": "null",
             "scope": "application",
-            "markdownDescription": "API keys are now stored securely. [Click here to remove the stored key](command:coauthor.removeApiKey)",
+            "markdownDescription": "API keys are now stored securely. [Click here to remove the stored key](command:texra.removeApiKey)",
             "readOnly": true
           }
         }
@@ -511,13 +511,13 @@
       {
         "title": "Logger",
         "properties": {
-          "coauthor.logger.verboseOutput": {
+          "texra.logger.verboseOutput": {
             "type": "boolean",
             "default": false,
             "description": "Whether to show verbose debug messages in the logger view",
             "scope": "resource"
           },
-          "coauthor.debug.saveMessageObjects": {
+          "texra.debug.saveMessageObjects": {
             "type": "boolean",
             "default": false,
             "description": "Save message JSON objects to files before API calls for debugging purposes",
@@ -528,264 +528,264 @@
     ],
     "commands": [
       {
-        "command": "coauthor.cleanOutput",
+        "command": "texra.cleanOutput",
         "title": "Clean All LLM Output Files",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(trash)"
       },
       {
-        "command": "coauthor.cleanBuild",
+        "command": "texra.cleanBuild",
         "title": "Clean All Build Files",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(clear-all)"
       },
       {
-        "command": "coauthor.indentTeX",
+        "command": "texra.indentTeX",
         "title": "Indent All LaTeX Files",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(indent)"
       },
       {
-        "command": "coauthor.getRecentCommits",
+        "command": "texra.getRecentCommits",
         "title": "Get Recent Commits",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.refreshCommits",
+        "command": "texra.refreshCommits",
         "title": "Refresh Commits",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.indentCurrentTeX",
+        "command": "texra.indentCurrentTeX",
         "title": "Indent Current TeX",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(indent)",
         "enablement": "!virtualWorkspace"
       },
       {
-        "command": "coauthor.countPdfPages",
+        "command": "texra.countPdfPages",
         "title": "Count PDF Pages",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.encodeImageToBase64",
+        "command": "texra.encodeImageToBase64",
         "title": "Encode Image to Base64",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.convertPdfToImages",
+        "command": "texra.convertPdfToImages",
         "title": "Convert PDF to Images",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.testPdfToImage",
+        "command": "texra.testPdfToImage",
         "title": "Test PDF to Image Conversion",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.extractFigurePaths",
+        "command": "texra.extractFigurePaths",
         "title": "Extract Figure Paths from LaTeX",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.extractTikzFigures",
+        "command": "texra.extractTikzFigures",
         "title": "Extract TikZ Figures from Current File",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.compileTikzFigures",
+        "command": "texra.compileTikzFigures",
         "title": "Compile TikZ Figures from Current File",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.getTeXCount",
+        "command": "texra.getTeXCount",
         "title": "Count Words in Current TeX File",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(symbol-number)",
         "enablement": "!virtualWorkspace"
       },
       {
-        "command": "coauthor.testConnection",
+        "command": "texra.testConnection",
         "title": "Test Text Connection Methods",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.testAgentLoading",
+        "command": "texra.testAgentLoading",
         "title": "Test Agent Loading",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.loadSpecificAgent",
+        "command": "texra.loadSpecificAgent",
         "title": "Load Specific Agent",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.downloadArXivSource",
+        "command": "texra.downloadArXivSource",
         "title": "Download arXiv Source",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.parseXml",
+        "command": "texra.parseXml",
         "title": "Parse XML Structure",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.validateAndFixXml",
+        "command": "texra.validateAndFixXml",
         "title": "Validate and Fix XML using Claude",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.parseYaml",
+        "command": "texra.parseYaml",
         "title": "Parse YAML Structure",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.testYamlBrackets",
+        "command": "texra.testYamlBrackets",
         "title": "Test YAML Bracket Handling",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.stopAgent",
+        "command": "texra.stopAgent",
         "title": "Stop Agent",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.execute",
+        "command": "texra.execute",
         "title": "Execute Agent",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.pack",
+        "command": "texra.pack",
         "title": "Pack Files",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.clean",
+        "command": "texra.clean",
         "title": "Clean Files",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.folderExplorer.newFile",
+        "command": "texra.folderExplorer.newFile",
         "title": "New File",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(new-file)"
       },
       {
-        "command": "coauthor.folderExplorer.newFolder",
+        "command": "texra.folderExplorer.newFolder",
         "title": "New Folder",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(new-folder)"
       },
       {
-        "command": "coauthor.folderExplorer.rename",
+        "command": "texra.folderExplorer.rename",
         "title": "Rename",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(edit)"
       },
       {
-        "command": "coauthor.folderExplorer.delete",
+        "command": "texra.folderExplorer.delete",
         "title": "Delete",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(trash)"
       },
       {
-        "command": "coauthor.setApiKey",
+        "command": "texra.setApiKey",
         "title": "Set API Key",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.removeApiKey",
+        "command": "texra.removeApiKey",
         "title": "Remove API Key",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.testTextEditor",
+        "command": "texra.testTextEditor",
         "title": "Test Text Editor Tool",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(edit)"
       },
       {
-        "command": "coauthor.showLinterMessages",
+        "command": "texra.showLinterMessages",
         "title": "Show Linter Messages",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.countLinterMessages",
+        "command": "texra.countLinterMessages",
         "title": "Count Linter Messages",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.fixLinterIssues",
+        "command": "texra.fixLinterIssues",
         "title": "Fix Linter Issues with Claude",
-        "category": "CoAuthor",
+        "category": "TeXRA",
         "icon": "$(fix-all)"
       },
       {
-        "command": "coauthor.testWolframAlpha",
+        "command": "texra.testWolframAlpha",
         "title": "Test Wolfram Alpha API Connection",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.wolframAlphaQuery",
+        "command": "texra.wolframAlphaQuery",
         "title": "Query Wolfram Alpha",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.testWolframScript",
+        "command": "texra.testWolframScript",
         "title": "Test Wolfram Script Installation",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.wolframScriptExecute",
+        "command": "texra.wolframScriptExecute",
         "title": "Execute Wolfram Language Code",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.wolframScriptRunFile",
+        "command": "texra.wolframScriptRunFile",
         "title": "Run Current Wolfram Language File",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       },
       {
-        "command": "coauthor.showAgentHistory",
+        "command": "texra.showAgentHistory",
         "title": "Show Agent Execution History",
-        "category": "CoAuthor"
+        "category": "TeXRA"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "coauthor",
-          "title": "CoAuthor",
+          "id": "texra",
+          "title": "TeXRA",
           "icon": "resources/quantum-deer.svg"
         }
       ],
       "panel": [
         {
-          "id": "coauthor-panel",
-          "title": "CoAuthor ProgressBoard",
+          "id": "texra-panel",
+          "title": "TeXRA ProgressBoard",
           "icon": "$(server-process)"
         }
       ]
     },
     "views": {
-      "coauthor": [
+      "texra": [
         {
           "type": "webview",
-          "id": "coauthor.mainView",
-          "name": "Your Favourite CoAuthor",
-          "contextualTitle": "CoAuthor"
+          "id": "texra.mainView",
+          "name": "Your Favourite TeXRA",
+          "contextualTitle": "TeXRA"
         },
         {
-          "id": "coauthor.folderExplorer",
+          "id": "texra.folderExplorer",
           "name": "TeX Agents",
           "when": "workbenchState != empty"
         }
       ],
-      "coauthor-panel": [
+      "texra-panel": [
         {
           "type": "webview",
-          "id": "coauthor.progressView",
-          "name": "CoAuthor: ProgressBoard",
+          "id": "texra.progressView",
+          "name": "TeXRA: ProgressBoard",
           "contextualTitle": "ProgressBoard",
           "icon": "$(server-process)"
         }
@@ -795,61 +795,61 @@
       "editor/title": [
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "coauthor.indentCurrentTeX",
+          "command": "texra.indentCurrentTeX",
           "group": "navigation"
         },
         {
           "when": "editorLangId =~ /^latex$|^latex-expl3$|^doctex$/",
-          "command": "coauthor.getTeXCount",
+          "command": "texra.getTeXCount",
           "group": "navigation"
         }
       ],
       "view/title": [
         {
-          "command": "coauthor.indentTeX",
-          "when": "view == coauthor.progressView",
+          "command": "texra.indentTeX",
+          "when": "view == texra.progressView",
           "group": "navigation@1"
         },
         {
-          "command": "coauthor.cleanOutput",
-          "when": "view == coauthor.progressView",
+          "command": "texra.cleanOutput",
+          "when": "view == texra.progressView",
           "group": "navigation@2"
         },
         {
-          "command": "coauthor.cleanBuild",
-          "when": "view == coauthor.progressView",
+          "command": "texra.cleanBuild",
+          "when": "view == texra.progressView",
           "group": "navigation@3"
         },
         {
-          "command": "coauthor.folderExplorer.newFile",
-          "when": "view == coauthor.folderExplorer",
+          "command": "texra.folderExplorer.newFile",
+          "when": "view == texra.folderExplorer",
           "group": "navigation"
         },
         {
-          "command": "coauthor.folderExplorer.newFolder",
-          "when": "view == coauthor.folderExplorer",
+          "command": "texra.folderExplorer.newFolder",
+          "when": "view == texra.folderExplorer",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "coauthor.folderExplorer.newFile",
-          "when": "view == coauthor.folderExplorer && viewItem == folder",
+          "command": "texra.folderExplorer.newFile",
+          "when": "view == texra.folderExplorer && viewItem == folder",
           "group": "1_modification"
         },
         {
-          "command": "coauthor.folderExplorer.newFolder",
-          "when": "view == coauthor.folderExplorer && viewItem == folder",
+          "command": "texra.folderExplorer.newFolder",
+          "when": "view == texra.folderExplorer && viewItem == folder",
           "group": "1_modification"
         },
         {
-          "command": "coauthor.folderExplorer.rename",
-          "when": "view == coauthor.folderExplorer && viewItem != editing",
+          "command": "texra.folderExplorer.rename",
+          "when": "view == texra.folderExplorer && viewItem != editing",
           "group": "2_modification"
         },
         {
-          "command": "coauthor.folderExplorer.delete",
-          "when": "view == coauthor.folderExplorer && viewItem != editing",
+          "command": "texra.folderExplorer.delete",
+          "when": "view == texra.folderExplorer && viewItem != editing",
           "group": "3_modification"
         }
       ]
@@ -865,7 +865,7 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test",
-    "build": "npm run compile && vsce package --out releases/coauthor-$npm_package_version.vsix",
+    "build": "npm run compile && vsce package --out releases/texra-$npm_package_version.vsix",
     "format": "prettier --write ."
   },
   "devDependencies": {
@@ -896,7 +896,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/LionSR/coauthor.git"
+    "url": "https://github.com/LionSR/texra.git"
   },
   "license": "MIT",
   "author": "Sirui LU",
@@ -905,14 +905,14 @@
     "latex",
     "academic",
     "writing",
-    "coauthor",
+    "texra",
     "vscode",
     "research"
   ],
   "bugs": {
-    "url": "https://github.com/LionSR/coauthor/issues"
+    "url": "https://github.com/LionSR/texra/issues"
   },
-  "homepage": "https://github.com/LionSR/coauthor#readme",
+  "homepage": "https://github.com/LionSR/texra#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@google/genai": "^0.7.0",

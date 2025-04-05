@@ -97,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Copy default agents
   copyDefaultAgents(context);
 
-  // Register commands first - this will create and store the CoAuthorViewProvider
+  // Register commands first - this will create and store the TeXRAViewProvider
   const registeredCommands = registerCommands(context);
 
   // Register the folder explorer with context
@@ -107,17 +107,17 @@ export function activate(context: vscode.ExtensionContext) {
   // Register the tree data provider and webview providers
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'coauthor.progressView',
+      'texra.progressView',
       progressViewProvider,
     ),
     // Removed duplicate mainViewProvider registration since it's handled in commands.ts
     vscode.window.registerTreeDataProvider(
-      'coauthor.folderExplorer',
+      'texra.folderExplorer',
       folderExplorer,
     ),
     // Add watcher for configuration changes
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('coauthor.explorer.agentsDirectory')) {
+      if (e.affectsConfiguration('texra.explorer.agentsDirectory')) {
         folderExplorer.setupFileSystemWatcher();
         folderExplorer.refresh();
       }

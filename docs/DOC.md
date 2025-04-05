@@ -179,7 +179,7 @@ You can customize the list of available agents in your VS Code settings:
 4. Edit the agent list to add, remove, or modify agents.
 
 ```json
-"coauthor.agents": [
+"texra.agents": [
   "correct",
   "polish",
   "draw",
@@ -198,7 +198,7 @@ Customize the extension through VS Code settings:
 
 ```json
 {
-  "coauthor.agents": ["correct", "polish", "draw"]
+  "texra.agents": ["correct", "polish", "draw"]
 }
 ```
 
@@ -308,7 +308,7 @@ TexRA provides specialized tools for extracting and compiling TikZ figures from 
 You can configure a directory for additional input files needed when compiling extracted TikZ figures:
 
 1. Open VSCode settings (File > Preferences > Settings)
-2. Search for "coauthor.latex.tikzInputDirectory"
+2. Search for "texra.latex.tikzInputDirectory"
 3. Set the absolute path to your TikZ-related input directory
 
 This setting will pass the directory to the TEXINPUTS environment variable specifically when compiling standalone TikZ figures, using the format `.:yourTikzInputDir:$TEXINPUTS`. This ensures the LaTeX compiler can find any custom packages, styles, or macros needed for your TikZ figures.
@@ -320,7 +320,7 @@ By default, TexRA includes your workspace root directory in the TEXINPUTS enviro
 To change this behavior:
 
 1. Open VSCode settings (File > Preferences > Settings)
-2. Search for "coauthor.latex.includeWorkspaceInTexinputs"
+2. Search for "texra.latex.includeWorkspaceInTexinputs"
 3. Uncheck the box to disable including the workspace path
 
 #### TikZ Template
@@ -328,7 +328,7 @@ To change this behavior:
 You can customize the template used for generating standalone TikZ documents during the extraction and compilation process:
 
 1. Open VSCode settings (File > Preferences > Settings)
-2. Search for "coauthor.latex.tikzTemplate"
+2. Search for "texra.latex.tikzTemplate"
 3. Modify the template to include any additional packages or settings needed for your TikZ figures
 
 Example:

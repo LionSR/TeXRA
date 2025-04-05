@@ -25,7 +25,7 @@ const CHANNEL = 'ImgUtils';
 logger.initialize(CHANNEL);
 
 // Define the temporary directory path
-const TEMP_DIR = path.join(os.tmpdir(), 'coauthor-pdf-conversion');
+const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
 async function checkImageMagickInstalled(): Promise<boolean> {
   try {

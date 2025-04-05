@@ -9,9 +9,9 @@ import {
 } from '../WolframTool/wolframScriptUtils';
 
 export const wolframScriptCommands = {
-  testWolframScript: 'coauthor.testWolframScript',
-  wolframScriptExecute: 'coauthor.wolframScriptExecute',
-  wolframScriptRunFile: 'coauthor.wolframScriptRunFile',
+  testWolframScript: 'texra.testWolframScript',
+  wolframScriptExecute: 'texra.wolframScriptExecute',
+  wolframScriptRunFile: 'texra.wolframScriptRunFile',
 };
 
 export function registerWolframScriptCommands(
