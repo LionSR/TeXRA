@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 import { WolframAlphaClient } from '../WolframTool/wolframAlphaUtils';
 
 export const wolframAlphaCommands = {
-  testWolframAlpha: 'coauthor.testWolframAlpha',
-  wolframAlphaQuery: 'coauthor.wolframAlphaQuery',
+  testWolframAlpha: 'texra.testWolframAlpha',
+  wolframAlphaQuery: 'texra.wolframAlphaQuery',
 };
 
 export function registerWolframAlphaCommands(context: vscode.ExtensionContext) {

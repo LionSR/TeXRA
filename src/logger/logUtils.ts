@@ -275,8 +275,8 @@ function createLoggerForChannel(channel: string): winston.Logger {
     return channelLoggers.get(channel)!;
   }
 
-  // Create output channel with the CoAuthor prefix
-  const channelName = 'CoAuthor ' + channel;
+  // Create output channel with the TeXRA prefix
+  const channelName = 'TeXRA ' + channel;
   const outputChannel = vscode.window.createOutputChannel(channelName);
 
   // Create transport

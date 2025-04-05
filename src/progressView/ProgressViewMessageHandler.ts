@@ -35,7 +35,7 @@ export class ProgressViewMessageHandler {
         this.provider.deleteAllStreams();
         break;
       case COMMANDS.STOP_STREAM:
-        vscode.commands.executeCommand('coauthor.stopAgent', message.stream);
+        vscode.commands.executeCommand('texra.stopAgent', message.stream);
         break;
       case COMMANDS.DIFF_STREAM:
         await this.handleDiffStream(message.stream);
@@ -68,7 +68,7 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute pack command with taskState
-    await vscode.commands.executeCommand('coauthor.pack', {
+    await vscode.commands.executeCommand('texra.pack', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
@@ -92,7 +92,7 @@ export class ProgressViewMessageHandler {
     const agentConfig = taskStateToAgentConfig(taskState);
 
     // Execute the agent with the restored config
-    await vscode.commands.executeCommand('coauthor.execute', agentConfig);
+    await vscode.commands.executeCommand('texra.execute', agentConfig);
   }
 
   private async handleCleanStream(stream: string) {
@@ -106,7 +106,7 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute clean command with taskState
-    await vscode.commands.executeCommand('coauthor.clean', {
+    await vscode.commands.executeCommand('texra.clean', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
@@ -130,7 +130,7 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the restore state command with the task configuration
-    await vscode.commands.executeCommand('coauthor.restoreState', taskState);
+    await vscode.commands.executeCommand('texra.restoreState', taskState);
   }
 
   private async handleDiffStream(stream: string) {
@@ -147,7 +147,7 @@ export class ProgressViewMessageHandler {
     logger.debug(CHANNEL, `Task state: ${JSON.stringify(taskState)}`);
 
     // Execute the latexdiff command with the task configuration
-    await vscode.commands.executeCommand('coauthor.runLatexdiff', {
+    await vscode.commands.executeCommand('texra.runLatexdiff', {
       agent: taskState.agent,
       model: taskState.model,
       inputFile: taskState.inputFile,
