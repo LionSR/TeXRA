@@ -271,6 +271,7 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\nlabel{': '\\label{',
 
     // align problem
+    '\\end{Galign}': '\\end{align}',
     '\n\n\\end{align}': '\n\\end{align}',
 
     // latex ending separators
