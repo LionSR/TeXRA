@@ -20,6 +20,7 @@ import {
 import {
   applyReplacements,
   getReplacementsByCategory,
+  getAllReplacements,
 } from '../utils/replacementUtils';
 import {
   runLatexdiff,
@@ -151,6 +152,8 @@ export class OutputHandler {
 
   /** Processes XML content by filtering tags and applying replacements. */
   public async processXmlContent(content: string): Promise<string> {
+    content = applyReplacements(content, getAllReplacements()).trim();
+
     const latexXmlReplacements = getReplacementsByCategory('latex_xml');
     if (latexXmlReplacements) {
       content = applyReplacements(content, latexXmlReplacements);
