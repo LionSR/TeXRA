@@ -248,6 +248,9 @@ export class ModelHandlerAnthropic extends ModelHandler {
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createMediaContent(mediaMessage: any[]): ContentBlock[] {
+    if (mediaMessage.length === 0) {
+      return [];
+    }
     this.logger.debug(
       `Creating media content for ${mediaMessage.length} items for Anthropic`,
     );
