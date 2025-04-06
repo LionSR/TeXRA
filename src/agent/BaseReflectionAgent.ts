@@ -629,6 +629,10 @@ export abstract class BaseReflectionAgent {
           processedResponse,
           getAllReplacementsRegex(),
         ).trim();
+        processedResponse = applyReplacements(
+          processedResponse,
+          getAllReplacements(),
+        ).trim();
 
         toolState.updateLastResponse(processedResponse);
 
