@@ -292,19 +292,28 @@ export class ModelHandlerOpenAI extends ModelHandler {
         this.logger.info(
           'Using direct response format (streaming style) as fallback',
         );
-        const newResponse = responseObject.content.trim();
+        let newResponse = responseObject.content.trim();
         // Since we don't have a stop reason in this format, assume 'stop'
-        // const stopReason = 'stop';
-        let stopReason = 'length';
+        let stopReason = 'stop';
+        // let stopReason = 'length';
         if (responseObject.finish_reason) {
           stopReason = responseObject.finish_reason;
         }
+        // if (responseObject.choices[0].finish_reason) {
+        //   stopReason = responseObject.choices[0].finish_reason;
+        // }
 
         // For usage, we'll use empty values since they're not provided
         const usage = responseObject.usage || {
           prompt_tokens: 0,
           completion_tokens: 0,
         };
+
+        // Add end tag if response was stopped and tag isn't present
+        if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+          this.logger.info(`Adding end tag to response: ${endTag}`);
+          newResponse = `${newResponse}\n${endTag}`;
+        }
 
         return [newResponse, usage, stopReason];
       }
@@ -324,6 +333,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     // Extract base response
     const choice = responseObject.choices[0];
     const stopReason = choice.finish_reason;
+    this.logger.info(`Stop reason: ${stopReason}`);
     let newResponse = '';
     if (choice.message.content) {
       newResponse = choice.message.content.trim();
@@ -335,6 +345,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
 
     // Add end tag if response was stopped and tag isn't present
     if (stopReason === 'stop' && endTag && !newResponse.includes(endTag)) {
+      this.logger.info(`Adding end tag to response: ${endTag}`);
       newResponse = `${newResponse}\n${endTag}`;
     }
 
