@@ -344,6 +344,12 @@ export class ModelHandlerAnthropic extends ModelHandler {
       newResponse += `\n${endTag}`;
     }
 
+    newResponse = applyReplacements(newResponse, getAllReplacements()).trim();
+    newResponse = applyReplacements(
+      newResponse,
+      getAllReplacementsRegex(),
+    ).trim();
+
     return [newResponse, responseObject.usage, stopReason];
   }
 
