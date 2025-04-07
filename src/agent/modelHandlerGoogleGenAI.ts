@@ -471,6 +471,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       );
     }
 
+    responseText = applyReplacements(responseText, getAllReplacements()).trim();
+    responseText = applyReplacements(
+      responseText,
+      getAllReplacementsRegex(),
+    ).trim();
+
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
       candidate?.finishReason ?? FinishReason.FINISH_REASON_UNSPECIFIED;
@@ -665,6 +671,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler {
       fileContent,
       getAllReplacementsRegex(),
     ).trim();
+
     extractAndLogScratchpad(fileContent, this.logger);
     await writeFile(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
