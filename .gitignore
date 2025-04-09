@@ -4,5 +4,6 @@ dist/
 .aider*
 releases/
 
+.DS_Store
 .cursor
 .cursor/rules
