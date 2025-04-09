@@ -77,7 +77,7 @@ export async function listMediaFiles(): Promise<string[]> {
   }
 
   const IGNORED_FIGURE_DIRECTORIES = getConfig<string[]>(
-    'files.ignored.figureDirectories',
+    'files.ignored.mediaDirectories',
   );
 
   const INCLUDED_FIGURE_EXTENSIONS = getConfig<string[]>(

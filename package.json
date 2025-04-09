@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
-  "version": "0.28.2",
+  "version": "0.28.3",
   "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
@@ -250,7 +250,7 @@
             "editPresentation": "multilineText",
             "order": 11
           },
-          "texra.files.ignored.figureDirectories": {
+          "texra.files.ignored.mediaDirectories": {
             "type": "array",
             "items": {
               "type": "string"
