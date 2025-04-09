@@ -21,6 +21,7 @@ docs/
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
 
+resources/.DS_Store
 !resources/**
 !src/webview/*.js
 !src/webview/*.html
