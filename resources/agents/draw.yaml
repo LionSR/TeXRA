@@ -24,6 +24,8 @@ prompts:
   userPrefix: |
     I am going to give you a \LaTeX document of a research paper. You are about to create or revise the figures in this paper, so please read the document carefully.
 
+    {{ ADDITIONAL_INPUTS }}
+
     Here is the \LaTeX document {{ INPUT_FILE }}:
     <latex_document>
     {{ INPUT_CONTENT }}
