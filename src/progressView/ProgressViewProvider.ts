@@ -42,6 +42,7 @@ const OUTPUT_CHANNEL_ONLY = new Set([
   'Webview',
   'TestCommands',
   'fileSelectionCommands',
+  'arXivCommands',
   'packCommands',
   'cleanCommands',
   'MessageHandler',
