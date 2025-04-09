@@ -334,7 +334,7 @@ export class WebviewMessageHandler {
       input: await listInputFiles(),
       reference: await listReferenceFiles(),
       auxiliary: await listAuxiliaryFiles(),
-      figure: await listMediaFiles(),
+      media: await listMediaFiles(),
     };
 
     Object.entries(refreshedFiles).forEach(([type, files]) => {

@@ -62,7 +62,7 @@ export function setupUIHandlers() {
       : null;
   }
 
-  // Get values for single file inputs (input, reference, auxiliary, figure)
+  // Get values for single file inputs (input, reference, auxiliary, media)
   function getSingleFileData(
     fileTypes = ['input', 'reference', 'auxiliary', 'media'],
   ) {
