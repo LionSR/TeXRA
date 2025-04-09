@@ -11,6 +11,7 @@ import * as logger from '../logger/logUtils';
 // Local imports - utilities
 import { getWorkspacePath, getRelativePath } from '../utils/workspaceFileUtils';
 import { capitalize, uncapitalize } from '../frontend-utils/commonUtils';
+import { getConfig } from '../utils/configUtils';
 import {
   listInputFiles,
   listReferenceFiles,
@@ -538,10 +539,18 @@ export class WebviewMessageHandler {
       return [];
     }
 
+    // Get model names from configuration using getConfig utility
+    const modelNames = getConfig<string[]>('models', []);
+
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
       .filter((doc) => doc.uri.scheme === 'file')
-      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
+      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false))
+      // Filter out files with names matching *_${model_name}*
+      .filter((filePath) => {
+        const fileName = path.basename(filePath);
+        return !modelNames.some((model) => fileName.includes(`_${model}`));
+      });
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;
