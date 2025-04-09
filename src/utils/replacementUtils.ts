@@ -934,6 +934,12 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\F^': 'F^',
     '\\bepsilon': '\\beps',
     // '\\mathbf{I}': '\\bI',
+    '{\\rm tot}': '\\text{tot}',
+    '{\\rm eq}': '\\text{eq}',
+    '{\\rm st}': '\\text{st}',
+    '{\\rm na}': '\\text{na}',
+    '\\G(': 'G(',
+    '\\F(': 'F(',
   },
 };
 
