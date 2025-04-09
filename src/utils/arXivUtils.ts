@@ -27,7 +27,8 @@ export function isValidArxivId(arxivId: string): boolean {
   // Modern arXiv ID format (YYMM.number or YYMM.numberv1)
   const modernPattern = /^\d{4}\.\d{4,5}(v\d+)?$/;
   // Old arXiv ID format (category/YYMM.number or category/YYMM.numberv1)
-  const oldPattern = /^[a-z-]+(\.[A-Z]{2})?\/\d{2}(0[1-9]|1[0-2])\d{3}(v\d+)?$/;
+  // Updated to support variations like cond-mat/0009311
+  const oldPattern = /^[a-z-]+(\.[A-Z]{2})?\/\d{4,7}(v\d+)?$/;
 
   return modernPattern.test(arxivId) || oldPattern.test(arxivId);
 }
