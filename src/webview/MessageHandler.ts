@@ -312,21 +312,41 @@ export class WebviewMessageHandler {
     const fileType = message.fileType;
     let selectedFiles: string[] | null = null;
 
-    if (fileType === 'OutputFiles') {
-      selectedFiles = await this.selectOutputFiles(message.currentFile);
-    } else {
-      const currentFileForMultiple = message.currentFile;
-      selectedFiles = await vscode.commands.executeCommand<string[]>(
-        `texra.select${fileType}`,
-        currentFileForMultiple,
-      );
-    }
+    try {
+      if (fileType === 'OutputFiles') {
+        selectedFiles = await this.selectOutputFiles(message.currentFile);
+      } else {
+        const currentFileForMultiple = message.currentFile;
+        // Extract the base type without the 'Files' suffix
+        const baseType = fileType.replace('Files', '');
 
-    if (selectedFiles) {
-      webviewView.webview.postMessage({
-        command: `set${fileType}`,
-        files: selectedFiles,
-      });
+        selectedFiles = await vscode.commands.executeCommand<string[]>(
+          `texra.select${baseType}Files`,
+          currentFileForMultiple,
+        );
+
+        if (selectedFiles === undefined) {
+          console.warn(
+            `Command texra.select${baseType}Files returned undefined`,
+          );
+          selectedFiles = null;
+        }
+      }
+
+      if (selectedFiles) {
+        webviewView.webview.postMessage({
+          command: `set${fileType}`,
+          files: selectedFiles,
+        });
+      }
+    } catch (error) {
+      logger.error(
+        CHANNEL,
+        `Error in handleSelectMultipleFiles: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      vscode.window.showErrorMessage(
+        `Error selecting ${fileType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 

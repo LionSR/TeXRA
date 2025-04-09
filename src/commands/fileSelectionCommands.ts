@@ -228,9 +228,11 @@ async function selectMediaFiles(
 
   const includedFigureExtensions = getConfig<string[]>(
     'files.included.mediaExtensions',
+    [],
   );
   const includedAudioExtensions = getConfig<string[]>(
     'files.included.audioExtensions',
+    [],
   );
 
   const fileUris = await vscode.window.showOpenDialog({
@@ -265,12 +267,13 @@ async function selectMediaFile(): Promise<string | null> {
     canSelectFiles: true,
     canSelectFolders: false,
     filters: {
-      Images: getConfig<string[]>('files.included.mediaExtensions').map((ext) =>
-        ext.replace('.', ''),
-      ),
-      'Audio files': getConfig<string[]>('files.included.audioExtensions').map(
+      Images: getConfig<string[]>('files.included.mediaExtensions', []).map(
         (ext) => ext.replace('.', ''),
       ),
+      'Audio files': getConfig<string[]>(
+        'files.included.audioExtensions',
+        [],
+      ).map((ext) => ext.replace('.', '')),
     },
   });
   if (fileUri && fileUri[0]) {
