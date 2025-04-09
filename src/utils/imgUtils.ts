@@ -6,7 +6,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 
 // Third-party imports
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
