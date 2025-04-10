@@ -16,9 +16,9 @@
   ],
   "author": "TexRA Team",
   "license": "MIT",
-  "description": "Documentation for TexRA - AI-powered academic writing assistant",
+  "description": "Documentation for TexRA - AI-powered academic research assistant",
   "devDependencies": {
-    "vitepress": "^1.6.3"
+    "vitepress": "^2.0.0-alpha.4"
   },
   "type": "module"
 }
