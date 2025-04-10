@@ -650,6 +650,7 @@ const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\boldsymbol{\\lambda}': '\\bla',
     '\\boldsymbol{\\Gamma}': '\\bGa',
     '\\boldsymbol{\\Lambda}': '\\bLa',
+    '\\bSigma': '\\bSig',
 
     // Hat Variables
     '\\hat{\\sigma}': '\\hsg',
