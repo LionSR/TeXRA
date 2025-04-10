@@ -80,7 +80,7 @@ settings:
 # Agent prompts
 prompts:
   systemPrompt: |
-    You are an expert academic writing assistant specialized in [your specific domain].
+    You are an expert academic research assistant specialized in [your specific domain].
     Your task is to [describe the agent's primary purpose].
 
   userPrefix: |
@@ -126,7 +126,7 @@ The prompts section is critical for agent behavior. Customize each prompt:
 ```yaml
 prompts:
   systemPrompt: |
-    You are an expert academic writing assistant specialized in creating literature reviews for computer science papers.
+    You are an expert academic research assistant specialized in creating literature reviews for computer science papers.
     Your task is to analyze existing research papers and synthesize a comprehensive literature review that:
     1. Organizes works by themes and approaches
     2. Identifies relationships between different research directions

@@ -1,6 +1,6 @@
 # Introduction to TexRA
 
-Welcome to TexRA, your intelligent academic writing assistant integrated directly into VS Code. This guide will help you understand what TexRA is, how it works, and how it can enhance your academic writing workflow.
+Welcome to TexRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TexRA is, how it works, and how it can enhance your academic writing workflow.
 
 ## What is TexRA?
 
