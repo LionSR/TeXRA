@@ -3,15 +3,15 @@ import { defineConfig } from 'vitepress';
 
 export default defineConfig({
   title: 'TeXRA',
-  description: 'Your Intelligent Academic Writing Assistant',
-  head: [['link', { rel: 'icon', href: '/quantum-deer.png' }]],
+  description: 'Your Intelligent Academic Research Assistant',
+  head: [['link', { rel: 'icon', href: '/logo1.png' }]],
   themeConfig: {
-    logo: '/quantum-deer.png',
+    logo: '/logo1.png',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/' },
       { text: 'Reference', link: '/reference/' },
-      { text: 'GitHub', link: 'https://github.com/LionSR/texra' },
+      { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
     sidebar: {
       '/guide/': [
@@ -74,7 +74,7 @@ export default defineConfig({
     },
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2025-present Sirui Lu',
+      copyright: 'Copyright © 2025-present TeXRA Team',
     },
   },
   ignoreDeadLinks: true,
