@@ -114,7 +114,7 @@ async function handleLatexdiff(
     // Wait for build to complete before viewing
     setTimeout(async () => {
       await vscode.commands.executeCommand('latex-workshop.view');
-    }, 5000);
+    }, 10000);
   } catch (err) {
     vscode.window.showErrorMessage(
       `Error creating LaTeX diff: ${err instanceof Error ? err.message : String(err)}`,
