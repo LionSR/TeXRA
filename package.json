@@ -3,7 +3,7 @@
   "displayName": "TeXRA",
   "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
   "version": "0.28.5",
-  "publisher": "Sirui-Lu",
+  "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.96.2"
   },
@@ -759,7 +759,7 @@
         {
           "id": "texra",
           "title": "TeXRA",
-          "icon": "resources/quantum-deer.svg"
+          "icon": "resources/logo1.svg"
         }
       ],
       "panel": [
@@ -904,7 +904,7 @@
   },
   "license": "MIT",
   "author": "TeXRA.ai",
-  "icon": "resources/quantum-deer.png",
+  "icon": "resources/logo1.png",
   "keywords": [
     "latex",
     "academic",
