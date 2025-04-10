@@ -2,10 +2,10 @@
 layout: home
 hero:
   name: TexRA
-  text: Your Intelligent Academic Writing Assistant
-  tagline: Enhance your research writing with powerful AI integration in VS Code
+  text: Your Intelligent Academic Research Assistant
+  tagline: Enhance your research with powerful AI assistance in VS Code
   image:
-    src: /quantum-deer.png
+    src: /logo1.png
     alt: TexRA Logo
   actions:
     - theme: brand
@@ -13,7 +13,7 @@ hero:
       link: /guide/
     - theme: alt
       text: View on GitHub
-      link: https://github.com/LionSR/texra
+      link: https://github.com/texra-ai/texra-issues
 
 features:
   - icon: 📝
@@ -89,16 +89,6 @@ TexRA is specially designed to understand the unique requirements of academic wr
 - Complex technical figures
 - Specialized terminology
 - Research-specific formatting
-
-## Quotes from Users
-
-> "TexRA has transformed my paper writing process. What used to take weeks now takes days."
->
-> — Professor in Computer Science
-
-> "I'm continually amazed by how well it adapts my dense research papers into clear lecture notes."
->
-> — Assistant Professor in Physics
 
 ## Get Started Today
 
