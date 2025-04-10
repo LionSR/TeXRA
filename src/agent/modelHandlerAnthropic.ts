@@ -113,6 +113,16 @@ export class ModelHandlerAnthropic extends ModelHandler {
           `Token count of message exceeds context window: ${responseTokenCount.input_tokens} > ${this.config.contextWindow}`,
         );
       }
+      if (
+        this.config.contextWindow - responseTokenCount.input_tokens <
+        options.max_tokens
+      ) {
+        this.logger.warn(
+          `Token count of message plus max tokens exceeds context window: ${responseTokenCount.input_tokens} + ${options.max_tokens} > ${this.config.contextWindow}. Reducing max tokens to ${this.config.contextWindow - responseTokenCount.input_tokens}.`,
+        );
+        options.max_tokens =
+          this.config.contextWindow - responseTokenCount.input_tokens - 10;
+      }
       // in the future we log this in firstInputTokens of the AgentStateGlobal
     }
 

@@ -3,7 +3,7 @@
   "displayName": "TeXRA",
   "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
   "version": "0.28.5",
-  "publisher": "TeXRA.ai",
+  "publisher": "Sirui-Lu",
   "engines": {
     "vscode": "^1.96.2"
   },
