@@ -30,9 +30,11 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     if (effort === ReasoningEffort.LOW || effort === ReasoningEffort.HIGH) {
       return effort;
     }
-    
+
     // Default to 'high' for MEDIUM and any other values
-    this.logger.warn(`xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`);
+    this.logger.warn(
+      `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
+    );
     return ReasoningEffort.HIGH;
   }
 
@@ -59,7 +61,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     ) {
       // Ensure only supported values are used
       kwargs.reasoning_effort = this.validateReasoningEffort(
-        this.config.capabilities.reasoningEffort
+        this.config.capabilities.reasoningEffort,
       );
     }
 
@@ -125,7 +127,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
         }
       }
     }
-    
+
     if (!reasoningContent) {
       return null;
     }
@@ -141,15 +143,18 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
 
   /** Extracts response text and usage statistics from API response. */
   extractResponse(responseObject: any, endTag: string): [string, any, string] {
-    const [responseText, usage, stopReason] = super.extractResponse(responseObject, endTag);
-    
+    const [responseText, usage, stopReason] = super.extractResponse(
+      responseObject,
+      endTag,
+    );
+
     // Extract and add reasoning tokens for usage calculation
-    if (
-      responseObject.usage?.completion_tokens_details?.reasoning_tokens
-    ) {
-      this.logger.debug(`Found reasoning tokens: ${responseObject.usage.completion_tokens_details.reasoning_tokens}`);
+    if (responseObject.usage?.completion_tokens_details?.reasoning_tokens) {
+      this.logger.debug(
+        `Found reasoning tokens: ${responseObject.usage.completion_tokens_details.reasoning_tokens}`,
+      );
     }
-    
+
     return [responseText, usage, stopReason];
   }
-} 
+}
