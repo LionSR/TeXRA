@@ -189,6 +189,6 @@ Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and loc
 
 Before the author(s) have figured out the best way to use and distribute TeXRA and its potential academic value and social impact, the code is under private license.
 
-© [Sirui Lu] [2024]. All rights reserved.
+© [TeXRA Team] [2025]. All rights reserved.
 This repository and its contents are proprietary and confidential.
 Unauthorized copying, distribution, or use is strictly prohibited.
