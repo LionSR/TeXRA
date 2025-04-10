@@ -2,8 +2,8 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
-  "version": "0.28.4",
-  "publisher": "Sirui-Lu",
+  "version": "0.28.5",
+  "publisher": "TeXRA.ai",
   "engines": {
     "vscode": "^1.96.2"
   },
@@ -67,7 +67,9 @@
               "gemini2f",
               "gemini2fT",
               "DSV3",
-              "DSR1"
+              "DSR1",
+              "grok3",
+              "grok3-"
             ],
             "description": "List of available models",
             "scope": "resource"
@@ -901,7 +903,7 @@
     "url": "https://github.com/LionSR/texra.git"
   },
   "license": "MIT",
-  "author": "Sirui LU",
+  "author": "TeXRA.ai",
   "icon": "resources/quantum-deer.png",
   "keywords": [
     "latex",

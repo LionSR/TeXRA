@@ -468,6 +468,39 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== xAI Models =====
+  grok3: {
+    name: 'grok3',
+    fullName: 'grok-3-beta',
+    openrouterFullName: 'x-ai/grok-3-beta',
+    provider: ModelProvider.XAI,
+    maxOutputTokens: 131072,
+    contextWindow: 131072,
+    inputPrice: 3.0,
+    outputPrice: 15.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsReasoning: false,
+      supportsReasoningEffort: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  'grok3-': {
+    name: 'grok3-',
+    fullName: 'grok-3-mini-beta',
+    openrouterFullName: 'x-ai/grok-3-mini-beta',
+    provider: ModelProvider.XAI,
+    maxOutputTokens: 131072,
+    contextWindow: 131072,
+    inputPrice: 0.3,
+    outputPrice: 0.5,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsReasoning: true,
+      supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.LOW,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   grok2: {
     name: 'grok2',
     fullName: 'grok-2-1212',
