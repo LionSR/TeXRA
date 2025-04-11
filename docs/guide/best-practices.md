@@ -8,7 +8,7 @@ The quality of your instructions significantly impacts the results you get from 
 
 ### Be Specific and Clear
 
-Vague instructions lead to unpredictable results. Instead of:
+Vague instructions lead to unpredictable results. Think of it like asking a new research assistant to "make this better" – you might get _anything_! Instead of:
 
 ❌ "Make this better"
 
@@ -48,35 +48,12 @@ Point to specific parts of the document:
 
 ## Model Selection
 
-Choosing the right model for each task improves quality and efficiency:
+Choosing an appropriate model can significantly impact the quality, speed, and cost of your results. It's a bit like choosing between a calculator, a supercomputer, and a quantum oracle – pick the right tool for the job! Refer to the [AI Models Guide](./models.md) for detailed comparison tables. Key considerations include:
 
-### Match Model to Task Complexity
-
-- **Simple Tasks** (typo correction, basic formatting): Use faster, more economical models like `gemini2f`, `gpt4o-`, or `haiku35`
-- **Medium Complexity** (polishing, basic figures): Use balanced models like `sonnet35`, `gpt4o`, or `gemini2p`
-- **Complex Tasks** (paper transformation, advanced figures): Use powerful models like `sonnet37`, `opus`, or `o1`
-
-### Consider Response Quality vs. Speed
-
-When quality is critical (e.g., final revisions), use top-tier models:
-
-- `opus` for highest quality text processing
-- `o1` for complex reasoning tasks
-- `sonnet37` for balanced performance
-
-When speed matters more (e.g., early drafts), use faster models:
-
-- `gemini2f` for quick corrections
-- `haiku35` for rapid iterations
-- `gpt4o-` for fast feedback
-
-### Leverage Special Capabilities
-
-Use models with specialized capabilities when needed:
-
-- **Thinking-enabled models** (`sonnet37T`, `o1`, `gemini2fT`) for complex reasoning tasks
-- **Vision-capable models** (`gpt4o`, `gemini2p`) for image understanding
-- **Large context models** (`gemini2p`, `sonnet37`) for processing extensive documents
+- **Task Complexity**: Simple tasks (like basic correction) often work well with faster, cheaper models (e.g., those marked '$' or 'Fast'/'Very Fast'). Complex tasks requiring deep reasoning or high-quality generation (like transforming papers or intricate drawing) benefit from more powerful, albeit slower and more expensive, models (e.g., '$$$$' or 'Slow').
+- **Budget & Speed**: Balance your needs using the relative cost ($ - $$$$) and speed indicators provided in the [AI Models Guide](./models.md).
+- **Special Capabilities**: Does your task require specific features like explicit reasoning (`*T` models, `o*` series), vision, native PDF/audio handling, or an exceptionally large context window? Choose a model that supports these needs (check the tables in the [AI Models Guide](./models.md)).
+- **Experimentation**: Often, trying a task with a couple of different relevant models is the best way to find the optimal balance for your specific needs.
 
 ## File Management
 
@@ -173,7 +150,7 @@ Ensure high-quality output with these verification practices:
 
 ### Review Process
 
-Always review AI-generated content:
+Always review AI-generated content – the AI is smart, but it hasn't defended a PhD... yet.
 
 1. Compile the document to check for LaTeX errors
 2. Verify all cross-references and citations
@@ -194,11 +171,13 @@ Implement validation checks as part of your workflow:
 
 Use comparison tools to evaluate changes:
 
-1. Use LaTeXdiff to visualize specific changes
-2. Review the ProgressBoard log to understand the AI's process
-3. Compare multiple versions to select the best elements
+1. Use LaTeXdiff (see the [LaTeX Diff Guide](./latex-diff.md), including tips on source comparison) to visualize specific changes.
+2. Review the [ProgressBoard log](./progress-board.md) to understand the AI's process.
+3. Compare multiple versions to select the best elements.
 
 ## LaTeX-Specific Practices
+
+Working with LaTeX can sometimes feel like wrangling an octopus. These practices help keep things smooth:
 
 ### Document Structure
 
@@ -273,6 +252,14 @@ conference presentation. Structure the slides as follows:
 Use the Bergen theme with a blue color scheme. Emphasize visual elements
 over text and include bullet points rather than full paragraphs.
 ```
+
+### Draft to Publication Workflow (Example)
+
+1.  **Initial Cleanup/Structuring**: Use `correct` if starting from a rough draft or existing file.
+2.  **Content Enhancement**: Use `polish` to improve style, clarity, and flow.
+3.  **Figure Creation/Refinement**: Use `draw` to add or enhance TikZ figures.
+4.  **Final Proofreading**: Use `correct` again for a final pass on grammar and syntax.
+5.  **(Optional) Transformation**: Use `paper2slide` or `paper2poster` if needed.
 
 ## Next Steps
 
