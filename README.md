@@ -2,7 +2,7 @@
 
 TeXRA is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
 
-See [PHILOSOPHY.md](PHILOSOPHY.md).
+See [texra.ai](https://texra.ai).
 
 ## UI Features
 
