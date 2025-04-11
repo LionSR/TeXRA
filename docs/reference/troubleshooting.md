@@ -447,7 +447,9 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 ### Using ProgressBoard
 
-The ProgressBoard is your main debugging tool:
+The ProgressBoard is your main debugging tool. See the [ProgressBoard Guide](../guide/progress-board.md) for a full explanation of its features.
+
+Key points for troubleshooting:
 
 1. **Access ProgressBoard**:
 

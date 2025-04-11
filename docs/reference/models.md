@@ -13,20 +13,20 @@ TeXRA organizes models into several categories based on their providers:
 
 ## Anthropic Models
 
-Anthropic's Claude models excel at following detailed instructions, understanding context, and producing high-quality academic writing.
+Anthropic's Claude models excel at following detailed instructions, understanding context, and producing high-quality academic research.
 
 ### Claude 3.7 Sonnet (sonnet37)
 
 **Key Features:**
 
 - Excellent context understanding up to 200K tokens
-- Strong academic writing capabilities
+- Strong academic research capabilities
 - Good at following complex instructions
 - Fast response times for medium-complexity tasks
 
 **Best For:**
 
-- Day-to-day academic writing assistance
+- Day-to-day academic research assistance
 - Handling medium to complex documents
 - Tasks requiring strong reasoning ability
 
@@ -94,7 +94,7 @@ Instruction: Transform this complex research paper into comprehensive lecture no
 
 **Best For:**
 
-- Everyday academic writing tasks
+- Everyday academic research tasks
 - Draft improvement
 - Standard corrections
 
@@ -167,7 +167,7 @@ Instruction: Convert this plain text draft into properly formatted LaTeX with ap
 
 **Best For:**
 
-- General-purpose academic writing
+- General-purpose academic research
 - Image-based reasoning
 - Visual explanation tasks
 
@@ -216,7 +216,7 @@ Google's Gemini models offer strong performance with competitive pricing and exc
 
 **Best For:**
 
-- General academic writing tasks
+- General academic research tasks
 - Image-based reasoning
 - Large document processing
 

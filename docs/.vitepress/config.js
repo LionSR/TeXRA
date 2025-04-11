@@ -4,7 +4,16 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: 'TeXRA',
   description: 'Your Intelligent Academic Research Assistant',
-  head: [['link', { rel: 'icon', href: '/logo-128x128.svg' }]],
+  head: [
+    ['link', { rel: 'icon', href: '/logo-128x128.svg' }],
+    [
+      'link',
+      {
+        rel: 'stylesheet',
+        href: '/node_modules/@vscode/codicons/dist/codicon.css',
+      },
+    ],
+  ],
   themeConfig: {
     logo: '/logo-128x128.svg',
     nav: [
@@ -21,14 +30,31 @@ export default defineConfig({
             { text: 'Introduction', link: '/guide/' },
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Quick Start', link: '/guide/quick-start' },
+            {
+              text: 'LaTeX Compilation Setup',
+              link: '/guide/latex-compilation.md',
+            },
+            {
+              text: 'Acknowledgments & Inspirations',
+              link: '/guide/acknowledgments.md',
+            },
           ],
         },
         {
           text: 'Core Concepts',
           items: [
-            { text: 'AI Agents', link: '/guide/agents' },
+            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+            {
+              text: 'Agent Architecture',
+              link: '/guide/agent-architecture.md',
+            },
             { text: 'Models', link: '/guide/models' },
             { text: 'File Management', link: '/guide/file-management' },
+            {
+              text: 'Working with Figures & Media',
+              link: '/guide/working-with-figures.md',
+            },
+            { text: 'ProgressBoard', link: '/guide/progress-board' },
             { text: 'Tool Integration', link: '/guide/tool-integration' },
           ],
         },
@@ -45,6 +71,7 @@ export default defineConfig({
           text: 'Customization',
           items: [
             { text: 'Configuration', link: '/guide/configuration' },
+            { text: 'Agent Explorer', link: '/guide/agent-explorer' },
             { text: 'Custom Agents', link: '/guide/custom-agents' },
           ],
         },

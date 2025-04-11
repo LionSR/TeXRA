@@ -1,306 +1,93 @@
-# Multiple Output Processing
+# Handling Multiple Files (Inputs & Outputs)
 
-TeXRA provides powerful capabilities for working with multiple files simultaneously. This guide explains how to process multiple input files and manage multiple outputs efficiently.
+TeXRA excels at managing complex academic projects often split across multiple files, like a paper with several chapters or appendices. This guide explains how to work with multiple input files and how agents can generate multiple, distinct output files in a single run.
 
-## Understanding Multiple Output Processing
+## Why Use Multiple Files?
 
-Multiple output processing allows you to:
+Working with multiple files is essential when:
 
-1. Process several related documents in a single operation
-2. Maintain consistency across a collection of files
-3. Apply the same improvements to multiple chapters or sections
-4. Handle complex document structures split across files
+- Your source document is split (e.g., `chapter1.tex`, `chapter2.tex`, `appendixA.tex`).
+- You need to apply consistent changes (like polishing or correcting) across related documents.
+- You only want an agent to modify specific parts (e.g., only update `chapter2.tex` and `appendixA.tex` based on the full context).
+- An agent needs to generate distinct outputs based on a single input (less common, but possible).
 
-This approach is particularly valuable for:
+## UI for Multiple Files
 
-- Books with multiple chapters
-- Theses with separate chapter files
-- Paper collections with shared formatting
-- Course materials with multiple related documents
+The TeXRA UI provides dedicated sections for managing multiple files:
 
-## Enabling Multiple Output Mode
+<!-- ![Multiple Files UI Placeholder](/images/multiple-files-ui.png) _(Placeholder: Screenshot highlighting Input Files & Multiple Outputs sections)_ -->
 
-To work with multiple files:
+- **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent.
+- **Multiple Outputs**:
+  - Use the "▼" toggle to activate multiple output mode.
+  - Use the "+" button (<i class="codicon codicon-add"></i>) to list the _exact filenames_ you expect the agent to generate. **Order matters** if the agent references them by position.
+  - The list can be cleared (<i class="codicon codicon-trash"></i>).
+  - If this section is _not_ toggled/activated, TeXRA expects the agent to produce only a single output file, named based on the primary input file.
+- **Output Filename Override**: When _not_ using Multiple Outputs, you can specify a custom name for the single output file here. This is ignored if Multiple Outputs is active.
 
-### Step 1: Enable Multiple Input Files
+_(See [File Management](./file-management.md) for general UI controls.)_
 
-1. Click the "▼" toggle next to "Input" in the file selection area
-2. The multiple selection panel will expand
-3. Use the "+" button to add files
-4. Use "Opened Files" to add all currently open files
+## How It Works: Agent Input
 
-<!-- ![Multiple Input Selection](/images/multiple-input-selection.png) -->
+When you provide multiple input files, TeXRA typically combines their content (often wrapping each in `<document name=\"...\">` tags within a parent `<documents>` tag) and includes it in the prompt sent to the selected agent. The agent receives the combined context to inform its processing.
 
-### Step 2: Enable Multiple Outputs
+## How It Works: Agent Output & Extraction
 
-1. Click the "▼" toggle next to "Multiple Outputs"
-2. The multiple output panel will expand
-3. Add output files corresponding to your input files
-4. Optionally set a custom output filename pattern
+This is the crucial part for generating multiple distinct files:
 
-<!-- ![Multiple Output Selection](/images/multiple-output-selection.png) -->
+1. **User Specifies Outputs:** You list the desired output filenames in the "Multiple Outputs" UI section (e.g., `chapter2_polish_r0_model.tex`, `appendixA_polish_r0_model.tex`).
+2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
-::: tip
-By default, TeXRA will use the same output naming pattern for all files:  
-`original_filename_agent_r0_model.extension`
-:::
+   ```xml
+   <latex_documents>  <!-- Or agent's specific documentTag -->
+     <document name="chapter2_polish_r0_model.tex">
+       % ... content for the first output file ...
+     </document>
+     <document name="appendixA_polish_r0_model.tex">
+       % ... content for the second output file ...
+     </document>
+     ...
+   </latex_documents>
+   ```
 
-## Processing Multiple Files
+3. **TeXRA Extracts:** The TeXRA backend (`OutputHandler.ts`) parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the filenames you listed in the UI.
+4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
-When working with multiple files, TeXRA applies special processing:
+**Key Point:** The agent doesn't magically know how to split output. It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
 
-### Sequential Processing
+## The `_multiple` Suffix
 
-TeXRA processes multiple files sequentially:
+You might notice `_multiple` appended to the agent name in logs or temporary filenames when using the "Multiple Outputs" feature. This internal suffix indicates that TeXRA is operating in a context where multiple output files are expected based on your UI selection; it doesn't necessarily mean a different agent `.yaml` file (like `polish_multiple.yaml`) was automatically chosen unless you selected it explicitly.
 
-1. Each input file is analyzed individually
-2. Files are processed in the order they appear in the list
-3. Results are generated for each file separately
-4. Outputs maintain the relationship to their corresponding inputs
+## Example: `polish_multiple` Agent Prompts
 
-### Maintaining Context
+The built-in `polish_multiple.yaml` agent (which inherits from `polish`) demonstrates how prompts need to be structured to request and format multiple outputs within the `<latex_documents>` tag. Its `userRequest` prompt explicitly asks the model to structure its response like this, referencing the `{{ OUTPUT_FILES_ORDER }}` variable which contains the comma-separated list of filenames from the UI:
 
-To maintain context across multiple files:
-
-1. Order files logically (e.g., chapters in sequence)
-2. Include any shared files (e.g., preambles, style files) as auxiliary files
-3. Provide explicit instructions about maintaining consistency
-4. Consider using the first file as a style reference
-
-## Common Multiple Output Scenarios
-
-### Book Chapters
-
-Process multiple chapters of a book with consistent styling:
-
-1. Select all chapter files as input files
-2. Select the main style file as an auxiliary file
-3. Use an instruction like:
-
-```
-Improve the writing style across all chapters. Ensure consistent terminology,
-tone, and formatting throughout. Pay special attention to transitions between
-chapters and maintaining a unified voice.
+```yaml
+# (Inside polish_multiple.yaml userRequest prompt)
+# ... instructions ...
+# Use the following format:
+<latex_documents>
+<document name="{OUTPUT_FILES_ORDER[0]}">
+% 1ST_UPDATED_LATEX_DOCUMENT_1 HERE
+</document>
+<document name="{OUTPUT_FILES_ORDER[1]}">
+% 1ST_UPDATED_LATEX_DOCUMENT_2 HERE
+</document>
+... (repeat for all output files)
+</latex_documents>
 ```
 
-### Lecture Notes Series
+This instructs the LLM to generate the necessary XML structure that TeXRA's `OutputHandler` can parse.
 
-Process a series of lecture notes with consistent formatting:
+## When to Use
 
-1. Select all lecture note files as input files
-2. Select a template or style guide as a reference file
-3. Use an instruction like:
-
-```
-Enhance these lecture notes by improving clarity, adding appropriate section
-headings, and ensuring consistent formatting across all documents. Maintain
-all mathematical notation and technical content exactly as written.
-```
-
-### Paper Sections
-
-Process separate sections of a research paper:
-
-1. Select introduction, methods, results, and discussion files
-2. Select the bibliography as an auxiliary file
-3. Use an instruction like:
-
-```
-Polish these paper sections to create a cohesive manuscript. Ensure consistent
-terminology and citation style across all sections. Improve transitions between
-sections and make sure that cross-references are appropriate.
-```
-
-## Custom Output Naming
-
-For more control over output files:
-
-### Using Output Name Override
-
-1. Click the ">" toggle next to "Output Filename" in the Multiple Outputs section
-2. Enter a custom filename pattern (including extension)
-3. This pattern will be applied to all outputs
-
-<!-- ![Output Name Override](/images/output-name-override.png) -->
-
-### Custom Naming Patterns
-
-For more complex naming needs:
-
-- Use separate output files for each input with their own naming convention
-- Arrange output files in the order corresponding to input files
-- Use descriptive names that indicate the relationship to input files
-
-## Processing Options for Multiple Files
-
-When working with multiple files, consider these options:
-
-### Reflect Option
-
-Enabling the "Reflect" option with multiple files:
-
-- The AI will process each file and then reflect on all files together
-- This helps ensure consistency across outputs
-- It may identify and fix inconsistencies between files
-- Particularly valuable for maintaining unified style and terminology
-
-### Attach TeX Count
-
-With multiple files, the "Attach TeX Count" option:
-
-- Provides statistics for each file individually
-- Helps the AI understand the structure of each document
-- Allows document-specific optimizations
-
-### Auto-Extract Features
-
-Auto-extraction works across all selected files:
-
-- Figures are extracted from all input files
-- TikZ diagrams are compiled from all input files
-- Extracted content is available for all processing
-
-## Reviewing Multiple Outputs
-
-After processing multiple files:
-
-### Individual Review
-
-Review each output file individually:
-
-1. Compare with the corresponding input file
-2. Check for file-specific improvements
-3. Verify that document-specific features are preserved
-
-### Consistency Check
-
-Verify consistency across all outputs:
-
-1. Check for consistent terminology
-2. Ensure unified style and formatting
-3. Verify cross-references between documents
-4. Confirm consistent citation style
-
-### Batch Diff Generation
-
-Generate diffs for all processed files:
-
-1. Use LaTeX diff for each input-output pair
-2. Review changes systematically
-3. Look for inconsistent changes across files
-
-## File Management for Multiple Outputs
-
-Managing multiple output files effectively:
-
-### Pack Operation
-
-The "Pack" button with multiple files:
-
-1. Creates a timestamped directory in the "History" folder
-2. Moves all output files to this directory
-3. Preserves the relationship between files
-4. Maintains a clean workspace
-
-### Clean Operation
-
-The "Clean" button with multiple files:
-
-1. Identifies all outputs for all processed files
-2. Safely removes them from the workspace
-3. Cleans up auxiliary files generated during processing
-
-## Advanced Multiple File Techniques
-
-### Sequential Processing with Different Agents
-
-For complex workflows, apply different agents in sequence:
-
-1. Process all files with the `correct` agent first
-2. Pack the outputs
-3. Use those outputs as inputs for the `polish` agent
-4. Repeat with other agents as needed
-
-### Combined Document Processing
-
-For documents that will be combined later:
-
-1. Process each file separately
-2. Ensure consistent instructions across all files
-3. Use the same model for all processing
-4. Provide explicit instructions about eventual combination
-
-### Split and Recombine
-
-For very large documents:
-
-1. Split the document into manageable chunks
-2. Process each chunk separately
-3. Use the same settings for all chunks
-4. Recombine processed chunks into a final document
-
-## Troubleshooting Multiple Output Processing
-
-### Common Issues
-
-**Problem**: Inconsistent styling across outputs
-
-**Solutions**:
-
-- Use more specific instructions about consistency
-- Enable the "Reflect" option
-- Process files sequentially in a logical order
-- Provide a style guide as a reference file
-
-**Problem**: Missing cross-references between files
-
-**Solutions**:
-
-- Include all related files as input or auxiliary files
-- Specify the importance of maintaining cross-references
-- Use the `merge` agent for final integration
-
-**Problem**: Performance issues with many files
-
-**Solutions**:
-
-- Process smaller batches of files
-- Use lighter models for initial processing
-- Consider sequential processing with different agents
-- Focus on most critical files first
-
-## Best Practices
-
-### File Organization
-
-Organize your files effectively:
-
-1. **Logical Ordering**: Arrange files in their logical sequence
-2. **Clear Naming**: Use descriptive, consistent filenames
-3. **Shared Resources**: Identify and include shared style files
-4. **Output Management**: Plan your output organization in advance
-
-### Instruction Crafting
-
-Create effective instructions for multiple files:
-
-1. **Emphasize Consistency**: Explicitly request consistency across files
-2. **Specify Relationships**: Explain how files relate to each other
-3. **Prioritize Elements**: Identify what aspects must remain consistent
-4. **Define Document Roles**: Explain the purpose of each file
-
-### Model Selection
-
-Choose appropriate models for multiple file processing:
-
-1. **Consistency-Focused**: Use Claude 3.7 Sonnet or Claude 3 Opus for best consistency
-2. **Context-Aware**: Select models with large context windows for related files
-3. **Efficiency**: For many similar files, consider faster models like Gemini Flash
+- Applying consistent edits (e.g., `polish`, `correct`) across multiple related `.tex` files.
+- Tasks where an agent naturally produces distinct outputs (though less common than editing existing files).
+- Targeting agent modifications to specific files within a larger project.
 
 ## Next Steps
 
-Now that you understand multiple output processing, you might want to explore:
-
-- [File Management](/guide/file-management) - Learn more about effective file organization
-- [Intelligent Merge](/guide/intelligent-merge) - Understand how to combine processed files
-- [Best Practices](/reference/best-practices) - Discover recommended workflows for complex projects
+- [Custom Agents](./custom-agents.md): Learn how to design prompts for agents handling multiple outputs.
+- [File Management](./file-management.md): Review the file selection UI in detail.
+- [Agent Architecture](./agent-architecture.md): Understand the overall agent execution flow.
