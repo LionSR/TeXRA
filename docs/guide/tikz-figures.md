@@ -1,24 +1,30 @@
-# TikZ Figures
+# Working with TikZ Figures
 
-TeXRA provides advanced capabilities for working with TikZ figures in LaTeX documents. These features help you create, extract, modify, and manage technical diagrams with AI assistance.
+[TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations due to its high quality and seamless LaTeX integration.
 
-## Understanding TikZ
+TeXRA offers specialized features for working with TikZ, leveraging the `draw` agent and specific extraction/compilation tools. This guide focuses on TikZ-specific workflows.
 
-[TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's particularly useful for academic and technical documents because:
+::: tip General Media Handling
+For information on managing other types of figures (like standard images or PDFs) and general media selection in the UI, see the [Working with Figures & Media](./working-with-figures.md) guide.
+:::
 
-- It integrates seamlessly with LaTeX
-- It maintains consistent fonts, styles, and notations
-- It produces high-quality vector graphics
-- It's excellent for mathematical diagrams, flowcharts, and technical illustrations
+## What is TikZ? (A Brief Intro)
 
-## The Draw Agent
+Instead of using a graphical editor, TikZ lets you describe graphics using commands within your LaTeX document. For example:
+
+````latex
+\\documentclass[tikz, border=2mm]{standalone}\n\\usepackage{tikz}\n\\begin{document}\n\\begin{tikzpicture}\n  \\draw[blue, thick] (0,0) circle (1cm);\n  \\node at (0,0) {Hello!};\n\\end{tikzpicture}\n\\end{document}\n```
+
+This code draws a blue circle with text inside. TeXRA's tools help manage and generate this kind of code.
+
+## The `draw` Agent
 
 TeXRA's `draw` agent is specifically designed to work with TikZ figures. It can:
 
-1. Create new TikZ figures based on textual descriptions
-2. Enhance existing figures with improvements or additions
-3. Fix errors or issues in TikZ code
-4. Add annotations or labels to diagrams
+1. **Create new TikZ figures** based on textual descriptions.
+2. **Enhance existing figures** with improvements or additions.
+3. **Fix errors** or issues in TikZ code.
+4. **Add annotations** or labels to diagrams.
 
 <!-- ![TikZ Figure Example](/images/tikz-figure-example.png) -->
 
@@ -27,17 +33,20 @@ TeXRA's `draw` agent is specifically designed to work with TikZ figures. It can:
 To create a new TikZ figure:
 
 1. Select the agent: `draw`
+2. Choose a model (Models like `o1`, `sonnet37T`, or `gpt4o` are often good choices for complex drawing tasks).
 2. Choose a model (Claude 3.7 Sonnet or GPT-4o recommended)
 3. Provide a detailed description of the desired figure
 4. Execute the agent
 
 **Example instruction:**
 
-```
+````
+
 Create a TikZ figure showing a flowchart of the machine learning pipeline
 described in Section 2. Include the following steps: data collection,
 preprocessing, feature extraction, model training, and evaluation.
 Connect the steps with arrows and add appropriate labels.
+
 ```
 
 ### Enhancing Existing Figures
@@ -52,10 +61,12 @@ To enhance an existing figure:
 **Example instruction:**
 
 ```
+
 Enhance the existing TikZ figure to add color coding for different components.
 Use blue for input components, green for processing steps, and red for output.
 Add a legend explaining the color scheme and improve the layout for better readability.
-```
+
+````
 
 ## TikZ Extraction
 
@@ -118,7 +129,7 @@ The TikZ template determines the standalone document structure used for extracte
 
 ```json
 "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
-```
+````
 
 Customize this template to include additional packages or settings required by your figures.
 

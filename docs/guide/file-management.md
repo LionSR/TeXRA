@@ -35,19 +35,9 @@ These are supporting files needed for proper document processing:
 - Custom macro files
 - Configuration files
 
-### Figure Files
+### Figure & Media Files
 
-Figure files include images and diagrams used in your document:
-
-- Standard image formats (`.png`, `.jpg`, `.jpeg`, `.gif`, `.heic`, `.heif`, `.webp`)
-- Vector graphics (`.pdf`, `.svg`)
-- TikZ figures extracted from documents
-
-### Audio Files
-
-Audio files include audio files used in your document:
-
-- Standard audio formats (`.wav`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac`)
+Files containing visual or audio content, such as images, PDFs used as figures, or audio recordings. See the [Working with Figures & Media](./working-with-figures.md) guide for details on supported types, UI controls, and automatic extraction.
 
 ## File Selection Interface
 
@@ -73,6 +63,7 @@ For projects requiring multiple files, enable the multiple file selection mode:
 3. Use the "+" button to add files
 4. Remove files with the "-" button
 5. Reorder files by dragging and dropping
+6. Clear the entire list using the "Empty List" button (<i class="codicon codicon-trash"></i>)
 
 Multiple file selection is particularly useful for:
 
@@ -120,35 +111,6 @@ You can customize how TeXRA handles files by configuring file extensions and ign
   "figures",
   "venv"
 ],
-```
-
-## Auto-Extraction Features
-
-TeXRA can automatically extract files from your documents:
-
-### Auto-Extract Options
-
-Access these options through the "Auto Extract" dropdown:
-
-1. **Figures**: Automatically extract image references from LaTeX documents
-2. **TikZ Figures**: Automatically extract and compile TikZ figures
-
-When enabled, TeXRA will:
-
-1. Scan your LaTeX documents for figure references
-2. Extract the referenced images
-3. Add them to the figure files list
-4. Make them available to the agent for processing
-
-![Auto Extract Options](/images/auto-extract-options.png)
-
-### TikZ Extraction Settings
-
-For TikZ figure extraction, you can customize the template and paths:
-
-```json
-"texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n...",
-"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs"
 ```
 
 ## Output File Naming

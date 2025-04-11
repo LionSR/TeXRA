@@ -1,10 +1,12 @@
-# AI Agents
+# Built-in Agent Reference
 
-TeXRA provides a variety of specialized AI agents designed to assist with different aspects of academic writing. Each agent has been optimized for specific tasks through careful prompt engineering and tool integration.
+TeXRA provides a variety of built-in AI agents designed to assist with different aspects of academic research. Each agent is optimized for specific tasks. You can select these agents from the dropdown menu in the TeXRA UI.
 
-## Core Agents
+For details on the underlying structure and execution flow common to all agents, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
 
-### correct
+## Correction & Polishing Agents
+
+### `correct`
 
 The `correct` agent focuses on fixing errors without changing the style or content of your document.
 
@@ -24,20 +26,7 @@ Ensure consistent notation for mathematical symbols and equations.
 Don't change the technical content or writing style.
 ```
 
-**Sample output:**
-
-```diff
-- The experment was conducted over a perid of three monthes.
-+ The experiment was conducted over a period of three months.
-
-- We define the function $f(x) = x^2 + 2x + 1$ which can be factorised.
-+ We define the function $f(x) = x^2 + 2x + 1$ which can be factorized.
-
-- The results are summarized in table \ref{tab:results}.
-+ The results are summarized in Table \ref{tab:results}.
-```
-
-### polish
+### `polish`
 
 The `polish` agent enhances the writing style and clarity of your document while preserving technical content.
 
@@ -57,103 +46,44 @@ and enhance the flow between paragraphs. Maintain all technical content and equa
 Focus especially on the introduction and discussion sections.
 ```
 
-**Sample output:**
+### `polish_cover`
 
-```diff
-- In this paper we will show a new method for analyzing the data. The method is based on
-- statistical analysis. It can be used for different types of experiments.
-+ In this paper, we present a novel method for data analysis based on statistical principles.
-+ This approach can be applied across various experimental designs, offering flexibility and robustness.
+The `polish_cover` agent focuses specifically on improving the style, clarity, and impact of cover letters.
 
-- The implications of our findings are significant and important because they suggest
-- that the theory we proposed earlier is correct.
-+ Our findings have significant implications, providing strong support for our previously
-+ proposed theoretical framework.
-```
-
-### draw
-
-The `draw` agent creates or enhances TikZ figures based on textual descriptions or existing figures.
-
-**Purpose:** Generate visual representations of concepts, systems, or data.
+**Purpose:** Enhance the quality and persuasiveness of academic cover letters.
 
 **Best for:**
 
-- Creating diagrams, flowcharts, or schematics
-- Improving existing figures
-- Converting descriptions into visualizations
+- Refining draft cover letters for job applications or submissions
+- Ensuring a professional and compelling tone
 
 **Example instruction:**
 
 ```
-Create a TikZ figure illustrating a neural network with an input layer (3 nodes),
-two hidden layers (5 nodes each), and an output layer (2 nodes).
-Use appropriate colors and add labels for each layer.
+Polish this cover letter to improve its clarity, flow, and professional tone. Ensure it strongly highlights my qualifications for the [Job Title/Submission Venue]. Make the language concise and impactful.
 ```
 
-**Sample output:**
+## Content Generation & Transformation Agents
 
-```latex
-\begin{tikzpicture}[shorten >=1pt, ->, draw=black!50, node distance=\layersep]
-    \tikzstyle{neuron}=[circle, fill=gray!25, minimum size=17pt, inner sep=0pt]
-    \tikzstyle{input neuron}=[neuron, fill=green!50];
-    \tikzstyle{hidden neuron}=[neuron, fill=blue!50];
-    \tikzstyle{output neuron}=[neuron, fill=red!50];
-    \tikzstyle{annot} = [text width=4em, text centered]
+### `derive`
 
-    % Define layer separation
-    \def\layersep{2.5cm}
+The `derive` agent focuses on deriving mathematical equations or logical steps.
 
-    % Input layer
-    \foreach \i in {1,...,3} {
-        \node[input neuron] (I-\i) at (0,-\i) {};
-    }
+**Purpose:** Assist with mathematical derivations and logical reasoning.
 
-    % Hidden layer 1
-    \foreach \i in {1,...,5} {
-        \node[hidden neuron] (H1-\i) at (\layersep,-\i*0.8+0.8) {};
-    }
+**Best for:**
 
-    % Hidden layer 2
-    \foreach \i in {1,...,5} {
-        \node[hidden neuron] (H2-\i) at (2*\layersep,-\i*0.8+0.8) {};
-    }
+- Filling in intermediate steps in a derivation
+- Checking the logical flow of an argument
+- Deriving equations based on stated principles
 
-    % Output layer
-    \foreach \i in {1,...,2} {
-        \node[output neuron] (O-\i) at (3*\layersep,-\i*1.5+0.75) {};
-    }
+**Example instruction:**
 
-    % Connect the layers
-    \foreach \i in {1,...,3} {
-        \foreach \j in {1,...,5} {
-            \draw (I-\i) -- (H1-\j);
-        }
-    }
-
-    \foreach \i in {1,...,5} {
-        \foreach \j in {1,...,5} {
-            \draw (H1-\i) -- (H2-\j);
-        }
-    }
-
-    \foreach \i in {1,...,5} {
-        \foreach \j in {1,...,2} {
-            \draw (H2-\i) -- (O-\j);
-        }
-    }
-
-    % Layer labels
-    \node[annot, above of=I-1, node distance=1cm] (il) {Input layer};
-    \node[annot, above of=H1-1, node distance=1cm] (hl1) {Hidden layer 1};
-    \node[annot, above of=H2-1, node distance=1cm] (hl2) {Hidden layer 2};
-    \node[annot, above of=O-1, node distance=1cm] (ol) {Output layer};
-\end{tikzpicture}
+```
+Starting from Equation (1) and assuming [state assumptions], derive the expression for [target variable]. Show the key intermediate steps clearly.
 ```
 
-## Transformation Agents
-
-### paper2note
+### `paper2note`
 
 The `paper2note` agent transforms research papers into comprehensive lecture notes.
 
@@ -173,7 +103,7 @@ Add explanatory text for complex concepts, include discussion questions, and hig
 key takeaways. Create sections for Introduction, Background, Methods, Results, and Discussion.
 ```
 
-### paper2slide
+### `paper2slide`
 
 The `paper2slide` agent converts research papers into LaTeX beamer presentations.
 
@@ -193,7 +123,7 @@ Include a title slide, outline, introduction, methodology, results, and conclusi
 Use bullet points for clarity and add slide titles. Include the key figures and tables.
 ```
 
-### paper2poster
+### `paper2poster`
 
 The `paper2poster` agent transforms papers into academic conference posters.
 
@@ -213,93 +143,125 @@ Include sections for Introduction, Methodology, Results, and Conclusions.
 Highlight key figures and tables. Make it visually appealing with appropriate columns.
 ```
 
-## Specialized Agents
+### `paper2cover`
 
-### merge
+The `paper2cover` agent generates a draft cover letter based on the content of a research paper.
 
-The `merge` agent intelligently combines changes from multiple documents.
-
-**Purpose:** Integrate edits from different versions or authors.
+**Purpose:** Quickly create a starting point for a submission cover letter.
 
 **Best for:**
 
-- Collaborative writing projects
-- Incorporating reviewer suggestions
-- Combining different drafts
+- Drafting cover letters for journal submissions
+- Summarizing a paper's contribution for introductory purposes
 
 **Example instruction:**
 
 ```
-Merge changes from the edited file into the original document. Prioritize substantive
+Generate a draft cover letter for submitting this paper to [Journal Name]. Highlight the main contributions, significance, and suitability for the journal based on the paper's content.
+```
+
+## Figure & Media Agents
+
+### `draw`
+
+The `draw` agent creates or enhances TikZ figures based on textual descriptions or existing figures.
+
+**Purpose:** Generate visual representations of concepts, systems, or data.
+
+**Best for:**
+
+- Creating diagrams, flowcharts, or schematics from descriptions
+- Improving existing TikZ figures
+- Converting descriptions into LaTeX visualizations
+
+**Example instruction:**
+
+```
+Create a TikZ figure illustrating a neural network with an input layer (3 nodes),
+two hidden layers (5 nodes each), and an output layer (2 nodes).
+Use appropriate colors and add labels for each layer.
+```
+
+### `ocr`
+
+The `ocr` agent performs Optical Character Recognition (OCR) on image or PDF files.
+
+**Purpose:** Extract text content from images or non-searchable PDFs.
+
+**Best for:**
+
+- Extracting text from scanned documents or figures
+- Making image-based text searchable and editable
+- Processing figures containing text for analysis
+
+**Example instruction:**
+
+```
+Perform OCR on the provided image file [figure.png] and extract all text content. Format the output as plain text.
+```
+
+### `transcribe_audio`
+
+The `transcribe_audio` agent converts audio files into text transcripts.
+
+**Purpose:** Create text versions of audio recordings.
+
+**Best for:**
+
+- Transcribing interviews or lectures
+- Converting meeting recordings to text
+- Creating subtitles or notes from audio
+
+**Example instruction:**
+
+```
+Transcribe the provided audio file [interview.mp3]. Provide the output as a plain text file with speaker labels if possible.
+```
+
+## Specialized Agents
+
+### `solve_qi`
+
+The `solve_qi` agent attempts to solve quantitative interview (QI) style questions.
+
+**Purpose:** Assist with solving quantitative problems, often found in technical interviews.
+
+**Best for:**
+
+- Practicing quantitative interview questions
+- Getting step-by-step solutions for math or logic puzzles
+- Understanding problem-solving approaches for quantitative tasks
+
+**Example instruction:**
+
+```
+Solve the following quantitative interview question, showing your reasoning and steps clearly: [Insert Question Here]
+```
+
+### `merge`
+
+The `merge` agent intelligently combines changes from an edited document back into a base document.
+
+**Purpose:** Integrate edits from different versions or sources while resolving conflicts.
+
+**Best for:**
+
+- Applying AI-suggested edits from a `_r0_` or `_r1_` file
+- Incorporating reviewer suggestions from a separate file
+- Combining different drafts or collaborator edits
+
+**Example instruction:**
+
+```
+Merge changes from the edited file into the original document (base file). Prioritize substantive
 improvements in clarity while maintaining the original's technical precision.
 Preserve mathematical notation and citations from the original.
 ```
 
-### txt2tex
-
-The `txt2tex` agent converts plain text to properly formatted LaTeX.
-
-**Purpose:** Transform unformatted text into LaTeX documents.
-
-**Best for:**
-
-- Converting notes to LaTeX
-- Transforming plain text drafts
-- Formatting text from other sources
-
-**Example instruction:**
-
-```
-Convert this plain text into a properly formatted LaTeX document. Use appropriate
-sectioning commands, format equations, and create proper citations. Use the article
-class and include necessary packages.
-```
-
-## Using Multiple Agents
-
-For complex projects, you may want to apply multiple agents in sequence. Here are some effective workflows:
-
-### Draft to Publication
-
-1. **txt2tex**: Convert initial draft to LaTeX
-2. **polish**: Improve the writing style
-3. **correct**: Final proofreading
-4. **draw**: Add or enhance figures
-
-### Paper to Teaching Materials
-
-1. **paper2note**: Convert paper to lecture notes
-2. **paper2slide**: Create presentation slides
-3. **polish**: Enhance clarity for students
-4. **draw**: Add explanatory figures
-
-## Customizing Agent Behavior
-
-You can customize agent behavior through:
-
-1. **Specific Instructions**: Provide detailed guidance in the instruction field
-2. **Tool Configuration**: Enable options like "Reflect" for self-improvement
-3. **Model Selection**: Choose different models based on task complexity
-
-::: tip
-Use the "Reflect" option with agents like `polish` and `draw` to get higher quality results. The AI will review and improve its initial output.
-:::
-
-## Creating Custom Agents
-
-Advanced users can create custom agents:
-
-1. Navigate to the agents directory
-2. Create a new YAML configuration file
-3. Define prompts, settings, and inheritance relationships
-4. Restart VS Code to load the new agent
-
-See [Custom Agents](/guide/custom-agents) for detailed instructions.
-
 ## Next Steps
 
-Now that you understand the different agents available in TeXRA, you might want to explore:
+Now that you understand the default built-in agents, you might want to explore:
 
-- [Models](/guide/models) - Learn about the different AI models and their capabilities
-- [File Management](/guide/file-management) - Understand how to work with multiple files
-- [Tool Integration](/guide/tool-integration) - Discover how TeXRA integrates with external tools
+- [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
+- [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.
+- [Models](/guide/models) - Learn about the different AI models and their capabilities.
