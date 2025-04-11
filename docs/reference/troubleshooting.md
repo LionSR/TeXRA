@@ -476,7 +476,7 @@ If you can't resolve an issue using this guide:
 
 1. **Check GitHub issues**:
 
-   - Search existing issues on the [TeXRA repository](https://github.com/LionSR/texra/issues)
+   - Search existing issues on the [TeXRA repository](https://github.com/texra-ai/texra-issues/issues)
    - Look for similar problems and solutions
 
 2. **Report new issues**:

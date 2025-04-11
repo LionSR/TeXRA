@@ -900,7 +900,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/LionSR/texra.git"
+    "url": "https://github.com/texra-ai.git"
   },
   "license": "MIT",
   "author": "TeXRA.ai",
@@ -914,9 +914,9 @@
     "research"
   ],
   "bugs": {
-    "url": "https://github.com/LionSR/texra/issues"
+    "url": "https://github.com/texra-ai/texra-issues/issues"
   },
-  "homepage": "https://github.com/LionSR/texra#readme",
+  "homepage": "https://texra.ai",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@cantoo/pdf-lib": "^2.3.2",
