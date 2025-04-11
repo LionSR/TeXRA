@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
+Even the best research assistants (human or AI) have off days. This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
 
 ## Installation Issues
 

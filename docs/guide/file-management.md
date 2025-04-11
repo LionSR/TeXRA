@@ -1,6 +1,6 @@
 # File Management
 
-TeXRA provides a comprehensive file management system designed specifically for academic research workflows. This guide explains how to effectively organize, select, and manage files when working with TeXRA.
+Academic projects often involve juggling numerous files – main documents, chapters, figures, references, auxiliary styles... TeXRA aims to make this less of a circus act with its comprehensive file management system. This guide explains how to effectively organize, select, and manage files when working with TeXRA.
 
 ## File Categories
 

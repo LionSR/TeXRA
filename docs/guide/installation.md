@@ -27,7 +27,7 @@ The easiest way to install TeXRA is directly from the Visual Studio Code Marketp
 
 ## Installing Required Dependencies
 
-TeXRA relies on several external tools to function properly. Follow the instructions for your operating system.
+Now for the slightly less fun part – making sure TeXRA has all the tools it needs to work its magic. TeXRA relies on several external tools to function properly. Follow the instructions for your operating system.
 
 ### LaTeX Distribution
 

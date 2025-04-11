@@ -10,6 +10,8 @@ You need a functional LaTeX distribution installed, such as:
 - **macOS**: MacTeX (includes TeX Live)
 - **Linux**: TeX Live (often available via package manager)
 
+Getting LaTeX set up correctly can sometimes feel like wrestling an octopus, but it's necessary for features like compiling diffs and TikZ previews.
+
 Ensure that the `pdflatex` command (or your preferred LaTeX engine) is accessible from your system's command line.
 
 See the main [Installation Guide](./installation.md) for more details on installing LaTeX and other essential dependencies like Perl (required for `latexdiff`).
