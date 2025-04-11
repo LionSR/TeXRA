@@ -139,8 +139,10 @@ Optimize TeXRA's performance for your workflow:
 
 ### Context Optimization
 
-- Include only essential context in prompts
-- Focus instructions on specific sections when possible
+LLMs have impressive memories, but they aren't infinite. Help them focus by:
+
+- Including only essential context in prompts
+- Focusing instructions on specific sections when possible
 - Remove irrelevant boilerplate from reference documents
 - Keep auxiliary files as simple as possible
 

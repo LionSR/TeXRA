@@ -8,7 +8,7 @@ The core of TeXRA's agent definition lies in a combination of YAML for structure
 
 ## Understanding the YAML Structure
 
-These `.yaml` files have two main parts:
+These `.yaml` files have two main parts (and thankfully, YAML is usually less prickly than XML or JSON):
 
 1.  **`settings`**: Define general operational parameters. For example:
     - `agentType`: Is it a complex `CoT` (Chain of Thought) agent that "thinks" step-by-step, or a simpler `direct` agent?

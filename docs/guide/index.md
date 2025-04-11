@@ -6,7 +6,7 @@ Welcome to TeXRA, your intelligent academic research assistant integrated direct
 
 ## What is TeXRA?
 
-TeXRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and research. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on the content while the AI assists with formatting, clarity, and technical precision.
+TeXRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and writing. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on your brilliant ideas while the AI helps wrangle the LaTeX and refine the prose.
 
 Unlike general-purpose AI interfaces like ChatGPT or Claude, TeXRA is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
 
