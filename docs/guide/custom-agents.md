@@ -1,6 +1,6 @@
 # Custom Agents
 
-TeXRA allows you to create custom agents tailored to your specific academic research needs. This guide focuses on the practical steps of creating the agent definition (`.yaml`) file.
+TeXRA allows you to create custom agents tailored to your specific academic research needs. This is where you can truly unleash the power of AI for your unique workflows (or just make an agent that writes everything in pirate speak, we won't judge). This guide focuses on the practical steps of creating the agent definition (`.yaml`) file.
 
 ::: info Agent Fundamentals
 Before creating a custom agent, it's highly recommended to understand the underlying concepts:

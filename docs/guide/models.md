@@ -1,6 +1,6 @@
 # AI Models
 
-TeXRA supports a variety of language models from different providers, allowing you to choose the best fit for your task's complexity, required speed, and budget. This guide provides an overview of the models available by default.
+TeXRA supports a variety of language models from different providers, allowing you to choose the best fit for your task's complexity, required speed, and budget (think of it as choosing your research assistant's brain!). This guide provides an overview of the models available by default.
 
 ## Model Providers Overview
 
