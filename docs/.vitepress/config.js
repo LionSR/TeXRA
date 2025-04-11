@@ -75,17 +75,18 @@ export default defineConfig({
             { text: 'Custom Agents', link: '/guide/custom-agents' },
           ],
         },
+        {
+          text: 'Best Practices',
+          items: [
+            { text: 'General Workflow', link: '/guide/best-practices.md' },
+          ],
+        },
       ],
       '/reference/': [
-        {
-          text: 'API Reference',
-          items: [{ text: 'Settings', link: '/reference/settings' }],
-        },
         {
           text: 'Resources',
           items: [
             { text: 'Troubleshooting', link: '/reference/troubleshooting' },
-            { text: 'Best Practices', link: '/reference/best-practices' },
             { text: 'Glossary', link: '/reference/glossary' },
           ],
         },
