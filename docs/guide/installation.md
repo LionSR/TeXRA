@@ -12,7 +12,7 @@ TeXRA is designed to work on all major operating systems with the following mini
 
 ## Installing the Extension
 
-### Method 1: VS Code Marketplace (Recommended)
+### From VS Code Marketplace (Recommended)
 
 The easiest way to install TeXRA is directly from the Visual Studio Code Marketplace:
 
