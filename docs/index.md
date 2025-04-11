@@ -5,7 +5,7 @@ hero:
   text: Your Intelligent Academic Research Assistant
   tagline: Enhance your research with powerful AI assistance in VS Code
   image:
-    src: /logo-128x128.png
+    src: /logo-1024x1024.svg
     alt: TeXRA Logo
   actions:
     - theme: brand

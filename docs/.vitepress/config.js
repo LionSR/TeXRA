@@ -4,9 +4,9 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: 'TeXRA',
   description: 'Your Intelligent Academic Research Assistant',
-  head: [['link', { rel: 'icon', href: '/logo-128x128.png' }]],
+  head: [['link', { rel: 'icon', href: '/logo-128x128.svg' }]],
   themeConfig: {
-    logo: '/logo-128x128.png',
+    logo: '/logo-128x128.svg',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/' },
@@ -68,7 +68,7 @@ export default defineConfig({
         },
       ],
     },
-    socialLinks: [{ icon: 'github', link: 'https://github.com/LionSR/texra' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/texra-ai' }],
     search: {
       provider: 'local',
     },

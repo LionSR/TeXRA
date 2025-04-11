@@ -14,9 +14,11 @@ TeXRA is designed to work on all major operating systems with the following mini
 
 ## Installing the Extension
 
+The following two methods need to be rewrote because the extension is now published on the VS Code Marketplace.
+
 ### Method 1: Direct Installation from VSIX
 
-1. Download the latest release (`.vsix` file) from the [GitHub release page](https://github.com/LionSR/texra/releases)
+1. Download the latest release (`.vsix` file) from the [GitHub release page](https://github.com/texra-ai/releases)
 2. In VS Code, locate the `.vsix` file in the file explorer
 3. Right-click on the `.vsix` file
 4. Select "Install Extension VSIX" from the context menu
@@ -31,7 +33,7 @@ If you need to customize the extension or want to work with the latest developme
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/LionSR/texra.git
+   git clone https://github.com/texra-ai.git
    cd texra
    ```
 
@@ -284,7 +286,7 @@ If you work across multiple computers:
 
 If you encounter persistent installation issues:
 
-1. Check the [GitHub Issues page](https://github.com/LionSR/texra/issues) for known problems
+1. Check the [GitHub Issues page](https://github.com/texra-ai/texra-issues/issues) for known problems
 2. Look for error messages in the TeXRA ProgressBoard
 3. File a new issue with detailed information about your system and the specific error
 
