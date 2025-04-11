@@ -1,7 +1,8 @@
 // .vitepress/config.js
-import { defineConfig } from 'vitepress';
+import { withMermaid } from 'vitepress-plugin-mermaid';
 
-export default defineConfig({
+// Define the base VitePress config
+const baseConfig = {
   title: 'TeXRA',
   description: 'Your Intelligent Academic Research Assistant',
   head: [
@@ -97,9 +98,23 @@ export default defineConfig({
       provider: 'local',
     },
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2024-present TeXRA Team',
+      copyright: 'Copyright © 2024-present TeXRA Team. All rights reserved.',
     },
   },
   ignoreDeadLinks: true,
+};
+
+// Export the config wrapped with withMermaid, including optional configs
+export default withMermaid(baseConfig, {
+  // your existing vitepress config is passed above as baseConfig
+  // optionally, you can pass MermaidConfig
+  mermaid: {
+    // refer https://mermaid.js.org/config/setup/modules/mermaidAPI.html#mermaidapi-configuration-defaults for options
+    // Add any specific Mermaid options here, e.g.:
+    // theme: 'dark',
+  },
+  // optionally set additional config for plugin itself with MermaidPluginConfig
+  mermaidPlugin: {
+    class: 'mermaid', // Default class, you can add more like "my-class"
+  },
 });
