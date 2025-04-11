@@ -1,13 +1,13 @@
 # Configuration
 
-TexRA provides extensive configuration options that allow you to customize its behavior to match your workflow. This guide explains the available settings and how to adjust them for optimal performance.
+TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow. This guide explains the available settings and how to adjust them for optimal performance.
 
 ## Accessing Configuration
 
-You can configure TexRA through VS Code's settings:
+You can configure TeXRA through VS Code's settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`)
-2. Search for "TexRA" to see all available settings
+2. Search for "TeXRA" to see all available settings
 3. Adjust settings in the UI or edit the JSON directly
 
 <!-- ![VS Code Settings](/images/vscode-settings.png) -->
@@ -59,7 +59,7 @@ Define which AI models appear in the model selection dropdown:
 
 ### API Provider Settings
 
-Configure how TexRA connects to AI model providers:
+Configure how TeXRA connects to AI model providers:
 
 ```json
 "texra.model.useOpenRouter": false,
@@ -77,7 +77,7 @@ Configure how TexRA connects to AI model providers:
 
 ### File Extensions
 
-Control which file types TexRA includes:
+Control which file types TeXRA includes:
 
 ```json
 "texra.files.included.inputExtensions": [
@@ -96,7 +96,7 @@ Control which file types TexRA includes:
 
 ### Ignored Directories
 
-Control which directories TexRA ignores:
+Control which directories TeXRA ignores:
 
 ```json
 "texra.files.ignored.directories": [
@@ -172,7 +172,7 @@ Control agent execution behavior:
 "texra.agent.pauseForConfirmation": false
 ```
 
-When set to `true`, TexRA will pause for confirmation after each agent, even when reflection is enabled.
+When set to `true`, TeXRA will pause for confirmation after each agent, even when reflection is enabled.
 
 ## Git Integration
 
@@ -192,7 +192,7 @@ Configure the folder explorer view:
 "texra.explorer.agentsDirectory": "/path/to/custom/agents"
 ```
 
-This setting specifies a custom root path for the TexRA file explorer view, which can be absolute or relative to the workspace root.
+This setting specifies a custom root path for the TeXRA file explorer view, which can be absolute or relative to the workspace root.
 
 ## Logger Configuration
 
@@ -210,7 +210,7 @@ Control logging behavior:
 
 ### Workspace vs. User Settings
 
-You can configure TexRA at different levels:
+You can configure TeXRA at different levels:
 
 1. **User Settings**: Apply to all workspaces (set in VS Code's user settings)
 2. **Workspace Settings**: Apply only to the current workspace (set in `.vscode/settings.json`)
@@ -249,10 +249,10 @@ For macOS and Linux, use forward slashes:
 
 ## Creating Custom Profiles
 
-While TexRA doesn't have built-in profile support, you can create multiple configuration sets using VS Code's settings profiles:
+While TeXRA doesn't have built-in profile support, you can create multiple configuration sets using VS Code's settings profiles:
 
 1. Create different VS Code profiles for different types of projects
-2. Configure TexRA differently in each profile
+2. Configure TeXRA differently in each profile
 3. Switch between profiles based on your current task
 
 ## Configuration Best Practices
@@ -295,11 +295,11 @@ For advanced configurations, you can directly edit the VS Code settings JSON:
 
 1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
 2. Run "Preferences: Open User Settings (JSON)"
-3. Add or modify TexRA settings
+3. Add or modify TeXRA settings
 
 ### Command-Specific Configuration
 
-Some TexRA commands can be configured through their own settings:
+Some TeXRA commands can be configured through their own settings:
 
 ```json
 "texra.setApiKey": {
@@ -312,7 +312,7 @@ Some TexRA commands can be configured through their own settings:
 
 ### Cross-Extension Compatibility
 
-Configure TexRA to work well with other extensions:
+Configure TeXRA to work well with other extensions:
 
 ```json
 // LaTeX Workshop compatibility
@@ -342,7 +342,7 @@ Common configuration issues include:
 
 ## Next Steps
 
-Now that you understand how to configure TexRA, you might want to explore:
+Now that you understand how to configure TeXRA, you might want to explore:
 
 - [Custom Agents](/guide/custom-agents) - Learn how to create your own specialized agents
 - [Best Practices](/reference/best-practices) - Discover recommended settings for different workflows

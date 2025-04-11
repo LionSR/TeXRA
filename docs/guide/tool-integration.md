@@ -1,10 +1,10 @@
 # Tool Integration
 
-TexRA enhances AI capabilities by integrating with specialized external tools for academic research. This approach follows Andrew Ng's framework for building effective AI agents, particularly focusing on tool use as a key design pattern.
+TeXRA enhances AI capabilities by integrating with specialized external tools for academic research. This approach follows Andrew Ng's framework for building effective AI agents, particularly focusing on tool use as a key design pattern.
 
 ## Understanding Tool Integration
 
-While language models are powerful, they benefit from specialized tools for specific tasks. TexRA's tool integration:
+While language models are powerful, they benefit from specialized tools for specific tasks. TeXRA's tool integration:
 
 1. Leverages external programs for specialized tasks
 2. Provides structured data to the AI for better context
@@ -13,7 +13,7 @@ While language models are powerful, they benefit from specialized tools for spec
 
 ## Core Integrated Tools
 
-TexRA integrates several key tools specifically designed for academic research:
+TeXRA integrates several key tools specifically designed for academic research:
 
 ### LaTeX Tools
 
@@ -28,7 +28,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Generates a visual diff document
 - Aids in reviewing changes between versions
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Accessible directly from the LaTeXdiffs section
 - Automated diff generation after processing documents
@@ -48,7 +48,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Makes code more readable and maintainable
 - Standardizes document formatting
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Available via the "Indent TeX" command
 - Automated indentation of generated documents
@@ -69,7 +69,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Provides detailed document statistics
 - Helps assess document complexity and length
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Available via the "Count Words in Current TeX File" command
 - Optional integration in prompts via "Attach TeX Count" option
@@ -88,7 +88,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Resizes and adjusts images as needed
 - Creates viewable previews of figures
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Automatic processing of figures for AI vision
 - Creation of viewable previews from PDFs
@@ -105,7 +105,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Enables multi-page document handling
 - Supports high-quality image extraction
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Used with GraphicsMagick/ImageMagick for PDF processing
 - Ensures high-quality figure extraction
@@ -122,7 +122,7 @@ TexRA integrates several key tools specifically designed for academic research:
 - Tracks document evolution over time
 - Supports collaborative workflows
 
-**Integration in TexRA**:
+**Integration in TeXRA**:
 
 - Commit listing in the LaTeXdiffs section
 - Support for comparing against previous versions
@@ -130,7 +130,7 @@ TexRA integrates several key tools specifically designed for academic research:
 
 ## Tool Configuration Options
 
-TexRA provides several ways to configure tool integration:
+TeXRA provides several ways to configure tool integration:
 
 ### Tool Config Dropdown
 
@@ -171,7 +171,7 @@ Configure tool integration through VS Code settings:
 
 ## How Tool Integration Works
 
-Behind the scenes, TexRA orchestrates a series of tool operations:
+Behind the scenes, TeXRA orchestrates a series of tool operations:
 
 ### Document Analysis Workflow
 
@@ -197,7 +197,7 @@ Behind the scenes, TexRA orchestrates a series of tool operations:
 
 ## Leveraging Tools Effectively
 
-To get the most from TexRA's tool integration:
+To get the most from TeXRA's tool integration:
 
 ### For Document Statistics
 
@@ -260,7 +260,7 @@ For advanced workflows, you can chain multiple tools:
 
 ### External Tool Integration
 
-TexRA can work alongside other VS Code extensions:
+TeXRA can work alongside other VS Code extensions:
 
 - **LaTeX Workshop**: For compilation and preview
 - **GitLens**: For enhanced git visualization
@@ -300,8 +300,8 @@ If you encounter issues with tool integration:
 
 ## Next Steps
 
-Now that you understand TexRA's tool integration, you might want to explore:
+Now that you understand TeXRA's tool integration, you might want to explore:
 
 - [TikZ Figures](/guide/tikz-figures) - Learn more about working with figures
 - [LaTeX Diff](/guide/latex-diff) - Explore document comparison features
-- [Configuration](/guide/configuration) - Customize TexRA's tool integration
+- [Configuration](/guide/configuration) - Customize TeXRA's tool integration

@@ -1,6 +1,6 @@
 # TikZ Figures
 
-TexRA provides advanced capabilities for working with TikZ figures in LaTeX documents. These features help you create, extract, modify, and manage technical diagrams with AI assistance.
+TeXRA provides advanced capabilities for working with TikZ figures in LaTeX documents. These features help you create, extract, modify, and manage technical diagrams with AI assistance.
 
 ## Understanding TikZ
 
@@ -13,7 +13,7 @@ TexRA provides advanced capabilities for working with TikZ figures in LaTeX docu
 
 ## The Draw Agent
 
-TexRA's `draw` agent is specifically designed to work with TikZ figures. It can:
+TeXRA's `draw` agent is specifically designed to work with TikZ figures. It can:
 
 1. Create new TikZ figures based on textual descriptions
 2. Enhance existing figures with improvements or additions
@@ -59,7 +59,7 @@ Add a legend explaining the color scheme and improve the layout for better reada
 
 ## TikZ Extraction
 
-TexRA can automatically extract TikZ figures from your LaTeX documents for separate processing and management.
+TeXRA can automatically extract TikZ figures from your LaTeX documents for separate processing and management.
 
 ### Automatic Extraction
 
@@ -70,7 +70,7 @@ To enable automatic TikZ extraction:
 3. Select your input file(s)
 4. Execute your chosen agent
 
-When automatic extraction is enabled, TexRA will:
+When automatic extraction is enabled, TeXRA will:
 
 1. Scan your LaTeX documents for TikZ environments
 2. Extract each figure as a separate file
@@ -83,7 +83,7 @@ You can also extract TikZ figures manually using VSCode commands:
 
 1. Open a LaTeX file containing TikZ figures
 2. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
-3. Run "TexRA: Extract TikZ Figures from Current File"
+3. Run "TeXRA: Extract TikZ Figures from Current File"
 
 This will create standalone files for each TikZ figure in your document.
 
@@ -93,7 +93,7 @@ Once extracted, TikZ figures can be compiled into viewable images:
 
 ### Automatic Compilation
 
-When using the automatic extraction feature, TexRA will:
+When using the automatic extraction feature, TeXRA will:
 
 1. Create a standalone LaTeX document for each TikZ figure
 2. Compile it using your LaTeX distribution
@@ -104,13 +104,13 @@ When using the automatic extraction feature, TexRA will:
 You can manually compile extracted figures:
 
 1. Open the Command Palette
-2. Run "TexRA: Compile TikZ Figures from Current File"
+2. Run "TeXRA: Compile TikZ Figures from Current File"
 
 This will compile all extracted figures and generate preview images.
 
 ## Customizing TikZ Processing
 
-You can customize how TexRA handles TikZ figures through several settings:
+You can customize how TeXRA handles TikZ figures through several settings:
 
 ### TikZ Template
 
@@ -134,7 +134,7 @@ This directory will be added to the LaTeX search path when compiling figures.
 
 ### Including Workspace in TEXINPUTS
 
-By default, TexRA includes your workspace root in the TEXINPUTS environment variable:
+By default, TeXRA includes your workspace root in the TEXINPUTS environment variable:
 
 ```json
 "texra.latex.includeWorkspaceInTexinputs": true
@@ -164,7 +164,7 @@ Maintain the same visual style and color scheme as the reference figure.
 
 ## Advanced TikZ Techniques
 
-TexRA's `draw` agent can implement advanced TikZ techniques:
+TeXRA's `draw` agent can implement advanced TikZ techniques:
 
 ### Animation Frames
 
@@ -252,8 +252,8 @@ TikZ compilation can be resource-intensive:
 
 ## Next Steps
 
-Now that you understand how to work with TikZ figures in TexRA, you might want to explore:
+Now that you understand how to work with TikZ figures in TeXRA, you might want to explore:
 
 - [LaTeX Diff](/guide/latex-diff) - Learn how to compare document versions including figures
-- [Tool Integration](/guide/tool-integration) - Discover other tools TexRA integrates with
-- [Best Practices](/reference/best-practices) - Learn general best practices for working with TexRA
+- [Tool Integration](/guide/tool-integration) - Discover other tools TeXRA integrates with
+- [Best Practices](/reference/best-practices) - Learn general best practices for working with TeXRA
