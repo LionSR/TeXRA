@@ -37,7 +37,7 @@ These are supporting files needed for proper document processing:
 
 ### Figure & Media Files
 
-Files containing visual or audio content, such as images, PDFs used as figures, or audio recordings. See the [Working with Figures & Media](./working-with-figures.md) guide for details on supported types, UI controls, and automatic extraction.
+Files containing visual or audio content, such as images, PDFs used as figures, or audio recordings. See the [Working with Figures](./working-with-figures.md) guide for details on supported types, UI controls, and automatic extraction.
 
 ## File Selection Interface
 
@@ -74,7 +74,7 @@ Multiple file selection is particularly useful for:
 
 ### Adding Opened Files
 
-The "Opened Files" button (folder icon) allows you to quickly add all currently open files in VS Code to your selection. This is useful when you have already opened the relevant files for your project.
+The "Add Opened Files" button (<i class="codicon codicon-folder-opened"></i>) available for Input, Reference, and Auxiliary files allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
 
 ### Output Files
 
