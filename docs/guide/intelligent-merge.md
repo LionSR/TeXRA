@@ -1,6 +1,8 @@
-# Intelligent Merge
+# Intelligent Merge Workflow
 
-TeXRA's intelligent merge feature allows you to seamlessly combine changes from multiple document versions or authors. This powerful capability goes beyond simple text merging by understanding the context and intent of changes, making it invaluable for collaborative academic writing.
+Often, AI agents like `polish` or `correct` might modify only a specific section of your document, or you might receive suggested edits from a reviewer in a separate file. TeXRA's **Intelligent Merge** workflow provides a powerful way to integrate these kinds of changes—whether partial edits from an agent's output (e.g., `*_r0_*.tex` files) or external suggestions—back into your original base document.
+
+This workflow goes beyond simple text merging by understanding LaTeX structure and the semantic intent of changes, making it invaluable for maintaining consistency and quality in academic research.
 
 ## Understanding Intelligent Merge
 

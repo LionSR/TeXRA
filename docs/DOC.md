@@ -178,19 +178,22 @@ You can customize the list of available agents in your VS Code settings:
 3. Look for the "TeXRA: agents" setting.
 4. Edit the agent list to add, remove, or modify agents.
 
+Example showing the default agents:
+
 ```json
 "texra.agents": [
   "correct",
+  "derive",
   "polish",
   "draw",
-  "meeting2text",
-  "paper2note",
-  "txt2tex",
-  "correct_st",
-  "polish_st",
-  "draw_st",
+  "ocr",
+  "paper2cover",
   "paper2slide",
-  "slide2paper"
+  "paper2poster",
+  "paper2note",
+  "polish_cover",
+  "solve_qi",
+  "transcribe_audio"
 ]
 ```
 
@@ -221,16 +224,6 @@ npm run watch
 
 # Production build
 npm run compile && vsce package
-```
-
-### Testing
-
-```bash
-# Run test suite
-npm test
-
-# Run specific tests
-npm test -- --grep "test name"
 ```
 
 ## Housekeeping Operations

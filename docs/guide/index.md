@@ -1,6 +1,8 @@
 # Introduction to TeXRA
 
-Welcome to TeXRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TeXRA is, how it works, and how it can enhance your academic writing workflow.
+Welcome to TeXRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TeXRA is, how it works, and how it can enhance your academic research workflow.
+
+<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
 
 ## What is TeXRA?
 
@@ -10,13 +12,13 @@ Unlike general-purpose AI interfaces like ChatGPT or Claude, TeXRA is specifical
 
 ## The Philosophy Behind TeXRA
 
-TeXRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic writing that are often underutilized. The extension implements an approach inspired by key AI design patterns:
+TeXRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic research that are often underutilized. The extension implements an approach inspired by key AI design patterns:
 
 1. **Reflection**: The LLM examines its own work to identify improvements
 2. **Tool use**: The LLM leverages external tools to gather information or process data
 3. **Planning**: The LLM develops and executes multi-step plans to achieve complex goals
 
-Through these patterns, TeXRA creates an iterative process that mimics expert academic writing - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
+Through these patterns, TeXRA creates an iterative process that mimics expert academic research - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
 
 ## Key Features
 
@@ -72,10 +74,22 @@ TeXRA is designed for:
 
 ## Getting Started
 
-Ready to enhance your academic writing with TeXRA? The next sections will guide you through:
+Ready to enhance your academic research with TeXRA? The next sections will guide you through:
 
 - [Installation](/guide/installation): Setting up TeXRA and its dependencies
 - [Quick Start](/guide/quick-start): Your first steps with TeXRA
-- [Core Concepts](/guide/agents): Understanding the fundamental components
+- [Core Concepts](/guide/built-in-agents.md): Understanding the fundamental components
+- [Advanced Usage](/guide/latex-diff): Leveraging powerful features
+- [Customization](/guide/configuration): Tailoring TeXRA to your needs
 
-Let's begin your journey toward more efficient and effective academic writing!
+## Data Privacy & Security
+
+TeXRA prioritizes your privacy. All API calls to language models (like Anthropic Claude, OpenAI GPT, Google Gemini) are made **directly from your local VS Code instance** to the respective provider's API endpoint (or OpenRouter, if configured).
+
+**Your document content and API keys are NOT sent to or stored on any TeXRA servers.**
+
+API keys are stored securely using VS Code's built-in Secret Storage.
+
+While TeXRA itself doesn't store your data, be aware of the data usage and privacy policies of the specific AI model providers you choose to use.
+
+Let's begin your journey toward more efficient and effective academic research!
