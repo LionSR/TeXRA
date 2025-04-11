@@ -8,7 +8,7 @@ This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparin
 
 ## Understanding LaTeX Diff
 
-Unlike standard text diff tools, LaTeX diff understands LaTeX syntax and produces readable, compilable LaTeX documents with changes highlighted. This approach offers several advantages:
+Unlike standard text diff tools (which can look like hieroglyphics when comparing LaTeX source), LaTeX diff understands LaTeX syntax and produces readable, compilable LaTeX documents with changes highlighted. This approach offers several advantages:
 
 1. **Structural Awareness**: Understands LaTeX environments and commands
 2. **Visual Clarity**: Shows changes within the typeset document

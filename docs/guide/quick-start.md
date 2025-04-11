@@ -76,7 +76,7 @@ Ensure consistent terminology throughout.
 ```
 
 ::: tip Effective Instructions
-Be specific about what you want. Include what should change and what should remain the same.
+Be specific about what you want! Vague instructions are like asking a genie for "something cool" – results may vary wildly. Include what should change and what should remain the same.
 :::
 
 ### Step 5: Configure Tools
@@ -100,7 +100,7 @@ Be specific about what you want. Include what should change and what should rema
 ### Step 7: Review Results
 
 1. When the agent completes, VS Code will open the generated output file (e.g., `yourfile_polish_r0_model.tex`).
-2. Review the changes made by the AI.
+2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
    - **VS Code's Diff View**: Right-click on the original and output files in the Explorer and select "Compare Selected" for a side-by-side source code comparison.
    - **TeXRA's LaTeXdiff feature**: Use the LaTeXdiffs section in the TeXRA panel for a compiled, visual comparison (see the [LaTeX Diff guide](./latex-diff.md)).

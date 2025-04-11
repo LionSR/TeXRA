@@ -91,33 +91,6 @@ Documentation of TeXRA's internal APIs:
 
 ## Additional Resources
 
-### Version History
-
-Review changes and updates in each release:
-
-- Feature additions
-- Bug fixes
-- Breaking changes
-- Migration guides
-
-### Community Contributions
-
-Examples and templates shared by the community:
-
-- Custom agents
-- Specialized workflows
-- Integration examples
-- Academic templates
-
-### Integration Examples
-
-How to integrate TeXRA with other tools:
-
-- LaTeX Workshop configuration
-- Git integration
-- Bibliography managers
-- Academic workflow tools
-
 ### Limitations and Known Issues
 
 Documentation of current limitations and known issues:

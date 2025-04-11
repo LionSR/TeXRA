@@ -22,7 +22,7 @@ The primary way to use this feature is via the UI button in the "LaTeXdiffs" sec
 
 ## What Happens Behind the Scenes
 
-When you click the Merge button:
+When you click the Merge button (prepare for some AI wizardry):
 
 1.  TeXRA sends the content of both the Base File and the Edited File to a selected AI model (defaults can be configured in settings, `sonnet37` is often a good choice).
 2.  The model is instructed to intelligently synthesize a new, complete document that preserves the structure and unchanged content of the Base File while incorporating the modifications present in the Edited File.

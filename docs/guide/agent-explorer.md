@@ -1,6 +1,6 @@
 # Agent Explorer
 
-The TeXRA extension includes a dedicated **Agent Explorer** view within the VS Code sidebar, typically located under the main TeXRA panel (identified by the logo icon). This explorer provides a convenient way to browse, inspect, and manage the agent definition files that power TeXRA's capabilities.
+The TeXRA extension includes a dedicated **Agent Explorer** view within the VS Code sidebar, typically located under the main TeXRA panel (identified by the logo icon). Think of it as your command center for browsing, inspecting, and managing the AI personalities (agent definition files) that power TeXRA's capabilities.
 
 <!-- ![TeX Agents View Placeholder](/images/agent-explorer-view.png) _(Placeholder: Add screenshot of the TeX Agents view)_ -->
 
@@ -16,7 +16,7 @@ The Agent Explorer is organized into two main sections:
 - **Expand/Collapse**: Click the arrows next to folder names (including "Built-in Agents" and "Custom Agents") to expand or collapse them.
 - **File Icons**: Folders are marked with a folder icon <i class="codicon codicon-folder"></i>, and agent definition files (usually `.yaml`) are marked with a file icon <i class="codicon codicon-file"></i>.
 - **Opening Files**: Click on an agent file name to open it in the editor.
-  - **Built-in Agents**: These files are **read-only** to prevent accidental modification of core functionalities. They will be marked with a lock icon <i class="codicon codicon-lock"></i> and VS Code will prevent saving changes. If you want to modify a built-in agent, it's recommended to create a copy in your Custom Agents directory.
+  - **Built-in Agents**: These files are **read-only** to prevent accidental modification of core functionalities (it's usually best not to tinker with the pre-built magic!). They will be marked with a lock icon <i class="codicon codicon-lock"></i> and VS Code will prevent saving changes. If you want to modify a built-in agent, it's recommended to create a copy in your Custom Agents directory.
   - **Custom Agents**: These files can be opened and edited normally.
 
 ## Managing Custom Agents

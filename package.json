@@ -366,8 +366,7 @@
               "characters",
               "latex_xml",
               "scratchpad_xml",
-              "style",
-              "personal_style"
+              "style"
             ],
             "description": "List of enabled LaTeX replacement categories",
             "order": 5
