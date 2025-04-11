@@ -55,15 +55,15 @@ TeXRA offers a comprehensive set of features designed for academic workflows:
 At its core, TeXRA follows an iterative process inspired by expert workflows:
 
 ```mermaid
-graph TD
+graph LR
     A[Start: User Input & Agent Config] --> B{Analyze Document & Instructions};
-    B --> C{Plan Changes};
-    C --> D{Execute Plan (LLM Call - Round 0)};
-    D --> E{Process Output (Save *_r0_* File)};
-    E --> F{Reflect on Output? (Optional)};
-    F -- Yes --> G{Refine Plan};
-    G --> H{Execute Refined Plan (LLM Call - Round 1)};
-    H --> I{Process Output (Save *_r1_* File)};
+    B --> C[Plan Changes];
+    C --> D["Execute Plan (LLM Call - Round 0)"];
+    D --> E["Process Output (Save *_r0_* File)"];
+    E --> F{"Reflect on Output? (Optional)"};
+    F -- Yes --> G[Refine Plan];
+    G --> H["Execute Refined Plan (LLM Call - Round 1)"];
+    H --> I["Process Output (Save *_r1_* File)"];
     I --> J[End];
     F -- No --> J[End];
 ```
