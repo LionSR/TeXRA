@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-This guide will help you get up and running with TeXRA quickly. In just a few minutes, you'll be able to use AI to enhance your academic writing in VS Code.
+This guide will help you get up and running with TeXRA quickly. In just a few minutes, you'll be able to use AI to enhance your academic research in VS Code.
 
 ## Overview
 
@@ -10,6 +10,16 @@ TeXRA integrates powerful AI capabilities directly into your writing workflow. H
 - Improve writing style and clarity
 - Create or enhance technical figures
 - Transform papers into different formats (lecture notes, slides, posters)
+
+## Set Up API Keys
+
+Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
+
+1.  **Open the Command Palette**: Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS).
+2.  **Run the Set API Key command**: Type `TeXRA: Set API Key` and select the command.
+3.  **Follow the prompts**: Select the API provider (e.g., Anthropic, OpenAI) and enter your key when prompted.
+
+Repeat this process for each AI provider you plan to use with TeXRA.
 
 ## Basic Workflow
 
@@ -82,7 +92,7 @@ Be specific about what you want. Include what should change and what should rema
 ### Step 6: Execute the Agent
 
 1. Click the "Execute" button
-2. The ProgressBoard panel (typically at the bottom) will show the progress
+2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
 <!-- ![Execution Progress](/images/execution-progress.png) -->
@@ -143,9 +153,9 @@ For example, if your input file is `paper.tex` and you used the `polish` agent w
 
 Now that you've completed your first task with TeXRA, you can:
 
-- Explore more [advanced agents](/guide/agents) for specialized tasks
-- Learn about [LaTeX diff](/guide/latex-diff) for comparing document versions
-- Discover how to use [intelligent merge](/guide/intelligent-merge) for combining changes
-- Optimize your workflow with [custom configuration](/guide/configuration)
+- Explore more [built-in agents](./built-in-agents.md) for specialized tasks
+- Learn about [LaTeX diff](./latex-diff.md) for comparing document versions
+- Discover how to use [intelligent merge](./intelligent-merge.md) for combining changes
+- Optimize your workflow with [custom configuration](./configuration.md)
 
 For any issues or questions, refer to the [troubleshooting](/reference/troubleshooting) section or check the [GitHub repository](https://github.com/texra-ai/texra-issues/issues).

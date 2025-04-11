@@ -1,0 +1,40 @@
+# Agent Explorer
+
+The TeXRA extension includes a dedicated **Agent Explorer** view within the VS Code sidebar, typically located under the main TeXRA panel (identified by the logo icon). This explorer provides a convenient way to browse, inspect, and manage the agent definition files that power TeXRA's capabilities.
+
+<!-- ![TeX Agents View Placeholder](/images/agent-explorer-view.png) _(Placeholder: Add screenshot of the TeX Agents view)_ -->
+
+## Structure
+
+The Agent Explorer is organized into two main sections:
+
+1.  **Built-in Agents**: This section displays the standard agents that come bundled with the TeXRA extension. These files (`.yaml`) define the core functionalities like `correct`, `polish`, `draw`, etc.
+2.  **Custom Agents**: This section displays agents that you have created or added yourself. This directory's location can be customized in the VS Code settings via `texra.explorer.agentsDirectory`. If this setting is not configured, or the directory doesn't exist, this section might not appear.
+
+## Browsing and Viewing Agents
+
+- **Expand/Collapse**: Click the arrows next to folder names (including "Built-in Agents" and "Custom Agents") to expand or collapse them.
+- **File Icons**: Folders are marked with a folder icon <i class="codicon codicon-folder"></i>, and agent definition files (usually `.yaml`) are marked with a file icon <i class="codicon codicon-file"></i>.
+- **Opening Files**: Click on an agent file name to open it in the editor.
+  - **Built-in Agents**: These files are **read-only** to prevent accidental modification of core functionalities. They will be marked with a lock icon <i class="codicon codicon-lock"></i> and VS Code will prevent saving changes. If you want to modify a built-in agent, it's recommended to create a copy in your Custom Agents directory.
+  - **Custom Agents**: These files can be opened and edited normally.
+
+## Managing Custom Agents
+
+You can manage your custom agent files directly within the "Custom Agents" section of the explorer:
+
+- **Right-Click**: Right-click on a file or folder within the "Custom Agents" section (or on the "Custom Agents" root folder itself) to access the context menu.
+- **Title Bar Icons**: Some actions might also be available via icons in the view's title bar when the "TeX Agents" view is focused.
+
+Available actions for **Custom Agents** include:
+
+- **New File** <i class="codicon codicon-new-file"></i>: Creates a new, empty file (e.g., `new-file.yaml`) within the selected folder (or the root custom agents folder). You will be prompted to rename it immediately.
+- **New Folder** <i class="codicon codicon-new-folder"></i>: Creates a new folder within the selected folder. You will be prompted to rename it.
+- **Rename** <i class="codicon codicon-edit"></i>: Renames the selected custom file or folder.
+- **Delete** <i class="codicon codicon-trash"></i>: Deletes the selected custom file or folder (with confirmation).
+
+**Important**: These management actions (New File, New Folder, Rename, Delete) are **not available** for items within the "Built-in Agents" section.
+
+## Relationship to Custom Agent Creation
+
+The Agent Explorer is where you manage the files you create following the steps in the [Custom Agents](./custom-agents.md) guide. Use the explorer to organize your agent `.yaml` files effectively.

@@ -1,307 +1,53 @@
-# Tool Integration
+# Tool Integration: Enhancing AI Capabilities
 
-TeXRA enhances AI capabilities by integrating with specialized external tools for academic research. This approach follows Andrew Ng's framework for building effective AI agents, particularly focusing on tool use as a key design pattern.
+While Large Language Models (LLMs) are incredibly powerful, TeXRA integrates specialized external tools to handle tasks requiring precision, specific formatting, or analysis beyond the LLM's core capabilities. This approach aligns with best practices for building effective AI agents (as discussed by researchers at institutions like Anthropic), where leveraging specialized tools is a key design pattern. This ensures higher quality results, better consistency, and more robust handling of complex academic documents, especially LaTeX.
 
-## Understanding Tool Integration
+This guide provides an overview of the types of tools TeXRA uses and how they enhance the agent workflows.
 
-While language models are powerful, they benefit from specialized tools for specific tasks. TeXRA's tool integration:
+## Integrated Tool Categories
 
-1. Leverages external programs for specialized tasks
-2. Provides structured data to the AI for better context
-3. Extracts and processes information that would be difficult for the AI alone
-4. Ensures consistent formatting and processing of academic content
+TeXRA leverages tools primarily in these areas:
 
-## Core Integrated Tools
+### 1. LaTeX Processing
 
-TeXRA integrates several key tools specifically designed for academic research:
+Ensuring clean, consistent, and valid LaTeX code.
 
-### LaTeX Tools
+- **Formatting:** Tools like `latexindent` are used automatically after agent runs (and via command) to ensure consistent code style and readability. Configure `latexindent` options in [VS Code Settings](./configuration.md#latex-configuration).
+- **Comparison:** `latexdiff` is used to visualize changes between document versions, including automatic diff generation after agent runs. See the [LaTeX Diff guide](./latex-diff.md) for details on usage and configuration.
 
-#### latexdiff
+### 2. Figure & Media Handling
 
-**Purpose**: Compare LaTeX documents and visualize changes with color-coding.
+Processing visual elements for analysis and inclusion.
 
-**How it's used**:
+- **Extraction:** TeXRA can automatically find figure references (`\includegraphics`) and extract TikZ environments from your LaTeX source. See the [TikZ Figures guide](./tikz-figures.md) and the "Auto Extract" options in the UI ([File Management guide](./file-management.md#auto-extraction-features)).
+- **Conversion/Compilation:** Tools like `pdflatex`, `GraphicsMagick`/`ImageMagick`, and `Ghostscript` are used behind the scenes to compile extracted TikZ code and convert PDFs/images into formats suitable for the LLM (previews for you, data for the AI). Installation of these external dependencies is covered in the [Installation guide](./installation.md). Configuration options are in [VS Code Settings](./configuration.md#latex-configuration).
 
-- Compares original and modified documents
-- Highlights additions, deletions, and modifications
-- Generates a visual diff document
-- Aids in reviewing changes between versions
+### 3. Document Analysis
 
-**Integration in TeXRA**:
+Providing quantitative insights into your document structure.
 
-- Accessible directly from the LaTeXdiffs section
-- Automated diff generation after processing documents
-- Support for comparing with git commits via latexdiff-vc
-- Pack/clean functions for managing diff outputs
+- **Statistics:** `texcount` analyzes your document to provide statistics like word counts, heading counts, and math element counts. This information can optionally be included in prompts to give the LLM better context about the document's scale and complexity. See the "Attach TeX Count" option in the UI ([File Management guide](./file-management.md#tool-config-dropdown)) and the `texra.getTeXCount` command.
 
-<!-- ![LaTeX Diff Example](/images/latexdiff-example.png) -->
+_(Note: These tools often rely on external programs that need to be installed separately. See the [Installation guide](./installation.md) for requirements.)_
 
-#### latexindent
+## How Tools Enhance Agents
 
-**Purpose**: Format LaTeX code with consistent indentation and structure.
+Tool integration significantly improves agent performance and reliability:
 
-**How it's used**:
+- **Better Context for LLM:** Providing structured data like figure previews or document statistics (`texcount` output) helps the LLM understand the full context beyond just the raw text, leading to more relevant and accurate responses.
+- **Handling Specialized Formats:** Tools handle the complexities of LaTeX compilation, TikZ rendering, and image conversion, allowing the LLM to focus on the content and reasoning.
+- **Consistency & Quality:** Automatic formatting (`latexindent`) ensures outputs adhere to standards. `latexdiff` provides crucial observability.
+- **Enabling New Workflows:** Features like comparing versions (`latexdiff-vc`) or checking text/figure consistency are only possible through tool integration.
 
-- Applies consistent indentation to LaTeX files
-- Structures environments, commands, and sections
-- Makes code more readable and maintainable
-- Standardizes document formatting
+The outputs of these tools are often incorporated directly or indirectly into the prompts constructed based on the [Agent Architecture](./agent-architecture.md).
 
-**Integration in TeXRA**:
+## Configuring Tool Usage
 
-- Available via the "Indent TeX" command
-- Automated indentation of generated documents
-- Configurable through settings:
+You have several ways to control how TeXRA uses these tools:
 
-```json
-"texra.latex.latexindentConfig": "/path/to/config"
-```
+- **Tool Config Dropdown (UI):** Quickly enable/disable features like "Attach TeX Count" or "Reflect" for the current run. See [File Management](./file-management.md#tool-config-dropdown).
+- **Auto Extract Dropdown (UI):** Enable/disable automatic extraction of Figures or TikZ Figures for the current run. See [File Management](./file-management.md#auto-extraction-features).
 
-#### texcount
+For detailed configuration of specific tools (like `latexindent`, TikZ processing paths, etc.), refer to the main [Configuration guide](./configuration.md).
 
-**Purpose**: Analyze document statistics including word count, heading count, and math elements.
-
-**How it's used**:
-
-- Counts words in text, headers, and captions
-- Tracks mathematical formulas and equations
-- Provides detailed document statistics
-- Helps assess document complexity and length
-
-**Integration in TeXRA**:
-
-- Available via the "Count Words in Current TeX File" command
-- Optional integration in prompts via "Attach TeX Count" option
-- Helps AI understand document structure and complexity
-
-### Figure Processing Tools
-
-#### GraphicsMagick/ImageMagick
-
-**Purpose**: Process images and convert between formats.
-
-**How it's used**:
-
-- Converts PDFs to images for visualization
-- Processes image formats for compatibility
-- Resizes and adjusts images as needed
-- Creates viewable previews of figures
-
-**Integration in TeXRA**:
-
-- Automatic processing of figures for AI vision
-- Creation of viewable previews from PDFs
-- Support for image extraction and manipulation
-
-#### Ghostscript
-
-**Purpose**: Process PDF documents and convert between formats.
-
-**How it's used**:
-
-- Renders PDFs for image extraction
-- Processes complex document formats
-- Enables multi-page document handling
-- Supports high-quality image extraction
-
-**Integration in TeXRA**:
-
-- Used with GraphicsMagick/ImageMagick for PDF processing
-- Ensures high-quality figure extraction
-- Supports TikZ figure compilation
-
-### Git Integration
-
-**Purpose**: Access version history and manage document changes.
-
-**How it's used**:
-
-- Retrieves commit history for comparison
-- Enables latexdiff-vc for version comparison
-- Tracks document evolution over time
-- Supports collaborative workflows
-
-**Integration in TeXRA**:
-
-- Commit listing in the LaTeXdiffs section
-- Support for comparing against previous versions
-- Integration with latexdiff-vc for visual diffs
-
-## Tool Configuration Options
-
-TeXRA provides several ways to configure tool integration:
-
-### Tool Config Dropdown
-
-The "Tool Config" dropdown in the main interface allows you to enable or disable specific tool integrations:
-
-- **Reflect**: Enable the AI's self-reflection mechanism
-- **Attach TeX Count**: Include document statistics in prompts
-- **Use Prefill from Input**: Use document content as initial text
-- **Print Input Prompt**: Save generated prompts for debugging
-
-<!-- ![Tool Config Options](/images/tool-config-options.png) -->
-
-### Auto Extract Options
-
-The "Auto Extract" dropdown provides options for automatic extraction:
-
-- **Figures**: Automatically extract image references
-- **TikZ Figures**: Automatically extract and compile TikZ figures
-
-### VS Code Settings
-
-Configure tool integration through VS Code settings:
-
-```json
-// LaTeX tools configuration
-"texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
-"texra.latex.tikzInputDirectory": "/path/to/tikz/inputs",
-"texra.latex.includeWorkspaceInTexinputs": true,
-
-// Tool configuration
-"texra.model.useStreaming": true,
-"texra.model.useStreamingAnthropicReasoning": true,
-"texra.agent.pauseForConfirmation": false,
-
-// Git configuration
-"texra.git.numberOfCommitsToShow": 20
-```
-
-## How Tool Integration Works
-
-Behind the scenes, TeXRA orchestrates a series of tool operations:
-
-### Document Analysis Workflow
-
-1. **Input Processing**:
-
-   - TeX files are parsed to extract structure
-   - texcount analyzes document statistics
-   - Figures are extracted and processed
-   - TikZ code is compiled into viewable images
-
-2. **AI Processing**:
-
-   - Tool outputs are incorporated into prompts
-   - The AI leverages this structured information
-   - Responses reference tool-provided data
-   - Tool outputs guide the AI's understanding
-
-3. **Output Processing**:
-   - Generated content is formatted with latexindent
-   - Diffs are created with latexdiff
-   - Figures are extracted and compiled
-   - Statistics are gathered for verification
-
-## Leveraging Tools Effectively
-
-To get the most from TeXRA's tool integration:
-
-### For Document Statistics
-
-Enable "Attach TeX Count" when:
-
-- Working with complex documents
-- Needing to preserve document structure
-- Making targeted changes to specific sections
-- Analyzing document composition
-
-### For Figure Processing
-
-Enable auto-extraction options when:
-
-- Working with documents containing figures
-- Creating or modifying TikZ diagrams
-- Needing the AI to understand visual elements
-- Wanting figure improvements
-
-### For Version Comparison
-
-Use LaTeX diff features when:
-
-- Tracking changes between versions
-- Reviewing AI-generated modifications
-- Comparing against previous work
-- Preparing to merge changes
-
-### For Document Formatting
-
-Use latexindent features when:
-
-- Standardizing document formatting
-- Preparing for collaboration
-- Improving code readability
-- Ensuring consistent style
-
-## Advanced Tool Integration
-
-### Custom Tool Chains
-
-For advanced workflows, you can chain multiple tools:
-
-1. **Extract and Improve Figures**:
-
-   - Extract TikZ figures with auto-extraction
-   - Use the `draw` agent to enhance them
-   - Reintegrate improved figures into your document
-
-2. **Analyze and Enhance Structure**:
-
-   - Use texcount to analyze document composition
-   - Apply targeted improvements with specific agents
-   - Verify changes with latexdiff
-
-3. **Version Management Workflow**:
-   - Use git integration to track document evolution
-   - Apply intelligent merge to combine versions
-   - Verify changes with latexdiff
-
-### External Tool Integration
-
-TeXRA can work alongside other VS Code extensions:
-
-- **LaTeX Workshop**: For compilation and preview
-- **GitLens**: For enhanced git visualization
-- **Remote Development**: For working with remote files
-
-Configure these tools to work together:
-
-```json
-"latex-workshop.latex.outDir": "%DIR%/build",
-"texra.files.ignored.directories": ["build"]
-```
-
-## Troubleshooting Tool Integration
-
-If you encounter issues with tool integration:
-
-### LaTeX Tools
-
-- Verify tool installation with command-line checks
-- Ensure proper PATH configuration
-- Check for compatibility issues between tools
-- Verify LaTeX package availability
-
-### Image Processing
-
-- Confirm GraphicsMagick/ImageMagick installation
-- Check Ghostscript compatibility
-- Verify file permissions for temporary directories
-- Check for format compatibility issues
-
-### Git Integration
-
-- Ensure your project is a git repository
-- Check git installation and configuration
-- Verify commit history accessibility
-- Check for large repository performance issues
-
-## Next Steps
-
-Now that you understand TeXRA's tool integration, you might want to explore:
-
-- [TikZ Figures](/guide/tikz-figures) - Learn more about working with figures
-- [LaTeX Diff](/guide/latex-diff) - Explore document comparison features
-- [Configuration](/guide/configuration) - Customize TeXRA's tool integration
+By understanding how TeXRA uses tools, you can better leverage its capabilities and customize its behavior for your specific research needs.

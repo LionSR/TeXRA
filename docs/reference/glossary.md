@@ -1,6 +1,6 @@
 # Glossary
 
-This glossary provides definitions for technical terms used throughout the TeXRA documentation. Reference this resource to understand specific terminology related to TeXRA, AI models, LaTeX, and academic writing.
+This glossary provides definitions for technical terms used throughout the TeXRA documentation. Reference this resource to understand specific terminology related to TeXRA, AI models, LaTeX, and academic research.
 
 ## TeXRA-Specific Terms
 
@@ -60,7 +60,7 @@ A parameter that controls the randomness of model outputs. Lower values (0.0-0.3
 
 ### Prompt
 
-Instructions and context provided to an AI model to guide its response. In TeXRA, prompts are carefully engineered for specific academic writing tasks.
+Instructions and context provided to an AI model to guide its response. In TeXRA, prompts are carefully engineered for specific academic research tasks.
 
 ### API (Application Programming Interface)
 
@@ -80,7 +80,7 @@ A numerical representation of text that captures semantic meaning, allowing AI m
 
 ### Hallucination
 
-When an AI model generates information that is factually incorrect or not based on its input. TeXRA's structured approach helps minimize hallucinations in academic writing.
+When an AI model generates information that is factually incorrect or not based on its input. TeXRA's structured approach helps minimize hallucinations in academic research.
 
 ## LaTeX and Document Terms
 

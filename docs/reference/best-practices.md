@@ -1,6 +1,6 @@
 # Best Practices
 
-This guide provides recommendations for getting the most out of TeXRA in your academic writing workflow. Following these best practices will help you achieve better results, work more efficiently, and maximize the benefits of AI-assisted academic writing.
+This guide provides recommendations for getting the most out of TeXRA in your academic research workflow. Following these best practices will help you achieve better results, work more efficiently, and maximize the benefits of AI-assisted academic research.
 
 ## Effective Prompting
 

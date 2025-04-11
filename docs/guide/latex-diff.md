@@ -1,6 +1,10 @@
 # LaTeX Diff
 
-TeXRA provides powerful LaTeX diff functionality to help you compare different versions of your documents. This feature is essential for tracking changes, collaborating with co-authors, and reviewing AI-generated modifications.
+A core design philosophy of TeXRA is to provide transparency and control over the AI's modifications. The integrated LaTeX diff functionality is central to this, allowing you to precisely see and evaluate the changes suggested by AI agents before deciding how to incorporate them.
+
+TeXRA automatically generates diff files after agent runs that modify `.tex` files (like `correct` or `polish`), comparing the agent's output (`*_r0_*.tex` or `*_r1_*.tex`) against the original input or the previous round's output. This provides immediate observability into the agent's actions.
+
+This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparing arbitrary file versions and understanding the results.
 
 ## Understanding LaTeX Diff
 
@@ -23,7 +27,7 @@ This section provides several key features:
 2. **Edited File Selection**: Select a modified version
 3. **latexdiff Button**: Generate a diff between two files
 4. **Git Integration**: Compare with previous versions using Git history
-5. **Merge Button**: Intelligently merge changes from edited file to base file
+5. **Merge Button**: Intelligently merge changes from edited file to base file. See the [Intelligent Merge Workflow](./intelligent-merge.md) guide for details.
 
 ## Basic File Comparison
 
@@ -35,7 +39,7 @@ To compare two LaTeX files:
 2. In the "Edited File" dropdown, select the modified version
 
 ::: tip
-The "Current" button allows you to quickly select the currently open file for either role.
+The "Current" button allows you to quickly select the currently open file for either role. The "Empty" button (<i class="codicon codicon-close"></i>) clears the selection for that role.
 :::
 
 ### Step 2: Generate the Diff
@@ -116,24 +120,6 @@ For documents split across multiple files:
 1. Use the `merge` agent instead of the basic diff functionality
 2. Select the base directory containing all files
 3. Provide specific instructions for handling multiple files
-
-### Filtering Changes
-
-To focus on specific types of changes:
-
-1. After generating a diff, you can search for `\DIFadd` or `\DIFdel` commands
-2. Use VS Code's search functionality to navigate between changes
-3. Consider creating custom search patterns for specific types of changes
-
-### Customizing Diff Appearance
-
-The appearance of diffs can be customized by adding commands to your document:
-
-```latex
-% Add to preamble of your document to customize diff appearance
-\providecommand{\DIFadd}[1]{{\color{blue}\textbf{#1}}}
-\providecommand{\DIFdel}[1]{{\color{red}\textit{#1}}}
-```
 
 ## Integration with Workflow
 
