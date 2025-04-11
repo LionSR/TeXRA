@@ -53,16 +53,32 @@ Known for large context windows, multimodality, and speed/cost efficiency.
 | `gemini2fT` | `gemini2f` with explicit reasoning steps   | $             | Fast           |                                         |
 | `gemini2f`  | Fastest, most cost-effective, vision       | $             | Very Fast      | Good for simple tasks, native PDF/audio |
 
-### Other Models (via OpenRouter)
+### DeepSeek Models
 
-These require enabling OpenRouter in settings.
+Strong technical and coding performance, cost-effective.
 
-| Model ID | Key Strength / Use Case              | Relative Cost | Relative Speed | Notes            |
-| :------- | :----------------------------------- | :------------ | :------------- | :--------------- |
-| `grok3`  | Large context, alternative reasoning | $$$           | Medium         | xAI Grok 3       |
-| `grok3-` | Faster Grok 3 (mini)                 | $$            | Fast           | xAI Grok 3 Mini  |
-| `DSV3`   | Strong technical/coding performance  | $             | Fast           | DeepSeek V3 Chat |
-| `DSR1`   | Advanced reasoning (DeepSeek)        | $$            | Medium         | DeepSeek R1      |
+| Model ID | Key Strength / Use Case     | Relative Cost | Relative Speed | Notes            |
+| :------- | :-------------------------- | :------------ | :------------- | :--------------- |
+| `DSV3`   | Good coding & general tasks | $             | Fast           | DeepSeek V3 Chat |
+| `DSR1`   | Advanced reasoning          | $$            | Medium         | DeepSeek R1      |
+
+### Grok / xAI Models
+
+Large context models from xAI.
+
+| Model ID | Key Strength / Use Case              | Relative Cost | Relative Speed | Notes           |
+| :------- | :----------------------------------- | :------------ | :------------- | :-------------- |
+| `grok3`  | Large context, alternative reasoning | $$$           | Medium         | xAI Grok 3      |
+| `grok3-` | Faster Grok 3 (mini)                 | $$            | Fast           | xAI Grok 3 Mini |
+
+### Other Models (Available Primarily via OpenRouter)
+
+These models are generally accessed by enabling OpenRouter in settings.
+
+| Model ID  | Key Strength / Use Case          | Provider     | Relative Cost | Relative Speed |
+| :-------- | :------------------------------- | :----------- | :------------ | :------------- |
+| `llama31` | Strong open model, large context | Meta         | $$$           | Medium         |
+| `qvq-72b` | Strong multi-lingual             | Qwen/Alibaba | $$            | Medium         |
 
 _Relative Cost/Speed are estimates: $ = Low/Fast, $$$$ = High/Slow._
 
@@ -111,13 +127,30 @@ The specific models available by default and their identifiers (`sonnet37`, `gpt
 
 ## Using OpenRouter
 
-To access models not directly integrated (like Grok or DeepSeek) or potentially find different pricing:
+To access models not directly integrated (like Llama or Qwen), find alternative pricing, or ensure access if a direct API key isn't available, you can use [OpenRouter](https://openrouter.ai/).
 
 1.  Get an [OpenRouter](https://openrouter.ai/) API key.
 2.  Add the key using the `TeXRA: Set API Key` command (select OpenRouter).
 3.  Enable OpenRouter in VS Code Settings: `"texra.model.useOpenRouter": true`.
 
-When enabled, TeXRA will route API calls through OpenRouter for compatible models.
+When enabled, TeXRA will route API calls **for all compatible models** (including Anthropic, OpenAI, Google, DeepSeek, Grok, etc., if supported by OpenRouter) through OpenRouter instead of their direct APIs.
+
+## Streaming Support
+
+For long responses or reasoning-heavy models, you can enable streaming to see incremental results. This is often more robust for complex tasks.
+
+Configure streaming in VS Code Settings:
+
+```json
+// General streaming toggle (applies if specific model type toggle isn't set)
+"texra.model.useStreaming": false,
+
+// Specific toggle for Anthropic reasoning models
+"texra.model.useStreamingAnthropicReasoning": false,
+
+// Specific toggle for OpenAI reasoning models
+"texra.model.useStreamingOpenAIReasoning": false
+```
 
 ## Next Steps
 

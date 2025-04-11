@@ -43,15 +43,15 @@ export default defineConfig({
         {
           text: 'Core Concepts',
           items: [
-            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
             {
               text: 'Agent Architecture',
               link: '/guide/agent-architecture.md',
             },
+            { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
             { text: 'Models', link: '/guide/models' },
             { text: 'File Management', link: '/guide/file-management' },
             {
-              text: 'Working with Figures & Media',
+              text: 'Working with Figures',
               link: '/guide/working-with-figures.md',
             },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
@@ -79,11 +79,7 @@ export default defineConfig({
       '/reference/': [
         {
           text: 'API Reference',
-          items: [
-            { text: 'Agent Reference', link: '/reference/agents' },
-            { text: 'Model Reference', link: '/reference/models' },
-            { text: 'Settings', link: '/reference/settings' },
-          ],
+          items: [{ text: 'Settings', link: '/reference/settings' }],
         },
         {
           text: 'Resources',

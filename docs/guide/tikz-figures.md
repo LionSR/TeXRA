@@ -5,15 +5,23 @@
 TeXRA offers specialized features for working with TikZ, leveraging the `draw` agent and specific extraction/compilation tools. This guide focuses on TikZ-specific workflows.
 
 ::: tip General Media Handling
-For information on managing other types of figures (like standard images or PDFs) and general media selection in the UI, see the [Working with Figures & Media](./working-with-figures.md) guide.
+For information on managing other types of figures (like standard images or PDFs) and general media selection in the UI, see the [Working with Figures](./working-with-figures.md) guide.
 :::
 
 ## What is TikZ? (A Brief Intro)
 
 Instead of using a graphical editor, TikZ lets you describe graphics using commands within your LaTeX document. For example:
 
-````latex
-\\documentclass[tikz, border=2mm]{standalone}\n\\usepackage{tikz}\n\\begin{document}\n\\begin{tikzpicture}\n  \\draw[blue, thick] (0,0) circle (1cm);\n  \\node at (0,0) {Hello!};\n\\end{tikzpicture}\n\\end{document}\n```
+```latex
+\documentclass[tikz, border=2mm]{standalone}
+\usepackage{tikz}
+\begin{document}
+\begin{tikzpicture}
+  \draw[blue, thick] (0,0) circle (1cm);
+  \node at (0,0) {Hello!};
+\end{tikzpicture}
+\end{document}
+```
 
 This code draws a blue circle with text inside. TeXRA's tools help manage and generate this kind of code.
 
@@ -34,19 +42,17 @@ To create a new TikZ figure:
 
 1. Select the agent: `draw`
 2. Choose a model (Models like `o1`, `sonnet37T`, or `gpt4o` are often good choices for complex drawing tasks).
-2. Choose a model (Claude 3.7 Sonnet or GPT-4o recommended)
-3. Provide a detailed description of the desired figure
-4. Execute the agent
+3. Choose a model (Claude 3.7 Sonnet or GPT-4o recommended)
+4. Provide a detailed description of the desired figure
+5. Execute the agent
 
 **Example instruction:**
 
-````
-
+```
 Create a TikZ figure showing a flowchart of the machine learning pipeline
 described in Section 2. Include the following steps: data collection,
 preprocessing, feature extraction, model training, and evaluation.
 Connect the steps with arrows and add appropriate labels.
-
 ```
 
 ### Enhancing Existing Figures
@@ -65,8 +71,7 @@ To enhance an existing figure:
 Enhance the existing TikZ figure to add color coding for different components.
 Use blue for input components, green for processing steps, and red for output.
 Add a legend explaining the color scheme and improve the layout for better readability.
-
-````
+```
 
 ## TikZ Extraction
 
@@ -129,7 +134,7 @@ The TikZ template determines the standalone document structure used for extracte
 
 ```json
 "texra.latex.tikzTemplate": "\\documentclass[tikz,border=10pt]{standalone}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\usetikzlibrary{positioning}\n\\usetikzlibrary{patterns}\n\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n\\usetikzlibrary{shapes, arrows}\n\n\\begin{document}\n{{ tikzpicture }}\n\\end{document}"
-````
+```
 
 Customize this template to include additional packages or settings required by your figures.
 
@@ -171,39 +176,6 @@ To leverage existing figures as references:
 Create a TikZ diagram of a neural network architecture similar to the one in
 the reference file, but add an attention mechanism between the encoder and decoder.
 Maintain the same visual style and color scheme as the reference figure.
-```
-
-## Advanced TikZ Techniques
-
-TeXRA's `draw` agent can implement advanced TikZ techniques:
-
-### Animation Frames
-
-Create series of related figures for animations:
-
-```
-Generate 5 TikZ figures showing the step-by-step execution of the quicksort algorithm.
-Each figure should represent one step in the sorting process, with consistent styling
-and clear indication of the pivot element and partitioning process.
-```
-
-### Coordinate Systems
-
-Implement different coordinate systems for specialized diagrams:
-
-```
-Create a TikZ figure using polar coordinates to show the radiation pattern of the
-antenna described in Section 3. Include concentric circles at 10dB intervals and
-mark the main lobe and side lobes.
-```
-
-### TikZ Libraries
-
-Utilize specialized TikZ libraries for specific diagram types:
-
-```
-Create a finite state machine diagram using the TikZ automata library to represent
-the algorithm in Figure 2. Use rounded rectangles for states and clear labels for transitions.
 ```
 
 ## Troubleshooting TikZ Issues

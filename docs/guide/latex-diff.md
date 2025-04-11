@@ -243,11 +243,12 @@ For best results with LaTeX diff:
 
 When reviewing diff documents:
 
-1. **Compile First**: Always compile the diff document to see rendered changes
-2. **Systematic Review**: Go through changes methodically, section by section
-3. **Check Context**: Look at the context around each change
-4. **Verify Math**: Pay special attention to changes in mathematical expressions
-5. **Check References**: Verify cross-references and citations remain intact
+1. **Compile First**: Always compile the diff document to see rendered changes using LaTeX Workshop or your preferred method.
+2. **VS Code Diff View**: For a quick source-level comparison, open both the original (`.tex`) and the generated diff (`_diff.tex` or similar) file in VS Code. Select both files in the Explorer, right-click, and choose "Compare Selected". This highlights source code changes side-by-side.
+3. **Systematic Review**: Go through changes methodically, section by section, in either the compiled PDF or the source diff.
+4. **Check Context**: Look at the context around each change.
+5. **Verify Math**: Pay special attention to changes in mathematical expressions.
+6. **Check References**: Verify cross-references and citations remain intact.
 
 ### Version Management
 

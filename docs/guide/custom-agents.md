@@ -29,47 +29,128 @@ Custom agents reside in a specific directory.
 
 ### Step 3: Define the Agent
 
-Open the newly created `.yaml` file and define your agent's structure. Start with a basic template and customize it:
+Open the newly created `.yaml` file and define your agent's structure. Start with a basic template and customize it. Here are the key fields:
 
 ```yaml
-# Custom agent for [Your Agent's Purpose]
-# Author: [Your Name]
-# Date: [Creation Date]
-
-# Optional: Specify a built-in or other custom agent to inherit from
-# See docs/guide/built-in-agents.md for potential parents
+# --- Agent Inheritance (Optional) ---
+# Specify a built-in or other custom agent to inherit settings and prompts from.
+# See docs/guide/built-in-agents.md for potential parents.
 inherits: base # Or polish, correct, etc.
 
-# Define settings to override or add to the parent (if inheriting)
+# --- Agent Settings ---
+# Define the agent's core behavior and operational parameters.
+# Override parent settings here if inheriting.
 settings:
-  agentType: CoT # Or direct
-  temperature: 0.1
-  # Add other settings as needed (documentTag, endTag, outputExt, prefills, etc.)
-  # Refer to docs/guide/agent-architecture.md for details on settings
+  # Core Behavior
+  agentType: CoT # Type: 'CoT' (Chain of Thought) for complex reasoning with scratchpads, or 'direct' for simpler, direct output.
+  temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
+  isRewrite: true # Boolean: Does the agent primarily rewrite existing content (true) or generate new content (false)? Affects some internal handling.
 
-# Define prompts to override or add to the parent (if inheriting)
+  # Output Handling
+  documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
+  endTag: '</document>' # The closing tag that signals the agent has finished its main output.
+  outputExt: tex # Default file extension for the output file (e.g., tex, md, txt).
+  prefills:
+    - "<document>\n" # List of strings the AI should start its response(s) with.
+      # Item [0] is for Round 0, Item [1] is for Round 1 (reflection).
+      # Crucial for models needing specific start formats (e.g., XML tags).
+
+  # File Handling (Optional - Advanced)
+  # requiredFiles:
+  #   TEMPLATE: path/to/template.tex # Map variable names to required file paths relative to workspace.
+  # requiredFilesInternal:
+  #   STYLE_GUIDE: styles/internal_style.css # Map variable names to files relative to the agent's YAML file location.
+  # filePatternsContain:
+  #   - pattern: 'bibliography' # Find files whose names contain this pattern.
+  #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
+  #     categories: ['auxiliaryFile', 'auxiliaryFiles'] # Search within these UI file categories.
+  # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
+  #   - 'introduction.tex'
+  #   - 'methods.tex'
+
+# --- Agent Prompts ---
+# Define the text templates used to instruct the LLM.
+# Override parent prompts here if inheriting.
 prompts:
   systemPrompt: |
+    # Defines the AI's role, core instructions, constraints, overall persona.
+    # Sent once at the beginning (for supported models).
     [Define the AI's role and core instructions]
-    Refer to docs/guide/agent-architecture.md for prompt details.
 
   userPrefix: |
+    # Provides introductory text, main context (input files, user instruction).
+    # Variables like {{ INPUT_CONTENT }}, {{ INSTRUCTION }}, {{ BIBLIOGRAPHY_CONTENT }} (from filePatternsContain) are substituted here.
     [Define context, instructions, and input variables like {{ INPUT_CONTENT }}]
 
   userRequest: |
+    # The prompt for the AI's first round of work (Round 0).
+    # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
     [Define the initial task prompt, potentially including scratchpad guidance]
 
   # userReflect: | # Optional: Only needed if you plan to use reflect=true
+  #   The prompt for the AI's second round (Round 1) asking it to critique and improve its Round 0 output.
   #   [Define the reflection prompt]
+```
+
+#### Using Variables in Prompts (Jinja2 Templating)
+
+Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
+
+**Common Variables:**
+
+- `{{ INSTRUCTION }}`: The text entered into the "Instruction" box in the UI.
+- `{{ INPUT_FILE }}`: The path of the primary input file.
+- `{{ INPUT_CONTENT }}`: The full text content of the primary input file.
+- `{{ REFERENCE_FILE }}`: Path of the primary reference file.
+- `{{ REFERENCE_CONTENT }}`: Content of the primary reference file.
+- `{{ AUXILIARY_FILE }}`: Path of the primary auxiliary file.
+- `{{ AUXILIARY_CONTENT }}`: Content of the primary auxiliary file.
+- `{{ EDITED_FILE }}`: Path of the edited file (used in `merge`).
+- `{{ EDITED_CONTENT }}`: Content of the edited file.
+- `{{ MEDIA_FILE }}`: Path of the primary media file.
+  _Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md)._
+
+**Multiple File Variables:**
+
+- `{{ ALL_INPUTS }}`: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
+- `{{ ALL_REFERENCES }}`: Similar XML string for all reference files.
+- `{{ ALL_AUXILIARYS }}`: Similar XML string for all auxiliary files.
+- `{{ LIST_OF_ALL_INPUTS }}`: Simple comma-separated string listing all input file paths.
+- `{{ LIST_OF_ALL_REFERENCES }}`: Similar comma-separated list for reference files.
+- `{{ LIST_OF_ALL_AUXILIARYS }}`: Similar comma-separated list for auxiliary files.
+
+**Multiple Output Variable:**
+
+- `{{ OUTPUT_FILES_ORDER }}`: Comma-separated string listing the output filenames specified in the UI. Crucial for agents generating multiple files. See [Handling Multiple Files](./multiple-output.md).
+
+**Custom Variables (from `settings`):**
+
+- Files specified in `requiredFiles` or `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
+- Files matched by `filePatternsContain` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ BIBLIOGRAPHY_CONTENT }}`).
+
+**Example Usage in `userPrefix`:**
+
+```yaml
+userPrefix: |
+  Please process the main document: {{ INPUT_FILE }}
+  <document name="{{ INPUT_FILE }}">
+  {{ INPUT_CONTENT }}
+  </document>
+
+  Refer to these auxiliary files:
+  {{ ALL_AUXILIARYS }}
+
+  Apply the following instruction:
+  <instruction>{{ INSTRUCTION }}</instruction>
 ```
 
 **Key Considerations:**
 
-- **Refer to Architecture:** Constantly refer back to the [Agent Architecture & Execution Flow](./agent-architecture.md) guide to understand the purpose and impact of each `settings` field and `prompts` section.
+- **Architecture Overview:** For a high-level understanding of the execution flow and how prompts/settings interact, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
 - **Inheritance:** Inheriting from a relevant built-in agent (like `correct` or `polish`) can save significant effort. Only define the settings and prompts you need to change.
-- **Multiple Outputs:** If your agent needs to generate multiple distinct files, you must design your prompts (especially `userRequest` and `userReflect`) to produce the required XML structure with named `<document>` tags. See the [Handling Multiple Files](./multiple-output.md) guide for details.
-- **Start Simple:** Begin with a basic version of your agent and incrementally add complexity (e.g., required files, file patterns) as needed.
-- **Test Iteratively:** Test your agent frequently using the TeXRA UI and review the logs in the ProgressBoard.
+- **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
+- **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
+- **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
 
 ### Step 4: Save and Reload
 
@@ -77,4 +158,4 @@ prompts:
 2.  Reload the VS Code window (Command Palette > `Developer: Reload Window`).
 3.  Your new custom agent should now appear in the "Agent" dropdown menu in the TeXRA UI.
 
-For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, refer to the examples within the [Agent Architecture & Execution Flow](./agent-architecture.md) guide and examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).
+For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).

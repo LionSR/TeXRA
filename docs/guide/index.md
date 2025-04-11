@@ -52,15 +52,23 @@ TeXRA offers a comprehensive set of features designed for academic workflows:
 
 ## How TeXRA Works
 
-At its core, TeXRA works by:
+At its core, TeXRA follows an iterative process inspired by expert workflows:
 
-1. **Analyzing** your academic documents and instructions
-2. **Planning** a detailed approach to fulfill your requirements
-3. **Executing** the plan using powerful language models
-4. **Reflecting** on the output to identify improvements
-5. **Refining** the result based on this self-evaluation
+```mermaid
+graph TD
+    A[Start: User Input & Agent Config] --> B{Analyze Document & Instructions};
+    B --> C{Plan Changes};
+    C --> D{Execute Plan (LLM Call - Round 0)};
+    D --> E{Process Output (Save *_r0_* File)};
+    E --> F{Reflect on Output? (Optional)};
+    F -- Yes --> G{Refine Plan};
+    G --> H{Execute Refined Plan (LLM Call - Round 1)};
+    H --> I{Process Output (Save *_r1_* File)};
+    I --> J[End];
+    F -- No --> J[End];
+```
 
-This process leverages the strengths of language models while addressing their limitations through structured workflows and specialized tools.
+This process leverages the strengths of language models while addressing their limitations through structured workflows, optional self-reflection, and specialized tools.
 
 ## Who Should Use TeXRA?
 
