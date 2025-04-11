@@ -1,6 +1,6 @@
 # Working with TikZ Figures
 
-[TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations due to its high quality and seamless LaTeX integration.
+[TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations due to its high quality and seamless LaTeX integration. While mastering TikZ can feel like learning a new language, TeXRA is here to help!
 
 TeXRA offers specialized features for working with TikZ, leveraging the `draw` agent and specific extraction/compilation tools. This guide focuses on TikZ-specific workflows.
 
@@ -27,7 +27,7 @@ This code draws a blue circle with text inside. TeXRA's tools help manage and ge
 
 ## The `draw` Agent
 
-TeXRA's `draw` agent is specifically designed to work with TikZ figures. It can:
+TeXRA's `draw` agent is specifically designed to work with TikZ figures (think of it as your AI graphics assistant). It can:
 
 1. **Create new TikZ figures** based on textual descriptions.
 2. **Enhance existing figures** with improvements or additions.

@@ -1,6 +1,6 @@
 # Configuration
 
-TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow. This guide explains the available settings and how to adjust them for optimal performance.
+TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
 ## Accessing Configuration
 

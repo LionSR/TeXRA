@@ -2,7 +2,7 @@
 
 ## Acknowledging TeXRA
 
-We are thrilled if TeXRA proves useful for your academic research! While not required, if TeXRA played a significant role in your work—particularly if used as part of a study or evaluation involving LLMs or academic research tools—we would greatly appreciate an acknowledgment.
+We are thrilled if TeXRA proves useful for your academic research! While not required, if TeXRA played a significant role in your work—particularly if used as part of a study or evaluation involving LLMs or academic research tools—we would greatly appreciate an acknowledgment or citation if possible.
 
 As the project evolves, we will provide a preferred citation format (e.g., a white paper or software citation). Please refer to the [TeXRA GitHub repository](https://github.com/texra-ai/texra-issues) or the [texra.ai](https://texra.ai) website for future citation details.
 
@@ -10,7 +10,7 @@ Your feedback and potential acknowledgments help support the continued developme
 
 ### Supporting TeXRA
 
-If you find TeXRA valuable, consider supporting its development:
+If TeXRA helps you publish faster, graduate sooner, or simply reduces your LaTeX-induced stress levels, consider supporting its development:
 
 - [**Sponsor on GitHub**](https://github.com/sponsors/YOUR_USERNAME) <!-- Replace with actual sponsor link -->
 - [**Buy Me a Coffee**](https://www.buymeacoffee.com/YOUR_USERNAME) <!-- Replace with actual BMC link -->

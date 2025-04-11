@@ -53,7 +53,7 @@ This is the crucial part for generating multiple distinct files:
 3. **TeXRA Extracts:** The TeXRA backend (`OutputHandler.ts`) parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the filenames you listed in the UI.
 4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
-**Key Point:** The agent doesn't magically know how to split output. It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
+**Key Point:** The agent doesn't magically know how to split output (it hasn't mastered telepathy... yet). It must be explicitly instructed via its prompts (like in `polish_multiple.yaml`) to generate the `<document name=\"...\">` structure matching the list you provide in the UI.
 
 ## The `_multiple` Suffix
 

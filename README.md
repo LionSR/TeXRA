@@ -84,8 +84,9 @@ After installing these dependencies, ensure they are accessible from the command
 4. Choose your input file(s) and any additional options
 5. (Optional) Select auxiliary files or figures
 6. Choose your preferred AI model
-7. Click "Execute" to run the AI-assisted agent
-8. Review the output in the newly created file
+7. Write specific instructions for the agent (vague requests like "make it better" can lead to unpredictable results!).
+8. Click "Execute" to run the AI-assisted agent
+9. Review the output in the newly created file
 
 Although many models are supported, we recommend using Anthropic sonnet\*/opus or O1/O3-series or Gemini 2 Flash/Thinking model for the best experience.
 

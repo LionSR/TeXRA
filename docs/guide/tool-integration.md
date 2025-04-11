@@ -50,4 +50,4 @@ You have several ways to control how TeXRA uses these tools:
 
 For detailed configuration of specific tools (like `latexindent`, TikZ processing paths, etc.), refer to the main [Configuration guide](./configuration.md).
 
-By understanding how TeXRA uses tools, you can better leverage its capabilities and customize its behavior for your specific research needs.
+By understanding how TeXRA uses tools, you can better leverage its capabilities and customize its behavior for your specific research needs. It's like giving your AI assistant superpowers!

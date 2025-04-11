@@ -1,6 +1,6 @@
 # Built-in Agent Reference
 
-TeXRA provides a variety of built-in AI agents designed to assist with different aspects of academic research. Each agent is optimized for specific tasks. You can select these agents from the dropdown menu in the TeXRA UI.
+TeXRA provides a variety of built-in AI agents, each like a specialized research assistant ready for a specific task. Choosing the right one from the dropdown menu in the TeXRA UI is the first step to AI-powered productivity (or at least, less painful editing).
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
@@ -12,7 +12,7 @@ For details on the underlying structure and execution flow common to all agents,
 
 ### `correct`
 
-The `correct` agent focuses on fixing errors without changing the style or content of your document.
+The `correct` agent focuses on fixing errors without changing the style or content of your document (think of it as a meticulous, slightly obsessive proofreader).
 
 **Purpose:** Fix typos, grammatical errors, and LaTeX syntax issues.
 
@@ -152,7 +152,7 @@ Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as 
 
 ## Next Steps
 
-Now that you understand the default built-in agents, you might want to explore:
+Now that you've met the built-in crew, you might want to dive deeper:
 
 - [Agent Architecture & Execution Flow](./agent-architecture.md) - Understand how agents work internally.
 - [Custom Agents](./custom-agents.md) - Learn how to create your own specialized agents.

@@ -1,6 +1,6 @@
 # ProgressBoard
 
-The ProgressBoard is TeXRA's central hub for monitoring agent execution, viewing detailed logs, and managing past runs. It's an essential tool for understanding how agents work and troubleshooting issues.
+The ProgressBoard is TeXRA's central hub for monitoring agent execution, viewing detailed logs, and managing past runs. Think of it as the mission control center for your AI assistant – essential for understanding what's happening under the hood and troubleshooting when things go sideways.
 
 ## Accessing the ProgressBoard
 
