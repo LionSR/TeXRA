@@ -34,12 +34,8 @@
               "polish",
               "draw",
               "ocr",
-              "paper2cover",
               "paper2slide",
               "paper2poster",
-              "paper2note",
-              "polish_cover",
-              "solve_qi",
               "transcribe_audio"
             ],
             "description": "List of available agents",
