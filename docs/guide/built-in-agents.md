@@ -134,20 +134,20 @@ Perform OCR on the provided image file [figure.png] and extract all text content
 
 ### `transcribe_audio`
 
-The `transcribe_audio` agent converts audio files into text transcripts. (Note: Requires native audio support, see [Working with Figures & Media](./working-with-figures.md)).
+The `transcribe_audio` agent converts audio files (like lectures, podcasts, or personal notes) into text transcripts. (Note: Requires native audio support, see [Working with Figures](./working-with-figures.md)).
 
-**Purpose:** Create text versions of audio recordings.
+**Purpose:** Create searchable text versions of spoken audio content.
 
 **Best for:**
 
-- Transcribing interviews or lectures
-- Converting meeting recordings to text
-- Creating subtitles or notes from audio
+- Transcribing recorded lectures or talks
+- Converting podcast episodes to text
+- Transcribing personal voice memos or notes
 
 **Example instruction:**
 
 ```
-Transcribe the provided audio file [interview.mp3]. Provide the output as a plain text file with speaker labels if possible.
+Transcribe the provided lecture audio file [lecture.mp3]. Provide the output as plain text, identifying different speakers if possible (e.g., Lecturer, Questioner 1).
 ```
 
 ## Next Steps
