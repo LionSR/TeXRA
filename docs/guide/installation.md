@@ -7,57 +7,23 @@ This guide will walk you through the process of installing TeXRA and all its dep
 TeXRA is designed to work on all major operating systems with the following minimum requirements:
 
 - **Visual Studio Code**: Version 1.96.2 or newer
-- **Operating System**: Windows 10/11, macOS 10.14+, or Linux (Ubuntu 18.04+)
-- **RAM**: 8GB minimum (16GB recommended)
-- **Storage**: 1GB free space for dependencies
+- **Operating System**: Windows, macOS, or Linux
 - **Internet Connection**: Required for API access to language models
 
 ## Installing the Extension
 
-The following two methods need to be rewrote because the extension is now published on the VS Code Marketplace.
+### Method 1: VS Code Marketplace (Recommended)
 
-### Method 1: Direct Installation from VSIX
+The easiest way to install TeXRA is directly from the Visual Studio Code Marketplace:
 
-1. Download the latest release (`.vsix` file) from the [GitHub release page](https://github.com/texra-ai/releases)
-2. In VS Code, locate the `.vsix` file in the file explorer
-3. Right-click on the `.vsix` file
-4. Select "Install Extension VSIX" from the context menu
-5. Restart VS Code when prompted
+1.  Open VS Code.
+2.  Go to the Extensions view (click the square icon in the Activity Bar or press `Ctrl+Shift+X`).
+3.  Search for "TeXRA".
+4.  Find the extension published by "texra-ai".
+5.  Click the "Install" button.
+6.  Reload VS Code if prompted.
 
-![VSIX Installation](/images/vsix-installation.png)
-
-### Method 2: Building from Source (Advanced)
-
-If you need to customize the extension or want to work with the latest development version:
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/texra-ai.git
-   cd texra
-   ```
-
-2. Install Node.js dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Install development tools:
-
-   ```bash
-   npm install -g yo generator-code
-   npm install -g vsce
-   npm install --save-dev webpack webpack-cli
-   ```
-
-4. Build the extension:
-
-   ```bash
-   npm run build
-   ```
-
-5. Install the generated VSIX file using Method 1
+<a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">View on Marketplace</a>
 
 ## Installing Required Dependencies
 
@@ -197,6 +163,7 @@ TeXRA requires API keys to access language models. Here's how to set them up:
 
 - **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
 - **Anthropic API Key**: Available from [Anthropic Console](https://console.anthropic.com/)
+- **Google API Key**: Available from [Google AI Studio](...)
   :::
 
 ## Verifying Installation
@@ -245,7 +212,6 @@ If you work across multiple computers:
 
 1. Use cloud storage (e.g., Dropbox) to sync key folders:
 
-   - **Log**: Contains thinking logs and processing information
    - **Diffs**: Stores difference files from LaTeX diff operations
    - **History**: Tracks different versions of your documents
 

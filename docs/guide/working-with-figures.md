@@ -1,4 +1,4 @@
-# Working with Figures & Media
+# Working with Figures
 
 TeXRA integrates seamlessly with visual and audio media, allowing AI agents to analyze, reference, or even generate figures directly within your documents. This guide covers how to manage media files and leverage automatic extraction features.
 

@@ -3,7 +3,7 @@ layout: home
 hero:
   name: TeXRA
   text: Your Intelligent Academic Research Assistant
-  tagline: Enhance your research with powerful AI assistance directly in VS Code
+  tagline: AI assistance to help with your academic research in VS Code
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
@@ -36,10 +36,11 @@ features:
     details: Process text, images, and PDFs in a unified interface designed specifically for academic research workflows.
 ---
 
-<div class="custom-block info">
-  <p>
-    TeXRA brings the power of cutting-edge Large Language Models directly into your VS Code editor, streamlining academic writing and research tasks. Stop copy-pasting, stay in your flow.
+<div class="custom-block info intro-block">
+  <p class="intro-text">
+    TeXRA brings the power of cutting-edge Large Language Models directly into your VS Code editor, helping with academic writing and research tasks.
   </p>
+  <p class="tagline-emphasis">Stop copy-pasting, stay in your flow.</p>
 </div>
 
 ## Why TeXRA?
@@ -48,7 +49,8 @@ Standard LLM interfaces struggle with the nuances of academic work – complex f
 
 - **Agentic Design**: Specialized agents tackle specific tasks like correcting, polishing, drawing, and transforming documents.
 - **Reflection & Tool Use**: Agents can critique their own work and leverage external tools (like `latexdiff`, `texcount`) for enhanced accuracy and observability.
-- **Context Awareness**: Seamlessly handles multi-file projects, references, and complex LaTeX structures.
+- **Context Awareness**: Seamlessly handles multi-file projects and references, giving you control over the context provided to the LLM (up to its limits).
+- **Transparency & Control**: Uses a structured, customizable agent system – not a black box.
 
 ## Key Capabilities
 
@@ -59,7 +61,7 @@ Standard LLM interfaces struggle with the nuances of academic work – complex f
     <p>Go beyond simple grammar checks. Improve clarity, flow, and style while preserving technical accuracy. Fix subtle LaTeX errors and ensure consistency.</p>
     <div class="feature-example">
       <span style="color: var(--vp-c-red); text-decoration: line-through;">The results shows significant increase.</span><br/>
-      <span style="color: var(--vp-c-green);">The results show a significant increase.</span>
+      <span style="color: var(--vp-c-brand);">The results show a significant increase.</span>
     </div>
   </div>
 
@@ -75,6 +77,9 @@ Standard LLM interfaces struggle with the nuances of academic work – complex f
   <div class="feature-item">
     <h3>🔄 Document Transformation</h3>
     <p>Effortlessly convert papers into slides (`paper2slide`), lecture notes (`paper2note`), posters (`paper2poster`), or even draft cover letters (`paper2cover`).</p>
+    <div class="feature-example">
+      <code>Paper Abstract</code> &#8594; `Beamer Slides Outline`
+    </div>
   </div>
 
   <div class="feature-item">
@@ -82,18 +87,24 @@ Standard LLM interfaces struggle with the nuances of academic work – complex f
     <p>Understands LaTeX structure, math, citations, and environments. Includes integrated `latexdiff` for visualizing changes and `texcount` for analysis.</p>
     <div class="feature-example">
       <span style="color: var(--vp-c-red); text-decoration: line-through;">E = mc</span><br/>
-      <span style="color: var(--vp-c-green);">E = mc^2 \label{eq:einstein}</span> (via `correct` agent)
+      <span style="color: var(--vp-c-brand);">E = mc^2 \label{eq:einstein}</span> (via `correct` agent)
     </div>
   </div>
 
   <div class="feature-item">
     <h3>🧩 Multi-File Projects</h3>
     <p>Handle books, theses, or papers split across multiple files. Apply changes consistently or target specific sections.</p>
+    <div class="feature-example">
+      <code>[ch1.tex, ch2.tex]</code> &#8594; <code>[ch1_polished.tex, ch2_polished.tex]</code>
+    </div>
   </div>
 
   <div class="feature-item">
     <h3>🖼️ Multimodal Understanding</h3>
     <p>Leverage vision-capable models to analyze images, figures, and PDFs directly within your workflow.</p>
+    <div class="feature-example">
+      <code>&lt;figure.png&gt; + "Write caption"</code> &#8594; <code>\caption{...}</code>
+    </div>
   </div>
 
 </div>
@@ -114,6 +125,16 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
   border-radius: 8px;
   border: 1px solid var(--vp-c-brand-soft);
   background-color: var(--vp-c-brand-dimm);
+}
+.intro-block .intro-text {
+  font-size: 1.1rem; /* Slightly larger */
+  margin-bottom: 0.5rem; /* Space before tagline */
+}
+.intro-block .tagline-emphasis {
+  font-weight: 600;
+  color: var(--vp-c-brand-dark);
+  font-size: 1.05rem;
+  margin: 0;
 }
 .features-grid {
   display: grid;
@@ -176,5 +197,6 @@ Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation)
 }
 .cta-button-alt:hover {
   background-color: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-dark); /* Ensure text color contrasts */
 }
 </style>
