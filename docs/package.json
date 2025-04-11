@@ -14,9 +14,9 @@
     "vscode-extension",
     "ai"
   ],
-  "author": "TexRA Team",
+  "author": "TeXRA Team",
   "license": "MIT",
-  "description": "Documentation for TexRA - AI-powered academic research assistant",
+  "description": "Documentation for TeXRA - AI-powered academic research assistant",
   "devDependencies": {
     "vitepress": "^2.0.0-alpha.4"
   },

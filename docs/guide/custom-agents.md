@@ -1,10 +1,10 @@
 # Custom Agents
 
-TexRA allows you to create custom agents tailored to your specific academic writing needs. This guide will walk you through the process of creating, configuring, and using custom agents.
+TeXRA allows you to create custom agents tailored to your specific academic writing needs. This guide will walk you through the process of creating, configuring, and using custom agents.
 
 ## Understanding Agent Architecture
 
-Before creating a custom agent, it's helpful to understand how agents are structured in TexRA:
+Before creating a custom agent, it's helpful to understand how agents are structured in TeXRA:
 
 ### Agent Components
 
@@ -16,7 +16,7 @@ Each agent consists of several key components:
 
 ### Agent Types
 
-TexRA supports two main agent types:
+TeXRA supports two main agent types:
 
 - **Chain of Thought (CoT)**: Uses structured XML output with scratchpad thinking for complex reasoning
 - **Direct**: Provides simpler, more straightforward output for less complex tasks
@@ -39,7 +39,7 @@ Let's walk through the process of creating a custom agent:
 Custom agents live in a dedicated directory:
 
 1. Open VS Code
-2. Access the TexRA sidebar (quantum deer icon)
+2. Access the TeXRA sidebar (quantum deer icon)
 3. Find "Custom Agents" in the folder explorer section
 
 You can also set a custom agents directory in settings:
@@ -166,7 +166,7 @@ prompts:
 
 ## Inheritance and Overriding
 
-One powerful feature of TexRA's agent system is inheritance, which allows you to build on existing agents:
+One powerful feature of TeXRA's agent system is inheritance, which allows you to build on existing agents:
 
 ### Basic Inheritance
 
