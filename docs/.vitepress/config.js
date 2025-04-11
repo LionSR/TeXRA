@@ -4,9 +4,9 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: 'TeXRA',
   description: 'Your Intelligent Academic Research Assistant',
-  head: [['link', { rel: 'icon', href: '/logo1.png' }]],
+  head: [['link', { rel: 'icon', href: '/logo-128x128.png' }]],
   themeConfig: {
-    logo: '/logo1.png',
+    logo: '/logo-128x128.png',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Guide', link: '/guide/' },
@@ -74,7 +74,7 @@ export default defineConfig({
     },
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2025-present TeXRA Team',
+      copyright: 'Copyright © 2024-present TeXRA Team',
     },
   },
   ignoreDeadLinks: true,

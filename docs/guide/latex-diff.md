@@ -1,6 +1,6 @@
 # LaTeX Diff
 
-TexRA provides powerful LaTeX diff functionality to help you compare different versions of your documents. This feature is essential for tracking changes, collaborating with co-authors, and reviewing AI-generated modifications.
+TeXRA provides powerful LaTeX diff functionality to help you compare different versions of your documents. This feature is essential for tracking changes, collaborating with co-authors, and reviewing AI-generated modifications.
 
 ## Understanding LaTeX Diff
 
@@ -13,7 +13,7 @@ Unlike standard text diff tools, LaTeX diff understands LaTeX syntax and produce
 
 ## The LaTeXdiffs Section
 
-The LaTeX diff functionality is accessible through the "LaTeXdiffs" section in the TexRA interface:
+The LaTeX diff functionality is accessible through the "LaTeXdiffs" section in the TeXRA interface:
 
 <!-- ![LaTeXdiffs Section](/images/latexdiffs-section.png) -->
 
@@ -42,7 +42,7 @@ The "Current" button allows you to quickly select the currently open file for ei
 
 Click the "latexdiff" button with the <i class="codicon codicon-diff-single"></i> icon.
 
-TexRA will:
+TeXRA will:
 
 1. Run the latexdiff tool on your selected files
 2. Generate a new LaTeX document with highlighted changes
@@ -60,7 +60,7 @@ The generated diff document will highlight:
 
 ## Git-Based Version Comparison
 
-TexRA also allows you to compare documents with previous Git versions:
+TeXRA also allows you to compare documents with previous Git versions:
 
 ### Step 1: Select Base File and Commit
 
@@ -137,7 +137,7 @@ The appearance of diffs can be customized by adding commands to your document:
 
 ## Integration with Workflow
 
-LaTeX diff integrates with several TexRA workflows:
+LaTeX diff integrates with several TeXRA workflows:
 
 ### Document Review Workflow
 
@@ -165,13 +165,13 @@ LaTeX diff integrates with several TexRA workflows:
 
 ## Under the Hood
 
-TexRA's LaTeX diff functionality builds on several key technologies:
+TeXRA's LaTeX diff functionality builds on several key technologies:
 
 ### latexdiff Tool
 
 [latexdiff](https://ctan.org/pkg/latexdiff) is a Perl script that compares LaTeX files and generates a marked-up LaTeX document highlighting differences.
 
-TexRA:
+TeXRA:
 
 1. Calls latexdiff with appropriate options
 2. Processes the output for consistency
@@ -181,7 +181,7 @@ TexRA:
 
 [latexdiff-vc](https://ctan.org/pkg/latexdiff) (version control) extends latexdiff to work with version control systems like Git.
 
-TexRA:
+TeXRA:
 
 1. Retrieves file versions from Git history
 2. Passes them to latexdiff
@@ -274,7 +274,7 @@ Maintain a clear version strategy:
 
 ## Next Steps
 
-Now that you understand TexRA's LaTeX diff functionality, you might want to explore:
+Now that you understand TeXRA's LaTeX diff functionality, you might want to explore:
 
 - [Intelligent Merge](/guide/intelligent-merge) - Learn how to combine changes intelligently
 - [File Management](/guide/file-management) - Understand how to organize your files effectively
