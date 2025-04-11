@@ -1,0 +1,153 @@
+name: transcribe_audio
+settings:
+  agentType: CoT
+  documentTag: audio_transcript
+  endTag: </audio_transcript>
+  outputExt: tex
+  prefills:
+    - <scratchpad>
+    - <scratchpad>
+
+prompts:
+  systemPrompt: |
+    You are an expert audio transcriptionist AI. Your task is to accurately transcribe audio content, identify different speakers with timestamps, summarize the key points, structure the transcript into logical sections, and translate spoken mathematical equations into LaTeX format.
+
+    When processing audio content, you must:
+    \begin{itemize}
+        \item Accurately transcribe the spoken words.
+        \item Identify distinct speakers based on voice characteristics and context cues. Use speaker names if identifiable, otherwise label them as Speaker A, Speaker B, etc.
+        \item Prepend each utterance with a timestamp in [HH:MM:SS] format and the identified speaker name/label (e.g., [00:01:23] Speaker A: Transcript text...).
+        \item Generate a concise summary of the main topics discussed in the audio.
+        \item Translate any spoken mathematical equations into standard LaTeX format (e.g., inline math with \( ... \) or display math with \[ ... \]).
+        \item Divide the final transcript into logical sections based on topic shifts or conversation flow.
+        \item Pay attention to punctuation and grammar for readability.
+        \item Handle overlapping speech or unclear audio segments gracefully, indicating uncertainty where necessary (e.g., [unintelligible]).
+        \item **Do not use any markdown formatting (like bold or italics) in the final transcript output.**
+    \end{itemize}
+
+  userPrefix: |
+    I will provide you with:
+    1. The audio content as an attached media file.
+    2. Any relevant context documents (optional).
+    3. Specific instructions or focus areas for the transcription.
+
+    Here is the context:
+
+    <documents>
+    {{ ALL_AUXILIARYS }}
+    {{ ALL_REFERENCES }}
+    {{ ALL_INPUTS }} 
+
+    </documents>
+
+    The audio content is attached.
+
+  userRequest: |
+    <instruction>
+    {{ INSTRUCTION }}
+    </instruction>
+
+    Please analyze the attached audio content and any provided context.
+
+    First, perform the initial analysis, planning, and generate a summary in the scratchpad:
+
+    <scratchpad>
+    \begin{enumerate}
+        \item [Audio Content Analysis]
+            \begin{itemize}
+                \item Estimated number of speakers.
+                \item Key topics or themes identified.
+                \item Mention of mathematical equations.
+                \item Potential challenges (e.g., background noise, accents, overlapping speech).
+            \end{itemize}
+        \item [Speaker Identification Plan]
+            \begin{itemize}
+                \item Strategy for distinguishing speakers.
+                \item How speakers will be labeled (Identified names or Speaker A, B, C...). List identified names if any.
+            \end{itemize}
+        \item [Equation Translation Plan]
+             \begin{itemize}
+                 \item Approach for identifying and translating spoken equations to LaTeX.
+             \end{itemize}
+        \item [Sectioning Plan]
+            \begin{itemize}
+                \item Criteria for dividing the transcript into sections.
+                \item Potential section titles or themes.
+            \end{itemize}
+        \item [Generated Meeting Summary]
+            \begin{itemize}
+                \item [Write the concise summary of the main points discussed in the audio here.]
+            \end{itemize}
+    \end{enumerate}
+
+    <summary>
+    % generate a sumnary of the audio content here
+    </summary>
+    </scratchpad>
+
+    Now, generate the initial audio transcript with timestamps, speaker identification, and LaTeX equations in the specified format. Do not use markdown. Use the following format:
+
+    <audio_transcript>
+    [HH:MM:SS:MS] SpeakerName: INITIAL_TRANSCRIPT_WITH_SPEAKERS_AND_EQUATIONS
+    </audio_transcript>
+
+  userReflect: |
+    Let's review the initial transcription, summary, structure, and equation translation. Consider these aspects in the scratchpad:
+
+    <scratchpad>
+    <reflection>
+    \begin{enumerate}
+        \item How accurate is the transcription? Are there noticeable word errors?
+        \item Is the speaker identification correct and consistent? Are speakers labeled with names or letters as planned?
+        \item Are timestamps included for each utterance in the correct [HH:MM:SS] format? Are they accurate?
+        \item Does the output follow the required format: `[HH:MM:SS] SpeakerName: Text`?
+        \item Is the generated summary accurate and comprehensive? Does it capture the key points effectively?
+        \item Are spoken mathematical equations correctly identified and translated into appropriate LaTeX format?
+        \item Is the transcript well-divided into logical sections? Are the section breaks appropriate?
+        \item Is the punctuation and formatting clear and readable? Is there any unintended markdown formatting?
+        \item Are uncertain or unintelligible parts handled appropriately?
+    \end{enumerate}
+    </reflection>
+    <improvements>
+    \begin{enumerate}
+        \item [Accuracy Corrections]
+            \begin{itemize}
+                \item Issue: [Specific transcription error or unintelligible segment]
+                \item Solution: [Correction or improved handling]
+            \end{itemize}
+        \item [Speaker/Timestamp Format Refinements]
+            \begin{itemize}
+                \item Issue: [Speaker misattribution, incorrect labeling (name/letter), incorrect timestamp, or wrong format]
+                \item Solution: [Correction to speaker labels, timestamps, or format]
+            \end{itemize}
+        \item [Equation Translation Corrections]
+             \begin{itemize}
+                 \item Issue: [Incorrect or missing LaTeX translation for a spoken equation]
+                 \item Solution: [Provide the correct LaTeX translation]
+             \end{itemize}
+        \item [Sectioning Adjustments]
+            \begin{itemize}
+                \item Issue: [Poor section break, missing section, unclear topic flow]
+                \item Solution: [Adjust section breaks, add titles, improve structure]
+            \end{itemize}
+        \item [Summary Enhancements]
+            \begin{itemize}
+                \item Issue: [Missing key point, inaccurate summary statement]
+                \item Solution: [Refine summary content]
+            \end{itemize}
+        \item [Markdown Removal]
+             \begin{itemize}
+                 \item Issue: [Unwanted markdown (bold, italics) found in transcript]
+                 \item Solution: [Remove markdown formatting]
+             \end{itemize}
+    \end{enumerate}
+    </improvements>
+
+    In this scratchpad, you may also go through the timeline of the audio and output one by one what improvements you made to the transcript.
+    </scratchpad>
+
+    Based on this reflection, produce the final, refined audio transcript with improved accuracy, correct speaker identification with timestamps, LaTeX equations, sectioning, and formatting. Ensure no markdown is used. Use the following format:
+
+    <audio_transcript>
+    [HH:MM:SS:MS] SpeakerName: REFINED_TRANSCRIPT_WITH_SECTIONS_SPEAKERS_AND_EQUATIONS
+    </audio_transcript>
