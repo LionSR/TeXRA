@@ -371,7 +371,7 @@
               "latex_xml",
               "scratchpad_xml",
               "style",
-              "max_style"
+              "personal_style"
             ],
             "description": "List of enabled LaTeX replacement categories",
             "order": 5
@@ -759,7 +759,7 @@
         {
           "id": "texra",
           "title": "TeXRA",
-          "icon": "resources/logo1.svg"
+          "icon": "resources/logo-128x128.svg"
         }
       ],
       "panel": [
@@ -904,7 +904,7 @@
   },
   "license": "MIT",
   "author": "TeXRA.ai",
-  "icon": "resources/logo1.png",
+  "icon": "resources/logo-128x128.png",
   "keywords": [
     "latex",
     "academic",

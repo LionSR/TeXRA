@@ -1,6 +1,6 @@
 # Multiple Output Processing
 
-TexRA provides powerful capabilities for working with multiple files simultaneously. This guide explains how to process multiple input files and manage multiple outputs efficiently.
+TeXRA provides powerful capabilities for working with multiple files simultaneously. This guide explains how to process multiple input files and manage multiple outputs efficiently.
 
 ## Understanding Multiple Output Processing
 
@@ -41,17 +41,17 @@ To work with multiple files:
 <!-- ![Multiple Output Selection](/images/multiple-output-selection.png) -->
 
 ::: tip
-By default, TexRA will use the same output naming pattern for all files:  
+By default, TeXRA will use the same output naming pattern for all files:  
 `original_filename_agent_r0_model.extension`
 :::
 
 ## Processing Multiple Files
 
-When working with multiple files, TexRA applies special processing:
+When working with multiple files, TeXRA applies special processing:
 
 ### Sequential Processing
 
-TexRA processes multiple files sequentially:
+TeXRA processes multiple files sequentially:
 
 1. Each input file is analyzed individually
 2. Files are processed in the order they appear in the list

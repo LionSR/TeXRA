@@ -1,26 +1,26 @@
-# Introduction to TexRA
+# Introduction to TeXRA
 
-Welcome to TexRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TexRA is, how it works, and how it can enhance your academic writing workflow.
+Welcome to TeXRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TeXRA is, how it works, and how it can enhance your academic writing workflow.
 
-## What is TexRA?
+## What is TeXRA?
 
-TexRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and research. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on the content while the AI assists with formatting, clarity, and technical precision.
+TeXRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and research. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on the content while the AI assists with formatting, clarity, and technical precision.
 
-Unlike general-purpose AI interfaces like ChatGPT or Claude, TexRA is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
+Unlike general-purpose AI interfaces like ChatGPT or Claude, TeXRA is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
 
-## The Philosophy Behind TexRA
+## The Philosophy Behind TeXRA
 
-TexRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic writing that are often underutilized. The extension implements an approach inspired by key AI design patterns:
+TeXRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic writing that are often underutilized. The extension implements an approach inspired by key AI design patterns:
 
 1. **Reflection**: The LLM examines its own work to identify improvements
 2. **Tool use**: The LLM leverages external tools to gather information or process data
 3. **Planning**: The LLM develops and executes multi-step plans to achieve complex goals
 
-Through these patterns, TexRA creates an iterative process that mimics expert academic writing - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
+Through these patterns, TeXRA creates an iterative process that mimics expert academic writing - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
 
 ## Key Features
 
-TexRA offers a comprehensive set of features designed for academic workflows:
+TeXRA offers a comprehensive set of features designed for academic workflows:
 
 ### Specialized AI Agents
 
@@ -48,9 +48,9 @@ TexRA offers a comprehensive set of features designed for academic workflows:
 - File organization and batch processing
 - Integration with external academic tools
 
-## How TexRA Works
+## How TeXRA Works
 
-At its core, TexRA works by:
+At its core, TeXRA works by:
 
 1. **Analyzing** your academic documents and instructions
 2. **Planning** a detailed approach to fulfill your requirements
@@ -60,9 +60,9 @@ At its core, TexRA works by:
 
 This process leverages the strengths of language models while addressing their limitations through structured workflows and specialized tools.
 
-## Who Should Use TexRA?
+## Who Should Use TeXRA?
 
-TexRA is designed for:
+TeXRA is designed for:
 
 - **Researchers** writing academic papers, grants, or reports
 - **Professors** creating lecture notes, slides, or educational materials
@@ -72,10 +72,10 @@ TexRA is designed for:
 
 ## Getting Started
 
-Ready to enhance your academic writing with TexRA? The next sections will guide you through:
+Ready to enhance your academic writing with TeXRA? The next sections will guide you through:
 
-- [Installation](/guide/installation): Setting up TexRA and its dependencies
-- [Quick Start](/guide/quick-start): Your first steps with TexRA
+- [Installation](/guide/installation): Setting up TeXRA and its dependencies
+- [Quick Start](/guide/quick-start): Your first steps with TeXRA
 - [Core Concepts](/guide/agents): Understanding the fundamental components
 
 Let's begin your journey toward more efficient and effective academic writing!

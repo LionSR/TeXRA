@@ -1,10 +1,10 @@
 # File Management
 
-TexRA provides a comprehensive file management system designed specifically for academic research workflows. This guide explains how to effectively organize, select, and manage files when working with TexRA.
+TeXRA provides a comprehensive file management system designed specifically for academic research workflows. This guide explains how to effectively organize, select, and manage files when working with TeXRA.
 
 ## File Categories
 
-TexRA organizes files into several categories:
+TeXRA organizes files into several categories:
 
 ### Input Files
 
@@ -51,7 +51,7 @@ Audio files include audio files used in your document:
 
 ## File Selection Interface
 
-The TexRA interface provides a streamlined way to select and manage files:
+The TeXRA interface provides a streamlined way to select and manage files:
 
 ![File Selection Interface](/images/file-selection.png)
 
@@ -95,17 +95,17 @@ When using multiple input files, you may need to specify multiple output files:
 
 ## File Path Handling
 
-TexRA intelligently handles file paths to ensure proper document processing:
+TeXRA intelligently handles file paths to ensure proper document processing:
 
 ### Relative vs. Absolute Paths
 
 - **Display**: Files are displayed with paths relative to the workspace root
-- **Processing**: TexRA resolves paths to their absolute form when needed
+- **Processing**: TeXRA resolves paths to their absolute form when needed
 - **Output**: Output files are typically saved in the same directory as their corresponding input files
 
 ### File Path Configuration
 
-You can customize how TexRA handles files by configuring file extensions and ignored paths in VS Code settings:
+You can customize how TeXRA handles files by configuring file extensions and ignored paths in VS Code settings:
 
 ```json
 "texra.files.included.inputExtensions": [
@@ -124,7 +124,7 @@ You can customize how TexRA handles files by configuring file extensions and ign
 
 ## Auto-Extraction Features
 
-TexRA can automatically extract files from your documents:
+TeXRA can automatically extract files from your documents:
 
 ### Auto-Extract Options
 
@@ -133,7 +133,7 @@ Access these options through the "Auto Extract" dropdown:
 1. **Figures**: Automatically extract image references from LaTeX documents
 2. **TikZ Figures**: Automatically extract and compile TikZ figures
 
-When enabled, TexRA will:
+When enabled, TeXRA will:
 
 1. Scan your LaTeX documents for figure references
 2. Extract the referenced images
@@ -153,7 +153,7 @@ For TikZ figure extraction, you can customize the template and paths:
 
 ## Output File Naming
 
-TexRA uses a structured naming convention for output files:
+TeXRA uses a structured naming convention for output files:
 
 ```
 original_filename_agent_r0_model.extension
@@ -179,7 +179,7 @@ For specific needs, you can override the default naming:
 
 ## File Management Commands
 
-TexRA provides several commands for managing generated files:
+TeXRA provides several commands for managing generated files:
 
 ### Pack
 
@@ -207,7 +207,7 @@ For complex LaTeX projects with many files and dependencies:
 
 ### LaTeX Directory Structure
 
-TexRA works well with standard LaTeX project structures:
+TeXRA works well with standard LaTeX project structures:
 
 ```
 project/
@@ -223,7 +223,7 @@ project/
 
 ### Input File Detection
 
-TexRA automatically detects appropriate input files based on:
+TeXRA automatically detects appropriate input files based on:
 
 1. File extension (`.tex`, `.txt`, `.md`)
 2. Location in project hierarchy
@@ -278,8 +278,8 @@ Replace `/path/to/Dropbox` and `/path/to/local` with your actual Dropbox and loc
 
 ## Next Steps
 
-Now that you understand how to manage files in TexRA, you might want to explore:
+Now that you understand how to manage files in TeXRA, you might want to explore:
 
-- [Tool Integration](/guide/tool-integration) - Learn how TexRA leverages external tools
+- [Tool Integration](/guide/tool-integration) - Learn how TeXRA leverages external tools
 - [LaTeX Diff](/guide/latex-diff) - Understand how to compare document versions
 - [Intelligent Merge](/guide/intelligent-merge) - Learn about merging edited documents
