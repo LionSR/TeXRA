@@ -343,3 +343,22 @@ Example:
 ```
 
 Note: The `{{ tikzpicture }}` placeholder is required and will be replaced with the extracted TikZ content during the compilation process.
+
+### Method 2: Direct Installation from VSIX (Manual/Offline)
+
+If you need to install a specific version manually or install offline:
+
+1.  Download the desired release `.vsix` file (e.g., `texra-0.28.5.vsix`) from the [GitHub Releases page](https://github.com/texra-ai/texra-releases) or other sources. <!-- Adjust link if needed -->
+2.  In VS Code, go to the Extensions view (`Ctrl+Shift+X`).
+3.  Click the "..." menu in the top-right corner of the Extensions view.
+4.  Select "Install from VSIX...".
+5.  Choose the downloaded `.vsix` file.
+6.  Reload VS Code when prompted.
+
+### Method 3: Building from Source (Developers)
+
+If you want to contribute to development or run the latest unreleased code:
+
+1.  Clone the repository: `git clone https://github.com/texra-ai/texra.git`
+2.  Follow the developer setup instructions in the repository's main `README.md` (install dependencies, build, etc.).
+3.  Install the locally built `.vsix` file using Method 2.

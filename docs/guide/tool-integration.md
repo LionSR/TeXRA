@@ -32,7 +32,7 @@ _(Note: These tools often rely on external programs that need to be installed se
 
 ## How Tools Enhance Agents
 
-Tool integration significantly improves agent performance and reliability:
+Tool integration improves agent performance and reliability:
 
 - **Better Context for LLM:** Providing structured data like figure previews or document statistics (`texcount` output) helps the LLM understand the full context beyond just the raw text, leading to more relevant and accurate responses.
 - **Handling Specialized Formats:** Tools handle the complexities of LaTeX compilation, TikZ rendering, and image conversion, allowing the LLM to focus on the content and reasoning.
