@@ -1,0 +1,33 @@
+# LaTeX Compilation Environment
+
+While TeXRA focuses on AI-assisted editing and generation of LaTeX source code, several features rely on having a working LaTeX distribution installed on your system for tasks like compiling previews or processing generated `latexdiff` files.
+
+## Required LaTeX Distribution
+
+You need a functional LaTeX distribution installed, such as:
+
+- **Windows**: MiKTeX or TeX Live
+- **macOS**: MacTeX (includes TeX Live)
+- **Linux**: TeX Live (often available via package manager)
+
+Ensure that the `pdflatex` command (or your preferred LaTeX engine) is accessible from your system's command line.
+
+See the main [Installation Guide](./installation.md) for more details on installing LaTeX and other essential dependencies like Perl (required for `latexdiff`).
+
+## Integration with LaTeX Workshop
+
+TeXRA is designed to work smoothly alongside the popular [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, which provides excellent compilation, previewing, and IntelliSense features.
+
+**Workflow Interaction:**
+
+TeXRA leverages LaTeX Workshop when available. For example, after generating a comparison file using its `latexdiff` features (see [LaTeX Diff guide](./latex-diff.md)), TeXRA attempts to automatically trigger LaTeX Workshop's build and view commands. This allows you to quickly compile and see the visualized changes in the resulting PDF.
+
+**Recommended Setting:**
+
+To keep your project directory clean, it's highly recommended to configure LaTeX Workshop to place its build output files (like `.aux`, `.log`, `.pdf`) into a separate subdirectory. TeXRA is aware of this common practice.
+
+1.  Open VS Code Settings (`Ctrl+,`).
+2.  Search for `Latex-workshop: Latex: Out Dir`.
+3.  Set the value to `./build` or `%DIR%/build`.
+
+This directs build files to a `build/` subdirectory within your project, preventing clutter in your main source directory. While TeXRA primarily works with the source `.tex` files, having a clean setup benefits the overall workflow, especially when using LaTeX Workshop for compilation and previewing.

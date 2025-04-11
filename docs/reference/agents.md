@@ -1,6 +1,6 @@
 # AI Agents
 
-TeXRA provides a variety of specialized AI agents designed to assist with different aspects of academic writing. Each agent has been optimized for specific tasks through careful prompt engineering and tool integration.
+TeXRA provides a variety of specialized AI agents designed to assist with different aspects of academic research. Each agent has been optimized for specific tasks through careful prompt engineering and tool integration.
 
 ## Core Agents
 

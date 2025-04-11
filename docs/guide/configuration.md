@@ -16,25 +16,29 @@ You can configure TeXRA through VS Code's settings:
 
 ### Agent Configuration
 
-Control which agents are available in the dropdown menu:
+Control which agents are available in the dropdown menu. Below is the default list:
 
 ```json
 "texra.agents": [
   "correct",
+  "derive",
   "polish",
   "draw",
-  "paper2note",
+  "ocr",
+  "paper2cover",
   "paper2slide",
   "paper2poster",
-  "txt2tex",
-  "merge",
-  // Additional custom agents
+  "paper2note",
+  "polish_cover",
+  "solve_qi",
+  "transcribe_audio"
+  // Additional custom agents can be added here
 ]
 ```
 
 ### Model Configuration
 
-Define which AI models appear in the model selection dropdown:
+Define which AI models appear in the model selection dropdown. The default list is:
 
 ```json
 "texra.models": [
@@ -49,11 +53,14 @@ Define which AI models appear in the model selection dropdown:
   "gpt4o",
   "gpt4ol",
   "gemini25p",
+  "gemini25f",
   "gemini2p",
   "gemini2f",
   "gemini2fT",
   "DSV3",
-  "DSR1"
+  "DSR1",
+  "grok3",
+  "grok3-"
 ]
 ```
 

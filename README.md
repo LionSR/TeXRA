@@ -2,7 +2,7 @@
 
 TeXRA is a powerful VS Code extension designed to help frustrated academics with their writing and research by leveraging the power of large language models (LLMs). It provides a seamless AI-assisted writing experience through an intuitive interface integrated directly into VS Code.
 
-See [texra.ai](https://texra.ai).
+See [texra.ai](https://texra.ai). For detailed guides and usage instructions, visit the [**Full Documentation Site**](https://texra.ai/docs/).
 
 ## UI Features
 
@@ -47,7 +47,7 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 
 ## Required Dependencies
 
-TeXRA requires several system dependencies for full functionality:
+TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/docs/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
 
 ### LaTeX Distribution
 
@@ -65,36 +65,21 @@ TeXRA requires several system dependencies for full functionality:
 - macOS: Pre-installed
 - Linux: Install via package manager (`sudo apt-get install perl` for Ubuntu)
 
-### GraphicsMagick/ImageMagick
+### GraphicsMagick/ImageMagick & Ghostscript (Optional Fallbacks)
 
-Required for PDF and image processing. Install either GraphicsMagick (recommended) or ImageMagick:
+These tools are primarily used as a fallback for converting PDF pages to images if you use AI models **without** native PDF support. They may also be used for other less common image processing tasks.
 
-#### GraphicsMagick (Recommended)
+- **GraphicsMagick (Recommended)** or **ImageMagick**: For image manipulation.
+- **Ghostscript**: Required by GraphicsMagick/ImageMagick for PDF processing.
 
-- Windows: [Download from GraphicsMagick website](http://www.graphicsmagick.org/download.html)
-- macOS: `brew install graphicsmagick`
-- Linux: `sudo apt-get install graphicsmagick`
-
-#### ImageMagick (Alternative)
-
-- Windows: [Download from ImageMagick website](https://imagemagick.org/script/download.php). Check [detailed installation guide](https://github.com/yakovmeister/pdf2image/blob/HEAD/docs/gm-installation.md#user-content-fn-1-f7f37a073c154c15b8ec0322771634a3).
-- macOS: `brew install imagemagick`
-- Linux: `sudo apt-get install imagemagick`
-
-### Ghostscript
-
-Required by GraphicsMagick/ImageMagick for PDF processing:
-
-- Windows: [Download from Ghostscript website](https://ghostscript.com/releases/gsdnld.html) You might have to install version 9.52 from [https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs952](https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/tag/gs952)
-- macOS: `brew install ghostscript`
-- Linux: `sudo apt-get install ghostscript`
+See the [Installation Guide](https://texra.ai/docs/guide/installation.html) for setup details if needed.
 
 After installing these dependencies, ensure they are accessible from the command line by adding them to your system's PATH environment variable if necessary.
 
 ## Basic Usage
 
 1. Open a LaTeX or text file in VS Code
-2. Access the TeXRA sidebar (look for the scholarly duck icon in the Activity Bar)
+2. Access the TeXRA sidebar (look for the logo icon in the Activity Bar)
 3. Select your desired agent (e.g., polish, correct, draw)
 4. Choose your input file(s) and any additional options
 5. (Optional) Select auxiliary files or figures
@@ -106,18 +91,17 @@ Although many models are supported, we recommend using Anthropic sonnet\*/opus o
 
 ## Available AI Agents
 
-TeXRA supports a variety of intelligent agents, including but not limited to:
+TeXRA provides agents optimized for various academic tasks. Some core examples include:
 
-- `correct`: Fix typos and minor errors in LaTeX documents
-- `polish`: Improve the writing style and clarity of LaTeX documents
-- `draw`: Create or enhance TikZ figures in LaTeX documents
-- `write`: Generate new LaTeX content based on instructions
-- `meeting2text`: Convert meeting transcripts into structured text
-- `paper2note`: Transform research papers into lecture notes
-- `txt2tex`: Convert plain text to LaTeX format
-- `merge`: Merge LaTeX documents intelligently, ensuring consistency and handling conflicts
-- `slide2paper`: Convert presentation slides into a research paper format
-- `paper2slide`: Convert research paper into a latex beamer presentation slides
+- `correct`: Fix typos, grammatical errors, and LaTeX syntax issues.
+- `polish`: Improve writing style, clarity, and flow.
+- `draw`: Create or enhance TikZ figures from descriptions.
+- `paper2slide`: Convert research papers into presentation slides.
+- `paper2note`: Transform papers into structured lecture notes.
+
+See the [**Built-in Agents Guide**](https://texra.ai/docs/guide/built-in-agents.html) for the full default list and detailed descriptions.
+
+This list can also be customized in the VS Code settings.
 
 ## Customization
 
@@ -146,27 +130,9 @@ TeXRA offers various customization options through VS Code settings:
   - Smart file backup and versioning
   - Cross-platform path handling
 
-## Recommended Settings
+## Support & Feedback
 
-To reduce clutter, configure LaTeX-workshop's output directory:
-
-1. In VS Code settings, search for "Latex-workshop: Out Dir"
-2. Set to `%DIR%/build`
-
-This directs all LaTeX output files to a `build` subdirectory. Works with relative/absolute paths from the root file. No trailing slash needed.
-
-**Note:** Default for `latexmk` users. The extension auto-detects output directory from LaTeX tool arguments. Recommend adding `-pdf` and `-f` to the latexmk command:
-
-```json
-"latex-workshop.latex.magic.args": [
-  "-synctex=1",
-  "-interaction=nonstopmode",
-  "-file-line-error",
-  "%DOC%",
-  "-pdf",
-  "-f"
-]
-```
+Encountering issues or have suggestions? Please report them on our [**GitHub Issues page**](https://github.com/texra-ai/texra-issues/issues).
 
 ## License
 
