@@ -1,4 +1,4 @@
-# TexRA Frontend (VS Code Extension)
+# TeXRA Frontend (VS Code Extension)
 
 ## Features
 
@@ -52,11 +52,11 @@ If you want to customize or contribute to the extension, follow these steps:
 
 ## Detailed Usage Instructions
 
-TexRA frontend provides several commands that can be accessed via the command palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) or through the TexRA sidebar.
+TeXRA frontend provides several commands that can be accessed via the command palette (Ctrl+Shift+P or Cmd+Shift+P on macOS) or through the TeXRA sidebar.
 
 ### File Selection
 
-TexRA supports multiple file inputs for various file types:
+TeXRA supports multiple file inputs for various file types:
 
 1. **Input Files**: You can select multiple input files for agents that require it.
 2. **Reference Files**: For agents that use reference or sample files.
@@ -84,7 +84,7 @@ This process ensures that your instructions are carried out thoroughly and intel
 
 ### Buttons and Controls
 
-The TexRA sidebar provides several buttons and controls for easy interaction:
+The TeXRA sidebar provides several buttons and controls for easy interaction:
 
 1. **Agent Selection**: Choose the specific agent you want to perform (e.g., correct, polish, draw).
 2. **Model Selection**: Select the AI model to use for the agent (e.g., Sonnet+, Opus, GPT-4).
@@ -174,8 +174,8 @@ The `textConnection.ts` handles:
 You can customize the list of available agents in your VS Code settings:
 
 1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`).
-2. Search for "TexRA" in the settings search bar.
-3. Look for the "TexRA: agents" setting.
+2. Search for "TeXRA" in the settings search bar.
+3. Look for the "TeXRA: agents" setting.
 4. Edit the agent list to add, remove, or modify agents.
 
 ```json
@@ -235,7 +235,7 @@ npm test -- --grep "test name"
 
 ## Housekeeping Operations
 
-The TexRA VS Code extension provides a user-friendly interface for performing housekeeping operations on your LaTeX projects. These operations are designed to work seamlessly with all TexRA features, including the Intelligent Merge functionality.
+The TeXRA VS Code extension provides a user-friendly interface for performing housekeeping operations on your LaTeX projects. These operations are designed to work seamlessly with all TeXRA features, including the Intelligent Merge functionality.
 
 ### Clean Single
 
@@ -243,7 +243,7 @@ The "Clean Single" operation removes output files associated with a specific inp
 
 To use this feature:
 
-1. Select your input file in the TexRA sidebar
+1. Select your input file in the TeXRA sidebar
 2. Choose the agent and model
 3. Click the "Clean" button in the "Housekeeping" section
 
@@ -253,17 +253,17 @@ The "Pack Single" operation collects output files associated with a specific inp
 
 To use this feature:
 
-1. Select your input file in the TexRA sidebar
+1. Select your input file in the TeXRA sidebar
 2. Choose the agent and model
 3. Click the "Pack" button in the "Housekeeping" section
 
 ### Clean Output Files
 
-This operation removes all output files in the current directory. To use it, click the "Clean Output" button in the TexRA sidebar.
+This operation removes all output files in the current directory. To use it, click the "Clean Output" button in the TeXRA sidebar.
 
 ### Clean Build Files
 
-This operation cleans up build directories. To use it, click the "Clean Build" button in the TexRA sidebar.
+This operation cleans up build directories. To use it, click the "Clean Build" button in the TeXRA sidebar.
 
 ### Indent TeX
 
@@ -271,7 +271,7 @@ This operation runs the `latexindent` tool on your TeX files to improve formatti
 
 ### LaTeX Diff Operations
 
-TexRA provides powerful diff functionality to compare different versions of your LaTeX documents:
+TeXRA provides powerful diff functionality to compare different versions of your LaTeX documents:
 
 1. **LaTeX Diff**: Generate a diff between two LaTeX files. Select an input file and an edited file, then click the "latexdiff" button.
 2. **LaTeX Diff VC**: Generate a diff against a specific git commit. Select an input file and a commit hash, then click the "latexdiff-vc" button.
@@ -288,20 +288,20 @@ operations, helping you maintain a clean and efficient workspace.
 
 ## Recommended Setup
 
-For optimal use with VS Code or Cursor, we recommend placing the TexRA extension in the right (secondary) sidebar. This setup
+For optimal use with VS Code or Cursor, we recommend placing the TeXRA extension in the right (secondary) sidebar. This setup
 allows for a more efficient workflow, especially when working with documents. To achieve this:
 
 1. Open VS Code's Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS).
 2. Run the command "View: Toggle Secondary Side Bar Visibility" (or use the shortcut ⌥⌘B on macOS).
-3. Drag the TexRA view from the primary sidebar to the newly opened secondary sidebar on the right.
+3. Drag the TeXRA view from the primary sidebar to the newly opened secondary sidebar on the right.
 
-This configuration keeps your document in focus while providing easy access to TexRA's features.`npm run watch
+This configuration keeps your document in focus while providing easy access to TeXRA's features.`npm run watch
 
 ## LaTeX Configuration
 
 ### TikZ Figure Extraction and Compilation
 
-TexRA provides specialized tools for extracting and compiling TikZ figures from your LaTeX documents. The following settings help you customize this process:
+TeXRA provides specialized tools for extracting and compiling TikZ figures from your LaTeX documents. The following settings help you customize this process:
 
 #### TikZ Input Directory
 
@@ -315,7 +315,7 @@ This setting will pass the directory to the TEXINPUTS environment variable speci
 
 #### Workspace Path in TEXINPUTS
 
-By default, TexRA includes your workspace root directory in the TEXINPUTS environment variable when compiling TikZ figures. This helps LaTeX find package files and custom styles that might be located anywhere in your project.
+By default, TeXRA includes your workspace root directory in the TEXINPUTS environment variable when compiling TikZ figures. This helps LaTeX find package files and custom styles that might be located anywhere in your project.
 
 To change this behavior:
 

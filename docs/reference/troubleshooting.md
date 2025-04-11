@@ -1,12 +1,12 @@
 # Troubleshooting
 
-This guide helps you diagnose and resolve common issues you might encounter when using TexRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
+This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
 
 ## Installation Issues
 
 ### Extension Not Loading
 
-**Problem**: TexRA doesn't appear in the sidebar or shows errors during load.
+**Problem**: TeXRA doesn't appear in the sidebar or shows errors during load.
 
 **Solutions**:
 
@@ -18,19 +18,19 @@ This guide helps you diagnose and resolve common issues you might encounter when
 2. **Verify installation**:
 
    - Go to Extensions view (Ctrl+Shift+X)
-   - Search for "TexRA"
+   - Search for "TeXRA"
    - If not installed or disabled, install or enable it
    - Try reinstalling from the VSIX file
 
 3. **Check error logs**:
 
    - Open Output panel (Ctrl+Shift+U)
-   - Select "TexRA" from the dropdown menu
+   - Select "TeXRA" from the dropdown menu
    - Look for specific error messages
 
 4. **Check extension conflicts**:
    - Temporarily disable other extensions that might conflict
-   - Restart VS Code and check if TexRA works
+   - Restart VS Code and check if TeXRA works
 
 ### Dependency Installation Problems
 
@@ -72,7 +72,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 1. **Verify API keys**:
 
-   - Open TexRA in VS Code
+   - Open TeXRA in VS Code
    - Click "Set API Key" option
    - Re-enter your API keys carefully
 
@@ -126,7 +126,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 2. **Document validation**:
 
-   - Verify the document compiles correctly outside of TexRA
+   - Verify the document compiles correctly outside of TeXRA
    - Fix any LaTeX errors in the original document
 
 3. **Package dependencies**:
@@ -259,7 +259,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 ### File Selection Issues
 
-**Problem**: Problems with selecting or managing files in TexRA.
+**Problem**: Problems with selecting or managing files in TeXRA.
 
 **Solutions**:
 
@@ -298,7 +298,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 1. **Check file paths**:
 
-   - Verify where TexRA is saving output files
+   - Verify where TeXRA is saving output files
    - Look in the same directory as the input file
    - Check the ProgressBoard log for file paths
 
@@ -333,7 +333,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 2. **XML parsing issues**:
 
-   - TexRA uses XML to structure its output
+   - TeXRA uses XML to structure its output
    - Malformed XML can cause corruption
    - Check the raw output file for XML structure problems
 
@@ -350,7 +350,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 ### Slow Response Times
 
-**Problem**: TexRA operations take too long to complete.
+**Problem**: TeXRA operations take too long to complete.
 
 **Solutions**:
 
@@ -418,7 +418,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
 
 ### VS Code Integration Problems
 
-**Problem**: Issues with TexRA's integration with VS Code features.
+**Problem**: Issues with TeXRA's integration with VS Code features.
 
 **Solutions**:
 
@@ -427,7 +427,7 @@ This guide helps you diagnose and resolve common issues you might encounter when
    - Enable one by one to identify conflicts
 2. **Version incompatibility**:
    - Update VS Code to the latest version
-   - Ensure TexRA is up to date
+   - Ensure TeXRA is up to date
    - Check the minimum VS Code version requirement
 
 ### LaTeX Workshop Integration
@@ -451,8 +451,8 @@ The ProgressBoard is your main debugging tool:
 
 1. **Access ProgressBoard**:
 
-   - Look for "TexRA ProgressBoard" in the panel at the bottom of VS Code
-   - If not visible, open it via the Command Palette: "TexRA: Show ProgressBoard"
+   - Look for "TeXRA ProgressBoard" in the panel at the bottom of VS Code
+   - If not visible, open it via the Command Palette: "TeXRA: Show ProgressBoard"
 
 2. **Interpreting logs**:
 
@@ -476,7 +476,7 @@ If you can't resolve an issue using this guide:
 
 1. **Check GitHub issues**:
 
-   - Search existing issues on the [TexRA repository](https://github.com/LionSR/texra/issues)
+   - Search existing issues on the [TeXRA repository](https://github.com/LionSR/texra/issues)
    - Look for similar problems and solutions
 
 2. **Report new issues**:
@@ -484,7 +484,7 @@ If you can't resolve an issue using this guide:
    - Provide detailed information about your environment
    - Include steps to reproduce the problem
    - Attach relevant log excerpts from ProgressBoard
-   - Mention your OS, VS Code version, and TexRA version
+   - Mention your OS, VS Code version, and TeXRA version
 
 3. **Temporary workarounds**:
    - Try alternative workflows while waiting for a solution
@@ -493,8 +493,8 @@ If you can't resolve an issue using this guide:
 
 ## Next Steps
 
-If you've resolved your issue or want to learn more about TexRA:
+If you've resolved your issue or want to learn more about TeXRA:
 
-- [Best Practices](/reference/best-practices) - Learn how to use TexRA effectively
-- [Configuration](/guide/configuration) - Customize TexRA for your needs
+- [Best Practices](/reference/best-practices) - Learn how to use TeXRA effectively
+- [Configuration](/guide/configuration) - Customize TeXRA for your needs
 - [Agent Reference](/reference/agents) - Explore the different agents available

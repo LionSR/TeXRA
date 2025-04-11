@@ -1,12 +1,12 @@
 ---
 layout: home
 hero:
-  name: TexRA
+  name: TeXRA
   text: Your Intelligent Academic Research Assistant
   tagline: Enhance your research with powerful AI assistance in VS Code
   image:
-    src: /logo1.png
-    alt: TexRA Logo
+    src: /logo-128x128.png
+    alt: TeXRA Logo
   actions:
     - theme: brand
       text: Get Started
@@ -35,11 +35,11 @@ features:
 
 <div class="custom-block">
   <p>
-    TexRA is a VS Code extension that brings the power of large language models to your academic writing workflow. It's designed to help researchers, professors, and students produce high-quality academic content by leveraging AI to handle formatting, corrections, and creative aspects of document preparation.
+    TeXRA is a VS Code extension that brings the power of large language models to your academic writing workflow. It's designed to help researchers, professors, and students produce high-quality academic content by leveraging AI to handle formatting, corrections, and creative aspects of document preparation.
   </p>
 </div>
 
-## Why TexRA?
+## Why TeXRA?
 
 Traditional LLM interfaces like ChatGPT or Claude often lead to shallow conversations that fail to exploit the models' full potential in academic contexts due to:
 
@@ -47,7 +47,7 @@ Traditional LLM interfaces like ChatGPT or Claude often lead to shallow conversa
 - Lack of integration with academic tools
 - Inability to handle multi-step reasoning processes effectively
 
-TexRA addresses these limitations by implementing:
+TeXRA addresses these limitations by implementing:
 
 - **Reflection**: The LLM examines its own work to identify improvements
 - **Tool use**: The LLM leverages external tools to gather information or process data
@@ -82,7 +82,7 @@ TexRA addresses these limitations by implementing:
 
 ## Designed for Academic Research
 
-TexRA is specially designed to understand the unique requirements of academic writing:
+TeXRA is specially designed to understand the unique requirements of academic writing:
 
 - Mathematical notation and formulas
 - Citation management
@@ -92,7 +92,7 @@ TexRA is specially designed to understand the unique requirements of academic wr
 
 ## Get Started Today
 
-Installing and using TexRA is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
+Installing and using TeXRA is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
 
 <div class="cta-container">
   <a href="/guide/" class="cta-button">Explore the Documentation</a>

@@ -1,10 +1,10 @@
 # AI Models
 
-TexRA supports a variety of language models from different providers. Each model has specific strengths, capabilities, and pricing considerations. This guide will help you choose the right model for your tasks.
+TeXRA supports a variety of language models from different providers. Each model has specific strengths, capabilities, and pricing considerations. This guide will help you choose the right model for your tasks.
 
 ## Model Overview
 
-TexRA organizes models into several categories based on their providers:
+TeXRA organizes models into several categories based on their providers:
 
 1. **Anthropic Models** (Claude family)
 2. **OpenAI Models** (GPT-4 and O-series)
@@ -284,7 +284,7 @@ Instruction: Fix formatting issues and typos in this document. Ensure consistent
 
 ## Other Models (via OpenRouter)
 
-TexRA supports additional models through OpenRouter integration, allowing access to models from other providers.
+TeXRA supports additional models through OpenRouter integration, allowing access to models from other providers.
 
 ### Llama 3.1 (llama31)
 
@@ -355,7 +355,7 @@ From lowest to highest cost per token:
 
 ## Model Configuration
 
-The model selection dropdown in the TexRA interface shows all available models. The list of available models can be customized in VS Code settings:
+The model selection dropdown in the TeXRA interface shows all available models. The list of available models can be customized in VS Code settings:
 
 ```json
 "texra.models": [
@@ -379,7 +379,7 @@ The model selection dropdown in the TexRA interface shows all available models. 
 
 ## Using OpenRouter
 
-TexRA supports accessing models through [OpenRouter](https://openrouter.ai/), which can provide:
+TeXRA supports accessing models through [OpenRouter](https://openrouter.ai/), which can provide:
 
 1. Access to models not directly available via their original API
 2. Potential cost savings through competitive pricing
@@ -388,7 +388,7 @@ TexRA supports accessing models through [OpenRouter](https://openrouter.ai/), wh
 To enable OpenRouter:
 
 1. Obtain an OpenRouter API key
-2. Set it in TexRA's API key settings
+2. Set it in TeXRA's API key settings
 3. Enable OpenRouter in VS Code settings:
 
 ```json
@@ -426,8 +426,8 @@ For long responses or reasoning-heavy models, you can enable streaming to see in
 
 ## Next Steps
 
-Now that you understand the different models available in TexRA, explore:
+Now that you understand the different models available in TeXRA, explore:
 
 - [File Management](/guide/file-management) to learn how to work with multiple files
-- [Tool Integration](/guide/tool-integration) to discover how TexRA leverages external tools
+- [Tool Integration](/guide/tool-integration) to discover how TeXRA leverages external tools
 - [Advanced Usage](/guide/advanced-usage) for more sophisticated workflows
