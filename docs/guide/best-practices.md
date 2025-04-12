@@ -124,8 +124,7 @@ When collaborating with others:
 
 1. Use version control (Git) to track document evolution
 2. Use LaTeXdiff to visualize changes between versions
-3. Use the intelligent merge feature to combine contributions
-4. Establish clear guidelines for model and agent usage
+3. Establish clear guidelines for model and agent usage
 
 ## Performance Optimization
 
@@ -145,6 +144,7 @@ LLMs have impressive memories, but they aren't infinite. Help them focus by:
 - Focusing instructions on specific sections when possible
 - Remove irrelevant boilerplate from reference documents
 - Keep auxiliary files as simple as possible
+- Keep the prompt and the input files as least confusing as possible. Try not to have self-conflicting definitions and instructions (surprisingly hard to do!).
 
 ## Quality Assurance
 
