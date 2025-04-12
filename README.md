@@ -36,18 +36,17 @@ TeXRA is built as a TypeScript-based VS Code extension that provides:
 
 ## Installation Guide
 
-1. Open VS Code
-2. Download the newest release (`.vsix` file, e.g., `texra-0.28.0.vsix`) from the release page of the Github repo
-3. Find the newest `.vsix` file in the VS Code file explorer
-4. Right-click on the `.vsix` file
-5. From the context menu, select "Install Extension VSIX"
-6. Configure your API keys in VS Code settings:
-   - OpenAI API key
-   - Anthropic API key
+After installing the extension, you can configure your API keys in VS Code settings:
+
+- OpenAI API key
+- Anthropic API key
+- Gemini API key
+- Other (xAI, deepseek, OpenRouter, etc.) API keys
+
 
 ## Required Dependencies
 
-TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/docs/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
+TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
 
 ### LaTeX Distribution
 
@@ -65,14 +64,10 @@ TeXRA requires several system dependencies for full functionality. See the [**In
 - macOS: Pre-installed
 - Linux: Install via package manager (`sudo apt-get install perl` for Ubuntu)
 
-### GraphicsMagick/ImageMagick & Ghostscript (Optional Fallbacks)
 
-These tools are primarily used as a fallback for converting PDF pages to images if you use AI models **without** native PDF support. They may also be used for other less common image processing tasks.
+Optionally, you can also install GraphicsMagick/ImageMagick & Ghostscript for the fallback of the pdf to image conversion.
 
-- **GraphicsMagick (Recommended)** or **ImageMagick**: For image manipulation.
-- **Ghostscript**: Required by GraphicsMagick/ImageMagick for PDF processing.
-
-See the [Installation Guide](https://texra.ai/docs/guide/installation.html) for setup details if needed.
+See the [Installation Guide](https://texra.ai/guide/installation.html) for setup details if needed.
 
 After installing these dependencies, ensure they are accessible from the command line by adding them to your system's PATH environment variable if necessary.
 
@@ -100,7 +95,7 @@ TeXRA provides agents optimized for various academic tasks. Some core examples i
 - `paper2slide`: Convert research papers into presentation slides.
 - `paper2note`: Transform papers into structured lecture notes.
 
-See the [**Built-in Agents Guide**](https://texra.ai/docs/guide/built-in-agents.html) for the full default list and detailed descriptions.
+See the [**Built-in Agents Guide**](https://texra.ai/guide/built-in-agents.html) for the full default list and detailed descriptions.
 
 This list can also be customized in the VS Code settings.
 

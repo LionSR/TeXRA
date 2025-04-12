@@ -34,7 +34,7 @@ Open the newly created `.yaml` file and define your agent's structure. Start wit
 ```yaml
 # --- Agent Inheritance (Optional) ---
 # Specify a built-in or other custom agent to inherit settings and prompts from.
-# See docs/guide/built-in-agents.md for potential parents.
+# See guide/built-in-agents.md for potential parents.
 inherits: base # Or polish, correct, etc.
 
 # --- Agent Settings ---
