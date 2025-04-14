@@ -12,7 +12,7 @@ requiredFilesInternal:
 
 prompts:
   systemPrompt: |
-    You are an expert physicist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a physics audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
+    You are an expert scientist and scientific poster designer. Your task is to create a detailed, mathematically rich LaTeX Beamer poster based on a given research paper. The poster should be tailored for a scientific audience, highlighting the key points, methodology, results, and conclusions of the paper in a visually appealing A5 format.
 
     When creating the poster:
     - Use LaTeX Beamer syntax and commands
@@ -20,7 +20,7 @@ prompts:
     - Include detailed mathematical equations, derivations, and explanations
     - Use appropriate figures, tables, and diagrams to illustrate key concepts and results
     - Maintain a professional and scientifically rigorous tone throughout the poster
-    - Use appropriate physics notation and terminology consistently
+    - Use appropriate notation and terminology consistently
     - Prioritize both mathematical depth and visual representations of key ideas
     - Cite relevant key papers using biblatex
     - Ensure the poster is visually appealing and readable at A5 size, despite the increased detail
@@ -40,7 +40,7 @@ prompts:
 
     Please carefully review the provided research paper before creating the poster.
 
-    Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a physics audience in A5 format.
+    Your task is to create a professional, mathematically detailed LaTeX Beamer poster for a scientific audience in A5 format.
 
     \begin{itemize}
         \item Use LaTeX Beamer syntax and commands correctly.
@@ -49,7 +49,7 @@ prompts:
         \item Create appropriate figures, tables, and diagrams to illustrate key concepts and results.
         \item Write concise yet informative explanations for each section.
         \item Maintain a professional and scientifically rigorous tone throughout the poster.
-        \item Use appropriate physics notation and terminology consistently.
+        \item Use appropriate notation and terminology consistently.
         \item Prioritize both mathematical depth and visual representations of key ideas.
         \item Ensure the poster is visually appealing and readable at A5 size, despite the increased detail.
         \item Include author information, affiliations, and contact details.
@@ -65,7 +65,7 @@ prompts:
     {% endif %}
 
   userRequest: |
-    Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a physics audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
+    Based on the research paper provided, please create a detailed, mathematically rich LaTeX Beamer poster for a scientific audience in A5 format. In the scratchpad below, outline the key points and structure you plan to include in the poster.
 
     <scratchpad>
     \begin{enumerate}
@@ -96,7 +96,7 @@ prompts:
     4. Visual Representations: Have you included appropriate figures, tables, or diagrams to illustrate key concepts and results?
     5. Balance: Is there a good balance between textual explanations, mathematical content, and visual elements?
     6. Conciseness vs Detail: Despite the increased detail, is the content presented concisely and effectively for a poster format?
-    7. Physics Terminology: Is the use of physics notation and terminology consistent and appropriate for the target audience?
+    7. Physics Terminology: Is the use of notation and terminology consistent and appropriate for the target audience?
     8. Mathematical Rigor: Are equations and mathematical concepts presented clearly and accurately? Ensure they are properly formatted using LaTeX commands.
     9. Readability: Despite the increased content, is the text size appropriate for A5 format? Ensure all content is easily readable.
     10. Color Usage: Have you effectively used the provided color scheme to enhance readability and visual appeal, especially for mathematical content?
@@ -116,6 +116,6 @@ prompts:
     </improvements>
     </scratchpad>
 
-    Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a physics audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the new version based on the previous version you just wrote.
+    Based on this reflection, please revise the LaTeX Beamer poster to enhance its mathematical content, overall structure, and visual quality. Ensure that the poster effectively communicates the key aspects of the research paper to a scientific audience in an A5 format, balancing detailed mathematical content with visual appeal. Output the new version based on the previous version you just wrote.
 
     Output your revised poster within the <beamer_poster> tags. Include
