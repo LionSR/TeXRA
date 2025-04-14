@@ -26,7 +26,7 @@ Clearly state what should and shouldn't be changed:
 
 Help the AI understand the purpose and audience:
 
-✅ "Polish this abstract for submission to the Journal of Quantum Physics. The target audience is physicists with expertise in quantum field theory. Focus on highlighting the novelty and significance of the results."
+✅ "Polish this abstract for submission to the Journal of Quantum Physics. The target audience is scientists with expertise in quantum field theory. Focus on highlighting the novelty and significance of the results."
 
 ### Use Structured Instructions
 
@@ -48,7 +48,7 @@ Point to specific parts of the document:
 
 ## Model Selection
 
-Choosing an appropriate model can significantly impact the quality, speed, and cost of your results. It's a bit like choosing between a calculator, a supercomputer, and a quantum oracle – pick the right tool for the job! Refer to the [AI Models Guide](./models.md) for detailed comparison tables. Key considerations include:
+Choosing an appropriate model can significantly impact the quality, speed, and cost of your results. It's a bit like choosing between a calculator and a supercomputer – pick the right tool for the job! Refer to the [AI Models Guide](./models.md) for detailed comparison tables. Key considerations include:
 
 - **Task Complexity**: Simple tasks (like basic correction) often work well with faster, cheaper models (e.g., those marked '$' or 'Fast'/'Very Fast'). Complex tasks requiring deep reasoning or high-quality generation (like transforming papers or intricate drawing) benefit from more powerful, albeit slower and more expensive, models (e.g., '$$$$' or 'Slow').
 - **Budget & Speed**: Balance your needs using the relative cost ($ - $$$$) and speed indicators provided in the [AI Models Guide](./models.md).
