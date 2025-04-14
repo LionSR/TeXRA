@@ -25,7 +25,6 @@ The easiest way to install TeXRA is directly from the Visual Studio Code Marketp
 
 <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 8px 12px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">View on Marketplace</a>
 
-
 ### From VSIX File
 
 1. Open VS Code

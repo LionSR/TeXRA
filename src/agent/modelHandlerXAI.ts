@@ -7,7 +7,6 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
-import { ReasoningEffort } from '../model/ModelConfig';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
@@ -19,63 +18,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     const baseURL = this.getBaseUrl();
     this.logger.debug(`Using xAI API key. Base URL: ${baseURL}`);
     return new OpenAI({ apiKey, baseURL });
-  }
-
-  /**
-   * Validates reasoning effort to ensure only supported values are used.
-   * xAI models only support 'low' and 'high', not 'medium'.
-   */
-  private validateReasoningEffort(effort: ReasoningEffort): string {
-    // xAI models only support 'low' and 'high'
-    if (effort === ReasoningEffort.LOW || effort === ReasoningEffort.HIGH) {
-      return effort;
-    }
-
-    // Default to 'high' for MEDIUM and any other values
-    this.logger.warn(
-      `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
-    );
-    return ReasoningEffort.HIGH;
-  }
-
-  /** Creates a chat completion with xAI-specific parameters. */
-  async createResponse(
-    client: OpenAI,
-    messages: any[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-  ): Promise<any> {
-    const kwargs: any = {
-      model: this.config.fullName,
-      messages,
-      max_tokens: this.config.maxOutputTokens,
-      temperature,
-    };
-
-    // Add reasoning_effort parameter for models that support it
-    if (
-      this.config.capabilities.supportsReasoning &&
-      this.config.capabilities.supportsReasoningEffort &&
-      this.config.capabilities.reasoningEffort
-    ) {
-      // Ensure only supported values are used
-      kwargs.reasoning_effort = this.validateReasoningEffort(
-        this.config.capabilities.reasoningEffort,
-      );
-    }
-
-    if (endTag) {
-      kwargs.stop = [endTag];
-    }
-
-    try {
-      const response = await client.chat.completions.create(kwargs);
-      return response;
-    } catch (err) {
-      this.logger.error(`Error in createResponse: ${err}`);
-      throw err;
-    }
   }
 
   /**
