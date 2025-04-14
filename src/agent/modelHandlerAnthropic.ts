@@ -60,7 +60,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    let useStreaming = this.getStreamingConfig();
+    const useStreaming = this.getStreamingConfig();
 
     // Prepare options for the API call
     const options: any = {
@@ -548,7 +548,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
         basePrice +=
           (responseUsage.cache_read_input_tokens *
             this.config.inputPrice *
-            0.1) /
+            this.capabilities.cacheDiscountFactor) /
           1e6;
       }
     }
