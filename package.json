@@ -1,8 +1,8 @@
 {
   "name": "texra",
   "displayName": "TeXRA",
-  "description": "TeXRA: your LLM-powered latex 24/7 research assistant.",
-  "version": "0.28.5",
+  "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
+  "version": "0.28.6",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.96.2"
@@ -11,7 +11,8 @@
     "Programming Languages",
     "Linters",
     "Formatters",
-    "AI"
+    "AI",
+    "Education"
   ],
   "activationEvents": [
     "onView:texra",
@@ -84,19 +85,43 @@
           "texra.model.useStreaming": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming API responses when supported by the model. This will be more robust for long responses.",
+            "description": "Enable streaming API responses when supported by the model. This serves as a global default but can be overridden by provider-specific settings.",
             "scope": "resource"
           },
-          "texra.model.useStreamingAnthropicReasoning": {
+          "texra.model.useStreamingAnthropic": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming API responses when supported by the Anthropic model. This will be more robust for long responses. This overrides the texra.model.useStreaming setting.",
+            "description": "Enable streaming for Anthropic models. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
-          "texra.model.useStreamingOpenAIReasoning": {
+          "texra.model.useStreamingOpenai": {
             "type": "boolean",
             "default": false,
-            "description": "Enable streaming API responses when supported by the OpenAI model. This will be more robust for long responses. This overrides the texra.model.useStreaming setting.",
+            "description": "Enable streaming for OpenAI models. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.useStreamingGoogle": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming for Google models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.useStreamingXai": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming for xAI models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.useStreamingDeepSeek": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.useStreamingOpenrouter": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable streaming for models accessed via OpenRouter. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.useNativeGoogleSDK": {
@@ -234,6 +259,7 @@
             "default": [
               "o1",
               "o3",
+              "o4",
               "gpt",
               "sonnet",
               "haiku",
@@ -415,20 +441,24 @@
             "enum": [
               "sonnet37",
               "sonnet35",
+              "gemini25p",
               "gemini2fT",
               "gemini2f",
               "gemini2p",
               "o3-mini",
-              "gpt4o"
+              "gpt4o",
+              "DSV3"
             ],
             "enumDescriptions": [
               "Claude Sonnet 3.7",
               "Claude Sonnet 3.5",
+              "Gemini 2.5 Pro",
               "Gemini 2 Flash Thinking",
               "Gemini 2 Flash",
               "Gemini 2 Pro",
               "OpenAI O3 Mini",
-              "OpenAI GPT-4O"
+              "OpenAI GPT-4O",
+              "DeepSeek V3"
             ],
             "description": "Default model to use for merge operations",
             "order": 1
@@ -902,11 +932,20 @@
   "icon": "resources/logo-128x128.png",
   "keywords": [
     "latex",
+    "tex",
     "academic",
     "writing",
-    "texra",
-    "vscode",
-    "research"
+    "research",
+    "agent",
+    "llm",
+    "AI",
+    "Claude",
+    "OpenAI",
+    "Gemini",
+    "OpenRouter",
+    "DeepSeek",
+    "Grok",
+    "GPT"
   ],
   "bugs": {
     "url": "https://github.com/texra-ai/texra-issues/issues"
@@ -926,7 +965,7 @@
     "glob": "^11.0.1",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
-    "openai": "^4.86.1",
+    "openai": "^4.93.0",
     "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",

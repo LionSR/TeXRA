@@ -43,7 +43,6 @@ After installing the extension, you can configure your API keys in VS Code setti
 - Gemini API key
 - Other (xAI, deepseek, OpenRouter, etc.) API keys
 
-
 ## Required Dependencies
 
 TeXRA requires several system dependencies for full functionality. See the [**Installation Guide**](https://texra.ai/guide/installation.html) in the full documentation for detailed setup instructions for your operating system.
@@ -63,7 +62,6 @@ TeXRA requires several system dependencies for full functionality. See the [**In
 - Windows: Included with MiKTeX
 - macOS: Pre-installed
 - Linux: Install via package manager (`sudo apt-get install perl` for Ubuntu)
-
 
 Optionally, you can also install GraphicsMagick/ImageMagick & Ghostscript for the fallback of the pdf to image conversion.
 

@@ -6,7 +6,7 @@ import { ModelHandler } from './ModelHandler';
 import { ModelHandlerAnthropic } from './modelHandlerAnthropic';
 import { ModelHandlerGoogle } from './modelHandlerGoogle';
 import { ModelHandlerGoogleGenAI } from './modelHandlerGoogleGenAI';
-import { ModelHandlerDeepseek } from './modelHandlerDeepseek';
+import { ModelHandlerDeepSeek } from './modelHandlerDeepSeek';
 import { ModelHandlerXAI } from './modelHandlerXAI';
 import {
   ModelHandlerOpenRouter,
@@ -63,7 +63,7 @@ export class ModelFactory {
       [ModelProvider.ANTHROPIC, ModelHandlerAnthropic],
       [ModelProvider.OPENAI, ModelHandlerOpenAI],
       [ModelProvider.GOOGLE, ModelHandlerGoogle],
-      [ModelProvider.DEEPSEEK, ModelHandlerDeepseek],
+      [ModelProvider.DEEPSEEK, ModelHandlerDeepSeek],
       [ModelProvider.XAI, ModelHandlerXAI],
       [ModelProvider.OTHERS, ModelHandlerOpenRouter],
     ]);
