@@ -39,6 +39,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: false,
       supportsNativePdf: true,
       supportsReasoning: true,
@@ -58,6 +59,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsNativePdf: true,
       supportsReasoning: false,
@@ -77,6 +79,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsTokenCounting: true,
     } satisfies ModelCapabilities,
@@ -93,6 +96,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      cacheDiscountFactor: 0.1,
       supportsPromptCaching: true,
       supportsAssistantPrefill: true,
       supportsNativePdf: true,
@@ -112,6 +116,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsTokenCounting: true,
     } satisfies ModelCapabilities,
@@ -128,6 +133,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 15.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -144,6 +151,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsVision: true,
       supportsTokenCounting: true,
@@ -162,6 +170,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsPromptCaching: true,
+      cacheDiscountFactor: 0.1,
       supportsAssistantPrefill: true,
       supportsTokenCounting: true,
     } satisfies ModelCapabilities,
@@ -181,6 +190,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: false,
       supportsReasoning: true,
       reasoningEffort: ReasoningEffort.HIGH,
@@ -201,6 +211,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: true,
       supportsReasoning: true,
       supportsIntermDevMsgs: true,
@@ -221,6 +232,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: false,
       supportsReasoning: true,
       supportsSystemPrompt: false,
@@ -239,6 +251,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: false,
       supportsReasoning: true,
       supportsSystemPrompt: false,
@@ -247,6 +260,66 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
 
   // ===== OpenAI Models =====
+  gpt41: {
+    name: 'gpt41',
+    fullName: 'gpt-4.1-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 2.0,
+    outputPrice: 8.0,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
+      supportsPredictiveOutput: true,
+      supportsIntermDevMsgs: true,
+      supportsVision: true,
+      supportsNativePdf: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  'gpt41-': {
+    name: 'gpt41-',
+    fullName: 'gpt-4.1-mini-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1-mini',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 0.4,
+    outputPrice: 1.6,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
+      supportsPredictiveOutput: true,
+      supportsIntermDevMsgs: true,
+      supportsVision: true,
+      supportsNativePdf: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  'gpt41--': {
+    name: 'gpt41--',
+    fullName: 'gpt-4.1-nano-2025-04-14',
+    openrouterFullName: 'openai/gpt-4.1-nano',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 32768,
+    contextWindow: 1000000,
+    inputPrice: 0.1,
+    outputPrice: 0.4,
+    capabilities: {
+      ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
+      supportsPredictiveOutput: true,
+      supportsIntermDevMsgs: true,
+      supportsVision: true,
+      supportsNativePdf: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   gpt45: {
     name: 'gpt45',
     fullName: 'gpt-4.5-preview',
@@ -259,6 +332,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsPredictiveOutput: false,
       supportsIntermDevMsgs: true,
       supportsVision: true,
@@ -268,8 +342,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   gpt4o: {
     name: 'gpt4o',
-    fullName: 'gpt-4o-2024-08-06',
-    openrouterFullName: 'openai/gpt-4o-2024-08-06',
+    fullName: 'gpt-4o-2024-11-20',
+    openrouterFullName: 'openai/gpt-4o-2024-11-20',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 16384,
     contextWindow: 128000,
@@ -278,6 +352,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsPredictiveOutput: true,
       supportsIntermDevMsgs: true,
       supportsNativePdf: true,
@@ -315,6 +390,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsPredictiveOutput: true,
       supportsIntermDevMsgs: true,
       supportsVision: true,
@@ -334,6 +410,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsReasoning: true,
       supportsIntermDevMsgs: true,
       supportsVision: true,
@@ -354,6 +431,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 10.0,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
       supportsNativePdf: true,
       supportsVision: true,
       supportsReasoning: true,
@@ -409,6 +488,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.3,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
@@ -426,6 +507,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.25,
       supportsNativePdf: true,
       supportsVision: true,
       supportsNativeAudio: true,
@@ -567,6 +651,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 0.28,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAssistantPrefill: true,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: false,
     } satisfies ModelCapabilities,
     // wait until the official deepseek API fix the content box issue in the messages
@@ -583,6 +670,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     outputPrice: 4,
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
+      supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsReasoning: true,
       supportsVision: false,
       reasoningEffort: ReasoningEffort.HIGH,
@@ -603,6 +692,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAssistantPrefill: true,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsVision: false,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -619,6 +709,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     capabilities: {
       ...DEFAULT_MODEL_CAPABILITIES,
       supportsAutoPromptCaching: true,
+      cacheDiscountFactor: 0.5,
       supportsReasoning: true,
       supportsVision: false,
       supportsReasoningEffort: true,
