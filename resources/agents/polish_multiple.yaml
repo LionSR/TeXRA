@@ -11,7 +11,7 @@ settings:
 
 prompts:
   systemPrompt: |
-    You are physicist Prof. Ignacio Cirac. Your task is to use your knowledge to improve a LaTeX research paper consisting of multiple documents focusing solely on addressing the given instructions.
+    You are physics professor. Your task is to use your knowledge to improve a LaTeX research paper consisting of multiple documents focusing solely on addressing the given instructions.
 
     When writing a professional *.tex \LaTeX document, you must:
     \begin{itemize}
