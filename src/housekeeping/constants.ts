@@ -47,11 +47,15 @@ export const MODELS = [
   'o1',
   'o1preview',
   'o1-',
+  'gpt41',
+  'gpt41-',
+  'gpt41--',
   'gpt4ol',
   'gpt4o',
   'gpt4o-',
   'gpt4t',
   'gemini25p',
+  'gemini25f',
   'gemini2p',
   'gemini2fT',
   'gemini2f',
@@ -60,8 +64,11 @@ export const MODELS = [
   'qvq-72b',
   'DSV3',
   'DSR1',
+  'DSV3o',
+  'DSR1o',
   'grok2',
   'grok3',
+  'grok3-',
 ];
 
 export const HISTORY_DIR = 'History';
