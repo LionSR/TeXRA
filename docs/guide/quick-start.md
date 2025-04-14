@@ -114,25 +114,25 @@ Here are some common tasks you can try with TeXRA:
 ### Fixing Grammar and Typos
 
 - **Agent**: `correct`
-- **Model**: `sonnet35` or `haiku35` (faster)
+- **Model**: `gemini25p` or `gpt41`
 - **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
 
 ### Creating a TikZ Figure
 
 - **Agent**: `draw`
-- **Model**: `sonnet37` or `gpt4o`
+- **Model**: `sonnet37T` or `o3-mini`
 - **Instruction**: "Create a TikZ figure showing a workflow diagram with three main steps: data collection, processing, and analysis. Use arrows to show the data flow between steps."
 
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet37` or `opus`
+- **Model**: `sonnet37T` or `gpt41`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style
 
 - **Agent**: `polish`
-- **Model**: `opus` or `gpt4o`
+- **Model**: `opus` or `sonnet37T`
 - **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
 
 ## Understanding the Output

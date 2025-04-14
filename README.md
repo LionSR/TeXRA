@@ -130,8 +130,4 @@ Encountering issues or have suggestions? Please report them on our [**GitHub Iss
 
 ## License
 
-Before the author(s) have figured out the best way to use and distribute TeXRA and its potential academic value and social impact, the code is under private license.
-
 © [TeXRA Team] [2025]. All rights reserved.
-This repository and its contents are proprietary and confidential.
-Unauthorized copying, distribution, or use is strictly prohibited.

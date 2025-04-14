@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.28.7",
+  "version": "0.28.8",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.96.2"
@@ -49,14 +49,12 @@
             "default": [
               "sonnet37T",
               "sonnet37",
-              "sonnet35",
-              "opus",
               "o3-",
               "o1",
               "o1-",
-              "gpt45",
+              "gpt41",
+              "gpt41-",
               "gpt4o",
-              "gpt4ol",
               "gemini25p",
               "gemini25f",
               "gemini2p",

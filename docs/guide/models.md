@@ -32,14 +32,17 @@ Known for strong instruction following and context handling.
 
 Known for strong reasoning and creative capabilities.
 
-| Model ID | Key Strength / Use Case            | Relative Cost | Relative Speed | Notes               |
-| :------- | :--------------------------------- | :------------ | :------------- | :------------------ |
-| `o1`     | Advanced reasoning, math, figures  | $$$$          | Slow           | Explicit reasoning  |
-| `gpt45`  | High quality, vision (Preview)     | $$$$          | Medium         |                     |
-| `gpt4o`  | Strong all-rounder, vision         | $$$           | Medium         | Good default choice |
-| `gpt4ol` | Latest `gpt4o`, potentially better | $$$           | Medium         |                     |
-| `o3-`    | Fast reasoning                     | $$$           | Fast           | `o3-mini`           |
-| `o1-`    | Fast reasoning (smaller `o1`)      | $$$           | Fast           | `o1-mini`           |
+| Model ID  | Key Strength / Use Case            | Relative Cost | Relative Speed | Notes                       |
+| :-------- | :--------------------------------- | :------------ | :------------- | :-------------------------- |
+| `o1`      | Advanced reasoning, math, figures  | $$$$          | Slow           | Explicit reasoning          |
+| `gpt45`   | High quality, vision (Preview)     | $$$$          | Medium         |                             |
+| `gpt41`   | Long-context vision, powerful      | $$$           | Medium         | 1M tokens context           |
+| `gpt41-`  | Long-context vision, cost-effective| $$            | Medium         | 1M tokens context, mini     |
+| `gpt41--` | Long-context vision, cheapest      | $             | Medium         | 1M tokens context, nano     |
+| `gpt4o`   | Strong all-rounder, vision         | $$$           | Medium         | Good default choice         |
+| `gpt4ol`  | Latest `gpt4o`, potentially better | $$$           | Medium         |                             |
+| `o3-`     | Fast reasoning                     | $$$           | Fast           | `o3-mini`                   |
+| `o1-`     | Fast reasoning (smaller `o1`)      | $$$           | Fast           | `o1-mini`                   |
 
 ### Google Models
 
@@ -89,7 +92,7 @@ Consider these factors:
 - **Task Complexity**: Simple corrections might only need a `$`/Fast model (`gemini2f`), while complex paper transformations benefit from `$$$$`/Slow models (`opus`, `o1`).
 - **Budget**: Use cost indicators ($ - $$$$) to guide selection.
 - **Speed**: If quick turnaround is needed, prefer Fast/Very Fast models.
-- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `DSR1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`)?
+- **Special Capabilities**: Do you need explicit reasoning (`sonnet37T`, `gemini2fT`, `o1`, `o3-`, `o1-`, `DSR1`), vision (`gpt4o`, `gemini*`), native PDF/audio (`gemini*`), or very large context (`gemini*`, `gpt41`)?
 
 Experimentation is often key to finding the best model for your specific needs and writing style.
 
@@ -150,6 +153,8 @@ Configure streaming in VS Code Settings:
 
 // Specific toggle for OpenAI reasoning models
 "texra.model.useStreamingOpenAIReasoning": false
+
+// Similar configuration for Google/DeepSeek/OpenRouter models
 ```
 
 ## Next Steps

@@ -56,7 +56,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    let useStreaming = this.getStreamingConfig();
+    const useStreaming = this.getStreamingConfig();
 
     const kwargs: any = {
       model: this.config.fullName,
@@ -515,7 +515,10 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
     if (responseUsage.cached_tokens) {
       basePrice -=
-        (responseUsage.cached_tokens * this.config.inputPrice * 0.5) / 1e6;
+        (responseUsage.cached_tokens *
+          this.config.inputPrice *
+          (1 - this.capabilities.cacheDiscountFactor)) /
+        1e6;
     }
 
     return basePrice;
