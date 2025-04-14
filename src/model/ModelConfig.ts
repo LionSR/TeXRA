@@ -20,6 +20,7 @@ export enum ReasoningEffort {
 export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsPromptCaching: false,
   supportsAutoPromptCaching: false,
+  cacheDiscountFactor: 1.0,
   supportsReasoning: false,
   reasoningEffort: ReasoningEffort.NONE,
   supportsVision: true,
@@ -47,6 +48,7 @@ export enum ModelProvider {
 export interface ModelCapabilities {
   supportsPromptCaching: boolean;
   supportsAutoPromptCaching: boolean;
+  cacheDiscountFactor: number;
   supportsReasoning: boolean;
   reasoningEffort: ReasoningEffort;
   supportsVision: boolean;
