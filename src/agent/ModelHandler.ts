@@ -160,6 +160,46 @@ export abstract class ModelHandler {
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
+  /**
+   * Gets streaming configuration for the current model provider
+   * @returns Boolean indicating if streaming should be enabled
+   */
+  public getStreamingConfig(): boolean {
+    const useStreamingGlobal = getConfig<boolean>('model.useStreaming', false);
+
+    // For OpenRouter models, use dedicated setting
+    if (
+      this.config.openRouterOnly ||
+      getConfig<boolean>('model.useOpenRouter', false)
+    ) {
+      return getConfig<boolean>(
+        'model.useStreamingOpenrouter',
+        useStreamingGlobal,
+      );
+    }
+
+    // Map ModelProvider enum to configuration key suffix
+    const providerConfigMap: Record<ModelProvider, string> = {
+      [ModelProvider.ANTHROPIC]: 'Anthropic',
+      [ModelProvider.OPENAI]: 'Openai',
+      [ModelProvider.GOOGLE]: 'Google',
+      [ModelProvider.DEEPSEEK]: 'Deepseek',
+      [ModelProvider.XAI]: 'Xai',
+      [ModelProvider.OTHERS]: '', // Will fall back to global
+    };
+
+    const configSuffix = providerConfigMap[this.config.provider];
+
+    // If no mapping exists or it's the OTHERS provider, just use global setting
+    if (!configSuffix) {
+      return useStreamingGlobal;
+    }
+
+    // Build the full config key and fetch the setting
+    const configKey = `model.useStreaming${configSuffix}`;
+    return getConfig<boolean>(configKey, useStreamingGlobal);
+  }
+
   get isOReasoningModelFull(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     if (
@@ -174,6 +214,30 @@ export abstract class ModelHandler {
   get isOReasoningModel(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
     return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
+  }
+
+  /**
+   * Validates reasoning effort based on provider-specific support
+   * @param effort The reasoning effort level to validate
+   * @returns Valid reasoning effort string for the current provider
+   */
+  protected validateReasoningEffort(effort: string): string {
+    // Default implementation - return as is for most providers
+    if (this.config.provider === ModelProvider.XAI) {
+      // xAI models only support 'low' and 'high'
+      if (effort === 'low' || effort === 'high') {
+        return effort;
+      }
+
+      // Default to 'high' for other values
+      this.logger.warn(
+        `xAI models only support 'low' or 'high' reasoning effort. Converting '${effort}' to 'high'.`,
+      );
+      return 'high';
+    }
+
+    // For other providers, return effort as is
+    return effort;
   }
 
   /**
