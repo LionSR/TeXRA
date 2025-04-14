@@ -31,7 +31,6 @@
             },
             "default": [
               "correct",
-              "derive",
               "polish",
               "draw",
               "ocr",
