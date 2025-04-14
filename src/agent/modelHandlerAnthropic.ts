@@ -60,7 +60,7 @@ export class ModelHandlerAnthropic extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    let useStreaming = getConfig<boolean>('model.useStreaming', false);
+    let useStreaming = this.getStreamingConfig();
 
     // Prepare options for the API call
     const options: any = {
@@ -80,9 +80,6 @@ export class ModelHandlerAnthropic extends ModelHandler {
         type: 'enabled',
         budget_tokens: useStreaming ? 32768 : 4096,
       };
-      useStreaming =
-        useStreaming ||
-        getConfig<boolean>('model.useStreamingAnthropicReasoning', false);
     }
 
     // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking

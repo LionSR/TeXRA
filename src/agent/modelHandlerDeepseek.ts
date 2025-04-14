@@ -9,19 +9,19 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { ToolState } from './ToolState';
 
 /**
- * Handler for Deepseek models using OpenAI-compatible API.
+ * Handler for DeepSeek models using OpenAI-compatible API.
  */
-export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
-  /** Returns OpenAI client configured with Deepseek's base URL. */
+export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
+  /** Returns OpenAI client configured with DeepSeek's base URL. */
   async getClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
-    this.logger.debug(`Using Deepseek API key. Base URL: ${baseURL}`);
+    this.logger.debug(`Using DeepSeek API key. Base URL: ${baseURL}`);
     return new OpenAI({ apiKey, baseURL });
   }
 
   /**
-   * Process thinking blocks for Deepseek models
+   * Process thinking blocks for DeepSeek models
    * @param responseObject The raw response object from the model
    * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
@@ -36,7 +36,7 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
       return null;
     }
 
-    // Extract reasoning content from Deepseek response
+    // Extract reasoning content from DeepSeek response
     let reasoningContent = null;
 
     // Check for reasoning_content based on DeepSeek API structure
@@ -79,7 +79,7 @@ export class ModelHandlerDeepseek extends ModelHandlerOpenAI {
 
     // Log preview of thinking content (assuming it's a string)
     this.logger.debug(
-      `Deepseek reasoning content preview: ${reasoningContent.substring(0, 200)}...`,
+      `DeepSeek reasoning content preview: ${reasoningContent.substring(0, 200)}...`,
       groupId,
     );
 

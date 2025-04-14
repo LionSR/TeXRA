@@ -31,17 +31,24 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     systemPrompt?: string,
     endTag?: string,
   ): Promise<any> {
+    // Get streaming config
+    const useStreaming = this.getStreamingConfig();
+
     const kwargs: any = {
       model: this.config.openrouterFullName, // Use OpenRouter model name
       messages,
       max_tokens: this.config.maxOutputTokens,
       temperature,
-      extra_headers: { 'X-Title': 'CoA' },
+      extra_headers: { 'X-Title': 'TeXRA.ai' },
     };
 
+    // Reasoning parameters might vary depending on the underlying model via OpenRouter
+    // The `reasoning` and `include_reasoning` parameters are specific to some models like O1
     if (this.config.capabilities.supportsReasoning) {
       kwargs.reasoning = {
-        effort: this.config.capabilities.reasoningEffort,
+        effort: this.validateReasoningEffort(
+          this.config.capabilities.reasoningEffort,
+        ),
       };
       kwargs.include_reasoning = true;
     }
@@ -50,7 +57,13 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       kwargs.stop = [endTag];
     }
 
-    return client.chat.completions.create(kwargs);
+    if (useStreaming) {
+      kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
+      const stream = client.beta.chat.completions.stream(kwargs);
+      return await stream.finalMessage();
+    } else {
+      return await client.chat.completions.create(kwargs);
+    }
   }
 
   // Implementation for processing thinking blocks in OpenRouter responses
@@ -119,7 +132,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     toolState: ToolState,
   ): void {
     const lastMessage = messages.at(-1);
-    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/Deepseek perhaps?) via OpenRouter might do
+    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
     if (lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
         // is this correct? it looks like we should attach previous response too.
@@ -157,13 +170,13 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   }
 }
 
-export class ModelHandlerDeepseekViaOpenRouter extends ModelHandlerOpenRouter {
-  /** Returns OpenAI client configured with OpenRouter settings for Deepseek models. */
+export class ModelHandlerDeepSeekViaOpenRouter extends ModelHandlerOpenRouter {
+  /** Returns OpenAI client configured with OpenRouter settings for DeepSeek models. */
   async getClient(): Promise<OpenAI> {
     const apiKey = await this.getApiKey();
     const baseURL = this.getBaseUrl();
     this.logger.debug(
-      `Using OpenRouter API key for Deepseek model. Base URL: ${baseURL}`,
+      `Using OpenRouter API key for DeepSeek model. Base URL: ${baseURL}`,
     );
     return new OpenAI({
       apiKey,
