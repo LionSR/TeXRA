@@ -56,7 +56,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     endTag?: string,
   ): Promise<any> {
     // Get streaming config
-    let useStreaming = getConfig<boolean>('model.useStreaming', false);
+    let useStreaming = this.getStreamingConfig();
 
     const kwargs: any = {
       model: this.config.fullName,
@@ -71,14 +71,14 @@ export class ModelHandlerOpenAI extends ModelHandler {
       kwargs.temperature = temperature;
     }
     if (this.config.capabilities.supportsReasoning) {
-      useStreaming =
-        useStreaming ||
-        getConfig<boolean>('model.useStreamingOpenAIReasoning', false);
       if (
         this.config.capabilities.supportsReasoningEffort &&
         this.config.capabilities.reasoningEffort
       ) {
-        kwargs.reasoning_effort = this.config.capabilities.reasoningEffort;
+        // Validate reasoning effort based on provider-specific constraints
+        kwargs.reasoning_effort = this.validateReasoningEffort(
+          this.config.capabilities.reasoningEffort,
+        );
       }
     }
 
@@ -247,7 +247,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
           audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
         }
         // actually, currently only mp3 and wav are supported
-        // openai.BadRequestError: Error code: 400 - [{‘error’: {‘code’: 400, ‘message’: ‘Invalid audio format “m4a” for audio generation. Valid formats are: [wav, mp3]’, ‘status’: ‘INVALID_ARGUMENT’}}]
+        // openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Invalid audio format "m4a" for audio generation. Valid formats are: [wav, mp3]', 'status': 'INVALID_ARGUMENT'}}]
 
         // For the size:
         // You can use the File API to upload an audio file of any size.
