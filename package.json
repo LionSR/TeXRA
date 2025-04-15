@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.28.8",
+  "version": "0.28.9",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.96.2"
@@ -229,7 +229,8 @@
               ".png",
               ".vsix",
               ".ts",
-              ".js"
+              ".js",
+              ".yaml"
             ],
             "description": "File extensions to ignore when listing text files",
             "editPresentation": "multilineText",
@@ -242,6 +243,7 @@
             },
             "default": [
               "command.tex",
+              "commands.tex",
               "preamble.tex"
             ],
             "description": "Files to ignore when listing input, sample, and edited files, but not auxiliary files",

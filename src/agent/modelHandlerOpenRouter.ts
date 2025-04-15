@@ -45,12 +45,17 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     // Reasoning parameters might vary depending on the underlying model via OpenRouter
     // The `reasoning` and `include_reasoning` parameters are specific to some models like O1
     if (this.config.capabilities.supportsReasoning) {
-      kwargs.reasoning = {
-        effort: this.validateReasoningEffort(
-          this.config.capabilities.reasoningEffort,
-        ),
-      };
-      kwargs.include_reasoning = true;
+      if (
+        this.config.capabilities.supportsReasoningEffort &&
+        this.config.capabilities.reasoningEffort
+      ) {
+        kwargs.reasoning = {
+          effort: this.validateReasoningEffort(
+            this.config.capabilities.reasoningEffort,
+          ),
+        };
+        kwargs.include_reasoning = true;
+      }
     }
 
     if (endTag) {
