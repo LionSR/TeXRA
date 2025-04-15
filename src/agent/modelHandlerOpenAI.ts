@@ -81,6 +81,11 @@ export class ModelHandlerOpenAI extends ModelHandler {
         );
       }
     }
+    if (this.config.fullName.includes('deepseek')) {
+      // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
+      this.logger.debug('Setting max_tokens to 8192 for DeepSeek models');
+      kwargs.max_tokens = 8192;
+    }
 
     if (useStreaming) {
       let response: any;
@@ -158,7 +163,7 @@ export class ModelHandlerOpenAI extends ModelHandler {
     }
 
     // Append the formatted content to the correct message
-    const lastRole = messages.length > 0 ? messages.at(-1).role : null;
+    let lastRole = messages.length > 0 ? messages.at(-1).role : null;
     if (lastRole === 'system' || messages.length === 0) {
       messages.push({ role: 'user', content: userMessageContent });
     } else if (lastRole === 'user') {
@@ -175,10 +180,24 @@ export class ModelHandlerOpenAI extends ModelHandler {
     const requestRole = this.config.capabilities.supportsIntermDevMsgs
       ? 'system'
       : 'user';
-    messages.push({
-      role: requestRole,
-      content: [{ type: 'text', text: userRequest }],
-    });
+    lastRole = messages.length > 0 ? messages.at(-1).role : null;
+
+    if (requestRole === 'system') {
+      messages.push({
+        role: requestRole,
+        content: [{ type: 'text', text: userRequest }],
+      });
+    } else if (requestRole === 'user' && lastRole === 'user') {
+      messages.at(-1).content.push({
+        type: 'text',
+        text: userRequest,
+      });
+    } else {
+      messages.push({
+        role: requestRole,
+        content: [{ type: 'text', text: userRequest }],
+      });
+    }
 
     return messages;
   }
