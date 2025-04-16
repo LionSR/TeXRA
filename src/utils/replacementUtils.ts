@@ -359,6 +359,7 @@ const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     '\\end{latex_document>': '</latex_document>\n',
     '\\end{output>': '\\end{output}',
     '\\end{response>': '\\end{response}',
+    '\\enc{reflection>': '</reflection>',
     '\\end{scratchpad>': '</scratchpad>',
     '\\end{itemize>': '\\end{itemize}',
     '\\end{enumerate>': '\\end{enumerate}',
