@@ -964,7 +964,7 @@
     "glob": "^11.0.1",
     "marked": "^15.0.7",
     "nunjucks": "^3.2.4",
-    "openai": "^4.93.0",
+    "openai": "^4.94.0",
     "pdf2pic": "^3.1.4",
     "sortablejs": "^1.15.6",
     "split.js": "^1.6.5",
