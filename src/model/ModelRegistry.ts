@@ -199,7 +199,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'o3': {
+  o3: {
     name: 'o3',
     fullName: 'o3-2025-04-16',
     openrouterFullName: 'openai/o3-2025-04-16',
