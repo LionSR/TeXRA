@@ -43,6 +43,8 @@ export const MODELS = [
   'sonnet36',
   'haiku35',
   'haiku',
+  'o4-',
+  'o3',
   'o3-',
   'o1',
   'o1preview',
