@@ -179,8 +179,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
 
   // ===== OpenAI Reasoning Models =====
   'o4-': {
-    name: 'o4',
-    fullName: 'o4-2025-04-16',
+    name: 'o4-',
+    fullName: 'o4-mini-2025-04-16',
     openrouterFullName: 'openai/o4-mini-high',
     provider: ModelProvider.OPENAI,
     maxOutputTokens: 100000,
@@ -502,8 +502,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   gemini25f: {
     name: 'gemini25f',
-    fullName: 'gemini-2.5-flash-preview-04-09',
-    openrouterFullName: 'google/gemini-2.5-flash-preview-04-09:free',
+    fullName: 'gemini-2.5-flash-preview',
+    openrouterFullName: 'google/gemini-2.5-flash-preview:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 64000,
     contextWindow: 1000000,
