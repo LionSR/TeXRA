@@ -78,6 +78,16 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '{-\\,0}': '{0}',
     '{-\\,1}': '{1}',
 
+    ')\!\|': ') \|',
+    '}\!\|': '} \|',
+    ')\!\\': ') \\',
+    '}\!\\': '} \\',
+    '\!\\cdot\!': ' \\cdot ',
+    '\!\\ldots\!': ' \\ldots ',
+    '\!\\cdots\!': ' \\cdots ',
+    '\!\\vdots\!': ' \\vdots ',
+    '\!\\ddots\!': ' \\ddots ',
+
     // Skip commands
     '\\medskip\n': '',
     '\\smallskip\n': '',
@@ -112,6 +122,10 @@ const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '$ μT': '$ $\\mu$T',
     '$ μH': '$ $\\mu$H',
     '$ μF': '$ $\\mu$F',
+
+    // unicodes:
+    '–': '-',
+    '‑': '-',
   },
 };
 
@@ -268,6 +282,9 @@ const EQUATION_REPLACEMENTS: ReplacementCategory = {
     '\\\\Sigma': '\\Sigma',
     '\\\\Omega': '\\Omega',
     // labels
+    ',    \\label{': ',\\label{',
+    ',  \\label{': ',\\label{',
+    ',        \\label{': ',\\label{',
     '\\\\label{': '\\label{',
     '\\\nlabel{': '\\label{',
 
