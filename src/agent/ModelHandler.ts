@@ -208,12 +208,20 @@ export abstract class ModelHandler {
     ) {
       return false;
     }
-    return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
+    return (
+      nameLowerCased.includes('o1') ||
+      nameLowerCased.includes('o3') ||
+      nameLowerCased.includes('o4')
+    );
   }
 
   get isOReasoningModel(): boolean {
     const nameLowerCased = this.config.name.toLowerCase();
-    return nameLowerCased.includes('o1') || nameLowerCased.includes('o3');
+    return (
+      nameLowerCased.includes('o1') ||
+      nameLowerCased.includes('o3') ||
+      nameLowerCased.includes('o4')
+    );
   }
 
   /**
