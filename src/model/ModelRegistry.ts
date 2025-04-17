@@ -502,8 +502,8 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   },
   gemini25f: {
     name: 'gemini25f',
-    fullName: 'gemini-2.5-flash-preview',
-    openrouterFullName: 'google/gemini-2.5-flash-preview:free',
+    fullName: 'gemini-2.5-flash-preview-04-17',
+    openrouterFullName: 'google/gemini-2.5-flash-preview-04-17:free',
     provider: ModelProvider.GOOGLE,
     maxOutputTokens: 64000,
     contextWindow: 1000000,
